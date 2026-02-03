@@ -199,4 +199,14 @@ Feature: Observability Metrics
       Then the RTT metric does not reflect the prior session value
       And the RTT metric converges toward the new latency
 
+    @Scenario(02)
+    Scenario: Metrics return defaults after disconnect before reconnection
+      Given a server is running
+      And a client connects with latency 50ms
+      And RTT has converged near 100ms round-trip
+      When the client disconnects
+      And the client queries RTT metric after disconnect
+      Then no panic occurs
+      And the RTT returns a defined default value
+
 

@@ -265,3 +265,40 @@ fn then_entity_out_of_scope_for_client(ctx: &TestWorldRef) -> AssertOutcome<()> 
         }
     })
 }
+
+/// Step: Then the entity despawns on the client
+/// Verifies the entity no longer exists on the client side after leaving scope.
+/// This is a POLLING assertion - waits for entity to despawn.
+#[then("the entity despawns on the client")]
+fn then_entity_despawns_on_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    ctx.client(client_key, |client| {
+        if !client.has_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Step: Then the server stops replicating entities to that client
+/// Verifies that after disconnect, the server no longer has the user in its user list
+/// (which implies it stops replicating entities to that client).
+/// This is a POLLING assertion - waits for user to be removed.
+#[then("the server stops replicating entities to that client")]
+fn then_server_stops_replicating_to_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+
+    ctx.server(|server| {
+        if !server.user_exists(&client_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}

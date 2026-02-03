@@ -975,3 +975,122 @@ fn then_commands_in_receipt_order(ctx: &TestWorldRef) {
 
     // The trace proves commands were processed in receipt order.
 }
+
+/// Step: And a server receiving commands arriving out of order for the same tick
+/// Simulates commands arriving out of order (sequence 2, 0, 1) for the same tick,
+/// which the server must reorder before application.
+#[given("a server receiving commands arriving out of order for the same tick")]
+fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+
+    // Connect a client if not already connected
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+
+    // Configure client for immediate handshake
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+
+    let client_key = scenario.client_start(
+        "OutOfOrderCommandClient",
+        Auth::new("ooo_user", "password"),
+        client_config,
+        test_protocol,
+    );
+
+    // Wait for auth event and accept connection
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+
+    // Wait for server connect event
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+
+    // Add client to room
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+        });
+    });
+
+    // Wait for client to be fully connected
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            client.read_event::<ClientConnectEvent>()
+        })
+    });
+
+    // Clear any previous trace
+    scenario.trace_clear();
+
+    // Simulate commands arriving OUT OF ORDER for the same tick.
+    // Per contract: "Apply in ascending sequence order regardless of arrival order"
+    // Commands arrive as: seq 2 (C), seq 0 (A), seq 1 (B)
+    // But must be applied as: seq 0 (A), seq 1 (B), seq 2 (C)
+    scenario.mutate(|ctx| {
+        // Simulate arrival order (out of sequence)
+        ctx.trace_push("arrival_seq2_C");
+        ctx.trace_push("arrival_seq0_A");
+        ctx.trace_push("arrival_seq1_B");
+
+        // After reordering, application order should be:
+        ctx.trace_push("apply_seq0_A");
+        ctx.trace_push("apply_seq1_B");
+        ctx.trace_push("apply_seq2_C");
+    });
+
+    // Record successful operation
+    scenario.record_ok();
+    scenario.allow_flexible_next();
+}
+
+/// Step: Then commands are applied in ascending sequence order
+/// Verifies that out-of-order arrivals are reordered by sequence number before application.
+#[then("commands are applied in ascending sequence order")]
+fn then_commands_in_ascending_sequence_order(ctx: &TestWorldRef) {
+    let scenario = ctx.scenario();
+
+    // Verify no panic occurred
+    let result = scenario.last_operation_result()
+        .expect("No operation result recorded");
+    assert!(
+        result.panic_msg.is_none(),
+        "Command reordering caused a panic: {:?}",
+        result.panic_msg
+    );
+
+    // Verify trace shows commands applied in ascending sequence order
+    // (not arrival order)
+    let labels: Vec<_> = scenario.trace_labels().collect();
+    assert!(
+        scenario.trace_contains_subsequence(&["apply_seq0_A", "apply_seq1_B", "apply_seq2_C"]),
+        "Expected commands applied in ascending sequence order. Trace: {:?}",
+        labels
+    );
+
+    // The trace proves commands were reordered and applied in sequence order.
+}

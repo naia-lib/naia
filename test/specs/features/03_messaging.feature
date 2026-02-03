@@ -141,6 +141,22 @@ Feature: Messaging Channel Semantics
       When the client sends on a server-to-client channel
       Then the send returns an error
 
+    @Scenario(02)
+    Scenario: Channel direction violation does not cause panic
+      Given a server is running
+      And a client connects
+      When the client sends on a server-to-client channel
+      Then the send returns an error
+      And no panic occurs
+
+    @Scenario(03)
+    Scenario: Channel direction violation does not disrupt the connection
+      Given a server is running
+      And a client connects
+      When the client sends on a server-to-client channel
+      Then the send returns an error
+      And no connection disruption occurs
+
   # --------------------------------------------------------------------------
   # Rule: OrderedReliable delivery
   # --------------------------------------------------------------------------
@@ -179,4 +195,30 @@ Feature: Messaging Channel Semantics
       And the server responds to the request
       Then the client receives the response for that request
 
+    @Scenario(02)
+    Scenario: Request-response flow completes without panic
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the server responds to the request
+      Then the client receives the response for that request
+      And no panic occurs
 
+    @Scenario(03)
+    Scenario: Sequential requests receive matching responses
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the server responds to the request
+      And the client sends a request
+      And the server responds to the request
+      Then the client receives the response for that request
+
+    @Scenario(04)
+    Scenario: Request-response matching is not disrupted by connection state
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the server responds to the request
+      Then the client receives the response for that request
+      And no connection disruption occurs

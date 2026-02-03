@@ -243,6 +243,28 @@ Feature: Entity Scopes
       When the server excludes the entity for the client
       Then the entity despawns on the client
 
+    @Deferred
+    @Scenario(02)
+    Scenario: Entity spawns on client when entering scope
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      Then the entity spawns on the client
+
+    @Deferred
+    @Scenario(03)
+    Scenario: Re-entering scope creates fresh entity lifetime
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      And the entity despawns on the client
+      And the server includes the entity for the client
+      Then the entity spawns on the client as a new lifetime
+
   # --------------------------------------------------------------------------
   # Rule: Disconnect handling
   # --------------------------------------------------------------------------
@@ -262,3 +284,18 @@ Feature: Entity Scopes
       When the client disconnects
       Then the server stops replicating entities to that client
 
+    @Deferred
+    @Scenario(02)
+    Scenario: Operations on unknown user are ignored
+      Given a server is running
+      And a server-owned entity exists
+      When the server includes the entity for an unknown client
+      Then no error is raised
+
+    @Deferred
+    @Scenario(03)
+    Scenario: Operations on unknown entity are ignored
+      Given a server is running
+      And a client connects
+      When the server includes an unknown entity for the client
+      Then no error is raised

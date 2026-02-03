@@ -248,4 +248,20 @@ Feature: Transport Layer Contract
       Then observable application behavior is identical
       And no transport-specific guarantees are exposed
 
+    @Scenario(02)
+    Scenario: Client layer abstracts transport reordering from application
+      Given a server is running
+      And a client connects
+      When the client receives packets in a different order than sent
+      Then the client handles them without panic
+      And no connection disruption occurs
+
+    @Scenario(03)
+    Scenario: Server layer abstracts transport duplication from application
+      Given a server is running
+      And a client connects
+      When the server receives duplicate packets
+      Then the server handles them without panic
+      And no connection disruption occurs
+
 

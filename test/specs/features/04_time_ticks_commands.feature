@@ -139,16 +139,38 @@ Feature: Time Ticks and Commands
   # --------------------------------------------------------------------------
   # Rule: Command ordering
   # --------------------------------------------------------------------------
-  # Server applies commands in receipt order for the same tick.
+  # Server applies commands in sequence order (send order) for the same tick.
+  # Commands with the same tick are applied in ascending sequence number order.
   # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Command ordering
 
+    # Tests that multiple commands queued for the same tick are applied in
+    # deterministic order (sequence order = send order).
     @Scenario(01)
-    Scenario: Multiple commands for same tick are applied in receipt order
+    Scenario: Multiple commands for same tick are applied in sequence order
       Given a test scenario
       And a server receiving multiple commands for the same tick
       When the tick is processed
       Then commands are applied in receipt order
 
+    # Tests that command processing does not panic regardless of processing
+    # complexity. Per contract: "Remote/untrusted anomalies MUST NOT panic"
+    @Scenario(02)
+    Scenario: Command ordering processing does not cause panic
+      Given a test scenario
+      And a server receiving multiple commands for the same tick
+      When the tick is processed
+      Then commands are applied in receipt order
+      And no panic occurs
+
+    # Tests that out-of-order arrivals are buffered and applied in sequence order.
+    # Per contract: "Apply in ascending sequence order regardless of arrival order"
+    # and "Buffer out-of-order until earlier sequences arrive"
+    @Scenario(03)
+    Scenario: Out-of-order command arrivals are reordered by sequence number
+      Given a test scenario
+      And a server receiving commands arriving out of order for the same tick
+      When the tick is processed
+      Then commands are applied in ascending sequence order
 

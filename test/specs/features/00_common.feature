@@ -185,6 +185,14 @@ Feature: Common Definitions and Policies
       Then the operation returns an Err result
       And no panic occurs
 
+    @Scenario(02)
+    Scenario: Sending on wrong-direction channel returns Err
+      Given a test scenario
+      And a connected client
+      When the client sends on a server-to-client channel
+      Then the send returns an error
+      And no panic occurs
+
   @Rule(02)
   Rule: Remote or untrusted input must never panic
 
@@ -207,13 +215,22 @@ Feature: Common Definitions and Policies
   @Rule(03)
   Rule: Protocol mismatch is a deployment error not a panic
 
-  @Scenario(01)
-  Scenario: Protocol mismatch produces ProtocolMismatch rejection
+    @Scenario(01)
+    Scenario: Protocol mismatch produces ProtocolMismatch rejection
       Given a test scenario
       And a server with protocol version A
       And a client with protocol version B
       When the client attempts to connect
       Then the connection is rejected with ProtocolMismatch
+      And no panic occurs
+
+    @Scenario(02)
+    Scenario: Protocol mismatch does not establish connection
+      Given a test scenario
+      And a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the client does not observe ConnectEvent
       And no panic occurs
 
   @Rule(04)
@@ -226,6 +243,13 @@ Feature: Common Definitions and Policies
       When the same API call sequence is executed twice
       Then the event emission order is identical both times
       And the entity spawn order is identical both times
+
+    @Scenario(02)
+    Scenario: Component update order is deterministic
+      Given a test scenario with deterministic time
+      And a deterministic network input sequence
+      When the same API call sequence is executed twice
+      Then the event emission order is identical both times
 
   @Rule(05)
   Rule: Per-tick determinism for concurrent operations
@@ -255,6 +279,15 @@ Feature: Common Definitions and Policies
       When the client reconnects
       Then it receives fresh entity spawns for all in-scope entities
       And no prior session state is retained
+
+    @Scenario(02)
+    Scenario: Server treats reconnecting client as new session
+      Given a test scenario
+      And a client that was previously connected
+      And the client disconnected
+      When the client reconnects
+      Then it receives fresh entity spawns for all in-scope entities
+      And the client is connected
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS
