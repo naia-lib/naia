@@ -136,9 +136,19 @@
 @Feature(time_ticks_and_commands)
 Feature: Time Ticks and Commands
 
+  # --------------------------------------------------------------------------
+  # Rule: Command ordering
+  # --------------------------------------------------------------------------
+  # Server applies commands in receipt order for the same tick.
+  # --------------------------------------------------------------------------
   @Rule(01)
-  Rule: Time Ticks and Commands
+  Rule: Command ordering
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Scenario(01)
+    Scenario: Multiple commands for same tick are applied in receipt order
+      Given a test scenario
+      And a server receiving multiple commands for the same tick
+      When the tick is processed
+      Then commands are applied in receipt order
 
 

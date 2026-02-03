@@ -14,7 +14,7 @@ runner = "copilot"
 planner = "copilot"
 
 # Budget limits
-max_retries = 0
+max_retries = 2           # Allow 2 retries with model escalation (haiku→sonnet→opus)
 max_cert_updates = 3
 max_runtime_seconds = 600
 max_files_changed = 10
