@@ -103,9 +103,162 @@
 @Feature(entity_scopes)
 Feature: Entity Scopes
 
+  # --------------------------------------------------------------------------
+  # Rule: Rooms gating
+  # --------------------------------------------------------------------------
+  # SharesRoom(U,E) is a required precondition for InScope(U,E)
+  # --------------------------------------------------------------------------
   @Rule(01)
-  Rule: Entity Scopes
+  Rule: Rooms gating
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Deferred
+    @Scenario(01)
+    Scenario: Entity in shared room is in-scope for user
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      Then the entity is in-scope for the client
 
+    @Deferred
+    @Scenario(02)
+    Scenario: Entity not in shared room is out-of-scope for user
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity do not share a room
+      Then the entity is out-of-scope for the client
+
+  # --------------------------------------------------------------------------
+  # Rule: Include/Exclude filter
+  # --------------------------------------------------------------------------
+  # Per-user include/exclude filter applies after Rooms gate
+  # --------------------------------------------------------------------------
+  @Rule(02)
+  Rule: Include/Exclude filter
+
+    @Deferred
+    @Scenario(01)
+    Scenario: Exclude removes entity from user's scope
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      Then the entity is out-of-scope for the client
+
+    @Deferred
+    @Scenario(02)
+    Scenario: Include restores entity to user's scope after Exclude
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the server excludes the entity for the client
+      And the entity is out-of-scope for the client
+      When the server includes the entity for the client
+      Then the entity is in-scope for the client
+
+    @Deferred
+    @Scenario(03)
+    Scenario: Last call wins between Include and Exclude
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      And the server includes the entity for the client
+      Then the entity is in-scope for the client
+
+  # --------------------------------------------------------------------------
+  # Rule: Owner scope invariant
+  # --------------------------------------------------------------------------
+  # Owning client always in-scope for its client-owned entities
+  # --------------------------------------------------------------------------
+  @Rule(03)
+  Rule: Owner scope invariant
+
+    @Deferred
+    @Scenario(01)
+    Scenario: Owning client always sees own entity
+      Given a server is running
+      And a client connects
+      And the client owns an entity
+      Then the entity is in-scope for the client
+
+    @Deferred
+    @Scenario(02)
+    Scenario: Exclude on owner's own entity has no effect
+      Given a server is running
+      And a client connects
+      And the client owns an entity
+      When the server excludes the entity for the client
+      Then the entity is in-scope for the client
+
+  # --------------------------------------------------------------------------
+  # Rule: Roomless entities
+  # --------------------------------------------------------------------------
+  # Entities in zero rooms are out-of-scope for all non-owners
+  # --------------------------------------------------------------------------
+  @Rule(04)
+  Rule: Roomless entities
+
+    @Deferred
+    @Scenario(01)
+    Scenario: Roomless entity is out-of-scope for non-owners
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the entity is not in any room
+      Then the entity is out-of-scope for the client
+
+    @Deferred
+    @Scenario(02)
+    Scenario: Include cannot bypass room gate for roomless entity
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the entity is not in any room
+      When the server includes the entity for the client
+      Then the entity is out-of-scope for the client
+
+  # --------------------------------------------------------------------------
+  # Rule: Scope state effects
+  # --------------------------------------------------------------------------
+  # Scope transitions trigger observable client-side effects
+  # --------------------------------------------------------------------------
+  @Rule(05)
+  Rule: Scope state effects
+
+    @Deferred
+    @Scenario(01)
+    Scenario: Entity despawns on client when leaving scope
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      Then the entity despawns on the client
+
+  # --------------------------------------------------------------------------
+  # Rule: Disconnect handling
+  # --------------------------------------------------------------------------
+  # Disconnect implies OutOfScope for that user for all entities
+  # --------------------------------------------------------------------------
+  @Rule(06)
+  Rule: Disconnect handling
+
+    @Deferred
+    @Scenario(01)
+    Scenario: Disconnect implies out-of-scope for all entities
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the client disconnects
+      Then the server stops replicating entities to that client
 

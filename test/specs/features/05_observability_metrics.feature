@@ -118,9 +118,85 @@
 @Feature(observability_metrics)
 Feature: Observability Metrics
 
+  # --------------------------------------------------------------------------
+  # Rule: Metric query safety
+  # --------------------------------------------------------------------------
+  # Metrics APIs MUST be safe to query at any time and MUST NOT panic.
+  # If a metric cannot be computed yet, it MUST return a well-defined default.
+  # --------------------------------------------------------------------------
   @Rule(01)
-  Rule: Observability Metrics
+  Rule: Metric query safety
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Scenario(01)
+    Scenario: Metrics can be queried before connection without panic
+      Given a server is running
+      And a client is created but not connected
+      When the client queries RTT metric
+      Then no panic occurs
+      And the RTT returns a defined default value
+
+    @Scenario(02)
+    Scenario: Metrics can be queried during handshake without panic
+      Given a server is running
+      And a client begins connecting
+      When the client queries RTT metric during handshake
+      Then no panic occurs
+      And the RTT returns a defined default value
+
+    @Scenario(03)
+    Scenario: Metrics can be queried after disconnect without panic
+      Given a server is running
+      And a client connects
+      And the client disconnects
+      When the client queries RTT metric after disconnect
+      Then no panic occurs
+      And the RTT returns a defined default value
+
+  # --------------------------------------------------------------------------
+  # Rule: RTT must be non-negative and bounded
+  # --------------------------------------------------------------------------
+  # RTT estimates MUST be non-negative. RTT MUST NOT overflow or become
+  # NaN/Infinity. Under stable link conditions, RTT SHOULD converge.
+  # --------------------------------------------------------------------------
+  @Rule(02)
+  Rule: RTT must be non-negative and bounded
+
+    @Scenario(01)
+    Scenario: RTT converges under stable conditions
+      Given a server is running
+      And a client connects
+      And the link has stable fixed-latency conditions
+      When sufficient samples have been collected
+      Then the RTT metric is non-negative
+      And the RTT metric is within tolerance of expected latency
+
+    @Scenario(02)
+    Scenario: RTT remains bounded under jitter and loss
+      Given a server is running
+      And a client connects
+      And the link has high jitter and moderate packet loss
+      When traffic is exchanged for multiple metric windows
+      Then the RTT metric is non-negative
+      And the RTT metric is finite
+      And the RTT metric is less than RTT_MAX_VALUE_MS
+
+  # --------------------------------------------------------------------------
+  # Rule: Metrics reset on connection lifecycle
+  # --------------------------------------------------------------------------
+  # New connections MUST NOT inherit stale samples from prior connections.
+  # --------------------------------------------------------------------------
+  @Rule(03)
+  Rule: Metrics reset on connection lifecycle
+
+    @Scenario(01)
+    Scenario: Reconnection does not inherit stale RTT samples
+      Given a server is running
+      And a client connects with latency 50ms
+      And RTT has converged near 100ms round-trip
+      When the client disconnects
+      And the client reconnects with latency 200ms
+      And sufficient samples have been collected
+      Then the RTT metric does not reflect the prior session value
+      And the RTT metric converges toward the new latency
 
 

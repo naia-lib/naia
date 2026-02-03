@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "958cf6de93e8f2baa4177743b751a39a4fed5689f0ae4ed425465bd2c7698bf9",
-    "step_registry_hash": "8fea38cae1648a5b0bb637cf5dd018002fd287a2b9cab86a819941bb820d5c21",
-    "resolved_plan_hash": "7abbf54ba6e4dbdacf3d7c2c47e8629c188b43c3ccd56e134c959553f68b8eca"
+    "feature_fingerprint_hash": "b67a60c6bba63d55edef5685d72c0e6fe91f95b358d47fa0d3f36dc666585df1",
+    "step_registry_hash": "cbd8fb413e24eee7f7e0641893359f954710bf725225a8003d7e3a8da38795cc",
+    "resolved_plan_hash": "3bb1fe51480fa9e40737a2d6deabec26455fcbd575f4a8cf39936af3266f2e76"
   },
   "scenarios": [
     {
@@ -1632,6 +1632,430 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "0d193f50eda227bf4ab6288104e1cbd3dacbef7732ffae604df6cce348f06b53"
+        }
+      ]
+    },
+    {
+      "scenario_key": "observability_metrics:Rule(01):Scenario(01)",
+      "feature_path": "features/05_observability_metrics.feature",
+      "scenario_name": "Metrics can be queried before connection without panic",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client is created but not connected",
+          "binding_id": "dc27ef786ad0038a308a28989f408bfdd7569ec0120fc7105caf1a6e740a3c1c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7ddb44d02d010d0d0f0a350415fa9bd4657cdc4d08188416efb8a579d1808f38"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client queries RTT metric",
+          "binding_id": "c4985af06bbc3e231cb0344f2afc85a33a86c507090c798ccff55221b4db9371",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c475940e7a7158fed079a0c9a0dc2fd7a93d4dc59b9bc98ca27166298d81a963"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT returns a defined default value",
+          "binding_id": "627af7fffe080a03b325ea04b7af80f21ecb0ac3d5ac05a8bdb43cd3452e3531",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7b4995bec80b3ea9b87a3e77a051ccb88a040cc3b2a2f42e93afebe6d7f89f72"
+        }
+      ]
+    },
+    {
+      "scenario_key": "observability_metrics:Rule(01):Scenario(02)",
+      "feature_path": "features/05_observability_metrics.feature",
+      "scenario_name": "Metrics can be queried during handshake without panic",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client begins connecting",
+          "binding_id": "bd08241c4d3f40ab1175b67f9ef4e1f8c11fdfa39aaf992a4e1c5c11f22c81cc",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "16932f83390a79954d721750c851ccd7a7af7d41c078e094b99227b8104bd648"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client queries RTT metric during handshake",
+          "binding_id": "3e7dff9c8fde59c97f59d0910aae1b1f141d27c69d2e54ce982ac5d295b3886b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "16582949c6b35a94f5be8ccb0bde24b284adf5f84df296c055a6a9bfa53d19a7"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT returns a defined default value",
+          "binding_id": "627af7fffe080a03b325ea04b7af80f21ecb0ac3d5ac05a8bdb43cd3452e3531",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7b4995bec80b3ea9b87a3e77a051ccb88a040cc3b2a2f42e93afebe6d7f89f72"
+        }
+      ]
+    },
+    {
+      "scenario_key": "observability_metrics:Rule(01):Scenario(03)",
+      "feature_path": "features/05_observability_metrics.feature",
+      "scenario_name": "Metrics can be queried after disconnect without panic",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client disconnects",
+          "binding_id": "46224cbb4eb9b4fcb3b53f11c4548854cf7e707818fffcec91231051f71caf16",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3d807883c919fa9bc4edaaeb4924c9c5e3fbf56376d3d94660742471db2eda26"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client queries RTT metric after disconnect",
+          "binding_id": "8d6cc02a39c842470a7f4958f8506abbdd440f24d2f5f8caf1ab278bec125f53",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ad7048af06866ce1179a91dd6b7941b7907f3d7d79343247053a3bcea2704061"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT returns a defined default value",
+          "binding_id": "627af7fffe080a03b325ea04b7af80f21ecb0ac3d5ac05a8bdb43cd3452e3531",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7b4995bec80b3ea9b87a3e77a051ccb88a040cc3b2a2f42e93afebe6d7f89f72"
+        }
+      ]
+    },
+    {
+      "scenario_key": "observability_metrics:Rule(02):Scenario(01)",
+      "feature_path": "features/05_observability_metrics.feature",
+      "scenario_name": "RTT converges under stable conditions",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the link has stable fixed-latency conditions",
+          "binding_id": "c4710e4ff1c4db90067d1c28433e9d0d587912a95b457fa17cedb33d9e793816",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "94dd433402498ff7e253dce0ebe30da4f7a6336e6cb5f13ef1b0cd638ba3dd86"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "sufficient samples have been collected",
+          "binding_id": "d77b26c8c119c1e4e2169acf311d4e3a8129fe53117444da1f82eddd6d01df88",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1e1de9807813208f00dbcdbd5986145bd6b02583496007601d3c8da92e899393"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric is non-negative",
+          "binding_id": "5ceed68990710014697f78ce2961412d624c4e4ddf537630e131b307a9dae7d6",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3bfb49c950481fd91779756ddea50f67d88f17301c1056a935d36787c6d479c9"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric is within tolerance of expected latency",
+          "binding_id": "b6203c81ada5ebd53d127863d239b7145dd03f8f4aa6b9b4fce2c3685f2c8339",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "455f610d890b1c04b9d588c16a4aabdf61fc2ef140ddfa68ab692bbf8173d573"
+        }
+      ]
+    },
+    {
+      "scenario_key": "observability_metrics:Rule(02):Scenario(02)",
+      "feature_path": "features/05_observability_metrics.feature",
+      "scenario_name": "RTT remains bounded under jitter and loss",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the link has high jitter and moderate packet loss",
+          "binding_id": "6c9a6e394ab2e9aef5e01fff2c0e10f65aed200794f45ab5ed06da78285367db",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "bd551cfb6c6c46590172726fc6696fdae0236832c83949d8624d89d38943c747"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "traffic is exchanged for multiple metric windows",
+          "binding_id": "d61abcb862381ce0603802bbadaa40404720d832c116083b1f9633d12fbc9b05",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1a46d7223ec57e3a09bcf7bd267c015b1bee87722c7d682690d70d371e86f922"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric is non-negative",
+          "binding_id": "5ceed68990710014697f78ce2961412d624c4e4ddf537630e131b307a9dae7d6",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3bfb49c950481fd91779756ddea50f67d88f17301c1056a935d36787c6d479c9"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric is finite",
+          "binding_id": "e5d1216a612b2cf677643872751b84dc1e21052dcf695880a9186bebc24e214f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6b16c007657ec05c9433a920ef04f89b67d1502dec56f30a3dacb7a004bb31d3"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric is less than RTT_MAX_VALUE_MS",
+          "binding_id": "bd7a15f5b04ac8f8c30ef4776eee33b3cf362b3a5a43b98e8a91486f0e2f3937",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1d65bd9d1b96e0e791cce4b10b55a9cf9d062a4fdae58efcaa53ef3ca5b5181e"
+        }
+      ]
+    },
+    {
+      "scenario_key": "observability_metrics:Rule(03):Scenario(01)",
+      "feature_path": "features/05_observability_metrics.feature",
+      "scenario_name": "Reconnection does not inherit stale RTT samples",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects with latency 50ms",
+          "binding_id": "3488dd895390f348ef4faa75dcd6ee2106e3873e398d7049dbc5887066e70876",
+          "captures": [
+            "50"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "423e27134411fddfd5cd4ff28a320a355ab73db69b6222e45d53a0ad11f68f49"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "RTT has converged near 100ms round-trip",
+          "binding_id": "d9fdc5a8c80c98c5ebf32da677c6f3f2a34369de3523af191c613574c0c3ea64",
+          "captures": [
+            "100"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d33a7332533b4e7302881d6c9771160a16edf435b6b7ecbccda7653c7a595c91"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client disconnects",
+          "binding_id": "1a2c5c87485998b897bf39449fc8e8ace74edc19718d530b933a78eaa7c9e287",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ff7fd15fe045e15a6b6081b5ff8f6ae59eb0140e3b6b5f2cad9e0c42199c1087"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client reconnects with latency 200ms",
+          "binding_id": "d48eab75a612aedb3120c374838baab60091248bb4b257269f0fabe3444f138f",
+          "captures": [
+            "200"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "81e966a24b2fd72942d8ec4c776b9c00882cc4425507262db16676b1bb523768"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "sufficient samples have been collected",
+          "binding_id": "d77b26c8c119c1e4e2169acf311d4e3a8129fe53117444da1f82eddd6d01df88",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1e1de9807813208f00dbcdbd5986145bd6b02583496007601d3c8da92e899393"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric does not reflect the prior session value",
+          "binding_id": "33ef5ef9403346a8a0fa60bc2ba204ab2352d1491c54303aecde6552dc842d29",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "130fab8371ac987e79266279d9897b76c707a5245a77a8d7ab973ab1103f1007"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the RTT metric converges toward the new latency",
+          "binding_id": "aad6fa9192a3e465526bb19ac807682434a5b239f0147f2f822ea1b317e2a422",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "07b7f9c2dc1ea3c2d8237aa786153cf669c4506bb02e7cfbfd8b93d46c92cf88"
+        }
+      ]
+    },
+    {
+      "scenario_key": "time_ticks_and_commands:Rule(01):Scenario(01)",
+      "feature_path": "features/04_time_ticks_commands.feature",
+      "scenario_name": "Multiple commands for same tick are applied in receipt order",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a test scenario",
+          "binding_id": "5b3d02f62bf77c8c794dc8ab9135486da6d8328aa16197a8c31740ca2d82089d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "98e5696a0037c0e44738e14259833500f00bfa76886fc1883e804090a7dec33b"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server receiving multiple commands for the same tick",
+          "binding_id": "86adb472fa9c84e69a0da845982141817adb59da2e50b2452d874eb03df1b320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "333c33ab3dd143a683f50c49637898b64782d2186c2f1b0799fe4602cbd30a43"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the tick is processed",
+          "binding_id": "4103113baa895def37bac9a010ffd5aaaeaebaf57125f1ab40724ee95329375d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "edbc1567161f1029457d31caf2bd792173c6a130d6e3c4021f5c954483721910"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "commands are applied in receipt order",
+          "binding_id": "5687923cda075c91a257a58175244bee66d3ebb8d86dd90224d3986646b7a442",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "8d1334ec4febf9f3200baa47524ccf59c99be50c47e82ffc65f1432ea99c8d1b"
         }
       ]
     },

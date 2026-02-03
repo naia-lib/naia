@@ -787,20 +787,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.io.server_addr()
     }
 
-    /// Gets the average Round Trip Time measured to the Server
+    /// Gets the average Round Trip Time measured to the Server in seconds.
+    /// Returns 0.0 if not connected.
     pub fn rtt(&self) -> f32 {
         self.server_connection
             .as_ref()
-            .expect("it is expected that you should verify whether the client is connected before calling this method")
-            .time_manager.rtt()
+            .map(|conn| conn.time_manager.rtt() / 1000.0)
+            .unwrap_or(0.0)
     }
 
-    /// Gets the average Jitter measured in connection to the Server
+    /// Gets the average Jitter measured in connection to the Server in seconds.
+    /// Returns 0.0 if not connected.
     pub fn jitter(&self) -> f32 {
         self.server_connection
             .as_ref()
-            .expect("it is expected that you should verify whether the client is connected before calling this method")
-            .time_manager.jitter()
+            .map(|conn| conn.time_manager.jitter() / 1000.0)
+            .unwrap_or(0.0)
     }
 
     // Ticks

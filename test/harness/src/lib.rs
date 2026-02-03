@@ -2,7 +2,7 @@ mod harness;
 pub mod test_protocol;
 
 pub use harness::{
-    ClientExpectCtx, ClientKey, EntityOwner, ExpectCtx, ExpectResult, OperationResult, Scenario,
+    ClientExpectCtx, ClientKey, EntityKey, EntityOwner, ExpectCtx, ExpectResult, OperationResult, Scenario,
     ServerExpectCtx, ToTicks, TraceEvent, TrackedClientEvent, TrackedServerEvent,
 };
 pub use naia_shared::handshake::RejectReason;
