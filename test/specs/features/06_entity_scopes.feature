@@ -111,7 +111,6 @@ Feature: Entity Scopes
   @Rule(01)
   Rule: Rooms gating
 
-    @Deferred
     @Scenario(01)
     Scenario: Entity in shared room is in-scope for user
       Given a server is running
@@ -137,7 +136,6 @@ Feature: Entity Scopes
   @Rule(02)
   Rule: Include/Exclude filter
 
-    @Deferred
     @Scenario(01)
     Scenario: Exclude removes entity from user's scope
       Given a server is running
@@ -180,7 +178,6 @@ Feature: Entity Scopes
   @Rule(03)
   Rule: Owner scope invariant
 
-    @Deferred
     @Scenario(01)
     Scenario: Owning client always sees own entity
       Given a server is running
@@ -205,7 +202,6 @@ Feature: Entity Scopes
   @Rule(04)
   Rule: Roomless entities
 
-    @Deferred
     @Scenario(01)
     Scenario: Roomless entity is out-of-scope for non-owners
       Given a server is running
@@ -232,7 +228,6 @@ Feature: Entity Scopes
   @Rule(05)
   Rule: Scope state effects
 
-    @Deferred
     @Scenario(01)
     Scenario: Entity despawns on client when leaving scope
       Given a server is running
@@ -273,7 +268,6 @@ Feature: Entity Scopes
   @Rule(06)
   Rule: Disconnect handling
 
-    @Deferred
     @Scenario(01)
     Scenario: Disconnect implies out-of-scope for all entities
       Given a server is running

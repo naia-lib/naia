@@ -167,6 +167,33 @@ fn given_server_excludes_entity_for_client(ctx: &mut TestWorldMut) {
     scenario.mutate(|_| {});
 }
 
+/// Step: Given the entity is not in any room
+/// Ensures the entity is not in any room.
+#[given("the entity is not in any room")]
+fn given_entity_not_in_any_room(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    // Remove entity from all rooms
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let room_keys = server.room_keys();
+            for room_key in room_keys {
+                if let Some(mut room) = server.room_mut(&room_key) {
+                    if room.has_entity(&entity_key) {
+                        room.remove_entity(&entity_key);
+                    }
+                }
+            }
+        });
+    });
+
+    // Advance a tick to let the change propagate
+    scenario.mutate(|_| {});
+}
+
 // ============================================================================
 // When Steps - Scope Operations
 // ============================================================================
@@ -213,6 +240,28 @@ fn when_server_excludes_entity_for_client(ctx: &mut TestWorldMut) {
 
     // Advance a tick to let the scope change propagate
     scenario.mutate(|_| {});
+}
+
+/// Step: When the entity despawns on the client
+/// Waits for the entity to despawn on the client side before proceeding.
+#[when("the entity despawns on the client")]
+fn when_entity_despawns_on_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    // Wait for entity to despawn on client
+    scenario.expect(|ectx| {
+        ectx.client(client_key, |client| {
+            if !client.has_entity(&entity_key) {
+                Some(())
+            } else {
+                None
+            }
+        })
+    });
 }
 
 // ============================================================================
@@ -279,6 +328,26 @@ fn then_entity_despawns_on_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
 
     ctx.client(client_key, |client| {
         if !client.has_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Step: Then the entity spawns on the client as a new lifetime
+/// Verifies the entity exists on the client side as a fresh spawn.
+/// This is a POLLING assertion - waits for entity to spawn.
+#[then("the entity spawns on the client as a new lifetime")]
+fn then_entity_spawns_on_client_as_new_lifetime(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    ctx.client(client_key, |client| {
+        if client.has_entity(&entity_key) {
             AssertOutcome::Passed(())
         } else {
             AssertOutcome::Pending

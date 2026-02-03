@@ -1357,11 +1357,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
-        if let Some(in_scope) = self.entity_scope_map.get(user_key, &global_entity) {
-            *in_scope
-        } else {
-            false
+
+        // Owning client is always in-scope for client-owned entities
+        if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
+            match owner {
+                EntityOwner::Client(owner_key)
+                | EntityOwner::ClientWaiting(owner_key)
+                | EntityOwner::ClientPublic(owner_key) => {
+                    if owner_key == *user_key {
+                        return true;
+                    }
+                }
+                _ => {}
+            }
         }
+
+        // Check explicit include/exclude
+        if let Some(in_scope) = self.entity_scope_map.get(user_key, &global_entity) {
+            return *in_scope;
+        }
+        // Default: in-scope if user and entity share a room
+        let Some(user) = self.users.get(user_key) else {
+            return false;
+        };
+        let Some(entity_rooms) = self.entity_room_map.entity_get_rooms(&global_entity) else {
+            return false;
+        };
+        let user_rooms = user.room_keys();
+        entity_rooms.intersection(user_rooms).next().is_some()
     }
 
     //// Components
@@ -2632,12 +2655,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .world_manager
                         .has_global_entity(global_entity);
 
+                    // Default is true (in-scope) since we're already iterating room entities for room users
                     let should_be_in_scope = if let Some(in_scope) =
                         self.entity_scope_map.get(user_key, global_entity)
                     {
                         *in_scope
                     } else {
-                        false
+                        true
                     };
 
                     if should_be_in_scope {
