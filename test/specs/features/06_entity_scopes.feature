@@ -146,7 +146,6 @@ Feature: Entity Scopes
       When the server excludes the entity for the client
       Then the entity is out-of-scope for the client
 
-    @Deferred
     @Scenario(02)
     Scenario: Include restores entity to user's scope after Exclude
       Given a server is running
@@ -238,7 +237,6 @@ Feature: Entity Scopes
       When the server excludes the entity for the client
       Then the entity despawns on the client
 
-    @Deferred
     @Scenario(02)
     Scenario: Entity spawns on client when entering scope
       Given a server is running
@@ -278,7 +276,6 @@ Feature: Entity Scopes
       When the client disconnects
       Then the server stops replicating entities to that client
 
-    @Deferred
     @Scenario(02)
     Scenario: Operations on unknown user are ignored
       Given a server is running

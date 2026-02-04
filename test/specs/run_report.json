@@ -5,7 +5,7 @@
     "feature_fingerprint_hash": "68525f5c648d64dfaca83d44bfb645272bc4df8446c8005bf1eeb5c67077c139",
     "step_registry_hash": "e2b788183eee837d69148a0f3ab9369cef592cd1d324ccffbefa685fb44fceb4",
     "resolved_plan_hash": "11a6f712fab7f4b7e49e357bf831551bd4922c7256c678337172c0c5bdcbf692",
-    "run_report_hash": "d21c7d8dfb8b042a716accb6e023e6c57b1cb27fcf786fce1be75d2b6bcc009c"
+    "run_report_hash": "0cda2cf297f6217df6a8d98415003bedc231a0fd8012c5dece03580a99418c18"
   },
   "scenarios": [
     {
@@ -1330,7 +1330,7 @@
     },
     {
       "scenario_key": "entity_scopes:Rule(03):Scenario(01)",
-      "status": "failed",
+      "status": "passed",
       "steps": [
         {
           "planned_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
@@ -1365,8 +1365,8 @@
           "planned_payload_hash": "ac9a5bac55925353918d13b994f94d61cc69a90e8e3a8375874f070643a1e9f3",
           "executed_payload_hash": "ac9a5bac55925353918d13b994f94d61cc69a90e8e3a8375874f070643a1e9f3",
           "executed_impl_hash": "bfbdc79f45decaf172e7a62d634fe6d4932ea08e752bad25495717a7addc9451",
-          "status": "failed",
-          "error_message": "Scenario::expect timed out after 500 ticks: BDD Step Assertion"
+          "status": "passed",
+          "error_message": null
         }
       ]
     },
