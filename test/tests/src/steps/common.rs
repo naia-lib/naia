@@ -351,7 +351,7 @@ fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
     connect_client_impl(ctx);
 
     let scenario = ctx.scenario_mut();
-    let client_key = scenario.last_client();
+    let _client_key = scenario.last_client();
     let room_key = scenario.last_room();
 
     // Spawn a test entity on server side that will replicate to client

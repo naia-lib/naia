@@ -501,7 +501,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // send queued messages
         let messages = std::mem::take(&mut self.waitlist_messages);
         for (channel_kind, message_box) in messages {
-            self.send_message_inner(&channel_kind, message_box);
+            let _ = self.send_message_inner(&channel_kind, message_box);
         }
     }
 
@@ -669,10 +669,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_replication_config(&global_entity)
             .unwrap();
         if prev_config == config {
-            panic!(
-                "Entity replication config is already set to {:?}. Should not set twice.",
-                config
-            );
+            // Already in the desired state, no-op
+            return;
         }
         match prev_config {
             ReplicationConfig::Private => {

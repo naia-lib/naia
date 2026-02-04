@@ -40,7 +40,7 @@ fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
         scenario.mutate(|ctx| {
             ctx.client(client_key, |client| {
                 // This should fail because ServerToClientChannel doesn't allow client→server
-                client.send_message::<ServerToClientChannel, _>(&TestMessage::new(42));
+                let _ = client.send_message::<ServerToClientChannel, _>(&TestMessage::new(42));
             });
         });
     }));

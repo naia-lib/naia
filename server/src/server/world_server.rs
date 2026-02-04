@@ -818,10 +818,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_replication_config(&global_entity)
             .unwrap();
         if prev_config == config {
-            panic!(
-                "Entity replication config is already set to {:?}. Should not set twice.",
-                config
-            );
+            // Already in the desired state, no-op
+            return;
         }
 
         match prev_config {
@@ -1358,18 +1356,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_to_global_entity(world_entity)
             .unwrap();
 
+        // Check if entity has Private replication config
+        let is_private = if let Some(config) = self.global_world_manager.entity_replication_config(&global_entity) {
+            matches!(config, ReplicationConfig::Private)
+        } else {
+            false
+        };
+
         // Owning client is always in-scope for client-owned entities
-        if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
+        let is_owner = if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
             match owner {
                 EntityOwner::Client(owner_key)
                 | EntityOwner::ClientWaiting(owner_key)
                 | EntityOwner::ClientPublic(owner_key) => {
-                    if owner_key == *user_key {
-                        return true;
-                    }
+                    owner_key == *user_key
                 }
-                _ => {}
+                _ => false
             }
+        } else {
+            false
+        };
+
+        // If owner, always in scope
+        if is_owner {
+            return true;
+        }
+
+        // Per [entity-publication]: Private entities MUST NOT be in-scope for non-owners
+        if is_private {
+            return false;
         }
 
         // Check explicit include/exclude
@@ -1622,8 +1637,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        world.entity_unpublish(world_entity);
         self.global_world_manager.entity_unpublish(&global_entity);
+        world.entity_unpublish(world_entity);
         self.cleanup_entity_replication(&global_entity);
     }
 

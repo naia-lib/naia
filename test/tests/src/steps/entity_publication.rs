@@ -264,16 +264,6 @@ fn then_entity_in_scope_for_client_b(ctx: &TestWorldRef) {
     );
 }
 
-/// Step: Then the entity is out-of-scope for client A
-/// Verifies the entity is not in client A's scope.
-#[then("the entity is out-of-scope for client A")]
-fn then_entity_out_of_scope_for_client_a(ctx: &TestWorldRef) {
-    assert!(
-        !check_entity_in_scope(ctx, "A"),
-        "Expected entity to be out-of-scope for client A, but it was in-scope"
-    );
-}
-
 /// Step: Then the entity is out-of-scope for client B
 /// Verifies the entity is not in client B's scope.
 #[then("the entity is out-of-scope for client B")]

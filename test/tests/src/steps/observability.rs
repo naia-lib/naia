@@ -72,7 +72,7 @@ fn given_client_begins_connecting(ctx: &mut TestWorldMut) {
     client_config.jitter_buffer = JitterBufferType::Bypass;
 
     // Start client - this initiates the handshake
-    let client_key = scenario.client_start(
+    let _client_key = scenario.client_start(
         "ConnectingClient",
         Auth::new("test_user", "password"),
         client_config,

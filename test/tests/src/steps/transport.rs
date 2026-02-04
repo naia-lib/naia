@@ -51,7 +51,7 @@ fn when_client_sends_packet_within_mtu(ctx: &mut TestWorldMut) {
     // MTU_SIZE_BYTES is ~430 bytes, TestMessage is just a u32
     scenario.mutate(|ctx| {
         ctx.client(client_key, |client| {
-            client.send_message::<UnreliableChannel, _>(&TestMessage::new(42));
+            let _ = client.send_message::<UnreliableChannel, _>(&TestMessage::new(42));
         });
     });
 
@@ -116,7 +116,7 @@ fn when_client_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
             ctx.client(client_key, |client| {
-                client.send_message::<UnreliableChannel, _>(&LargeTestMessage::new(1000));
+                let _ = client.send_message::<UnreliableChannel, _>(&LargeTestMessage::new(1000));
             });
         });
     }));

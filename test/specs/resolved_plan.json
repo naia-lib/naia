@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "995c4f5252d883f1cbb1c31579c4cd6a343c697a66483bda018bf56856c18cc0",
-    "step_registry_hash": "c904eb3aabc9ad54bdbbd865e994ff7d5edc782e6b5180f621c79effda832bbc",
-    "resolved_plan_hash": "37d032c76064a9e71789fe4925093d94b1bb79c42623ba51a20f1e717432fce1"
+    "feature_fingerprint_hash": "fcceb2265cc27130e993ae2d0573e210b624d23030681c51aaa0ad0104f4c87f",
+    "step_registry_hash": "c6c981d266a13c9965cbd0ede241ad7170458026e5c21dba7053db75ae6a360d",
+    "resolved_plan_hash": "6c3a55595df8865ff837ad6a8d6aa6da9069784aa91e6eace02d19b4c6031c39"
   },
   "scenarios": [
     {
@@ -1429,6 +1429,224 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "fb9cee393542db31417decb85e0bc13d41884d2126d19def00a3ed9ee9dada44"
+        }
+      ]
+    },
+    {
+      "scenario_key": "entity_publication:Rule(01):Scenario(01)",
+      "feature_path": "features/09_entity_publication.feature",
+      "scenario_name": "Unpublished entity is out-of-scope for non-owners",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c8ed53cdcb9eece5a2cf97564cb9260f8a127294113067dd467178b40c5dfbfd"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A spawns a client-owned entity with Private replication config",
+          "binding_id": "54e89324d1e984848c5bc5d9825671e31305d02b257804fb5bdb5b9f78cdffdd",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b6ef732cec98d66e81decd5889e1d8ca09cf549a149a7279f564a1fcf1b7a3c4"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A and the entity share a room",
+          "binding_id": "40be0d0ad33be108b7e5f81c936fce2c2cf343ab7840d8cf6d680a150adbeeea",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5b9578237edb6acafe06ef74ccb1b87cdcbd0e5bf2ebbf8bc175f798dd53c095"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B and the entity share a room",
+          "binding_id": "40be0d0ad33be108b7e5f81c936fce2c2cf343ab7840d8cf6d680a150adbeeea",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5f16b7bd3c50aa3ab28026b98f32c44666b7ce02a620e06d97d721c320f0240d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is out-of-scope for client B",
+          "binding_id": "33185c17587aedfa44e434a27d73445f5a78b85c1c62e87ee1027af3f4b0e20c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3b0481b95e364f6b73a1ddd09746a851e1503a638a005223955ab1f5af045fe5"
+        }
+      ]
+    },
+    {
+      "scenario_key": "entity_publication:Rule(01):Scenario(02)",
+      "feature_path": "features/09_entity_publication.feature",
+      "scenario_name": "Published entity may be in-scope for non-owners",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c8ed53cdcb9eece5a2cf97564cb9260f8a127294113067dd467178b40c5dfbfd"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A spawns a client-owned entity with Public replication config",
+          "binding_id": "bc892bb786bac3ac8f3f65d950dc2f5dc6be22560a7e518c25b4e17fc36b96e8",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "22a2adbe6d42a8d5e18036d619ca0984ef5f343417dfcfc8533af8e78c28bcdf"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A and the entity share a room",
+          "binding_id": "40be0d0ad33be108b7e5f81c936fce2c2cf343ab7840d8cf6d680a150adbeeea",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5b9578237edb6acafe06ef74ccb1b87cdcbd0e5bf2ebbf8bc175f798dd53c095"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B and the entity share a room",
+          "binding_id": "40be0d0ad33be108b7e5f81c936fce2c2cf343ab7840d8cf6d680a150adbeeea",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5f16b7bd3c50aa3ab28026b98f32c44666b7ce02a620e06d97d721c320f0240d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is in-scope for client B",
+          "binding_id": "653325107ac25d039b7fb86593e48ffe5b447095051a61e7624e19d10bb3274d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1a72430b911b29e3cc718884447d1b46ed43c099f8a57b2d28b71230d394d05d"
+        }
+      ]
+    },
+    {
+      "scenario_key": "entity_publication:Rule(01):Scenario(03)",
+      "feature_path": "features/09_entity_publication.feature",
+      "scenario_name": "Owning client always in-scope regardless of publication state",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A spawns a client-owned entity with Private replication config",
+          "binding_id": "54e89324d1e984848c5bc5d9825671e31305d02b257804fb5bdb5b9f78cdffdd",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b6ef732cec98d66e81decd5889e1d8ca09cf549a149a7279f564a1fcf1b7a3c4"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A and the entity share a room",
+          "binding_id": "40be0d0ad33be108b7e5f81c936fce2c2cf343ab7840d8cf6d680a150adbeeea",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5b9578237edb6acafe06ef74ccb1b87cdcbd0e5bf2ebbf8bc175f798dd53c095"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is in-scope for client A",
+          "binding_id": "3fe46d15114d2c2a8d73115a06d43f0c78138e8b33894368c2f6866c71cedb55",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2440cbb4eddb1b1fb8472ba68235c37dc926961fefea985b054608ed3edb37bc"
         }
       ]
     },
