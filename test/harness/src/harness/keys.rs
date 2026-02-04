@@ -6,6 +6,12 @@ impl ClientKey {
     pub(crate) fn new(id: u32) -> Self {
         Self(id)
     }
+
+    /// Creates an invalid client key for testing "unknown client" scenarios.
+    /// This key will not correspond to any real client in the scenario.
+    pub fn invalid() -> Self {
+        Self(u32::MAX)
+    }
 }
 
 /// EntityKey - A copyable, comparable key representing a logical game entity in tests

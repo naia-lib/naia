@@ -10,6 +10,9 @@ pub mod transport;
 pub mod messaging;
 pub mod observability;
 pub mod entity_scopes;
+pub mod entity_replication;
+pub mod entity_ownership;
+pub mod entity_publication;
 
 // ABI proof tests (compile_fail demonstrations - gated with #[cfg(FALSE)])
 #[cfg(FALSE)]

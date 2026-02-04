@@ -102,9 +102,40 @@
 @Feature(entity_publication)
 Feature: Entity Publication
 
+  # --------------------------------------------------------------------------
+  # Rule: Publication gating
+  # --------------------------------------------------------------------------
+  # Publication gates non-owner visibility for client-owned entities
+  # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Entity Publication
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Scenario(01)
+    Scenario: Unpublished entity is out-of-scope for non-owners
+      Given a server is running
+      And client A connects
+      And client B connects
+      And client A spawns a client-owned entity with Private replication config
+      And client A and the entity share a room
+      And client B and the entity share a room
+      Then the entity is out-of-scope for client B
+
+    @Scenario(02)
+    Scenario: Published entity may be in-scope for non-owners
+      Given a server is running
+      And client A connects
+      And client B connects
+      And client A spawns a client-owned entity with Public replication config
+      And client A and the entity share a room
+      And client B and the entity share a room
+      Then the entity is in-scope for client B
+
+    @Scenario(03)
+    Scenario: Owning client always in-scope regardless of publication state
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Private replication config
+      And client A and the entity share a room
+      Then the entity is in-scope for client A
 
 

@@ -116,9 +116,63 @@
 @Feature(entity_replication)
 Feature: Entity Replication
 
+  # --------------------------------------------------------------------------
+  # Rule: Entity Replication
+  # --------------------------------------------------------------------------
+  # Core replication semantics: spawn, component sync, identity stability
+  # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Entity Replication
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Scenario(01)
+    Scenario: Entity spawns on client when entering scope
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      Then the entity spawns on the client with the replicated component
+
+    @Scenario(02)
+    Scenario: Component updates are replicated to client
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server updates the replicated component
+      Then the client observes the component update
+
+    @Scenario(03)
+    Scenario: Entity despawns on client when leaving scope
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      Then the entity despawns on the client
+
+    @Deferred
+    @Scenario(04)
+    Scenario: GlobalEntity identity is stable during entity lifetime
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server updates the replicated component
+      Then the entity GlobalEntity remains unchanged
+
+    @Deferred
+    @Scenario(05)
+    Scenario: Server state overwrites client local state on conflict
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      And the client modifies the component locally
+      When the server updates the replicated component
+      Then the client observes the server value
 
 

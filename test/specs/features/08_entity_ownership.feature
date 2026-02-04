@@ -108,6 +108,31 @@ Feature: Entity Ownership
   @Rule(01)
   Rule: Entity Ownership
 
-    # All executable scenarios deferred until step bindings implemented.
+    @Scenario(01)
+    Scenario: Server-owned entity accepts writes only from server
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the client attempts to write to the server-owned entity
+      Then the write is rejected
+
+    @Scenario(02)
+    Scenario: Client-owned entity accepts writes from owning client
+      Given a server is running
+      And a client connects
+      And the client spawns a client-owned entity with a replicated component
+      When the client updates the replicated component
+      Then the server observes the component update
+
+    @Scenario(03)
+    Scenario: Entity has exactly one owner at any moment
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      Then the entity owner is the server
 
 

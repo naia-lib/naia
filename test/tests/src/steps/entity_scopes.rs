@@ -119,8 +119,17 @@ fn given_entity_in_scope_for_client(ctx: &mut TestWorldMut) {
         });
     });
 
-    // Advance a tick to let replication happen
+    // Advance and wait until the client actually observes the entity in-scope.
     scenario.mutate(|_| {});
+    scenario.expect(|ectx| {
+        ectx.client(client_key, |client| {
+            if client.has_entity(&entity_key) {
+                Some(())
+            } else {
+                None
+            }
+        })
+    });
 }
 
 /// Step: Given the entity is out-of-scope for the client
@@ -370,4 +379,58 @@ fn then_server_stops_replicating_to_client(ctx: &TestWorldRef) -> AssertOutcome<
             AssertOutcome::Pending
         }
     })
+}
+
+/// Step: Then the entity spawns on the client
+/// Verifies the entity exists on the client side.
+/// This is a POLLING assertion - waits for entity to spawn.
+#[then("the entity spawns on the client")]
+fn then_entity_spawns_on_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    ctx.client(client_key, |client| {
+        if client.has_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Step: When the server includes the entity for an unknown client
+/// Attempts to include an entity for a non-existent client (should be a no-op).
+#[when("the server includes the entity for an unknown client")]
+fn when_server_includes_entity_for_unknown_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    // Create a fake/unknown client key that doesn't exist in the scenario
+    let unknown_client_key = naia_test_harness::ClientKey::invalid();
+
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            // This should be a no-op since the client doesn't exist
+            // user_scope_mut returns None for unknown clients
+            if let Some(mut scope) = server.user_scope_mut(&unknown_client_key) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+
+    // Advance a tick
+    scenario.mutate(|_| {});
+}
+
+/// Step: Then no error is raised
+/// Verifies that the previous operation did not raise an error.
+/// Since we reached this step, no panic occurred.
+#[then("no error is raised")]
+fn then_no_error_is_raised(_ctx: &TestWorldRef) -> AssertOutcome<()> {
+    AssertOutcome::Passed(())
 }
