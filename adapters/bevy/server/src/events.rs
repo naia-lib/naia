@@ -2,9 +2,9 @@ use std::{any::Any, collections::HashMap, hash::Hash, marker::PhantomData, net::
 
 use bevy_ecs::{
     entity::Entity,
-    event::EventReader,
-    prelude::{Event, Resource},
-    system::SystemState,
+    message::{MessageCursor, Messages},
+    prelude::Resource,
+    system::{Res, SystemState},
 };
 
 use naia_bevy_shared::{
@@ -15,29 +15,32 @@ use naia_bevy_shared::{
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
 
 // ConnectEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct ConnectEvent(pub UserKey);
 
 // DisconnectEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct DisconnectEvent(pub UserKey, pub SocketAddr);
 
 // ErrorEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct ErrorEvent(pub NaiaServerError);
 
 // TickEventReader
 #[derive(Resource)]
 pub(crate) struct CachedTickEventsState {
-    pub(crate) event_state: SystemState<EventReader<'static, 'static, TickEvent>>,
+    pub(crate) event_state: SystemState<(
+        Res<'static, Messages<TickEvent>>,
+        bevy_ecs::system::Local<'static, MessageCursor<TickEvent>>,
+    )>,
 }
 
 // TickEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct TickEvent(pub Tick);
 
 // AuthEvents
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct AuthEvents {
     inner: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
 }
@@ -63,7 +66,7 @@ impl AuthEvents {
 }
 
 // MessageEvents
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct MessageEvents {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
 }
@@ -107,7 +110,7 @@ fn convert_messages<M: Message>(
 }
 
 // RequestEvents
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct RequestEvents {
     inner: HashMap<
         ChannelKind,
@@ -153,22 +156,22 @@ impl RequestEvents {
 }
 
 // SpawnEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct SpawnEntityEvent(pub UserKey, pub Entity);
 
 // DespawnEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct DespawnEntityEvent(pub UserKey, pub Entity);
 
 // PublishEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct PublishEntityEvent(pub UserKey, pub Entity);
 
 // UnpublishEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct UnpublishEntityEvent(pub UserKey, pub Entity);
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct InsertComponentEvent<C: Replicate> {
     pub user_key: UserKey,
     pub entity: Entity,
@@ -185,7 +188,7 @@ impl<C: Replicate> InsertComponentEvent<C> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct InsertBundleEvent<B: ReplicateBundle> {
     pub user_key: UserKey,
     pub entity: Entity,
@@ -202,7 +205,7 @@ impl<B: ReplicateBundle> InsertBundleEvent<B> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct UpdateComponentEvent<C: Replicate> {
     pub user_key: UserKey,
     pub entity: Entity,
@@ -219,7 +222,7 @@ impl<C: Replicate> UpdateComponentEvent<C> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct RemoveComponentEvent<C: Replicate> {
     pub user_key: UserKey,
     pub entity: Entity,

@@ -3,7 +3,7 @@ use std::{
     marker::PhantomData,
 };
 
-use bevy_ecs::{entity::Entity, world::World};
+use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
 use naia_bevy_shared::{ComponentKind, ReplicateBundle, WorldProxy, WorldRefType};
 
@@ -157,6 +157,8 @@ impl<T: Send + Sync + 'static, B: ReplicateBundle> BundleEventHandler
     for BundleEventHandlerImpl<T, B>
 {
     fn send_event(&self, world: &mut World, entity: Entity) {
-        world.send_event(InsertBundleEvent::<T, B>::new(entity));
+        world
+            .resource_mut::<Messages<InsertBundleEvent<T, B>>>()
+            .write(InsertBundleEvent::<T, B>::new(entity));
     }
 }

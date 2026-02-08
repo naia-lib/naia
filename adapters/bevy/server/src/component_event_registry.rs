@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, resource::Resource, world::World};
+use bevy_ecs::{entity::Entity, message::Messages, resource::Resource, world::World};
 
 use log::warn;
 
@@ -119,13 +119,17 @@ impl<R: Replicate> ComponentEventHandlerImpl<R> {
 impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
     fn handle_inserts(&mut self, world: &mut World, entities: Vec<(UserKey, Entity)>) {
         for (user_key, entity) in entities {
-            world.send_event(InsertComponentEvent::<R>::new(user_key, entity));
+            world
+                .resource_mut::<Messages<InsertComponentEvent<R>>>()
+                .write(InsertComponentEvent::<R>::new(user_key, entity));
         }
     }
 
     fn handle_updates(&mut self, world: &mut World, entities: Vec<(UserKey, Entity)>) {
         for (user_key, entity) in entities {
-            world.send_event(UpdateComponentEvent::<R>::new(user_key, entity));
+            world
+                .resource_mut::<Messages<UpdateComponentEvent<R>>>()
+                .write(UpdateComponentEvent::<R>::new(user_key, entity));
         }
     }
 
@@ -140,7 +144,9 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
                 .ok()
                 .map(|boxed_r| *boxed_r)
                 .unwrap();
-            world.send_event(RemoveComponentEvent::<R>::new(user_key, entity, component));
+            world
+                .resource_mut::<Messages<RemoveComponentEvent<R>>>()
+                .write(RemoveComponentEvent::<R>::new(user_key, entity, component));
         }
     }
 }

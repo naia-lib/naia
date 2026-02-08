@@ -33,7 +33,7 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
             // RESOURCES //
             .init_resource::<HostOwnedMap>()
             // EVENTS //
-            .add_event::<HostSyncEvent>()
+            .add_message::<HostSyncEvent>()
             // SYSTEMS //
             .add_systems(
                 Update,

@@ -3,7 +3,8 @@ use std::any::TypeId;
 use bevy_ecs::{
     component::Component,
     entity::Entity,
-    message::{Message, MessageWriter},
+    lifecycle::RemovedComponents,
+    message::{Message, Messages},
     query::{Added, Changed},
     system::{Query, ResMut},
 };
@@ -39,9 +40,9 @@ pub fn on_host_owned_added(
 }
 
 pub fn on_despawn(
-    mut events: MessageWriter<HostSyncEvent>,
+    mut events: ResMut<Messages<HostSyncEvent>>,
     query: Query<Entity>,
-    mut removals: bevy_ecs::component::RemovedComponents<HostOwned>,
+    mut removals: RemovedComponents<HostOwned>,
     mut host_owned_map: ResMut<HostOwnedMap>,
 ) {
     for entity in removals.read() {
@@ -58,7 +59,7 @@ pub fn on_despawn(
 }
 
 pub fn on_component_added<R: Replicate + Component>(
-    mut events: MessageWriter<HostSyncEvent>,
+    mut events: ResMut<Messages<HostSyncEvent>>,
     query: Query<(Entity, &HostOwned), Added<R>>,
 ) {
     for (entity, host_owned) in query.iter() {
@@ -71,9 +72,9 @@ pub fn on_component_added<R: Replicate + Component>(
 }
 
 pub fn on_component_removed<R: Replicate + Component>(
-    mut events: MessageWriter<HostSyncEvent>,
+    mut events: ResMut<Messages<HostSyncEvent>>,
     query: Query<&HostOwned>,
-    mut removals: bevy_ecs::component::RemovedComponents<R>,
+    mut removals: RemovedComponents<R>,
 ) {
     for entity in removals.read() {
         if let Ok(host_owned) = query.get(entity) {
