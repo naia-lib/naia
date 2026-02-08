@@ -2,9 +2,10 @@ use std::default::Default;
 
 use bevy::{
     color::LinearRgba,
+    ecs::message::Messages,
     log::info,
     prelude::{
-        Color as BevyColor, Commands, EventReader, Mesh2d, MeshMaterial2d, Query, Res, ResMut,
+        Color as BevyColor, Commands, Mesh2d, MeshMaterial2d, Query, Res, ResMut,
         Sprite, Transform, Vec2,
     },
 };
@@ -37,9 +38,9 @@ pub fn connect_events(
     mut commands: Commands,
     mut client: Client<Main>,
     mut global: ResMut<Global>,
-    mut event_reader: EventReader<ConnectEvent<Main>>,
+    mut event_reader: ResMut<Messages<ConnectEvent<Main>>>,
 ) {
-    for _ in event_reader.read() {
+    for _ in event_reader.drain() {
         let Ok(server_address) = client.server_address() else {
             panic!("Shouldn't happen");
         };
@@ -48,6 +49,7 @@ pub fn connect_events(
         // Create entity for Client-authoritative Cursor
 
         // Spawn Cursor Entity
+
         let cursor_entity = commands
             // Spawn new Square Entity
             .spawn_empty()
@@ -71,14 +73,14 @@ pub fn connect_events(
     }
 }
 
-pub fn reject_events(mut event_reader: EventReader<RejectEvent<Main>>) {
-    for _ in event_reader.read() {
+pub fn reject_events(mut event_reader: ResMut<Messages<RejectEvent<Main>>>) {
+    for _ in event_reader.drain() {
         info!("Client rejected from connecting to Server");
     }
 }
 
-pub fn disconnect_events(mut event_reader: EventReader<DisconnectEvent<Main>>) {
-    for _ in event_reader.read() {
+pub fn disconnect_events(mut event_reader: ResMut<Messages<DisconnectEvent<Main>>>) {
+    for _ in event_reader.drain() {
         info!("Client disconnected from Server");
     }
 }
@@ -87,11 +89,11 @@ pub fn message_events(
     mut commands: Commands,
     client: Client<Main>,
     mut global: ResMut<Global>,
-    mut event_reader: EventReader<MessageEvents<Main>>,
+    mut event_reader: ResMut<Messages<MessageEvents<Main>>>,
     position_query: Query<&Position>,
     color_query: Query<&Color>,
 ) {
-    for events in event_reader.read() {
+    for events in event_reader.drain() {
         for message in events.read::<EntityAssignmentChannel, EntityAssignment>() {
             let assign = message.assign;
 
@@ -165,9 +167,9 @@ pub fn message_events(
 
 pub fn request_events(
     mut client: Client<Main>,
-    mut event_reader: EventReader<RequestEvents<Main>>,
+    mut event_reader: ResMut<Messages<RequestEvents<Main>>>,
 ) {
-    for events in event_reader.read() {
+    for events in event_reader.drain() {
         for (response_send_key, request) in events.read::<RequestChannel, BasicRequest>() {
             info!("Client received Request <- Server: {:?}", request);
             let response = BasicResponse::new("ClientResponse".to_string(), request.index);
@@ -190,40 +192,40 @@ pub fn response_events(mut client: Client<Main>, mut global: ResMut<Global>) {
     }
 }
 
-pub fn spawn_entity_events(mut event_reader: EventReader<SpawnEntityEvent<Main>>) {
-    for _event in event_reader.read() {
+pub fn spawn_entity_events(mut event_reader: ResMut<Messages<SpawnEntityEvent<Main>>>) {
+    for _event in event_reader.drain() {
         info!("spawned entity");
     }
 }
 
-pub fn despawn_entity_events(mut event_reader: EventReader<DespawnEntityEvent<Main>>) {
-    for _event in event_reader.read() {
+pub fn despawn_entity_events(mut event_reader: ResMut<Messages<DespawnEntityEvent<Main>>>) {
+    for _event in event_reader.drain() {
         info!("despawned entity");
     }
 }
 
-pub fn publish_entity_events(mut event_reader: EventReader<PublishEntityEvent<Main>>) {
-    for _event in event_reader.read() {
+pub fn publish_entity_events(mut event_reader: ResMut<Messages<PublishEntityEvent<Main>>>) {
+    for _event in event_reader.drain() {
         info!("client demo: publish entity event");
     }
 }
 
-pub fn unpublish_entity_events(mut event_reader: EventReader<UnpublishEntityEvent<Main>>) {
-    for _event in event_reader.read() {
+pub fn unpublish_entity_events(mut event_reader: ResMut<Messages<UnpublishEntityEvent<Main>>>) {
+    for _event in event_reader.drain() {
         info!("client demo: unpublish entity event");
     }
 }
 
 pub fn insert_component_events(
     mut commands: Commands,
-    mut color_event_reader: EventReader<InsertComponentEvent<Main, Color>>,
-    mut position_event_reader: EventReader<InsertComponentEvent<Main, Position>>,
-    mut shape_event_reader: EventReader<InsertComponentEvent<Main, Shape>>,
+    mut color_event_reader: ResMut<Messages<InsertComponentEvent<Main, Color>>>,
+    mut position_event_reader: ResMut<Messages<InsertComponentEvent<Main, Position>>>,
+    mut shape_event_reader: ResMut<Messages<InsertComponentEvent<Main, Shape>>>,
     global: Res<Global>,
     sprite_query: Query<(&Shape, &Color)>,
     position_query: Query<&Position>,
 ) {
-    for event in color_event_reader.read() {
+    for event in color_event_reader.drain() {
         let entity = event.entity;
 
         // When we receive a replicated Color component for a given Entity,
@@ -297,7 +299,7 @@ pub fn insert_component_events(
             panic!("spritequery failed!");
         }
     }
-    for event in position_event_reader.read() {
+    for event in position_event_reader.drain() {
         let entity = event.entity;
 
         info!("add Position Component to entity: {:?}", entity);
@@ -309,7 +311,7 @@ pub fn insert_component_events(
         }
     }
 
-    for event in shape_event_reader.read() {
+    for event in shape_event_reader.drain() {
         let entity = event.entity;
         info!("add Shape Component to entity: {:?}", entity);
     }
@@ -317,7 +319,7 @@ pub fn insert_component_events(
 
 pub fn update_component_events(
     mut global: ResMut<Global>,
-    mut position_event_reader: EventReader<UpdateComponentEvent<Main, Position>>,
+    mut position_event_reader: ResMut<Messages<UpdateComponentEvent<Main, Position>>>,
     mut position_query: Query<&mut Position>,
 ) {
     // When we receive a new Position update for the Player's Entity,
@@ -329,7 +331,7 @@ pub fn update_component_events(
         let server_entity = owned_entity.confirmed;
         let client_entity = owned_entity.predicted;
 
-        for event in position_event_reader.read() {
+        for event in position_event_reader.drain() {
             let server_tick = event.tick;
             let updated_entity = event.entity;
 
@@ -370,21 +372,21 @@ pub fn update_component_events(
 }
 
 pub fn remove_component_events(
-    mut color_event_reader: EventReader<RemoveComponentEvent<Main, Color>>,
-    mut position_event_reader: EventReader<RemoveComponentEvent<Main, Position>>,
-    mut shape_event_reader: EventReader<RemoveComponentEvent<Main, Shape>>,
+    mut color_event_reader: ResMut<Messages<RemoveComponentEvent<Main, Color>>>,
+    mut position_event_reader: ResMut<Messages<RemoveComponentEvent<Main, Position>>>,
+    mut shape_event_reader: ResMut<Messages<RemoveComponentEvent<Main, Shape>>>,
 ) {
-    for event in color_event_reader.read() {
+    for event in color_event_reader.drain() {
         let entity = event.entity;
         let _component = event.component.clone();
         info!("removed Color component from entity: {:?}", entity);
     }
-    for event in position_event_reader.read() {
+    for event in position_event_reader.drain() {
         let entity = event.entity;
         let _component = event.component.clone();
         info!("removed Position component from entity: {:?}", entity);
     }
-    for event in shape_event_reader.read() {
+    for event in shape_event_reader.drain() {
         let entity = event.entity;
         let _component = event.component.clone();
         info!("removed Shape component from entity: {:?}", entity);
@@ -394,7 +396,7 @@ pub fn remove_component_events(
 pub fn tick_events(
     mut client: Client<Main>,
     mut global: ResMut<Global>,
-    mut tick_reader: EventReader<ClientTickEvent<Main>>,
+    mut tick_reader: ResMut<Messages<ClientTickEvent<Main>>>,
     mut position_query: Query<&mut Position>,
 ) {
     let Some(predicted_entity) = global
@@ -410,7 +412,7 @@ pub fn tick_events(
         return;
     };
 
-    for event in tick_reader.read() {
+    for event in tick_reader.drain() {
         let client_tick = event.tick;
 
         // Send a request to server

@@ -1,6 +1,7 @@
 use naia_serde::SerdeInternal;
 
 use crate::ProtocolId;
+use crate::handshake::RejectReason;
 
 #[derive(SerdeInternal, Debug, PartialEq, Eq, Clone)]
 pub enum HandshakeHeader {
@@ -18,10 +19,4 @@ pub enum HandshakeHeader {
     ServerRejectResponse(RejectReason),
     // Used to request a graceful Client disconnect from the Server
     Disconnect,
-}
-
-#[derive(SerdeInternal, Debug, PartialEq, Eq, Clone, Copy)]
-pub enum RejectReason {
-    ProtocolMismatch,
-    Auth,
 }

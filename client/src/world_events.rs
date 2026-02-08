@@ -4,7 +4,7 @@ use std::{
 
 use naia_shared::{
     Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
-    Replicate, Request, ResponseSendKey, Tick, handshake::simple::RejectReason,
+    Replicate, Request, ResponseSendKey, Tick, handshake::RejectReason,
 };
 
 use crate::NaiaClientError;

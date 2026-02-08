@@ -1,2 +1,2 @@
 mod header;
-pub use header::{HandshakeHeader, RejectReason};
+pub use header::HandshakeHeader;

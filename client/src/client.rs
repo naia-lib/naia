@@ -9,7 +9,7 @@ use naia_shared::{
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity,
     PacketType, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
     ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick,
-    WorldMutType, WorldRefType, handshake::{HandshakeHeader, simple::RejectReason},
+    WorldMutType, WorldRefType, handshake::{HandshakeHeader, RejectReason},
 };
 
 use super::{

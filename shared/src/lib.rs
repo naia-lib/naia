@@ -57,6 +57,7 @@ mod wrapping_number;
 cfg_if! {
     if #[cfg(any(feature = "transport_udp", feature = "transport_local"))]{
         pub mod transport;
+        pub use transport as http_utils;
     }
 }
 

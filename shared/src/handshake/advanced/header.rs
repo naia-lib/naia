@@ -1,7 +1,7 @@
 use naia_serde::SerdeInternal;
 
 use crate::ProtocolId;
-use super::simple::RejectReason;
+use crate::handshake::RejectReason;
 
 #[derive(SerdeInternal, Debug, PartialEq, Eq, Clone)]
 pub enum HandshakeHeader {
