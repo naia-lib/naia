@@ -21,9 +21,9 @@ impl AppRegisterComponentEvents for App {
         component_event_registry.register_component_handler::<C>();
 
         // add events
-        self.add_event::<InsertComponentEvent<T, C>>()
-            .add_event::<UpdateComponentEvent<T, C>>()
-            .add_event::<RemoveComponentEvent<T, C>>();
+        self.add_message::<InsertComponentEvent<T, C>>()
+            .add_message::<UpdateComponentEvent<T, C>>()
+            .add_message::<RemoveComponentEvent<T, C>>();
 
         self
     }
@@ -37,7 +37,7 @@ impl AppRegisterComponentEvents for App {
             .register_bundle_handler::<B>();
 
         // add events
-        self.add_event::<InsertBundleEvent<T, B>>();
+        self.add_message::<InsertBundleEvent<T, B>>();
 
         self
     }

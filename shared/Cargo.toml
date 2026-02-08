@@ -19,17 +19,17 @@ maintenance = { status = "actively-developed" }
 [features]
 wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
-test_time = [ "naia-socket-shared/test_time" ]
 bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
 transport_udp = [ "http" ]
-transport_local = [ "http", "tokio", "once_cell" ]
+interior_visibility = []
+test_time = []
+test_utils = []
+transport_local = []
+e2e_debug = []
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
 advanced_handshake = []
-interior_visibility = []
-e2e_debug = []
-test_utils = []
 
 [dependencies]
 naia-socket-shared = { version = "0.24", path = "../socket/shared" }
@@ -38,9 +38,7 @@ naia-serde = { version = "0.24", path = "serde" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
 js-sys = { version = "0.3.64", optional = true }
-bevy_ecs = { version = "0.17", default-features = false, optional = true }
+bevy_ecs = { version = "0.18", default-features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }
 http = { version = "1.2", optional = true }
-tokio = { version = "1", features = ["rt-multi-thread", "sync", "time"], optional = true }
-once_cell = { version = "1", optional = true }
-blake3 = { version = "1.5" }
+blake3 = "1"

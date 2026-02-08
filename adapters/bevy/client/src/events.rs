@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use bevy_ecs::{
     entity::Entity,
-    event::{Event, EventReader},
+    message::{MessageCursor, Messages},
     resource::Resource,
     system::SystemState,
 };
@@ -17,7 +17,7 @@ use naia_bevy_shared::{
 use crate::Replicate;
 
 // ConnectEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct ConnectEvent<T> {
     phantom_t: PhantomData<T>,
 }
@@ -31,7 +31,7 @@ impl<T> ConnectEvent<T> {
 }
 
 // DisconnectEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct DisconnectEvent<T> {
     phantom_t: PhantomData<T>,
 }
@@ -45,7 +45,7 @@ impl<T> DisconnectEvent<T> {
 }
 
 // RejectEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct RejectEvent<T> {
     phantom_t: PhantomData<T>,
 }
@@ -59,7 +59,7 @@ impl<T> RejectEvent<T> {
 }
 
 // ErrorEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct ErrorEvent<T> {
     pub err: NaiaClientError,
     phantom_t: PhantomData<T>,
@@ -75,7 +75,7 @@ impl<T> ErrorEvent<T> {
 }
 
 // MessageEvents
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct MessageEvents<T> {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     phantom_t: PhantomData<T>,
@@ -114,7 +114,7 @@ impl<T> MessageEvents<T> {
 }
 
 // RequestEvents
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct RequestEvents<T> {
     inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
     phantom_t: PhantomData<T>,
@@ -158,11 +158,14 @@ impl<T> RequestEvents<T> {
 // ClientTickEventReader
 #[derive(Resource)]
 pub(crate) struct CachedClientTickEventsState<T: Send + Sync + 'static> {
-    pub(crate) event_state: SystemState<EventReader<'static, 'static, ClientTickEvent<T>>>,
+    pub(crate) event_state: SystemState<(
+        bevy_ecs::system::Res<'static, Messages<ClientTickEvent<T>>>,
+        bevy_ecs::system::Local<'static, MessageCursor<ClientTickEvent<T>>>,
+    )>,
 }
 
 // ClientTickEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct ClientTickEvent<T> {
     pub tick: Tick,
     phantom_t: PhantomData<T>,
@@ -178,7 +181,7 @@ impl<T> ClientTickEvent<T> {
 }
 
 // ServerTickEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct ServerTickEvent<T> {
     pub tick: Tick,
     phantom_t: PhantomData<T>,
@@ -194,7 +197,7 @@ impl<T> ServerTickEvent<T> {
 }
 
 // SpawnEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct SpawnEntityEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -210,7 +213,7 @@ impl<T> SpawnEntityEvent<T> {
 }
 
 // DespawnEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct DespawnEntityEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -225,7 +228,7 @@ impl<T> DespawnEntityEvent<T> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct InsertComponentEvent<T: Send + Sync + 'static, C: Replicate> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -242,7 +245,7 @@ impl<T: Send + Sync + 'static, C: Replicate> InsertComponentEvent<T, C> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct InsertBundleEvent<T: Send + Sync + 'static, B: ReplicateBundle> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -259,7 +262,7 @@ impl<T: Send + Sync + 'static, B: ReplicateBundle> InsertBundleEvent<T, B> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct UpdateComponentEvent<T: Send + Sync + 'static, C: Replicate> {
     pub tick: Tick,
     pub entity: Entity,
@@ -278,7 +281,7 @@ impl<T: Send + Sync + 'static, C: Replicate> UpdateComponentEvent<T, C> {
     }
 }
 
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct RemoveComponentEvent<T: Send + Sync + 'static, C: Replicate> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -296,7 +299,7 @@ impl<T: Send + Sync + 'static, C: Replicate> RemoveComponentEvent<T, C> {
 }
 
 // PublishEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct PublishEntityEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -312,7 +315,7 @@ impl<T> PublishEntityEvent<T> {
 }
 
 // UnpublishEntityEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct UnpublishEntityEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -328,7 +331,7 @@ impl<T> UnpublishEntityEvent<T> {
 }
 
 // EntityAuthGrantedEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct EntityAuthGrantedEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -344,7 +347,7 @@ impl<T> EntityAuthGrantedEvent<T> {
 }
 
 // EntityAuthDeniedEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct EntityAuthDeniedEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,
@@ -360,7 +363,7 @@ impl<T> EntityAuthDeniedEvent<T> {
 }
 
 // EntityAuthResetEvent
-#[derive(Event)]
+#[derive(bevy_ecs::message::Message)]
 pub struct EntityAuthResetEvent<T> {
     pub entity: Entity,
     phantom_t: PhantomData<T>,

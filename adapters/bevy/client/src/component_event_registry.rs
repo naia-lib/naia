@@ -1,6 +1,6 @@
 use std::{any::Any, collections::HashMap, marker::PhantomData};
 
-use bevy_ecs::{entity::Entity, resource::Resource, world::World};
+use bevy_ecs::{entity::Entity, message::Messages, resource::Resource, world::World};
 
 use log::warn;
 
@@ -121,13 +121,17 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
 {
     fn handle_inserts(&mut self, world: &mut World, entities: Vec<Entity>) {
         for entity in entities {
-            world.send_event(InsertComponentEvent::<T, R>::new(entity));
+            world
+                .resource_mut::<Messages<InsertComponentEvent<T, R>>>()
+                .write(InsertComponentEvent::<T, R>::new(entity));
         }
     }
 
     fn handle_updates(&mut self, world: &mut World, entities: Vec<(Tick, Entity)>) {
         for (tick, entity) in entities {
-            world.send_event(UpdateComponentEvent::<T, R>::new(tick, entity));
+            world
+                .resource_mut::<Messages<UpdateComponentEvent<T, R>>>()
+                .write(UpdateComponentEvent::<T, R>::new(tick, entity));
         }
     }
 
@@ -138,7 +142,9 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
                 .ok()
                 .map(|boxed_r| *boxed_r)
                 .unwrap();
-            world.send_event(RemoveComponentEvent::<T, R>::new(entity, component));
+            world
+                .resource_mut::<Messages<RemoveComponentEvent<T, R>>>()
+                .write(RemoveComponentEvent::<T, R>::new(entity, component));
         }
     }
 }

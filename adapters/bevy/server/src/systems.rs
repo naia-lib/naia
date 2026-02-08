@@ -1,8 +1,8 @@
 use std::ops::DerefMut;
 
 use bevy_ecs::{
-    event::{EventReader, EventWriter, Events},
-    system::{ResMut, SystemState},
+    message::Messages,
+    system::{Res, ResMut, SystemState},
     world::{Mut, World},
 };
 
@@ -43,13 +43,13 @@ pub fn world_to_host_sync(world: &mut World) {
 
         // Host Component Updates
         let mut host_component_event_reader =
-            world.get_resource_mut::<Events<HostSyncEvent>>().unwrap();
+            world.get_resource_mut::<Messages<HostSyncEvent>>().unwrap();
         let host_component_events: Vec<HostSyncEvent> =
             host_component_event_reader.drain().collect();
         for event in host_component_events {
             match event {
                 HostSyncEvent::Insert(_host_id, entity, component_kind) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(world.proxy(), &entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -66,14 +66,14 @@ pub fn world_to_host_sync(world: &mut World) {
                     );
                 }
                 HostSyncEvent::Remove(_host_id, entity, component_kind) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(world.proxy(), &entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
                     server.remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(_host_id, entity) => {
-                    if server.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(world.proxy(), &entity) == Some(EntityAuthStatus::Denied) {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -94,7 +94,7 @@ pub fn receive_packets(mut server: ResMut<ServerImpl>) {
 
 pub fn translate_tick_events(
     mut server: ResMut<ServerImpl>,
-    mut tick_event_writer: EventWriter<bevy_events::TickEvent>,
+    mut tick_events: ResMut<Messages<bevy_events::TickEvent>>,
 ) {
     if !server.is_listening() {
         return;
@@ -108,7 +108,7 @@ pub fn translate_tick_events(
         // Tick Event
         if events.has::<naia_events::TickEvent>() {
             for tick in events.read::<naia_events::TickEvent>() {
-                tick_event_writer.write(bevy_events::TickEvent(tick));
+                tick_events.write(bevy_events::TickEvent(tick));
             }
         }
     }
@@ -137,67 +137,71 @@ pub fn translate_world_events(world: &mut World) {
             // Connect Event
             if events.has::<naia_events::ConnectEvent>() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::ConnectEvent>>()
+                    .get_resource_mut::<Messages<bevy_events::ConnectEvent>>()
                     .unwrap();
                 for user_key in events.read::<naia_events::ConnectEvent>() {
-                    event_writer.send(bevy_events::ConnectEvent(user_key));
+                    event_writer.write(bevy_events::ConnectEvent(user_key));
                 }
             }
 
             // Disconnect Event
             if events.has::<naia_events::DisconnectEvent>() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::DisconnectEvent>>()
+                    .get_resource_mut::<Messages<bevy_events::DisconnectEvent>>()
                     .unwrap();
                 for (user_key, user) in events.read::<naia_events::DisconnectEvent>() {
-                    event_writer.send(bevy_events::DisconnectEvent(user_key, user));
+                    event_writer.write(bevy_events::DisconnectEvent(user_key, user));
                 }
             }
 
             // Error Event
             if events.has::<naia_events::ErrorEvent>() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::ErrorEvent>>()
+                    .get_resource_mut::<Messages<bevy_events::ErrorEvent>>()
                     .unwrap();
                 for error in events.read::<naia_events::ErrorEvent>() {
-                    event_writer.send(bevy_events::ErrorEvent(error));
+                    event_writer.write(bevy_events::ErrorEvent(error));
                 }
             }
 
             // Message Event
             if events.has_messages() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::MessageEvents>>()
+                    .get_resource_mut::<Messages<bevy_events::MessageEvents>>()
                     .unwrap();
-                event_writer.send(bevy_events::MessageEvents::from(&mut events));
+                event_writer.write(bevy_events::MessageEvents::from(&mut events));
             }
 
             // Request Event
             if events.has_requests() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::RequestEvents>>()
+                    .get_resource_mut::<Messages<bevy_events::RequestEvents>>()
                     .unwrap();
-                event_writer.send(bevy_events::RequestEvents::from(&mut events));
+                event_writer.write(bevy_events::RequestEvents::from(&mut events));
             }
 
             // Auth Event
             if events.has_auths() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::AuthEvents>>()
+                    .get_resource_mut::<Messages<bevy_events::AuthEvents>>()
                     .unwrap();
-                event_writer.send(bevy_events::AuthEvents::from(&mut events));
+                event_writer.write(bevy_events::AuthEvents::from(&mut events));
             }
 
             // Spawn Entity Event
             if events.has::<naia_events::SpawnEntityEvent>() {
-                let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::SpawnEntityEvent>>()
-                    .unwrap();
                 let mut client_spawned_entities = Vec::new();
                 for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
-                    if let EntityOwner::Client(user_key) = server.entity_owner(&entity) {
+                    if let EntityOwner::Client(user_key) = server.entity_owner(world.proxy(), &entity) {
                         client_spawned_entities.push((user_key, entity));
-                        event_writer.send(bevy_events::SpawnEntityEvent(user_key, entity));
+                    }
+                }
+                {
+                    let mut event_writer = world
+                        .get_resource_mut::<Messages<bevy_events::SpawnEntityEvent>>()
+                        .unwrap();
+                    for &(user_key, entity) in &client_spawned_entities {
+                        event_writer.write(bevy_events::SpawnEntityEvent(user_key, entity));
                     }
                 }
                 for (user_key, entity) in client_spawned_entities {
@@ -208,30 +212,30 @@ pub fn translate_world_events(world: &mut World) {
             // Despawn Entity Event
             if events.has::<naia_events::DespawnEntityEvent>() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::DespawnEntityEvent>>()
+                    .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent>>()
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::DespawnEntityEvent>() {
-                    event_writer.send(bevy_events::DespawnEntityEvent(user_key, entity));
+                    event_writer.write(bevy_events::DespawnEntityEvent(user_key, entity));
                 }
             }
 
             // Publish Entity Event
             if events.has::<naia_events::PublishEntityEvent>() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::PublishEntityEvent>>()
+                    .get_resource_mut::<Messages<bevy_events::PublishEntityEvent>>()
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::PublishEntityEvent>() {
-                    event_writer.send(bevy_events::PublishEntityEvent(user_key, entity));
+                    event_writer.write(bevy_events::PublishEntityEvent(user_key, entity));
                 }
             }
 
             // Unpublish Entity Event
             if events.has::<naia_events::UnpublishEntityEvent>() {
                 let mut event_writer = world
-                    .get_resource_mut::<Events<bevy_events::UnpublishEntityEvent>>()
+                    .get_resource_mut::<Messages<bevy_events::UnpublishEntityEvent>>()
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::UnpublishEntityEvent>() {
-                    event_writer.send(bevy_events::UnpublishEntityEvent(user_key, entity));
+                    event_writer.write(bevy_events::UnpublishEntityEvent(user_key, entity));
                 }
             }
 
@@ -268,8 +272,10 @@ pub fn translate_world_events(world: &mut World) {
 }
 
 pub fn send_packets_init(world: &mut World) {
-    let tick_event_state: SystemState<EventReader<bevy_events::TickEvent>> =
-        SystemState::new(world);
+    let tick_event_state: SystemState<(
+        Res<Messages<bevy_events::TickEvent>>,
+        bevy_ecs::system::Local<bevy_ecs::message::MessageCursor<bevy_events::TickEvent>>,
+    )> = SystemState::new(world);
     world.insert_resource(CachedTickEventsState {
         event_state: tick_event_state,
     });
@@ -286,9 +292,9 @@ pub fn send_packets(world: &mut World) {
                 // Tick Event
                 let mut did_tick = false;
 
-                let mut events_reader = events_reader_state.event_state.get_mut(world);
+                let (messages, mut cursor) = events_reader_state.event_state.get_mut(world);
 
-                for bevy_events::TickEvent(_tick) in events_reader.read() {
+                for bevy_events::TickEvent(_tick) in cursor.read(&messages) {
                     did_tick = true;
                 }
 

@@ -426,13 +426,13 @@ impl<'w> Server<'w> {
 
     pub(crate) fn entity_take_authority(&mut self, entity: &Entity) {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(server) => server.entity_take_authority(entity),
-            ServerImpl::Full(server) => server.entity_take_authority(entity),
+            ServerImpl::WorldOnly(server) => { let _ = server.entity_take_authority(entity); },
+            ServerImpl::Full(server) => { let _ = server.entity_take_authority(entity); },
         }
     }
 
-    pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {
-        self.server_impl.entity_authority_status(entity)
+    pub(crate) fn entity_authority_status(&self, _entity: &Entity) -> Option<EntityAuthStatus> {
+        todo!("entity_authority_status requires world access; use ServerImpl directly in exclusive systems")
     }
 
     pub fn world_only_resource_scope(
