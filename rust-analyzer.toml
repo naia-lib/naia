@@ -1,0 +1,19 @@
+# rust-analyzer configuration for naia workspace
+
+[files]
+exclude = ["target", "demos"]
+
+[procMacro]
+enable = false
+
+[check]
+command = "clippy"
+
+[cargo]
+allTargets = false
+
+[completion]
+limit = 100
+
+[workspace.symbol.search]
+limit = 100
