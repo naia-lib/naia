@@ -28,7 +28,7 @@ pub struct ServerSendError;
 pub struct ServerRecvError;
 
 // Error type for local auth operations
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum LocalAuthError {
     ChannelClosed,
     ParseError,

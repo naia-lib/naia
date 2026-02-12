@@ -1,93 +1,96 @@
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::{mpsc, oneshot, oneshot::error::TryRecvError};
+use tokio::sync::mpsc;
 
 use naia_shared::{
     transport::local::{
-        get_runtime, ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError,
+        ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError,
     },
     IdentityToken,
 };
 
 use super::addr_cell::LocalAddrCell;
 
-// PendingRequest for async auth handling
+// PendingRequest polls synchronously — no Tokio runtime needed for local transport.
 struct PendingRequest {
-    receiver: oneshot::Receiver<Result<(u16, String), LocalAuthError>>,
+    auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    addr_cell: LocalAddrCell,
+    cached_result: Option<Result<(u16, String), LocalAuthError>>,
 }
 
 impl PendingRequest {
     fn new(
-        mut auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
     ) -> Self {
-        let (tx, rx) = oneshot::channel::<Result<(u16, String), LocalAuthError>>();
-
-        get_runtime().spawn(async move {
-            // Wait for auth response from mpsc channel (one message)
-            // Since we own the receiver, no mutex needed!
-            let response_bytes = match auth_responses_rx.recv().await {
-                Some(bytes) => bytes,
-                None => {
-                    // Channel closed
-                    let _ = tx.send(Err(LocalAuthError::ChannelClosed));
-                    return;
-                }
-            };
-
-            // Parse HTTP response
-            let response = naia_shared::transport::bytes_to_response(&response_bytes);
-            let status_code = response.status().as_u16();
-
-            if status_code != 200 {
-                let _ = tx.send(Ok((status_code, String::new())));
-                return;
-            }
-
-            // Parse response body: "identity_token\r\nserver_addr"
-            let body = match String::from_utf8(response.body().to_vec()) {
-                Ok(b) => b,
-                Err(_) => {
-                    let _ = tx.send(Err(LocalAuthError::ParseError));
-                    return;
-                }
-            };
-
-            let mut parts = body.splitn(2, "\r\n");
-            let identity_token = parts.next().unwrap().to_string();
-            let server_addr_str = match parts.next() {
-                Some(addr) => addr,
-                None => {
-                    let _ = tx.send(Err(LocalAuthError::ParseError));
-                    return;
-                }
-            };
-
-            let server_addr = match server_addr_str.parse() {
-                Ok(addr) => addr,
-                Err(_) => {
-                    let _ = tx.send(Err(LocalAuthError::ParseError));
-                    return;
-                }
-            };
-
-            // Update addr_cell asynchronously
-            // IMPORTANT: Update addr_cell BEFORE sending result so client can use it immediately
-            addr_cell.recv(server_addr).await;
-
-            let _ = tx.send(Ok((status_code, identity_token)));
-        });
-
-        Self { receiver: rx }
+        Self {
+            auth_responses_rx,
+            addr_cell,
+            cached_result: None,
+        }
     }
 
     pub fn poll_response(&mut self) -> Result<Option<(u16, String)>, LocalAuthError> {
-        match self.receiver.try_recv() {
-            Ok(Ok((status_code, id_token))) => Ok(Some((status_code, id_token))),
-            Ok(Err(e)) => Err(e),
-            Err(TryRecvError::Empty) => Ok(None),
-            Err(TryRecvError::Closed) => Err(LocalAuthError::ChannelClosed),
+        // Return cached result if we already parsed the response
+        if let Some(ref result) = self.cached_result {
+            return match result {
+                Ok((status_code, id_token)) => Ok(Some((*status_code, id_token.clone()))),
+                Err(e) => Err(e.clone()),
+            };
         }
+
+        // Try to receive the auth response synchronously
+        let response_bytes = match self.auth_responses_rx.try_recv() {
+            Ok(bytes) => bytes,
+            Err(mpsc::error::TryRecvError::Empty) => return Ok(None),
+            Err(mpsc::error::TryRecvError::Disconnected) => {
+                return Err(LocalAuthError::ChannelClosed);
+            }
+        };
+
+        // Parse HTTP response
+        let response = naia_shared::transport::bytes_to_response(&response_bytes);
+        let status_code = response.status().as_u16();
+
+        if status_code != 200 {
+            let result = Ok((status_code, String::new()));
+            self.cached_result = Some(result.clone());
+            return Ok(Some(result.unwrap()));
+        }
+
+        // Parse response body: "identity_token\r\nserver_addr"
+        let body = match String::from_utf8(response.body().to_vec()) {
+            Ok(b) => b,
+            Err(_) => {
+                self.cached_result = Some(Err(LocalAuthError::ParseError));
+                return Err(LocalAuthError::ParseError);
+            }
+        };
+
+        let mut parts = body.splitn(2, "\r\n");
+        let identity_token = parts.next().unwrap().to_string();
+        let server_addr_str = match parts.next() {
+            Some(addr) => addr,
+            None => {
+                self.cached_result = Some(Err(LocalAuthError::ParseError));
+                return Err(LocalAuthError::ParseError);
+            }
+        };
+
+        let server_addr = match server_addr_str.parse() {
+            Ok(addr) => addr,
+            Err(_) => {
+                self.cached_result = Some(Err(LocalAuthError::ParseError));
+                return Err(LocalAuthError::ParseError);
+            }
+        };
+
+        // Update addr_cell synchronously
+        self.addr_cell.set(server_addr);
+
+        let result = Ok((status_code, identity_token));
+        self.cached_result = Some(result.clone());
+        Ok(Some(result.unwrap()))
     }
 }
 

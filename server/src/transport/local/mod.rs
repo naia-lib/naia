@@ -6,4 +6,5 @@ mod socket;
 pub use auth::{LocalServerAuthReceiver, LocalServerAuthSender, ServerAuthIo};
 pub use data::{LocalServerReceiver, LocalServerSender};
 pub use inner_socket::LocalServerSocket;
+pub use naia_shared::transport::local::LocalTransportHub;
 pub use socket::Socket;

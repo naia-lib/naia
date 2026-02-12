@@ -83,6 +83,9 @@ impl ServerImpl {
     }
 
     pub(crate) fn entity_authority_status<W: WorldRefType<Entity>>(&self, world: W, entity: &Entity) -> Option<EntityAuthStatus> {
+        if !world.has_entity(entity) {
+            return None;
+        }
         match self {
             Self::Full(server) => server.entity(world, entity).authority(),
             Self::WorldOnly(server) => server.entity(world, entity).authority(),

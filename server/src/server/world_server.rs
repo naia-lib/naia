@@ -976,10 +976,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub(crate) fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
-        let global_entity = self
+        let global_entity = match self
             .global_entity_map
             .entity_to_global_entity(world_entity)
-            .unwrap();
+        {
+            Ok(ge) => ge,
+            Err(_) => return None,
+        };
         self.global_world_manager
             .entity_authority_status(&global_entity)
     }
