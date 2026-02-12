@@ -1394,7 +1394,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code) => {
-                    warn!("Authentication error status code: {}", code);
 
                     let old_socket_addr_result = self.io.server_addr();
 

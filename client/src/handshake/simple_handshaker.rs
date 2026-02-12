@@ -75,8 +75,6 @@ impl Handshaker for HandshakeManager {
                 }
             }
             HandshakeState::TimeSync(time_manager) => {
-                // use time manager to send initial pings until client/server time is synced
-                // then, move state to AwaitingConnectResponse
                 let writer = time_manager.write_ping();
                 return Some(writer.to_packet());
             }
@@ -85,7 +83,6 @@ impl Handshaker for HandshakeManager {
                 return Some(writer.to_packet());
             }
             HandshakeState::Connected => {
-                // do nothing, not necessary
                 return None;
             }
         }
