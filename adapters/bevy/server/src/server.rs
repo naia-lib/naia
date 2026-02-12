@@ -37,6 +37,18 @@ impl ServerImpl {
         Self::WorldOnly(world_only_server)
     }
 
+    pub(crate) fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
+        match self {
+            Self::Full(server) => server.listen(socket),
+            Self::WorldOnly(server) => {
+                let boxed_socket: Box<dyn Socket> = socket.into();
+                let (_auth_sender, _auth_receiver, packet_sender, packet_receiver) =
+                    boxed_socket.listen();
+                server.io_load(packet_sender, packet_receiver);
+            }
+        }
+    }
+
     pub(crate) fn is_listening(&self) -> bool {
         match self {
             Self::Full(server) => server.is_listening(),
@@ -158,12 +170,7 @@ impl<'w> Server<'w> {
     //// Connections ////
 
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
-        match &mut *self.server_impl {
-            ServerImpl::WorldOnly(_server) => {
-                panic!("WorldOnly Servers do not support this function")
-            }
-            ServerImpl::Full(server) => server.listen(socket),
-        }
+        self.server_impl.listen(socket);
     }
 
     pub fn is_listening(&self) -> bool {
