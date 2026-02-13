@@ -1,5 +1,3 @@
-use std::str::FromStr;
-
 use http::Method;
 use log::warn;
 
@@ -106,7 +104,7 @@ fn parse_path_line(path_line: &str) -> (Method, String) {
     let path = parts.next().unwrap();
     let _http_version = parts.next().unwrap(); // Status text can be empty
 
-    let method = Method::from_str(method).unwrap();
+    let method = method.parse::<Method>().unwrap();
     (method, path.to_string())
 }
 
