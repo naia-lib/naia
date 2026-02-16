@@ -166,11 +166,11 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
     }
 
     pub(crate) fn entity_request_authority(&mut self, entity: &Entity) {
-        self.client.client.entity_request_authority(entity);
+        let _ = self.client.client.entity_request_authority(entity);
     }
 
     pub(crate) fn entity_release_authority(&mut self, entity: &Entity) {
-        self.client.client.entity_release_authority(entity);
+        let _ = self.client.client.entity_release_authority(entity);
     }
 
     pub(crate) fn entity_authority_status(&self, entity: &Entity) -> Option<EntityAuthStatus> {

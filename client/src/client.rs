@@ -272,13 +272,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if should_read_packets {
             // read packets on tick boundary, de-jittering
-            if connection
+            if let Err(_err) = connection
                 .read_buffered_packets(
                     &self.protocol.channel_kinds,
                     &self.protocol.message_kinds,
                     &self.protocol.component_kinds,
                 )
-                .is_err()
             {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 warn!("Error reading from buffered packet!");
@@ -1373,7 +1372,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if self.server_connection.is_none() {
             self.maintain_handshake();
-        } else {
+        }
+        // Note: maintain_handshake may have just established the connection,
+        // so we check again (not else) to immediately process any remaining
+        // packets (e.g. entity replication data) that arrived in the same
+        // transport batch as the final handshake response.
+        if self.server_connection.is_some() {
             self.maintain_connection();
         }
     }
@@ -1442,6 +1446,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                             let server_addr = self.server_address_unwrapped();
                             self.incoming_world_events.push_connection(&server_addr);
+
+                            // Stop reading here — any remaining packets in
+                            // the transport (e.g. Data packets with entity
+                            // replication) must be processed through
+                            // maintain_connection, not the handshake loop
+                            // which silently discards non-handshake packets.
+                            break;
                         }
                         Some(HandshakeResult::Rejected(reason)) => {
                             info!("Client: Received HandshakeResult::Rejected({:?})", reason);
@@ -1478,13 +1489,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Self::handle_empty_acks(connection, &mut self.io);
 
         let mut received_any = false;
-        let mut _packets_received = 0;
 
         // receive from socket
         loop {
             match self.io.recv_reader() {
                 Ok(Some(mut reader)) => {
-                    _packets_received += 1;
                     connection.mark_heard();
 
                     let header = match StandardHeader::de(&mut reader) {
@@ -1507,7 +1516,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         PacketType::Heartbeat
                         | PacketType::Ping
                         | PacketType::Pong => {
-                            // continue, these packet types are allowed when
+                            // these packet types are allowed when
                             // connection is established
                         }
                         PacketType::Handshake => {

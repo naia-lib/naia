@@ -5,7 +5,7 @@ use log::{debug, warn};
 use naia_client::{NaiaClientError, TickEvents, WorldEvents};
 use naia_shared::{
     ChannelKind, ComponentKind, GlobalResponseId, LocalEntity, MessageContainer, MessageKind,
-    OwnedLocalEntity, Replicate, Tick, WorldRefType, handshake::simple::RejectReason,
+    OwnedLocalEntity, Replicate, Tick, WorldRefType, handshake::RejectReason,
 };
 
 use crate::{

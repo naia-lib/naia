@@ -39,6 +39,9 @@ pub enum HandshakeAction {
     None,
     FinalizeConnection(UserKey, OutgoingPacket),
     SendPacket(OutgoingPacket),
+    /// Used by the simple (non-UDP) handshaker to forward unrecognized packets.
+    /// Only constructed when `transport_udp` is disabled.
+    #[cfg_attr(feature = "transport_udp", allow(dead_code))]
     ForwardPacket,
     /// Disconnect the user (for verified disconnect requests)
     DisconnectUser(UserKey),

@@ -200,7 +200,6 @@ impl Connection {
             .base
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
-        
         // Count drained commands and messages for this connection
         #[cfg(feature = "e2e_debug")]
         {
