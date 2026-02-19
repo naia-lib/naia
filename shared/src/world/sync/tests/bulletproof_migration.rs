@@ -57,7 +57,7 @@ fn migration_preserves_component_state() {
 #[test]
 fn migration_handles_empty_component_state() {
     // Setup: Create entity with no components
-    let mut channel = RemoteEntityChannel::new(HostType::Client);
+    let channel = RemoteEntityChannel::new(HostType::Client);
 
     // Extract component kinds (simulating migration)
     let component_kinds = channel.extract_inserted_component_kinds();
@@ -160,7 +160,7 @@ fn migration_handles_command_replay() {
 #[test]
 fn migration_handles_invalid_entity() {
     // This test verifies that migration handles invalid entities gracefully
-    let mut channel = RemoteEntityChannel::new(HostType::Client);
+    let channel = RemoteEntityChannel::new(HostType::Client);
 
     // Test that channel is in correct initial state
     assert_eq!(channel.get_state(), EntityChannelState::Despawned);

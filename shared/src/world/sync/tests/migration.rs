@@ -1,8 +1,6 @@
 #![cfg(test)]
 
-use crate::world::entity::entity_converters::GlobalWorldManagerType;
 use crate::world::local::local_entity::RemoteEntity;
-use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     world::{
         component::component_kinds::ComponentKind,
@@ -15,7 +13,6 @@ use crate::{
     HostType,
 };
 use crate::{BigMapKey, GlobalEntity, HostEntity, LocalEntityMap, OwnedLocalEntity};
-use std::collections::HashSet;
 
 // BULLETPROOF: Simplified test approach - create a minimal test that doesn't require complex setup
 

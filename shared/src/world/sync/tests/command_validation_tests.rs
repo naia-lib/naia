@@ -6,20 +6,9 @@
 /// The bug was missed because previous tests created channels directly and
 /// bypassed the real command flow. These tests exercise the ACTUAL code path.
 use crate::{
-    world::sync::{
-        host_entity_channel::HostEntityChannel, remote_entity_channel::RemoteEntityChannel,
-    },
-    BigMapKey, ComponentKind, EntityAuthStatus, EntityCommand, GlobalEntity, HostEntity, HostType,
-    RemoteEntity,
+    world::sync::host_entity_channel::HostEntityChannel,
+    BigMapKey, EntityCommand, GlobalEntity, HostEntity, HostType, RemoteEntity,
 };
-use std::any::TypeId;
-
-#[derive(Debug, Clone, Copy)]
-struct DummyComponent;
-
-fn component_kind<T: 'static>() -> ComponentKind {
-    ComponentKind::from(TypeId::of::<T>())
-}
 
 /// Test that ALL migration-related commands can be sent through the real channel flow
 #[test]

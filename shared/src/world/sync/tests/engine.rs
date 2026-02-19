@@ -233,7 +233,6 @@ fn empty_drain_safe() {
 
 #[test]
 #[ignore]
-#[ignore]
 fn entity_auth_basic() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
 

@@ -13,14 +13,17 @@ use crate::{
 };
 
 /// Test component types for integration testing
+#[allow(dead_code)]
 struct Position {
     x: f32,
     y: f32,
 }
+#[allow(dead_code)]
 struct Velocity {
     x: f32,
     y: f32,
 }
+#[allow(dead_code)]
 struct Health {
     value: u32,
 }
@@ -172,12 +175,7 @@ fn migration_with_buffered_operations() {
     // MIGRATION: Force drain all buffers
     remote_channel.force_drain_all_buffers();
 
-    // MIGRATION: Extract component state
-    let component_kinds = remote_channel.extract_inserted_component_kinds();
-
-    // Verify components were processed correctly
-    // Note: The exact state depends on the processing logic
-    assert!(component_kinds.len() >= 0); // At least some processing happened
+    // Force-drain processes all buffered operations; component extraction not needed here
 }
 
 /// INTEGRATION TEST: Migration error handling

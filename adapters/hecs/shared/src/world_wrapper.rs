@@ -70,7 +70,7 @@ impl WorldRefType<Entity> for &WorldWrapper {
         has_component_of_kind(&self.inner, &self.data, entity, component_kind)
     }
 
-    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<'_, R>> {
         component::<R>(&self.inner, entity)
     }
 
@@ -100,7 +100,7 @@ impl WorldRefType<Entity> for &mut WorldWrapper {
         has_component_of_kind(&self.inner, &self.data, entity, component_kind)
     }
 
-    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<R>> {
+    fn component<R: Replicate>(&self, entity: &Entity) -> Option<ReplicaRefWrapper<'_, R>> {
         component::<R>(&self.inner, entity)
     }
 
@@ -156,7 +156,7 @@ impl WorldMutType<Entity> for &mut WorldWrapper {
         kinds
     }
 
-    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<R>> {
+    fn component_mut<R: Replicate>(&mut self, entity: &Entity) -> Option<ReplicaMutWrapper<'_, R>> {
         if let Ok(hecs_mut) = self.inner.get::<&mut R>(*entity) {
             let wrapper = ComponentMut(hecs_mut);
             let component_mut = ReplicaMutWrapper::new(wrapper);

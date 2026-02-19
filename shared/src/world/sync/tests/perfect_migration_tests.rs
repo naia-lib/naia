@@ -14,10 +14,12 @@ use crate::{
 };
 
 /// Test component types for migration testing
+#[allow(dead_code)]
 struct Position {
     x: f32,
     y: f32,
 }
+#[allow(dead_code)]
 struct Velocity {
     x: f32,
     y: f32,
@@ -69,13 +71,11 @@ fn host_entity_channel_perfect_operations() {
 
     channel.send_command(EntityCommand::InsertComponent(global_entity, pos_kind));
 
-    // Test command extraction
-    let commands = channel.extract_outgoing_commands();
-    assert!(commands.len() >= 0); // Commands may be processed immediately
+    // Test command extraction (commands may be processed immediately)
+    let _commands = channel.extract_outgoing_commands();
 
-    // Test component kinds
-    let component_kinds = channel.component_kinds();
-    assert!(component_kinds.len() >= 0); // Components may be processed immediately
+    // Test component kinds (components may be processed immediately)
+    let _component_kinds = channel.component_kinds();
 }
 
 /// Test that LocalEntityMap works perfectly
@@ -86,7 +86,7 @@ fn local_entity_map_perfect_operations() {
     // Test entity insertion
     let global_entity = GlobalEntity::from_u64(60001);
     let remote_entity = crate::world::local::local_entity::RemoteEntity::new(42);
-    let host_entity = HostEntity::new(100);
+    let _host_entity = HostEntity::new(100);
 
     entity_map.insert_with_remote_entity(global_entity, remote_entity);
 
@@ -181,11 +181,8 @@ fn buffered_operations_perfect() {
     // Force drain buffers
     remote_channel.force_drain_all_buffers();
 
-    // Extract final state
-    let component_kinds = remote_channel.extract_inserted_component_kinds();
-
-    // Verify some processing happened
-    assert!(component_kinds.len() >= 0);
+    // Extract final state (processing happened during force_drain)
+    let _component_kinds = remote_channel.extract_inserted_component_kinds();
 }
 
 /// Test that high-frequency operations work perfectly

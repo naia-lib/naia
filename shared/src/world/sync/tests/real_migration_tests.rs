@@ -14,10 +14,12 @@ use crate::{
 };
 
 /// Test component types for migration testing
+#[allow(dead_code)]
 struct Position {
     x: f32,
     y: f32,
 }
+#[allow(dead_code)]
 struct Velocity {
     x: f32,
     y: f32,
@@ -87,7 +89,7 @@ fn local_entity_map_redirect_operations() {
     // Test entity insertion
     let global_entity = GlobalEntity::from_u64(1);
     let remote_entity = crate::world::local::local_entity::RemoteEntity::new(42);
-    let host_entity = HostEntity::new(100);
+    let _host_entity = HostEntity::new(100);
 
     entity_map.insert_with_remote_entity(global_entity, remote_entity);
 
@@ -183,11 +185,8 @@ fn buffered_operations_handling() {
     // Force drain buffers
     remote_channel.force_drain_all_buffers();
 
-    // Extract final state
-    let component_kinds = remote_channel.extract_inserted_component_kinds();
-
-    // Verify some processing happened
-    assert!(component_kinds.len() >= 0);
+    // Extract final state (processing happened during force_drain)
+    let _component_kinds = remote_channel.extract_inserted_component_kinds();
 }
 
 /// Test that high-frequency operations work correctly
