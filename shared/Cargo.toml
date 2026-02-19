@@ -22,10 +22,10 @@ mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy_ecs" ]
 zstd_support = [ "zstd" ]
 transport_udp = [ "http" ]
+transport_local = [ "http", "tokio", "once_cell" ]
 interior_visibility = []
 test_time = [ "naia-socket-shared/test_time" ]
 test_utils = []
-transport_local = [ "http", "tokio", "once_cell" ]
 e2e_debug = []
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
