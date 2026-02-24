@@ -54,7 +54,7 @@ fn run_namako_cli(subcommand: &str, extra_args: &[&str]) -> Output {
 
     let mut args = vec![
         "run",
-        "-p", "namako-cli",
+        "-p", "namako_cli",
         "--manifest-path", cli_manifest.to_str().unwrap(),
         "--",
         subcommand,

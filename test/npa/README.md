@@ -18,7 +18,7 @@ cargo run -p naia_npa -- run -p resolved_plan.json -o run_report.json
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│  Namako Engine (namako-cli)                                 │
+│  Namako Engine (namako_cli)                                 │
 │    ├── lint → calls `naia_npa manifest`                     │
 │    └── run  → calls `naia_npa run --plan ... --out ...`     │
 └─────────────────────────────────────────────────────────────┘
