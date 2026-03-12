@@ -49,7 +49,9 @@ pub fn world_to_host_sync(world: &mut World) {
         for event in host_component_events {
             match event {
                 HostSyncEvent::Insert(_host_id, entity, component_kind) => {
-                    if server.entity_authority_status(world.proxy(), &entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(world.proxy(), &entity)
+                        == Some(EntityAuthStatus::Denied)
+                    {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -66,14 +68,18 @@ pub fn world_to_host_sync(world: &mut World) {
                     );
                 }
                 HostSyncEvent::Remove(_host_id, entity, component_kind) => {
-                    if server.entity_authority_status(world.proxy(), &entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(world.proxy(), &entity)
+                        == Some(EntityAuthStatus::Denied)
+                    {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
                     server.remove_component_worldless(&entity, &component_kind);
                 }
                 HostSyncEvent::Despawn(_host_id, entity) => {
-                    if server.entity_authority_status(world.proxy(), &entity) == Some(EntityAuthStatus::Denied) {
+                    if server.entity_authority_status(world.proxy(), &entity)
+                        == Some(EntityAuthStatus::Denied)
+                    {
                         // if auth status is denied, that means the client is performing this operation and it's already being handled
                         continue;
                     }
@@ -192,7 +198,9 @@ pub fn translate_world_events(world: &mut World) {
             if events.has::<naia_events::SpawnEntityEvent>() {
                 let mut client_spawned_entities = Vec::new();
                 for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
-                    if let EntityOwner::Client(user_key) = server.entity_owner(world.proxy(), &entity) {
+                    if let EntityOwner::Client(user_key) =
+                        server.entity_owner(world.proxy(), &entity)
+                    {
                         client_spawned_entities.push((user_key, entity));
                     }
                 }

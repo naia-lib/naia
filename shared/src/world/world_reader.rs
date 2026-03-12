@@ -198,7 +198,7 @@ impl WorldReader {
             }
             EntityMessageType::SetAuthority => {
                 // this command is only ever received by clients, regarding server-owned entities
-                
+
                 // Count when SetAuthority message KIND is recognized on wire (before entity mapping)
                 #[cfg(feature = "e2e_debug")]
                 {

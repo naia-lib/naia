@@ -3,15 +3,13 @@
 
 use std::time::Duration;
 
-use namako_engine::{given, when, then};
-use naia_test_harness::{
-    protocol, Auth,
-    ServerAuthEvent, ServerConnectEvent,
-    TrackedServerEvent, TrackedClientEvent,
-    ClientDisconnectEvent,
-};
-use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
+use naia_server::ServerConfig;
+use naia_test_harness::{
+    protocol, Auth, ClientDisconnectEvent, ServerAuthEvent, ServerConnectEvent, TrackedClientEvent,
+    TrackedServerEvent,
+};
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -28,9 +26,7 @@ fn given_server_running(ctx: &mut TestWorldMut) {
     scenario.server_start(ServerConfig::default(), test_protocol);
 
     // Create a room for clients and store it
-    let room_key = scenario.mutate(|ctx| {
-        ctx.server(|server| server.make_room().key())
-    });
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
     scenario.set_last_room(room_key);
 }
 
@@ -102,7 +98,10 @@ fn connect_client_impl(ctx: &mut TestWorldMut) {
     // Add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -154,7 +153,11 @@ fn when_server_disconnects(ctx: &mut TestWorldMut) {
 fn then_server_has_clients(ctx: &TestWorldRef, expected: usize) {
     let scenario = ctx.scenario();
     let count = scenario.server().expect("server").users_count();
-    assert_eq!(count, expected, "server should have {} connected clients", expected);
+    assert_eq!(
+        count, expected,
+        "server should have {} connected clients",
+        expected
+    );
 }
 
 // ============================================================================

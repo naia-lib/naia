@@ -1,8 +1,17 @@
+use naia_server::{
+    EntityMut as NaiaEntityMut, EntityRef as NaiaEntityRef, ReplicationConfig, RoomKey,
+};
+use naia_shared::{
+    AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent,
+    WorldMutType, WorldRefType,
+};
 
-use naia_server::{EntityMut as NaiaEntityMut, EntityRef as NaiaEntityRef, ReplicationConfig, RoomKey};
-use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent, WorldMutType, WorldRefType};
-
-use crate::{harness::{users::Users, entity_registry::EntityRegistry, entity_owner::EntityOwner, EntityKey}, ClientKey, TestEntity};
+use crate::{
+    harness::{
+        entity_owner::EntityOwner, entity_registry::EntityRegistry, users::Users, EntityKey,
+    },
+    ClientKey, TestEntity,
+};
 
 /// Harness wrapper for EntityRef that works with EntityKey instead of TestEntity
 pub struct ServerEntityRef<'a, W: WorldRefType<TestEntity>> {
@@ -17,7 +26,11 @@ impl<'a, W: WorldRefType<TestEntity>> ServerEntityRef<'a, W> {
         users: Users<'a>,
         registry: &'a EntityRegistry,
     ) -> Self {
-        Self { entity_ref, users, registry }
+        Self {
+            entity_ref,
+            users,
+            registry,
+        }
     }
 
     /// Get the EntityKey for this entity
@@ -58,7 +71,9 @@ impl<'a, W: WorldRefType<TestEntity>> ServerEntityRef<'a, W> {
             naia_server::EntityOwner::Client(user_key)
             | naia_server::EntityOwner::ClientWaiting(user_key)
             | naia_server::EntityOwner::ClientPublic(user_key) => {
-                let client_key = self.users.user_to_client_key(&user_key)
+                let client_key = self
+                    .users
+                    .user_to_client_key(&user_key)
                     .unwrap_or_else(|| panic!("UserKey {:?} not found in client map", user_key));
                 EntityOwner::Client(client_key)
             }
@@ -80,7 +95,11 @@ impl<'a, W: WorldMutType<TestEntity>> ServerEntityMut<'a, W> {
         users: Users<'a>,
         registry: &'a EntityRegistry,
     ) -> Self {
-        Self { entity_mut, users, registry }
+        Self {
+            entity_mut,
+            users,
+            registry,
+        }
     }
 
     /// Get the EntityKey for this entity
@@ -152,7 +171,9 @@ impl<'a, W: WorldMutType<TestEntity>> ServerEntityMut<'a, W> {
             naia_server::EntityOwner::Client(user_key)
             | naia_server::EntityOwner::ClientWaiting(user_key)
             | naia_server::EntityOwner::ClientPublic(user_key) => {
-                let client_key = self.users.user_to_client_key(&user_key)
+                let client_key = self
+                    .users
+                    .user_to_client_key(&user_key)
                     .unwrap_or_else(|| panic!("UserKey {:?} not found in client map", user_key));
                 EntityOwner::Client(client_key)
             }
@@ -162,7 +183,10 @@ impl<'a, W: WorldMutType<TestEntity>> ServerEntityMut<'a, W> {
 
     /// Give authority to a user
     pub fn give_authority(&mut self, client_key: &ClientKey) -> Result<&mut Self, AuthorityError> {
-        let user_key = self.users.client_to_user_key(client_key).ok_or(AuthorityError::NotInScope)?;
+        let user_key = self
+            .users
+            .client_to_user_key(client_key)
+            .ok_or(AuthorityError::NotInScope)?;
         self.entity_mut.give_authority(&user_key)?;
         Ok(self)
     }
@@ -191,4 +215,3 @@ impl<'a, W: WorldMutType<TestEntity>> ServerEntityMut<'a, W> {
         self
     }
 }
-

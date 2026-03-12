@@ -73,7 +73,11 @@ impl AuthChannel {
             }
             EntityMessageType::DisableDelegation => {
                 #[cfg(feature = "e2e_debug")]
-                crate::e2e_trace!("[CLIENT_RECV] DisableDelegation entity={:?} current_state={:?}", entity, self.state);
+                crate::e2e_trace!(
+                    "[CLIENT_RECV] DisableDelegation entity={:?} current_state={:?}",
+                    entity,
+                    self.state
+                );
                 if self.state != EntityAuthChannelState::Delegated {
                     panic!(
                         "Cannot disable delegation on Entity: {:?} that is not delegated",
@@ -107,30 +111,34 @@ impl AuthChannel {
 
                 let from_status = self.auth_status.unwrap();
                 #[cfg(feature = "e2e_debug")]
-                crate::e2e_trace!("[CLIENT_RECV] SetAuthority entity={:?} from_status={:?} to_status={:?}", command.entity(), from_status, next_status);
+                crate::e2e_trace!(
+                    "[CLIENT_RECV] SetAuthority entity={:?} from_status={:?} to_status={:?}",
+                    command.entity(),
+                    from_status,
+                    next_status
+                );
 
                 match (from_status, next_status) {
-                    (EntityAuthStatus::Available, EntityAuthStatus::Requested) |
-                    (EntityAuthStatus::Available, EntityAuthStatus::Granted) |
-                    (EntityAuthStatus::Available, EntityAuthStatus::Denied) |
-
-                    (EntityAuthStatus::Requested, EntityAuthStatus::Granted) |
-                    (EntityAuthStatus::Requested, EntityAuthStatus::Denied) |
-                    (EntityAuthStatus::Requested, EntityAuthStatus::Available) |
-
-                    (EntityAuthStatus::Denied, EntityAuthStatus::Granted) |
-                    (EntityAuthStatus::Denied, EntityAuthStatus::Available) |
-
-                    (EntityAuthStatus::Granted, EntityAuthStatus::Available) |
-                    (EntityAuthStatus::Granted, EntityAuthStatus::Denied) |
-                    (EntityAuthStatus::Granted, EntityAuthStatus::Releasing) |
-
-                    (EntityAuthStatus::Releasing, EntityAuthStatus::Available) |
-                    (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
+                    (EntityAuthStatus::Available, EntityAuthStatus::Requested)
+                    | (EntityAuthStatus::Available, EntityAuthStatus::Granted)
+                    | (EntityAuthStatus::Available, EntityAuthStatus::Denied)
+                    | (EntityAuthStatus::Requested, EntityAuthStatus::Granted)
+                    | (EntityAuthStatus::Requested, EntityAuthStatus::Denied)
+                    | (EntityAuthStatus::Requested, EntityAuthStatus::Available)
+                    | (EntityAuthStatus::Denied, EntityAuthStatus::Granted)
+                    | (EntityAuthStatus::Denied, EntityAuthStatus::Available)
+                    | (EntityAuthStatus::Granted, EntityAuthStatus::Available)
+                    | (EntityAuthStatus::Granted, EntityAuthStatus::Denied)
+                    | (EntityAuthStatus::Granted, EntityAuthStatus::Releasing)
+                    | (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
+                    | (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
                         // valid transition!
                     }
                     (from_status, to_status) => {
-                        panic!("Invalid authority transition from {:?} to {:?}", from_status, to_status);
+                        panic!(
+                            "Invalid authority transition from {:?} to {:?}",
+                            from_status, to_status
+                        );
                     }
                 }
 
@@ -253,7 +261,9 @@ impl AuthChannel {
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub(crate) fn receiver_debug_diagnostic(&self) -> (SubCommandId, usize, Option<SubCommandId>, usize) {
+    pub(crate) fn receiver_debug_diagnostic(
+        &self,
+    ) -> (SubCommandId, usize, Option<SubCommandId>, usize) {
         self.receiver.debug_diagnostic()
     }
 }

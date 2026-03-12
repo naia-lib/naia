@@ -2,7 +2,7 @@
 use bevy_ecs::prelude::Component;
 
 use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, EntityProperty, Message, Property, Protocol, 
+    Channel, ChannelDirection, ChannelMode, EntityProperty, Message, Property, Protocol,
     ReliableSettings, Replicate, TickBufferSettings,
 };
 

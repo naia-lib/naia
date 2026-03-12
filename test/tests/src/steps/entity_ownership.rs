@@ -5,10 +5,10 @@
 //!   - Write rejection for unauthorized clients
 //!   - Client-owned entity spawning and updates
 
-use namako_engine::{given, when, then};
-use namako_engine::codegen::AssertOutcome;
-use naia_test_harness::{EntityKey, EntityOwner, Position};
 use naia_client::ReplicationConfig as ClientReplicationConfig;
+use naia_test_harness::{EntityKey, EntityOwner, Position};
+use namako_engine::codegen::AssertOutcome;
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -201,15 +201,14 @@ fn then_entity_owner_is_server(ctx: &TestWorldRef) -> AssertOutcome<()> {
 /// Verifies the unauthorized write was rejected.
 #[then("the write is rejected")]
 fn then_write_is_rejected(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let write_rejected: bool = ctx
-        .scenario()
-        .bdd_get(WRITE_REJECTED_KEY)
-        .unwrap_or(false);
+    let write_rejected: bool = ctx.scenario().bdd_get(WRITE_REJECTED_KEY).unwrap_or(false);
 
     if write_rejected {
         AssertOutcome::Passed(())
     } else {
-        AssertOutcome::Failed("Expected write to be rejected, but server state was modified".to_string())
+        AssertOutcome::Failed(
+            "Expected write to be rejected, but server state was modified".to_string(),
+        )
     }
 }
 

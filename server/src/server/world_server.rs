@@ -10,8 +10,8 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    AuthorityError, handshake::HandshakeHeader, BigMap, BitReader, BitWriter, Channel, ChannelKind, ChannelKinds,
-    ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    handshake::HandshakeHeader, AuthorityError, BigMap, BitReader, BitWriter, Channel, ChannelKind,
+    ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message,
     MessageContainer, MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request,
@@ -638,7 +638,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     new_status = EntityAuthStatus::Granted;
                 }
                 // Use host_send_set_auth which handles both HostEntity and RemoteEntity
-                conn.base.world_manager.host_send_set_auth(&global_entity, new_status);
+                conn.base
+                    .world_manager
+                    .host_send_set_auth(&global_entity, new_status);
                 #[cfg(feature = "e2e_debug")]
                 if new_status == EntityAuthStatus::Granted {
                     SERVER_SET_AUTH_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -698,7 +700,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     #[cfg(feature = "test_utils")]
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
-        self.global_entity_map.set_global_entity_counter_for_test(value);
+        self.global_entity_map
+            .set_global_entity_counter_for_test(value);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -731,7 +734,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         result.map(|_| ())
     }
 
-    fn send_take_authority_messages(&mut self, global_entity: &GlobalEntity, previous_owner: AuthOwner) {
+    fn send_take_authority_messages(
+        &mut self,
+        global_entity: &GlobalEntity,
+        previous_owner: AuthOwner,
+    ) {
         // Server has taken authority - send appropriate messages based on previous state
         match previous_owner {
             AuthOwner::Client(prev_holder_key) => {
@@ -739,8 +746,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // Other clients were already Denied, no message needed
                 if let Some(user) = self.users.get(&prev_holder_key) {
                     if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                        if connection.base.world_manager.has_global_entity(global_entity) {
-                            connection.base.world_manager.host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                        if connection
+                            .base
+                            .world_manager
+                            .has_global_entity(global_entity)
+                        {
+                            connection
+                                .base
+                                .world_manager
+                                .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
                         }
                     }
                 }
@@ -749,10 +763,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // No holder - all clients were Available, all need to transition to Denied
                 for (_user_key, user) in self.users.iter() {
                     if let Some(connection) = self.user_connections.get_mut(&user.address()) {
-                        if !connection.base.world_manager.has_global_entity(global_entity) {
+                        if !connection
+                            .base
+                            .world_manager
+                            .has_global_entity(global_entity)
+                        {
                             continue;
                         }
-                        connection.base.world_manager.host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                        connection
+                            .base
+                            .world_manager
+                            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
                     }
                 }
             }
@@ -899,7 +920,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
-        
+
         let requester = AuthOwner::Client(*origin_user);
         let result = self
             .global_world_manager
@@ -957,8 +978,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // Push to events for external systems (e.g., Bevy adapter, test harness)
         // Events are separate from network messages - they're notifications for external consumers
-        self.incoming_world_events.push_auth_grant(origin_user, &world_entity);
-        
+        self.incoming_world_events
+            .push_auth_grant(origin_user, &world_entity);
+
         Ok(())
     }
 
@@ -976,10 +998,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
     pub(crate) fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
-        let global_entity = match self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-        {
+        let global_entity = match self.global_entity_map.entity_to_global_entity(world_entity) {
             Ok(ge) => ge,
             Err(_) => return None,
         };
@@ -1017,10 +1036,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         world: &mut W,
         world_entity: &E,
     ) -> bool {
-        let global_entity = match self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-        {
+        let global_entity = match self.global_entity_map.entity_to_global_entity(world_entity) {
             Ok(ge) => ge,
             Err(_) => return false,
         };
@@ -1360,7 +1376,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .unwrap();
 
         // Check if entity has Private replication config
-        let is_private = if let Some(config) = self.global_world_manager.entity_replication_config(&global_entity) {
+        let is_private = if let Some(config) = self
+            .global_world_manager
+            .entity_replication_config(&global_entity)
+        {
             matches!(config, ReplicationConfig::Private)
         } else {
             false
@@ -1371,10 +1390,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             match owner {
                 EntityOwner::Client(owner_key)
                 | EntityOwner::ClientWaiting(owner_key)
-                | EntityOwner::ClientPublic(owner_key) => {
-                    owner_key == *user_key
-                }
-                _ => false
+                | EntityOwner::ClientPublic(owner_key) => owner_key == *user_key,
+                _ => false,
             }
         } else {
             false
@@ -2389,7 +2406,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.publish_entity(world, &global_entity, &world_entity, false);
                     self.incoming_world_events
                         .push_publish(user_key, &world_entity);
-                    
+
                     // NOTE: Client-owned entities do NOT get auto-granted authority.
                     // Authority/SetAuthority only applies to delegated (server-owned) entities.
                 }
@@ -2435,7 +2452,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    if self.entity_release_authority(Some(user_key), &world_entity).is_ok() {
+                    if self
+                        .entity_release_authority(Some(user_key), &world_entity)
+                        .is_ok()
+                    {
                         self.incoming_world_events.push_auth_reset(&world_entity);
                     }
                 }

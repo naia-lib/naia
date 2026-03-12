@@ -81,7 +81,6 @@ impl WorldWriter {
         has_written: &mut bool,
         next_send_commands: &mut VecDeque<(CommandId, EntityCommand)>,
     ) {
-
         let mut last_counted_id: Option<MessageIndex> = None;
         let mut last_written_id: Option<MessageIndex> = None;
 

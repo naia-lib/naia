@@ -28,7 +28,8 @@ impl<'scenario> UntilCtx<'scenario> {
     /// The closure is called each tick and should return `Some(T)` when expectations are met.
     /// Ticks the simulation until the closure returns `Some(value)` or the maximum tick count is reached.
     pub fn expect_msg<T>(self, msg: &str, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
-        self.scenario.expect_with_ticks_internal_msg(self.max_ticks, msg, f)
+        self.scenario
+            .expect_with_ticks_internal_msg(self.max_ticks, msg, f)
     }
 
     /// Register a labeled expectation for spec obligation tracing with custom tick timeout.
@@ -45,7 +46,12 @@ impl<'scenario> UntilCtx<'scenario> {
     ///     ctx.client(key, |c| c.has_message()).then_some(())
     /// });
     /// ```
-    pub fn spec_expect<T>(self, label: impl AsRef<str>, f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>) -> T {
-        self.scenario.expect_with_ticks_internal_msg(self.max_ticks, label.as_ref(), f)
+    pub fn spec_expect<T>(
+        self,
+        label: impl AsRef<str>,
+        f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
+    ) -> T {
+        self.scenario
+            .expect_with_ticks_internal_msg(self.max_ticks, label.as_ref(), f)
     }
 }

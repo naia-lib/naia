@@ -48,9 +48,7 @@ impl JitterBuffer {
     pub fn pop_item(&mut self, current_tick: Tick) -> Option<(Tick, OwnedBitReader)> {
         match self {
             JitterBuffer::Real(queue) => queue.pop_item(current_tick),
-            JitterBuffer::Bypass(queue) => {
-                queue.pop_front()
-            }
+            JitterBuffer::Bypass(queue) => queue.pop_front(),
         }
     }
 }

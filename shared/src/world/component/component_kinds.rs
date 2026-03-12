@@ -89,11 +89,7 @@ impl ComponentKinds {
         let net_id = self.current_net_id;
         self.kind_map.insert(
             component_kind,
-            (
-                net_id,
-                C::create_builder(),
-                C::protocol_name().to_string(),
-            ),
+            (net_id, C::create_builder(), C::protocol_name().to_string()),
         );
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;

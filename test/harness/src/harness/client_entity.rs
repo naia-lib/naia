@@ -1,7 +1,12 @@
 use naia_client::{EntityMut as NaiaEntityMut, EntityRef as NaiaEntityRef, ReplicationConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent, WorldMutType, WorldRefType};
+use naia_shared::{
+    AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent,
+    WorldMutType, WorldRefType,
+};
 
-use crate::harness::{entity_owner::EntityOwner, entity_registry::EntityRegistry, EntityKey, ClientKey};
+use crate::harness::{
+    entity_owner::EntityOwner, entity_registry::EntityRegistry, ClientKey, EntityKey,
+};
 use crate::TestEntity;
 
 /// Harness wrapper for client EntityRef that works with EntityKey instead of TestEntity
@@ -17,13 +22,18 @@ impl<'a, W: WorldRefType<TestEntity>> ClientEntityRef<'a, W> {
         registry: &'a EntityRegistry,
         client_key: ClientKey,
     ) -> Self {
-        Self { entity_ref, registry, client_key }
+        Self {
+            entity_ref,
+            registry,
+            client_key,
+        }
     }
 
     /// Get the EntityKey for this entity
     pub fn key(&self) -> Option<EntityKey> {
         let entity = self.entity_ref.id();
-        self.registry.entity_key_for_client_test_entity(&self.client_key, &entity)
+        self.registry
+            .entity_key_for_client_test_entity(&self.client_key, &entity)
     }
 
     /// Get the underlying TestEntity id
@@ -74,13 +84,18 @@ impl<'a, W: WorldMutType<TestEntity>> ClientEntityMut<'a, W> {
         registry: &'a EntityRegistry,
         client_key: ClientKey,
     ) -> Self {
-        Self { entity_mut, registry, client_key }
+        Self {
+            entity_mut,
+            registry,
+            client_key,
+        }
     }
 
     /// Get the EntityKey for this entity
     pub fn key(&self) -> Option<EntityKey> {
         let entity = self.entity_mut.id();
-        self.registry.entity_key_for_client_test_entity(&self.client_key, &entity)
+        self.registry
+            .entity_key_for_client_test_entity(&self.client_key, &entity)
     }
 
     /// Get the underlying TestEntity id

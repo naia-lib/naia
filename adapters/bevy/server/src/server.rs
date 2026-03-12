@@ -94,7 +94,11 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn entity_authority_status<W: WorldRefType<Entity>>(&self, world: W, entity: &Entity) -> Option<EntityAuthStatus> {
+    pub(crate) fn entity_authority_status<W: WorldRefType<Entity>>(
+        &self,
+        world: W,
+        entity: &Entity,
+    ) -> Option<EntityAuthStatus> {
         if !world.has_entity(entity) {
             return None;
         }
@@ -104,7 +108,11 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn entity_owner<W: WorldRefType<Entity>>(&self, world: W, entity: &Entity) -> EntityOwner {
+    pub(crate) fn entity_owner<W: WorldRefType<Entity>>(
+        &self,
+        world: W,
+        entity: &Entity,
+    ) -> EntityOwner {
         match self {
             Self::Full(server) => server.entity(world, entity).owner(),
             Self::WorldOnly(server) => server.entity(world, entity).owner(),
@@ -436,8 +444,12 @@ impl<'w> Server<'w> {
 
     pub(crate) fn entity_take_authority(&mut self, entity: &Entity) {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(server) => { let _ = server.entity_take_authority(entity); },
-            ServerImpl::Full(server) => { let _ = server.entity_take_authority(entity); },
+            ServerImpl::WorldOnly(server) => {
+                let _ = server.entity_take_authority(entity);
+            }
+            ServerImpl::Full(server) => {
+                let _ = server.entity_take_authority(entity);
+            }
         }
     }
 

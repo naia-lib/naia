@@ -261,15 +261,13 @@ impl EntityRegistry {
         client_key: &ClientKey,
         entity: &TestEntity,
     ) -> Option<EntityKey> {
-        self.entity_map
-            .iter()
-            .find_map(|(key, record)| {
-                record
-                    .client_entities
-                    .get(client_key)
-                    .filter(|&e| e == entity)
-                    .map(|_| *key)
-            })
+        self.entity_map.iter().find_map(|(key, record)| {
+            record
+                .client_entities
+                .get(client_key)
+                .filter(|&e| e == entity)
+                .map(|_| *key)
+        })
     }
 
     /// Remove and return EntityKey for a pending client-spawned entity.

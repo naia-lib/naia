@@ -17,15 +17,12 @@ use crate::{
             remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
             remote_world_waitlist::RemoteWorldWaitlist,
         },
-        sync::{
-            RemoteEngine, RemoteEntityChannel,
-        },
+        sync::{RemoteEngine, RemoteEntityChannel},
     },
     ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver,
-    GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
-    LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, OwnedLocalEntity,
-    Replicate, Tick, WorldMutType,
+    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity,
+    GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter,
+    LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType,
 };
 
 cfg_if! {
@@ -107,15 +104,32 @@ impl RemoteWorldManager {
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub fn debug_channel_diagnostic(&self, remote_entity: &RemoteEntity) -> Option<(EntityChannelState, (SubCommandId, usize, Option<SubCommandId>, usize))> {
-        self.remote_engine.get_world()
+    pub fn debug_channel_diagnostic(
+        &self,
+        remote_entity: &RemoteEntity,
+    ) -> Option<(
+        EntityChannelState,
+        (SubCommandId, usize, Option<SubCommandId>, usize),
+    )> {
+        self.remote_engine
+            .get_world()
             .get(remote_entity)
             .map(|channel| channel.debug_auth_diagnostic())
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub fn debug_channel_snapshot(&self, remote_entity: &RemoteEntity) -> Option<(EntityChannelState, Option<MessageIndex>, usize, Option<(MessageIndex, EntityMessageType)>, Option<MessageIndex>)> {
-        self.remote_engine.get_world()
+    pub fn debug_channel_snapshot(
+        &self,
+        remote_entity: &RemoteEntity,
+    ) -> Option<(
+        EntityChannelState,
+        Option<MessageIndex>,
+        usize,
+        Option<(MessageIndex, EntityMessageType)>,
+        Option<MessageIndex>,
+    )> {
+        self.remote_engine
+            .get_world()
             .get(remote_entity)
             .map(|channel| channel.debug_channel_snapshot())
     }

@@ -5,31 +5,34 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-
-use naia_demo_world::{WorldMut, WorldRef};
-use naia_shared::{
-    transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
-    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, TestClock, WorldRefType,
-};
-use naia_server::{
-    transport::local::{LocalServerSocket, Socket as ServerSocket},
-    Server as NaiaServer, ServerConfig, UserKey, RoomKey,
-};
 use naia_client::{
     transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
     Client as NaiaClient, ClientConfig, TickEvents as ClientTickEvents,
     WorldEvents as ClientWorldEvents,
 };
+use naia_demo_world::{WorldMut, WorldRef};
+use naia_server::{
+    transport::local::{LocalServerSocket, Socket as ServerSocket},
+    RoomKey, Server as NaiaServer, ServerConfig, UserKey,
+};
+use naia_shared::{
+    transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
+    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, TestClock, WorldRefType,
+};
 
+use crate::harness::ClientEntityMut;
 use crate::{
     harness::{
         client_events::{process_spawn_events, ClientEvents},
-        client_state::ClientState, entity_registry::EntityRegistry, mutate_ctx::MutateCtx,
-        users::Users, ClientKey, EntityKey, ExpectCtx, server_events::ServerEvents, ClientEntityRef
+        client_state::ClientState,
+        entity_registry::EntityRegistry,
+        mutate_ctx::MutateCtx,
+        server_events::ServerEvents,
+        users::Users,
+        ClientEntityRef, ClientKey, EntityKey, ExpectCtx,
     },
     Auth, TestEntity, TestWorld,
 };
-use crate::harness::ClientEntityMut;
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -60,7 +63,9 @@ pub struct TraceEvent {
 impl TraceEvent {
     /// Create a new trace event with the given label.
     pub fn new(label: impl Into<String>) -> Self {
-        Self { label: label.into() }
+        Self {
+            label: label.into(),
+        }
     }
 }
 
@@ -1073,7 +1078,11 @@ impl Scenario {
 
     /// Check if server observed events in the expected order.
     /// Returns true if `earlier` appears before `later` in server event history.
-    pub fn server_event_before(&self, earlier: TrackedServerEvent, later: TrackedServerEvent) -> bool {
+    pub fn server_event_before(
+        &self,
+        earlier: TrackedServerEvent,
+        later: TrackedServerEvent,
+    ) -> bool {
         let earlier_idx = self.server_event_history.iter().position(|e| *e == earlier);
         let later_idx = self.server_event_history.iter().position(|e| *e == later);
         match (earlier_idx, later_idx) {
@@ -1088,7 +1097,7 @@ impl Scenario {
         &self,
         client_key: ClientKey,
         earlier: TrackedClientEvent,
-        later: TrackedClientEvent
+        later: TrackedClientEvent,
     ) -> bool {
         let history = self.client_event_history(client_key);
         let earlier_idx = history.iter().position(|e| *e == earlier);
@@ -1291,16 +1300,16 @@ impl Scenario {
 
     /// Retrieve a value from BDD storage.
     pub fn bdd_get<T: Any + Clone>(&self, key: &str) -> Option<T> {
-        self.bdd_storage.get(key).and_then(|v| {
-            v.downcast_ref::<T>().cloned()
-        })
+        self.bdd_storage
+            .get(key)
+            .and_then(|v| v.downcast_ref::<T>().cloned())
     }
 
     /// Take (remove and return) a value from BDD storage.
     pub fn bdd_take<T: Any>(&mut self, key: &str) -> Option<T> {
-        self.bdd_storage.remove(key).and_then(|v| {
-            v.downcast::<T>().ok().map(|b| *b)
-        })
+        self.bdd_storage
+            .remove(key)
+            .and_then(|v| v.downcast::<T>().ok().map(|b| *b))
     }
 
     // ========================================================================

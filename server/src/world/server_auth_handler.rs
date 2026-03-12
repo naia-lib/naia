@@ -116,7 +116,10 @@ impl ServerAuthHandler {
         }
     }
 
-    pub(crate) fn server_take_authority(&mut self, entity: &GlobalEntity) -> Result<AuthOwner, AuthorityError> {
+    pub(crate) fn server_take_authority(
+        &mut self,
+        entity: &GlobalEntity,
+    ) -> Result<AuthOwner, AuthorityError> {
         let Some(owner) = self.entity_auth_map.get_mut(entity) else {
             return Err(AuthorityError::NotDelegated);
         };

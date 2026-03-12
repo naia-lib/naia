@@ -9,14 +9,12 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Duration;
 
-use namako_engine::{given, when, then};
-use naia_test_harness::{
-    protocol, Auth, LinkConditionerConfig,
-    ServerAuthEvent, ServerConnectEvent,
-    TrackedServerEvent, TrackedClientEvent,
-    ClientConnectEvent, ClientDisconnectEvent,
-};
 use naia_client::{ClientConfig, JitterBufferType};
+use naia_test_harness::{
+    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, LinkConditionerConfig,
+    ServerAuthEvent, ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
+};
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -188,7 +186,10 @@ fn given_client_connects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
     // Add to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -443,7 +444,10 @@ fn when_client_reconnects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) 
     // Add to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -494,11 +498,7 @@ fn then_rtt_is_non_negative(ctx: &TestWorldRef) {
 
     ctx.client(client_key, |client| {
         let rtt = client.rtt();
-        assert!(
-            rtt >= 0.0,
-            "RTT must be non-negative, got: {}",
-            rtt
-        );
+        assert!(rtt >= 0.0, "RTT must be non-negative, got: {}", rtt);
     });
 }
 

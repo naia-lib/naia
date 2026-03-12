@@ -96,7 +96,8 @@ impl<P> OrderedIds<P> {
     where
         P: Clone,
     {
-        self.inner.iter()
+        self.inner
+            .iter()
             .find(|(_, item)| predicate(item))
             .map(|(id, item)| (*id, item.clone()))
     }

@@ -86,10 +86,13 @@ impl TickBufferReceiverChannel {
 
             let message_capacity = self.settings.message_capacity as u16;
 
-            if !self
-                .incoming_messages
-                .insert(host_tick, &remote_tick, message_index, new_message, message_capacity)
-            {
+            if !self.incoming_messages.insert(
+                host_tick,
+                &remote_tick,
+                message_index,
+                new_message,
+                message_capacity,
+            ) {
                 // Failed to Insert Command
             }
         }

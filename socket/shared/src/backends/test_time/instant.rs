@@ -1,7 +1,4 @@
-use std::{
-    cell::Cell,
-    time::Duration,
-};
+use std::{cell::Cell, time::Duration};
 
 // Thread-local simulated clock — each test thread gets its own isolated clock.
 thread_local! {

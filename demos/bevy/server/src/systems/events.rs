@@ -279,7 +279,9 @@ pub fn insert_component_events(
     }
 }
 
-pub fn update_component_events(mut position_events: ResMut<Messages<UpdateComponentEvent<Position>>>) {
+pub fn update_component_events(
+    mut position_events: ResMut<Messages<UpdateComponentEvent<Position>>>,
+) {
     for _events in position_events.drain() {
         // info!("update component in client entity");
     }

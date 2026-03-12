@@ -16,13 +16,13 @@
 //! - Given/When steps receive `TestWorldMut` (can only mutate)
 //! - Then steps receive `TestWorldRef` (can only assert)
 
-mod world;
 mod steps;
+mod world;
 
 pub use world::{TestWorld, TestWorldMut, TestWorldRef};
 
 // Re-export key types from harness for convenience
-pub use naia_test_harness::{
-    Scenario, ClientKey, ExpectCtx, TrackedClientEvent, TrackedServerEvent,
-};
 pub use naia_server::RoomKey;
+pub use naia_test_harness::{
+    ClientKey, ExpectCtx, Scenario, TrackedClientEvent, TrackedServerEvent,
+};

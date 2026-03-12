@@ -74,7 +74,7 @@ pub use remote_entity_channel::RemoteEntityChannel;
 pub mod auth_channel;
 pub mod bevy_integration;
 pub mod ordered_ids;
-#[cfg(feature = "e2e_debug")]
-mod trace;
 #[cfg(test)]
 pub mod tests;
+#[cfg(feature = "e2e_debug")]
+mod trace;

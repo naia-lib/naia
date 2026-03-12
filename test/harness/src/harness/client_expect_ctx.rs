@@ -3,12 +3,10 @@ use std::net::SocketAddr;
 use naia_client::{ConnectionStatus, NaiaClientError};
 use naia_demo_world::WorldRef;
 
-use crate::{
-    harness::{
-        client_events::{ClientEvent, ClientEvents, ClientRejectEvent},
-        scenario::Scenario,
-        ClientKey, EntityKey, ClientEntityRef,
-    },
+use crate::harness::{
+    client_events::{ClientEvent, ClientEvents, ClientRejectEvent},
+    scenario::Scenario,
+    ClientEntityRef, ClientKey, EntityKey,
 };
 
 /// Context for client-side expectations with per-tick events

@@ -66,11 +66,7 @@ impl ChannelKinds {
         let net_id = self.current_net_id;
         self.kind_map.insert(
             channel_kind,
-            (
-                net_id,
-                settings,
-                C::protocol_name().to_string(),
-            ),
+            (net_id, settings, C::protocol_name().to_string()),
         );
         self.net_id_map.insert(net_id, channel_kind);
         self.current_net_id += 1;

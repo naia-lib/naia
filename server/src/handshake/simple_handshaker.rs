@@ -50,8 +50,12 @@ impl Handshaker for HandshakeManager {
         match handshake_header {
             HandshakeHeader::ClientIdentifyRequest(protocol_id) => {
                 if protocol_id != self.protocol_id {
-                    warn!("Server: Protocol Mismatch! Client: {}, Server: {}", protocol_id, self.protocol_id);
-                    let reject_response = Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
+                    warn!(
+                        "Server: Protocol Mismatch! Client: {}, Server: {}",
+                        protocol_id, self.protocol_id
+                    );
+                    let reject_response =
+                        Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
                     return Ok(HandshakeAction::SendPacket(reject_response));
                 }
                 if has_connection {

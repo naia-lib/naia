@@ -11,17 +11,14 @@
 
 use std::time::Duration;
 
-use namako_engine::{given, when, then};
-use namako_engine::codegen::AssertOutcome;
-use naia_test_harness::{
-    protocol, Auth, ProtocolId,
-    ServerAuthEvent, ServerConnectEvent,
-    TrackedServerEvent, TrackedClientEvent,
-    ClientConnectEvent, ClientRejectEvent,
-    RejectReason,
-};
-use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
+use naia_server::ServerConfig;
+use naia_test_harness::{
+    protocol, Auth, ClientConnectEvent, ClientRejectEvent, ProtocolId, RejectReason,
+    ServerAuthEvent, ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
+};
+use namako_engine::codegen::AssertOutcome;
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -41,9 +38,7 @@ fn given_server_running_with_auth(ctx: &mut TestWorldMut) {
     scenario.server_start(server_config, test_protocol);
 
     // Create a room for clients and store it
-    let room_key = scenario.mutate(|ctx| {
-        ctx.server(|server| server.make_room().key())
-    });
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
     scenario.set_last_room(room_key);
 
     // Clear any previous event history
@@ -191,7 +186,10 @@ fn when_client_authenticates_and_connects(ctx: &mut TestWorldMut) {
     // Add to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -341,7 +339,11 @@ fn then_client_disconnect_after_connect(ctx: &TestWorldRef) -> AssertOutcome<()>
     }
 
     // Then: verify Connect came first (hard assertion)
-    if ctx.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect) {
+    if ctx.client_event_before(
+        client_key,
+        TrackedClientEvent::Connect,
+        TrackedClientEvent::Disconnect,
+    ) {
         AssertOutcome::Passed(())
     } else {
         AssertOutcome::Failed(format!(
@@ -491,7 +493,11 @@ fn then_client_connect_before_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()
         return AssertOutcome::Pending;
     }
 
-    if ctx.client_event_before(client_key, TrackedClientEvent::Connect, TrackedClientEvent::Disconnect) {
+    if ctx.client_event_before(
+        client_key,
+        TrackedClientEvent::Connect,
+        TrackedClientEvent::Disconnect,
+    ) {
         AssertOutcome::Passed(())
     } else {
         AssertOutcome::Failed(format!(

@@ -11,4 +11,3 @@ macro_rules! e2e_trace {
 macro_rules! e2e_trace {
     ($($arg:tt)*) => {};
 }
-

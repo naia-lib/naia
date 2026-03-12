@@ -5,8 +5,8 @@ use bevy::{
     ecs::message::Messages,
     log::info,
     prelude::{
-        Color as BevyColor, Commands, Mesh2d, MeshMaterial2d, Query, Res, ResMut,
-        Sprite, Transform, Vec2,
+        Color as BevyColor, Commands, Mesh2d, MeshMaterial2d, Query, Res, ResMut, Sprite,
+        Transform, Vec2,
     },
 };
 

@@ -5,9 +5,9 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent,
-    GlobalEntity, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType,
-    Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
+    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -203,7 +203,9 @@ impl Connection {
         // Count drained commands and messages for this connection
         #[cfg(feature = "e2e_debug")]
         {
-            use crate::server::world_server::{SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_WORLD_MSGS_DRAINED};
+            use crate::server::world_server::{
+                SERVER_OUTGOING_CMDS_DRAINED_TOTAL, SERVER_WORLD_MSGS_DRAINED,
+            };
             let total_drained = host_world_events.len();
             if total_drained > 0 {
                 SERVER_OUTGOING_CMDS_DRAINED_TOTAL.fetch_add(total_drained, Ordering::Relaxed);
@@ -280,7 +282,10 @@ impl Connection {
 
             // send packet
             if io.send_packet(&self.address, writer.to_packet()).is_err() {
-                warn!("Server Error: Cannot send ACK-only packet to {}", &self.address);
+                warn!(
+                    "Server Error: Cannot send ACK-only packet to {}",
+                    &self.address
+                );
             } else {
                 #[cfg(feature = "e2e_debug")]
                 {
@@ -360,10 +365,11 @@ impl Connection {
 
         // write common data packet
         let mut has_written = false;
-        
+
         // Count SetAuthority(Granted) commands before writing
         #[cfg(feature = "e2e_debug")]
-        let set_auth_granted_before = host_world_events.iter()
+        let set_auth_granted_before = host_world_events
+            .iter()
             .filter(|(_, cmd)| {
                 if let EntityCommand::SetAuthority(_, _, status) = cmd {
                     *status == EntityAuthStatus::Granted
@@ -372,7 +378,7 @@ impl Connection {
                 }
             })
             .count();
-        
+
         self.base.write_packet(
             channel_kinds,
             message_kinds,
@@ -388,11 +394,12 @@ impl Connection {
             host_world_events,
             update_events,
         );
-        
+
         #[cfg(feature = "e2e_debug")]
         {
             // Count SetAuthority(Granted) commands after writing (they're consumed during write)
-            let set_auth_granted_after = host_world_events.iter()
+            let set_auth_granted_after = host_world_events
+                .iter()
                 .filter(|(_, cmd)| {
                     if let EntityCommand::SetAuthority(_, _, status) = cmd {
                         *status == EntityAuthStatus::Granted
@@ -401,7 +408,7 @@ impl Connection {
                     }
                 })
                 .count();
-            
+
             // The difference is how many were written
             let written_count = set_auth_granted_before - set_auth_granted_after;
             if written_count > 0 {

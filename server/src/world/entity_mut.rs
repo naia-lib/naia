@@ -1,8 +1,10 @@
 use std::hash::Hash;
 
-use naia_shared::{AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType};
+use naia_shared::{
+    AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType,
+};
 
-use crate::{UserKey, room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig};
+use crate::{room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig, UserKey};
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {

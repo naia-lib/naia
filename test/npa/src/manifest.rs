@@ -3,8 +3,8 @@
 //! Outputs the semantic step registry as JSON to stdout.
 
 use anyhow::Result;
-use namako_engine::npap::{SemanticStepRegistry, SemanticBinding, BindingSignature};
-use namako_engine::codegen::{StepConstructor, WorldInventory, inventory};
+use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
+use namako_engine::npap::{BindingSignature, SemanticBinding, SemanticStepRegistry};
 
 use naia_tests::TestWorld;
 

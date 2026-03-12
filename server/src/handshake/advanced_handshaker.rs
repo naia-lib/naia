@@ -61,7 +61,8 @@ impl Handshaker for HandshakeManager {
         match handshake_header {
             HandshakeHeader::ClientChallengeRequest(protocol_id) => {
                 if protocol_id != self.protocol_id {
-                    let reject_response = Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
+                    let reject_response =
+                        Self::write_reject_response(RejectReason::ProtocolMismatch).to_packet();
                     return Ok(HandshakeAction::SendPacket(reject_response));
                 }
                 if let Ok((timestamp, id_token)) = self.recv_challenge_request(reader) {

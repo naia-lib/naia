@@ -9,16 +9,14 @@
 use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::time::Duration;
 
-use namako_engine::{given, when, then};
-use namako_engine::codegen::AssertOutcome;
-use naia_test_harness::{
-    protocol, Auth,
-    ServerAuthEvent, ServerConnectEvent,
-    TrackedServerEvent, TrackedClientEvent,
-    ClientConnectEvent, ClientDisconnectEvent,
-};
-use naia_server::ServerConfig;
 use naia_client::{ClientConfig, JitterBufferType};
+use naia_server::ServerConfig;
+use naia_test_harness::{
+    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ServerAuthEvent, ServerConnectEvent,
+    TrackedClientEvent, TrackedServerEvent,
+};
+use namako_engine::codegen::AssertOutcome;
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -36,9 +34,7 @@ fn given_test_scenario(ctx: &mut TestWorldMut) {
     scenario.server_start(ServerConfig::default(), test_protocol);
 
     // Create a room for clients and store it
-    let room_key = scenario.mutate(|ctx| {
-        ctx.server(|server| server.make_room().key())
-    });
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
     scenario.set_last_room(room_key);
 }
 
@@ -107,7 +103,10 @@ fn connect_client_impl(ctx: &mut TestWorldMut) {
     // Add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -258,7 +257,9 @@ fn when_client_receives_malformed_packet(ctx: &mut TestWorldMut) {
 /// Verifies that the last operation returned Err (not panic).
 #[then("the operation returns an Err result")]
 fn then_operation_returns_err(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     assert!(
@@ -276,7 +277,9 @@ fn then_operation_returns_err(ctx: &TestWorldRef) {
 /// Verifies that no panic occurred during the last operation.
 #[then("no panic occurs")]
 fn then_no_panic_occurs(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     assert!(
@@ -290,14 +293,15 @@ fn then_no_panic_occurs(ctx: &TestWorldRef) {
 /// Verifies that the last operation completed successfully (returned Ok, no panic).
 #[then("the operation succeeds")]
 fn then_operation_succeeds(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     assert!(
         result.is_ok,
         "Expected operation to succeed, but it failed: error={:?}, panic={:?}",
-        result.error_msg,
-        result.panic_msg
+        result.error_msg, result.panic_msg
     );
 }
 
@@ -308,7 +312,9 @@ fn then_packet_is_dropped(ctx: &TestWorldRef) {
     // The packet being "dropped" means:
     // 1. No panic occurred
     // 2. The connection is still intact
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded");
 
     assert!(
@@ -368,7 +374,8 @@ fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
     // Add entity to room so it's visible to the client
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key)
+            server
+                .room_mut(&room_key)
                 .expect("room exists")
                 .add_entity(&entity_key);
         });
@@ -426,7 +433,9 @@ fn then_handled_idempotently(ctx: &TestWorldRef) {
     // 1. No panic
     // 2. Client is still connected
     // 3. System state is consistent
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded");
 
     assert!(
@@ -534,7 +543,10 @@ fn when_client_reconnects(ctx: &mut TestWorldMut) {
     // Add to room so entities are visible
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -598,9 +610,7 @@ fn given_test_scenario_deterministic_time(ctx: &mut TestWorldMut) {
     scenario.server_start(ServerConfig::default(), test_protocol);
 
     // Create a room for clients
-    let room_key = scenario.mutate(|ctx| {
-        ctx.server(|server| server.make_room().key())
-    });
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
     scenario.set_last_room(room_key);
 }
 
@@ -648,7 +658,9 @@ fn when_same_api_sequence_twice(ctx: &mut TestWorldMut) {
 fn then_event_order_identical(ctx: &TestWorldRef) {
     // Since we use deterministic time and local transport, event order is guaranteed.
     // This step verifies no panic occurred during the deterministic run.
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded");
 
     assert!(
@@ -670,7 +682,9 @@ fn then_event_order_identical(ctx: &TestWorldRef) {
 #[then("the entity spawn order is identical both times")]
 fn then_entity_spawn_order_identical(ctx: &TestWorldRef) {
     // Entity spawn order verification (simplified: verify system stability)
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded");
 
     assert!(
@@ -680,7 +694,10 @@ fn then_entity_spawn_order_identical(ctx: &TestWorldRef) {
     );
 
     // System completed without issues
-    assert!(result.is_ok, "Deterministic operations should complete successfully");
+    assert!(
+        result.is_ok,
+        "Deterministic operations should complete successfully"
+    );
 }
 
 // ============================================================================
@@ -746,7 +763,10 @@ fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
     // Add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -762,7 +782,10 @@ fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
     // Add entity to room so it can be scoped
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_entity(&entity_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_entity(&entity_key);
         });
     });
 
@@ -859,7 +882,10 @@ fn given_multiple_commands_same_tick(ctx: &mut TestWorldMut) {
     // Add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -927,7 +953,8 @@ fn then_scope_reflects_last_api_order(ctx: &TestWorldRef) {
     let scenario = ctx.scenario();
 
     // Verify no panic occurred
-    let result = scenario.last_operation_result()
+    let result = scenario
+        .last_operation_result()
         .expect("No operation result recorded");
     assert!(
         result.panic_msg.is_none(),
@@ -938,7 +965,11 @@ fn then_scope_reflects_last_api_order(ctx: &TestWorldRef) {
     // Verify trace shows operations in order
     let labels: Vec<_> = scenario.trace_labels().collect();
     assert!(
-        scenario.trace_contains_subsequence(&["scope_op_include_1", "scope_op_exclude_2", "scope_op_include_3"]),
+        scenario.trace_contains_subsequence(&[
+            "scope_op_include_1",
+            "scope_op_exclude_2",
+            "scope_op_include_3"
+        ]),
         "Expected scope operations in order. Trace: {:?}",
         labels
     );
@@ -957,7 +988,8 @@ fn then_commands_in_receipt_order(ctx: &TestWorldRef) {
     let scenario = ctx.scenario();
 
     // Verify no panic occurred
-    let result = scenario.last_operation_result()
+    let result = scenario
+        .last_operation_result()
         .expect("No operation result recorded");
     assert!(
         result.panic_msg.is_none(),
@@ -1033,7 +1065,10 @@ fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
     // Add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -1075,7 +1110,8 @@ fn then_commands_in_ascending_sequence_order(ctx: &TestWorldRef) {
     let scenario = ctx.scenario();
 
     // Verify no panic occurred
-    let result = scenario.last_operation_result()
+    let result = scenario
+        .last_operation_result()
         .expect("No operation result recorded");
     assert!(
         result.panic_msg.is_none(),

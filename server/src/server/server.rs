@@ -2,8 +2,9 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, ProtocolId, Replicate, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
+    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, ProtocolId, Replicate,
+    Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{

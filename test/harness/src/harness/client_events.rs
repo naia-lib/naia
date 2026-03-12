@@ -4,8 +4,8 @@ use log::{debug, warn};
 
 use naia_client::{NaiaClientError, TickEvents, WorldEvents};
 use naia_shared::{
-    ChannelKind, ComponentKind, GlobalResponseId, LocalEntity, MessageContainer, MessageKind,
-    OwnedLocalEntity, Replicate, Tick, WorldRefType, handshake::RejectReason,
+    handshake::RejectReason, ChannelKind, ComponentKind, GlobalResponseId, LocalEntity,
+    MessageContainer, MessageKind, OwnedLocalEntity, Replicate, Tick, WorldRefType,
 };
 
 use crate::{
@@ -234,10 +234,7 @@ impl ClientEvents {
     }
 
     /// Take all insert events for a specific component kind
-    pub fn take_inserts_for_component(
-        &mut self,
-        component_kind: &ComponentKind,
-    ) -> Vec<EntityKey> {
+    pub fn take_inserts_for_component(&mut self, component_kind: &ComponentKind) -> Vec<EntityKey> {
         self.inserts
             .get_mut(component_kind)
             .map(|v| std::mem::take(v))

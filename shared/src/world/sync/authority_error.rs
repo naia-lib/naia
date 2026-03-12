@@ -5,4 +5,3 @@ pub enum AuthorityError {
     NotHolder,
     NotInScope,
 }
-

@@ -3,9 +3,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 
 use naia_shared::{
-    transport::local::{
-        ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError,
-    },
+    transport::local::{ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError},
     IdentityToken,
 };
 
@@ -19,10 +17,7 @@ struct PendingRequest {
 }
 
 impl PendingRequest {
-    fn new(
-        auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
-        addr_cell: LocalAddrCell,
-    ) -> Self {
+    fn new(auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
         Self {
             auth_responses_rx,
             addr_cell,

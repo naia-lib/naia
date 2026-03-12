@@ -5,14 +5,14 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::Args;
+use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
 use namako_engine::npap::{
-    ResolvedPlan, RunReport, ScenarioResult, StepResult,
-    StepStatus, ScenarioStatus, SemanticBinding, BindingSignature,
+    BindingSignature, ResolvedPlan, RunReport, ScenarioResult, ScenarioStatus, SemanticBinding,
+    StepResult, StepStatus,
 };
-use namako_engine::codegen::{StepConstructor, WorldInventory, inventory};
-use namako_engine::step::{Step, Context as StepContext};
+use namako_engine::step::{Context as StepContext, Step};
 
 use naia_tests::TestWorld;
 
@@ -42,31 +42,40 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
     for step in inventory::iter::<W::Given> {
         let meta = StepConstructor::<W>::npap_metadata(step);
         let (_, regex_fn, func) = step.inner();
-        table.insert(meta.binding_id.to_string(), StepEntry {
-            func,
-            impl_hash: meta.impl_hash.to_string(),
-            regex: regex_fn(),
-        });
+        table.insert(
+            meta.binding_id.to_string(),
+            StepEntry {
+                func,
+                impl_hash: meta.impl_hash.to_string(),
+                regex: regex_fn(),
+            },
+        );
     }
 
     for step in inventory::iter::<W::When> {
         let meta = StepConstructor::<W>::npap_metadata(step);
         let (_, regex_fn, func) = step.inner();
-        table.insert(meta.binding_id.to_string(), StepEntry {
-            func,
-            impl_hash: meta.impl_hash.to_string(),
-            regex: regex_fn(),
-        });
+        table.insert(
+            meta.binding_id.to_string(),
+            StepEntry {
+                func,
+                impl_hash: meta.impl_hash.to_string(),
+                regex: regex_fn(),
+            },
+        );
     }
 
     for step in inventory::iter::<W::Then> {
         let meta = StepConstructor::<W>::npap_metadata(step);
         let (_, regex_fn, func) = step.inner();
-        table.insert(meta.binding_id.to_string(), StepEntry {
-            func,
-            impl_hash: meta.impl_hash.to_string(),
-            regex: regex_fn(),
-        });
+        table.insert(
+            meta.binding_id.to_string(),
+            StepEntry {
+                func,
+                impl_hash: meta.impl_hash.to_string(),
+                regex: regex_fn(),
+            },
+        );
     }
 
     table
@@ -132,8 +141,8 @@ pub fn run(args: RunArgs) -> Result<()> {
     // Step 1: Read and parse the resolved plan
     let plan_json = std::fs::read_to_string(&args.plan)
         .with_context(|| format!("Failed to read plan: {}", args.plan.display()))?;
-    let plan: ResolvedPlan = serde_json::from_str(&plan_json)
-        .context("Failed to parse resolved plan JSON")?;
+    let plan: ResolvedPlan =
+        serde_json::from_str(&plan_json).context("Failed to parse resolved plan JSON")?;
 
     // Step 2: Validate step_registry_hash matches current manifest
     let current_bindings = collect_bindings::<TestWorld>();
@@ -180,11 +189,9 @@ pub fn run(args: RunArgs) -> Result<()> {
                         names
                             .zip(std::iter::once(step.step_text.clone()).chain(
                                 (1..captures.len()).map(|group_id| {
-                                    captures
-                                        .get(group_id)
-                                        .map_or(String::new(), |(s, end)| {
-                                            step.step_text[s..end].to_string()
-                                        })
+                                    captures.get(group_id).map_or(String::new(), |(s, end)| {
+                                        step.step_text[s..end].to_string()
+                                    })
                                 }),
                             ))
                             .map(|(name, val)| (name.map(String::from), val))
@@ -212,9 +219,10 @@ pub fn run(args: RunArgs) -> Result<()> {
                     };
 
                     // Execute the step function synchronously
-                    let exec_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        futures::executor::block_on((e.func)(&mut world, context))
-                    }));
+                    let exec_result =
+                        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            futures::executor::block_on((e.func)(&mut world, context))
+                        }));
 
                     match exec_result {
                         Ok(()) => StepResult {
@@ -256,10 +264,7 @@ pub fn run(args: RunArgs) -> Result<()> {
                         executed_payload_hash: String::new(),
                         executed_impl_hash: String::new(),
                         status: StepStatus::Failed,
-                        error_message: Some(format!(
-                            "Unknown binding_id: {}",
-                            step.binding_id
-                        )),
+                        error_message: Some(format!("Unknown binding_id: {}", step.binding_id)),
                     }
                 }
             };
@@ -287,18 +292,26 @@ pub fn run(args: RunArgs) -> Result<()> {
     );
 
     // Check for any failed scenarios
-    let has_failures = run_report.scenarios.iter().any(|s| s.status == ScenarioStatus::Failed);
+    let has_failures = run_report
+        .scenarios
+        .iter()
+        .any(|s| s.status == ScenarioStatus::Failed);
 
     let json = serde_json::to_string_pretty(&run_report)?;
     std::fs::write(&args.output, &json)
         .with_context(|| format!("Failed to write {}", args.output.display()))?;
 
     if has_failures {
-        let failed_count = run_report.scenarios.iter()
+        let failed_count = run_report
+            .scenarios
+            .iter()
             .filter(|s| s.status == ScenarioStatus::Failed)
             .count();
-        eprintln!("✗ Run complete with {} failed scenario(s). Output: {}",
-                  failed_count, args.output.display());
+        eprintln!(
+            "✗ Run complete with {} failed scenario(s). Output: {}",
+            failed_count,
+            args.output.display()
+        );
         bail!("Run failed: {} scenario(s) did not pass", failed_count);
     }
 

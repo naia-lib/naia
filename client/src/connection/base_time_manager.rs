@@ -127,7 +127,8 @@ impl BaseTimeManager {
             let time_offset_millis = (send_offset_millis + recv_offset_millis) / 2;
             // Use saturating_sub to handle edge cases where server processing appears to take longer than RTT
             // (can happen in fast test scenarios or clock inconsistencies)
-            let round_trip_delay_millis = round_trip_time_millis.saturating_sub(server_process_time_millis);
+            let round_trip_delay_millis =
+                round_trip_time_millis.saturating_sub(server_process_time_millis);
 
             return Ok(Some((
                 tick_duration_avg,

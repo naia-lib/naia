@@ -6,9 +6,9 @@
 //!
 //! Run with: `cargo test -p naia_npa --test namako_integration_test`
 
-use std::process::{Command, Output};
-use std::path::PathBuf;
 use std::fs;
+use std::path::PathBuf;
+use std::process::{Command, Output};
 
 /// Get the naia_npa crate directory (CARGO_MANIFEST_DIR = naia/test/npa/)
 fn crate_dir() -> PathBuf {
@@ -18,16 +18,20 @@ fn crate_dir() -> PathBuf {
 /// Get the naia/specs directory path
 fn specs_dir() -> PathBuf {
     crate_dir()
-        .parent().unwrap()  // naia/
+        .parent()
+        .unwrap() // naia/
         .join("specs")
 }
 
 /// Get the namako CLI manifest path
 fn namako_cli_manifest() -> PathBuf {
     crate_dir()
-        .parent().unwrap()  // naia/test/
-        .parent().unwrap()  // naia/
-        .parent().unwrap()  // specops/
+        .parent()
+        .unwrap() // naia/test/
+        .parent()
+        .unwrap() // naia/
+        .parent()
+        .unwrap() // specops/
         .join("namako/Cargo.toml")
 }
 
@@ -50,12 +54,17 @@ fn run_cargo(args: &[&str], cwd: &PathBuf) -> Output {
 fn run_namako_cli(subcommand: &str, extra_args: &[&str]) -> Output {
     let specs = specs_dir();
     let cli_manifest = namako_cli_manifest();
-    let adapter_cmd = format!("cargo run --manifest-path {} --", adapter_manifest().display());
+    let adapter_cmd = format!(
+        "cargo run --manifest-path {} --",
+        adapter_manifest().display()
+    );
 
     let mut args = vec![
         "run",
-        "-p", "namako_cli",
-        "--manifest-path", cli_manifest.to_str().unwrap(),
+        "-p",
+        "namako_cli",
+        "--manifest-path",
+        cli_manifest.to_str().unwrap(),
         "--",
         subcommand,
     ];
@@ -82,7 +91,8 @@ fn run_adapter(subcommand: &str, extra_args: &[&str]) -> Output {
 
     let mut args = vec![
         "run",
-        "--manifest-path", adapter_manifest.to_str().unwrap(),
+        "--manifest-path",
+        adapter_manifest.to_str().unwrap(),
         "--",
         subcommand,
     ];
@@ -104,7 +114,10 @@ fn assert_output_contains(output: &Output, needle: &str, context: &str) {
     assert!(
         combined.contains(needle),
         "{}: Expected output to contain '{}'\nstdout: {}\nstderr: {}",
-        context, needle, stdout, stderr
+        context,
+        needle,
+        stdout,
+        stderr
     );
 }
 
@@ -138,10 +151,7 @@ fn assert_failure(output: &Output, context: &str) {
 /// Verify that lint passes on the current smoke feature
 #[test]
 fn demo_a_lint_passes_on_valid_features() {
-    let output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_resolved_plan.json",
-    ]);
+    let output = run_namako_cli("lint", &["-s", ".", "-o", "test_resolved_plan.json"]);
 
     assert_success(&output, "lint on valid features");
     assert_output_contains(&output, "Lint passed", "lint success message");
@@ -154,17 +164,14 @@ fn demo_a_lint_passes_on_valid_features() {
 #[test]
 fn demo_a_adapter_run_succeeds_on_valid_scenarios() {
     // First lint to get a resolved plan
-    let lint_output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_run_plan.json",
-    ]);
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "test_run_plan.json"]);
     assert_success(&lint_output, "lint for run test");
 
     // Then run the adapter
-    let run_output = run_adapter("run", &[
-        "-p", "test_run_plan.json",
-        "-o", "test_run_report.json",
-    ]);
+    let run_output = run_adapter(
+        "run",
+        &["-p", "test_run_plan.json", "-o", "test_run_report.json"],
+    );
 
     assert_success(&run_output, "adapter run on valid scenarios");
     assert_output_contains(&run_output, "Run complete", "run success message");
@@ -178,27 +185,33 @@ fn demo_a_adapter_run_succeeds_on_valid_scenarios() {
 #[test]
 fn demo_a_update_cert_succeeds_after_passing_run() {
     // Lint
-    let lint_output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_cert_plan.json",
-    ]);
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "test_cert_plan.json"]);
     assert_success(&lint_output, "lint for cert test");
 
     // Run
-    let run_output = run_adapter("run", &[
-        "-p", "test_cert_plan.json",
-        "-o", "test_cert_report.json",
-    ]);
+    let run_output = run_adapter(
+        "run",
+        &["-p", "test_cert_plan.json", "-o", "test_cert_report.json"],
+    );
     assert_success(&run_output, "run for cert test");
 
     // Update cert
-    let cert_output = run_namako_cli("update-cert", &[
-        "-r", "test_cert_report.json",
-        "-o", "test_certification.json",
-    ]);
+    let cert_output = run_namako_cli(
+        "update-cert",
+        &[
+            "-r",
+            "test_cert_report.json",
+            "-o",
+            "test_certification.json",
+        ],
+    );
 
     assert_success(&cert_output, "update-cert after passing run");
-    assert_output_contains(&cert_output, "Certification updated", "cert success message");
+    assert_output_contains(
+        &cert_output,
+        "Certification updated",
+        "cert success message",
+    );
 
     // Cleanup
     let _ = fs::remove_file(specs_dir().join("test_cert_plan.json"));
@@ -210,35 +223,52 @@ fn demo_a_update_cert_succeeds_after_passing_run() {
 #[test]
 fn demo_a_verify_passes_with_matching_hashes() {
     // Lint
-    let lint_output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_verify_plan.json",
-    ]);
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "test_verify_plan.json"]);
     assert_success(&lint_output, "lint for verify test");
 
     // Run
-    let run_output = run_adapter("run", &[
-        "-p", "test_verify_plan.json",
-        "-o", "test_verify_report.json",
-    ]);
+    let run_output = run_adapter(
+        "run",
+        &[
+            "-p",
+            "test_verify_plan.json",
+            "-o",
+            "test_verify_report.json",
+        ],
+    );
     assert_success(&run_output, "run for verify test");
 
     // Update cert
-    let cert_output = run_namako_cli("update-cert", &[
-        "-r", "test_verify_report.json",
-        "-o", "test_verify_baseline.json",
-    ]);
+    let cert_output = run_namako_cli(
+        "update-cert",
+        &[
+            "-r",
+            "test_verify_report.json",
+            "-o",
+            "test_verify_baseline.json",
+        ],
+    );
     assert_success(&cert_output, "update-cert for verify test");
 
     // Verify
-    let verify_output = run_namako_cli("verify", &[
-        "-s", ".",
-        "-c", "test_verify_baseline.json",
-        "-r", "test_verify_report.json",
-    ]);
+    let verify_output = run_namako_cli(
+        "verify",
+        &[
+            "-s",
+            ".",
+            "-c",
+            "test_verify_baseline.json",
+            "-r",
+            "test_verify_report.json",
+        ],
+    );
 
     assert_success(&verify_output, "verify with matching hashes");
-    assert_output_contains(&verify_output, "Verification passed", "verify success message");
+    assert_output_contains(
+        &verify_output,
+        "Verification passed",
+        "verify success message",
+    );
 
     // Cleanup
     let _ = fs::remove_file(specs_dir().join("test_verify_plan.json"));
@@ -260,29 +290,35 @@ fn demo_b_adapter_refuses_stale_plan() {
     let plan_path = specs_dir().join("test_stale_plan.json");
 
     // First get a valid plan
-    let lint_output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_stale_plan.json",
-    ]);
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "test_stale_plan.json"]);
     assert_success(&lint_output, "lint for stale plan test");
 
     // Modify the step_registry_hash to make it stale
     let plan_content = fs::read_to_string(&plan_path).expect("read plan");
     let mut plan: serde_json::Value = serde_json::from_str(&plan_content).expect("parse plan");
     if let Some(header) = plan.get_mut("header") {
-        header["step_registry_hash"] = serde_json::json!("deadbeef00000000000000000000000000000000000000000000000000000000");
+        header["step_registry_hash"] =
+            serde_json::json!("deadbeef00000000000000000000000000000000000000000000000000000000");
     }
     fs::write(&plan_path, serde_json::to_string_pretty(&plan).unwrap()).expect("write stale plan");
 
     // Try to run with stale plan - should fail
-    let run_output = run_adapter("run", &[
-        "-p", "test_stale_plan.json",
-        "-o", "test_stale_report.json",
-    ]);
+    let run_output = run_adapter(
+        "run",
+        &["-p", "test_stale_plan.json", "-o", "test_stale_report.json"],
+    );
 
     assert_failure(&run_output, "adapter should refuse stale plan");
-    assert_output_contains(&run_output, "Plan step_registry_hash", "stale plan error message");
-    assert_output_contains(&run_output, "does not match current manifest", "stale plan error message");
+    assert_output_contains(
+        &run_output,
+        "Plan step_registry_hash",
+        "stale plan error message",
+    );
+    assert_output_contains(
+        &run_output,
+        "does not match current manifest",
+        "stale plan error message",
+    );
 
     // Cleanup
     let _ = fs::remove_file(specs_dir().join("test_stale_plan.json"));
@@ -296,39 +332,53 @@ fn demo_b_verify_detects_baseline_drift() {
     let baseline_path = specs_dir().join("test_drift_baseline.json");
 
     // First get valid artifacts
-    let lint_output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_drift_plan.json",
-    ]);
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "test_drift_plan.json"]);
     assert_success(&lint_output, "lint for drift test");
 
-    let run_output = run_adapter("run", &[
-        "-p", "test_drift_plan.json",
-        "-o", "test_drift_report.json",
-    ]);
+    let run_output = run_adapter(
+        "run",
+        &["-p", "test_drift_plan.json", "-o", "test_drift_report.json"],
+    );
     assert_success(&run_output, "run for drift test");
 
     // Create baseline with modified step_registry_hash
-    let cert_output = run_namako_cli("update-cert", &[
-        "-r", "test_drift_report.json",
-        "-o", "test_drift_baseline.json",
-    ]);
+    let cert_output = run_namako_cli(
+        "update-cert",
+        &[
+            "-r",
+            "test_drift_report.json",
+            "-o",
+            "test_drift_baseline.json",
+        ],
+    );
     assert_success(&cert_output, "update-cert for drift test");
 
     // Modify baseline identity to simulate drift
     let baseline_content = fs::read_to_string(&baseline_path).expect("read baseline");
-    let mut baseline: serde_json::Value = serde_json::from_str(&baseline_content).expect("parse baseline");
+    let mut baseline: serde_json::Value =
+        serde_json::from_str(&baseline_content).expect("parse baseline");
     if let Some(identity) = baseline.get_mut("identity") {
-        identity["step_registry_hash"] = serde_json::json!("deadbeef00000000000000000000000000000000000000000000000000000000");
+        identity["step_registry_hash"] =
+            serde_json::json!("deadbeef00000000000000000000000000000000000000000000000000000000");
     }
-    fs::write(&baseline_path, serde_json::to_string_pretty(&baseline).unwrap()).expect("write drift baseline");
+    fs::write(
+        &baseline_path,
+        serde_json::to_string_pretty(&baseline).unwrap(),
+    )
+    .expect("write drift baseline");
 
     // Verify should fail with drift detection
-    let verify_output = run_namako_cli("verify", &[
-        "-s", ".",
-        "-c", "test_drift_baseline.json",
-        "-r", "test_drift_report.json",
-    ]);
+    let verify_output = run_namako_cli(
+        "verify",
+        &[
+            "-s",
+            ".",
+            "-c",
+            "test_drift_baseline.json",
+            "-r",
+            "test_drift_report.json",
+        ],
+    );
 
     assert_failure(&verify_output, "verify should detect baseline drift");
     // Should report drift in step_registry_hash
@@ -357,48 +407,72 @@ fn demo_b_verify_detects_baseline_drift() {
 #[test]
 fn identity_has_exactly_four_fields() {
     // Lint
-    let lint_output = run_namako_cli("lint", &[
-        "-s", ".",
-        "-o", "test_identity_plan.json",
-    ]);
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "test_identity_plan.json"]);
     assert_success(&lint_output, "lint for identity test");
 
     // Run
-    let run_output = run_adapter("run", &[
-        "-p", "test_identity_plan.json",
-        "-o", "test_identity_report.json",
-    ]);
+    let run_output = run_adapter(
+        "run",
+        &[
+            "-p",
+            "test_identity_plan.json",
+            "-o",
+            "test_identity_report.json",
+        ],
+    );
     assert_success(&run_output, "run for identity test");
 
     // Update cert
-    let cert_output = run_namako_cli("update-cert", &[
-        "-r", "test_identity_report.json",
-        "-o", "test_identity_cert.json",
-    ]);
+    let cert_output = run_namako_cli(
+        "update-cert",
+        &[
+            "-r",
+            "test_identity_report.json",
+            "-o",
+            "test_identity_cert.json",
+        ],
+    );
     assert_success(&cert_output, "update-cert for identity test");
 
     // Check certification structure
     let cert_content = fs::read_to_string(specs_dir().join("test_identity_cert.json"))
         .expect("read certification");
-    let cert: serde_json::Value = serde_json::from_str(&cert_content)
-        .expect("parse certification");
+    let cert: serde_json::Value = serde_json::from_str(&cert_content).expect("parse certification");
 
     let identity = cert.get("identity").expect("certification has identity");
     let identity_obj = identity.as_object().expect("identity is object");
 
     // Must have exactly these 4 fields
-    assert!(identity_obj.contains_key("hash_contract_version"), "identity has hash_contract_version");
-    assert!(identity_obj.contains_key("feature_fingerprint_hash"), "identity has feature_fingerprint_hash");
-    assert!(identity_obj.contains_key("step_registry_hash"), "identity has step_registry_hash");
-    assert!(identity_obj.contains_key("resolved_plan_hash"), "identity has resolved_plan_hash");
+    assert!(
+        identity_obj.contains_key("hash_contract_version"),
+        "identity has hash_contract_version"
+    );
+    assert!(
+        identity_obj.contains_key("feature_fingerprint_hash"),
+        "identity has feature_fingerprint_hash"
+    );
+    assert!(
+        identity_obj.contains_key("step_registry_hash"),
+        "identity has step_registry_hash"
+    );
+    assert!(
+        identity_obj.contains_key("resolved_plan_hash"),
+        "identity has resolved_plan_hash"
+    );
 
     // Must NOT have run_report_hash in identity
-    assert!(!identity_obj.contains_key("run_report_hash"), "identity must NOT contain run_report_hash");
+    assert!(
+        !identity_obj.contains_key("run_report_hash"),
+        "identity must NOT contain run_report_hash"
+    );
 
     // run_report_hash should be in metadata, not identity
     let metadata = cert.get("metadata").expect("certification has metadata");
     let metadata_obj = metadata.as_object().expect("metadata is object");
-    assert!(metadata_obj.contains_key("run_report_hash"), "metadata has run_report_hash");
+    assert!(
+        metadata_obj.contains_key("run_report_hash"),
+        "metadata has run_report_hash"
+    );
 
     // Cleanup
     let _ = fs::remove_file(specs_dir().join("test_identity_plan.json"));
@@ -413,11 +487,14 @@ fn registry_hash_depends_on_impl_hash() {
     let manifest_output = run_adapter("manifest", &[]);
     assert_success(&manifest_output, "get manifest");
 
-    let manifest: serde_json::Value = serde_json::from_slice(&manifest_output.stdout)
-        .expect("parse manifest");
+    let manifest: serde_json::Value =
+        serde_json::from_slice(&manifest_output.stdout).expect("parse manifest");
 
     // Verify manifest has step_registry_hash
-    assert!(manifest.get("step_registry_hash").is_some(), "manifest has step_registry_hash");
+    assert!(
+        manifest.get("step_registry_hash").is_some(),
+        "manifest has step_registry_hash"
+    );
 
     // Verify manifest has bindings with impl_hash
     let bindings = manifest.get("bindings").expect("manifest has bindings");

@@ -8,14 +8,12 @@
 
 use std::time::Duration;
 
-use namako_engine::{given, then};
-use naia_test_harness::{
-    protocol, Auth, EntityKey, Position,
-    ServerAuthEvent, ServerConnectEvent,
-    TrackedServerEvent, TrackedClientEvent,
-    ClientConnectEvent, ClientKey,
-};
 use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_test_harness::{
+    protocol, Auth, ClientConnectEvent, ClientKey, EntityKey, Position, ServerAuthEvent,
+    ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
+};
+use namako_engine::{given, then};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -83,7 +81,10 @@ fn connect_named_client(ctx: &mut TestWorldMut, name: &str) {
     // Add client to room
     scenario.mutate(|mctx| {
         mctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 

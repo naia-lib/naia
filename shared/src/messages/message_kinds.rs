@@ -83,11 +83,7 @@ impl MessageKinds {
         let net_id = self.current_net_id;
         self.kind_map.insert(
             message_kind,
-            (
-                net_id,
-                M::create_builder(),
-                M::protocol_name().to_string(),
-            ),
+            (net_id, M::create_builder(), M::protocol_name().to_string()),
         );
         self.net_id_map.insert(net_id, message_kind);
         self.current_net_id += 1;

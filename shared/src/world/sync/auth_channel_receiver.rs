@@ -143,10 +143,17 @@ impl AuthChannelReceiver {
 
     #[cfg(feature = "e2e_debug")]
     pub(crate) fn debug_diagnostic(&self) -> (SubCommandId, usize, Option<SubCommandId>, usize) {
-        let head_sub_id = self.buffered_messages.peek_front()
+        let head_sub_id = self
+            .buffered_messages
+            .peek_front()
             .and_then(|(_, msg)| msg.subcommand_id());
         let buffer_len = self.buffered_messages.len();
         let incoming_len = self.incoming_messages.len();
-        (self.next_subcommand_id, buffer_len, head_sub_id, incoming_len)
+        (
+            self.next_subcommand_id,
+            buffer_len,
+            head_sub_id,
+            incoming_len,
+        )
     }
 }

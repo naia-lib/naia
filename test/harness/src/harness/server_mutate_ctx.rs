@@ -2,20 +2,18 @@ use log::warn;
 
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{NaiaServerError, RoomKey, TickBufferMessages};
-use naia_shared::{WorldRefType,
+use naia_shared::{
     generate_identity_token, Channel, IdentityToken, Message, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Tick,
+    ResponseReceiveKey, ResponseSendKey, Tick, WorldRefType,
 };
 
-use crate::{
-    harness::{
-        server_entity::{ServerEntityMut, ServerEntityRef},
-        mutate_ctx::MutateCtx,
-        room::{RoomMut, RoomRef},
-        user::{UserMut, UserRef},
-        user_scope::{UserScopeMut, UserScopeRef},
-        ClientKey, EntityKey,
-    },
+use crate::harness::{
+    mutate_ctx::MutateCtx,
+    room::{RoomMut, RoomRef},
+    server_entity::{ServerEntityMut, ServerEntityRef},
+    user::{UserMut, UserRef},
+    user_scope::{UserScopeMut, UserScopeRef},
+    ClientKey, EntityKey,
 };
 
 /// Lightweight handle for server-side mutations
@@ -76,10 +74,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
 
     /// Get mutable entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
-    pub fn entity_mut(
-        &'_ mut self,
-        key: &EntityKey,
-    ) -> Option<ServerEntityMut<'_, WorldMut<'_>>> {
+    pub fn entity_mut(&'_ mut self, key: &EntityKey) -> Option<ServerEntityMut<'_, WorldMut<'_>>> {
         let scenario = self.ctx.scenario_mut();
         let entity = scenario.entity_registry().server_entity(key)?;
         let (server, world, registry, users) = scenario.split_for_server_mut();
@@ -306,7 +301,11 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     // Message Operations
 
     /// Set EntityProperty to reference an entity
-    pub fn set_entity_property(&mut self, entity_property: &mut naia_shared::EntityProperty, entity_key: &EntityKey) {
+    pub fn set_entity_property(
+        &mut self,
+        entity_property: &mut naia_shared::EntityProperty,
+        entity_key: &EntityKey,
+    ) {
         let scenario = self.ctx.scenario_mut();
         if let Some(entity) = scenario.entity_registry().server_entity(entity_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();

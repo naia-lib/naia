@@ -6,8 +6,8 @@
 /// The bug was missed because previous tests created channels directly and
 /// bypassed the real command flow. These tests exercise the ACTUAL code path.
 use crate::{
-    world::sync::host_entity_channel::HostEntityChannel,
-    BigMapKey, EntityCommand, GlobalEntity, HostEntity, HostType, RemoteEntity,
+    world::sync::host_entity_channel::HostEntityChannel, BigMapKey, EntityCommand, GlobalEntity,
+    HostEntity, HostType, RemoteEntity,
 };
 
 /// Test that ALL migration-related commands can be sent through the real channel flow

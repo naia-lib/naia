@@ -3,13 +3,14 @@ use std::{any::Any, collections::VecDeque, hash::Hash, net::SocketAddr, time::Du
 use log::{debug, info, warn};
 
 use naia_shared::{
+    handshake::{HandshakeHeader, RejectReason},
     AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant,
     GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity,
-    PacketType, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick,
-    WorldMutType, WorldRefType, handshake::{HandshakeHeader, RejectReason},
+    PacketType, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response,
+    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, Tick, WorldMutType, WorldRefType,
 };
 
 use super::{
@@ -272,13 +273,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         if should_read_packets {
             // read packets on tick boundary, de-jittering
-            if let Err(_err) = connection
-                .read_buffered_packets(
-                    &self.protocol.channel_kinds,
-                    &self.protocol.message_kinds,
-                    &self.protocol.component_kinds,
-                )
-            {
+            if let Err(_err) = connection.read_buffered_packets(
+                &self.protocol.channel_kinds,
+                &self.protocol.message_kinds,
+                &self.protocol.component_kinds,
+            ) {
                 // TODO: Except for cosmic radiation .. Server should never send a malformed packet .. handle this
                 warn!("Error reading from buffered packet!");
             }
@@ -340,15 +339,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     // Messages
 
     /// Queues up an Message to be sent to the Server
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) -> Result<(), NaiaClientError> {
+    pub fn send_message<C: Channel, M: Message>(
+        &mut self,
+        message: &M,
+    ) -> Result<(), NaiaClientError> {
         let cloned_message = M::clone_box(message);
         self.send_message_inner(&ChannelKind::of::<C>(), cloned_message)
     }
 
-    fn send_message_inner(&mut self, channel_kind: &ChannelKind, message_box: Box<dyn Message>) -> Result<(), NaiaClientError> {
+    fn send_message_inner(
+        &mut self,
+        channel_kind: &ChannelKind,
+        message_box: Box<dyn Message>,
+    ) -> Result<(), NaiaClientError> {
         let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
         if !channel_settings.can_send_to_server() {
-            return Err(NaiaClientError::Message("Cannot send message to Server on this Channel".to_string()));
+            return Err(NaiaClientError::Message(
+                "Cannot send message to Server on this Channel".to_string(),
+            ));
         }
 
         if channel_settings.tick_buffered() {
@@ -899,7 +907,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // check whether we have authority to despawn this entity
         if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
             if owner.is_server() {
-                let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
+                let is_delegated = self
+                    .global_world_manager
+                    .entity_is_delegated(&global_entity);
                 if !is_delegated {
                     panic!("attempting to despawn entity that is not yet delegated. Delegation needs some time to be confirmed by the Server, so check that a despawn is possible by calling `commands.entity(..).replication_config(..).is_delegated()` first.");
                 }
@@ -944,7 +954,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // If not, silently ignore the mutation (matches test expectation that updates are ignored)
         if let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(entity) {
             let owner = self.global_world_manager.entity_owner(&global_entity);
-            let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
+            let is_delegated = self
+                .global_world_manager
+                .entity_is_delegated(&global_entity);
 
             let can_mutate = if is_delegated {
                 // For delegated entities, check authority status
@@ -1277,9 +1289,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // Updated Host Manager
         match (old_auth_status, new_auth_status) {
             // Grant authority (from any state)
-            (EntityAuthStatus::Requested, EntityAuthStatus::Granted) |
-            (EntityAuthStatus::Denied, EntityAuthStatus::Granted) |
-            (EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
+            (EntityAuthStatus::Requested, EntityAuthStatus::Granted)
+            | (EntityAuthStatus::Denied, EntityAuthStatus::Granted)
+            | (EntityAuthStatus::Available, EntityAuthStatus::Granted) => {
                 // Register and emit grant event
                 self.server_connection
                     .as_mut()
@@ -1296,8 +1308,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
             // Lose authority (must deregister and emit reset)
-            (EntityAuthStatus::Granted, EntityAuthStatus::Available) |
-            (EntityAuthStatus::Granted, EntityAuthStatus::Denied) => {
+            (EntityAuthStatus::Granted, EntityAuthStatus::Available)
+            | (EntityAuthStatus::Granted, EntityAuthStatus::Denied) => {
                 // Deregister and emit reset event
                 self.server_connection
                     .as_mut()
@@ -1345,8 +1357,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 // Release by someone else - emit reset
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
-            (EntityAuthStatus::Available, EntityAuthStatus::Available) |
-            (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
+            (EntityAuthStatus::Available, EntityAuthStatus::Available)
+            | (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
                 // Idempotent - no action needed
             }
             (_, _) => {
@@ -1398,7 +1410,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code) => {
-
                     let old_socket_addr_result = self.io.server_addr();
 
                     // reset connection
@@ -1411,7 +1422,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         // push out rejection
                         match old_socket_addr_result {
                             Ok(old_socket_addr) => {
-                                self.incoming_world_events.push_rejection(&old_socket_addr, RejectReason::Auth);
+                                self.incoming_world_events
+                                    .push_rejection(&old_socket_addr, RejectReason::Auth);
                             }
                             Err(err) => {
                                 self.incoming_world_events.push_error(err);
@@ -1457,7 +1469,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         Some(HandshakeResult::Rejected(reason)) => {
                             info!("Client: Received HandshakeResult::Rejected({:?})", reason);
                             let server_addr = self.server_address_unwrapped();
-                            self.incoming_world_events.push_rejection(&server_addr, reason);
+                            self.incoming_world_events
+                                .push_rejection(&server_addr, reason);
                             self.disconnect_reset_connection();
                             break;
                         }
@@ -1513,9 +1526,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             }
                             // continue
                         }
-                        PacketType::Heartbeat
-                        | PacketType::Ping
-                        | PacketType::Pong => {
+                        PacketType::Heartbeat | PacketType::Ping | PacketType::Pong => {
                             // these packet types are allowed when
                             // connection is established
                         }
@@ -1695,21 +1706,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub fn debug_remote_channel_diagnostic(&self, remote_entity: &naia_shared::RemoteEntity) -> Option<(naia_shared::EntityChannelState, (naia_shared::SubCommandId, usize, Option<naia_shared::SubCommandId>, usize))> {
+    pub fn debug_remote_channel_diagnostic(
+        &self,
+        remote_entity: &naia_shared::RemoteEntity,
+    ) -> Option<(
+        naia_shared::EntityChannelState,
+        (
+            naia_shared::SubCommandId,
+            usize,
+            Option<naia_shared::SubCommandId>,
+            usize,
+        ),
+    )> {
         let Some(connection) = self.server_connection.as_ref() else {
             return None;
         };
-        connection.base.world_manager.debug_remote_channel_diagnostic(remote_entity)
+        connection
+            .base
+            .world_manager
+            .debug_remote_channel_diagnostic(remote_entity)
     }
 
     #[cfg(feature = "e2e_debug")]
-    pub fn debug_remote_channel_snapshot(&self, remote_entity: &naia_shared::RemoteEntity) -> Option<(naia_shared::EntityChannelState, Option<naia_shared::MessageIndex>, usize, Option<(naia_shared::MessageIndex, naia_shared::EntityMessageType)>, Option<naia_shared::MessageIndex>)> {
+    pub fn debug_remote_channel_snapshot(
+        &self,
+        remote_entity: &naia_shared::RemoteEntity,
+    ) -> Option<(
+        naia_shared::EntityChannelState,
+        Option<naia_shared::MessageIndex>,
+        usize,
+        Option<(naia_shared::MessageIndex, naia_shared::EntityMessageType)>,
+        Option<naia_shared::MessageIndex>,
+    )> {
         let Some(connection) = self.server_connection.as_ref() else {
             return None;
         };
-        connection.base.world_manager.debug_remote_channel_snapshot(remote_entity)
+        connection
+            .base
+            .world_manager
+            .debug_remote_channel_snapshot(remote_entity)
     }
-
 
     fn process_entity_events<W: WorldMutType<E>>(
         &mut self,
@@ -1888,7 +1924,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .entity_is_delegated(&global_entity);
                         naia_shared::e2e_trace!(
                             "[CLIENT_RECV] DisableDelegation entity={:?} delegated_at_entry={}",
-                            global_entity, delegated_at_entry
+                            global_entity,
+                            delegated_at_entry
                         );
                     }
                     let world_entity = self

@@ -7,15 +7,13 @@
 
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
-use namako_engine::{when, then};
-use namako_engine::codegen::AssertOutcome;
 use naia_shared::{GlobalResponseId, ResponseReceiveKey, ResponseSendKey};
-use naia_test_harness::{
-    test_protocol::{
-        OrderedChannel, RequestResponseChannel, ServerToClientChannel,
-        TestMessage, TestRequest, TestResponse,
-    },
+use naia_test_harness::test_protocol::{
+    OrderedChannel, RequestResponseChannel, ServerToClientChannel, TestMessage, TestRequest,
+    TestResponse,
 };
+use namako_engine::codegen::AssertOutcome;
+use namako_engine::{then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -50,7 +48,9 @@ fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
             // If no panic, the operation was silently rejected (returns Ok but message not sent)
             // For channel direction violations, the API typically drops the message silently
             // but the semantic is that this is an error condition
-            scenario.record_err("Channel direction violation: client cannot send on server-to-client channel");
+            scenario.record_err(
+                "Channel direction violation: client cannot send on server-to-client channel",
+            );
         }
         Err(panic_payload) => {
             let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
@@ -69,7 +69,9 @@ fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
 /// Verifies that the last send operation returned an error.
 #[then("the send returns an error")]
 fn then_send_returns_error(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     // Should be an error result (operation rejected)
@@ -104,7 +106,8 @@ fn when_server_sends_messages_abc_ordered(ctx: &mut TestWorldMut) {
         ctx.server(|server| {
             server.send_message::<OrderedChannel, _>(&client_key, &TestMessage::new(1)); // A
             server.send_message::<OrderedChannel, _>(&client_key, &TestMessage::new(2)); // B
-            server.send_message::<OrderedChannel, _>(&client_key, &TestMessage::new(3)); // C
+            server.send_message::<OrderedChannel, _>(&client_key, &TestMessage::new(3));
+            // C
         });
     });
 
@@ -158,7 +161,8 @@ fn when_server_sends_message_a_ordered(ctx: &mut TestWorldMut) {
     // Send message A (1) on ordered reliable channel
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.send_message::<OrderedChannel, _>(&client_key, &TestMessage::new(1)); // A
+            server.send_message::<OrderedChannel, _>(&client_key, &TestMessage::new(1));
+            // A
         });
     });
 
@@ -217,9 +221,9 @@ fn when_client_sends_request(ctx: &mut TestWorldMut) {
     // Send a request from client to server
     let response_key = scenario.mutate(|ctx| {
         ctx.client(client_key, |client| {
-            client.send_request::<RequestResponseChannel, TestRequest>(
-                &TestRequest::new("test_query")
-            )
+            client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new(
+                "test_query",
+            ))
         })
     });
 
@@ -244,7 +248,9 @@ fn when_server_responds_to_request(ctx: &mut TestWorldMut) {
     // Wait for the server to receive the request
     let (response_id, _request): (GlobalResponseId, TestRequest) = scenario.expect(|ctx| {
         ctx.server(|server| {
-            for (_client_key, response_id, request) in server.read_request::<RequestResponseChannel, TestRequest>() {
+            for (_client_key, response_id, request) in
+                server.read_request::<RequestResponseChannel, TestRequest>()
+            {
                 return Some((response_id, request));
             }
             None
@@ -269,10 +275,13 @@ fn then_client_receives_response(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let scenario = ctx.scenario();
 
     // Try to get the stored response receive key
-    let response_key: Option<ResponseReceiveKey<TestResponse>> = scenario.bdd_get("response_receive_key");
+    let response_key: Option<ResponseReceiveKey<TestResponse>> =
+        scenario.bdd_get("response_receive_key");
 
     if response_key.is_none() {
-        return AssertOutcome::Failed("No response receive key was stored - did the client send a request?".to_string());
+        return AssertOutcome::Failed(
+            "No response receive key was stored - did the client send a request?".to_string(),
+        );
     }
 
     let response_key = response_key.unwrap();

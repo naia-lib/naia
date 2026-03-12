@@ -82,7 +82,10 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
     }
 
     //// Messages ////
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) -> Result<(), NaiaClientError> {
+    pub fn send_message<C: Channel, M: Message>(
+        &mut self,
+        message: &M,
+    ) -> Result<(), NaiaClientError> {
         self.client.client.send_message::<C, M>(message)
     }
 

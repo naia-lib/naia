@@ -12,11 +12,11 @@
 //! - Given/When steps: `TestWorldMut` (mutation operations only)
 //! - Then steps: `TestWorldRef` (read/assertion operations only, wraps ExpectCtx)
 
-use namako_engine::codegen::{AssertOutcome, StepContext};
 use naia_test_harness::{
     ClientExpectCtx, ClientKey, ExpectCtx, Scenario, ServerExpectCtx, ToTicks, TrackedClientEvent,
     TrackedServerEvent,
 };
+use namako_engine::codegen::{AssertOutcome, StepContext};
 
 /// The World type for Naia BDD tests.
 ///
@@ -29,13 +29,17 @@ impl TestWorld {
     /// Get the scenario as mutable, panicking if not initialized.
     /// Use this in Given/When steps.
     pub fn scenario_mut(&mut self) -> &mut Scenario {
-        self.0.as_mut().expect("Scenario not initialized - call a Given step first")
+        self.0
+            .as_mut()
+            .expect("Scenario not initialized - call a Given step first")
     }
 
     /// Get the scenario as immutable, panicking if not initialized.
     /// Use this in Then steps.
     pub fn scenario(&self) -> &Scenario {
-        self.0.as_ref().expect("Scenario not initialized - call a Given step first")
+        self.0
+            .as_ref()
+            .expect("Scenario not initialized - call a Given step first")
     }
 
     /// Initialize with a new scenario.
@@ -81,17 +85,19 @@ impl namako_engine::World for TestWorld {
     {
         let scenario = self.scenario_mut();
         // Default timeout of 500 ticks for polling assertions
-        scenario.until(500.ticks()).expect_msg("BDD Step Assertion", |ctx| {
-            let ref_ctx = TestWorldRef::new(ctx);
-            match f(&ref_ctx) {
-                AssertOutcome::Passed(val) => Some(val),
-                AssertOutcome::Pending => None,
-                AssertOutcome::Failed(msg) => {
-                    // Hard failure - panic immediately, do not retry
-                    panic!("Assertion failed: {}", msg);
-                },
-            }
-        })
+        scenario
+            .until(500.ticks())
+            .expect_msg("BDD Step Assertion", |ctx| {
+                let ref_ctx = TestWorldRef::new(ctx);
+                match f(&ref_ctx) {
+                    AssertOutcome::Passed(val) => Some(val),
+                    AssertOutcome::Pending => None,
+                    AssertOutcome::Failed(msg) => {
+                        // Hard failure - panic immediately, do not retry
+                        panic!("Assertion failed: {}", msg);
+                    }
+                }
+            })
     }
 }
 
@@ -124,7 +130,13 @@ pub struct NamakoGivenTestWorld {
 }
 
 impl namako_engine::codegen::StepConstructor<TestWorld> for NamakoGivenTestWorld {
-    fn inner(&self) -> (namako_engine::step::Location, namako_engine::codegen::LazyRegex, namako_engine::Step<TestWorld>) {
+    fn inner(
+        &self,
+    ) -> (
+        namako_engine::step::Location,
+        namako_engine::codegen::LazyRegex,
+        namako_engine::Step<TestWorld>,
+    ) {
         (self.loc, self.regex, self.func)
     }
 
@@ -161,7 +173,13 @@ pub struct NamakoWhenTestWorld {
 }
 
 impl namako_engine::codegen::StepConstructor<TestWorld> for NamakoWhenTestWorld {
-    fn inner(&self) -> (namako_engine::step::Location, namako_engine::codegen::LazyRegex, namako_engine::Step<TestWorld>) {
+    fn inner(
+        &self,
+    ) -> (
+        namako_engine::step::Location,
+        namako_engine::codegen::LazyRegex,
+        namako_engine::Step<TestWorld>,
+    ) {
         (self.loc, self.regex, self.func)
     }
 
@@ -198,7 +216,13 @@ pub struct NamakoThenTestWorld {
 }
 
 impl namako_engine::codegen::StepConstructor<TestWorld> for NamakoThenTestWorld {
-    fn inner(&self) -> (namako_engine::step::Location, namako_engine::codegen::LazyRegex, namako_engine::Step<TestWorld>) {
+    fn inner(
+        &self,
+    ) -> (
+        namako_engine::step::Location,
+        namako_engine::codegen::LazyRegex,
+        namako_engine::Step<TestWorld>,
+    ) {
         (self.loc, self.regex, self.func)
     }
 
@@ -277,7 +301,9 @@ impl<'a> TestWorldRef<'a> {
     /// Create a new read-only context from an ExpectCtx.
     /// Called by the generated macro wrapper inside the polling loop.
     pub fn new(ctx: &mut ExpectCtx<'a>) -> Self {
-        Self { ctx: ctx as *mut ExpectCtx<'a> }
+        Self {
+            ctx: ctx as *mut ExpectCtx<'a>,
+        }
     }
 
     /// Get access to the underlying ExpectCtx.
@@ -332,7 +358,12 @@ impl<'a> TestWorldRef<'a> {
     }
 
     /// Check client event ordering.
-    pub fn client_event_before(&self, client_key: ClientKey, a: TrackedClientEvent, b: TrackedClientEvent) -> bool {
+    pub fn client_event_before(
+        &self,
+        client_key: ClientKey,
+        a: TrackedClientEvent,
+        b: TrackedClientEvent,
+    ) -> bool {
         self.scenario_ref().client_event_before(client_key, a, b)
     }
 
@@ -343,7 +374,9 @@ impl<'a> TestWorldRef<'a> {
 
     /// Get client event history (cloned).
     pub fn client_event_history(&self, client_key: ClientKey) -> Vec<TrackedClientEvent> {
-        self.scenario_ref().client_event_history(client_key).to_vec()
+        self.scenario_ref()
+            .client_event_history(client_key)
+            .to_vec()
     }
 
     /// Get server event history (cloned).

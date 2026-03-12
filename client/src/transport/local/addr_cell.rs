@@ -1,4 +1,7 @@
-use std::{net::SocketAddr, sync::{Arc, RwLock}};
+use std::{
+    net::SocketAddr,
+    sync::{Arc, RwLock},
+};
 
 use naia_shared::transport::local::ClientServerAddr;
 

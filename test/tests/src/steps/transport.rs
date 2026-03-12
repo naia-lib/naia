@@ -5,9 +5,9 @@
 //!   - Inbound packet validation
 //!   - Transport abstraction guarantees
 
-use namako_engine::{given, when, then};
 use naia_test_harness::test_protocol::{LargeTestMessage, TestMessage, UnreliableChannel};
 use naia_test_harness::LinkConditionerConfig;
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -76,7 +76,10 @@ fn when_server_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                server.send_message::<UnreliableChannel, _>(&client_key, &LargeTestMessage::new(1000));
+                server.send_message::<UnreliableChannel, _>(
+                    &client_key,
+                    &LargeTestMessage::new(1000),
+                );
             });
         });
     }));
@@ -240,7 +243,9 @@ fn then_transport_adapter_not_called(ctx: &TestWorldRef) {
     // 2. No panic occurred
     // This validates that oversized packets are caught at the API layer,
     // not passed through to the transport.
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded");
 
     // Should be an error result (operation rejected gracefully)
@@ -277,7 +282,7 @@ fn when_packets_from_client_dropped(ctx: &mut TestWorldMut) {
     scenario.configure_link_conditioner(
         &client_key,
         Some(LinkConditionerConfig::new(0, 0, 1.0)), // 100% loss client→server
-        None, // No conditioning server→client
+        None,                                        // No conditioning server→client
     );
 
     // Run several ticks to simulate transport behavior under packet loss
@@ -320,7 +325,7 @@ fn when_packets_from_server_dropped(ctx: &mut TestWorldMut) {
     // Client→server remains functional so the client can still operate
     scenario.configure_link_conditioner(
         &client_key,
-        None, // No conditioning client→server
+        None,                                        // No conditioning client→server
         Some(LinkConditionerConfig::new(0, 0, 1.0)), // 100% loss server→client
     );
 
@@ -357,14 +362,13 @@ fn when_packets_from_server_dropped(ctx: &mut TestWorldMut) {
 /// Verifies that the server handled packet loss gracefully without panic.
 #[then("the server continues operating normally")]
 fn then_server_continues_operating_normally(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     // Should have completed successfully (no panic)
-    assert!(
-        result.is_ok,
-        "Server did not continue operating normally"
-    );
+    assert!(result.is_ok, "Server did not continue operating normally");
     assert!(
         result.panic_msg.is_none(),
         "Server panicked during packet loss: {:?}",
@@ -376,14 +380,13 @@ fn then_server_continues_operating_normally(ctx: &TestWorldRef) {
 /// Verifies that the client handled packet loss gracefully without panic.
 #[then("the client continues operating normally")]
 fn then_client_continues_operating_normally(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     // Should have completed successfully (no panic)
-    assert!(
-        result.is_ok,
-        "Client did not continue operating normally"
-    );
+    assert!(result.is_ok, "Client did not continue operating normally");
     assert!(
         result.panic_msg.is_none(),
         "Client panicked during packet loss: {:?}",
@@ -503,7 +506,7 @@ fn when_server_receives_packets_reordered(ctx: &mut TestWorldMut) {
     scenario.configure_link_conditioner(
         &client_key,
         Some(LinkConditionerConfig::new(50, 40, 0.0)), // Client→Server: jitter causes reordering
-        None, // Server→Client: no conditioning
+        None,                                          // Server→Client: no conditioning
     );
 
     // Run several ticks to process packets under reordering conditions
@@ -546,7 +549,7 @@ fn when_client_receives_packets_reordered(ctx: &mut TestWorldMut) {
     // Use latency >= jitter to avoid underflow (50ms latency, 40ms jitter)
     scenario.configure_link_conditioner(
         &client_key,
-        None, // Client→Server: no conditioning
+        None,                                          // Client→Server: no conditioning
         Some(LinkConditionerConfig::new(50, 40, 0.0)), // Server→Client: jitter causes reordering
     );
 
@@ -583,14 +586,13 @@ fn when_client_receives_packets_reordered(ctx: &mut TestWorldMut) {
 /// Verifies that the server handled duplicate/reordered packets gracefully.
 #[then("the server handles them without panic")]
 fn then_server_handles_without_panic(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     // Should have completed successfully (no panic)
-    assert!(
-        result.is_ok,
-        "Server did not handle packets gracefully"
-    );
+    assert!(result.is_ok, "Server did not handle packets gracefully");
     assert!(
         result.panic_msg.is_none(),
         "Server panicked while handling packets: {:?}",
@@ -602,14 +604,13 @@ fn then_server_handles_without_panic(ctx: &TestWorldRef) {
 /// Verifies that the client handled duplicate/reordered packets gracefully.
 #[then("the client handles them without panic")]
 fn then_client_handles_without_panic(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     // Should have completed successfully (no panic)
-    assert!(
-        result.is_ok,
-        "Client did not handle packets gracefully"
-    );
+    assert!(result.is_ok, "Client did not handle packets gracefully");
     assert!(
         result.panic_msg.is_none(),
         "Client panicked while handling packets: {:?}",
@@ -636,9 +637,7 @@ fn given_multiple_transport_adapters(ctx: &mut TestWorldMut) {
     scenario.server_start(ServerConfig::default(), test_protocol);
 
     // Create a room for clients
-    let room_key = scenario.mutate(|ctx| {
-        ctx.server(|server| server.make_room().key())
-    });
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
     scenario.set_last_room(room_key);
 
     // Store that we're testing transport abstraction independence
@@ -653,12 +652,12 @@ fn given_multiple_transport_adapters(ctx: &mut TestWorldMut) {
 /// that application behavior is consistent regardless of transport quality.
 #[when("the same application logic runs on each transport")]
 fn when_same_application_logic_runs(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{
-        protocol, Auth, ServerAuthEvent, ServerConnectEvent, ClientConnectEvent,
-        test_protocol::TestMessage,
+        protocol, test_protocol::TestMessage, Auth, ClientConnectEvent, ServerAuthEvent,
+        ServerConnectEvent,
     };
+    use std::time::Duration;
 
     let scenario = ctx.scenario_mut();
     scenario.clear_operation_result();
@@ -718,7 +717,10 @@ fn when_same_application_logic_runs(ctx: &mut TestWorldMut) {
         // Add to room
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+                server
+                    .room_mut(&room_key)
+                    .expect("room exists")
+                    .add_user(&client_key);
             });
         });
 
@@ -764,7 +766,9 @@ fn when_same_application_logic_runs(ctx: &mut TestWorldMut) {
 /// simulated transport conditions.
 #[then("observable application behavior is identical")]
 fn then_observable_application_behavior_identical(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     assert!(
@@ -785,7 +789,9 @@ fn then_observable_application_behavior_identical(ctx: &TestWorldRef) {
 /// from the messaging layer, not the transport layer.
 #[then("no transport-specific guarantees are exposed")]
 fn then_no_transport_specific_guarantees_exposed(ctx: &TestWorldRef) {
-    let result = ctx.scenario().last_operation_result()
+    let result = ctx
+        .scenario()
+        .last_operation_result()
         .expect("No operation result recorded - did you run a When step?");
 
     // If the application logic completed successfully under varying transport

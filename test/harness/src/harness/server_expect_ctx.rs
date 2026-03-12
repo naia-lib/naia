@@ -32,7 +32,10 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Get the server's current tick
     pub fn current_tick(&self) -> naia_shared::Tick {
-        let (server, _) = self.scenario.server_and_registry().expect("server not started");
+        let (server, _) = self
+            .scenario
+            .server_and_registry()
+            .expect("server not started");
         server.current_tick()
     }
 

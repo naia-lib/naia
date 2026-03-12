@@ -6,8 +6,8 @@ use naia_shared::{
     Channel, IdentityToken, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
 };
 
-use crate::{
-    harness::{ClientEntityMut, ClientEntityRef, mutate_ctx::MutateCtx, ClientKey, EntityKey},
+use crate::harness::{
+    mutate_ctx::MutateCtx, ClientEntityMut, ClientEntityRef, ClientKey, EntityKey,
 };
 
 /// Lightweight handle for client-side mutations
@@ -30,7 +30,8 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     {
         let scenario = self.ctx.scenario_mut();
         // Create Users the same way split_for_server_mut does
-        let (state, registry) = scenario.split_for_client_mut(&self.client_key)
+        let (state, registry) = scenario
+            .split_for_client_mut(&self.client_key)
             .expect("client state not found");
 
         // 1. Spawn entity via Client API
@@ -124,7 +125,10 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     // Message Operations
 
     /// Send message to server
-    pub fn send_message<C: Channel, M: Message>(&mut self, message: &M) -> Result<(), NaiaClientError> {
+    pub fn send_message<C: Channel, M: Message>(
+        &mut self,
+        message: &M,
+    ) -> Result<(), NaiaClientError> {
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
         state.client_mut().send_message::<C, M>(message)
     }
@@ -231,5 +235,4 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         let state = self.ctx.scenario().client_state(&self.client_key);
         state.client().client_tick()
     }
-
 }

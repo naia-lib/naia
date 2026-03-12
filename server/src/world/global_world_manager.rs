@@ -361,7 +361,8 @@ impl GlobalWorldManager {
         user_key: &UserKey,
         global_entity: &GlobalEntity,
     ) -> bool {
-        self.auth_handler.user_is_authority_holder(user_key, global_entity)
+        self.auth_handler
+            .user_is_authority_holder(user_key, global_entity)
     }
 
     pub(crate) fn pause_entity_replication(&mut self, global_entity: &GlobalEntity) {
