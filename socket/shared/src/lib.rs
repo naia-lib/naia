@@ -30,7 +30,10 @@ pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
-#[cfg(all(feature = "test_time", not(all(target_arch = "wasm32", any(feature = "wbindgen", feature = "mquad")))))]
+#[cfg(all(
+    feature = "test_time",
+    not(all(target_arch = "wasm32", any(feature = "wbindgen", feature = "mquad")))
+))]
 pub use backends::TestClock;
 
 #[derive(Debug, Eq, PartialEq)]
