@@ -1,11 +1,11 @@
-use std::{future, thread};
+use std::{future, sync::LazyLock, thread};
 
-use once_cell::sync::Lazy;
 use tokio::runtime::{Builder, Handle};
 
-/// TODO: make description
+/// Returns a handle to a background tokio runtime.
+/// Required because webrtc-unreliable-client internally uses tokio::spawn.
 pub fn get_runtime() -> Handle {
-    static GLOBAL: Lazy<Handle> = Lazy::new(|| {
+    static GLOBAL: LazyLock<Handle> = LazyLock::new(|| {
         let runtime = Builder::new_multi_thread()
             .enable_all()
             .build()
@@ -14,7 +14,7 @@ pub fn get_runtime() -> Handle {
         let runtime_handle = runtime.handle().clone();
 
         thread::Builder::new()
-            .name("tokio-main".to_string())
+            .name("webrtc-runtime".to_string())
             .spawn(move || {
                 let _guard = runtime.enter();
                 runtime.block_on(future::pending::<()>());
@@ -26,5 +26,5 @@ pub fn get_runtime() -> Handle {
         runtime_handle
     });
 
-    Lazy::<Handle>::force(&GLOBAL).clone()
+    GLOBAL.clone()
 }

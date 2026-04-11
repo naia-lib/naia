@@ -151,7 +151,7 @@ impl LocalTransportHub {
         let connections = self.connections.lock().unwrap();
 
         for (addr, conn) in connections.iter() {
-            let mut rx_guard = conn.auth_req_rx.lock().unwrap();
+            let rx_guard = conn.auth_req_rx.lock().unwrap();
             if paused {
                 // Drain ALL packets when paused, not just one
                 while rx_guard.try_recv().is_ok() {}
@@ -186,7 +186,7 @@ impl LocalTransportHub {
 
         // Finally check direct channels and apply link conditioning
         for (addr, conn) in connections.iter_mut() {
-            let mut rx_guard = conn.server_data_rx.lock().unwrap();
+            let rx_guard = conn.server_data_rx.lock().unwrap();
             if paused {
                 // Drain ALL packets when paused, not just one
                 while rx_guard.try_recv().is_ok() {}

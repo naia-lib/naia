@@ -164,7 +164,7 @@ pub fn run(args: RunArgs) -> Result<()> {
     let mut scenario_results = Vec::with_capacity(plan.scenarios.len());
 
     // NOTE: We execute steps synchronously. naia_test::Scenario manages its own
-    // internal runtime for network simulation, so we don't create a tokio runtime here.
+    // internal runtime for network simulation, so we don't create an async runtime here.
 
     for scenario in &plan.scenarios {
         let mut step_results = Vec::with_capacity(scenario.steps.len());

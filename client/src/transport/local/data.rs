@@ -58,7 +58,7 @@ impl LocalClientReceiver {
 
     pub fn receive(&mut self) -> Result<Option<&[u8]>, ClientRecvError> {
         // Try to receive from channel (non-blocking)
-        let mut rx_guard = self.rx.lock().unwrap();
+        let rx_guard = self.rx.lock().unwrap();
         match rx_guard.try_recv() {
             Ok(payload) => {
                 // Use debug logging instead of println to reduce noise

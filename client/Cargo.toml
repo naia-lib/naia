@@ -24,7 +24,7 @@ zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-client-socket" ]
 transport_udp = [
     "naia-shared/advanced_handshake", "naia-shared/transport_udp",
-    "local_ipaddress", "once_cell", "base64", "tokio", "reqwest",
+    "local_ipaddress", "base64", "ureq", "parking_lot",
 ]
 transport_local = [ "http", "base64", "naia-shared/transport_local" ]
 interior_visibility = [ "naia-shared/interior_visibility" ]
@@ -39,7 +39,6 @@ log = { version = "0.4" }
 
 local_ipaddress = { version = "0.1", optional = true }
 base64 = { version = "0.13", optional = true }
-tokio = { version = "1.15", features = ["full"], optional = true }
-reqwest = { version = "0.11", optional = true }
-once_cell = { version = "1.4.1", optional = true }
+ureq = { version = "2.0", optional = true }
+parking_lot = { version = "0.12", optional = true }
 http = { version = "1.2", optional = true }

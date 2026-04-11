@@ -1,6 +1,6 @@
 use std::{net::SocketAddr, sync::Arc};
 
-use tokio::sync::RwLock;
+use parking_lot::RwLock;
 
 use crate::transport::ServerAddr;
 
@@ -22,15 +22,15 @@ impl Default for AddrCell {
 }
 
 impl AddrCell {
-    pub async fn recv(&self, addr: &SocketAddr) {
-        let mut cell = self.cell.write().await;
+    pub fn recv(&self, addr: &SocketAddr) {
+        let mut cell = self.cell.write();
         cell.0 = ServerAddr::Found(*addr);
     }
 
     pub fn get(&self) -> ServerAddr {
         match self.cell.try_read() {
-            Ok(addr) => addr.0,
-            Err(_) => ServerAddr::Finding,
+            Some(addr) => addr.0,
+            None => ServerAddr::Finding,
         }
     }
 }
