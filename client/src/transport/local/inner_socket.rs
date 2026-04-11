@@ -4,7 +4,7 @@ use std::{
 };
 
 use naia_shared::IdentityToken;
-use tokio::sync::mpsc;
+use std::sync::mpsc;
 
 // use crate::shared::LocalTransportQueues;
 use super::{
@@ -17,7 +17,7 @@ pub struct LocalClientSocket {
     auth_io: Arc<Mutex<ClientAuthIo>>,
     sender: LocalClientSender,
     receiver: LocalClientReceiver,
-    auth_requests_tx: mpsc::UnboundedSender<Vec<u8>>,
+    auth_requests_tx: mpsc::Sender<Vec<u8>>,
 }
 
 impl LocalClientSocket {
@@ -26,10 +26,10 @@ impl LocalClientSocket {
     pub fn new_with_tokens(
         _client_addr: SocketAddr,
         _server_addr: SocketAddr,
-        auth_requests_tx: mpsc::UnboundedSender<Vec<u8>>,
-        auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
-        data_tx: mpsc::UnboundedSender<Vec<u8>>,
-        data_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        auth_requests_tx: mpsc::Sender<Vec<u8>>,
+        auth_responses_rx: mpsc::Receiver<Vec<u8>>,
+        data_tx: mpsc::Sender<Vec<u8>>,
+        data_rx: mpsc::Receiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
         identity_token: Arc<Mutex<Option<IdentityToken>>>,
         rejection_code: Arc<Mutex<Option<u16>>>,

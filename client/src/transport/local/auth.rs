@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::mpsc;
+use std::sync::mpsc;
 
 use naia_shared::{
     transport::local::{ClientIdentityReceiverResult, ClientServerAddr, LocalAuthError},
@@ -11,13 +11,13 @@ use super::addr_cell::LocalAddrCell;
 
 // PendingRequest polls synchronously — no Tokio runtime needed for local transport.
 struct PendingRequest {
-    auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+    auth_responses_rx: mpsc::Receiver<Vec<u8>>,
     addr_cell: LocalAddrCell,
     cached_result: Option<Result<(u16, String), LocalAuthError>>,
 }
 
 impl PendingRequest {
-    fn new(auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
+    fn new(auth_responses_rx: mpsc::Receiver<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
         Self {
             auth_responses_rx,
             addr_cell,
@@ -37,8 +37,8 @@ impl PendingRequest {
         // Try to receive the auth response synchronously
         let response_bytes = match self.auth_responses_rx.try_recv() {
             Ok(bytes) => bytes,
-            Err(mpsc::error::TryRecvError::Empty) => return Ok(None),
-            Err(mpsc::error::TryRecvError::Disconnected) => {
+            Err(mpsc::TryRecvError::Empty) => return Ok(None),
+            Err(mpsc::TryRecvError::Disconnected) => {
                 return Err(LocalAuthError::ChannelClosed);
             }
         };
@@ -91,7 +91,7 @@ impl PendingRequest {
 
 // ClientAuthIo - encapsulates all client auth logic
 pub(crate) struct ClientAuthIo {
-    auth_responses_rx: Option<mpsc::UnboundedReceiver<Vec<u8>>>,
+    auth_responses_rx: Option<mpsc::Receiver<Vec<u8>>>,
     addr_cell: LocalAddrCell,
     pending_req_opt: Option<PendingRequest>,
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
@@ -100,7 +100,7 @@ pub(crate) struct ClientAuthIo {
 
 impl ClientAuthIo {
     pub(crate) fn new(
-        auth_responses_rx: mpsc::UnboundedReceiver<Vec<u8>>,
+        auth_responses_rx: mpsc::Receiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
         identity_token: Arc<Mutex<Option<IdentityToken>>>,
         rejection_code: Arc<Mutex<Option<u16>>>,

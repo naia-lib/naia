@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 
-use tokio::sync::mpsc;
+use std::sync::mpsc;
 
 use log::debug;
 use naia_shared::transport::local::{ClientRecvError, ClientSendError, ClientServerAddr};
@@ -10,12 +10,12 @@ use super::addr_cell::LocalAddrCell;
 // Client packet sender
 #[derive(Clone)]
 pub struct LocalClientSender {
-    tx: mpsc::UnboundedSender<Vec<u8>>,
+    tx: mpsc::Sender<Vec<u8>>,
     addr_cell: LocalAddrCell,
 }
 
 impl LocalClientSender {
-    pub(crate) fn new(tx: mpsc::UnboundedSender<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
+    pub(crate) fn new(tx: mpsc::Sender<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
         Self { tx, addr_cell }
     }
 
@@ -42,13 +42,13 @@ impl LocalClientSender {
 // Client packet receiver
 #[derive(Clone)]
 pub struct LocalClientReceiver {
-    rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
+    rx: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
     addr_cell: LocalAddrCell,
     last_payload: Arc<Mutex<Option<Box<[u8]>>>>,
 }
 
 impl LocalClientReceiver {
-    pub(crate) fn new(rx: mpsc::UnboundedReceiver<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
+    pub(crate) fn new(rx: mpsc::Receiver<Vec<u8>>, addr_cell: LocalAddrCell) -> Self {
         Self {
             rx: Arc::new(Mutex::new(rx)),
             addr_cell,

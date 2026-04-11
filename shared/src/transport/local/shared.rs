@@ -1,7 +1,7 @@
 use std::net::SocketAddr;
+use std::sync::mpsc;
 
 use naia_socket_shared::IdentityToken;
-use tokio::sync::mpsc;
 
 pub const FAKE_SERVER_ADDR: &str = "127.0.0.1:54321";
 
@@ -36,24 +36,24 @@ pub enum LocalAuthError {
 
 // Helper to create data packet channels
 pub(crate) fn create_data_channels() -> (
-    mpsc::UnboundedSender<Vec<u8>>,   // client sends to server
-    mpsc::UnboundedReceiver<Vec<u8>>, // server receives from client
-    mpsc::UnboundedSender<Vec<u8>>,   // server sends to client
-    mpsc::UnboundedReceiver<Vec<u8>>, // client receives from server
+    mpsc::Sender<Vec<u8>>,   // client sends to server
+    mpsc::Receiver<Vec<u8>>, // server receives from client
+    mpsc::Sender<Vec<u8>>,   // server sends to client
+    mpsc::Receiver<Vec<u8>>, // client receives from server
 ) {
-    let (client_tx, server_rx) = mpsc::unbounded_channel();
-    let (server_tx, client_rx) = mpsc::unbounded_channel();
+    let (client_tx, server_rx) = mpsc::channel();
+    let (server_tx, client_rx) = mpsc::channel();
     (client_tx, server_rx, server_tx, client_rx)
 }
 
 // Helper to create 1:1 auth channels
 pub(crate) fn create_auth_channels() -> (
-    mpsc::UnboundedSender<Vec<u8>>,   // client sends requests
-    mpsc::UnboundedReceiver<Vec<u8>>, // server receives requests
-    mpsc::UnboundedSender<Vec<u8>>,   // server sends responses
-    mpsc::UnboundedReceiver<Vec<u8>>, // client receives responses
+    mpsc::Sender<Vec<u8>>,   // client sends requests
+    mpsc::Receiver<Vec<u8>>, // server receives requests
+    mpsc::Sender<Vec<u8>>,   // server sends responses
+    mpsc::Receiver<Vec<u8>>, // client receives responses
 ) {
-    let (req_tx, req_rx) = mpsc::unbounded_channel();
-    let (resp_tx, resp_rx) = mpsc::unbounded_channel();
+    let (req_tx, req_rx) = mpsc::channel();
+    let (resp_tx, resp_rx) = mpsc::channel();
     (req_tx, req_rx, resp_tx, resp_rx)
 }

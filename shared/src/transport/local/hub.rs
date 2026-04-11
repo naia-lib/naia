@@ -5,7 +5,7 @@ use std::{
 };
 
 use log::debug;
-use tokio::sync::mpsc;
+use std::sync::mpsc;
 
 use crate::transport::local::shared::{create_auth_channels, create_data_channels};
 use crate::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
@@ -14,17 +14,17 @@ use crate::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 /// Only stores server-side channels (what the server needs to receive/send)
 struct ClientConnection {
     // Auth channels (client -> server) - server receives
-    auth_req_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
+    auth_req_rx: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
     // Auth channels (server -> client) - server sends
-    auth_resp_tx: mpsc::UnboundedSender<Vec<u8>>,
+    auth_resp_tx: mpsc::Sender<Vec<u8>>,
 
     // Data channels (client -> server) - server receives
-    server_data_rx: Arc<Mutex<mpsc::UnboundedReceiver<Vec<u8>>>>,
+    server_data_rx: Arc<Mutex<mpsc::Receiver<Vec<u8>>>>,
     // Data channels (server -> client) - server sends
-    server_data_tx: mpsc::UnboundedSender<Vec<u8>>,
+    server_data_tx: mpsc::Sender<Vec<u8>>,
     // Data channels (client -> server) - server "receives" via this sender (injection)
     #[allow(dead_code)]
-    client_data_tx_injection: mpsc::UnboundedSender<Vec<u8>>,
+    client_data_tx_injection: mpsc::Sender<Vec<u8>>,
 
     // Link conditioner configuration (bidirectional)
     // None means no conditioning (perfect connection)
@@ -61,10 +61,10 @@ impl LocalTransportHub {
         &self,
     ) -> (
         SocketAddr,                       // client_addr
-        mpsc::UnboundedSender<Vec<u8>>,   // auth_req_tx (client sends)
-        mpsc::UnboundedReceiver<Vec<u8>>, // auth_resp_rx (client receives)
-        mpsc::UnboundedSender<Vec<u8>>,   // client_data_tx (client sends)
-        mpsc::UnboundedReceiver<Vec<u8>>, // client_data_rx (client receives)
+        mpsc::Sender<Vec<u8>>,   // auth_req_tx (client sends)
+        mpsc::Receiver<Vec<u8>>, // auth_resp_rx (client receives)
+        mpsc::Sender<Vec<u8>>,   // client_data_tx (client sends)
+        mpsc::Receiver<Vec<u8>>, // client_data_rx (client receives)
     ) {
         // Generate unique client address
         let client_id = {
