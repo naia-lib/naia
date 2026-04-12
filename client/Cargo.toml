@@ -26,7 +26,7 @@ transport_udp = [
     "naia-shared/advanced_handshake", "naia-shared/transport_udp",
     "local_ipaddress", "base64", "ureq", "parking_lot",
 ]
-transport_local = [ "http", "base64", "naia-shared/transport_local" ]
+transport_local = [ "http", "base64", "parking_lot", "naia-shared/transport_local" ]
 interior_visibility = [ "naia-shared/interior_visibility" ]
 e2e_debug = []
 test_time = [ "naia-shared/test_time" ]

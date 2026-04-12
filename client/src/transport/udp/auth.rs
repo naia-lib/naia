@@ -1,8 +1,9 @@
+use parking_lot::Mutex;
 use std::{
     net::SocketAddr,
     sync::{
         mpsc::{self, TryRecvError},
-        Arc, Mutex,
+        Arc,
     },
 };
 
@@ -74,7 +75,7 @@ impl AuthReceiver {
     pub fn new(auth_io: Arc<Mutex<AuthIo>>) -> Self {
         {
             // check if the auth_io is already connected
-            let guard = auth_io.lock().unwrap();
+            let guard = auth_io.lock();
             if guard.pending_req_opt.is_none() {
                 panic!("AuthReceiver created without a connected AuthIo");
             }
@@ -86,7 +87,7 @@ impl AuthReceiver {
 
 impl IdentityReceiver for AuthReceiver {
     fn receive(&mut self) -> IdentityReceiverResult {
-        let mut guard = self.auth_io.lock().unwrap();
+        let mut guard = self.auth_io.lock();
         guard.receive()
     }
 }

@@ -1,7 +1,9 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
+
+use parking_lot::Mutex;
 
 use naia_shared::IdentityToken;
 use std::sync::mpsc;
@@ -82,7 +84,7 @@ impl LocalClientSocket {
         if self.auth_requests_tx.send(request_bytes).is_ok() {}
 
         // Create PendingRequest immediately (not lazily!)
-        self.auth_io.lock().unwrap().connect();
+        self.auth_io.lock().connect();
 
         self.connect()
     }
@@ -105,7 +107,7 @@ impl LocalClientSocket {
         if self.auth_requests_tx.send(request_bytes).is_ok() {}
 
         // Create PendingRequest immediately
-        self.auth_io.lock().unwrap().connect();
+        self.auth_io.lock().connect();
 
         self.connect()
     }
@@ -133,7 +135,7 @@ impl LocalClientSocket {
         if self.auth_requests_tx.send(request_bytes).is_ok() {}
 
         // Create PendingRequest immediately
-        self.auth_io.lock().unwrap().connect();
+        self.auth_io.lock().connect();
 
         self.connect()
     }

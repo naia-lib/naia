@@ -1,8 +1,9 @@
+use parking_lot::Mutex;
 use std::{
     collections::HashMap,
     io::{ErrorKind, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use naia_shared::{http_utils, IdentityToken, LinkConditionerConfig};
@@ -274,12 +275,12 @@ impl TransportAuthSender for AuthSender {
         address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
-        self.auth_io.lock().unwrap().accept(address, identity_token)
+        self.auth_io.lock().accept(address, identity_token)
     }
 
     /// Sends a rejection packet from the Client Socket
     fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
-        self.auth_io.lock().unwrap().reject(address)
+        self.auth_io.lock().reject(address)
     }
 }
 
@@ -301,7 +302,7 @@ impl AuthReceiver {
 
 impl TransportAuthReceiver for AuthReceiver {
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        let mut guard = self.auth_io.lock().unwrap();
+        let mut guard = self.auth_io.lock();
         match guard.receive() {
             Ok(option) => match option {
                 Some((addr, buffer)) => {

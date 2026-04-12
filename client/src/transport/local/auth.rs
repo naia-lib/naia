@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use std::sync::mpsc;
 
@@ -136,12 +138,12 @@ impl ClientAuthIo {
 
     fn receive(&mut self) -> ClientIdentityReceiverResult {
         // Check if already received token (from previous call)
-        if let Some(token) = self.identity_token.lock().unwrap().clone() {
+        if let Some(token) = self.identity_token.lock().clone() {
             return ClientIdentityReceiverResult::Success(token);
         }
 
         // Check if rejection happened
-        if let Some(code) = *self.rejection_code.lock().unwrap() {
+        if let Some(code) = *self.rejection_code.lock() {
             return ClientIdentityReceiverResult::ErrorResponseCode(code);
         }
 
@@ -155,7 +157,7 @@ impl ClientAuthIo {
         match pending_req.poll_response() {
             Ok(Some((status_code, id_token))) => {
                 if status_code != 200 {
-                    *self.rejection_code.lock().unwrap() = Some(status_code);
+                    *self.rejection_code.lock() = Some(status_code);
                     return ClientIdentityReceiverResult::ErrorResponseCode(status_code);
                 }
 
@@ -167,7 +169,7 @@ impl ClientAuthIo {
                     ClientServerAddr::Found(_addr) => {}
                 }
 
-                *self.identity_token.lock().unwrap() = Some(id_token.clone());
+                *self.identity_token.lock() = Some(id_token.clone());
                 ClientIdentityReceiverResult::Success(id_token)
             }
             Ok(None) => ClientIdentityReceiverResult::Waiting,
@@ -188,6 +190,6 @@ impl LocalClientIdentity {
     }
 
     pub fn receive(&mut self) -> ClientIdentityReceiverResult {
-        self.auth_io.lock().unwrap().receive()
+        self.auth_io.lock().receive()
     }
 }

@@ -1,6 +1,7 @@
+use parking_lot::Mutex;
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
@@ -42,8 +43,8 @@ impl LocalServerReceiver {
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         if let Some((client_addr, bytes)) = self.hub.try_recv_data() {
             let boxed = bytes.into_boxed_slice();
-            *self.last_payload.lock().unwrap() = Some((client_addr, boxed));
-            let payload_ref = self.last_payload.lock().unwrap();
+            *self.last_payload.lock() = Some((client_addr, boxed));
+            let payload_ref = self.last_payload.lock();
             let (addr, payload_slice) = payload_ref.as_ref().unwrap();
             let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice.as_ref()) };
             Ok(Some((*addr, static_ref)))

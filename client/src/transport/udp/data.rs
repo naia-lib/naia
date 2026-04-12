@@ -1,7 +1,8 @@
+use parking_lot::Mutex;
 use std::{
     io::ErrorKind,
     net::{IpAddr, Ipv4Addr, Ipv6Addr, UdpSocket},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use naia_shared::LinkConditionerConfig;
@@ -40,7 +41,6 @@ impl Socket {
         data_socket
             .as_ref()
             .lock()
-            .unwrap()
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
 
@@ -63,7 +63,6 @@ impl Socket {
     ) {
         self.auth_io
             .lock()
-            .unwrap()
             .connect(auth_bytes_opt, auth_headers_opt);
         let id_receiver = AuthReceiver::new(self.auth_io.clone());
 
@@ -163,7 +162,6 @@ impl TransportSender for PacketSender {
             .socket
             .as_ref()
             .lock()
-            .unwrap()
             .send_to(payload, server_addr)
             .is_err()
         {
@@ -205,7 +203,6 @@ impl PacketReceiver for UdpPacketReceiver {
             .socket
             .as_ref()
             .lock()
-            .unwrap()
             .recv_from(&mut self.buffer)
         {
             Ok((recv_len, address)) => {

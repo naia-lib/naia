@@ -1,4 +1,5 @@
-use std::{ops::DerefMut, sync::Mutex};
+use parking_lot::Mutex;
+use std::{ops::DerefMut};
 
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
 use bevy_ecs::{entity::Entity, schedule::IntoScheduleConfigs};
@@ -65,7 +66,7 @@ impl Plugin {
 
 impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
-        let mut config = self.config.lock().unwrap().deref_mut().take().unwrap();
+        let mut config = self.config.lock().deref_mut().take().unwrap();
 
         let world_data = config.protocol.take_world_data();
         world_data.add_systems(app);

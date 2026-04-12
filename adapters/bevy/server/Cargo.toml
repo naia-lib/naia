@@ -19,6 +19,7 @@ transport_local = [ "naia-server/transport_local" ]
 test_time = [ "naia-server/test_time" ]
 
 [dependencies]
+parking_lot = "0.12"
 naia-server = { version = "0.24", path = "../../../server", features = ["bevy_support"] }
 naia-bevy-shared = { version = "0.24", path = "../shared" }
 bevy_app = { version = "0.18", default-features=false }

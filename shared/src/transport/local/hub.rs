@@ -1,8 +1,10 @@
 use std::{
     collections::HashMap,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
+
+use parking_lot::Mutex;
 
 use log::debug;
 use std::sync::mpsc;
@@ -68,7 +70,7 @@ impl LocalTransportHub {
     ) {
         // Generate unique client address
         let client_id = {
-            let mut id = self.next_client_id.lock().unwrap();
+            let mut id = self.next_client_id.lock();
             let current = *id;
             *id = current.wrapping_add(1);
             current
@@ -101,7 +103,6 @@ impl LocalTransportHub {
 
         self.connections
             .lock()
-            .unwrap()
             .insert(client_addr, connection);
 
         (
@@ -125,7 +126,7 @@ impl LocalTransportHub {
 
     /// Inject a packet from a client (used for testing/fuzzing)
     pub fn inject_client_packet(&self, client_addr: &SocketAddr, data: Vec<u8>) -> bool {
-        let connections = self.connections.lock().unwrap();
+        let connections = self.connections.lock();
         if let Some(conn) = connections.get(client_addr) {
             let _ = conn.client_data_tx_injection.send(data);
             return true;
@@ -136,7 +137,7 @@ impl LocalTransportHub {
     /// Inject a packet from the server to a client (used for testing/fuzzing)
     /// This bypasses normal server sending and directly injects raw data to the client.
     pub fn inject_server_packet(&self, client_addr: &SocketAddr, data: Vec<u8>) -> bool {
-        let connections = self.connections.lock().unwrap();
+        let connections = self.connections.lock();
         if let Some(conn) = connections.get(client_addr) {
             let _ = conn.server_data_tx.send(data);
             return true;
@@ -147,11 +148,11 @@ impl LocalTransportHub {
     /// Try to receive an auth request from any client (returns (client_addr, bytes))
     /// Returns None if traffic is paused (packets are dropped)
     pub fn try_recv_auth_request(&self) -> Option<(SocketAddr, Vec<u8>)> {
-        let paused = *self.traffic_paused.lock().unwrap(); // Single check
-        let connections = self.connections.lock().unwrap();
+        let paused = *self.traffic_paused.lock(); // Single check
+        let connections = self.connections.lock();
 
         for (addr, conn) in connections.iter() {
-            let rx_guard = conn.auth_req_rx.lock().unwrap();
+            let rx_guard = conn.auth_req_rx.lock();
             if paused {
                 // Drain ALL packets when paused, not just one
                 while rx_guard.try_recv().is_ok() {}
@@ -167,16 +168,16 @@ impl LocalTransportHub {
     /// Applies link conditioning if configured
     /// Also processes time queues to deliver ready packets to clients
     pub fn try_recv_data(&self) -> Option<(SocketAddr, Vec<u8>)> {
-        let paused = *self.traffic_paused.lock().unwrap(); // Single check
+        let paused = *self.traffic_paused.lock(); // Single check
         let now = Instant::now();
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = self.connections.lock();
 
         // First, deliver any ready packets from server-to-client queues for all clients
         self.deliver_all_queued_packets_to_clients(&mut connections, &now);
 
         // Then check time queues for client-to-server delayed packets that are now ready
         for (addr, conn) in connections.iter_mut() {
-            let mut queue_guard = conn.client_to_server_queue.lock().unwrap();
+            let mut queue_guard = conn.client_to_server_queue.lock();
             if queue_guard.has_item(&now) {
                 if let Some(bytes) = queue_guard.pop_item(&now) {
                     return Some((*addr, bytes));
@@ -186,14 +187,14 @@ impl LocalTransportHub {
 
         // Finally check direct channels and apply link conditioning
         for (addr, conn) in connections.iter_mut() {
-            let rx_guard = conn.server_data_rx.lock().unwrap();
+            let rx_guard = conn.server_data_rx.lock();
             if paused {
                 // Drain ALL packets when paused, not just one
                 while rx_guard.try_recv().is_ok() {}
             } else if let Ok(bytes) = rx_guard.try_recv() {
                 // Apply link conditioning if configured
                 if let Some(ref config) = conn.client_to_server_conditioner {
-                    let mut queue_guard = conn.client_to_server_queue.lock().unwrap();
+                    let mut queue_guard = conn.client_to_server_queue.lock();
                     link_condition_logic::process_packet(config, &mut queue_guard, bytes);
                     // Packet is now in queue, will be delivered later
                     continue;
@@ -209,12 +210,12 @@ impl LocalTransportHub {
     /// Send auth response to a specific client
     /// Returns Err(()) if traffic is paused (packets are dropped)
     pub fn send_auth_response(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
-        let paused = *self.traffic_paused.lock().unwrap(); // Single check
+        let paused = *self.traffic_paused.lock(); // Single check
         if paused {
             return Err(()); // Drop packet
         }
 
-        let connections = self.connections.lock().unwrap();
+        let connections = self.connections.lock();
         if let Some(conn) = connections.get(client_addr) {
             conn.auth_resp_tx.send(bytes).map_err(|_| ())
         } else {
@@ -227,14 +228,14 @@ impl LocalTransportHub {
     /// Applies link conditioning if configured
     /// Also processes time queues to deliver any ready packets
     pub fn send_data(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
-        let paused = *self.traffic_paused.lock().unwrap(); // Single check
+        let paused = *self.traffic_paused.lock(); // Single check
         if paused {
             debug!("[HUB] send_data: Packet dropped (traffic paused)");
             return Err(()); // Drop packet
         }
 
         let now = Instant::now();
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = self.connections.lock();
 
         // First, deliver any ready packets from server-to-client queues for all clients
         self.deliver_all_queued_packets_to_clients(&mut connections, &now);
@@ -243,7 +244,7 @@ impl LocalTransportHub {
             // Apply link conditioning if configured
             if let Some(ref config) = conn.server_to_client_conditioner {
                 let packet_len = bytes.len();
-                let mut queue_guard = conn.server_to_client_queue.lock().unwrap();
+                let mut queue_guard = conn.server_to_client_queue.lock();
                 let queue_len_before = queue_guard.len();
                 link_condition_logic::process_packet(config, &mut queue_guard, bytes);
                 let queue_len_after = queue_guard.len();
@@ -282,7 +283,7 @@ impl LocalTransportHub {
     ) -> usize {
         let mut total_delivered = 0;
         for (addr, conn) in connections.iter_mut() {
-            let mut queue_guard = conn.server_to_client_queue.lock().unwrap();
+            let mut queue_guard = conn.server_to_client_queue.lock();
             let queue_len_before = queue_guard.len();
             let mut delivered_this_client = 0;
             while queue_guard.has_item(now) {
@@ -316,7 +317,7 @@ impl LocalTransportHub {
     /// delayed packets are delivered even when there's no active send/recv
     pub fn process_time_queues(&self) {
         let now = Instant::now();
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = self.connections.lock();
 
         // Deliver ready packets from server-to-client queues
         let delivered = self.deliver_all_queued_packets_to_clients(&mut connections, &now);
@@ -341,7 +342,7 @@ impl LocalTransportHub {
         client_to_server: Option<LinkConditionerConfig>,
         server_to_client: Option<LinkConditionerConfig>,
     ) -> bool {
-        let mut connections = self.connections.lock().unwrap();
+        let mut connections = self.connections.lock();
         if let Some(conn) = connections.get_mut(client_addr) {
             conn.client_to_server_conditioner = client_to_server;
             conn.server_to_client_conditioner = server_to_client;
@@ -353,16 +354,16 @@ impl LocalTransportHub {
 
     /// Pause all traffic (drop all packets)
     pub fn pause_traffic(&self) {
-        *self.traffic_paused.lock().unwrap() = true;
+        *self.traffic_paused.lock() = true;
     }
 
     /// Resume normal traffic delivery
     pub fn resume_traffic(&self) {
-        *self.traffic_paused.lock().unwrap() = false;
+        *self.traffic_paused.lock() = false;
     }
 
     /// Check if traffic is paused
     pub fn is_traffic_paused(&self) -> bool {
-        *self.traffic_paused.lock().unwrap()
+        *self.traffic_paused.lock()
     }
 }

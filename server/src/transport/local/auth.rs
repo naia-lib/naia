@@ -1,6 +1,7 @@
+use parking_lot::Mutex;
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 use naia_shared::IdentityToken;
@@ -98,11 +99,11 @@ impl LocalServerAuthSender {
         address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), ServerSendError> {
-        self.auth_io.lock().unwrap().accept(address, identity_token)
+        self.auth_io.lock().accept(address, identity_token)
     }
 
     pub fn reject(&self, address: &SocketAddr) -> Result<(), ServerSendError> {
-        self.auth_io.lock().unwrap().reject(address)
+        self.auth_io.lock().reject(address)
     }
 }
 
@@ -122,7 +123,7 @@ impl LocalServerAuthReceiver {
     }
 
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
-        let mut guard = self.auth_io.lock().unwrap();
+        let mut guard = self.auth_io.lock();
         match guard.receive() {
             Ok(option) => match option {
                 Some((addr, buffer)) => {

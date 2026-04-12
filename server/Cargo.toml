@@ -31,6 +31,7 @@ e2e_debug = []
 test_utils = [ "naia-shared/test_utils" ]
 
 [dependencies]
+parking_lot = "0.12"
 naia-shared = { version = "0.24", path = "../shared" }
 naia-server-socket = { version = "0.24", path = "../socket/server", optional = true }
 cfg-if = { version = "1.0" }
