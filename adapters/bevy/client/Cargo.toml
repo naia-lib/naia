@@ -15,6 +15,7 @@ maintenance = { status = "actively-developed" }
 [features]
 transport_webrtc = [ "naia-client/transport_webrtc" ]
 transport_udp = [ "naia-client/transport_udp" ]
+interior_visibility = [ "naia-client/interior_visibility" ]
 
 [dependencies]
 parking_lot = "0.12"

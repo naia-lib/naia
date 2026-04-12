@@ -17,6 +17,7 @@ transport_webrtc = [ "naia-server/transport_webrtc" ]
 transport_udp = [ "naia-server/transport_udp" ]
 transport_local = [ "naia-server/transport_local" ]
 test_time = [ "naia-server/test_time" ]
+interior_visibility = [ "naia-server/interior_visibility" ]
 
 [dependencies]
 parking_lot = "0.12"
