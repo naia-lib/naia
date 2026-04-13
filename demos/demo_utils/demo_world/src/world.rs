@@ -359,23 +359,53 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
 
     fn entity_enable_delegation(
         &mut self,
-        _component_kinds: &ComponentKinds,
-        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
-        _global_world_manager: &dyn GlobalWorldManagerType,
-        _world_entity: &Entity,
+        component_kinds: &ComponentKinds,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        world_entity: &Entity,
     ) {
-        // No-op for demo world - delegation is handled at the framework level
+        for component_kind in WorldMutType::<Entity>::component_kinds(self, world_entity) {
+            WorldMutType::<Entity>::component_enable_delegation(
+                self,
+                component_kinds,
+                converter,
+                global_world_manager,
+                world_entity,
+                &component_kind,
+            );
+        }
     }
 
     fn component_enable_delegation(
         &mut self,
-        _component_kinds: &ComponentKinds,
-        _converter: &dyn EntityAndGlobalEntityConverter<Entity>,
-        _global_world_manager: &dyn GlobalWorldManagerType,
-        _world_entity: &Entity,
-        _component_kind: &ComponentKind,
+        component_kinds: &ComponentKinds,
+        converter: &dyn EntityAndGlobalEntityConverter<Entity>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        world_entity: &Entity,
+        component_kind: &ComponentKind,
     ) {
-        // No-op for demo world - delegation is handled at the framework level
+        let Some(mut component) = component_mut_of_kind(self.world, world_entity, component_kind)
+        else {
+            return;
+        };
+        let Ok(global_entity) = converter.entity_to_global_entity(world_entity) else {
+            return;
+        };
+        let accessor = global_world_manager.get_entity_auth_accessor(&global_entity);
+        let mutator_opt =
+            if global_world_manager.entity_needs_mutator_for_delegation(&global_entity) {
+                let diff_mask_size = component.diff_mask_size();
+                let mutator = global_world_manager.register_component(
+                    component_kinds,
+                    &global_entity,
+                    component_kind,
+                    diff_mask_size,
+                );
+                Some(mutator)
+            } else {
+                None
+            };
+        component.enable_delegation(&accessor, mutator_opt.as_ref());
     }
 
     fn entity_disable_delegation(&mut self, _entity: &Entity) {

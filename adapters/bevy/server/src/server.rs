@@ -442,7 +442,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub(crate) fn entity_take_authority(&mut self, entity: &Entity) {
+    pub fn entity_take_authority(&mut self, entity: &Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => {
                 let _ = server.entity_take_authority(entity);
