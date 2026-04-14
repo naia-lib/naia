@@ -1,39 +1,46 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::cell::Cell;
 use std::time::Duration;
 
-// Global simulated clock — visible to all threads so background executor
-// threads can call Instant::now() without per-thread initialization.
-static SIMULATED_CLOCK: AtomicU64 = AtomicU64::new(u64::MAX); // MAX = uninitialized sentinel
+// Thread-local simulated clock — each test thread gets its own independent
+// clock so parallel tests never interfere with each other.  The test executor
+// is single-threaded per scenario, so no cross-thread clock reads are needed.
+thread_local! {
+    static SIMULATED_CLOCK: Cell<u64> = const { Cell::new(u64::MAX) }; // MAX = uninitialized sentinel
+}
 
 pub struct TestClock;
 
 impl TestClock {
     /// Initialize the simulated clock with a starting time.
     pub fn init(initial_ms: u64) {
-        SIMULATED_CLOCK.store(initial_ms, Ordering::Release);
+        SIMULATED_CLOCK.with(|c| c.set(initial_ms));
     }
 
     /// Advance the simulated clock by the specified number of milliseconds.
     pub fn advance(delta_ms: u64) {
-        let current = SIMULATED_CLOCK.load(Ordering::Acquire);
-        if current == u64::MAX {
-            panic!("test clock not initialized! Call TestClock::init() first.");
-        }
-        SIMULATED_CLOCK.store(current + delta_ms, Ordering::Release);
+        SIMULATED_CLOCK.with(|c| {
+            let current = c.get();
+            if current == u64::MAX {
+                panic!("test clock not initialized! Call TestClock::init() first.");
+            }
+            c.set(current + delta_ms);
+        });
     }
 
     /// Reset the simulated clock (for cleanup between tests).
     pub fn reset() {
-        SIMULATED_CLOCK.store(u64::MAX, Ordering::Release);
+        SIMULATED_CLOCK.with(|c| c.set(u64::MAX));
     }
 
     /// Get the current simulated time in milliseconds.
     pub fn current_time_ms() -> u64 {
-        let millis = SIMULATED_CLOCK.load(Ordering::Acquire);
-        if millis == u64::MAX {
-            panic!("test clock not initialized! Call TestClock::init() first.");
-        }
-        millis
+        SIMULATED_CLOCK.with(|c| {
+            let millis = c.get();
+            if millis == u64::MAX {
+                panic!("test clock not initialized! Call TestClock::init() first.");
+            }
+            millis
+        })
     }
 }
 
