@@ -1,7 +1,7 @@
 # Scaling Naia to 10K+ Replicated Entities per Room
 
 **Status:** Proposed — 2026-04-23
-**Companion:** `SCALE_10K_ENTITIES_TEST_STRATEGY.md` — audit of Naia's test harness, coverage gaps, and the Phase 0 (close gaps) + Phase 0.5 (trace capture + allocation snapshots) gates that must land before any code in this plan.
+**Companion:** `SCALE_10K_ENTITIES_LANDING.md` — the landing strategy: test coverage plan (Phase 0 BDD-gap closure, golden traces, new contracts 15–19), engineering quality bar (hygiene, CI gates, benches, loom, tracing, fuzz, docs), feature-flag rollout, and the per-phase PR checklist. Everything non-architectural lives there.
 **Motivation:** cyberlith levels want `NetworkedTile` per tile (10K+ tiles per level), preserving the existing entity API (`commands.spawn((NetworkedTile, ...))`, `ReplicationConfig::Delegated`, `Property<T>`, authority handoff). Naia's per-tick work is currently proportional to *entities-in-scope*, not *entities-that-changed*; beyond ~1K entities this becomes the dominant server cost.
 
 **Constraints:**
