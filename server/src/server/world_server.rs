@@ -1365,6 +1365,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
+        // Per [entity-publication]: silently ignore explicit include() for Private entities
+        // when the user is not the owner — mirrors the guard in user_scope_has_entity().
+        if is_contained {
+            let is_private = self
+                .global_world_manager
+                .entity_replication_config(&global_entity)
+                .map(|c| matches!(c, ReplicationConfig::Private))
+                .unwrap_or(false);
+            if is_private {
+                let is_owner = match self.global_world_manager.entity_owner(&global_entity) {
+                    Some(
+                        EntityOwner::Client(owner_key)
+                        | EntityOwner::ClientWaiting(owner_key)
+                        | EntityOwner::ClientPublic(owner_key),
+                    ) => owner_key == *user_key,
+                    _ => false,
+                };
+                if !is_owner {
+                    return;
+                }
+            }
+        }
+
         self.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
     }
@@ -2687,6 +2710,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         // entity is owned by client, but it is public, so we don't need to replicate it
                         continue;
                     }
+                    // Per [entity-publication]: Private (Client/ClientWaiting) entities must
+                    // never be replicated via this path. The owning client already holds the
+                    // entity client-side; non-owning clients must not receive it.
+                    if matches!(
+                        self.global_world_manager.entity_owner(global_entity),
+                        Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
+                    ) {
+                        continue;
+                    }
 
                     let currently_in_scope = connection
                         .base
@@ -2771,6 +2803,29 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Wo
         world_entity: &E,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.global_entity_map.entity_to_global_entity(world_entity)
+    }
+}
+
+cfg_if! {
+    if #[cfg(feature = "test_utils")] {
+        impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
+            pub fn diff_handler_global_count(&self) -> usize {
+                self.global_world_manager.global_diff_handler_count()
+            }
+
+            pub fn diff_handler_global_count_by_kind(
+                &self,
+            ) -> HashMap<naia_shared::ComponentKind, usize> {
+                self.global_world_manager.global_diff_handler_count_by_kind()
+            }
+
+            pub fn diff_handler_user_counts(&self) -> HashMap<UserKey, usize> {
+                self.user_connections
+                    .values()
+                    .map(|conn| (conn.user_key, conn.diff_handler_receiver_count()))
+                    .collect()
+            }
+        }
     }
 }
 
