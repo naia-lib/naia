@@ -5,7 +5,7 @@
     "feature_fingerprint_hash": "d9494be85dad49ae0966f7cef8ee53023dbc6438d4cdc5dd4e9787c0b6f7421f",
     "step_registry_hash": "0c373dce43427833f0fd67d9c78b0fd1f8086bb8fcb82360137206bb4e3d33d4",
     "resolved_plan_hash": "78a6e45cb3c28dd30835f4b551c8d78694202ae050a01486a4bd1ca69ab3148a",
-    "run_report_hash": "f9ae4bf9b4051258de640d489b86ee79158893896c514bf319eb62af7f249998"
+    "run_report_hash": "d6c55f44c4b6a8f526476c523dab46b68f4121360d0fcab8b475ede80e11132f"
   },
   "scenarios": [
     {
@@ -1459,7 +1459,7 @@
     },
     {
       "scenario_key": "entity_publication:Rule(01):Scenario(01)",
-      "status": "failed",
+      "status": "passed",
       "steps": [
         {
           "planned_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
@@ -1503,8 +1503,8 @@
           "planned_payload_hash": "5b9578237edb6acafe06ef74ccb1b87cdcbd0e5bf2ebbf8bc175f798dd53c095",
           "executed_payload_hash": "5b9578237edb6acafe06ef74ccb1b87cdcbd0e5bf2ebbf8bc175f798dd53c095",
           "executed_impl_hash": "9ad6812d27b11f65000b60afebb073cba662b80054fb9035540f21278a36ddf4",
-          "status": "failed",
-          "error_message": "Remote Private Property should never be written."
+          "status": "passed",
+          "error_message": null
         },
         {
           "planned_binding_id": "40be0d0ad33be108b7e5f81c936fce2c2cf343ab7840d8cf6d680a150adbeeea",
