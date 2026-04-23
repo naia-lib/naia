@@ -23,7 +23,7 @@ test_time = [ ]
 [dependencies]
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
-url = { version = "2.2.2" }
+url = { version = "2.5" }
 wasm-bindgen = { version = "0.2", optional = true }
 js-sys = { version = "0.3.64", optional = true }
 

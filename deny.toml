@@ -1,11 +1,61 @@
+# cargo-deny configuration for naia.
+#
+# Schema: v2 (https://embarkstudios.github.io/cargo-deny/checks/cfg.html)
+#
+# All `ignore` entries below are time-boxed. The underlying fix for every
+# entry is the DTLS-stack migration in `webrtc-unreliable-client` (rustls
+# 0.19 -> 0.23, ring 0.16 -> 0.17.12+, webpki -> rustls-webpki, reqwest
+# 0.11 -> 0.12) and a companion bump in `webrtc-unreliable` (server-side
+# openssl via native-tls). Tracked in naia issue #TBD. When the migration
+# lands, delete the corresponding entries — do not extend expirations
+# without re-opening the follow-up.
+
 [advisories]
-unmaintained = "deny"
+version = 2
 yanked = "deny"
-notice = "deny"
+
+ignore = [
+    # ---- webrtc-unreliable-client 0.3.x DTLS stack ----
+    { id = "RUSTSEC-2024-0336", reason = "rustls 0.19 infinite-loop. webrtc-unreliable-client DTLS handshake path. Migrate to rustls 0.23.", expiration = "2026-06-01" },
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki name-constraint (URI). Via reqwest 0.11 TLS chain in webrtc-unreliable-client. Follows rustls upgrade.", expiration = "2026-06-01" },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki name-constraint (wildcard). Via reqwest 0.11 TLS chain in webrtc-unreliable-client. Follows rustls upgrade.", expiration = "2026-06-01" },
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL-parsing panic. Via reqwest 0.11 TLS chain in webrtc-unreliable-client. Follows rustls upgrade.", expiration = "2026-06-01" },
+    { id = "RUSTSEC-2023-0052", reason = "legacy webpki 0.21 CPU-DoS in path building. Direct dep of webrtc-unreliable-client; removed when rustls-webpki replaces it.", expiration = "2026-06-01" },
+
+    # ring 0.16 and 0.17.8 both need >=0.17.12. Single fix: bump through the chain.
+    { id = "RUSTSEC-2025-0009", reason = "ring AES panic under overflow checks. Both 0.16 (direct) and 0.17.8 (via rustls 0.21) in webrtc-unreliable-client tree.", expiration = "2026-06-01" },
+
+    # ---- webrtc-unreliable-client 0.3.x HTTP signaling stack ----
+    { id = "RUSTSEC-2026-0007", reason = "bytes 1.7.1 BytesMut::reserve overflow. Transitive via h2 -> hyper 0.14 -> reqwest 0.11. Resolved by reqwest 0.12 migration.", expiration = "2026-06-01" },
+
+    # ---- DER/ASN.1 chain via rcgen/x509-parser ----
+    { id = "RUSTSEC-2026-0009", reason = "time 0.3.36 stack-exhaustion DoS. Transitive via asn1-rs -> der-parser -> x509-parser -> rcgen. Resolved by rcgen bump.", expiration = "2026-06-01" },
+
+    # ---- webrtc-unreliable (server) native-tls chain ----
+    { id = "RUSTSEC-2025-0004", reason = "openssl 0.10.66 ssl::select_next_proto UAF. Via webrtc-unreliable 0.5.x (triplehex upstream) and webrtc-unreliable-client reqwest TLS fallback.", expiration = "2026-06-01" },
+    { id = "RUSTSEC-2025-0022", reason = "openssl 0.10.66 Md/Cipher fetch UAF. Same provenance as RUSTSEC-2025-0004.", expiration = "2026-06-01" },
+
+    # ---- crossbeam-channel (transitive via reqwest 0.11 tokio ecosystem) ----
+    { id = "RUSTSEC-2025-0024", reason = "crossbeam-channel 0.5.13 double-free on Drop. Resolved by reqwest 0.12 migration.", expiration = "2026-06-01" },
+]
 
 [licenses]
-copyleft = "deny"
-allow-osi-fsf-free = "either"
+version = 2
+# Broad allow list mirroring pre-v2 `allow-osi-fsf-free = "either"` intent.
+allow = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Zlib",
+    "Unicode-3.0",
+    "Unicode-DFS-2016",
+    "CC0-1.0",
+    "OpenSSL",
+]
 
 [[licenses.clarify]]
 name = "stretch"
