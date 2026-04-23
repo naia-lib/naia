@@ -119,9 +119,11 @@ Feature: Entity Scopes
       And the client and entity share a room
       Then the entity is in-scope for the client
 
-    @Deferred
+    # [entity-scopes-02] — Entity not in shared room is out-of-scope for user
+    # SharesRoom(U,E) MUST be necessary for InScope(U,E); an entity with no
+    # shared room MUST remain out-of-scope.
     @Scenario(02)
-    Scenario: Entity not in shared room is out-of-scope for user
+    Scenario: entity-scopes-02 — Entity not in shared room is out-of-scope for user
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -157,9 +159,11 @@ Feature: Entity Scopes
       When the server includes the entity for the client
       Then the entity is in-scope for the client
 
-    @Deferred
+    # [entity-scopes-05] — Last call wins between Include and Exclude
+    # The most recently applied include/exclude call for (U,E) determines the
+    # effective scope state. Include after Exclude → entity is back in scope.
     @Scenario(03)
-    Scenario: Last call wins between Include and Exclude
+    Scenario: entity-scopes-05 — Last call wins between Include and Exclude
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -184,9 +188,11 @@ Feature: Entity Scopes
       And the client owns an entity
       Then the entity is in-scope for the client
 
-    @Deferred
+    # [entity-scopes-owner-02] — Exclude on owner's own entity has no effect
+    # The owning client MUST always remain in-scope for their entity.
+    # server.exclude() on an owner's entity MUST be ignored.
     @Scenario(02)
-    Scenario: Exclude on owner's own entity has no effect
+    Scenario: entity-scopes-owner-02 — Exclude on owner's own entity has no effect
       Given a server is running
       And a client connects
       And the client owns an entity
@@ -209,9 +215,13 @@ Feature: Entity Scopes
       And the entity is not in any room
       Then the entity is out-of-scope for the client
 
+    # [entity-scopes-roomless-02] — Include cannot bypass room gate for roomless entity
+    # Include filter MUST NOT bypass the Rooms gate; a roomless entity MUST remain
+    # out-of-scope even after explicit include.
+    # DEFERRED: naia currently allows scope.include() to bypass the room gate.
     @Deferred
     @Scenario(02)
-    Scenario: Include cannot bypass room gate for roomless entity
+    Scenario: entity-scopes-roomless-02 — Include cannot bypass room gate for roomless entity
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -245,9 +255,11 @@ Feature: Entity Scopes
       And the client and entity share a room
       Then the entity spawns on the client
 
-    @Deferred
+    # [entity-scopes-lifetime-03] — Re-entering scope creates fresh entity lifetime
+    # After leaving scope for ≥1 tick, re-entry MUST produce a fresh spawn with
+    # the current server snapshot; the client MUST NOT rely on prior state.
     @Scenario(03)
-    Scenario: Re-entering scope creates fresh entity lifetime
+    Scenario: entity-scopes-lifetime-03 — Re-entering scope creates fresh entity lifetime
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -283,9 +295,10 @@ Feature: Entity Scopes
       When the server includes the entity for an unknown client
       Then no error is raised
 
-    @Deferred
+    # [entity-scopes-error-03] — Operations on unknown entity are ignored
+    # scope.include() on a non-existent entity MUST be a silent no-op (no panic).
     @Scenario(03)
-    Scenario: Operations on unknown entity are ignored
+    Scenario: entity-scopes-error-03 — Operations on unknown entity are ignored
       Given a server is running
       And a client connects
       When the server includes an unknown entity for the client

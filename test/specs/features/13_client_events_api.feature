@@ -2,7 +2,7 @@
 # Client Events API — Canonical Contract
 # ============================================================================
 # Source: contracts/13_client_events_api.spec.md
-# Last converted: 2026-01-17
+# Last converted: 2026-04-23
 #
 # Summary:
 #   This specification defines the only valid semantics for the client-side
@@ -118,6 +118,65 @@ Feature: Client Events API
   @Rule(01)
   Rule: Client Events API
 
-    # All executable scenarios deferred until step bindings implemented.
+    # [client-events-04] — Spawn is the first event for an entity lifetime
+    # The client MUST receive a SpawnEntityEvent when an entity enters scope.
+    @Scenario(01)
+    Scenario: client-events-04 — Client receives spawn event when entity enters scope
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      Then the client receives a spawn event for the entity
 
+    # [client-events-09] — Scope transitions are reflected as spawn/despawn events
+    # Leaving scope MUST emit Despawn; re-entering scope MUST emit a new Spawn.
+    @Scenario(02)
+    Scenario: client-events-09 — Scope leave emits Despawn; re-enter emits Spawn
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      Then the client receives a despawn event for the entity
+      When the server includes the entity for the client
+      Then the client receives a spawn event for the entity
 
+    # [client-events-07] — Component update events are one-shot per applied change
+    # When the server updates a replicated component, the client Events API MUST
+    # surface exactly one component update event for that applied change.
+    @Scenario(03)
+    Scenario: client-events-07 — Client receives component update event via Events API
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server updates the replicated component
+      Then the client receives a component update event for the entity
+
+    # [client-events-08] — Component remove events are one-shot per applied removal
+    # When the server removes a replicated component from an in-scope entity, the
+    # client Events API MUST surface exactly one component remove event for that change.
+    @Scenario(04)
+    Scenario: client-events-08 — Client receives component remove event via Events API
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server removes the replicated component
+      Then the client receives a component remove event for the entity
+
+    # [client-events-06] — Component insert events are one-shot per applied insertion
+    # When the server inserts a replicated component into an already-in-scope entity,
+    # the client Events API MUST surface exactly one component insert event.
+    @Scenario(05)
+    Scenario: client-events-06 — Client receives component insert event via Events API
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists without a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server inserts the replicated component
+      Then the client receives a component insert event for the entity

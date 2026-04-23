@@ -13,7 +13,8 @@ use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientKey, EntityKey, Position, ServerAuthEvent,
     ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
 };
-use namako_engine::{given, then};
+use namako_engine::codegen::AssertOutcome;
+use namako_engine::{given, then, when};
 
 use crate::{TestWorldMut, TestWorldRef};
 
@@ -245,6 +246,33 @@ fn check_entity_in_scope(ctx: &TestWorldRef, client_name: &str) -> bool {
     })
 }
 
+/// Step: Given the entity is in-scope for client B (precondition)
+/// Polls until the entity is in client B's server-side scope.
+/// Used as a Given/And precondition before a When step.
+#[given("the entity is in-scope for client B")]
+fn given_entity_in_scope_for_client_b(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+
+    let client_b: ClientKey = scenario
+        .bdd_get(&client_key_storage("B"))
+        .expect("client B not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+
+    scenario.spec_expect("entity-publication: entity in scope for client B", |ectx| {
+        ectx.server(|server| {
+            let in_scope = server
+                .user_scope(&client_b)
+                .map(|s| s.has(&entity_key))
+                .unwrap_or(false);
+            if in_scope { Some(()) } else { None }
+        })
+    });
+
+    scenario.allow_flexible_next();
+}
+
 /// Step: Then the entity is in-scope for client A
 /// Verifies the entity is in client A's scope.
 #[then("the entity is in-scope for client A")]
@@ -273,4 +301,108 @@ fn then_entity_out_of_scope_for_client_b(ctx: &TestWorldRef) {
         !check_entity_in_scope(ctx, "B"),
         "Expected entity to be out-of-scope for client B, but it was in-scope"
     );
+}
+
+/// Step: Then the entity becomes out-of-scope for client B
+/// Polls until the entity is no longer in client B's server-side scope.
+/// Used after an unpublish operation where scope removal propagates asynchronously.
+#[then("the entity becomes out-of-scope for client B")]
+fn then_entity_becomes_out_of_scope_for_client_b(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    if !check_entity_in_scope(ctx, "B") {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+// ============================================================================
+// When Steps - Publication Changes
+// ============================================================================
+
+/// Step: When client A publishes the entity
+/// Reconfigures the entity to Public, making it eligible for non-owner scope.
+#[when("client A publishes the entity")]
+fn when_client_a_publishes_the_entity(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+
+    let client_a: ClientKey = scenario
+        .bdd_get(&client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+
+    scenario.mutate(|mctx| {
+        mctx.client(client_a, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity.configure_replication(ClientReplicationConfig::Public);
+            }
+        });
+    });
+}
+
+/// Step: Then client {word} observes replication config as {word} for the entity
+///
+/// Polls until the named client's entity reports the expected ReplicationConfig.
+/// Covers [entity-publication-observability]: publication state MUST be observable
+/// via replication_config() on the owning client.
+#[then("client {word} observes replication config as {word} for the entity")]
+fn then_client_observes_replication_config(
+    ctx: &TestWorldRef,
+    client_name: String,
+    config_name: String,
+) -> AssertOutcome<()> {
+    let client_key: ClientKey = ctx
+        .scenario()
+        .bdd_get(&client_key_storage(&client_name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", client_name));
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let expected_config = match config_name.as_str() {
+        "Public" => ClientReplicationConfig::Public,
+        "Private" => ClientReplicationConfig::Private,
+        "Delegated" => ClientReplicationConfig::Delegated,
+        other => {
+            return AssertOutcome::Failed(format!("Unknown replication config: '{}'", other))
+        }
+    };
+
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.replication_config() {
+                Some(config) if config == expected_config => AssertOutcome::Passed(()),
+                Some(other) => AssertOutcome::Failed(format!(
+                    "Expected replication_config {:?}, got {:?}",
+                    expected_config, other
+                )),
+                None => AssertOutcome::Pending,
+            }
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Step: When client A unpublishes the entity
+/// Reconfigures the entity to Private, removing it from non-owner scopes.
+#[when("client A unpublishes the entity")]
+fn when_client_a_unpublishes_the_entity(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+
+    let client_a: ClientKey = scenario
+        .bdd_get(&client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+
+    scenario.mutate(|mctx| {
+        mctx.client(client_a, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity.configure_replication(ClientReplicationConfig::Private);
+            }
+        });
+    });
 }

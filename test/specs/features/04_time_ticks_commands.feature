@@ -174,3 +174,20 @@ Feature: Time Ticks and Commands
       When the tick is processed
       Then commands are applied in ascending sequence order
 
+    # [time-ticks-03] — ConnectEvent implies tick sync complete
+    # Client MUST NOT emit ConnectEvent until tick sync complete.
+    # After connection, client_tick() MUST return Some (tick is known).
+    @Scenario(04)
+    Scenario: time-ticks-03 — Client tick is known after connection
+      Given a server is running
+      And a client connects
+      Then the client tick is available
+
+    # [time-ticks-04] — Client knows server tick at connect time
+    # The client knows the server's current tick at connection time (via tick sync).
+    @Scenario(05)
+    Scenario: time-ticks-04 — Server tick is known to client after connection
+      Given a server is running
+      And a client connects
+      Then the server tick is known to the client
+

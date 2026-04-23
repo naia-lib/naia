@@ -138,4 +138,35 @@ Feature: Entity Publication
       And client A and the entity share a room
       Then the entity is in-scope for client A
 
+    # [entity-publication-05] — Unpublish forces immediate OutOfScope for non-owners
+    # Published → Unpublished: all non-owners MUST become OutOfScope for the entity.
+    @Scenario(04)
+    Scenario: entity-publication-05 — Unpublish forces entity out-of-scope for non-owners
+      Given a server is running
+      And client A connects
+      And client B connects
+      And client A spawns a client-owned entity with Public replication config
+      And client A and the entity share a room
+      And client B and the entity share a room
+      And the entity is in-scope for client B
+      When client A unpublishes the entity
+      Then the entity becomes out-of-scope for client B
+
+    # [entity-publication-observability-01] — Published entity reports Public replication_config
+    # Publication MUST be observable via replication_config on the owning client.
+    @Scenario(05)
+    Scenario: entity-publication-observability — Public entity reports Public replication_config
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Public replication config
+      Then client A observes replication config as Public for the entity
+
+    # [entity-publication-observability-02] — Unpublished entity reports Private replication_config
+    # Publication MUST be observable via replication_config on the owning client.
+    @Scenario(06)
+    Scenario: entity-publication-observability — Private entity reports Private replication_config
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Private replication config
+      Then client A observes replication config as Private for the entity
 

@@ -2,7 +2,7 @@
 # Entity Authority — Canonical Contract
 # ============================================================================
 # Source: contracts/11_entity_authority.spec.md
-# Last converted: 2026-01-17
+# Last converted: 2026-04-23
 #
 # Summary:
 #   This specification defines how a client can acquire and release the right
@@ -97,16 +97,6 @@
 #   - Authority becomes None, pending cleared, grants revoked
 #
 # ----------------------------------------------------------------------------
-# ROBUSTNESS
-# ----------------------------------------------------------------------------
-#
-# Out-of-scope requests ignored server-side:
-#   - Silent in production, MAY warn in Debug mode
-#
-# Duplicate/late signals are idempotent:
-#   - No duplicate effects, converge to final state
-#
-# ----------------------------------------------------------------------------
 # OBSERVABILITY
 # ----------------------------------------------------------------------------
 #
@@ -133,6 +123,98 @@ Feature: Entity Authority
   @Rule(01)
   Rule: Entity Authority
 
-    # All executable scenarios deferred until step bindings implemented.
+    # [entity-authority-01] — Authority is None for non-delegated entities
+    # If replication_config(E) != Delegated, authority(E) MUST be None on clients.
+    @Scenario(01)
+    Scenario: entity-authority-01 — Non-delegated entity has no authority status
+      Given a server is running
+      And client A connects
+      And the server spawns a non-delegated entity in-scope for client A
+      Then client A observes no authority status for the entity
 
+    # [entity-authority-09] — Server may hold authority; all clients observe Denied
+    # While the server holds authority, all in-scope clients MUST observe Denied.
+    @Scenario(02)
+    Scenario: entity-authority-09 — Server holding authority puts all clients in Denied
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When the server takes authority for the delegated entity
+      Then client A is denied authority for the delegated entity
+      And client B is denied authority for the delegated entity
 
+    # [entity-authority-10] — Server override/reset transitions all clients to Available
+    # When the server resets authority, all clients MUST transition to Available.
+    @Scenario(03)
+    Scenario: entity-authority-10 — Server reset transitions all clients to Available
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      And the server takes authority for the delegated entity
+      And client A is denied authority for the delegated entity
+      When the server releases authority for the delegated entity
+      Then client A is available for the delegated entity
+      And client B is available for the delegated entity
+
+    # [entity-authority-06] — release_authority() transitions Granted → Releasing → Available
+    # A client that holds authority MUST eventually become Available after releasing.
+    @Scenario(04)
+    Scenario: entity-authority-06 — Client release transitions Granted to Available
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      When client A releases authority for the delegated entity
+      Then client A is available for the delegated entity
+
+    # [entity-authority-16] — Authority grant is observable via event API
+    # When the server grants authority, the client MUST receive an authority granted event.
+    @Scenario(05)
+    Scenario: entity-authority-16 — Client receives authority granted event
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A receives an authority granted event for the entity
+
+    # [entity-authority-16] — Authority reset is observable via event API
+    # When the server releases authority, all in-scope clients MUST receive an
+    # authority reset event, signaling the entity returned to Available.
+    @Scenario(06)
+    Scenario: entity-authority-16 — Client receives authority reset event when server releases
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      And the server takes authority for the delegated entity
+      And client A is denied authority for the delegated entity
+      When the server releases authority for the delegated entity
+      Then client A receives an authority reset event for the entity
+
+    # [entity-authority-16] — Authority denied event observable when request is denied
+    # When client B requests authority while client A's grant is in flight, client B MUST
+    # receive a denied event (Requested → Denied transition emits EntityAuthDeniedEvent).
+    # Both clients request back-to-back (no intermediate wait) so B is still in Requested
+    # state when the server denies it, triggering the Requested→Denied event.
+    @Scenario(07)
+    Scenario: entity-authority-16 — Client receives authority denied event when request is denied
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client B receives an authority denied event for the entity
+
+    # [entity-authority-07] — request_authority on non-delegated entity MUST return error
+    # Calling request_authority() on a non-delegated entity MUST return an error,
+    # not panic. No state mutation should occur.
+    @Scenario(08)
+    Scenario: entity-authority-07 — Request authority on non-delegated entity returns error
+      Given a server is running
+      And client A connects
+      And the server spawns a non-delegated entity in-scope for client A
+      When client A requests authority for the non-delegated entity
+      Then the authority request fails with an error

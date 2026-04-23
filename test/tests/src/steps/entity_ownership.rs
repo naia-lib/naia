@@ -172,6 +172,54 @@ fn when_client_updates_replicated_component(ctx: &mut TestWorldMut) {
 // Then Steps - Ownership Assertions
 // ============================================================================
 
+/// Step: Then the entity owner is the client
+///
+/// Polls until the client entity is present and reports EntityOwner::Client.
+/// Covers [entity-ownership-02.t1]: client-owned entity MUST report Client ownership
+/// on the owning client's side.
+#[then("the entity owner is the client")]
+fn then_entity_owner_is_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.owner() {
+                EntityOwner::Client(_) => AssertOutcome::Passed(()),
+                other => AssertOutcome::Failed(format!(
+                    "Expected EntityOwner::Client for owned entity, got {:?}",
+                    other
+                )),
+            }
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Step: Then the server no longer has the entity
+///
+/// Polls until the entity is absent from the server's world.
+/// Covers [entity-ownership-08.t1]: owner disconnect despawns all client-owned entities.
+#[then("the server no longer has the entity")]
+fn then_server_no_longer_has_entity(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    ctx.server(|server| {
+        if server.has_entity(&entity_key) {
+            AssertOutcome::Pending
+        } else {
+            AssertOutcome::Passed(())
+        }
+    })
+}
+
 /// Step: Then the entity owner is the server
 /// Verifies the entity is owned by the server.
 #[then("the entity owner is the server")]

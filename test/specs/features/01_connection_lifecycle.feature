@@ -232,6 +232,23 @@ Feature: Connection Lifecycle
       When the server disconnects the client
       Then the client observed ConnectEvent before DisconnectEvent
 
+    # [connection-lifecycle-21] — Client DisconnectEvent ordering via polling assertion
+    # Polling variant of the ordering guarantee: waits for disconnect then checks order.
+    @Scenario(06)
+    Scenario: connection-21 — Client observes DisconnectEvent only after ConnectEvent
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the client observes DisconnectEvent after ConnectEvent
+
+    # [connection-lifecycle-connect] — Client observes ConnectEvent via polling
+    # Polling variant of the client ConnectEvent assertion.
+    @Scenario(07)
+    Scenario: connection-lifecycle — Client observes ConnectEvent polling variant
+      Given a server is running
+      When a connected client
+      Then the client observes ConnectEvent
+
   # --------------------------------------------------------------------------
   # Rule: Disconnect semantics
   # --------------------------------------------------------------------------
@@ -282,6 +299,15 @@ Feature: Connection Lifecycle
       And a client connects
       When the server disconnects the client
       Then the client is not connected
+
+    # [connection-lifecycle-users-count] — Server has no users after all disconnect
+    # After all clients disconnect, the server MUST report zero connected users.
+    @Scenario(07)
+    Scenario: connection-lifecycle — Server has no connected users after all clients disconnect
+      Given a server is running
+      And a client connects
+      When the server disconnects the client
+      Then the server has no connected users
 
   # --------------------------------------------------------------------------
   # Rule: Auth-required event ordering

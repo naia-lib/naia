@@ -104,6 +104,21 @@ impl<'a> ClientExpectCtx<'a> {
         self.events.has::<V>()
     }
 
+    /// Check if any component insert event was received for the given entity this tick
+    pub fn has_insert_event_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.events.has_insert_for_entity(entity_key)
+    }
+
+    /// Check if any component update event was received for the given entity this tick
+    pub fn has_update_event_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.events.has_update_for_entity(entity_key)
+    }
+
+    /// Check if any component remove event was received for the given entity this tick
+    pub fn has_remove_event_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.events.has_remove_for_entity(entity_key)
+    }
+
     /// Read messages from a specific channel
     /// Returns an iterator over messages of type M received on channel C
     pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(

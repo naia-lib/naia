@@ -211,6 +211,24 @@ impl ClientEvents {
         V::has(self)
     }
 
+    pub fn has_update_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.updates
+            .values()
+            .any(|v| v.iter().any(|(_, ek)| *ek == *entity_key))
+    }
+
+    pub fn has_insert_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.inserts
+            .values()
+            .any(|v| v.iter().any(|ek| *ek == *entity_key))
+    }
+
+    pub fn has_remove_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.removes
+            .values()
+            .any(|v| v.iter().any(|(ek, _)| *ek == *entity_key))
+    }
+
     pub fn take_messages_for_channel_and_type(
         &mut self,
         channel_kind: &naia_shared::ChannelKind,

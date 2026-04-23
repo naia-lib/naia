@@ -135,4 +135,23 @@ Feature: Entity Ownership
       And the entity is in-scope for the client
       Then the entity owner is the server
 
+    # [entity-ownership-08] — Owner disconnect despawns all client-owned entities
+    # When the owning client disconnects, the server MUST despawn all of that
+    # client's owned entities, cleaning up all per-connection scoped state.
+    @Scenario(04)
+    Scenario: entity-ownership-08 — Owner disconnect despawns all client-owned entities
+      Given a server is running
+      And a client connects
+      And the client spawns a client-owned entity with a replicated component
+      When the client disconnects
+      Then the server no longer has the entity
+
+    # [entity-ownership-02] — Client-owned entity reports EntityOwner::Client on owning client
+    # Client MUST report EntityOwner::Client for entities it owns.
+    @Scenario(05)
+    Scenario: entity-ownership-02 — Client-owned entity reports EntityOwner::Client on owner
+      Given a server is running
+      And a client connects
+      And the client spawns a client-owned entity with a replicated component
+      Then the entity owner is the client
 

@@ -1130,3 +1130,40 @@ fn then_commands_in_ascending_sequence_order(ctx: &TestWorldRef) {
 
     // The trace proves commands were reordered and applied in sequence order.
 }
+
+// ============================================================================
+// Then Steps - Tick Availability (time_ticks contract)
+// ============================================================================
+
+/// Step: Then the client tick is available
+///
+/// Polls until `client_tick()` returns Some, confirming tick sync is complete.
+/// Covers [time-ticks-03.t1]: ConnectEvent implies tick sync complete.
+#[then("the client tick is available")]
+fn then_client_tick_is_available(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |c| {
+        if c.client_tick().is_some() {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Step: Then the server tick is known to the client
+///
+/// Polls until `server_tick()` returns Some, confirming the client has received
+/// at least one server tick (tick sync complete).
+/// Covers [time-ticks-04.t1]: client knows server's current tick at connect time.
+#[then("the server tick is known to the client")]
+fn then_server_tick_is_known_to_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |c| {
+        if c.server_tick().is_some() {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}

@@ -83,7 +83,8 @@ fn given_client_and_entity_share_room(ctx: &mut TestWorldMut) {
 }
 
 /// Step: Given the client and entity do not share a room
-/// Ensures the entity is not in any room shared with the client.
+/// Ensures the entity is not in the last room (removing it if present).
+/// If the entity was never in any room, this is a safe no-op.
 #[given("the client and entity do not share a room")]
 fn given_client_and_entity_do_not_share_room(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
@@ -94,8 +95,11 @@ fn given_client_and_entity_do_not_share_room(ctx: &mut TestWorldMut) {
 
     scenario.mutate(|mctx| {
         mctx.server(|server| {
-            if let Some(mut entity) = server.entity_mut(&entity_key) {
-                entity.leave_room(&room_key);
+            // Use room.remove_entity with has_entity guard to avoid panic
+            if let Some(mut room) = server.room_mut(&room_key) {
+                if room.has_entity(&entity_key) {
+                    room.remove_entity(&entity_key);
+                }
             }
         });
     });
@@ -399,6 +403,27 @@ fn then_entity_spawns_on_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
             AssertOutcome::Pending
         }
     })
+}
+
+/// Step: When the server includes an unknown entity for the client
+/// Attempts to include a non-existent entity for the client (should be a no-op).
+#[when("the server includes an unknown entity for the client")]
+fn when_server_includes_unknown_entity_for_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+
+    // Use an invalid/non-existent entity key
+    let unknown_entity_key = naia_test_harness::EntityKey::invalid();
+
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&unknown_entity_key);
+            }
+        });
+    });
+
+    scenario.mutate(|_| {});
 }
 
 /// Step: When the server includes the entity for an unknown client

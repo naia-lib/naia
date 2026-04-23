@@ -152,9 +152,11 @@ Feature: Entity Replication
       When the server excludes the entity for the client
       Then the entity despawns on the client
 
-    @Deferred
+    # [entity-replication-06] — GlobalEntity identity is stable during entity lifetime
+    # The EntityKey (Naia's GlobalEntity abstraction) MUST remain stable while
+    # the entity exists; no reassignment during updates.
     @Scenario(04)
-    Scenario: GlobalEntity identity is stable during entity lifetime
+    Scenario: entity-replication-06 — GlobalEntity identity is stable during entity lifetime
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -163,9 +165,11 @@ Feature: Entity Replication
       When the server updates the replicated component
       Then the entity GlobalEntity remains unchanged
 
-    @Deferred
+    # [entity-replication-07] — Server state overwrites client local state on conflict
+    # When the server holds authoritative state and the client has a local modification,
+    # the next server replication MUST overwrite the client's local value.
     @Scenario(05)
-    Scenario: Server state overwrites client local state on conflict
+    Scenario: entity-replication-07 — Server state overwrites client local state on conflict
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component

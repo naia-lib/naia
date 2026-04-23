@@ -125,8 +125,15 @@ impl ServerAuthHandler {
         };
 
         let previous_owner = *owner;
-        *owner = AuthOwner::None;
+        if previous_owner == AuthOwner::Server {
+            return Ok(previous_owner);
+        }
+        *owner = AuthOwner::Server;
+        // Clean up previous holder (sets Available as side effect; overridden below)
         self.release_all_authority(entity, previous_owner);
+        // Server holds authority — transition to Granted
+        self.host_auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Granted);
 
         Ok(previous_owner)
     }

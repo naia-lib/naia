@@ -2,7 +2,7 @@
 # Entity Delegation — Canonical Contract
 # ============================================================================
 # Source: contracts/10_entity_delegation.spec.md
-# Last converted: 2026-01-17
+# Last converted: 2026-04-23
 #
 # Summary:
 #   This specification defines how a server-owned delegated entity grants
@@ -123,4 +123,62 @@ Feature: Entity Delegation
       Then client A is granted authority for the delegated entity
       And client B is denied authority for the delegated entity
 
+    # [entity-delegation-07/11] — Release transitions Denied back to Available
+    # After the authority holder releases, all Denied clients MUST become Available.
+    @Scenario(02)
+    Scenario: entity-delegation-11 — Release transitions Denied clients back to Available
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
+      When client A releases authority for the delegated entity
+      Then client A is available for the delegated entity
+      And client B is available for the delegated entity
 
+    # [entity-delegation-13] — Losing scope ends client authority and unblocks others
+    # When the authority-holding client loses scope, the server MUST release authority
+    # and other in-scope clients MUST transition to Available.
+    @Scenario(03)
+    Scenario: entity-delegation-13 — Losing scope releases authority and unblocks waiting clients
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
+      When the server removes the delegated entity from client A's scope
+      Then the delegated entity is no longer in client A's world
+      And client B is available for the delegated entity
+
+    # [entity-delegation-14] — Disconnect releases authority and unblocks others
+    # When the authority-holding client disconnects, the server MUST release authority
+    # and other in-scope clients MUST transition to Available.
+    @Scenario(04)
+    Scenario: entity-delegation-14 — Disconnect releases authority and unblocks waiting clients
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
+      When client A disconnects from the server
+      Then client B is available for the delegated entity
+
+    # [entity-delegation-17] — Delegation observable via replication_config and authority status
+    # Clients MUST be able to observe that an entity is Delegated and query the current
+    # authority status as Available when no holder exists.
+    @Scenario(05)
+    Scenario: entity-delegation-17 — Delegated entity has observable config and Available status
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      Then client A observes Delegated replication config for the entity
+      And client A observes Available authority status for the entity

@@ -51,9 +51,46 @@ fn given_server_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
     scenario.bdd_store(LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
 }
 
+/// Step: Given a server-owned entity exists without a replicated component
+/// Creates a server-owned entity with no components and stores its key.
+/// Used to test component insert events when a component is added after spawn.
+#[given("a server-owned entity exists without a replicated component")]
+fn given_server_owned_entity_without_replicated_component(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+
+    let entity_key = scenario.mutate(|mctx| {
+        let (entity_key, _) = mctx.server(|server| server.spawn(|_| {}));
+        entity_key
+    });
+
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.bdd_store(INITIAL_ENTITY_KEY, entity_key);
+}
+
 // ============================================================================
 // When Steps - Component Updates
 // ============================================================================
+
+/// Step: When the server inserts the replicated component
+/// Inserts a Position component into the server-owned entity (which had none).
+/// Covers [client-events-06]: component insert events fire when component is added.
+#[when("the server inserts the replicated component")]
+fn when_server_inserts_replicated_component(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.insert_component(Position::new(42.0, 99.0));
+            }
+        });
+    });
+
+    scenario.mutate(|_| {});
+}
 
 /// Step: When the server updates the replicated component
 /// Updates the Position component on the server-owned entity.

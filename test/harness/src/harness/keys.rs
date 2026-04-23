@@ -23,4 +23,10 @@ impl EntityKey {
     pub(crate) fn new(id: u32) -> Self {
         Self(id)
     }
+
+    /// Creates an invalid entity key for testing "unknown entity" scenarios.
+    /// This key will not correspond to any real entity in the scenario.
+    pub fn invalid() -> Self {
+        Self(u32::MAX)
+    }
 }
