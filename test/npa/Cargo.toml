@@ -3,6 +3,7 @@ name = "naia_npa"
 version = "0.1.0"
 edition = "2021"
 publish = false
+license = "MIT OR Apache-2.0"
 description = "NPA (Namako Plan Adapter) for Naia BDD tests"
 
 [[bin]]

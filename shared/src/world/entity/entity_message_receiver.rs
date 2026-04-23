@@ -21,7 +21,7 @@ impl EntityMessageReceiver {
     /// Read all buffered [`EntityMessage`] inside the `receiver` and process them.
     ///
     /// Outputs the list of [`EntityMessage`] that can be executed now, buffer the rest
-    /// into each entity's [`EntityChannelReceiver`]
+    /// into each entity's `EntityChannelReceiver`
     pub fn remote_take_incoming_messages<E: Copy + Hash + Eq + Debug>(
         remote_engine: &mut RemoteEngine<E>,
         incoming_messages: Vec<(MessageIndex, EntityMessage<E>)>,

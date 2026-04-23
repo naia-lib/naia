@@ -131,7 +131,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
         self.server.room_users_count(&self.key)
     }
 
-    /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
     pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
         self.server.room_user_keys(&self.key)
     }
@@ -212,7 +212,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
         self.server.room_users_count(&self.key)
     }
 
-    /// Returns an iterator of the [`UserKey`] for Users that belong in the [`Room`]
+    /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
     pub fn user_keys(&self) -> impl Iterator<Item = &UserKey> {
         self.server.room_user_keys(&self.key)
     }

@@ -24,7 +24,7 @@ pub enum CompressionMode {
     Default(i32),
     /// Compression mode using custom dictionary.
     /// 1st i32 parameter here is the compression level from -7 (fastest) to 22
-    /// (smallest). 2nd Vec<u8> parameter here is the dictionary itself.
+    /// (smallest). 2nd `Vec<u8>` parameter here is the dictionary itself.
     Dictionary(i32, Vec<u8>),
     /// Dictionary training mode.
     /// 1st usize parameter here describes the desired number of samples

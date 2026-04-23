@@ -6,9 +6,6 @@ concurrency:
 
 on:
   pull_request:
-    paths:
-      - 'Cargo.toml'
-      - 'deny.toml'
   schedule:
     - cron: '0 0 * * 0'
 env:

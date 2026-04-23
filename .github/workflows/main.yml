@@ -12,7 +12,7 @@ on:
       - ".github/dependabot.yml"
 env:
   CARGO_TERM_COLOR: always
-  RUSTFLAGS: "-Dwarnings -Aclippy::new_without_default -Aclippy::derive-partial-eq-without-eq"
+  RUSTFLAGS: "-Dwarnings -Wclippy::pedantic -Aclippy::module_name_repetitions -Aclippy::missing_errors_doc -Aclippy::new_without_default -Aclippy::derive-partial-eq-without-eq"
 
 jobs:
 
@@ -240,3 +240,63 @@ jobs:
         with:
           command: clippy
           args: --package ${{ matrix.package }} --target ${{ matrix.target }} ${{ matrix.additional-arguments }} --no-deps --
+
+  spec-verify:
+    name: Spec Adequacy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone naia
+        uses: actions/checkout@v3
+
+      - name: Clone namako
+        run: git clone https://github.com/connorcarpenter/namako.git ${{ github.workspace }}/../namako
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: Build naia_npa adapter
+        run: cargo build --manifest-path test/npa/Cargo.toml
+
+      - name: Build namako CLI
+        run: cargo build --manifest-path ${{ github.workspace }}/../namako/cli/Cargo.toml
+
+      - name: Run namako gate (lint + run + verify)
+        run: |
+          ${{ github.workspace }}/../namako/target/debug/namako gate \
+            --specs-dir test/specs \
+            --adapter-cmd "${{ github.workspace }}/target/debug/naia_npa"
+
+  docs-check:
+    name: Docs Build Clean
+    runs-on: ubuntu-latest
+    env:
+      RUSTDOCFLAGS: "-D warnings"
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: cargo doc (library crates only)
+        run: |
+          cargo doc --no-deps \
+            --package naia-shared \
+            --package naia-server \
+            --package naia-client \
+            --package naia-bevy-shared \
+            --package naia-bevy-server \
+            --package naia-bevy-client \
+            --package naia-socket-shared \
+            --package naia-server-socket \
+            --package naia-client-socket
+
+  # TODO(phase-0.5): add golden-traces check once trace capture harness is built.
+  # See SCALE_10K_ENTITIES_LANDING.md §7.2 and §4.2 for the spec.
+  # traces-check:
+  #   name: Golden Traces
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v3
+  #     - uses: Swatinem/rust-cache@v2
+  #     - run: cargo run -p naia_spec_tool -- traces check
