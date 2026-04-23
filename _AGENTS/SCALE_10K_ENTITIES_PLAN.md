@@ -1,0 +1,386 @@
+# Scaling Naia to 10K+ Replicated Entities per Room
+
+**Status:** Proposed — 2026-04-23
+**Motivation:** cyberlith levels want `NetworkedTile` per tile (10K+ tiles per level), preserving the existing entity API (`commands.spawn((NetworkedTile, ...))`, `ReplicationConfig::Delegated`, `Property<T>`, authority handoff). Naia's per-tick work is currently proportional to *entities-in-scope*, not *entities-that-changed*; beyond ~1K entities this becomes the dominant server cost.
+
+**Constraints:**
+- Zero breakage of the existing user API. Existing apps compile and behave identically.
+- Tiles-as-entities stays viable. No substrate rewrite. No "move tiles off ECS."
+- Bevy archetype tables remain the storage; Naia's per-client metadata layer is where the surgery happens.
+
+---
+
+## 1. Investigation summary — what Naia actually does today
+
+I traced the mutation path, scope-update path, update-send path, and wire format. What I found:
+
+### 1.1 Mutation path is already push-based
+
+Not a poll loop. Flow:
+
+- `Property::deref_mut` (`shared/src/world/component/property.rs:330`) calls `mutate()`.
+- `HostOwnedProperty::mutate` (property.rs:379) calls `PropertyMutator::mutate(index)`.
+- `MutChannelData::send` (`server/src/world/mut_channel.rs:31`) iterates the component's per-client `receiver_map: HashMap<SocketAddr, MutReceiver>` and sets the dirty bit in each user's `DiffMask`.
+
+Conclusion: the *per-property dirty bit* is already push-driven into per-client state. There is no global scan. This is good news and corrects prior assumptions.
+
+### 1.2 Where per-entity-proportional cost actually lives
+
+Three places scan per-entity-per-tick regardless of whether anything changed:
+
+| # | Location | Cost |
+|---|---|---|
+| **A** | `WorldServer::update_entity_scopes` — `server/src/server/world_server.rs:2619-2740` | For each room, for each user, iterates `room.entities()` fully every tick. 10K entities × 8 users = 80K lookups per tick against `entity_scope_map`, `has_global_entity`, `entity_is_public_and_owned_by_user`. |
+| **B** | `HostWorldManager::get_updatable_world` — `shared/src/world/host/host_world_manager.rs:162-184` | Per client per tick, iterates every host-world entity channel, cross-referenced against delivered-world, to build a candidate `HashMap<GlobalEntity, HashSet<ComponentKind>>`. `EntityUpdateManager::take_outgoing_events` (`shared/src/world/update/entity_update_manager.rs:37-66`) then filters by `diff_mask_is_clear`. For 10K mostly-idle entities, this map is built and mostly-filtered-empty every tick. |
+| **C** | Spawn burst at scope entry — `host_world_manager.rs:115-137` via `init_entity_send_host_commands` | Per-entity `EntityCommand::Spawn` + one `EntityCommand::InsertComponent` per component, each a separate reliable-channel message. 10K entities with 1 component = ~20K reliable messages. |
+
+### 1.3 Scope-exit behavior is unconditionally destructive
+
+`world_server.rs:2735`: when an entity leaves a user's scope, `connection.base.world_manager.despawn_entity(global_entity)` runs unconditionally. The client destroys the entity. On re-entry, Naia does a full re-spawn + re-insert-component + full initial-state write. There is no "pause updates, keep entity on client" path.
+
+For tiles this is the wrong default. For a future fog-of-war mechanic it's actively harmful (clients would lose tile content every time a unit leaves the area, rather than keeping it as fog).
+
+### 1.4 Wire format is already tight on the payload side
+
+Outgoing packet structure (`base_connection.rs:151-193`, `world_writer.rs:30-70`):
+
+- **Standard header** (ack manager).
+- **Messages** (reliable + unreliable channels).
+- **Updates** (`write_updates`): for each dirty `GlobalEntity`: 1 continue bit + `LocalEntity` (`bool + UnsignedVariableInteger<7>`) + foreach dirty component: 1 continue bit + `ComponentKind` (`ConstBitLength` — positional, not name-based) + diff-mask-gated payload (only dirty property bits written).
+- **Commands** (`write_commands`): foreach queued `EntityCommand`: CommandId (indexed delta) + `EntityMessageType` tag + payload.
+
+Observations:
+- `LocalEntity` uses a varint — small IDs pack to 1 byte. No fat headers.
+- `ComponentKind` uses const bit length at schema-registration time — no type-name strings on the wire.
+- `DiffMask` is per-component bit array; only dirty property bits are written. Unchanged fields cost nothing.
+- **The payload wire format is already quite good.** There isn't much fat to trim on update packets.
+
+The one real wire inefficiency is **level-load framing overhead**: for 10K entities, each gets a separate `Spawn` reliable message AND a separate `InsertComponent` reliable message. That's 20K reliable-channel entries with their own CommandId deltas, type tags, and ack-tracking records. The per-message framing dwarfs the per-entity payload at level load.
+
+---
+
+## 2. Proposal — four targeted changes
+
+### Win 1 — Refactor `ReplicationConfig` into a struct; add `scope_exit` behavior
+
+**Current:**
+
+```rust
+// server/src/world/replication_config.rs
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum ReplicationConfig {
+    Private,
+    Public,
+    Delegated,
+}
+```
+
+**Proposed:**
+
+```rust
+// server/src/world/replication_config.rs
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub enum Publicity {
+    Private,
+    Public,
+    Delegated,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+pub enum ScopeExit {
+    #[default]
+    Despawn,   // current behavior
+    Persist,   // keep entity + last-known state on client; pause updates
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+pub struct ReplicationConfig {
+    pub publicity: Publicity,
+    pub scope_exit: ScopeExit,
+    // room for future fields without breaking the API
+}
+
+impl ReplicationConfig {
+    pub const fn private() -> Self {
+        Self { publicity: Publicity::Private, scope_exit: ScopeExit::Despawn }
+    }
+    pub const fn public() -> Self {
+        Self { publicity: Publicity::Public, scope_exit: ScopeExit::Despawn }
+    }
+    pub const fn delegated() -> Self {
+        Self { publicity: Publicity::Delegated, scope_exit: ScopeExit::Despawn }
+    }
+    pub const fn with_scope_exit(mut self, exit: ScopeExit) -> Self {
+        self.scope_exit = exit; self
+    }
+    pub const fn persist_on_scope_exit(self) -> Self {
+        self.with_scope_exit(ScopeExit::Persist)
+    }
+}
+```
+
+**User-facing ergonomics** (preserves existing code):
+
+```rust
+// Old code — still compiles via a Deprecated-hinting re-export path if we want,
+// or just update call sites (there are ~20 across the repo):
+commands.spawn((NetworkedTile::new(tx, ty, *tile),))
+    .configure_replication(ReplicationConfig::delegated().persist_on_scope_exit());
+```
+
+**Call sites to update** (enumerated by `grep -rn "ReplicationConfig" naia/`):
+
+- `server/src/world/replication_config.rs` — definition.
+- `server/src/world/global_entity_record.rs:17-19` — default construction, switch `Public` / `Private` to struct form.
+- `server/src/world/global_world_manager.rs:201,207,219,261,270,274,302` — field-access the `.publicity` instead of raw enum match.
+- `server/src/world/entity_mut.rs:68,75` — API surface.
+- `server/src/world/entity_ref.rs:35` — API surface.
+- `server/src/server/world_server.rs:817-911,1379-1386` — `configure_entity_replication` state machine and scope-check in `user_scope_has_entity` need `.publicity` access.
+- `adapters/bevy/server/src/commands.rs:16,54` and `adapters/bevy/server/src/server.rs:126,438` — `ConfigureReplicationCommand`, bevy `CommandsExt`.
+- `adapters/bevy/client/src/commands.rs:19,77,145,150` and `adapters/bevy/client/src/client.rs:19,167` — client-side API.
+
+**Wire-out scope-exit behavior** (coupled with Win 1 because that's where the config comes from):
+
+At `world_server.rs:2735`, change:
+
+```rust
+} else if currently_in_scope {
+    connection.base.world_manager.despawn_entity(global_entity);
+}
+```
+
+to:
+
+```rust
+} else if currently_in_scope {
+    let scope_exit = self.global_world_manager
+        .entity_replication_config(global_entity)
+        .map(|c| c.scope_exit)
+        .unwrap_or(ScopeExit::Despawn);
+    match scope_exit {
+        ScopeExit::Despawn => {
+            connection.base.world_manager.despawn_entity(global_entity);
+        }
+        ScopeExit::Persist => {
+            connection.base.world_manager.pause_entity_for_user(global_entity);
+            // New API (to add): stop sending updates for this entity,
+            // but keep LocalEntity, HostEntityChannel, diff-mask receiver,
+            // and client-side materialization intact. See §2.1 below.
+        }
+    }
+}
+```
+
+#### 2.1 New `LocalWorldManager::pause_entity_for_user` and resume path
+
+For `Persist`, introduce a per-user-per-entity "paused" flag on the `HostEntityChannel`:
+
+- When paused: `get_updatable_world` skips this entity; `despawn_entity` is not sent.
+- The `MutReceiver` continues to accumulate dirty bits in the DiffMask as Property mutations occur — so when the user re-enters scope, we know exactly which properties changed while they were away.
+- On scope re-entry for a paused entity, do NOT `host_init_entity`. Instead: clear the paused flag. Next `write_packet` naturally includes any accumulated diff. If DiffMask is clean (nothing changed during absence), **zero bytes sent** — the client's local state is already correct.
+
+This is exactly the dspr `fogAmount > 0` discovered-set behavior, but keyed off per-user-per-entity paused state that's already straightforward to track next to the existing `HostEntityChannel`.
+
+**Edge cases:**
+- Entity actually despawned on server while user was paused → on resume, send Despawn (existing infra).
+- Component added/removed while user was paused → tracked existing path for InsertComponent/RemoveComponent replay; send those commands on resume. The reliable-channel already handles this ordering.
+- User disconnects entirely while paused → use existing `remove_user` cleanup.
+
+---
+
+### Win 2 — Push-based scope-change tracking
+
+`update_entity_scopes` scans all (room, user, entity) every tick. Scope state only changes when:
+
+1. `UserScope::include()` / `exclude()` is called (`user_scope.rs:37-50`).
+2. A room's membership (user or entity) changes.
+3. An entity spawns or despawns.
+4. An entity's replication config changes (affects `user_scope_has_entity` decision).
+
+All four are explicit API calls.
+
+**Proposal:** maintain a `scope_change_queue: VecDeque<ScopeChange>` on `WorldServer`:
+
+```rust
+enum ScopeChange {
+    EntityAdded(UserKey, GlobalEntity),       // need to re-evaluate inclusion
+    EntityRemoved(UserKey, GlobalEntity),     // need to despawn/pause
+    UserAddedToRoom(UserKey, RoomKey),        // expand evaluation to that user's room entities
+    UserRemovedFromRoom(UserKey, RoomKey),
+    RoomEntityAdded(RoomKey, GlobalEntity),   // expand to that room's users
+    RoomEntityRemoved(RoomKey, GlobalEntity),
+    ScopeToggled(UserKey, GlobalEntity, bool),// via UserScope::include/exclude
+}
+```
+
+Populate the queue at each API entry point (~8 functions in `world_server.rs`). Rooms already have a `entity_removal_queue` (world_server.rs:2621) — this generalizes the same pattern.
+
+Replace the body of `update_entity_scopes` with a drain-the-queue loop: for each change, compute *only the affected (user, entity) pairs* and apply the spawn/despawn/pause decision. Room size does not factor into the cost.
+
+**Idle-room tick cost:** O(1) (empty queue). 10K tiles in a static-scope editor = zero scope-update work per tick.
+
+**Change-heavy tick cost:** O(changes) — no worse than current worst case.
+
+**Correctness:** the current behavior (`user_scope_has_entity` derivation) is preserved exactly; we just evaluate it lazily instead of per-tick-eagerly.
+
+---
+
+### Win 3 — Push-based update candidate set
+
+`HostWorldManager::get_updatable_world` (host_world_manager.rs:162-184) builds a fresh `HashMap<GlobalEntity, HashSet<ComponentKind>>` every tick by iterating every host-world entity. `EntityUpdateManager::take_outgoing_events` (entity_update_manager.rs:37-66) then filters by `diff_mask_is_clear`. For 10K entities with 1 dirty, we build a 10K-entry map and filter down to 1.
+
+We already know at the exact moment a mutation happens (`MutChannelData::send`). Extend that path to push into a per-client dirty set:
+
+**Changes:**
+
+1. Add to `MutChannelData` (or somewhere it can reach per-user state): for each `receiver_map` entry, in addition to calling `receiver.mutate(property_index)`, also insert `(GlobalEntity, ComponentKind)` into a per-user `dirty_components: HashSet`. The `GlobalEntity`/`ComponentKind` are already known at the component-register site (where `MutReceiver` is created — `global_diff_handler.rs` gives `receiver(address, entity, component_kind)`), so we can stash them in the receiver or an adjacent struct.
+
+2. Replace `get_updatable_world` + `take_outgoing_events` with a single `drain_dirty_updates(&mut self) -> HashMap<GlobalEntity, HashSet<ComponentKind>>` that drains and returns the per-client dirty set.
+
+3. Validate membership (entity still replicates, component still present, diff-mask still dirty) at drain time — these are the same checks currently done in `take_outgoing_events`.
+
+**Idle tick cost:** dirty set is empty → `drain_dirty_updates` returns an empty map → the update-write branch is skipped entirely. Zero work for 10K idle tiles.
+
+**Mutation tick cost:** O(mutations). One hash insert per mutation (already O(1) per receiver iteration — marginal cost above the existing DiffMask bit-set).
+
+**Together with Win 2:** for an editor room with 10K tiles and 50 active units, server per-tick CPU is proportional to ~50 + recent-scope-changes, not 10K.
+
+---
+
+### Win 4 — Coalesced spawn+insert on scope entry
+
+`init_entity_send_host_commands` (host_world_manager.rs:115-137) sends:
+
+1. One `EntityCommand::Spawn` reliable message.
+2. One `EntityCommand::InsertComponent` reliable message per component in the entity's initial component set.
+
+Each reliable message carries its own `CommandId` delta, its own `EntityMessageType` tag, its own ack-tracking record. For 10K tiles × 1 component: 20K reliable-channel messages at level load, where the *payload* for each is trivial but the *framing* adds up.
+
+**Proposal:** add a new `EntityCommand::SpawnWithComponents(global_entity, component_kinds)` and matching `EntityMessageType::SpawnWithComponents`. Wire format:
+
+```
+CommandId delta
+EntityMessageType::SpawnWithComponents tag
+HostEntity (varint)
+u8 component_count
+[ComponentKind + write(...) payload]×component_count
+```
+
+One reliable message replaces (1 + K) messages. Halves (or better) the reliable-message count at level load.
+
+Dispatch logic in `init_entity_send_host_commands`: if `component_kinds.len() >= 1` (i.e., always, for spawn at scope entry), emit the combined command instead of separate Spawn + N InsertComponent commands.
+
+Receiver (`WorldReader::read_world_events` and downstream `RemoteEngine`): add a handler that splits it back into `spawn` + `insert_component×N` events for the client's ECS integration. The client-side API (`EntityEvent`) stays unchanged.
+
+**Preserves everything else:** reliable channel, ack tracking, the existing `InsertComponent` path for later-added components, the existing `Spawn` path for entities that spawn without any components immediately. This is purely a coalescing optimization for the common case.
+
+**Not implementing:**
+- Bulk spawn across entities (one message = N entities). Connor ruled out chunking. Per-entity coalescing only.
+- Schema-precompiled wire codec. Naia already uses `ConstBitLength` for kinds and `DiffMask` for properties — the payload wire format is already near the optimum for a bit-packed dynamic protocol. Further compression would need entity-specific knowledge that Naia can't reason about generically.
+
+---
+
+## 3. Implementation phases
+
+Each phase is an independent PR, builds on the previous, and can ship on its own.
+
+### Phase 1 — `ReplicationConfig` refactor + `ScopeExit::Persist` (Win 1)
+
+**Scope:**
+- `server/src/world/replication_config.rs` — struct definition, constants, builder API.
+- Update ~20 call sites (enumerated in §2 above).
+- Add `LocalWorldManager::pause_entity_for_user` and `resume_entity_for_user`.
+- Extend `HostEntityChannel` with a per-channel paused flag.
+- Branch the scope-exit path in `world_server.rs:2735`.
+- Adapter surface (`adapters/bevy/server/src/commands.rs`, `client/src/commands.rs`) — add `.persist_on_scope_exit()` builder forwarding.
+- Gherkin spec additions in `test/specs/features/` covering: (a) default despawn-on-exit unchanged, (b) persist-on-exit keeps entity on client, (c) re-entry with no mutations is zero-byte, (d) re-entry with mutations sends diff only, (e) server-despawn during paused propagates correctly on resume.
+
+**Acceptance:**
+- All existing tests pass (no semantic change for entities configured without `Persist`).
+- New tests for Persist behavior pass.
+- cyberlith can flag tile entities with `.persist_on_scope_exit()` and observe no despawn/respawn churn on scope changes.
+
+### Phase 2 — Push-based scope-change tracking (Win 2)
+
+**Scope:**
+- Add `scope_change_queue` and `ScopeChange` enum to `WorldServer`.
+- Populate at API entry points: `UserScope::include/exclude`, `room_add_user`, `room_remove_user`, `room_add_entity`, `room_remove_entity`, entity spawn/despawn paths, `configure_entity_replication` when it changes `publicity`.
+- Rewrite `update_entity_scopes` to drain the queue.
+- Preserve the `entity_removal_queue` behavior or absorb it into the new queue.
+
+**Acceptance:**
+- Existing scope-change specs pass unchanged.
+- New benchmark in `test/harness/`: room with 10K entities, scope-static tick → per-tick wall-time in `update_entity_scopes` is within noise of zero.
+
+### Phase 3 — Push-based update candidate set (Win 3)
+
+**Scope:**
+- Extend `MutChannelData::send` / `MutReceiver` to also push `(GlobalEntity, ComponentKind)` into a per-client `dirty_components: HashSet`. The simplest path: have each `MutReceiver` hold a reference (Arc/RwLock) to its owning user's dirty-set, analogous to the existing diff-mask reference topology.
+- Add `EntityUpdateManager::drain_dirty_updates` returning the map currently produced by `get_updatable_world` + `take_outgoing_events`.
+- Remove `HostWorldManager::get_updatable_world` full scan; callers use the drained set.
+- Keep the existing membership/diff-clear sanity checks at drain time.
+
+**Acceptance:**
+- All update-path specs pass unchanged.
+- Benchmark: 10K-entity room with no mutations → per-tick wall-time in update write path is near zero. One mutation → one entity's update flows, no others touched.
+
+### Phase 4 — `SpawnWithComponents` coalesced command (Win 4)
+
+**Scope:**
+- Add `EntityCommand::SpawnWithComponents` and `EntityMessageType::SpawnWithComponents`.
+- Update `WorldWriter::write_command` to serialize the combined form.
+- Update `init_entity_send_host_commands` to emit the combined command when `component_kinds.len() > 0`.
+- Update `WorldReader` / remote handlers to decode into the existing spawn + insert_component event stream.
+- Preserve the existing `EntityCommand::Spawn` for the (rare) case of spawning without initial components.
+
+**Acceptance:**
+- All existing spec tests pass — client observes identical `EntityEvent::SpawnEntity` + `EntityEvent::InsertComponent` sequence.
+- Benchmark: 10K-entity scope-entry burst — reliable message count roughly halves; wire bytes drop by the sum of per-message framing overhead (CommandId deltas + type tags + ack records).
+
+---
+
+## 4. Expected impact for cyberlith
+
+After Phases 1-3:
+
+| Scenario | Current | Post-refactor |
+|---|---|---|
+| 10K-tile level loaded, steady state | ~10ms/tick CPU on scope+update scans | ~microseconds (proportional to mutations) |
+| Tile edit in level editor | O(1) (unchanged, already push) | O(1) (unchanged) |
+| Scope change (user moves camera, camera-culled scope) | O(entities in room × users) per tick | O(changes) |
+| Scope re-entry for a tile that hasn't changed | Full Spawn + InsertComponent + value write | Zero bytes (Phase 1, `Persist`) |
+| Future fog-of-war for tiles | Requires custom tile-streaming layer | Falls out of Phase 1 — just set `persist_on_scope_exit` |
+
+After Phase 4:
+
+| Scenario | Current | Post-refactor |
+|---|---|---|
+| Level load with 10K tiles | ~20K reliable messages | ~10K reliable messages, lower framing overhead |
+
+The 10K-tile-level cyberlith goal becomes viable with Phases 1-3 alone. Phase 4 is polish for load-time wire efficiency.
+
+---
+
+## 5. Notes on what this is NOT
+
+- **Not a substrate rewrite.** Entities remain Bevy entities. Archetype tables remain the storage. `Query<&NetworkedTile>` continues to work exactly as today.
+- **Not chunk-grained authority.** Authority stays per-entity via the existing `Delegated` state machine.
+- **Not a new wire format.** Phase 4 adds one new `EntityCommand` variant; the bit-packing, varint, and DiffMask conventions are unchanged.
+- **Not a CRDT or event-log replication model.** Ordering and authority semantics are identical to today.
+- **Not tied to any cyberlith code change.** All four wins are internal Naia improvements. cyberlith benefits automatically once Phase 1 lands and it opts its tile entities into `Persist`.
+
+---
+
+## 6. Open questions to resolve during implementation
+
+1. **Phase 3 plumbing.** `MutChannelData::send` runs on the mutation thread (can be Bevy's world thread); the per-client `dirty_components` set must be accessible from both sides. The existing `MutReceiver` already uses `Arc<RwLock<DiffMask>>` (see `user_diff_handler.rs:69-73`), so the pattern is established — piggyback.
+2. **`ScopeExit::Persist` interaction with `Delegated`.** If a persisted-and-delegated entity loses scope while a user holds authority, does authority get released (current behavior in `user_scope_set_entity:1351-1366`)? Probably yes — scope-loss should still drop authority; the entity just isn't despawned. Confirm during Phase 1 implementation.
+3. **Phase 4 backward compatibility.** `SpawnWithComponents` is a new `EntityMessageType` variant. Clients on an older protocol version wouldn't recognize it. Naia already has a protocol ID check at handshake (`shared/src/protocol_id.rs`); bumping that is the standard path. Confirm whether the spec-test harness enforces a protocol-version bump for new message types.
+
+---
+
+## 7. Out-of-scope for this plan
+
+- **`GenerativeSubstrate`** (seed + overlay deterministic regen). Interesting long-term; not justified until procedural content is an established cyberlith feature.
+- **Spatial rooms as a primitive.** Connor clarified rooms are intended as coarse first-filter, not spatial. Build spatial helpers on top of `UserScope::include/exclude` via user code (e.g., a cyberlith-side quadtree that drives `include`/`exclude` calls). Phase 2 makes that strategy cheap.
+- **`MostlyImmutable` as a per-entity config.** Phase 3 makes it universal (all entities are zero-cost-when-idle by construction), so no per-entity flag is needed.
