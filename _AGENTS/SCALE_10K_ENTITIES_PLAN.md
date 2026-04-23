@@ -280,6 +280,128 @@ Receiver (`WorldReader::read_world_events` and downstream `RemoteEngine`): add a
 
 ---
 
+### Win 5 — Immutable replicated components (per-component cost floor)
+
+**Motivation.** Today every replicated component — even ones whose fields never change after initial sync — pays full diff-tracking overhead:
+
+For each `(GlobalEntity, ComponentKind)`, `GlobalWorldManager::insert_component_diff_handler` (`server/src/world/global_world_manager.rs:130-141`) allocates a `MutChannel` (Arc<RwLock<dyn MutChannelType>>) + `MutReceiverBuilder`, and registers it in `GlobalDiffHandler.mut_receiver_builders` (`shared/src/world/update/global_diff_handler.rs:7-49`). Every user that has the entity in scope then allocates a `MutReceiver` (Arc<RwLock<DiffMask>>) in `UserDiffHandler.receivers` (`shared/src/world/update/user_diff_handler.rs:16,29-54`) and an entry in that component's `MutChannelData.receiver_map`. Inside the component, *each* `Property<T>` field carries a cloned `PropertyMutator` (one Arc per field) so that `deref_mut` can push into the channel.
+
+Each replicated `Property<T>` field also emits, via the derive macro, contributions to `diff_mask_size`, `set_mutator`, `write_update`, and the per-field dirty-bit branches (`shared/derive/src/replicate.rs:73-189`).
+
+For 10K tiles × 1 component × N users, that's 10K Arc<RwLock<DiffMask>> instances server-wide plus 10K × N per-user receiver allocations. For a 3-field Tile component, that's another 30K per-field `PropertyMutator` Arc clones. None of it is exercised if the tile never mutates.
+
+**Observation.** cyberlith tiles are written once (on level load or editor placement) and never mutated afterward — destruction is a despawn, not a mutation. The same pattern applies broadly: unit-class descriptors, monster-type tags, item kinds, static terrain species, any "set-once" metadata.
+
+**Bevy already has exactly this concept.** Bevy 0.15+ added `Component::Mutability`:
+
+```rust
+// bevy_ecs/src/component/mod.rs:514-519
+pub trait Component: ... {
+    /// ... Mutable components will have Component<Mutability = Mutable>,
+    /// while immutable components will instead have Component<Mutability = Immutable>.
+    type Mutability: ComponentMutability;
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct TileKind(u8);  // Bevy refuses to hand out &mut via queries
+```
+
+Bevy guarantees "never have an exclusive reference `&mut ...` created while inserted onto an entity" (bevy_ecs mod.rs:670-672). The restriction is compile-time enforced.
+
+Naia's `ReplicatedComponent` trait currently *requires* `Mutable`:
+
+```rust
+// shared/src/world/component/replicate.rs:124-128
+pub trait ReplicatedComponent: Replicate + Component<Mutability = Mutable> {}
+impl<T: Replicate + Component<Mutability = Mutable>> ReplicatedComponent for T {}
+```
+
+This is the single line standing between us and a trivially correct "immutable replicated component" path.
+
+**Proposal.**
+
+1. **Relax `ReplicatedComponent`** to accept either mutability:
+   ```rust
+   pub trait ReplicatedComponent: Replicate + Component {}
+   impl<T: Replicate + Component> ReplicatedComponent for T {}
+   ```
+
+2. **Add a single const on `Replicate`** that the derive macro sets based on the Bevy `Mutability` (or a `#[replicate(immutable)]` attr for non-Bevy users):
+   ```rust
+   pub trait Replicate: Sync + Send + 'static + Named + Any {
+       const IS_IMMUTABLE: bool = false;
+       // ... (existing trait methods unchanged)
+   }
+   ```
+
+3. **Derive macro** (`shared/derive/src/replicate.rs`):
+   - If the struct is immutable (Bevy `Component<Mutability = Immutable>` or `#[replicate(immutable)]`), generate `const IS_IMMUTABLE: bool = true`.
+   - Forbid `Property<T>` fields in immutable components at macro-expansion time (compile error: "immutable Replicate cannot hold Property<T> — use plain T"). Fields are plain `T: Serde`.
+   - Generated `diff_mask_size() → 0`, `set_mutator(_) → { /* no-op */ }`, `write_update(...) → { panic!("immutable") }` (never called on the hot path — see point 4).
+   - Generated `write(...)` still serializes all fields for initial-state sync. This is the only wire path the component participates in.
+
+4. **Hot-path branches** (the actual savings):
+   - `GlobalWorldManager::insert_component_diff_handler` (`global_world_manager.rs:130`) — early return if `T::IS_IMMUTABLE`. No `MutChannel`, no `MutReceiverBuilder`, no entry in `GlobalDiffHandler`. `set_mutator` is never called.
+   - `HostWorldManager::init_entity_send_host_commands` (`host_world_manager.rs:115-137`) — don't call `entity_update_manager.register_component` for immutable kinds. `UserDiffHandler.receivers` never gets an entry for them.
+   - Win 3's `drain_dirty_updates` — immutable components never enter the dirty set by construction (no `MutChannel::send` path exists for them).
+   - `HostEntityChannel::component_kinds()` still includes immutable components so the initial `Spawn` + `InsertComponent` (or Win 4's `SpawnWithComponents`) carries them on the wire. `write()` serializes each field once.
+
+5. **Client-side.** Unchanged. Immutable components arrive via the standard read path — `new_read` constructs them from `BitReader::de()` for each field. Because the macro forbade `Property<T>` in immutable components, there's no `RemoteOwnedProperty`/`DelegatedProperty` machinery to route through — the read path is straight `T::de()`.
+
+6. **Forbidden combinations** (caught at derive time):
+   - `immutable` + `Property<T>` field → compile error.
+   - `immutable` + `EntityProperty` field → compile error (would require diff tracking for relation resolution).
+   - `immutable` + `ReplicationConfig::Delegated` at runtime → runtime panic or error event. Delegation implies "transfer authority to mutate," which is meaningless for an immutable component. Configuration-validation step in `configure_entity_replication`.
+
+**Quantified impact (10K tiles, 1 immutable component per tile, 8 users):**
+
+| Allocation | Mutable (current) | Immutable |
+|---|---|---|
+| `GlobalDiffHandler.mut_receiver_builders` | 10K entries + 10K Arc<RwLock<dyn MutChannelType>> | 0 |
+| `UserDiffHandler.receivers` (×8 users) | 80K entries + 80K Arc<RwLock<DiffMask>> | 0 |
+| `MutChannelData.receiver_map` | 80K entries | 0 |
+| Per-field `PropertyMutator` Arc clones (3-field tile) | 30K | 0 |
+| `take_outgoing_events` `diff_mask_is_clear` reads per tick | 10K (pre-Win-3) / 0 (post-Win-3) | 0 (always) |
+
+Win 5 is **orthogonal and compounding** with Win 3: Win 3 eliminates *scanning* the full entity world for dirty components; Win 5 eliminates the *allocation and registration* overhead for components that can never be dirty. A room with 10K immutable-tile entities and 50 mutable-unit entities:
+
+- Post-Win-3 only: 10K × 8 users = 80K MutReceiver allocations (never used), but per-tick CPU is proportional to ~50 dirty units.
+- Post-Win-3 + Win-5: ~50 MutReceiver allocations total (only on units), per-tick CPU unchanged.
+
+**Ergonomics.** User opts in via standard Bevy derive syntax:
+
+```rust
+#[derive(Component, Replicate)]
+#[component(immutable)]
+pub struct NetworkedTile {
+    pub x: i32,
+    pub y: i32,
+    pub fill: TileFill,  // plain T, not Property<T>
+}
+
+// cyberlith usage — no API change at the call site
+commands.spawn((
+    NetworkedTile { x: tx, y: ty, fill },
+    Transform::from_xyz(...),
+)).configure_replication(
+    ReplicationConfig::public().persist_on_scope_exit()
+);
+```
+
+Compile-time enforcement:
+- Bevy refuses `&mut NetworkedTile` via queries (Bevy's guarantee).
+- Naia derive refuses `Property<T>` fields in the component (our guarantee).
+- To mutate a tile, the user removes + re-inserts a new `NetworkedTile` component (or despawns + respawns the entity). This matches dspr's actual tile lifecycle.
+
+**Stays compatible.** Components that do need mutability (unit position, HP, animation state) keep `Property<T>` + `Mutable` and flow through the existing mutation path unchanged. The derive macro picks the right generation path per struct; the user never thinks about the two cases except via the one attribute.
+
+**Not implementing:**
+- A fallback "interior `Property<T>` but with a `freeze()` method that locks mutation" — less explicit, less Bevy-aligned, doesn't save the per-field Arc allocation. The immutable-at-the-type-level design is strictly better.
+- Per-instance immutability (same component type is sometimes mutable, sometimes not). The per-type model is simpler, matches Bevy's, and covers every use case we can think of.
+
+---
+
 ## 3. Implementation phases
 
 Each phase is an independent PR, builds on the previous, and can ship on its own.
@@ -337,6 +459,21 @@ Each phase is an independent PR, builds on the previous, and can ship on its own
 - All existing spec tests pass — client observes identical `EntityEvent::SpawnEntity` + `EntityEvent::InsertComponent` sequence.
 - Benchmark: 10K-entity scope-entry burst — reliable message count roughly halves; wire bytes drop by the sum of per-message framing overhead (CommandId deltas + type tags + ack records).
 
+### Phase 5 — Immutable replicated components (Win 5)
+
+**Scope:**
+- `shared/src/world/component/replicate.rs` — add `const IS_IMMUTABLE: bool = false` to the `Replicate` trait. Relax `ReplicatedComponent` to accept `Component<Mutability = _>`.
+- `shared/derive/src/replicate.rs` — detect Bevy `Component<Mutability = Immutable>` (and/or `#[replicate(immutable)]` attr). Emit `const IS_IMMUTABLE: bool = true`. Forbid `Property<T>` / `EntityProperty` fields in immutable components. Generate trivial `diff_mask_size`, `set_mutator`, `write_update` impls. Keep plain-`T`-serializing `write` / `new_read`.
+- `server/src/world/global_world_manager.rs:130-141` — early return in `insert_component_diff_handler` when `T::IS_IMMUTABLE`.
+- `shared/src/world/host/host_world_manager.rs:115-137` — skip `entity_update_manager.register_component` for immutable kinds.
+- `server/src/server/world_server.rs` — validate at `configure_entity_replication` time: reject `Delegated` + any-immutable-component combinations.
+
+**Acceptance:**
+- All existing specs pass (mutable components unchanged).
+- New spec in `test/specs/features/`: immutable component spawns, round-trips initial values, verified to *never* appear in the per-tick update stream.
+- Benchmark: 10K-tile room with one `#[component(immutable)]` tile component — `GlobalDiffHandler.mut_receiver_builders.len()` and `UserDiffHandler.receivers.len()` both stay at zero for tile kinds.
+- cyberlith `NetworkedTile` compiles with `#[component(immutable)]` and plain fields; no call-site changes beyond removing the `Property<T>` wrapper inside the struct.
+
 ---
 
 ## 4. Expected impact for cyberlith
@@ -357,7 +494,15 @@ After Phase 4:
 |---|---|---|
 | Level load with 10K tiles | ~20K reliable messages | ~10K reliable messages, lower framing overhead |
 
-The 10K-tile-level cyberlith goal becomes viable with Phases 1-3 alone. Phase 4 is polish for load-time wire efficiency.
+After Phase 5:
+
+| Scenario | Current (or post-Phase-3) | Post-refactor |
+|---|---|---|
+| Per-tile server-side allocation (1 component, 8 users) | 9 Arc<RwLock<DiffMask>> + 9 HashMap entries | 0 |
+| 10K-tile level, per-tick DiffMask read-locks | 10K (pre-Win-3) / 0 (post-Win-3, but allocations remain) | 0 allocations, 0 read-locks |
+| Adding a new immutable component to an entity | O(users) allocations + mutator wiring | O(1), no per-user work |
+
+Phases 1–3 unlock the 10K-tile target. Phase 4 trims level-load framing. Phase 5 eliminates the per-component floor cost entirely for components that don't need mutation — which, for cyberlith tiles specifically, is all of them.
 
 ---
 
@@ -376,6 +521,8 @@ The 10K-tile-level cyberlith goal becomes viable with Phases 1-3 alone. Phase 4 
 1. **Phase 3 plumbing.** `MutChannelData::send` runs on the mutation thread (can be Bevy's world thread); the per-client `dirty_components` set must be accessible from both sides. The existing `MutReceiver` already uses `Arc<RwLock<DiffMask>>` (see `user_diff_handler.rs:69-73`), so the pattern is established — piggyback.
 2. **`ScopeExit::Persist` interaction with `Delegated`.** If a persisted-and-delegated entity loses scope while a user holds authority, does authority get released (current behavior in `user_scope_set_entity:1351-1366`)? Probably yes — scope-loss should still drop authority; the entity just isn't despawned. Confirm during Phase 1 implementation.
 3. **Phase 4 backward compatibility.** `SpawnWithComponents` is a new `EntityMessageType` variant. Clients on an older protocol version wouldn't recognize it. Naia already has a protocol ID check at handshake (`shared/src/protocol_id.rs`); bumping that is the standard path. Confirm whether the spec-test harness enforces a protocol-version bump for new message types.
+4. **Phase 5 + delegation.** Specified as "runtime error" above, but a softer alternative is: allow `Delegated` on immutable components and have it mean "authority over spawn/despawn only" (since there's nothing to mutate). Decide during Phase 5 implementation based on whether any real use case exists for "delegated immutable."
+5. **Phase 5 + non-Bevy backends.** The primary signal is Bevy's `Mutability` type param. For the non-Bevy shared path (`#[cfg(not(feature = "bevy_support"))]`), the derive macro needs `#[replicate(immutable)]` as an explicit opt-in. Straightforward but must be covered by tests in both configurations.
 
 ---
 
