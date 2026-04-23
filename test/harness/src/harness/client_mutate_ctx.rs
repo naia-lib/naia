@@ -197,7 +197,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     /// ```
     pub fn set_identity_token(&mut self, token: IdentityToken) {
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
-        *state.identity_token_handle().lock().unwrap() = Some(token);
+        *state.identity_token_handle().lock() = Some(token);
     }
 
     /// Get the current identity token (if any) for this client
@@ -218,7 +218,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     /// without a token or reset the token state.
     pub fn clear_identity_token(&mut self) {
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
-        *state.identity_token_handle().lock().unwrap() = None;
+        *state.identity_token_handle().lock() = None;
     }
 
     /// Get the server tick that this client has received and processed

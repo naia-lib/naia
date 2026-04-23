@@ -47,6 +47,12 @@ pub trait ReplicateBuilder: Send + Sync + Named {
 /// a container of Properties that can be scoped, tracked, and synced, with a
 /// remote host
 pub trait Replicate: Sync + Send + 'static + Named + Any {
+    /// Returns true if this component type never sends mutation updates.
+    /// Immutable components are written once on spawn and never diff-tracked.
+    /// Override in the derive macro by adding `#[replicate(immutable)]`.
+    fn is_immutable(&self) -> bool {
+        false
+    }
     /// Gets the ComponentKind of this type
     fn kind(&self) -> ComponentKind;
     fn to_any(&self) -> &dyn Any;

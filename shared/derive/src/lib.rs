@@ -17,21 +17,21 @@ use replicate::replicate_impl;
 // Replicate
 
 /// Derives the Replicate trait for a given struct
-#[proc_macro_derive(Replicate)]
+#[proc_macro_derive(Replicate, attributes(replicate))]
 pub fn replicate_derive_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_shared };
     replicate_impl(input, shared_crate_name)
 }
 
 /// Derives the Replicate trait for a given struct, for the Bevy adapter
-#[proc_macro_derive(ReplicateBevy)]
+#[proc_macro_derive(ReplicateBevy, attributes(replicate))]
 pub fn replicate_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_bevy_shared };
     replicate_impl(input, shared_crate_name)
 }
 
 /// Derives the Replicate trait for a given struct, for the Bevy adapter
-#[proc_macro_derive(ReplicateHecs)]
+#[proc_macro_derive(ReplicateHecs, attributes(replicate))]
 pub fn replicate_derive_hecs(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_hecs_shared };
     replicate_impl(input, shared_crate_name)

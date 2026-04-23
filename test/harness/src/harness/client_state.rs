@@ -1,4 +1,6 @@
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 
 use naia_client::Client as NaiaClient;
 use naia_server::UserKey;
@@ -66,13 +68,13 @@ impl ClientState {
     /// Get the last identity token provided by the server to this client
     /// Returns None if no token has been received yet
     pub(crate) fn identity_token(&self) -> Option<IdentityToken> {
-        self.identity_token.lock().unwrap().clone()
+        self.identity_token.lock().clone()
     }
 
     /// Get the last rejection code (if any) returned by the handshake
     /// Returns None if no rejection occurred
     pub(crate) fn rejection_code(&self) -> Option<u16> {
-        *self.rejection_code.lock().unwrap()
+        *self.rejection_code.lock()
     }
 
     /// Get a reference to the identity token handle for mutation

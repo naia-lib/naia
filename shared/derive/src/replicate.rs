@@ -37,11 +37,24 @@ pub enum Property {
     NonReplicated(NonReplicatedProperty),
 }
 
+/// Returns true if the struct has `#[replicate(immutable)]` on it.
+fn is_immutable_attr(input: &DeriveInput) -> bool {
+    input.attrs.iter().any(|attr| {
+        attr.path().is_ident("replicate")
+            && attr
+                .parse_args::<syn::Ident>()
+                .map(|id| id == "immutable")
+                .unwrap_or(false)
+    })
+}
+
 pub fn replicate_impl(
     input: proc_macro::TokenStream,
     shared_crate_name: TokenStream,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+
+    let is_immutable = is_immutable_attr(&input);
 
     // Helper Properties
     let properties = get_properties(&input);
@@ -68,6 +81,18 @@ pub fn replicate_impl(
     let builder_name = format_ident!("{}Builder", replica_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);
 
+    // Immutability validation: #[replicate(immutable)] forbids Property<T>/EntityProperty fields.
+    if is_immutable {
+        for prop in &properties {
+            if matches!(prop, Property::Normal(_) | Property::Entity(_)) {
+                panic!(
+                    "immutable Replicate cannot hold Property<T> or EntityProperty — use plain T \
+                     fields instead (compile error from #[replicate(immutable)] validation)"
+                );
+            }
+        }
+    }
+
     // Definitions
     let property_enum_definition = get_property_enum_definition(&enum_name, &properties);
     let diff_mask_size: u8 = {
@@ -77,6 +102,14 @@ pub fn replicate_impl(
         } else {
             (((len - 1) / 8) + 1) as u8
         }
+    };
+
+    let is_immutable_method: TokenStream = if is_immutable {
+        quote! {
+            fn is_immutable(&self) -> bool { true }
+        }
+    } else {
+        quote! {}
     };
 
     // Methods
@@ -110,7 +143,15 @@ pub fn replicate_impl(
     let read_apply_field_update_method =
         get_read_apply_field_update_method(&properties, &struct_type);
     let write_method = get_write_method(&properties, &struct_type);
-    let write_update_method = get_write_update_method(&enum_name, &properties, &struct_type);
+    let write_update_method: TokenStream = if is_immutable {
+        quote! {
+            fn write_update(&self, _diff_mask: &DiffMask, _writer: &mut dyn BitWrite, _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
+                panic!("write_update called on an immutable component — this is a bug");
+            }
+        }
+    } else {
+        get_write_update_method(&enum_name, &properties, &struct_type)
+    };
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
     let split_update_method =
@@ -159,6 +200,7 @@ pub fn replicate_impl(
                 }
             }
             impl #typed_generics Replicate for #replica_name #untyped_generics {
+                #is_immutable_method
                 fn kind(&self) -> ComponentKind {
                     ComponentKind::of::<#replica_name #untyped_generics>()
                 }

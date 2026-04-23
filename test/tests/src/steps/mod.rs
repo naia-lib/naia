@@ -5,6 +5,7 @@
 
 pub mod common;
 pub mod connection;
+pub mod entity_delegation;
 pub mod entity_ownership;
 pub mod entity_publication;
 pub mod entity_replication;

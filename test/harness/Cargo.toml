@@ -23,6 +23,7 @@ naia-shared = { path = "../../shared", features = ["transport_local", "interior_
 
 naia-demo-world = { path = "../../demos/demo_utils/demo_world" }
 
-bevy_ecs = { version = "0.17", default-features = false }
+bevy_ecs = { version = "0.18", default-features = false }
+parking_lot = "0.12"
 
 log = "0.4"

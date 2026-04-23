@@ -8,6 +8,21 @@ pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
 }
 
+#[cfg(feature = "test_utils")]
+impl GlobalDiffHandler {
+    pub fn receiver_count(&self) -> usize {
+        self.mut_receiver_builders.len()
+    }
+
+    pub fn receiver_count_by_kind(&self) -> HashMap<ComponentKind, usize> {
+        let mut map = HashMap::new();
+        for &(_, kind) in self.mut_receiver_builders.keys() {
+            *map.entry(kind).or_insert(0) += 1;
+        }
+        map
+    }
+}
+
 impl GlobalDiffHandler {
     pub fn new() -> Self {
         Self {

@@ -291,12 +291,18 @@ jobs:
             --package naia-server-socket \
             --package naia-client-socket
 
-  # TODO(phase-0.5): add golden-traces check once trace capture harness is built.
-  # See SCALE_10K_ENTITIES_LANDING.md §7.2 and §4.2 for the spec.
-  # traces-check:
-  #   name: Golden Traces
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - uses: actions/checkout@v3
-  #     - uses: Swatinem/rust-cache@v2
-  #     - run: cargo run -p naia_spec_tool -- traces check
+  # Golden trace regression fence (Phase 2/3). Active once golden traces exist.
+  # Per SCALE_10K_ENTITIES_LANDING.md §4.2: this job becomes mandatory in Phase 2.
+  # For Phase 0/0.5/1: the traces check passes trivially (no golden files yet).
+  traces-check:
+    name: Golden Traces
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      - name: traces check
+        run: cargo run -p naia_spec_tool -- traces check

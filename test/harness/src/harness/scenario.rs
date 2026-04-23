@@ -2,8 +2,10 @@ use std::{
     any::Any,
     collections::HashMap,
     net::SocketAddr,
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
+
+use parking_lot::Mutex as ParkingMutex;
 
 use naia_client::{
     transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
@@ -33,6 +35,70 @@ use crate::{
     },
     Auth, TestEntity, TestWorld,
 };
+
+// ============================================================================
+// AllocationSnapshot types (Phase 0.5)
+// ============================================================================
+
+/// Snapshot of diff-handler allocations at a point in time.
+///
+/// Returned by [`Scenario::diff_handler_snapshot`]. Use to assert that
+/// component registrations are created/destroyed as expected.
+pub struct DiffHandlerSnapshot {
+    /// Total component registrations in the global diff handler.
+    pub global_receivers: usize,
+    /// Per-user component registration counts (keyed by [`ClientKey`]).
+    pub user_receivers: HashMap<ClientKey, usize>,
+    /// Global registration count broken down by component kind.
+    pub per_component_kind: HashMap<naia_shared::ComponentKind, usize>,
+}
+
+// ============================================================================
+// Wire trace capture types (Phase 0.5)
+// ============================================================================
+
+/// Direction of a captured wire packet.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TraceDirection {
+    ClientToServer,
+    ServerToClient,
+}
+
+/// A single captured wire packet.
+#[derive(Debug, Clone)]
+pub struct TracePacket {
+    pub direction: TraceDirection,
+    pub bytes: Vec<u8>,
+}
+
+/// A captured sequence of wire packets for golden-trace regression testing.
+///
+/// Obtain via [`Scenario::take_trace`] after enabling capture with
+/// [`Scenario::enable_trace_capture`].
+#[derive(Debug, Clone, Default)]
+pub struct Trace {
+    pub packets: Vec<TracePacket>,
+}
+
+impl Trace {
+    pub fn packet_count(&self) -> usize {
+        self.packets.len()
+    }
+
+    pub fn client_to_server_count(&self) -> usize {
+        self.packets
+            .iter()
+            .filter(|p| p.direction == TraceDirection::ClientToServer)
+            .count()
+    }
+
+    pub fn server_to_client_count(&self) -> usize {
+        self.packets
+            .iter()
+            .filter(|p| p.direction == TraceDirection::ServerToClient)
+            .count()
+    }
+}
 
 type Client = NaiaClient<TestEntity>;
 type Server = NaiaServer<TestEntity>;
@@ -129,6 +195,8 @@ pub struct Scenario {
     bdd_storage: HashMap<String, Box<dyn Any + Send + Sync>>,
     /// Received messages for BDD assertions (type-erased: Vec<u32> for TestMessage values).
     received_messages: Vec<u32>,
+    /// Whether wire trace capture is currently enabled on the hub.
+    trace_capture_enabled: bool,
 }
 
 /// Tracks the outcome of the last operation for BDD assertions.
@@ -171,6 +239,7 @@ impl Scenario {
             trace_events: Vec::new(),
             bdd_storage: HashMap::new(),
             received_messages: Vec::new(),
+            trace_capture_enabled: false,
         }
     }
 
@@ -973,8 +1042,8 @@ impl Scenario {
         &self,
     ) -> (
         ClientSocket,
-        Arc<Mutex<Option<naia_shared::IdentityToken>>>,
-        Arc<Mutex<Option<u16>>>,
+        Arc<ParkingMutex<Option<naia_shared::IdentityToken>>>,
+        Arc<ParkingMutex<Option<u16>>>,
         SocketAddr,
     ) {
         let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
@@ -985,8 +1054,8 @@ impl Scenario {
         addr_cell.set_sync(self.hub.server_addr());
 
         // Each client gets its own identity token storage (not shared!)
-        let identity_token = Arc::new(Mutex::new(None));
-        let rejection_code = Arc::new(Mutex::new(None));
+        let identity_token = Arc::new(ParkingMutex::new(None));
+        let rejection_code = Arc::new(ParkingMutex::new(None));
 
         // Use the inner socket type from the module
         let inner_socket = LocalClientSocket::new_with_tokens(
@@ -1202,6 +1271,75 @@ impl Scenario {
     }
 
     // ========================================================================
+    // AllocationSnapshot API (Phase 0.5)
+    // ========================================================================
+
+    /// Snapshot the current diff-handler allocation state.
+    ///
+    /// Returns counts of component registrations in the global and per-user
+    /// diff handlers. Useful for asserting that registrations appear/disappear
+    /// at the right points in a scenario.
+    pub fn diff_handler_snapshot(&self) -> DiffHandlerSnapshot {
+        let server = self.server.as_ref().expect("server not started");
+        let global_receivers = server.diff_handler_global_count();
+        let per_component_kind = server.diff_handler_global_count_by_kind();
+        let user_key_counts = server.diff_handler_user_counts();
+        let user_receivers = user_key_counts
+            .into_iter()
+            .filter_map(|(user_key, count)| {
+                self.user_to_client_key(&user_key).map(|ck| (ck, count))
+            })
+            .collect();
+        DiffHandlerSnapshot {
+            global_receivers,
+            user_receivers,
+            per_component_kind,
+        }
+    }
+
+    // ========================================================================
+    // Wire Trace Capture API (Phase 0.5)
+    // ========================================================================
+
+    /// Enable wire-level packet recording on the local transport hub.
+    ///
+    /// After calling this, every packet sent or received through the hub will
+    /// be appended to an internal buffer. Call [`take_trace`] to consume the
+    /// buffer and obtain a [`Trace`].
+    pub fn enable_trace_capture(&mut self) {
+        self.hub.enable_packet_recording();
+        self.trace_capture_enabled = true;
+    }
+
+    /// Consume the recorded wire trace and return it as a [`Trace`].
+    ///
+    /// The internal buffer is cleared. Capture remains enabled; call
+    /// [`enable_trace_capture`] again if you need to restart from scratch.
+    ///
+    /// # Panics
+    ///
+    /// Panics if trace capture was never enabled.
+    pub fn take_trace(&mut self) -> Trace {
+        assert!(
+            self.trace_capture_enabled,
+            "take_trace() called without first calling enable_trace_capture()"
+        );
+        let raw = self.hub.take_recorded_packets();
+        let packets = raw
+            .into_iter()
+            .map(|(server_to_client, bytes)| TracePacket {
+                direction: if server_to_client {
+                    TraceDirection::ServerToClient
+                } else {
+                    TraceDirection::ClientToServer
+                },
+                bytes,
+            })
+            .collect();
+        Trace { packets }
+    }
+
+    // ========================================================================
     // Trace Sink API (for deterministic ordering assertions)
     // ========================================================================
 
@@ -1398,5 +1536,119 @@ mod tests {
         // Non-existent element does not match
         assert!(!scenario.trace_contains_subsequence(&["X"]));
         assert!(!scenario.trace_contains_subsequence(&["A", "X"]));
+    }
+
+    // =========================================================================
+    // Phase 0.5: AllocationSnapshot API smoke tests
+    // =========================================================================
+
+    /// Verifies that diff_handler_snapshot() returns zero counts before server start.
+    ///
+    /// This test ensures the snapshot API is wired end-to-end and returns
+    /// consistent zero values when no entities have been registered.
+    #[test]
+    fn diff_handler_snapshot_zero_before_connect() {
+        use crate::test_protocol::protocol;
+        use naia_server::ServerConfig;
+
+        let mut scenario = Scenario::new();
+        scenario.server_start(ServerConfig::default(), protocol());
+
+        let snap = scenario.diff_handler_snapshot();
+        assert_eq!(snap.global_receivers, 0, "no components registered yet");
+        assert!(
+            snap.user_receivers.is_empty(),
+            "no users connected yet"
+        );
+        assert!(
+            snap.per_component_kind.is_empty(),
+            "no component kinds registered yet"
+        );
+    }
+
+    // =========================================================================
+    // Phase 0.5: Wire trace capture smoke tests
+    // =========================================================================
+
+    /// Verifies that enable_trace_capture() + take_trace() compiles and the
+    /// trace is empty before any ticks are run.
+    #[test]
+    fn trace_capture_empty_before_traffic() {
+        let mut scenario = Scenario::new();
+        scenario.enable_trace_capture();
+        let trace = scenario.take_trace();
+        assert_eq!(trace.packet_count(), 0);
+        assert_eq!(trace.client_to_server_count(), 0);
+        assert_eq!(trace.server_to_client_count(), 0);
+    }
+
+    /// Verifies direction counts are consistent.
+    #[test]
+    fn trace_direction_counts_consistent() {
+        let trace = Trace {
+            packets: vec![
+                TracePacket {
+                    direction: TraceDirection::ClientToServer,
+                    bytes: vec![1, 2, 3],
+                },
+                TracePacket {
+                    direction: TraceDirection::ServerToClient,
+                    bytes: vec![4, 5],
+                },
+                TracePacket {
+                    direction: TraceDirection::ServerToClient,
+                    bytes: vec![6],
+                },
+            ],
+        };
+        assert_eq!(trace.packet_count(), 3);
+        assert_eq!(trace.client_to_server_count(), 1);
+        assert_eq!(trace.server_to_client_count(), 2);
+    }
+
+    // =========================================================================
+    // Phase 5 spike: immutable component zero-allocation gate
+    // =========================================================================
+
+    /// Verifies that #[replicate(immutable)] components are NOT registered in
+    /// GlobalDiffHandler, while regular mutable components are.
+    ///
+    /// This is the Phase 5 spike gate: "verify toy component roundtrips with
+    /// zero GlobalDiffHandler entries".
+    #[test]
+    fn immutable_component_has_no_global_diff_handler_entry() {
+        use crate::test_protocol::{protocol, ImmutableLabel, Position};
+        use naia_server::ServerConfig;
+        use naia_shared::ComponentKind;
+
+        let mut scenario = Scenario::new();
+        scenario.server_start(ServerConfig::default(), protocol());
+
+        {
+            let (server, world, _registry, _users) = scenario.split_for_server_mut();
+            let world_proxy = world.proxy_mut();
+            let mut entity_mut = server.spawn_entity(world_proxy);
+            entity_mut.insert_component(Position::new(1.0, 2.0));
+            entity_mut.insert_component(ImmutableLabel);
+        }
+
+        let snap = scenario.diff_handler_snapshot();
+
+        let pos_kind = ComponentKind::of::<Position>();
+        let imm_kind = ComponentKind::of::<ImmutableLabel>();
+
+        assert_eq!(
+            snap.per_component_kind.get(&pos_kind).copied().unwrap_or(0),
+            1,
+            "Position (mutable) must have 1 GlobalDiffHandler entry"
+        );
+        assert!(
+            !snap.per_component_kind.contains_key(&imm_kind),
+            "ImmutableLabel must NOT appear in GlobalDiffHandler"
+        );
+        assert_eq!(
+            snap.global_receivers, 1,
+            "only the mutable Position component should be registered globally"
+        );
     }
 }

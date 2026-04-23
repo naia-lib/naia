@@ -12,6 +12,7 @@ members = [
     "socket/shared",
     "test/harness",
     "test/npa",
+    "test/spec_tool",
     "test/tests",
     "adapters/hecs/client",
     "adapters/hecs/server",

@@ -1159,3 +1159,10 @@ cfg_if! {
         }
     }
 }
+
+#[cfg(feature = "test_utils")]
+impl LocalWorldManager {
+    pub fn diff_handler_receiver_count(&self) -> usize {
+        self.updater.diff_handler_receiver_count()
+    }
+}

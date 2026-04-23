@@ -72,6 +72,11 @@ impl Connection {
         self.base.process_incoming_header(header, &mut []);
     }
 
+    #[cfg(feature = "test_utils")]
+    pub fn diff_handler_receiver_count(&self) -> usize {
+        self.base.world_manager.diff_handler_receiver_count()
+    }
+
     /// Read packet data received from a client, storing necessary data in an internal buffer
     pub fn read_packet(
         &mut self,

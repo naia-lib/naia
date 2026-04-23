@@ -109,4 +109,9 @@ impl UserDiffHandler {
         };
         receiver.clear_mask();
     }
+
+    #[cfg(feature = "test_utils")]
+    pub fn receiver_count(&self) -> usize {
+        self.receivers.len()
+    }
 }

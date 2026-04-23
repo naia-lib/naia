@@ -33,7 +33,10 @@ pub use entity_owner::EntityOwner;
 pub use expect_ctx::ExpectCtx;
 pub use expect_result::ExpectResult;
 pub use keys::{ClientKey, EntityKey};
-pub use scenario::{OperationResult, Scenario, TraceEvent, TrackedClientEvent, TrackedServerEvent};
+pub use scenario::{
+    DiffHandlerSnapshot, OperationResult, Scenario, Trace, TraceDirection, TraceEvent, TracePacket,
+    TrackedClientEvent, TrackedServerEvent,
+};
 pub use server_events::{
     ServerAuthEvent, ServerConnectEvent, ServerDelegateEntityEvent, ServerDespawnEntityEvent,
     ServerDisconnectEvent, ServerEntityAuthGrantEvent, ServerEntityAuthResetEvent,

@@ -133,6 +133,9 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
         component: &mut dyn Replicate,
     ) {
+        if component.is_immutable() {
+            return;
+        }
         let kind = component.kind();
         let diff_mask_length: u8 = component.diff_mask_size();
         let prop_mutator =
@@ -451,5 +454,24 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 impl InScopeEntities<GlobalEntity> for GlobalWorldManager {
     fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.entity_records.contains_key(global_entity)
+    }
+}
+
+#[cfg(feature = "test_utils")]
+impl GlobalWorldManager {
+    pub fn global_diff_handler_count(&self) -> usize {
+        self.diff_handler
+            .read()
+            .expect("GlobalDiffHandler lock poisoned")
+            .receiver_count()
+    }
+
+    pub fn global_diff_handler_count_by_kind(
+        &self,
+    ) -> std::collections::HashMap<naia_shared::ComponentKind, usize> {
+        self.diff_handler
+            .read()
+            .expect("GlobalDiffHandler lock poisoned")
+            .receiver_count_by_kind()
     }
 }

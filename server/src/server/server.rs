@@ -536,4 +536,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
         self.world_server.set_global_entity_counter_for_test(value);
     }
+
+    pub fn diff_handler_global_count(&self) -> usize {
+        self.world_server.diff_handler_global_count()
+    }
+
+    pub fn diff_handler_global_count_by_kind(
+        &self,
+    ) -> std::collections::HashMap<naia_shared::ComponentKind, usize> {
+        self.world_server.diff_handler_global_count_by_kind()
+    }
+
+    pub fn diff_handler_user_counts(&self) -> std::collections::HashMap<UserKey, usize> {
+        self.world_server.diff_handler_user_counts()
+    }
 }

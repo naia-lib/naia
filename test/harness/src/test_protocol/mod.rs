@@ -132,9 +132,16 @@ impl Position {
     }
 }
 
+/// Marker component that is replicated immutably.
+/// Used by Phase 5 spike tests to verify zero GlobalDiffHandler allocation.
+#[derive(Component, Replicate)]
+#[replicate(immutable)]
+pub struct ImmutableLabel;
+
 pub fn protocol() -> Protocol {
     Protocol::builder()
         .add_component::<Position>()
+        .add_component::<ImmutableLabel>()
         .add_message::<Auth>()
         .add_message::<TestMessage>()
         .add_message::<LargeTestMessage>()

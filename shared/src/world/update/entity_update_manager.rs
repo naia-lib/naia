@@ -107,6 +107,11 @@ impl EntityUpdateManager {
             .deregister_component(entity, component_kind);
     }
 
+    #[cfg(feature = "test_utils")]
+    pub fn diff_handler_receiver_count(&self) -> usize {
+        self.diff_handler.receiver_count()
+    }
+
     // Collect
 
     pub fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {

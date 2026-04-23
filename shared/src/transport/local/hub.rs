@@ -45,6 +45,9 @@ pub struct LocalTransportHub {
     connections: Arc<Mutex<HashMap<SocketAddr, ClientConnection>>>,
     next_client_id: Arc<Mutex<u16>>,
     traffic_paused: Arc<Mutex<bool>>,
+    /// Wire-level packet recorder. `None` = disabled; `Some(buf)` = recording.
+    /// bool field in each tuple: `true` = server-to-client, `false` = client-to-server.
+    packet_recorder: Arc<Mutex<Option<Vec<(bool, Vec<u8>)>>>>,
 }
 
 impl LocalTransportHub {
@@ -55,6 +58,25 @@ impl LocalTransportHub {
             connections: Arc::new(Mutex::new(HashMap::new())),
             next_client_id: Arc::new(Mutex::new(1)),
             traffic_paused: Arc::new(Mutex::new(false)),
+            packet_recorder: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Enable wire-level packet recording. Each packet that passes through
+    /// `try_recv_data` (client→server) or `send_data` (server→client) is
+    /// appended to an internal buffer.
+    pub fn enable_packet_recording(&self) {
+        *self.packet_recorder.lock() = Some(Vec::new());
+    }
+
+    /// Consume and return all recorded packets since the last call.
+    /// Returns `(server_to_client: bool, bytes)` pairs.
+    /// Recording remains active; the buffer is just cleared.
+    pub fn take_recorded_packets(&self) -> Vec<(bool, Vec<u8>)> {
+        let mut guard = self.packet_recorder.lock();
+        match &mut *guard {
+            Some(buf) => std::mem::take(buf),
+            None => Vec::new(),
         }
     }
 
@@ -200,6 +222,9 @@ impl LocalTransportHub {
                     continue;
                 } else {
                     // No conditioning, deliver immediately
+                    if let Some(ref mut buf) = *self.packet_recorder.lock() {
+                        buf.push((false, bytes.clone()));
+                    }
                     return Some((*addr, bytes));
                 }
             }
@@ -262,6 +287,9 @@ impl LocalTransportHub {
                     client_addr,
                     bytes.len()
                 );
+                if let Some(ref mut buf) = *self.packet_recorder.lock() {
+                    buf.push((true, bytes.clone()));
+                }
                 conn.server_data_tx.send(bytes).map_err(|_| ())
             }
         } else {

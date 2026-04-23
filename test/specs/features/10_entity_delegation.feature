@@ -110,6 +110,17 @@ Feature: Entity Delegation
   @Rule(01)
   Rule: Entity Delegation
 
-    # All executable scenarios deferred until step bindings implemented.
+    # [entity-delegation-06] — First request wins
+    # The first in-scope client to request authority MUST be granted it.
+    # A second client requesting while authority is held MUST observe Denied.
+    @Scenario(01)
+    Scenario: entity-delegation-06 — First request wins; other in-scope clients observe Denied
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
 
 
