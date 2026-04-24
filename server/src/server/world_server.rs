@@ -2886,7 +2886,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             connection
                 .base
                 .world_manager
-                .host_init_entity(global_entity, component_kinds);
+                .host_init_entity(global_entity, component_kinds, &self.component_kinds);
             #[cfg(feature = "e2e_debug")]
             {
                 SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);

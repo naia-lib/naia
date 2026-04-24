@@ -155,6 +155,7 @@ impl LocalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
+        component_kinds_map: &ComponentKinds,
     ) {
         if self
             .entity_map
@@ -171,6 +172,7 @@ impl LocalWorldManager {
             global_entity,
             component_kinds,
             &mut self.updater,
+            component_kinds_map,
         );
     }
 

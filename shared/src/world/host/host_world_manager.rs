@@ -9,7 +9,7 @@ use crate::{
         sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
         update::entity_update_manager::EntityUpdateManager,
     },
-    ComponentKind, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
+    ComponentKind, ComponentKinds, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
     EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
     HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
     MessageIndex, OwnedLocalEntity, ShortMessageIndex, WorldMutType,
@@ -118,11 +118,14 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
         entity_update_manager: &mut EntityUpdateManager,
+        component_kinds_map: &ComponentKinds,
     ) {
-        // Register components immediately when entity comes into scope (not waiting for delivery confirmation)
-        // This ensures mutations can set the diff mask right away
+        // Register only mutable components for diff-tracking immediately at scope entry.
+        // Immutable components (is_immutable == true) are never diff-tracked — skip them.
         for component_kind in &component_kinds {
-            entity_update_manager.register_component(global_entity, component_kind);
+            if !component_kinds_map.kind_is_immutable(component_kind) {
+                entity_update_manager.register_component(global_entity, component_kind);
+            }
         }
 
         if !component_kinds.is_empty() {

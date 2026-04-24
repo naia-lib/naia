@@ -42,6 +42,7 @@ impl Connection {
         time_manager: TimeManager,
         global_world_manager: &GlobalWorldManager,
         jitter_buffer_type: JitterBufferType,
+        component_kinds_map: &ComponentKinds,
     ) -> Self {
         let mut connection = Self {
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
@@ -66,7 +67,7 @@ impl Connection {
             connection
                 .base
                 .world_manager
-                .host_init_entity(&entity, component_kinds);
+                .host_init_entity(&entity, component_kinds, component_kinds_map);
         }
 
         connection

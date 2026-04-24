@@ -575,7 +575,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         connection
             .base
             .world_manager
-            .host_init_entity(&global_entity, component_kinds);
+            .host_init_entity(&global_entity, component_kinds, &self.protocol.component_kinds);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -1453,6 +1453,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 time_manager,
                                 &self.global_world_manager,
                                 self.client_config.jitter_buffer,
+                                &self.protocol.component_kinds,
                             ));
                             self.on_connect();
 

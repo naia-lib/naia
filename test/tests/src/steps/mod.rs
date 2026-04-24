@@ -19,6 +19,7 @@ pub mod scope_propagation;
 pub mod server_events;
 pub mod update_candidate_set;
 pub mod spawn_with_components;
+pub mod immutable_components;
 pub mod smoke;
 pub mod transport;
 pub mod world_integration;

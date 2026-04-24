@@ -168,6 +168,13 @@ impl ComponentKinds {
             .1;
     }
 
+    pub fn kind_is_immutable(&self, component_kind: &ComponentKind) -> bool {
+        self.kind_map
+            .get(component_kind)
+            .map(|(_, builder, _)| builder.is_immutable())
+            .unwrap_or(false)
+    }
+
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, (_, _, name)) in &self.kind_map {

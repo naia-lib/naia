@@ -19,6 +19,10 @@ use crate::{
 };
 
 pub trait ReplicateBuilder: Send + Sync + Named {
+    /// Returns true if the component type is marked `#[replicate(immutable)]`.
+    fn is_immutable(&self) -> bool {
+        false
+    }
     /// Create new Component from incoming bit stream
     fn read(
         &self,

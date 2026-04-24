@@ -112,6 +112,14 @@ pub fn replicate_impl(
         quote! {}
     };
 
+    let builder_is_immutable_method: TokenStream = if is_immutable {
+        quote! {
+            fn is_immutable(&self) -> bool { true }
+        }
+    } else {
+        quote! {}
+    };
+
     // Methods
     let new_complete_method = get_new_complete_method(&enum_name, &properties, &struct_type);
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
@@ -174,6 +182,7 @@ pub fn replicate_impl(
             struct #builder_name #typed_generics #builder_generic_fields
             #builder_new_method
             impl #typed_generics ReplicateBuilder for #builder_name #untyped_generics {
+                #builder_is_immutable_method
                 #builder_read_method
                 #read_create_update_method
                 #split_update_method
