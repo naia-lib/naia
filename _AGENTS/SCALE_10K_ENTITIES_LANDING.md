@@ -11,6 +11,7 @@ This is the "don't wave your hands" layer. Every recommendation is verifiable, g
 ## Table of Contents
 
 - [0. How to Use This Document](#0-how-to-use-this-document)
+  - [0.1 Development Workflow — BDD First, Always](#01-development-workflow--bdd-first-always)
 - [1. Audit of Current Test Infrastructure](#1-audit-of-current-test-infrastructure)
   - [1.1 Spec-driven BDD is the law of the land](#11-spec-driven-bdd-is-the-law-of-the-land)
   - [1.2 Unit tests where it matters](#12-unit-tests-where-it-matters)
@@ -85,6 +86,24 @@ Three reading paths, depending on what you're doing:
 **Opening a PR.** Copy [§5](#5-per-phase-pr-checklist) into the PR description and tick every box. Every unticked box is a hold on merge.
 
 Treat [§18](#18-end-state-vision) as the north star — the concrete description of what "done" looks like.
+
+---
+
+## 0.1 Development Workflow — BDD First, Always
+
+**This is a hard rule, not a suggestion.**
+
+For every phase (1–5), the development sequence within each phase is:
+
+1. **Write the contract.** Produce the spec file (`NN_foo.spec.md`) with all obligations (`t1..tN`) and the corresponding Gherkin feature file (`NN_foo.feature`) with `@Scenario(NN)` entries. The scenarios must be concrete and runnable — not placeholders.
+2. **Write the step bindings.** Implement the `Given`/`When`/`Then` Rust functions in `test/tests/src/steps/`. At this point the gate should run and the new scenarios should **fail** (or be marked `@Deferred` and excluded). Confirm the existing suite still passes.
+3. **Implement the behavior.** Change the naia production code until the new scenarios pass. Do not commit implementation code until its scenarios are green. Do not skip a failing scenario by marking it `@Deferred` — `@Deferred` is for known naia limitations only, not for work-in-progress.
+4. **Verify no regressions.** Run the full gate. Every contract that was green before the phase started must still be green.
+5. **Commit and push.** The commit contains the contract, scenarios, step bindings, and implementation together. Nothing ships in isolation.
+
+**Why this order matters.** Writing the contract first forces you to define the observable behavior precisely before touching internal code. If you can't write a scenario for it, you don't understand it well enough to implement it. Implementation that runs ahead of contracts produces code whose behavior is only described by the code itself — exactly what this test suite exists to prevent.
+
+**The single exception** is compile-fail fixtures (Phase 5): write the fixture that should fail compilation, confirm it currently passes (wrong behavior), then land the derive macro change. That is BDD-first at the type-system level.
 
 ---
 
@@ -402,6 +421,11 @@ Every phase PR must have all of these present at review time. Missing any = retu
 
 ```markdown
 ## Phase N — [Title]
+
+### Development workflow (verify before opening PR)
+- [ ] Contract and scenarios were written BEFORE implementation code (see §0.1)
+- [ ] New scenarios failed (or were verified runnable) before implementation landed
+- [ ] Implementation was driven to make failing scenarios pass, not the other way around
 
 ### Code
 - [ ] Implementation matches the Phase N scope in `SCALE_10K_ENTITIES_PLAN.md` §3
