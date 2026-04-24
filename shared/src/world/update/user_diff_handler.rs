@@ -11,6 +11,32 @@ use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::mut_channel::MutReceiver;
 
+// Diagnostic counters for the perf-upgrade project. These measure how much
+// work `dirty_receiver_candidates` does per invocation. On idle ticks today
+// the scan is O(receivers), which multiplied by users is the O(U·N) cost the
+// matrix shows. After Phase 3 lands a dirty-push model, `receivers_visited`
+// per idle tick should drop to zero. Enabled via `bench_instrumentation`.
+#[cfg(feature = "bench_instrumentation")]
+pub mod dirty_scan_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    pub static SCAN_CALLS: AtomicU64 = AtomicU64::new(0);
+    pub static RECEIVERS_VISITED: AtomicU64 = AtomicU64::new(0);
+    pub static DIRTY_RESULTS: AtomicU64 = AtomicU64::new(0);
+
+    pub fn reset() {
+        SCAN_CALLS.store(0, Ordering::Relaxed);
+        RECEIVERS_VISITED.store(0, Ordering::Relaxed);
+        DIRTY_RESULTS.store(0, Ordering::Relaxed);
+    }
+    pub fn snapshot() -> (u64, u64, u64) {
+        (
+            SCAN_CALLS.load(Ordering::Relaxed),
+            RECEIVERS_VISITED.load(Ordering::Relaxed),
+            DIRTY_RESULTS.load(Ordering::Relaxed),
+        )
+    }
+}
+
 #[derive(Clone)]
 pub struct UserDiffHandler {
     receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
@@ -117,11 +143,24 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        #[cfg(feature = "bench_instrumentation")]
+        {
+            use std::sync::atomic::Ordering;
+            dirty_scan_counters::SCAN_CALLS.fetch_add(1, Ordering::Relaxed);
+            dirty_scan_counters::RECEIVERS_VISITED
+                .fetch_add(self.receivers.len() as u64, Ordering::Relaxed);
+        }
         let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
         for ((entity, kind), receiver) in &self.receivers {
             if !receiver.diff_mask_is_clear() {
                 result.entry(*entity).or_default().insert(*kind);
             }
+        }
+        #[cfg(feature = "bench_instrumentation")]
+        {
+            use std::sync::atomic::Ordering;
+            let dirty: u64 = result.values().map(|s| s.len() as u64).sum();
+            dirty_scan_counters::DIRTY_RESULTS.fetch_add(dirty, Ordering::Relaxed);
         }
         result
     }

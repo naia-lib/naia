@@ -29,6 +29,7 @@ interior_visibility = [ "naia-shared/interior_visibility" ]
 test_time = [ "naia-shared/test_time" ]
 e2e_debug = []
 test_utils = [ "naia-shared/test_utils" ]
+bench_instrumentation = [ "naia-shared/bench_instrumentation" ]
 
 [dependencies]
 parking_lot = "0.12"

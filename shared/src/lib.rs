@@ -175,6 +175,8 @@ pub use world::update::component_update::{ComponentFieldUpdate, ComponentUpdate}
 pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;
 pub use world::update::mut_channel::{MutChannelType, MutReceiver};
+#[cfg(feature = "bench_instrumentation")]
+pub use world::update::user_diff_handler::dirty_scan_counters;
 pub use wrapping_number::{
     sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than,
     sequence_less_than, wrapping_diff,

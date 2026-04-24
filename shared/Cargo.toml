@@ -27,6 +27,7 @@ interior_visibility = []
 test_time = [ "naia-socket-shared/test_time" ]
 test_utils = []
 e2e_debug = []
+bench_instrumentation = []
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
 advanced_handshake = []

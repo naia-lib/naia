@@ -20,9 +20,9 @@ harness = false
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [dependencies]
-naia-server = { path = "../server", features = ["transport_local", "test_time"] }
+naia-server = { path = "../server", features = ["transport_local", "test_time", "bench_instrumentation"] }
 naia-client = { path = "../client", features = ["transport_local", "test_time"] }
-naia-shared = { path = "../shared", features = ["transport_local", "test_time"] }
+naia-shared = { path = "../shared", features = ["transport_local", "test_time", "bench_instrumentation"] }
 naia-demo-world = { path = "../demos/demo_utils/demo_world" }
 parking_lot = "0.12"
 bevy_ecs = { version = "0.18", default-features = false }
