@@ -1,6 +1,6 @@
 # Naia Perf Upgrade — 2-Orders-of-Magnitude Plan
 
-**Status:** in progress — Phases 0–4 complete; Phase 4.5 (mutable spike) is the next blocker before Phase 5 (2026-04-24)
+**Status:** in progress — Phases 0–4 complete. **Sidequest opened (2026-04-24): Priority Accumulator** — see `_AGENTS/PRIORITY_ACCUMULATOR_SIDEQUEST.md`. Sidequest runs between Phase 4 and Phase 5, may absorb Phase 4.5, blocks Phase 5.
 **Ref commits:** `4d73ad41` (U×N idle matrix bench) · GDD `862dcab` (LEVEL_SPEC §10 canonical)
 **Scope:** this document is the durable plan. Update it as phases land. Do not fork.
 
@@ -13,8 +13,9 @@
 | 2 — Immutable matrix | ✅ complete | `ed7b4012` | `phase-02.md` |
 | 3 — Kill O(U·N) idle | ✅ complete (189× at 16u_10000e) | `db1b706d` | `phase-03.md` |
 | 4 — Immutable skip idle | ✅ complete (21× at 16u_10000e imm) | TBD | `phase-04.md` |
-| 4.5 — Mutable resend-window spike | ⏳ in progress — blocker for Phase 5 | — | `phase-04.5.md` (pending) |
-| 5 — Spatial scope index | ⏸️ pending (blocked on 4.5) | — | — |
+| Sidequest — Priority Accumulator | 🔎 research stage | — | `PRIORITY_ACCUMULATOR_SIDEQUEST.md` |
+| 4.5 — Mutable resend-window spike | ⏸️ paused (blocked on sidequest; likely absorbed) | — | `phase-04.5.md` (pending) |
+| 5 — Spatial scope index | ⏸️ pending (blocked on sidequest) | — | — |
 | 6 — Coalesce audit | ⏸️ pending | — | — |
 | 7 — Regression gate + close-out | ⏸️ pending | — | — |
 
@@ -205,7 +206,28 @@ Expected win: **another 2–3×** on immutable-heavy workloads (i.e., all tile-d
 
 ---
 
-### Phase 4.5 — Mutable resend-window spike (blocker for Phase 5)
+### Sidequest — Priority Accumulator (interrupts the main track)
+
+**Opened:** 2026-04-24, after the Phase 4.5 spike surfaced on `idle_distribution.rs`.
+
+Glenn Fiedler's **priority accumulator** is a long-standing backlog item and (per Connor) an absolute necessity for Naia to be production-ready. It is a **sender-side** pacing layer (applies symmetrically to server-outbound and client-outbound traffic, since Naia supports client-authoritative messages / requests / responses / entities) that (a) accumulates a priority score per replicated item every tick, (b) selects items up to a per-tick bandwidth budget, and (c) resets accumulators for sent items — producing self-paced outbound traffic that survives bursts.
+
+It is believed to be the natural fix for the Phase 4.5 mutable resend-window spike (10K-item resend burst becomes N ticks of steady-state load at budget `B`). Research will verify or refute; if verified, Phase 4.5 folds into this sidequest.
+
+See `_AGENTS/PRIORITY_ACCUMULATOR_SIDEQUEST.md` for scope, research questions, deliverables, and scope discipline. The sidequest produces two artifacts (`PRIORITY_ACCUMULATOR_RESEARCH.md`, `PRIORITY_ACCUMULATOR_PLAN.md`), both approved before any code lands.
+
+Scope surfaces under survey:
+
+- Component update messages (original target)
+- `UnorderedReliable` / `OrderedReliable` entity commands (spawn-burst case)
+- Plain Naia messages (`ChannelSender`)
+- Request / response (built on messages)
+
+**Blocks:** Phase 4.5 and Phase 5. Phase 6 and 7 are independent and can be resequenced if useful.
+
+---
+
+### Phase 4.5 — Mutable resend-window spike (paused, likely absorbed by sidequest)
 
 **Goal:** eliminate the periodic ~17-tick latency spike on mutable idle ticks. No cell of the matrix may exceed `p99 × 10` (i.e., `idle_distribution` reports no `SPIKE`).
 
