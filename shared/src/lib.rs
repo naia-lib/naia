@@ -73,12 +73,15 @@ cfg_if! {
 pub use backends::{Timer, Timestamp};
 pub use connection::{
     ack_manager::AckManager,
+    bandwidth::BandwidthConfig,
     bandwidth_monitor::BandwidthMonitor,
     base_connection::BaseConnection,
     compression_config::{CompressionConfig, CompressionMode},
     connection_config::ConnectionConfig,
     decoder::Decoder,
     encoder::Encoder,
+    entity_priority::{EntityPriorityMut, EntityPriorityRef},
+    priority_state::{GlobalPriorityState, UserPriorityState},
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},
@@ -86,7 +89,10 @@ pub use connection::{
 };
 pub use messages::{
     channels::{
-        channel::{Channel, ChannelDirection, ChannelMode, ReliableSettings, TickBufferSettings},
+        channel::{
+            Channel, ChannelCriticality, ChannelDirection, ChannelMode, ChannelSettings,
+            ReliableSettings, TickBufferSettings,
+        },
         channel_kinds::{ChannelKind, ChannelKinds},
         default_channels,
         receivers::{

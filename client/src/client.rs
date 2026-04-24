@@ -5,12 +5,13 @@ use log::{debug, info, warn};
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
     AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityDoesNotExistError, EntityEvent, FakeEntityConverter, GameInstant,
-    GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
-    GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OwnedLocalEntity,
-    PacketType, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, Tick, WorldMutType, WorldRefType,
+    EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
+    FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
+    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message,
+    MessageContainer, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
+    ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde,
+    SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, UserPriorityState, WorldMutType,
+    WorldRefType,
 };
 
 use super::{
@@ -51,6 +52,8 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Events
     incoming_world_events: WorldEvents<E>,
     incoming_tick_events: TickEvents,
+    // Per-connection priority layer (single connection; no global/per-user split).
+    priority: UserPriorityState<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
@@ -99,7 +102,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             // Events
             incoming_world_events: WorldEvents::new(),
             incoming_tick_events: TickEvents::new(),
+            priority: UserPriorityState::new(),
         }
+    }
+
+    // Priority
+
+    /// Read-only handle to the priority state for `entity` on this client's
+    /// outbound connection.
+    pub fn entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
+        self.priority.get_ref(entity)
+    }
+
+    /// Mutable handle to the priority state for `entity` on this client's
+    /// outbound connection. Lazy-creates an entry on first write.
+    pub fn entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
+        self.priority.get_mut(entity)
     }
 
     /// Set the auth object to use when setting up a connection with the Server

@@ -7,7 +7,7 @@ use naia_shared::{
     BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
     GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Protocol,
-    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -226,6 +226,10 @@ impl Connection {
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
 
+        // Phase A: tick the outbound token-bucket bandwidth accumulator
+        // before the send cycle. Refreshes budget + one-packet overshoot.
+        self.base.accumulate_bandwidth(now);
+
         let mut any_sent = false;
         let mut iteration = 0;
         loop {
@@ -270,6 +274,14 @@ impl Connection {
             || self.base.message_manager.has_outgoing_messages()
             || self.tick_buffer.has_messages()
         {
+            // Phase A: bandwidth budget gate — defer further work to next
+            // tick if the token-bucket is exhausted (one-packet overshoot
+            // included). Unsent items compound; no starvation.
+            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+                self.base.record_bandwidth_deferred();
+                return false;
+            }
+
             let writer = self.write_packet(
                 protocol,
                 now,
@@ -280,11 +292,15 @@ impl Connection {
                 update_events,
             );
 
-            // send packet
+            // send packet, measuring actual size before the move so we can
+            // spend exactly what went on the wire.
             let packet = writer.to_packet();
+            let packet_bytes = packet.slice().len() as u32;
             if io.send_packet(packet).is_err() {
                 // TODO: pass this on and handle above
                 warn!("Client Error: Cannot send data packet to Server");
+            } else {
+                self.base.spend_bandwidth(packet_bytes);
             }
 
             return true;

@@ -22,6 +22,8 @@ pub mod shared {
     };
 }
 
+pub use naia_shared::{EntityPriorityMut, EntityPriorityRef};
+
 mod client;
 mod client_config;
 mod command_history;

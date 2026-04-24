@@ -251,7 +251,29 @@ impl MessageManager {
         packet_index: PacketIndex,
         has_written: &mut bool,
     ) {
-        for (channel_kind, channel) in &mut self.channel_senders {
+        // Phase A: walk channels in descending criticality order so High
+        // (e.g. TickBuffered) wins packet space over Normal wins over Low
+        // under tight budgets. Stable sort preserves equal-gain order.
+        // Reverse bits of base_gain into an ordering key so higher base_gain
+        // sorts first; ties broken by ChannelKind order (stable).
+        let mut ordered: Vec<(ChannelKind, f32)> = self
+            .channel_senders
+            .keys()
+            .map(|k| {
+                let gain = self
+                    .channel_settings
+                    .get(k)
+                    .map(|s| s.criticality.base_gain())
+                    .unwrap_or(1.0);
+                (k.clone(), gain)
+            })
+            .collect();
+        ordered.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        for (channel_kind, _gain) in &ordered {
+            let channel = self.channel_senders.get_mut(channel_kind).unwrap();
             if !channel.has_messages() {
                 continue;
             }

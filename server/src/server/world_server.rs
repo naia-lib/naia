@@ -12,11 +12,13 @@ use log::{info, warn};
 use naia_shared::{
     handshake::HandshakeHeader, AuthorityError, BigMap, BitReader, BitWriter, Channel, ChannelKind,
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
-    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message,
-    MessageContainer, MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
+    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
+    UserPriorityState,
+    GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
+    Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -107,6 +109,13 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     // Deferred auth grants (one-tick delay to ensure entity registration)
     pending_auth_grants: Vec<(UserKey, GlobalEntity, EntityAuthStatus)>,
     scope_change_queue: VecDeque<ScopeChange>,
+    // Sender-wide priority layer. Per-user layer stored here keyed by UserKey
+    // — see `user_priorities`. Evicted on entity despawn.
+    global_priority: GlobalPriorityState<E>,
+    // Per-user priority layer. Each user has its own UserPriorityState.
+    // Entries evicted on scope exit for that user; whole map entry dropped
+    // when the user disconnects.
+    user_priorities: HashMap<UserKey, UserPriorityState<E>>,
 }
 
 /// Events that drive scope re-evaluation.
@@ -184,6 +193,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Deferred auth grants
             pending_auth_grants: Vec::new(),
             scope_change_queue: VecDeque::new(),
+            global_priority: GlobalPriorityState::new(),
+            user_priorities: HashMap::new(),
         }
     }
 
@@ -1189,6 +1200,57 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         panic!("No User exists for given Key!");
     }
 
+    // Priority
+
+    /// Read-only handle to the sender-wide (global) priority state for `entity`.
+    /// Combined multiplicatively with the per-user gain at sort time.
+    pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
+        self.global_priority.get_ref(entity)
+    }
+
+    /// Mutable handle to the sender-wide (global) priority state for `entity`.
+    /// Lazy-creates an entry on first write.
+    pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
+        self.global_priority.get_mut(entity)
+    }
+
+    /// Read-only handle to the per-user priority state for `entity` on the
+    /// given user's connection. Evicted on scope exit for that user.
+    pub fn user_entity_priority(
+        &self,
+        user_key: &UserKey,
+        entity: E,
+    ) -> EntityPriorityRef<'_, E> {
+        // Fetch this user's layer; if none exists yet, fall back to the
+        // global `Ref`-on-missing semantics via a fresh empty layer.
+        // Safe because `EntityPriorityRef` reads `Option<&EntityPriorityData>`
+        // via the state map — no allocation is required on the read path.
+        match self.user_priorities.get(user_key) {
+            Some(layer) => layer.get_ref(entity),
+            None => {
+                // No entry exists for this user; return an empty ref by
+                // peeking through an ephemeral empty layer. We use a static
+                // path via a constructor that reads None for `state`.
+                EntityPriorityRef::empty(entity)
+            }
+        }
+    }
+
+    /// Mutable handle to the per-user priority state for `entity` on the given
+    /// user's connection. Lazy-creates the user's priority layer and the entity
+    /// entry on first write.
+    pub fn user_entity_priority_mut(
+        &mut self,
+        user_key: &UserKey,
+        entity: E,
+    ) -> EntityPriorityMut<'_, E> {
+        let layer = self
+            .user_priorities
+            .entry(*user_key)
+            .or_insert_with(UserPriorityState::new);
+        layer.get_mut(entity)
+    }
+
     // Ticks
 
     /// Gets the current tick of the Server
@@ -1326,6 +1388,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if !self.global_world_manager.has_entity(&global_entity) {
             info!("attempting to despawn entity that does not exist, this can happen if a delegated entity is being despawned");
             return;
+        }
+        // Priority layer eviction: drop global entry + every user's per-user
+        // entry for this entity. Prevents leaks across entity lifetime.
+        self.global_priority.on_despawn(world_entity);
+        for layer in self.user_priorities.values_mut() {
+            layer.on_scope_exit(world_entity);
         }
         self.cleanup_entity_replication(&global_entity);
         self.global_world_manager
@@ -2046,6 +2114,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         info!("deleting authenticated user for {}", user.address());
         self.user_connections.remove(&user_addr);
+
+        // Drop this user's entire per-user priority layer so entries never
+        // leak across user sessions.
+        self.user_priorities.remove(user_key);
 
         self.entity_scope_map.remove_user(user_key);
 
@@ -2929,6 +3001,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             #[cfg(feature = "e2e_debug")]
             {
                 SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+            }
+            // Priority layer eviction: this user's per-user priority entry for
+            // this entity is scoped to in-scope lifetime. Drop it regardless
+            // of scope-exit policy — a Persist pause still means no outbound
+            // traffic for this (user, entity) pair until re-scoped.
+            if let Some(layer) = self.user_priorities.get_mut(user_key) {
+                layer.on_scope_exit(&world_entity);
             }
         }
     }

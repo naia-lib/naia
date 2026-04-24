@@ -128,6 +128,15 @@ impl Protocol {
         self
     }
 
+    /// Register a channel with fully-specified `ChannelSettings` (including
+    /// `criticality`). Use this when you need a non-default priority tier;
+    /// otherwise `add_channel` is sufficient.
+    pub fn add_channel_settings<C: Channel>(&mut self, settings: ChannelSettings) -> &mut Self {
+        self.check_lock();
+        self.channel_kinds.add_channel::<C>(settings);
+        self
+    }
+
     pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.check_lock();
         self.message_kinds.add_message::<M>();

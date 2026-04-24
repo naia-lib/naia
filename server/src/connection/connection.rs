@@ -7,7 +7,7 @@ use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
     GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
-    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType,
+    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -258,6 +258,10 @@ impl Connection {
             }
         }
 
+        // Phase A: tick the outbound token-bucket bandwidth accumulator
+        // before the send cycle. Refreshes budget + one-packet overshoot.
+        self.base.accumulate_bandwidth(now);
+
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
         let mut any_sent = false;
@@ -349,6 +353,15 @@ impl Connection {
 
         // Normal packet sending path (with messages/events or no ACK needed)
         if has_events || has_messages {
+            // Phase A: bandwidth budget gate — if we can't afford another MTU
+            // packet under the token-bucket (one-packet overshoot included),
+            // defer the remaining work to the next tick. Anything unsent
+            // compounds; starvation is structurally impossible per Fiedler.
+            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+                self.base.record_bandwidth_deferred();
+                return false;
+            }
+
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,
@@ -362,10 +375,14 @@ impl Connection {
                 update_events,
             );
 
-            // send packet
-            if io.send_packet(&self.address, writer.to_packet()).is_err() {
+            // send packet, measuring actual size before the move so we can
+            // spend exactly what went on the wire.
+            let packet = writer.to_packet();
+            let packet_bytes = packet.slice().len() as u32;
+            if io.send_packet(&self.address, packet).is_err() {
                 warn!("Server Error: Cannot send data packet to {}", &self.address);
             } else {
+                self.base.spend_bandwidth(packet_bytes);
                 #[cfg(feature = "e2e_debug")]
                 {
                     SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);

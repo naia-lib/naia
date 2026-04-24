@@ -7,6 +7,7 @@ use std::{
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
+use crate::connection::bandwidth_accumulator::BandwidthAccumulator;
 use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::world::world_reader::WorldReader;
 use crate::world::world_writer::WorldWriter;
@@ -28,6 +29,7 @@ pub struct BaseConnection {
     pub world_manager: LocalWorldManager,
     ack_manager: AckManager,
     heartbeat_timer: Timer,
+    bandwidth_accumulator: BandwidthAccumulator,
 }
 
 impl BaseConnection {
@@ -50,7 +52,50 @@ impl BaseConnection {
             ),
             ack_manager: AckManager::new(),
             heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
+            bandwidth_accumulator: BandwidthAccumulator::new(&connection_config.bandwidth),
         }
+    }
+
+    // Bandwidth accumulator (outbound token-bucket cap)
+
+    /// Tick the bandwidth accumulator, adding `target_bytes_per_sec × dt` to
+    /// the budget and refreshing the one-packet-overshoot allowance.
+    pub fn accumulate_bandwidth(&mut self, now: &Instant) {
+        self.bandwidth_accumulator.accumulate(now);
+    }
+
+    /// Check whether a packet of `estimated_bytes` is permitted under the
+    /// current budget. Allows one MTU-sized overshoot per tick when the
+    /// budget is positive but short.
+    pub fn can_spend_bandwidth(&self, estimated_bytes: u32) -> bool {
+        self.bandwidth_accumulator.can_spend(estimated_bytes)
+    }
+
+    /// Subtract `actual_bytes` from the bandwidth budget after a send.
+    pub fn spend_bandwidth(&mut self, actual_bytes: u32) {
+        self.bandwidth_accumulator.spend(actual_bytes);
+    }
+
+    /// Current remaining budget (may be negative after overshoot).
+    pub fn bandwidth_remaining(&self) -> f64 {
+        self.bandwidth_accumulator.remaining()
+    }
+
+    /// Bytes sent during the most-recently-completed send cycle (D13 telemetry).
+    pub fn bandwidth_bytes_sent_last_tick(&self) -> u64 {
+        self.bandwidth_accumulator.bytes_sent_last_tick()
+    }
+
+    /// Packets deferred by the budget gate during the most-recently-completed
+    /// send cycle. Always 0 unless `bench_instrumentation` is enabled.
+    pub fn bandwidth_packets_deferred_last_tick(&self) -> u32 {
+        self.bandwidth_accumulator.packets_deferred_last_tick()
+    }
+
+    /// Record that a packet was deferred by the budget gate this cycle.
+    /// Invoked from send loops when `can_spend_bandwidth` returns false.
+    pub fn record_bandwidth_deferred(&mut self) {
+        self.bandwidth_accumulator.record_deferred();
     }
 
     // Heartbeats

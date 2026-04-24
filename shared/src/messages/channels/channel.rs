@@ -8,6 +8,10 @@ pub trait Channel: Named + 'static {}
 pub struct ChannelSettings {
     pub mode: ChannelMode,
     pub direction: ChannelDirection,
+    /// Priority tier used by the unified priority-sort send loop. Contributes
+    /// `base_gain()` per tick of message age to each message's on-the-fly
+    /// accumulator. Defaults via `ChannelCriticality::default_for(&mode)`.
+    pub criticality: ChannelCriticality,
 }
 
 impl ChannelSettings {
@@ -16,7 +20,18 @@ impl ChannelSettings {
             panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
         }
 
-        Self { mode, direction }
+        let criticality = ChannelCriticality::default_for(&mode);
+        Self {
+            mode,
+            direction,
+            criticality,
+        }
+    }
+
+    /// Override the channel's priority tier. Builder-style.
+    pub fn with_criticality(mut self, criticality: ChannelCriticality) -> Self {
+        self.criticality = criticality;
+        self
     }
 
     pub fn reliable(&self) -> bool {
@@ -106,4 +121,90 @@ pub enum ChannelDirection {
     ClientToServer,
     ServerToClient,
     Bidirectional,
+}
+
+/// Priority tier for a channel in the unified priority-sort send loop.
+///
+/// Each message's accumulator grows per tick by `base_gain()` × tick-age.
+/// Higher criticality → faster accumulator growth → earlier eligibility in the
+/// sorted drain. Reliable channels never drop items; criticality only changes
+/// when they egress relative to other channels and entity bundles.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ChannelCriticality {
+    /// Background traffic (e.g. non-urgent unreliable). `base_gain() = 0.5`.
+    Low,
+    /// Default tier. `base_gain() = 1.0`.
+    Normal,
+    /// Control traffic that must head the queue (e.g. auth, connection
+    /// lifecycle, critical RPCs). `base_gain() = 10.0`.
+    High,
+}
+
+impl ChannelCriticality {
+    /// Default tier applied by `ChannelSettings::new` based on channel mode.
+    /// TickBuffered → High (must land in the right tick window). Everything
+    /// else → Normal. Callers can override via `with_criticality()`.
+    pub const fn default_for(mode: &ChannelMode) -> Self {
+        match mode {
+            ChannelMode::TickBuffered(_) => ChannelCriticality::High,
+            _ => ChannelCriticality::Normal,
+        }
+    }
+
+    /// Per-tick priority gain applied to every queued message on this channel.
+    pub const fn base_gain(&self) -> f32 {
+        match self {
+            ChannelCriticality::Low => 0.5,
+            ChannelCriticality::Normal => 1.0,
+            ChannelCriticality::High => 10.0,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // A-BDD-5: Channel built with with_criticality(Low) on a normally-Normal
+    // mode gets Low base_gain in sort.
+    #[test]
+    fn with_criticality_overrides_mode_default() {
+        let s = ChannelSettings::new(
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            ChannelDirection::Bidirectional,
+        );
+        assert_eq!(s.criticality, ChannelCriticality::Normal);
+        let s2 = s.with_criticality(ChannelCriticality::Low);
+        assert_eq!(s2.criticality, ChannelCriticality::Low);
+        assert!((s2.criticality.base_gain() - 0.5).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn tick_buffered_defaults_to_high() {
+        let s = ChannelSettings::new(
+            ChannelMode::TickBuffered(TickBufferSettings::default()),
+            ChannelDirection::ClientToServer,
+        );
+        assert_eq!(s.criticality, ChannelCriticality::High);
+        assert!((s.criticality.base_gain() - 10.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn unreliable_defaults_to_normal() {
+        let s = ChannelSettings::new(
+            ChannelMode::UnorderedUnreliable,
+            ChannelDirection::Bidirectional,
+        );
+        assert_eq!(s.criticality, ChannelCriticality::Normal);
+    }
+
+    // A-BDD-6 support: base_gain ordering. High > Normal > Low.
+    #[test]
+    fn base_gain_ordering() {
+        let high = ChannelCriticality::High.base_gain();
+        let normal = ChannelCriticality::Normal.base_gain();
+        let low = ChannelCriticality::Low.base_gain();
+        assert!(high > normal);
+        assert!(normal > low);
+    }
 }

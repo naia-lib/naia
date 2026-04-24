@@ -1,7 +1,7 @@
 # Priority Accumulator — Research Distillation
 
-**Status:** 🔎 research stage deliverable (v1 — awaiting Connor's review)
-**Companion:** `PRIORITY_ACCUMULATOR_SIDEQUEST.md` (scope, questions, deliverables)
+**Status:** ✅ research complete (2026-04-24). Decisions resolved by Connor; see `PRIORITY_ACCUMULATOR_PLAN.md` for the implementation plan.
+**Companions:** `PRIORITY_ACCUMULATOR_SIDEQUEST.md` (scope) · `PRIORITY_ACCUMULATOR_PLAN.md` (implementation plan + API design)
 
 ---
 
@@ -111,15 +111,23 @@ The mental model: if *everything* is reliable, you can't skip sends, so priority
 - Reliable messages *can't* be dropped by priority, only paced — that's the bandwidth accumulator's job, not the priority accumulator's.
 - This sharpens recommendation (1) in the decision list: bandwidth-first is not just a sequencing choice; it is the mechanism that applies to *all* surfaces, while priority only applies cleanly to the skippable ones.
 
-**3. Three traffic tiers, not two.**
+**3. Three traffic tiers, not two — and Naia's channel types map cleanly onto them.**
 > "1. State Data: Guaranteed eventual delivery of most current state. 2. Events: Unreliable notifications of transient occurrences. 3. Control data: High-frequency, best-effort transmission of rapidly-updated data extracted from player input."
 
-Naia today has reliable / unreliable / sequenced. The tier mapping is roughly:
-- State Data ↔ `UnorderedReliable` + component updates
-- Events ↔ plain messages on reliable channels
-- Control data ↔ `SequencedUnreliable` / `UnorderedUnreliable`
+Naia's existing channel taxonomy matches Halo's tiers one-for-one:
 
-The taxonomy is compatible; no new tier needed. But the *treatment* differs per tier: the accumulator should prioritize state updates aggressively (skippable), pace events and control carefully (not skippable without gameplay effect).
+| Halo tier | Character | Naia surface |
+|---|---|---|
+| **State Data** | guaranteed eventual delivery of most-current state | **component updates** (the per-entity dirty-push path) |
+| **Events** | unreliable one-shot notifications | **plain messages on unreliable channels** (`SequencedUnreliable` / `UnorderedUnreliable`) |
+| **Control data** | high-frequency, player-input-derived, tick-coherent | **Tick-Buffered channels** |
+
+The taxonomy is compatible; no new tier needed. But the *treatment* differs per tier:
+- **State** is the skippable tier — priority accumulator applies aggressively; a newer snapshot supersedes an older one.
+- **Events** are also skippable (they're unreliable) but per-message, not per-item. Priority accumulation within an unreliable channel is possible but low value; bandwidth cap suffices.
+- **Control data** is tick-coherent — the Tick-Buffered channel deliberately coalesces to "one input per tick," so per-tick pacing is already the contract. Accumulator layering here is a no-op unless a client fires multi-message-per-tick control data.
+
+This sharpens the accumulator scope: **priority accumulator applies primarily to State (component updates)**; bandwidth budget applies to everything.
 
 **4. Priority functions are a footgun — the idle grenade lesson.**
 > "Idle grenades rolling around on the ground had incredibly high network priority. The cause was traced back… to a bugfix at the end of Halo 3! 'Equipment' was given a huge priority boost. Fix: only apply priority boost to active equipment."
@@ -257,7 +265,7 @@ The priority accumulator layer is not required to fix the spike; it is required 
 - **Priority function tuning — the idle-grenade trap** (Halo: Reach, 2011): a priority function that inherits boosts across categories can end up spending bandwidth on stationary junk. Mitigate by (a) shipping a sane default per channel kind that doesn't boost by inheritance, (b) inspectable runtime API — "why is item X at priority Y?", (c) a priority histogram in `bench_instrumentation` so pathological tails are visible without a bug report.
 - **Budget set too low:** latency climbs, acks bunch up. Mitigate by bandwidth-monitor telemetry (already partially present via `bandwidth_monitor.rs`) + a reasonable default that's well above observed steady-state.
 - **Budget set too high:** degenerates to current behavior, no regression risk. Safe default.
-- **Mixing reliable + skippable under one priority:** reliable messages can't be dropped by priority (only paced by budget), so a naive "top-K by priority" selector that pops reliables off would break delivery guarantees. Mitigate by two-phase send: bandwidth-reserve for reliables first, priority-select over skippables with the remainder. This matches Halo's "unreliability enables aggressive prioritization" framing.
+- **Mixing reliable + skippable under one priority:** reliable messages can't be dropped by priority (only paced by budget), so a naive "top-K by priority" selector that pops reliables off would break delivery guarantees. An early draft proposed a two-phase send (bandwidth-reserve for reliables first, priority-select over skippables with the remainder); **the plan supersedes this with a unified priority sort** (see `PRIORITY_ACCUMULATOR_PLAN.md` Part II D5 / Part IV Phase A.2). Reliables aren't "dropped" — they're *ordered* within the sort and paced by budget; the sort's compound-and-retain-on-skip invariant makes starvation structurally impossible without the reservation step. This still honors Halo's "unreliability enables aggressive prioritization" framing: the skippable tiers are where priority has *selection* effect, while reliable tiers are paced but always eventually delivered.
 
 ### F. Tests / invariants
 
@@ -270,50 +278,21 @@ The priority accumulator layer is not required to fix the spike; it is required 
 
 ---
 
-## Open decisions for Connor (needed before the implementation plan)
+## Decisions
 
-These are the judgment calls. The research has scoped them; Connor picks the path.
+All resolved 2026-04-24 by Connor; see `PRIORITY_ACCUMULATOR_PLAN.md` Part II (locked decision list D1–D16) and Part III (API design) for the authoritative form. Summary:
 
-1. **Sequencing.** Which of the following?
-   - **(a) bandwidth-first:** ship bandwidth accumulator only (resolves Phase 4.5). Add priority accumulator as a separate follow-up.
-   - **(b) combined:** ship bandwidth + priority together as the full sidequest.
-   - **(c) priority-first:** controversial; would not resolve Phase 4.5 by itself.
-   - **Claude's recommendation: (a), then (b) as a natural continuation.** Lowers risk, unblocks Phase 5 sooner, and makes priority a cleanly-layered addition later.
-
-2. **Budget target default.** What's the per-connection `target_bytes_per_sec`?
-   - **Claude's recommendation:** 64 000 B/s (512 kbps) as the default, configurable. Matches Fiedler's example bracket; generous headroom for games; still bounds bursts meaningfully.
-
-3. **Global budget vs per-channel budget.** One connection-wide budget, or one per channel?
-   - **Claude's recommendation:** single connection-wide budget + per-channel `fair_share` weights summing to 1.0. Keeps the accounting simple while preventing any one channel (e.g., `UnorderedReliable` spawn burst) from starving another (e.g., `OrderedReliable` gameplay events). Defaults produce behavior indistinguishable from "round-robin across channels with data."
-
-4. **Where does the accumulator live?** In each peer's outbound-packet assembly — **sender-side, symmetric for server and client**. Concretely: wrap the `send_packets` loop on `server::connection::Connection` *and* the equivalent loop on the client-side connection. Accumulator logic is identical on both sides; only the budget target and telemetry surface may differ.
-   - **Claude's recommendation:** a shared implementation in `shared/src/connection/` (new module) consumed by both `server::connection::Connection::send_packets` and `client::connection::Connection::send_packets`. Channels stay unchanged APIs; only the enclosing loop gains budget accounting. This keeps surfaces minimal, preserves Phase 4's invariants, and applies cleanly to client-authoritative flows (client-owned entities, client-issued messages/requests/responses).
-
-5. **Priority function shape (for step 2 later).** User-supplied callback per channel? Built-in heuristic with hooks? Declarative per-component annotation?
-   - **Claude's recommendation:** built-in heuristic per channel kind, with an opt-in trait callback for custom priority. Ship sane defaults so 95% of users never think about it.
-
-6. **Telemetry.** What counters under `bench_instrumentation`?
-   - Bytes sent / tick / channel.
-   - Budget remaining at end of tick.
-   - Oldest unsent item age / channel.
-   - Items deferred due to budget / tick.
-   - **Decision needed:** any of these promoted to always-on observability (outside `bench_instrumentation`)?
-
-7. **Phase 4.5 fate.** If sequencing (a) is chosen: after the bandwidth accumulator lands, re-run `idle_distribution` and confirm `OK` across all mutable cells. If confirmed, Phase 4.5 is closed by absorption (no separate fix, no separate log). If the spike persists, 4.5 becomes a fresh root-cause hunt against the post-accumulator baseline.
-
----
-
-## Recommended next artifact
-
-Once Connor reviews and picks the sequencing / defaults, I'll write `_AGENTS/PRIORITY_ACCUMULATOR_PLAN.md` with:
-
-- concrete phase structure (A: bandwidth; B: priority)
-- files-touched list per phase
-- test strategy per phase
-- criterion + `idle_distribution` gates per phase
-- risk register with rollback conditions
-
-No code lands until that plan is approved.
+- **Sequencing:** Phase A ships bandwidth accumulator + unified priority sort (default gains); Phase B exposes user-facing priority handles. Both within this sidequest.
+- **Budget default:** 64 000 B/s (512 kbps), configurable via new `ConnectionConfig.bandwidth: BandwidthConfig`.
+- **Scheduling shape:** **unified priority sort** across all outbound candidates (entity bundles + per-channel message batches), gated only by the bandwidth budget. No tier reservation. Starvation structurally impossible by compound-and-retain-on-skip.
+- **Channel priority:** `ChannelCriticality::{Low, Normal, High}` contributes `base_gain()` (0.5 / 1.0 / 10.0) into the unified sort. Default derived per `ChannelMode`; overridable via `ChannelSettings::with_criticality`. `Protocol::add_channel_settings(ChannelSettings)` replaces any future `add_channel_with_X` pattern.
+- **Implementation location:** entirely in `naia_shared`; server/client/adapters only pass config through and surface handle methods.
+- **Priority granularity:** per-entity, **two-layer** — `global_entity_priority*` (sender-wide, entity-lifetime persistent, evicted on despawn) and `user_entity_priority*` (per-connection, evicted on scope exit). Effective gain = `global × per_user`. Client has only `entity_priority*` (single connection).
+- **Accumulator unit:** per-message on-the-fly (`(current_tick − enqueue_tick) × base_gain`) + per-entity-bundle stored. Sort is a k-way merge, not a full resort.
+- **Override shape:** mutable handle pattern mirroring `UserScopeMut` — `set_gain` persistent until `reset`/next `set_gain`; `boost_once` transient additive; read-only `*_priority()` surfaces `accumulated` + `gain`. Lazy entry creation (set-and-forget works pre-scope).
+- **No `PriorityConfig`:** default gains are constants (entity = 1.0; channel gains from `base_gain()`). User tuning is per-entity via handles.
+- **Telemetry minimum:** always-on `bytes_sent_per_tick` + `budget_remaining_end_of_tick` + `oldest_unsent_age_ticks`; `#[cfg(feature = "bench_instrumentation")]` for top-N priority ring buffer + timing counters.
+- **Phase 4.5 fate:** absorbed if post-implementation `idle_distribution` returns `OK` across all mutable cells; fresh root-cause hunt only if the spike survives both phases.
 
 ---
 

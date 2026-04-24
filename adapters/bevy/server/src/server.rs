@@ -8,9 +8,9 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::SocketConfig, transport::Socket, EntityOwner, Events, NaiaServerError,
-    ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages,
-    TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
+    shared::SocketConfig, transport::Socket, EntityOwner, EntityPriorityMut, EntityPriorityRef,
+    Events, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
+    TickBufferMessages, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
     WorldServer as NaiaWorldServer, WorldServer,
 };
 
@@ -326,6 +326,47 @@ impl<'w> Server<'w> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope_mut(user_key),
             ServerImpl::Full(server) => server.user_scope_mut(user_key),
+        }
+    }
+
+    //// Priority ////
+
+    pub fn global_entity_priority(&self, entity: Entity) -> EntityPriorityRef<'_, Entity> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.global_entity_priority(entity),
+            ServerImpl::Full(server) => server.global_entity_priority(entity),
+        }
+    }
+
+    pub fn global_entity_priority_mut(
+        &mut self,
+        entity: Entity,
+    ) -> EntityPriorityMut<'_, Entity> {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.global_entity_priority_mut(entity),
+            ServerImpl::Full(server) => server.global_entity_priority_mut(entity),
+        }
+    }
+
+    pub fn user_entity_priority(
+        &self,
+        user_key: &UserKey,
+        entity: Entity,
+    ) -> EntityPriorityRef<'_, Entity> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.user_entity_priority(user_key, entity),
+            ServerImpl::Full(server) => server.user_entity_priority(user_key, entity),
+        }
+    }
+
+    pub fn user_entity_priority_mut(
+        &mut self,
+        user_key: &UserKey,
+        entity: Entity,
+    ) -> EntityPriorityMut<'_, Entity> {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.user_entity_priority_mut(user_key, entity),
+            ServerImpl::Full(server) => server.user_entity_priority_mut(user_key, entity),
         }
     }
 

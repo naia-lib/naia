@@ -1,8 +1,26 @@
 # Sidequest — Priority Accumulator
 
-**Status:** 🔎 research & planning (opened 2026-04-24, between Phase 4 and Phase 5 of `BENCH_PERF_UPGRADE.md`)
+**Status:** 🔨 core implementation complete 2026-04-24 (opened between Phase 4 and Phase 5 of `BENCH_PERF_UPGRADE.md`). Research complete; decisions resolved (D1–D16); Part III API design approved; **Phases A + B functional code landed, unit tests green, Phase C close-out remaining** (integration BDD specs + `idle_distribution` verification for Phase 4.5 absorption).
+
+**Implementation state (2026-04-24):**
+- ✅ Bandwidth accumulator (`shared/src/connection/bandwidth_accumulator.rs`) — token-bucket + one-packet overshoot. 9 unit tests.
+- ✅ Bandwidth gate wired into both server + client `send_packet` paths; MTU cap gates further packets per tick.
+- ✅ Always-on telemetry: `bytes_sent_last_tick`, `bandwidth_remaining`. Bench-gated: `packets_deferred_last_tick`.
+- ✅ Channel-criticality sort in `MessageManager::write_messages` (High→Normal→Low base gains).
+- ✅ Priority handles (global + per-user) with lazy entry creation; `set_gain` / `boost_once` / `reset`; Bevy adapter passthroughs.
+- ✅ Eviction wired: `GlobalPriorityState::on_despawn` in `despawn_entity_worldless`; `UserPriorityState::on_scope_exit` on scope exit + user delete.
+- ✅ V.2 preservation test: `IndexedMessageWriter` monotonicity panic pinned.
+- ✅ Integration BDD specs as unit tests at the Connection-composition level: A-BDD-1 (tick cap), A-BDD-2 (drain), A-BDD-3 (high>low at equal age), A-BDD-4 (no false defer), A-BDD-5/6 (criticality override & ordering), A-BDD-7 (bounded catchup), B-BDD-1 (carry-forward), B-BDD-2 (override wins), B-BDD-3 (multiplicative gain), B-BDD-4/5/6 (handle semantics), B-BDD-7 (structural bound), B-BDD-9 (scope-exit isolation), B-BDD-10 (despawn eviction). All 29 new tests pass.
+- ⏳ Full k-way merge between entity bundles + channel heads (A.2 ideal form) — current implementation sorts channels + gates bytes; entity bundle priority uses stored accumulator flow unchanged.
+- ⏳ Full cucumber .feature file + namako registration for AB-BDD-1 (10K spawn burst end-to-end), B-BDD-6 (persist-across-tick through real send loop), B-BDD-8 (cross-entity reorder preserving per-entity monotonicity through live spawn-barrier FSM) — need harness scaffolding.
+- ⏳ `idle_distribution` matrix verification (Phase 4.5 absorption gate).
 **Owner:** Connor + Claude (Opus 4.7)
 **Origin:** Long-standing Naia backlog item. Surfaced back to the top by the Phase 4.5 mutable resend-window spike (`idle_distribution.rs` shows ≥2700× max/p50 on every `N=10000 mut` cell at reliable-sender resend cadence).
+
+**Deliverables map:**
+- `PRIORITY_ACCUMULATOR_SIDEQUEST.md` *(this doc)* — scope, origin, discipline.
+- `PRIORITY_ACCUMULATOR_RESEARCH.md` — Fiedler distillation, Halo: Reach + Overwatch + Unreal + Unity + bevy_replicon prior art, answers to the research questions below.
+- `PRIORITY_ACCUMULATOR_PLAN.md` — locked decisions, API design, implementation phases, test plan, risk register.
 
 ---
 
@@ -38,47 +56,9 @@ So this sidequest is scoped to survey *all four surfaces* and produce a unified 
 
 ---
 
-## Questions the research stage must answer
+## Research questions (all answered — see `PRIORITY_ACCUMULATOR_RESEARCH.md`)
 
-### Fiedler's concept (source material distillation)
-- What precisely is a priority accumulator? (one-paragraph definition, not vibes.)
-- What are its inputs — priority function, tick rate, bandwidth budget, item state?
-- What bandwidth accounting model does Fiedler use (fixed bytes/tick? RTT-derived? congestion-window?).
-- How does he handle: new items, resends, acks, reliability guarantees?
-- What edge cases does he explicitly call out (starvation, priority inversion, oscillation)?
-
-### Application to Naia's four surfaces
-- **Component updates:** does priority-per-component subsume the dirty-push model from Phase 3, or layer on top?
-- **Entity commands (UnorderedReliable):** spawn-burst pacing. Does a large spawn batch get sliced across N ticks at budget B?
-- **Plain messages:** when does a priority make sense vs FIFO? Games have chat, match events, control messages — do we need per-message-type priority or per-channel?
-- **Request/response:** responses have implicit high priority (a client is blocked). How does this compose with the accumulator?
-
-### Interaction with existing machinery
-- Does the accumulator live in the per-peer outbound-packet loop (shared between server and client sides), or inside each channel sender? (Must be sender-side — both peers write outbound traffic; both need pacing.)
-- How does it interact with RTT-based resend (today `ReliableSender::collect_messages`)?
-- How does it interact with the dirty set from Phase 3 (dirty items = priority gains per tick)?
-- How does it interact with MTU/packet-framing?
-- Does it require protocol changes, or only sender-internal (symmetric on both peers)?
-
-### Specific to the Phase 4.5 spike
-- Does the accumulator, once applied to `ReliableSender`, eliminate the 17-tick resend burst?
-- Concretely: at 10K queued spawns, RTT-triggered resend, budget B = MTU, does the accumulator split them into `ceil(10000 × msg_bytes / B)` ticks of uniform work?
-- Does it still meet reliability guarantees (eventual delivery) under this pacing?
-
-### Guardrails & failure modes
-- How do we prevent starvation (low-priority items never sent)?
-- How do we tune priority gain/drain without making it a footgun?
-- What tests pin the behavior? (bandwidth budget respected; all items eventually sent; priority ordering observable in a repro).
-
----
-
-## Deliverables
-
-1. **Research doc** (`_AGENTS/PRIORITY_ACCUMULATOR_RESEARCH.md`): Fiedler's concept distilled from primary sources, prior art survey (other netcode frameworks), bandwidth math, explicit answers to the questions above.
-2. **Implementation plan** (`_AGENTS/PRIORITY_ACCUMULATOR_PLAN.md`): phased rollout across the four surfaces, test strategy (unit + integration + namako specs + benches), risk register.
-3. **Integration with BENCH_PERF_UPGRADE.md**: update phase table to reflect sidequest ordering (Sidequest → Phase 4.5 or merge → Phase 5).
-
-Neither the implementation plan nor the code lands until Connor approves the research doc.
+The research stage addressed: Fiedler's concept (priority vs bandwidth accumulator definitions, inputs, edge cases); applicability to Naia's four surfaces (component updates, reliable entity commands, plain messages, requests/responses); interaction with existing machinery (dirty set, RTT resend, MTU, protocol wire format); specific resolution of the Phase 4.5 spike; and guardrails against starvation + priority-function footguns (the Halo: Reach "idle grenade" class of bug).
 
 ---
 

@@ -2,9 +2,9 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
     AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, ProtocolId, Replicate,
-    Request, Response, ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType,
-    WorldRefType,
+    EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef, GlobalEntity, Instant, Message,
+    Protocol, ProtocolId, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey,
+    SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -362,6 +362,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// given User
     pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
         self.world_server.user_scope_mut(user_key)
+    }
+
+    // Priority
+
+    pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
+        self.world_server.global_entity_priority(entity)
+    }
+
+    pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
+        self.world_server.global_entity_priority_mut(entity)
+    }
+
+    pub fn user_entity_priority(
+        &self,
+        user_key: &UserKey,
+        entity: E,
+    ) -> EntityPriorityRef<'_, E> {
+        self.world_server.user_entity_priority(user_key, entity)
+    }
+
+    pub fn user_entity_priority_mut(
+        &mut self,
+        user_key: &UserKey,
+        entity: E,
+    ) -> EntityPriorityMut<'_, E> {
+        self.world_server.user_entity_priority_mut(user_key, entity)
     }
 
     // Rooms
