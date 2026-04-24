@@ -1,0 +1,17 @@
+{
+  "scenario_key": "contract10_delegation_grant",
+  "packets": [
+    {
+      "direction": "ClientToServer",
+      "hex": "05000200020000001400300040030000"
+    },
+    {
+      "direction": "ServerToClient",
+      "hex": "05000400060000000a008002000e0060008000"
+    },
+    {
+      "direction": "ClientToServer",
+      "hex": "180010001800000000"
+    }
+  ]
+}

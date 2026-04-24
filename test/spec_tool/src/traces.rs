@@ -66,14 +66,13 @@ fn golden_path(key: &str) -> PathBuf {
 /// Registry of all trace-capturable scenarios.
 ///
 /// Each entry maps a scenario key to a function that returns the `Trace`
-/// captured during its execution. Add entries here as Phase 0 scenarios
-/// are written.
+/// captured during its execution.
 fn scenario_registry() -> HashMap<&'static str, fn() -> naia_test_harness::Trace> {
+    use naia_test_harness::scenarios;
     let mut map: HashMap<&'static str, fn() -> naia_test_harness::Trace> = HashMap::new();
-    // Phase 0.5: no scenarios registered yet — they will be added in Phase 0.
-    // Example format:
-    //   map.insert("contract06_spawn_in_scope", || scenarios::contract06_spawn_in_scope());
-    let _ = &mut map; // suppress unused-mut warning
+    map.insert("contract06_scope_entry", scenarios::contract06_scope_entry);
+    map.insert("contract07_component_update", scenarios::contract07_component_update);
+    map.insert("contract10_delegation_grant", scenarios::contract10_delegation_grant);
     map
 }
 

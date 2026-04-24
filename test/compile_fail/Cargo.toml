@@ -1,0 +1,11 @@
+[package]
+name = "naia-compile-fail"
+version = "0.1.0"
+edition = "2021"
+publish = false
+license = "MIT OR Apache-2.0"
+description = "Compile-fail test harness for Naia derive macros (Phase 5 fixtures)"
+
+[dev-dependencies]
+trybuild = "1"
+naia-shared = { path = "../../shared", features = ["transport_local"] }

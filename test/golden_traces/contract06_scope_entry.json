@@ -1,0 +1,13 @@
+{
+  "scenario_key": "contract06_scope_entry",
+  "packets": [
+    {
+      "direction": "ServerToClient",
+      "hex": "0100feff0100000008000002000200004091000000000000000000000000"
+    },
+    {
+      "direction": "ClientToServer",
+      "hex": "000000000000000000"
+    }
+  ]
+}

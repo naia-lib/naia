@@ -10,6 +10,7 @@ members = [
     "socket/client",
     "socket/server",
     "socket/shared",
+    "test/compile_fail",
     "test/harness",
     "test/npa",
     "test/spec_tool",

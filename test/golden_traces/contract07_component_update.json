@@ -1,0 +1,13 @@
+{
+  "scenario_key": "contract07_component_update",
+  "packets": [
+    {
+      "direction": "ServerToClient",
+      "hex": "03000000000000000800000200030400080080221400004508"
+    },
+    {
+      "direction": "ClientToServer",
+      "hex": "080008000800000000"
+    }
+  ]
+}
