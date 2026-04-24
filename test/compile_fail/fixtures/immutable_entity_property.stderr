@@ -1,0 +1,7 @@
+error: proc-macro derive panicked
+ --> fixtures/immutable_entity_property.rs:5:10
+  |
+5 | #[derive(Replicate)]
+  |          ^^^^^^^^^
+  |
+  = help: message: immutable Replicate cannot hold Property<T> or EntityProperty — use plain T fields instead (compile error from #[replicate(immutable)] validation)

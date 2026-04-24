@@ -265,34 +265,37 @@ impl HostWorldManager {
     ) {
         // execute the action and emit an event
         for message in incoming_messages {
-            // info!("Processing EntityMessage<HostEntity>: {:?}", message);
             match message {
+                // These variants are sent server→client for remote-owned entities, routed through
+                // RemoteWorldManager, not HostWorldManager. A HostWorldManager processes messages
+                // about client-created (host-owned) entities only; the server never sends these
+                // variants back to the originating host.
                 EntityMessage::Spawn(_) => {
-                    todo!("Implement EntityMessage::<HostEntity>::Spawn handling");
+                    unreachable!("Server never sends Spawn to the originating HostWorldManager");
                 }
                 EntityMessage::Despawn(_) => {
-                    todo!("Implement EntityMessage::<HostEntity>::Despawn handling");
+                    unreachable!("Server never sends Despawn to the originating HostWorldManager");
                 }
                 EntityMessage::InsertComponent(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::InsertComponent handling");
+                    unreachable!("Server never sends InsertComponent to the originating HostWorldManager");
                 }
                 EntityMessage::RemoveComponent(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::RemoveComponent handling");
+                    unreachable!("Server never sends RemoveComponent to the originating HostWorldManager");
                 }
                 EntityMessage::Publish(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::Publish handling");
+                    unreachable!("Server never sends Publish to the originating HostWorldManager");
                 }
                 EntityMessage::Unpublish(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::Unpublish handling");
+                    unreachable!("Server never sends Unpublish to the originating HostWorldManager");
                 }
                 EntityMessage::EnableDelegation(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::EnableDelegation handling");
+                    unreachable!("Server never sends EnableDelegation to the originating HostWorldManager");
                 }
                 EntityMessage::DisableDelegation(_, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::DisableDelegation handling");
+                    unreachable!("Server never sends DisableDelegation to the originating HostWorldManager");
                 }
                 EntityMessage::SetAuthority(_, _, _) => {
-                    todo!("Implement EntityMessage::<HostEntity>::SetAuthority handling");
+                    unreachable!("Server never sends SetAuthority to the originating HostWorldManager");
                 }
                 EntityMessage::MigrateResponse(_sub_id, client_host_entity, new_remote_entity) => {
                     // Client receives MigrateResponse from server telling it to migrate

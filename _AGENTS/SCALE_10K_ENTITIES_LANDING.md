@@ -1,6 +1,6 @@
 # Landing Strategy — Scaling Naia to 10K+ Entities
 
-**Status:** Phase 0 ✅ COMPLETE (2026-04-23) · Phase 0.5 ✅ COMPLETE (2026-04-23) · Phase 1 pending
+**Status:** Phase 0 ✅ COMPLETE (2026-04-23) · Phase 0.5 ✅ COMPLETE (2026-04-23) · Phases 1–5 ✅ COMPLETE (2026-04-23/24) · cyberlith integration ✅ COMPLETE (2026-04-24)
 **Companion to:** `SCALE_10K_ENTITIES_PLAN.md` (the *what*: architecture, Wins 1–5, Phases 1–5).
 **Purpose:** The *how*. One doc covering every non-architectural obligation required to land the refactor with full behavior preservation, measurable perf gains, and the codebase in strictly better shape than where it started.
 

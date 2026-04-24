@@ -73,10 +73,6 @@ impl UserDiffHandler {
         return receiver.mask();
     }
 
-    //    pub fn has_diff_mask(&self, component_key: &ComponentKey) -> bool {
-    //        return self.receivers.contains_key(component_key);
-    //    }
-
     pub fn diff_mask_is_clear(
         &self,
         entity: &GlobalEntity,

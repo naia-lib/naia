@@ -48,11 +48,6 @@ impl GlobalDiffHandler {
                 "GlobalDiffHandler: For Entity {:?}, Component {} cannot Register more than once!",
                 global_entity, name
             );
-        } else {
-            // info!(
-            //     "GlobalDiffHandler: Registering Component {:?} for Entity {:?}",
-            //     name, global_entity,
-            // );
         }
 
         let (sender, builder) = MutChannel::new_channel(global_world_manager, diff_mask_length);
