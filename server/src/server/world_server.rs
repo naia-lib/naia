@@ -699,12 +699,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .insert_entity_record(&global_entity, EntityOwner::Server);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.spawn_entity_inner(&entity);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn disable_entity_replication(&mut self, world_entity: &E) {
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(world_entity);
@@ -734,7 +734,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .set_global_entity_counter_for_test(value);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
         let global_entity = self
             .global_entity_map
@@ -744,7 +744,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_replication_config(&global_entity)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         let global_entity = self
             .global_entity_map
@@ -956,7 +956,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_set_scope_exit(&global_entity, config.scope_exit);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub(crate) fn entity_give_authority(
         &mut self,
         origin_user: &UserKey,
@@ -1042,7 +1042,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // so no SetAuthority message is needed here.
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub(crate) fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         let global_entity = match self.global_entity_map.entity_to_global_entity(world_entity) {
             Ok(ge) => ge,
@@ -1052,7 +1052,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_authority_status(&global_entity)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_release_authority(
         &mut self,
         origin_user: Option<&UserKey>,

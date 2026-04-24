@@ -6,7 +6,7 @@ Last updated: 2026-01-08
 
 This spec defines the **connection state machine** and **observable events** for Naia connections.
 
-It is intentionally written at the Naia core API level. Engine adapters (hecs/bevy) MUST preserve these semantics; adapter-specific plumbing is out of scope.
+It is intentionally written at the Naia core API level. Engine adapters (bevy) MUST preserve these semantics; adapter-specific plumbing is out of scope.
 
 ---
 
@@ -528,7 +528,7 @@ When protocol changes require breaking compatibility:
 
 - The exact HTTP route(s), headers, or body format of the auth request.
 - Transport-specific wire details for how the token is conveyed.
-- Engine adapter (bevy/hecs) implementation details.
+- Engine adapter (bevy) implementation details.
 - Retry/backoff policies for repeated connection attempts (may be defined in a future spec if needed).
 - Session resumption / state persistence across reconnects.
 - Wire format details for protocol identity exchange.

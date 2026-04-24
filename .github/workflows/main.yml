@@ -66,7 +66,6 @@ jobs:
         package:
           [
             naia-server,
-            naia-hecs-server,
             naia-bevy-server,
           ]
     runs-on: ubuntu-latest
@@ -101,8 +100,6 @@ jobs:
             naia-socket-shared,
             naia-client,
             naia-shared,
-            naia-hecs-client,
-            naia-hecs-shared,
           ]
 
     runs-on: ubuntu-latest
@@ -173,7 +170,6 @@ jobs:
             naia-bevy-server-demo,
             naia-basic-server-demo,
             naia-server-socket-demo,
-            naia-hecs-server-demo,
           ]
     runs-on: ubuntu-latest
     steps:
@@ -201,7 +197,6 @@ jobs:
             naia-basic-client-demo-mq,
             naia-socket-client-demo-mq,
             naia-bevy-client-demo,
-            naia-hecs-client-demo,
             naia-basic-client-demo-wb,
             naia-socket-client-demo-wb,
           ]

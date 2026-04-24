@@ -34,12 +34,6 @@ pub fn derive_serde_bevy_client(input: proc_macro::TokenStream) -> proc_macro::T
     derive_serde_common(input, serde_crate_name)
 }
 
-#[proc_macro_derive(SerdeHecs)]
-pub fn derive_serde_hecs(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let serde_crate_name = quote! { naia_hecs_shared };
-    derive_serde_common(input, serde_crate_name)
-}
-
 fn derive_serde_common(
     input: proc_macro::TokenStream,
     serde_crate_name: proc_macro2::TokenStream,

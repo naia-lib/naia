@@ -13,9 +13,6 @@ node_modules
 /demos/bevy/client/target
 /demos/bevy/client/target/
 /demos/bevy/client/target/*
-/demos/hecs/client/target
-/demos/hecs/client/target/
-/demos/hecs/client/target/*
 /demos/macroquad/client/target
 /demos/macroquad/client/target/
 /demos/macroquad/client/target/*

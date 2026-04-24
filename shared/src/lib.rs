@@ -20,15 +20,13 @@ cfg_if! {
     }
 }
 
-pub use naia_derive::{
-    Channel, Message, MessageBevy, MessageHecs, Replicate, ReplicateBevy, ReplicateHecs,
-};
+pub use naia_derive::{Channel, Message, MessageBevy, Replicate, ReplicateBevy};
 pub use naia_serde::{
     BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
     Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
-    SerdeHecs, SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger,
-    SignedVariableFloat, SignedVariableInteger, UnsignedFloat, UnsignedInteger,
-    UnsignedVariableFloat, UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
+    SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger, SignedVariableFloat,
+    SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
+    UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,
@@ -111,7 +109,7 @@ pub use messages::{
             request_sender::LocalResponseId,
         },
     },
-    message::{Message, Message as MessageBevy, Message as MessageHecs, MessageBuilder},
+    message::{Message, Message as MessageBevy, MessageBuilder},
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
@@ -132,7 +130,7 @@ pub use world::{
             ReplicaRefTrait, ReplicaRefWrapper,
         },
         replicate::{
-            Replicate, Replicate as ReplicateHecs, Replicate as ReplicateBevy, ReplicateBuilder,
+            Replicate, Replicate as ReplicateBevy, ReplicateBuilder,
             ReplicatedComponent,
         },
     },

@@ -9,7 +9,7 @@
 #   events for Naia connections. Covers client/server states, authentication,
 #   identity tokens, handshake, tick sync, rejection, disconnect, reconnect,
 #   and protocol identity. Intentionally written at the Naia core API level;
-#   engine adapters (hecs/bevy) MUST preserve these semantics.
+#   engine adapters (bevy) MUST preserve these semantics.
 # ============================================================================
 
 # ============================================================================
@@ -18,7 +18,7 @@
 #
 # PURPOSE:
 #   Define the connection state machine and observable events for Naia
-#   connections at the core API level. Engine adapters (hecs/bevy) MUST
+#   connections at the core API level. Engine adapters (bevy) MUST
 #   preserve these semantics; adapter-specific plumbing is out of scope.
 #
 # GLOSSARY:
@@ -180,7 +180,7 @@
 #
 #   - Exact HTTP route/headers/body format of auth request
 #   - Transport-specific wire details for token conveyance
-#   - Engine adapter (bevy/hecs) implementation details
+#   - Engine adapter (bevy) implementation details
 #   - Retry/backoff policies for connection attempts
 #   - Session resumption / state persistence across reconnects
 #   - Wire format details for protocol identity exchange

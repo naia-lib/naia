@@ -637,20 +637,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
     // Replicate options & authority management
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
         self.spawn_entity_inner(&entity);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn disable_entity_replication(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(entity);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
         self.check_client_authoritative_allowed();
         let global_entity = self
@@ -661,7 +661,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_replication_config(&global_entity)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn configure_entity_replication<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -737,7 +737,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         self.check_client_authoritative_allowed();
 
@@ -750,7 +750,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_authority_status(&global_entity)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_request_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
@@ -778,7 +778,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         result
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_release_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 

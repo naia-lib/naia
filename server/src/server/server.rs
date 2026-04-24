@@ -222,12 +222,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.spawn_entity(world)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.world_server.enable_entity_replication(entity);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn disable_entity_replication(&mut self, world_entity: &E) {
         self.world_server.disable_entity_replication(world_entity);
     }
@@ -240,12 +240,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.resume_entity_replication(world_entity);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
         self.world_server.entity_replication_config(world_entity)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.world_server.entity_take_authority(world_entity)
     }
@@ -260,12 +260,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
             .configure_entity_replication(world, world_entity, config);
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         self.world_server.entity_authority_status(world_entity)
     }
 
-    /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_release_authority(
         &mut self,
         origin_user: Option<&UserKey>,
