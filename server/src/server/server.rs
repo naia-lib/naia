@@ -419,6 +419,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.outgoing_bandwidth_total()
     }
 
+    /// Bytes sent during the most recent `send_all_packets` tick. Precise
+    /// per-tick counter (unlike the rolling-window `outgoing_bandwidth_total`).
+    /// Zero before the first tick; read after a tick has run.
+    pub fn outgoing_bytes_last_tick(&self) -> u64 {
+        self.world_server.outgoing_bytes_last_tick()
+    }
+
     pub fn incoming_bandwidth_total(&self) -> f32 {
         self.world_server.incoming_bandwidth_total()
     }

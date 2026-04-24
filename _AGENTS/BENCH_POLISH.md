@@ -22,7 +22,7 @@ description** are the durable record.
 
 ## Task List
 
-### 1. [x] Fix `advance_tick` server-in-client-loop — **CORRECTNESS**  (commit pending)
+### 1. [x] Fix `advance_tick` server-in-client-loop — **CORRECTNESS**  (`717259ea`)
 
 **File**: `benches/src/lib.rs:400-419`
 
@@ -42,7 +42,7 @@ before marking complete).
 
 ---
 
-### 2. [ ] Add per-tick outgoing byte counter to Naia `Server`
+### 2. [x] Add per-tick outgoing byte counter to Naia `Server`  (commit pending)
 
 **Files**:
 - `server/src/server/server.rs` (add `outgoing_bytes_last_tick()` accessor)

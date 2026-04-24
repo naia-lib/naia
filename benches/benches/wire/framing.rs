@@ -10,19 +10,18 @@ const ENTITY_COUNTS: &[usize] = &[1, 10, 100, 1_000];
 ///
 /// Setup: N entities, all mutated each tick.
 /// Calibration: a probe world runs 60 warmup ticks and reads
-///   `server.outgoing_bandwidth_total()` (kbps) to set `Throughput::Bytes`.
-///   Criterion then reports bytes/sec so results are directly comparable
-///   to network budget estimates.
+///   `server.outgoing_bytes_last_tick()` — a precise per-tick byte counter
+///   — to set `Throughput::Bytes`. Criterion then reports bytes/sec so
+///   results are directly comparable to network budget estimates.
 pub fn wire_framing(c: &mut Criterion) {
     let mut group = c.benchmark_group("wire/framing");
     group.warm_up_time(Duration::from_millis(500));
     group.measurement_time(Duration::from_secs(5));
 
     for &n in ENTITY_COUNTS {
-        // Calibrate bytes/tick using the server's built-in bandwidth monitor.
+        // Calibrate bytes/tick using the server's per-tick byte counter.
         let bytes_per_tick = {
             let mut probe = BenchWorldBuilder::new()
-                .with_bandwidth()
                 .users(1)
                 .entities(n)
                 .build();

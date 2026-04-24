@@ -1,6 +1,6 @@
 pub mod bench_protocol;
 
-use std::{net::SocketAddr, sync::Arc, time::Duration};
+use std::{net::SocketAddr, sync::Arc};
 
 use parking_lot::Mutex;
 
@@ -52,7 +52,6 @@ pub struct BenchWorldBuilder {
     user_count: usize,
     entity_count: usize,
     entity_kind: EntityKind,
-    bandwidth_enabled: bool,
 }
 
 impl Default for BenchWorldBuilder {
@@ -67,7 +66,6 @@ impl BenchWorldBuilder {
             user_count: 1,
             entity_count: 0,
             entity_kind: EntityKind::Mutable,
-            bandwidth_enabled: false,
         }
     }
 
@@ -86,15 +84,9 @@ impl BenchWorldBuilder {
         self
     }
 
-    /// Enable bandwidth monitoring. Required to call `server_outgoing_bytes_per_tick()`.
-    pub fn with_bandwidth(mut self) -> Self {
-        self.bandwidth_enabled = true;
-        self
-    }
-
     /// Build to steady-state. Not measured — call from `iter_batched` setup.
     pub fn build(self) -> BenchWorld {
-        BenchWorld::new(self.user_count, self.entity_count, self.entity_kind, self.bandwidth_enabled)
+        BenchWorld::new(self.user_count, self.entity_count, self.entity_kind)
     }
 }
 
@@ -116,21 +108,14 @@ pub struct BenchWorld {
 }
 
 impl BenchWorld {
-    fn new(user_count: usize, entity_count: usize, entity_kind: EntityKind, bandwidth_enabled: bool) -> Self {
+    fn new(user_count: usize, entity_count: usize, entity_kind: EntityKind) -> Self {
         TestClock::init(0);
 
         let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().expect("invalid addr");
         let hub = LocalTransportHub::new(server_addr);
 
-        let bw_duration = if bandwidth_enabled {
-            Some(Duration::from_secs(1))
-        } else {
-            None
-        };
-
         let protocol = bench_protocol();
-        let mut server_config = ServerConfig::default();
-        server_config.connection.bandwidth_measure_duration = bw_duration;
+        let server_config = ServerConfig::default();
         let mut server: NaiaServer<BenchEntity> =
             NaiaServer::new(server_config, protocol.clone());
         server.listen(ServerSocket::new(
@@ -140,8 +125,7 @@ impl BenchWorld {
 
         let mut server_world = World::default();
 
-        let mut client_config = ClientConfig::default();
-        client_config.connection.bandwidth_measure_duration = bw_duration;
+        let client_config = ClientConfig::default();
 
         // Connect all clients
         let mut clients: Vec<(NaiaClient<BenchEntity>, World)> = Vec::new();
@@ -349,13 +333,15 @@ impl BenchWorld {
         }
     }
 
-    /// Outgoing bytes the server sent in the last bandwidth-measurement window,
-    /// normalised to one tick. Requires `.with_bandwidth()` on the builder.
+    /// Outgoing bytes the server sent during the most recent tick. Precise
+    /// (not a rolling average) — reads `Server::outgoing_bytes_last_tick`,
+    /// which is reset at the start of each `send_all_packets` and
+    /// incremented per sent packet.
     ///
-    /// Formula: kbps × TICK_MS / 8 = bytes/tick
+    /// Does NOT require `.with_bandwidth()` on the builder; the counter
+    /// is always tracked.
     pub fn server_outgoing_bytes_per_tick(&self) -> u64 {
-        let kbps = self.server.outgoing_bandwidth_total();
-        (kbps * TICK_MS as f32 / 8.0).max(1.0) as u64
+        self.server.outgoing_bytes_last_tick().max(1)
     }
 
     /// Grant authority on entity[entity_idx] to user[0].

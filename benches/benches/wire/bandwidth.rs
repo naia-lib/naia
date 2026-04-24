@@ -14,9 +14,10 @@ const SCENARIOS: &[(usize, usize)] = &[
 
 /// Sustained mutation throughput: N users, K mutations/tick.
 ///
-/// Throughput::Bytes is calibrated from Naia's built-in bandwidth monitor:
-/// we run 60 warmup ticks, read `server.outgoing_bandwidth_total()` (kbps),
-/// and convert to bytes/tick via `kbps × TICK_MS / 8`. Criterion then
+/// Throughput::Bytes is calibrated from Naia's per-tick outgoing byte
+/// counter: we run 60 warmup ticks, then read
+/// `server.outgoing_bytes_last_tick()` — a precise per-tick total that
+/// `send_all_packets` resets at the start of each tick. Criterion then
 /// reports iterations/sec and bytes/sec correctly.
 pub fn sustained_bandwidth(c: &mut Criterion) {
     let mut group = c.benchmark_group("wire/bandwidth");
@@ -24,10 +25,9 @@ pub fn sustained_bandwidth(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     for &(users, mutations) in SCENARIOS {
-        // Probe to calibrate actual bytes/tick using Naia's bandwidth monitor.
+        // Probe to calibrate actual bytes/tick using Naia's per-tick counter.
         let bytes_per_tick = {
             let mut probe = BenchWorldBuilder::new()
-                .with_bandwidth()
                 .users(users)
                 .entities(mutations)
                 .build();

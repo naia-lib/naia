@@ -611,6 +611,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         let now = Instant::now();
 
+        // Zero per-tick byte counter so outgoing_bytes_last_tick() reports
+        // only the bytes sent during THIS tick (readable after send_packets).
+        self.io.reset_outgoing_bytes_this_tick();
+
         // update entity scopes
         self.update_entity_scopes(&world);
 
@@ -1252,6 +1256,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     // Bandwidth monitoring
     pub fn outgoing_bandwidth_total(&self) -> f32 {
         self.io.outgoing_bandwidth_total()
+    }
+
+    /// Bytes sent (post-compression, pre-transport) during the most recent
+    /// `send_all_packets` call. Precise, non-rolling counter. Read after a
+    /// tick has run; reset to 0 at the start of the next `send_all_packets`.
+    pub fn outgoing_bytes_last_tick(&self) -> u64 {
+        self.io.outgoing_bytes_last_tick()
     }
 
     pub fn incoming_bandwidth_total(&self) -> f32 {

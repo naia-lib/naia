@@ -16,6 +16,11 @@ pub struct Io {
     incoming_bandwidth_monitor: Option<BandwidthMonitor>,
     outgoing_encoder: Option<Encoder>,
     incoming_decoder: Option<Decoder>,
+    /// Bytes sent during the most recent `send_all_packets` tick.
+    /// Reset at the start of each `send_all_packets` via
+    /// `reset_outgoing_bytes_this_tick`, incremented in `send_packet`.
+    /// Unconditionally tracked — no bandwidth monitor required.
+    outgoing_bytes_this_tick: u64,
 }
 
 impl Io {
@@ -46,6 +51,7 @@ impl Io {
             incoming_bandwidth_monitor,
             outgoing_encoder,
             incoming_decoder,
+            outgoing_bytes_this_tick: 0,
         }
     }
 
@@ -91,6 +97,10 @@ impl Io {
         if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
             monitor.record_packet(address, payload.len());
         }
+
+        // Per-tick byte counter (always tracked; cheap)
+        self.outgoing_bytes_this_tick =
+            self.outgoing_bytes_this_tick.saturating_add(payload.len() as u64);
 
         self.packet_sender
             .as_ref()
@@ -160,6 +170,19 @@ impl Io {
         if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
             monitor.tick();
         }
+    }
+
+    /// Zero out the per-tick byte counter. Called by `send_all_packets` at
+    /// the start of each server tick so that `outgoing_bytes_last_tick`
+    /// reflects only that tick's work.
+    pub fn reset_outgoing_bytes_this_tick(&mut self) {
+        self.outgoing_bytes_this_tick = 0;
+    }
+
+    /// Total bytes sent (post-compression) during the most recent
+    /// `send_all_packets` call. Call AFTER the tick completes.
+    pub fn outgoing_bytes_last_tick(&self) -> u64 {
+        self.outgoing_bytes_this_tick
     }
 
     pub fn outgoing_bandwidth_total(&self) -> f32 {
