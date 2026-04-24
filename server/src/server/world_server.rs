@@ -1,13 +1,11 @@
 use std::{
     any::Any,
-    collections::{hash_set::Iter, HashMap, HashSet},
+    collections::{hash_set::Iter, HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
     panic,
     time::Duration,
 };
-#[cfg(feature = "v2_push_pipeline")]
-use std::collections::VecDeque;
 
 use log::{info, warn};
 
@@ -108,14 +106,11 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     time_manager: TimeManager,
     // Deferred auth grants (one-tick delay to ensure entity registration)
     pending_auth_grants: Vec<(UserKey, GlobalEntity, EntityAuthStatus)>,
-    // Push-based scope-change queue (v2_push_pipeline)
-    #[cfg(feature = "v2_push_pipeline")]
     scope_change_queue: VecDeque<ScopeChange>,
 }
 
-/// Events that drive scope re-evaluation under the v2_push_pipeline path.
+/// Events that drive scope re-evaluation.
 /// Each variant encodes exactly the (user, entity) pairs that need attention.
-#[cfg(feature = "v2_push_pipeline")]
 enum ScopeChange {
     /// User was added to a room — check all entities in that room for this user.
     UserEnteredRoom(UserKey, RoomKey),
@@ -188,8 +183,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             time_manager,
             // Deferred auth grants
             pending_auth_grants: Vec::new(),
-            // Push-based scope-change queue (v2_push_pipeline)
-            #[cfg(feature = "v2_push_pipeline")]
             scope_change_queue: VecDeque::new(),
         }
     }
@@ -1428,7 +1421,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         self.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
-        #[cfg(feature = "v2_push_pipeline")]
         self.scope_change_queue.push_back(ScopeChange::ScopeToggled(
             *user_key,
             global_entity,
@@ -2132,7 +2124,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 user.cache_room(room_key);
             }
         }
-        #[cfg(feature = "v2_push_pipeline")]
         self.scope_change_queue
             .push_back(ScopeChange::UserEnteredRoom(*user_key, *room_key));
     }
@@ -2149,7 +2140,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 user.uncache_room(room_key);
             }
         }
-        #[cfg(feature = "v2_push_pipeline")]
         self.scope_change_queue
             .push_back(ScopeChange::UserLeftRoom(*user_key, *room_key));
     }
@@ -2225,7 +2215,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         self.entity_room_map
             .entity_add_room(&global_entity, room_key);
-        #[cfg(feature = "v2_push_pipeline")]
         self.scope_change_queue
             .push_back(ScopeChange::EntityEnteredRoom(global_entity, *room_key));
     }
@@ -2740,38 +2729,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        // Loop 2: scope-entry / scope-exit per (user, entity).
-        #[cfg(not(feature = "v2_push_pipeline"))]
-        self.update_entity_scopes_full_scan(world);
-        #[cfg(feature = "v2_push_pipeline")]
+        // Loop 2: process queued scope changes.
         self.drain_scope_change_queue(world);
     }
 
-    /// Legacy O(rooms × users × entities) full scan.
-    #[cfg(not(feature = "v2_push_pipeline"))]
-    fn update_entity_scopes_full_scan<W: WorldRefType<E>>(&mut self, world: &W) {
-        // TODO: we should be able to cache these tuples of keys to avoid building a new
-        // list each time
-        let room_keys: Vec<RoomKey> = self.rooms.iter().map(|(k, _)| k).collect();
-        for room_key in room_keys {
-            let user_keys: Vec<UserKey> = {
-                let room = self.rooms.get(&room_key).unwrap();
-                room.user_keys().copied().collect()
-            };
-            for user_key in &user_keys {
-                let entity_list: Vec<GlobalEntity> = {
-                    let room = self.rooms.get(&room_key).unwrap();
-                    room.entities().copied().collect()
-                };
-                for global_entity in &entity_list {
-                    self.apply_scope_for_user(world, user_key, global_entity);
-                }
-            }
-        }
-    }
-
-    /// Push-based O(changes) queue drain. Replaces the full scan under v2_push_pipeline.
-    #[cfg(feature = "v2_push_pipeline")]
     fn drain_scope_change_queue<W: WorldRefType<E>>(&mut self, world: &W) {
         // Snapshot the queue so we can re-borrow self mutably for apply_scope_for_user.
         let changes: Vec<ScopeChange> = self.scope_change_queue.drain(..).collect();
@@ -3017,10 +2978,7 @@ cfg_if! {
             }
 
             pub fn scope_change_queue_len(&self) -> usize {
-                #[cfg(feature = "v2_push_pipeline")]
-                return self.scope_change_queue.len();
-                #[cfg(not(feature = "v2_push_pipeline"))]
-                return 0;
+                self.scope_change_queue.len()
             }
         }
     }

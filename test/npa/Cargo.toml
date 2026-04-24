@@ -10,9 +10,6 @@ description = "NPA (Namako Plan Adapter) for Naia BDD tests"
 name = "naia_npa"
 path = "src/main.rs"
 
-[features]
-v2_push_pipeline = ["naia-tests/v2_push_pipeline"]
-
 [dependencies]
 # Core namako library with NPA types
 namako_engine = { path = "../../../namako/engine", features = ["npap", "macros"] }
