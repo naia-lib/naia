@@ -96,6 +96,32 @@ impl WorldReader {
                     EntityMessage::Spawn(remote_entity.copy_to_owned()),
                 );
             }
+            EntityMessageType::SpawnWithComponents => {
+                // read remote entity
+                let remote_entity = RemoteEntity::de(reader)?;
+                let local_entity = remote_entity.copy_to_owned();
+
+                // read component count
+                let count = u8::de(reader)?;
+
+                let mut kinds = Vec::with_capacity(count as usize);
+                for _ in 0..count {
+                    let converter = world_manager.entity_converter();
+                    let new_component = component_kinds.read(reader, converter)?;
+                    let new_component_kind = new_component.kind();
+                    world_manager.insert_received_component(
+                        &local_entity,
+                        &new_component_kind,
+                        new_component,
+                    );
+                    kinds.push(new_component_kind);
+                }
+
+                world_manager.receiver_buffer_message(
+                    message_id,
+                    EntityMessage::SpawnWithComponents(local_entity, kinds),
+                );
+            }
             EntityMessageType::Despawn => {
                 // read local entity
                 let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();

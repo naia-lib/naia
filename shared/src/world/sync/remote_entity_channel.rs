@@ -256,6 +256,47 @@ impl RemoteEntityChannel {
                         component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
                     }
                 }
+                EntityMessageType::SpawnWithComponents => {
+                    if self.state != EntityChannelState::Despawned {
+                        break;
+                    }
+
+                    self.state = EntityChannelState::Spawned;
+                    self.last_epoch_id = Some(id);
+                    // Discard stale pre-lifetime messages buffered before this id
+                    self.buffered_messages.pop_front_until_and_excluding(id);
+
+                    // Pop the SpawnWithComponents message itself
+                    let (_, msg) = self.buffered_messages.pop_front().unwrap();
+                    let kinds = match msg {
+                        EntityMessage::SpawnWithComponents((), kinds) => kinds,
+                        _ => unreachable!(),
+                    };
+
+                    // Emit synthetic Spawn event
+                    self.incoming_messages.push(EntityMessage::Spawn(()));
+
+                    // Process any pre-buffered component channels (out-of-order arrivals)
+                    for (component_kind, component_channel) in self.component_channels.iter_mut() {
+                        component_channel.buffer_pop_front_until_and_excluding(id);
+                        component_channel.process_messages(self.state);
+                        component_channel.drain_messages_into(component_kind, &mut self.incoming_messages);
+                    }
+
+                    // Accept coalesced components: mark inserted + emit InsertComponent events
+                    for kind in &kinds {
+                        let component_channel = self.component_channels
+                            .entry(*kind)
+                            .or_insert_with(RemoteComponentChannel::new);
+                        component_channel.set_inserted(true, id);
+                        self.incoming_messages.push(EntityMessage::InsertComponent((), *kind));
+                    }
+
+                    // Drain auth channel
+                    self.auth_channel.receiver_buffer_pop_front_until_and_including(id);
+                    self.auth_channel.receiver_process_messages(self.state);
+                    self.auth_channel.receiver_drain_messages_into(&mut self.incoming_messages);
+                }
                 EntityMessageType::Despawn => {
                     if self.state != EntityChannelState::Spawned {
                         break;

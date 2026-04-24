@@ -10,6 +10,7 @@ use crate::{
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum EntityMessage<E: Copy + Eq + PartialEq> {
     Spawn(E),
+    SpawnWithComponents(E, Vec<ComponentKind>),
     Despawn(E),
     InsertComponent(E, ComponentKind),
     RemoveComponent(E, ComponentKind),
@@ -32,6 +33,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     pub fn entity(&self) -> Option<E> {
         match self {
             Self::Spawn(entity) => Some(*entity),
+            Self::SpawnWithComponents(entity, _) => Some(*entity),
             Self::Despawn(entity) => Some(*entity),
             Self::InsertComponent(entity, _) => Some(*entity),
             Self::RemoveComponent(entity, _) => Some(*entity),
@@ -63,6 +65,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     pub fn strip_entity(self) -> EntityMessage<()> {
         match self {
             Self::Spawn(_) => EntityMessage::Spawn(()),
+            Self::SpawnWithComponents(_, kinds) => EntityMessage::SpawnWithComponents((), kinds),
             Self::Despawn(_) => EntityMessage::Despawn(()),
             Self::InsertComponent(_, component_kind) => {
                 EntityMessage::InsertComponent((), component_kind)
@@ -92,6 +95,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     pub fn with_entity<O: Copy + Eq + PartialEq>(self, entity: O) -> EntityMessage<O> {
         match self {
             EntityMessage::Spawn(_) => EntityMessage::Spawn(entity),
+            EntityMessage::SpawnWithComponents(_, kinds) => EntityMessage::SpawnWithComponents(entity, kinds),
             EntityMessage::Despawn(_) => EntityMessage::Despawn(entity),
             EntityMessage::InsertComponent(_, component_kind) => {
                 EntityMessage::InsertComponent(entity, component_kind)
@@ -129,6 +133,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     pub fn get_type(&self) -> EntityMessageType {
         match self {
             Self::Spawn(_) => EntityMessageType::Spawn,
+            Self::SpawnWithComponents(_, _) => EntityMessageType::SpawnWithComponents,
             Self::Despawn(_) => EntityMessageType::Despawn,
             Self::InsertComponent(_, _) => EntityMessageType::InsertComponent,
             Self::RemoveComponent(_, _) => EntityMessageType::RemoveComponent,
@@ -224,6 +229,7 @@ impl EntityMessage<RemoteEntity> {
                 panic!("MigrateResponse should be EntityMessage<HostEntity>, not EntityMessage<RemoteEntity>!");
             }
             EntityMessage::Spawn(_)
+            | EntityMessage::SpawnWithComponents(_, _)
             | EntityMessage::Despawn(_)
             | EntityMessage::InsertComponent(_, _)
             | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
@@ -255,6 +261,7 @@ impl EntityMessage<HostEntity> {
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity)
             }
             EntityMessage::Spawn(_)
+            | EntityMessage::SpawnWithComponents(_, _)
             | EntityMessage::Despawn(_)
             | EntityMessage::InsertComponent(_, _)
             | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),

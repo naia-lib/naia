@@ -192,6 +192,70 @@ impl WorldWriter {
                     );
                 }
             }
+            EntityCommand::SpawnWithComponents(global_entity, comp_kind_list) => {
+                let Some(world_entity) =
+                    entity_converter.global_entity_to_entity(global_entity).ok()
+                else {
+                    EntityMessageType::Noop.ser(writer);
+                    if is_writing {
+                        world_manager.record_command_written(
+                            packet_index,
+                            command_id,
+                            EntityMessage::Noop,
+                        );
+                    }
+                    return;
+                };
+
+                let all_present = comp_kind_list
+                    .iter()
+                    .all(|k| world.has_component_of_kind(&world_entity, k));
+
+                if !world_manager.has_global_entity(global_entity) || !all_present {
+                    EntityMessageType::Noop.ser(writer);
+                    if is_writing {
+                        world_manager.record_command_written(
+                            packet_index,
+                            command_id,
+                            EntityMessage::Noop,
+                        );
+                    }
+                    return;
+                }
+
+                EntityMessageType::SpawnWithComponents.ser(writer);
+
+                let host_entity = world_manager
+                    .entity_converter()
+                    .global_entity_to_host_entity(global_entity)
+                    .unwrap();
+                host_entity.ser(writer);
+
+                let count = comp_kind_list.len() as u8;
+                count.ser(writer);
+
+                {
+                    let mut converter =
+                        world_manager.entity_converter_mut(global_world_manager);
+                    for component_kind in comp_kind_list.iter() {
+                        world
+                            .component_of_kind(&world_entity, component_kind)
+                            .expect("Component does not exist in World")
+                            .write(component_kinds, writer, &mut converter);
+                    }
+                }
+
+                if is_writing {
+                    world_manager.record_command_written(
+                        packet_index,
+                        command_id,
+                        EntityMessage::SpawnWithComponents(
+                            host_entity.copy_to_owned(),
+                            comp_kind_list.clone(),
+                        ),
+                    );
+                }
+            }
             EntityCommand::Despawn(global_entity) => {
                 EntityMessageType::Despawn.ser(writer);
 
@@ -644,6 +708,11 @@ impl WorldWriter {
             EntityCommand::Spawn(_entity) => {
                 panic!(
                     "Packet Write Error: Blocking overflow detected! Entity Spawn message requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
+                )
+            }
+            EntityCommand::SpawnWithComponents(_entity, _kinds) => {
+                panic!(
+                    "Packet Write Error: Blocking overflow detected! SpawnWithComponents message requires {bits_needed} bits, but packet only has {bits_free} bits available! Recommend slimming down these Components."
                 )
             }
             EntityCommand::InsertComponent(_entity, component_kind) => {

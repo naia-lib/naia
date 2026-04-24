@@ -1,14 +1,14 @@
 {
   "identity": {
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "67215feb5fd432b37e72a82abd4cb7a43fcd45203f45d2b0ba20fe63b35a5b96",
-    "step_registry_hash": "7aadd1b703f201561e8335d8704723802172c6d3b55650dedbc5e9c423f7cd9e",
-    "resolved_plan_hash": "5199d92dc1bd2896e9d45f862122e51dbcc186176d8c84ef6937c39e4ccc0b16"
+    "feature_fingerprint_hash": "f0ea23ecb22f58c0093f2f01624400bbb3ab6b95813372f7d9bdc9ba54638edb",
+    "step_registry_hash": "261ec83ff004d4fb02fb190439127c1909ce7eec673a877e1fea354119576391",
+    "resolved_plan_hash": "4a9ae9898964ae770536219d26089538e9403b8c233470967802356a262b2a68"
   },
   "metadata": {
-    "timestamp": "2026-04-24T01:36:44.342218434+00:00",
+    "timestamp": "2026-04-24T03:00:58.643631310+00:00",
     "namako_version": "0.1.0",
     "npap_version": 1,
-    "run_report_hash": "59587d017361067a1a05b9e4da968290c7e068503e206e46718c77095ff2678d"
+    "run_report_hash": "9752eaa177ade15b1dff51eab878594b3795c7559cda65483eb72533c6a992e2"
   }
 }

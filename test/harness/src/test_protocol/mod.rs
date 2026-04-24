@@ -132,6 +132,18 @@ impl Position {
     }
 }
 
+#[derive(Component, Replicate)]
+pub struct Velocity {
+    pub vx: Property<f32>,
+    pub vy: Property<f32>,
+}
+
+impl Velocity {
+    pub fn new(vx: f32, vy: f32) -> Self {
+        Self::new_complete(vx, vy)
+    }
+}
+
 /// Marker component that is replicated immutably.
 /// Used by Phase 5 spike tests to verify zero GlobalDiffHandler allocation.
 #[derive(Component, Replicate)]
@@ -141,6 +153,7 @@ pub struct ImmutableLabel;
 pub fn protocol() -> Protocol {
     Protocol::builder()
         .add_component::<Position>()
+        .add_component::<Velocity>()
         .add_component::<ImmutableLabel>()
         .add_message::<Auth>()
         .add_message::<TestMessage>()

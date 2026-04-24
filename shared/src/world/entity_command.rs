@@ -9,6 +9,7 @@ use crate::{
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum EntityCommand {
     Spawn(GlobalEntity),
+    SpawnWithComponents(GlobalEntity, Vec<ComponentKind>),
     Despawn(GlobalEntity),
     InsertComponent(GlobalEntity, ComponentKind),
     RemoveComponent(GlobalEntity, ComponentKind),
@@ -31,6 +32,7 @@ impl EntityCommand {
     pub fn entity(&self) -> GlobalEntity {
         match self {
             Self::Spawn(entity) => *entity,
+            Self::SpawnWithComponents(entity, _) => *entity,
             Self::Despawn(entity) => *entity,
             Self::InsertComponent(entity, _) => *entity,
             Self::RemoveComponent(entity, _) => *entity,
@@ -57,6 +59,7 @@ impl EntityCommand {
     pub fn get_type(&self) -> EntityMessageType {
         match self {
             Self::Spawn(_) => EntityMessageType::Spawn,
+            Self::SpawnWithComponents(_, _) => EntityMessageType::SpawnWithComponents,
             Self::Despawn(_) => EntityMessageType::Despawn,
             Self::InsertComponent(_, _) => EntityMessageType::InsertComponent,
             Self::RemoveComponent(_, _) => EntityMessageType::RemoveComponent,
@@ -75,6 +78,7 @@ impl EntityCommand {
     pub(crate) fn set_subcommand_id(&mut self, id: SubCommandId) {
         match self {
             Self::Spawn(_)
+            | Self::SpawnWithComponents(_, _)
             | Self::Despawn(_)
             | Self::InsertComponent(_, _)
             | Self::RemoveComponent(_, _) => {
@@ -95,9 +99,6 @@ impl EntityCommand {
     }
 
     pub fn is_valid_for_remote_entity(&self) -> bool {
-        // During client-side migration, some commands become invalid
-        // Publish/Unpublish don't make sense for delegated entities
-        // Delegation commands don't make sense post-delegation
         match self {
             Self::Publish(_, _)
             | Self::Unpublish(_, _)

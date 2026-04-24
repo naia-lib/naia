@@ -24,7 +24,7 @@ pub use harness::{
     ClientErrorEvent, ClientPublishEntityEvent, ClientRejectEvent, ClientServerTickEvent,
     ClientSpawnEntityEvent, ClientTickEvent, ClientUnpublishEntityEvent,
 };
-pub use test_protocol::{protocol, Auth, EntityCommandMessage, ImmutableLabel, LargeTestMessage, Position};
+pub use test_protocol::{protocol, Auth, EntityCommandMessage, ImmutableLabel, LargeTestMessage, Position, Velocity};
 
 // Re-export demo_world types for tests
 pub use naia_demo_world::{Entity as TestEntity, World as TestWorld};

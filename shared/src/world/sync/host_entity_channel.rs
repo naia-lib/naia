@@ -33,7 +33,10 @@ impl HostEntityChannel {
 
     pub fn send_command(&mut self, command: EntityCommand) {
         match command.get_type() {
-            EntityMessageType::Spawn | EntityMessageType::Despawn | EntityMessageType::Noop => {
+            EntityMessageType::Spawn
+            | EntityMessageType::SpawnWithComponents
+            | EntityMessageType::Despawn
+            | EntityMessageType::Noop => {
                 panic!("These should be handled by the Engine, not the EntityChannelSender");
             }
             EntityMessageType::InsertComponent => {

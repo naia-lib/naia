@@ -8,6 +8,8 @@ use crate::{ComponentKind, EntityMessage};
 pub enum EntityMessageType {
     // Action indicating an Entity to be created
     Spawn,
+    // Action indicating an Entity to be created with initial components (coalesced spawn)
+    SpawnWithComponents,
     // Action indicating an Entity to be deleted
     Despawn,
     // Action indicating a Component to be added to an Entity

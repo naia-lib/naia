@@ -42,6 +42,7 @@ impl HostEngine {
     pub fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<HostEntity>) {
         match msg.get_type() {
             EntityMessageType::Spawn
+            | EntityMessageType::SpawnWithComponents
             | EntityMessageType::Despawn
             | EntityMessageType::InsertComponent
             | EntityMessageType::RemoveComponent => {
@@ -85,12 +86,25 @@ impl HostEngine {
                 if self.entity_channels.contains_key(&host_entity) {
                     panic!("Cannot spawn an entity that already exists in the engine");
                 }
-                // If the entity channel does not exist, create it
-                // info!("Creating entity channel for host entity: {:?}", host_entity);
-
                 self.entity_channels
                     .insert(host_entity, HostEntityChannel::new(self.host_type));
-
+                self.outgoing_commands.push(command);
+                return;
+            }
+            EntityMessageType::SpawnWithComponents => {
+                if self.entity_channels.contains_key(&host_entity) {
+                    panic!("Cannot spawn an entity that already exists in the engine");
+                }
+                let component_kinds = match &command {
+                    EntityCommand::SpawnWithComponents(_, kinds) => {
+                        kinds.iter().cloned().collect::<std::collections::HashSet<_>>()
+                    }
+                    _ => unreachable!(),
+                };
+                self.entity_channels.insert(
+                    host_entity,
+                    HostEntityChannel::new_with_components(self.host_type, component_kinds),
+                );
                 self.outgoing_commands.push(command);
                 return;
             }

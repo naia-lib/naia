@@ -124,16 +124,19 @@ impl HostWorldManager {
         for component_kind in &component_kinds {
             entity_update_manager.register_component(global_entity, component_kind);
         }
-        // add entity
-        self.host_engine
-            .send_command(converter, EntityCommand::Spawn(*global_entity));
-        // add components
-        for component_kind in component_kinds {
+
+        if !component_kinds.is_empty() {
+            // Coalesce Spawn + N InsertComponent into one reliable message
             self.host_engine.send_command(
                 converter,
-                EntityCommand::InsertComponent(*global_entity, component_kind),
+                EntityCommand::SpawnWithComponents(*global_entity, component_kinds),
             );
+            return;
         }
+
+        // Zero-component path: plain Spawn with no component payloads
+        self.host_engine
+            .send_command(converter, EntityCommand::Spawn(*global_entity));
     }
 
     pub fn send_command(
