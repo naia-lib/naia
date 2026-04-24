@@ -224,13 +224,7 @@ impl BenchWorld {
         if entity_count > 0 && user_count > 0 {
             for _ in 0..REPLICATE_TIMEOUT {
                 advance_tick(&hub, &mut server, &mut server_world, &mut clients);
-                let mut events = server.take_world_events();
-                let _ = server.take_tick_events(&Instant::now());
-                let _ = events.take_auths();
-                for (client, _) in &mut clients {
-                    let _ = client.take_world_events();
-                    let _ = client.take_tick_events(&Instant::now());
-                }
+                drain_all_events(&mut server, &mut clients);
 
                 let all_visible = clients.iter().all(|(client, world)| {
                     client.entities(&world.proxy()).len() >= entity_count
@@ -263,14 +257,7 @@ impl BenchWorld {
             &mut self.server_world,
             &mut self.clients,
         );
-        // Drain events — O(new_events), which is 0 for idle ticks.
-        let mut events = self.server.take_world_events();
-        let _ = self.server.take_tick_events(&Instant::now());
-        let _ = events.take_auths();
-        for (client, _) in &mut self.clients {
-            let _ = client.take_world_events();
-            let _ = client.take_tick_events(&Instant::now());
-        }
+        drain_all_events(&mut self.server, &mut self.clients);
     }
 
     /// Mutate the first `count` entities' mutable component values.
@@ -375,6 +362,31 @@ impl BenchWorld {
 
     pub fn hub(&self) -> &LocalTransportHub {
         &self.hub
+    }
+}
+
+// ─── drain_all_events ─────────────────────────────────────────────────────────
+
+/// Drain server + client events after a tick.
+///
+/// Benchmarks don't consume events, but Naia accumulates them indefinitely
+/// if never read — so we drain every tick to keep memory bounded and keep
+/// steady-state costs steady. Cost is O(new_events) (0 for idle ticks).
+///
+/// Used by `BenchWorld::tick()` and the replication-wait setup loop.
+/// The connection-wait setup loop does its own bespoke event consumption
+/// (ConnectEvent reads + auth accept) and doesn't call this.
+#[inline]
+pub fn drain_all_events(
+    server: &mut NaiaServer<BenchEntity>,
+    clients: &mut Vec<(NaiaClient<BenchEntity>, World)>,
+) {
+    let mut events = server.take_world_events();
+    let _ = server.take_tick_events(&Instant::now());
+    let _ = events.take_auths();
+    for (client, _) in clients {
+        let _ = client.take_world_events();
+        let _ = client.take_tick_events(&Instant::now());
     }
 }
 

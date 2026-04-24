@@ -42,7 +42,7 @@ before marking complete).
 
 ---
 
-### 2. [x] Add per-tick outgoing byte counter to Naia `Server`  (commit pending)
+### 2. [x] Add per-tick outgoing byte counter to Naia `Server`  (`100721d5`)
 
 **Files**:
 - `server/src/server/server.rs` (add `outgoing_bytes_last_tick()` accessor)
@@ -62,7 +62,7 @@ Caller reads this *after* a tick has run.
 
 ---
 
-### 3. [ ] Extract event-drain helper in bench harness
+### 3. [x] Extract event-drain helper in bench harness  (commit pending)
 
 **File**: `benches/src/lib.rs`
 
