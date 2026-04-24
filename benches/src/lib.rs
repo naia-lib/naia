@@ -22,8 +22,18 @@ use crate::bench_protocol::{
     bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent,
 };
 
+/// Simulated tick duration. 16 ms = 62.5 Hz, a reasonable game-server
+/// default. Load-bearing: don't change without auditing callers that
+/// interpret tick counts as wall-time (e.g. bandwidth windows).
 const TICK_MS: u64 = 16;
+
+/// Max ticks to wait for K clients to connect during setup. 500 ticks
+/// ≈ 8 s simulated; the local transport typically finishes in <10.
 const SETUP_TIMEOUT: usize = 500;
+
+/// Max ticks to wait for all entities to replicate to all clients. Sized
+/// for worst-case 8-client × 10K-entity scenarios; Naia chunks spawns
+/// across ticks so large counts genuinely need many ticks.
 const REPLICATE_TIMEOUT: usize = 10_000;
 
 // ─── bench!() macro ───────────────────────────────────────────────────────────

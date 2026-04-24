@@ -62,7 +62,7 @@ Caller reads this *after* a tick has run.
 
 ---
 
-### 3. [x] Extract event-drain helper in bench harness  (commit pending)
+### 3. [x] Extract event-drain helper in bench harness  (`af7126f9`)
 
 **File**: `benches/src/lib.rs`
 
@@ -77,7 +77,7 @@ Call from all three sites. Saves ~30 lines; removes a class of
 
 ---
 
-### 4. [ ] Document magic numbers in bench harness
+### 4. [x] Document magic numbers in bench harness  (commit pending)
 
 **File**: `benches/src/lib.rs:25-27`
 
