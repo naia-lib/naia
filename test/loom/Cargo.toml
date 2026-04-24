@@ -1,0 +1,15 @@
+[package]
+name = "naia-loom"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = "../.."
+edition = "2021"
+publish = false
+description = "loom concurrency model-checking tests for Naia"
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(loom)'] }
+
+[dependencies]
+loom = "0.7"
+naia-shared = { path = "../../shared", features = ["transport_local", "test_time"] }

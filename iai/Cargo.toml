@@ -1,0 +1,26 @@
+[package]
+name = "naia-iai"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
+edition = "2021"
+publish = false
+description = "iai-callgrind instruction-count benchmarks for Naia"
+
+[[bench]]
+name = "tick_hot_path"
+harness = false
+
+[[bench]]
+name = "update_dispatch"
+harness = false
+
+[build-dependencies]
+iai-callgrind-runner = "0.14"
+
+[dev-dependencies]
+iai-callgrind = "0.14"
+naia-benches = { path = "../benches" }
+
+[dependencies]
+naia-benches = { path = "../benches" }

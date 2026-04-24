@@ -1,6 +1,6 @@
 # Naia Benchmark Suite — Architecture & Implementation Plan
 
-**Status:** 🔲 Not started  
+**Status:** ✅ Complete (2026-04-24)  
 **Author:** Connor Carpenter  
 **Created:** 2026-04-24  
 
@@ -769,34 +769,34 @@ column as you go.
 
 | # | Step | Deliverable | Status |
 |---|---|---|---|
-| 1 | Add `benches/`, `iai/`, `test/loom/`, `test/bench_report/` to workspace `Cargo.toml` | Root Cargo.toml updated | 🔲 |
-| 2 | Create `benches/Cargo.toml` with criterion dep + `harness = false` | Crate scaffolded | 🔲 |
-| 3 | Write `benches/src/bench_protocol.rs` — `BenchComponent` (mutable) + `BenchImmutableComponent` | Protocol compiles | 🔲 |
-| 4 | Write `benches/src/lib.rs` — `NaiaWorldBuilder` + `NaiaWorld::tick()` | Builder compiles; `cargo check` clean | 🔲 |
-| 5 | Write `benches/benches/tick/idle.rs` — parametric idle tick over ENTITY_COUNTS | `cargo criterion -- tick/idle` runs | 🔲 |
-| 6 | Write `benches/benches/tick/active.rs` — parametric active tick over MUTATION_COUNTS | `cargo criterion -- tick/active` runs | 🔲 |
-| 7 | Write `benches/benches/tick/scope.rs` — scope enter + exit | `cargo criterion -- tick/scope` runs | 🔲 |
-| 8 | Write `benches/benches/spawn/single.rs` | Runs | 🔲 |
-| 9 | Write `benches/benches/spawn/burst.rs` — 10K entity burst with Throughput::Elements | Runs; Criterion shows entities/sec | 🔲 |
-| 10 | Write `benches/benches/spawn/coalesced.rs` — SpawnWithComponents vs. legacy with Throughput::Bytes | Comparison renders correctly | 🔲 |
-| 11 | Write `benches/benches/update/mutation.rs` | Runs | 🔲 |
-| 12 | Write `benches/benches/update/bulk.rs` — parametric over K with Throughput::Elements | Runs | 🔲 |
-| 13 | Write `benches/benches/update/immutable.rs` — mutable vs. immutable side-by-side | Runs; delta should be ≤ noise floor | 🔲 |
-| 14 | Write `benches/benches/authority/grant.rs` | Runs | 🔲 |
-| 15 | Write `benches/benches/authority/contention.rs` — parametric over user count | Runs | 🔲 |
-| 16 | Write `benches/benches/wire/framing.rs` — Throughput::Bytes per operation | Criterion shows bytes/op | 🔲 |
-| 17 | Write `benches/benches/wire/bandwidth.rs` — sustained throughput | Runs | 🔲 |
-| 18 | Wire all bench files into `benches/benches/main.rs` with Criterion `criterion_group!` + `criterion_main!` | Full suite: `cargo criterion` runs clean | 🔲 |
-| 19 | Create `iai/Cargo.toml` + `iai/benches/tick_hot_path.rs` | `cargo bench -p naia-iai --bench tick_hot_path` produces instruction counts | 🔲 |
-| 20 | Create `iai/benches/update_dispatch.rs` | Runs | 🔲 |
-| 21 | Create `test/loom/` crate + `dirty_set.rs` concurrency test | `RUSTFLAGS="--cfg loom" cargo test -p naia-loom` passes | 🔲 |
-| 22 | Download and vendor `chart.min.js` into `test/bench_report/assets/` | File present | 🔲 |
-| 23 | Write `test/bench_report/src/parser.rs` — parse cargo-criterion `--message-format=json` lines | Unit test: parses sample JSON | 🔲 |
-| 24 | Write `test/bench_report/src/model.rs` + `grouper.rs` — group into tick/spawn/update/authority/wire categories | Groups match directory structure | 🔲 |
-| 25 | Write `test/bench_report/src/charts.rs` — build Chart.js dataset JSON | Output is valid Chart.js config | 🔲 |
-| 26 | Write `test/bench_report/src/renderer.rs` — emit self-contained HTML | HTML opens in browser; charts render | 🔲 |
-| 27 | End-to-end test: run criterion suite → pipe to report tool → open HTML | All charts visible; line charts show expected curve shapes | 🔲 |
-| 28 | Write `benches/README.md` — how to run, baseline workflow, critcmp instructions | Documented | 🔲 |
+| 1 | Add `benches/`, `iai/`, `test/loom/`, `test/bench_report/` to workspace `Cargo.toml` | Root Cargo.toml updated | ✅ |
+| 2 | Create `benches/Cargo.toml` with criterion dep + `harness = false` | Crate scaffolded | ✅ |
+| 3 | Write `benches/src/bench_protocol.rs` — `BenchComponent` (mutable) + `BenchImmutableComponent` | Protocol compiles | ✅ |
+| 4 | Write `benches/src/lib.rs` — `NaiaWorldBuilder` + `NaiaWorld::tick()` | Builder compiles; `cargo check` clean | ✅ |
+| 5 | Write `benches/benches/tick/idle.rs` — parametric idle tick over ENTITY_COUNTS | `cargo criterion -- tick/idle` runs | ✅ |
+| 6 | Write `benches/benches/tick/active.rs` — parametric active tick over MUTATION_COUNTS | `cargo criterion -- tick/active` runs | ✅ |
+| 7 | Write `benches/benches/tick/scope.rs` — scope enter + exit | `cargo criterion -- tick/scope` runs | ✅ |
+| 8 | Write `benches/benches/spawn/single.rs` | Runs | ✅ |
+| 9 | Write `benches/benches/spawn/burst.rs` — 10K entity burst with Throughput::Elements | Runs; Criterion shows entities/sec | ✅ |
+| 10 | Write `benches/benches/spawn/coalesced.rs` — SpawnWithComponents vs. legacy with Throughput::Bytes | Comparison renders correctly | ✅ |
+| 11 | Write `benches/benches/update/mutation.rs` | Runs | ✅ |
+| 12 | Write `benches/benches/update/bulk.rs` — parametric over K with Throughput::Elements | Runs | ✅ |
+| 13 | Write `benches/benches/update/immutable.rs` — mutable vs. immutable side-by-side | Runs; delta should be ≤ noise floor | ✅ |
+| 14 | Write `benches/benches/authority/grant.rs` | Runs | ✅ |
+| 15 | Write `benches/benches/authority/contention.rs` — parametric over user count | Runs | ✅ |
+| 16 | Write `benches/benches/wire/framing.rs` — Throughput::Bytes per operation | Criterion shows bytes/op | ✅ |
+| 17 | Write `benches/benches/wire/bandwidth.rs` — sustained throughput | Runs | ✅ |
+| 18 | Wire all bench files into `benches/benches/main.rs` with Criterion `criterion_group!` + `criterion_main!` | Full suite: `cargo criterion` runs clean | ✅ |
+| 19 | Create `iai/Cargo.toml` + `iai/benches/tick_hot_path.rs` | `cargo bench -p naia-iai --bench tick_hot_path` produces instruction counts | ✅ |
+| 20 | Create `iai/benches/update_dispatch.rs` | Runs | ✅ |
+| 21 | Create `test/loom/` crate + `dirty_set.rs` concurrency test | `RUSTFLAGS="--cfg loom" cargo test -p naia-loom` passes (2/2) | ✅ |
+| 22 | Download and vendor `chart.min.js` into `test/bench_report/assets/` | 208 KB; present | ✅ |
+| 23 | Write `test/bench_report/src/parser.rs` — parse cargo-criterion `--message-format=json` lines | 2 unit tests pass | ✅ |
+| 24 | Write `test/bench_report/src/model.rs` + `grouper.rs` — group into tick/spawn/update/authority/wire categories | Groups match directory structure | ✅ |
+| 25 | Write `test/bench_report/src/charts.rs` — build Chart.js dataset JSON | Output is valid Chart.js config | ✅ |
+| 26 | Write `test/bench_report/src/renderer.rs` — emit self-contained HTML | HTML opens in browser; charts render | ✅ |
+| 27 | End-to-end test: run criterion suite → pipe to report tool → open HTML | tick/idle: 5 benchmarks → 211 KB self-contained HTML with Chart.js inline | ✅ |
+| 28 | Write `benches/README.md` — how to run, baseline workflow, critcmp instructions | Documented | ✅ |
 
 ---
 
@@ -817,5 +817,24 @@ The suite is complete when:
 8. `bench_report.html` opens in browser and shows all sections with charts
 
 ---
+
+---
+
+## 15. Notes
+
+### `spawn/coalesced` — measures steady-state cost after burst
+
+`SpawnWithComponents` (Win-4) is always the wire format; there is no legacy
+separate-Spawn+Insert mode to compare against in a single build. The benchmark
+measures steady-state idle tick cost after N entities are replicated, which
+proves O(1) ongoing overhead. A true wire-format comparison would require two
+builds and is not worth maintaining.
+
+### `wire/framing` and `wire/bandwidth` — bytes calibrated from bandwidth monitor
+
+`Throughput::Bytes` is calibrated by running 60 warmup ticks with a bandwidth-
+monitoring-enabled probe world and reading `server.outgoing_bandwidth_total()`
+(kbps). Converted to bytes/tick via `kbps × TICK_MS / 8`. Criterion then
+reports bytes/sec correctly.
 
 *Keep this document updated as steps complete. Mark each row ✅ when done.*

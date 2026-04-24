@@ -1,0 +1,28 @@
+[package]
+name = "naia-benches"
+version = "0.1.0"
+authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
+workspace = ".."
+edition = "2021"
+publish = false
+description = "Criterion wall-time benchmarks for Naia"
+
+[lib]
+name = "naia_benches"
+path = "src/lib.rs"
+
+[[bench]]
+name = "naia"
+path = "benches/main.rs"
+harness = false
+
+[dev-dependencies]
+criterion = { version = "0.5", features = ["html_reports"] }
+
+[dependencies]
+naia-server = { path = "../server", features = ["transport_local", "test_time"] }
+naia-client = { path = "../client", features = ["transport_local", "test_time"] }
+naia-shared = { path = "../shared", features = ["transport_local", "test_time"] }
+naia-demo-world = { path = "../demos/demo_utils/demo_world" }
+parking_lot = "0.12"
+bevy_ecs = { version = "0.18", default-features = false }
