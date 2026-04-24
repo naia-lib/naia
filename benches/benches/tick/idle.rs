@@ -61,8 +61,41 @@ pub fn idle_room_tick_matrix(c: &mut Criterion) {
     group.finish();
 }
 
+/// Idle-room tick, U×N matrix, IMMUTABLE entities.
+///
+/// The capacity surface Cyberlith actually runs on — tiles are immutable
+/// Naia entities (GDD §10). Compare against `tick/idle_matrix` to see how
+/// much of Win-5's per-tick discount survives at scale.
+pub fn idle_room_tick_matrix_immutable(c: &mut Criterion) {
+    let mut group = c.benchmark_group("tick/idle_matrix_immutable");
+    group.warm_up_time(Duration::from_millis(500));
+    group.measurement_time(Duration::from_secs(5));
+    group.sample_size(20);
+
+    for &u in MATRIX_USERS {
+        for &n in MATRIX_ENTITIES {
+            group.throughput(Throughput::Elements(1));
+            let id = BenchmarkId::new("u_x_n", format!("{}u_{}e", u, n));
+            group.bench_with_input(id, &(u, n), |b, &(u, n)| {
+                b.iter_batched(
+                    || {
+                        BenchWorldBuilder::new()
+                            .users(u)
+                            .entities(n)
+                            .immutable()
+                            .build()
+                    },
+                    |mut world| world.tick(),
+                    BatchSize::LargeInput,
+                )
+            });
+        }
+    }
+    group.finish();
+}
+
 criterion_group!(
     name = tick_idle;
     config = Criterion::default();
-    targets = idle_room_tick, idle_room_tick_matrix
+    targets = idle_room_tick, idle_room_tick_matrix, idle_room_tick_matrix_immutable
 );
