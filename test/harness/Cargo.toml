@@ -15,6 +15,7 @@ e2e_debug = [
   "naia-shared/e2e_debug"
 ]
 test_utils = []
+v2_push_pipeline = ["naia-server/v2_push_pipeline"]
 
 [dependencies]
 naia-server = { path = "../../server", features = ["transport_local", "interior_visibility", "test_time", "bevy_support", "test_utils"] }

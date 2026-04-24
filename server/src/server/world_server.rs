@@ -6,6 +6,8 @@ use std::{
     panic,
     time::Duration,
 };
+#[cfg(feature = "v2_push_pipeline")]
+use std::collections::VecDeque;
 
 use log::{info, warn};
 
@@ -106,6 +108,23 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     time_manager: TimeManager,
     // Deferred auth grants (one-tick delay to ensure entity registration)
     pending_auth_grants: Vec<(UserKey, GlobalEntity, EntityAuthStatus)>,
+    // Push-based scope-change queue (v2_push_pipeline)
+    #[cfg(feature = "v2_push_pipeline")]
+    scope_change_queue: VecDeque<ScopeChange>,
+}
+
+/// Events that drive scope re-evaluation under the v2_push_pipeline path.
+/// Each variant encodes exactly the (user, entity) pairs that need attention.
+#[cfg(feature = "v2_push_pipeline")]
+enum ScopeChange {
+    /// User was added to a room — check all entities in that room for this user.
+    UserEnteredRoom(UserKey, RoomKey),
+    /// User was removed from a room — entities in that room may need despawning.
+    UserLeftRoom(UserKey, RoomKey),
+    /// Entity was added to a room — check all users in that room for this entity.
+    EntityEnteredRoom(GlobalEntity, RoomKey),
+    /// Explicit include/exclude via UserScope API.
+    ScopeToggled(UserKey, GlobalEntity, bool),
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
@@ -169,6 +188,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             time_manager,
             // Deferred auth grants
             pending_auth_grants: Vec::new(),
+            // Push-based scope-change queue (v2_push_pipeline)
+            #[cfg(feature = "v2_push_pipeline")]
+            scope_change_queue: VecDeque::new(),
         }
     }
 
@@ -1406,6 +1428,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         self.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
+        #[cfg(feature = "v2_push_pipeline")]
+        self.scope_change_queue.push_back(ScopeChange::ScopeToggled(
+            *user_key,
+            global_entity,
+            is_contained,
+        ));
     }
 
     pub(crate) fn user_scope_has_entity(&self, user_key: &UserKey, world_entity: &E) -> bool {
@@ -2104,6 +2132,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 user.cache_room(room_key);
             }
         }
+        #[cfg(feature = "v2_push_pipeline")]
+        self.scope_change_queue
+            .push_back(ScopeChange::UserEnteredRoom(*user_key, *room_key));
     }
 
     /// Removes a User from a Room
@@ -2118,6 +2149,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 user.uncache_room(room_key);
             }
         }
+        #[cfg(feature = "v2_push_pipeline")]
+        self.scope_change_queue
+            .push_back(ScopeChange::UserLeftRoom(*user_key, *room_key));
     }
 
     /// Get a count of Users in a given Room
@@ -2191,6 +2225,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         self.entity_room_map
             .entity_add_room(&global_entity, room_key);
+        #[cfg(feature = "v2_push_pipeline")]
+        self.scope_change_queue
+            .push_back(ScopeChange::EntityEnteredRoom(global_entity, *room_key));
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
@@ -2656,6 +2693,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     // Entity Scopes
 
     fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
+        // Loop 1 (both paths): drain per-room entity-removal queues.
+        // This handles entities removed from a room via room_remove_entity.
         for (_, room) in self.rooms.iter_mut() {
             while let Some((removed_user, removed_global_entity)) = room.pop_entity_removal_queue()
             {
@@ -2701,89 +2740,80 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        for (_, room) in self.rooms.iter_mut() {
-            // TODO: we should be able to cache these tuples of keys to avoid building a new
-            // list each time
-            for user_key in room.user_keys() {
-                let Some(user) = self.users.get(user_key) else {
-                    continue;
-                };
-                let Some(connection) = self.user_connections.get_mut(&user.address()) else {
-                    continue;
-                };
-                for global_entity in room.entities() {
-                    let world_entity = self
-                        .global_entity_map
-                        .global_entity_to_entity(&global_entity)
-                        .unwrap();
-                    if !world.has_entity(&world_entity) {
-                        continue;
-                    }
-                    if self
-                        .global_world_manager
-                        .entity_is_public_and_owned_by_user(user_key, global_entity)
-                    {
-                        // entity is owned by client, but it is public, so we don't need to replicate it
-                        continue;
-                    }
-                    // Per [entity-publication]: Private (Client/ClientWaiting) entities must
-                    // never be replicated via this path. The owning client already holds the
-                    // entity client-side; non-owning clients must not receive it.
-                    if matches!(
-                        self.global_world_manager.entity_owner(global_entity),
-                        Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
-                    ) {
-                        continue;
-                    }
+        // Loop 2: scope-entry / scope-exit per (user, entity).
+        #[cfg(not(feature = "v2_push_pipeline"))]
+        self.update_entity_scopes_full_scan(world);
+        #[cfg(feature = "v2_push_pipeline")]
+        self.drain_scope_change_queue(world);
+    }
 
-                    let currently_in_scope = connection
-                        .base
-                        .world_manager
-                        .has_global_entity(global_entity);
+    /// Legacy O(rooms × users × entities) full scan.
+    #[cfg(not(feature = "v2_push_pipeline"))]
+    fn update_entity_scopes_full_scan<W: WorldRefType<E>>(&mut self, world: &W) {
+        // TODO: we should be able to cache these tuples of keys to avoid building a new
+        // list each time
+        let room_keys: Vec<RoomKey> = self.rooms.iter().map(|(k, _)| k).collect();
+        for room_key in room_keys {
+            let user_keys: Vec<UserKey> = {
+                let room = self.rooms.get(&room_key).unwrap();
+                room.user_keys().copied().collect()
+            };
+            for user_key in &user_keys {
+                let entity_list: Vec<GlobalEntity> = {
+                    let room = self.rooms.get(&room_key).unwrap();
+                    room.entities().copied().collect()
+                };
+                for global_entity in &entity_list {
+                    self.apply_scope_for_user(world, user_key, global_entity);
+                }
+            }
+        }
+    }
 
-                    // Default is true (in-scope) since we're already iterating room entities for room users
-                    let should_be_in_scope = if let Some(in_scope) =
-                        self.entity_scope_map.get(user_key, global_entity)
-                    {
-                        *in_scope
-                    } else {
-                        true
+    /// Push-based O(changes) queue drain. Replaces the full scan under v2_push_pipeline.
+    #[cfg(feature = "v2_push_pipeline")]
+    fn drain_scope_change_queue<W: WorldRefType<E>>(&mut self, world: &W) {
+        // Snapshot the queue so we can re-borrow self mutably for apply_scope_for_user.
+        let changes: Vec<ScopeChange> = self.scope_change_queue.drain(..).collect();
+        for change in changes {
+            match change {
+                ScopeChange::UserEnteredRoom(user_key, room_key) => {
+                    let entity_list: Vec<GlobalEntity> = self
+                        .rooms
+                        .get(&room_key)
+                        .map(|r| r.entities().copied().collect())
+                        .unwrap_or_default();
+                    for global_entity in &entity_list {
+                        self.apply_scope_for_user(world, &user_key, global_entity);
+                    }
+                }
+                ScopeChange::UserLeftRoom(user_key, room_key) => {
+                    let entity_list: Vec<GlobalEntity> = self
+                        .rooms
+                        .get(&room_key)
+                        .map(|r| r.entities().copied().collect())
+                        .unwrap_or_default();
+                    let Some(user) = self.users.get(&user_key) else {
+                        continue;
                     };
-
-                    if should_be_in_scope {
-                        if currently_in_scope {
-                            // Entity already present — resume if paused (ScopeExit::Persist re-entry)
-                            if connection.base.world_manager.is_entity_paused(global_entity) {
-                                connection.base.world_manager.resume_entity(global_entity);
-                            }
-                            continue;
-                        }
-                        let component_kinds = self
-                            .global_world_manager
-                            .component_kinds(global_entity)
-                            .unwrap();
-                        // add entity & components to the connections local scope
-                        connection
-                            .base
-                            .world_manager
-                            .host_init_entity(global_entity, component_kinds);
-                        #[cfg(feature = "e2e_debug")]
+                    let user_rooms = user.room_keys().clone();
+                    let Some(connection) =
+                        self.user_connections.get_mut(&user.address().clone())
+                    else {
+                        continue;
+                    };
+                    for global_entity in &entity_list {
+                        // Only despawn if the user has no other room in common with the entity.
+                        if let Some(entity_rooms) =
+                            self.entity_room_map.entity_get_rooms(global_entity)
                         {
-                            SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+                            if entity_rooms.iter().any(|rk| user_rooms.contains(rk)) {
+                                continue;
+                            }
                         }
-
-                        // if entity is delegated, send message to connection via EntityActionEvent system
-                        if !self.global_world_manager.entity_is_delegated(global_entity) {
+                        if !connection.base.world_manager.has_global_entity(global_entity) {
                             continue;
                         }
-
-                        connection.base.world_manager.send_enable_delegation(
-                            HostType::Server,
-                            false,
-                            global_entity,
-                        );
-                    } else if currently_in_scope {
-                        // Entity leaving scope — check ScopeExit policy
                         let scope_exit = self
                             .global_world_manager
                             .entity_replication_config(global_entity)
@@ -2791,16 +2821,142 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .unwrap_or(ScopeExit::Despawn);
                         match scope_exit {
                             ScopeExit::Persist => {
-                                // Pause replication: entity stays on client, updates frozen
                                 connection.base.world_manager.pause_entity(global_entity);
                             }
                             ScopeExit::Despawn => {
-                                // Default: remove entity from the connections local scope
                                 connection.base.world_manager.despawn_entity(global_entity);
                             }
                         }
+                        #[cfg(feature = "e2e_debug")]
+                        {
+                            SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+                        }
                     }
                 }
+                ScopeChange::EntityEnteredRoom(global_entity, room_key) => {
+                    let user_keys: Vec<UserKey> = self
+                        .rooms
+                        .get(&room_key)
+                        .map(|r| r.user_keys().copied().collect())
+                        .unwrap_or_default();
+                    for user_key in &user_keys {
+                        self.apply_scope_for_user(world, user_key, &global_entity);
+                    }
+                }
+                ScopeChange::ScopeToggled(user_key, global_entity, _is_included) => {
+                    self.apply_scope_for_user(world, &user_key, &global_entity);
+                }
+            }
+        }
+    }
+
+    /// Evaluate scope for one (user, entity) pair and apply any spawn/despawn/pause/resume.
+    fn apply_scope_for_user<W: WorldRefType<E>>(
+        &mut self,
+        world: &W,
+        user_key: &UserKey,
+        global_entity: &GlobalEntity,
+    ) {
+        let Some(user) = self.users.get(user_key) else {
+            return;
+        };
+        let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+            return;
+        };
+        let Some(world_entity) = self
+            .global_entity_map
+            .global_entity_to_entity(global_entity)
+            .ok()
+        else {
+            return;
+        };
+        if !world.has_entity(&world_entity) {
+            return;
+        }
+        if self
+            .global_world_manager
+            .entity_is_public_and_owned_by_user(user_key, global_entity)
+        {
+            // entity is owned by client but public — don't replicate via this path
+            return;
+        }
+        // Per [entity-publication]: Private (Client/ClientWaiting) entities must
+        // never be replicated via this path.
+        if matches!(
+            self.global_world_manager.entity_owner(global_entity),
+            Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
+        ) {
+            return;
+        }
+
+        let currently_in_scope = connection
+            .base
+            .world_manager
+            .has_global_entity(global_entity);
+
+        // Check whether the entity should be in scope for this user.
+        // Must be in a common room AND pass the explicit scope map (default: include).
+        let in_common_room = if let Some(entity_rooms) =
+            self.entity_room_map.entity_get_rooms(global_entity)
+        {
+            entity_rooms.intersection(user.room_keys()).next().is_some()
+        } else {
+            false
+        };
+        let scope_flag = self
+            .entity_scope_map
+            .get(user_key, global_entity)
+            .copied()
+            .unwrap_or(true);
+        let should_be_in_scope = in_common_room && scope_flag;
+
+        if should_be_in_scope {
+            if currently_in_scope {
+                // Entity already present — resume if paused (ScopeExit::Persist re-entry)
+                if connection.base.world_manager.is_entity_paused(global_entity) {
+                    connection.base.world_manager.resume_entity(global_entity);
+                }
+                return;
+            }
+            let component_kinds = self
+                .global_world_manager
+                .component_kinds(global_entity)
+                .unwrap();
+            connection
+                .base
+                .world_manager
+                .host_init_entity(global_entity, component_kinds);
+            #[cfg(feature = "e2e_debug")]
+            {
+                SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
+            }
+
+            if !self.global_world_manager.entity_is_delegated(global_entity) {
+                return;
+            }
+            connection.base.world_manager.send_enable_delegation(
+                HostType::Server,
+                false,
+                global_entity,
+            );
+        } else if currently_in_scope {
+            // Entity leaving scope — check ScopeExit policy
+            let scope_exit = self
+                .global_world_manager
+                .entity_replication_config(global_entity)
+                .map(|c| c.scope_exit)
+                .unwrap_or(ScopeExit::Despawn);
+            match scope_exit {
+                ScopeExit::Persist => {
+                    connection.base.world_manager.pause_entity(global_entity);
+                }
+                ScopeExit::Despawn => {
+                    connection.base.world_manager.despawn_entity(global_entity);
+                }
+            }
+            #[cfg(feature = "e2e_debug")]
+            {
+                SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
             }
         }
     }
@@ -2858,6 +3014,13 @@ cfg_if! {
                     .values()
                     .map(|conn| (conn.user_key, conn.diff_handler_receiver_count()))
                     .collect()
+            }
+
+            pub fn scope_change_queue_len(&self) -> usize {
+                #[cfg(feature = "v2_push_pipeline")]
+                return self.scope_change_queue.len();
+                #[cfg(not(feature = "v2_push_pipeline"))]
+                return 0;
             }
         }
     }

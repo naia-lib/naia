@@ -550,4 +550,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn diff_handler_user_counts(&self) -> std::collections::HashMap<UserKey, usize> {
         self.world_server.diff_handler_user_counts()
     }
+
+    pub fn scope_change_queue_len(&self) -> usize {
+        self.world_server.scope_change_queue_len()
+    }
 }

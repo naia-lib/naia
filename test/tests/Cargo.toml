@@ -12,6 +12,9 @@ description = "Step bindings for Naia BDD tests using Namako macros"
 name = "naia_tests"
 path = "src/lib.rs"
 
+[features]
+v2_push_pipeline = ["naia-test-harness/v2_push_pipeline"]
+
 [dependencies]
 # Namako for step macros and World trait
 namako_engine = { path = "../../../namako/engine", features = ["npap", "macros"] }

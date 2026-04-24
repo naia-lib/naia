@@ -1297,6 +1297,16 @@ impl Scenario {
         }
     }
 
+    /// Returns the current depth of the server's scope-change queue.
+    ///
+    /// Returns 0 when the `v2_push_pipeline` feature is not enabled (the legacy
+    /// full-scan path has no queue).  Under `v2_push_pipeline`, returns the
+    /// number of unprocessed entries after the last tick.
+    pub fn scope_change_queue_len(&self) -> usize {
+        let server = self.server.as_ref().expect("server not started");
+        server.scope_change_queue_len()
+    }
+
     // ========================================================================
     // Wire Trace Capture API (Phase 0.5)
     // ========================================================================
