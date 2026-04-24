@@ -13,7 +13,7 @@
 - ✅ Integration BDD specs as unit tests at the Connection-composition level: A-BDD-1 (tick cap), A-BDD-2 (drain), A-BDD-3 (high>low at equal age), A-BDD-4 (no false defer), A-BDD-5/6 (criticality override & ordering), A-BDD-7 (bounded catchup), B-BDD-1 (carry-forward), B-BDD-2 (override wins), B-BDD-3 (multiplicative gain), B-BDD-4/5/6 (handle semantics), B-BDD-7 (structural bound), B-BDD-9 (scope-exit isolation), B-BDD-10 (despawn eviction). All 29 new tests pass.
 - ⏳ Full k-way merge between entity bundles + channel heads (A.2 ideal form) — current implementation sorts channels + gates bytes; entity bundle priority uses stored accumulator flow unchanged.
 - ⏳ Full cucumber .feature file + namako registration for AB-BDD-1 (10K spawn burst end-to-end), B-BDD-6 (persist-across-tick through real send loop), B-BDD-8 (cross-entity reorder preserving per-entity monotonicity through live spawn-barrier FSM) — need harness scaffolding.
-- ⏳ `idle_distribution` matrix verification (Phase 4.5 absorption gate).
+- ✅ `idle_distribution` matrix verification — **Phase 4.5 CLOSED BY ABSORPTION (2026-04-24)**. All mutable cells `OK` (max/p50 ≤ 6.6×, down from 2741–4033×). See `BENCH_UPGRADE_LOG/phase-04.5.md`.
 **Owner:** Connor + Claude (Opus 4.7)
 **Origin:** Long-standing Naia backlog item. Surfaced back to the top by the Phase 4.5 mutable resend-window spike (`idle_distribution.rs` shows ≥2700× max/p50 on every `N=10000 mut` cell at reliable-sender resend cadence).
 

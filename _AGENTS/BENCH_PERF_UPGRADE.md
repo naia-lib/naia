@@ -1,6 +1,6 @@
 # Naia Perf Upgrade — 2-Orders-of-Magnitude Plan
 
-**Status:** in progress — Phases 0–4 complete. **Sidequest opened (2026-04-24): Priority Accumulator** — see `_AGENTS/PRIORITY_ACCUMULATOR_SIDEQUEST.md`. Sidequest runs between Phase 4 and Phase 5, may absorb Phase 4.5, blocks Phase 5.
+**Status:** in progress — Phases 0–4 complete. **Sidequest (Priority Accumulator): core implementation landed 2026-04-24** (Phases A + B functional code, unit + integration BDD tests green, commit `b710ca4e`). Phase C close-out (full cucumber .feature harness + `idle_distribution` absorption verification for Phase 4.5) pending. See `_AGENTS/PRIORITY_ACCUMULATOR_SIDEQUEST.md`.
 **Ref commits:** `4d73ad41` (U×N idle matrix bench) · GDD `862dcab` (LEVEL_SPEC §10 canonical)
 **Scope:** this document is the durable plan. Update it as phases land. Do not fork.
 
@@ -13,8 +13,8 @@
 | 2 — Immutable matrix | ✅ complete | `ed7b4012` | `phase-02.md` |
 | 3 — Kill O(U·N) idle | ✅ complete (189× at 16u_10000e) | `db1b706d` | `phase-03.md` |
 | 4 — Immutable skip idle | ✅ complete (21× at 16u_10000e imm) | TBD | `phase-04.md` |
-| Sidequest — Priority Accumulator | 🔎 research stage | — | `PRIORITY_ACCUMULATOR_SIDEQUEST.md` |
-| 4.5 — Mutable resend-window spike | ⏸️ paused (blocked on sidequest; likely absorbed) | — | `phase-04.5.md` (pending) |
+| Sidequest — Priority Accumulator | 🔨 A+B core complete; C close-out in progress | `b710ca4e` | `PRIORITY_ACCUMULATOR_SIDEQUEST.md` |
+| 4.5 — Mutable resend-window spike | ✅ closed by absorption (sidequest Phase A bandwidth cap) | `b710ca4e` | `phase-04.5.md` |
 | 5 — Spatial scope index | ⏸️ pending (blocked on sidequest) | — | — |
 | 6 — Coalesce audit | ⏸️ pending | — | — |
 | 7 — Regression gate + close-out | ⏸️ pending | — | — |
@@ -227,7 +227,13 @@ Scope surfaces under survey:
 
 ---
 
-### Phase 4.5 — Mutable resend-window spike (paused, likely absorbed by sidequest)
+### Phase 4.5 — Mutable resend-window spike ✅ CLOSED BY ABSORPTION (2026-04-24)
+
+**Outcome:** Closed by Priority Accumulator Sidequest Phase A (`b710ca4e`). Post-sidequest `idle_distribution` shows every mutable cell `OK` (max/p50 ≤ 6.6×, down from 2741–4033×). See `_AGENTS/BENCH_UPGRADE_LOG/phase-04.5.md` for the full before/after matrix and attribution.
+
+---
+
+### Phase 4.5 (original goal — retained for history)
 
 **Goal:** eliminate the periodic ~17-tick latency spike on mutable idle ticks. No cell of the matrix may exceed `p99 × 10` (i.e., `idle_distribution` reports no `SPIKE`).
 
