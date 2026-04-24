@@ -116,7 +116,7 @@ thresholds for Win-1 without first observing current numbers on a clean run.
 
 ---
 
-### 6. [x] Expand iai coverage to Wins 3, 4, 5  (`PENDING_COMMIT`)
+### 6. [x] Expand iai coverage to Wins 3, 4, 5  (`b4ef9ef3`)
 
 **Files**: new benches in `iai/benches/`.
 
