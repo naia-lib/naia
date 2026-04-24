@@ -1,8 +1,21 @@
 # Naia Perf Upgrade — 2-Orders-of-Magnitude Plan
 
-**Status:** drafted 2026-04-24
+**Status:** in progress — Phases 0–3 complete (2026-04-24)
 **Ref commits:** `4d73ad41` (U×N idle matrix bench) · GDD `862dcab` (LEVEL_SPEC §10 canonical)
 **Scope:** this document is the durable plan. Update it as phases land. Do not fork.
+
+## Phase status
+
+| Phase | Status | Landing commit | Log |
+|---|---|---|---|
+| 0 — Tooling & baseline | ✅ complete | `ed7b4012` | — |
+| 1 — Instrument server tick | ✅ complete | `ed7b4012` | `phase-01.md` |
+| 2 — Immutable matrix | ✅ complete | `ed7b4012` | `phase-02.md` |
+| 3 — Kill O(U·N) idle | ✅ complete (189× at 16u_10000e) | `db1b706d` | `phase-03.md` |
+| 4 — Immutable skip idle | ⏳ in progress | — | — |
+| 5 — Spatial scope index | ⏸️ pending | — | — |
+| 6 — Coalesce audit | ⏸️ pending | — | — |
+| 7 — Regression gate + close-out | ⏸️ pending | — | — |
 
 ---
 
@@ -83,7 +96,7 @@ A 100× reduction makes 64-player × 65K-tile sessions fit the tick budget with 
 
 ## 5. Phase plan
 
-### Phase 0 — Tooling & baseline (no code changes to Naia runtime)
+### Phase 0 — Tooling & baseline (no code changes to Naia runtime) ✅ COMPLETE
 
 **Goal:** make valgrind-free profiling trivial, and freeze a baseline we can diff against for the rest of the project.
 
@@ -98,7 +111,7 @@ Success: `samply record` on an idle-tick bench produces a flamegraph; `naia-benc
 
 ---
 
-### Phase 1 — Instrument the server tick loop
+### Phase 1 — Instrument the server tick loop ✅ COMPLETE
 
 **Goal:** make the *cause* of O(U·N) idle visible, without changing behavior.
 
@@ -122,7 +135,7 @@ Success: flamegraph + counters localize the O(U·N) cost to a specific function.
 
 ---
 
-### Phase 2 — Add immutable-tile matrix coverage
+### Phase 2 — Add immutable-tile matrix coverage ✅ COMPLETE
 
 **Goal:** the existing matrix is all-mutable. Tiles are immutable. Measure the *actual* target surface.
 
@@ -138,7 +151,9 @@ Success: the capacity table in §2 is re-grounded in measured numbers, not extra
 
 ---
 
-### Phase 3 — Kill O(U·N) idle (the main course)
+### Phase 3 — Kill O(U·N) idle (the main course) ✅ COMPLETE (2026-04-24, `db1b706d`)
+
+Gate met at 189× (302ms → 1.60ms). See `_AGENTS/BENCH_UPGRADE_LOG/phase-03.md` for attribution between dirty-push (real ~20×) and bench-methodology fix (swap-artifact ~10×).
 
 **Goal:** server idle-tick becomes O(dirty ∩ scope), not O(users × scope).
 
