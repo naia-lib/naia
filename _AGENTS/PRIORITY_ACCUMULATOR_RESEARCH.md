@@ -93,6 +93,62 @@ Explicitly *no* priority, *no* bandwidth accumulator — the scheme's per-tick w
 
 ## Prior art — production failure modes
 
+### Halo: Reach — Aldridge / Parsons, GDC 2011 ("I Shot You First")
+
+Shipping AAA netcode that went through the exact design space we're entering. Adds six load-bearing details that my Fiedler-only reading missed:
+
+**1. Priority is per-receiver per-item, not per-item.**
+> "Priority is calculated separately per-object per-client. Distance/direction is the core metric. Size & speed affect priority. Shooting & damage apply appropriate boosts. Lots of special cases (e.g. thrown grenades)."
+
+Implication for Naia: the priority function is `f(item, connection)`, not `f(item)`. This matters because the same tile entity has very different priority to two clients at opposite ends of a map. Naia already carries scope / FoW per connection; the priority accumulator extends that model.
+
+**2. "Unreliability enables aggressive prioritization."**
+> "Unreliability enables aggressive prioritization, which lets us handle the richness of our simulation."
+
+The mental model: if *everything* is reliable, you can't skip sends, so priority degenerates into "what order do we drain the queue." You need an unreliable tier (or a skip-allowed tier) for priority to actually *work* as a scarcity-allocation mechanism. For Naia this means:
+
+- Component updates (state) are the natural home for the priority accumulator. Newer snapshot > older snapshot; older snapshot is skippable.
+- Reliable messages *can't* be dropped by priority, only paced — that's the bandwidth accumulator's job, not the priority accumulator's.
+- This sharpens recommendation (1) in the decision list: bandwidth-first is not just a sequencing choice; it is the mechanism that applies to *all* surfaces, while priority only applies cleanly to the skippable ones.
+
+**3. Three traffic tiers, not two.**
+> "1. State Data: Guaranteed eventual delivery of most current state. 2. Events: Unreliable notifications of transient occurrences. 3. Control data: High-frequency, best-effort transmission of rapidly-updated data extracted from player input."
+
+Naia today has reliable / unreliable / sequenced. The tier mapping is roughly:
+- State Data ↔ `UnorderedReliable` + component updates
+- Events ↔ plain messages on reliable channels
+- Control data ↔ `SequencedUnreliable` / `UnorderedUnreliable`
+
+The taxonomy is compatible; no new tier needed. But the *treatment* differs per tier: the accumulator should prioritize state updates aggressively (skippable), pace events and control carefully (not skippable without gameplay effect).
+
+**4. Priority functions are a footgun — the idle grenade lesson.**
+> "Idle grenades rolling around on the ground had incredibly high network priority. The cause was traced back… to a bugfix at the end of Halo 3! 'Equipment' was given a huge priority boost. Fix: only apply priority boost to active equipment."
+
+A priority function that accumulated inherited boosts across game-state categories produced a shipping bug where bandwidth was dominated by stationary garbage. For Naia:
+
+- The priority function API must be **inspectable at runtime** — you should be able to ask "why is item X at priority Y right now?"
+- Telemetry must include **per-item priority histograms** so pathological tails are visible.
+- Sane defaults per channel kind; users can override, but "tune priority" is not the default experience.
+
+**5. Network profiling was decisive.**
+> "Splice the network profiler data into the films. For the first time, we could analyze network performance after the fact."
+
+They ran *monthly* playtests with traffic shaping and a physical "lag" button players could press to flag moments for engineers. For Naia: extend `bench_instrumentation` counters to emit a per-tick-per-connection record (bytes sent per channel, budget remaining, oldest unsent age, top-N items by priority) that can be dumped to disk and analyzed offline. This is the same class of tool as `idle_distribution.rs` but spanning the accumulator surface.
+
+**6. Concrete bandwidth numbers from shipped netcode.**
+
+| Metric | Value | Notes |
+|---|---|---|
+| Halo 3 → Reach bandwidth reduction | **to 20% of Halo 3** | priority + encoding + removing duplication |
+| Minimum total upstream for 16-player host | **250 kbps** | peer-authoritative topology |
+| Bandwidth per replicated biped at combat quality | **~1 kbit/s** | per client per player |
+| Minimum packet rate for solid gameplay | **10 Hz** | below this: feel degrades |
+| Halo 3 host upstream breakdown | 50% kinematics / 20% input / 20% weapon events / 10% other | for comparison to our 25 Hz budget |
+
+These bracket my earlier 512 kbps / connection recommendation: Halo's 250 kbps *total* for 16 clients works out to ~15 kbps per client when amortized. Our 512 kbps default is ~30× that — very safe. On the other side, Halo's 1 kbit/s per biped per client at combat quality is a useful floor: our 25 Hz × MTU bandwidth capacity easily supports tens of thousands of tile entities at replication rates far below combat-quality bipeds.
+
+**The combined Halo lesson:** accumulators are necessary but not sufficient. The priority *function*, the traffic *tiering*, and the profiling *tooling* are all first-class features. A priority accumulator shipped without a way to inspect its decisions is a shipping bug waiting to happen (see: idle grenades).
+
 ### Unreal Engine — `IsNetReady()` collapse (Streeting, 2025)
 
 Unreal's replication layer has the complete set — priority, relevancy, bandwidth caps — and still exhibits a pathology structurally identical to Naia's Phase 4.5 spike. Bulk reliable RPCs push `QueuedBits` past a threshold; `IsNetReady()` then **aborts the entire replication tick** for 45 + seconds. Fix required raising bandwidth caps to Fortnite-grade values and manually gating sends on `IsNetReady()`.
@@ -198,9 +254,10 @@ The priority accumulator layer is not required to fix the spike; it is required 
 ### E. Guardrails & failure modes
 
 - **Starvation:** solved by accumulator retention for skipped items. Monitor: p99.9 age-of-oldest-unsent-message.
-- **Priority function tuning:** new footgun surface. Mitigate by shipping a sane default per surface, documenting the knobs, and pinning tests that detect starvation.
+- **Priority function tuning — the idle-grenade trap** (Halo: Reach, 2011): a priority function that inherits boosts across categories can end up spending bandwidth on stationary junk. Mitigate by (a) shipping a sane default per channel kind that doesn't boost by inheritance, (b) inspectable runtime API — "why is item X at priority Y?", (c) a priority histogram in `bench_instrumentation` so pathological tails are visible without a bug report.
 - **Budget set too low:** latency climbs, acks bunch up. Mitigate by bandwidth-monitor telemetry (already partially present via `bandwidth_monitor.rs`) + a reasonable default that's well above observed steady-state.
 - **Budget set too high:** degenerates to current behavior, no regression risk. Safe default.
+- **Mixing reliable + skippable under one priority:** reliable messages can't be dropped by priority (only paced by budget), so a naive "top-K by priority" selector that pops reliables off would break delivery guarantees. Mitigate by two-phase send: bandwidth-reserve for reliables first, priority-select over skippables with the remainder. This matches Halo's "unreliability enables aggressive prioritization" framing.
 
 ### F. Tests / invariants
 
@@ -272,3 +329,5 @@ No code lands until that plan is approved.
 - Unity — [Netcode for Entities ghost snapshots](https://docs.unity3d.com/Packages/com.unity.netcode@1.5/manual/ghost-snapshots.html) — shipping priority + budget design.
 - Unreal — [Actor Priority in Unreal Engine (Epic Docs)](https://dev.epicgames.com/documentation/en-us/unreal-engine/actor-priority-in-unreal-engine) — shipping priority model (for comparison).
 - [Valve GameNetworkingSockets](https://github.com/ValveSoftware/GameNetworkingSockets) — structurally adjacent protocol, referenced for scheduling surface.
+- David Aldridge & Patrick Parsons (Bungie) — *I Shot You First: Networking the Gameplay of Halo: Reach* ([GDC Vault](https://www.gdcvault.com/play/1014345/I-Shot-You-First-Networking) · [YouTube](https://www.youtube.com/watch?v=h47zZrqjgLc) · [slide summary](http://slidegur.com/doc/219604/gameplay-networking-of-halo--reach)) — shipping AAA netcode, per-receiver per-object priority, unreliability-enables-prioritization, idle-grenade bug, network-profiler-in-replays tooling, concrete kbps / Hz targets.
+- [Wolfire Games blog — GDC session summary](http://blog.wolfire.com/2011/03/GDC-Session-Summary-Halo-networking) — secondary distillation of the above.
