@@ -105,7 +105,7 @@ fn delegation_disable_clears_authority() {
         ctx.server(|server| {
             let (entity, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
                 e.enter_room(&room_key);
             });
             server.user_scope_mut(&client_key).unwrap().include(&entity);
@@ -137,7 +137,7 @@ fn delegation_disable_clears_authority() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity) {
-                e.configure_replication(ReplicationConfig::Public);
+                e.configure_replication(ReplicationConfig::public());
             }
         });
     });
@@ -188,7 +188,7 @@ fn holder_can_mutate_delegated_entity() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -268,7 +268,7 @@ fn non_holder_cannot_mutate_delegated_entity() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -353,7 +353,7 @@ fn server_held_authority_is_indistinguishable_from_client_is_denied() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -420,7 +420,7 @@ fn request_authority_available_grants_to_requester_and_denies_everyone_else() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -488,7 +488,7 @@ fn denied_client_request_authority_fails_err_not_available() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -575,7 +575,7 @@ fn holder_release_authority_transitions_everyone_to_available() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -657,7 +657,7 @@ fn release_authority_when_not_holder_fails_err_not_holder() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -747,7 +747,7 @@ fn give_authority_assigns_to_client_and_denies_everyone_else() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -816,7 +816,7 @@ fn server_priority_take_authority_overrides_a_client_holder() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -901,7 +901,7 @@ fn take_authority_forces_server_hold_all_clients_denied() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -965,7 +965,7 @@ fn former_holder_sees_granted_to_available_on_server_release() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1042,7 +1042,7 @@ fn server_priority_give_authority_overrides_current_holder() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1123,7 +1123,7 @@ fn server_release_authority_clears_holder_all_clients_available() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1221,7 +1221,7 @@ fn out_of_scope_ends_authority_for_that_client() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(naia_server::ReplicationConfig::Delegated);
+                entity_mut.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1230,7 +1230,7 @@ fn out_of_scope_ends_authority_for_that_client() {
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(naia_server::ReplicationConfig::Delegated);
+        let config_ok = config == Some(naia_server::ReplicationConfig::delegated());
         let a_available = ctx.client(client_a_key, |c| {
             c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
         });
@@ -1321,7 +1321,7 @@ fn server_give_authority_requires_scope() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1408,7 +1408,7 @@ fn duplicate_authority_signals_are_idempotent() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(naia_server::ReplicationConfig::Delegated);
+                entity_mut.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1417,7 +1417,7 @@ fn duplicate_authority_signals_are_idempotent() {
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(naia_server::ReplicationConfig::Delegated);
+        let config_ok = config == Some(naia_server::ReplicationConfig::delegated());
         let a_available = ctx.client(client_a_key, |c| {
             c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
         });

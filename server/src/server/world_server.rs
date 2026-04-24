@@ -32,8 +32,8 @@ use crate::{
         entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
         global_world_manager::GlobalWorldManager, server_auth_handler::AuthOwner,
     },
-    NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, UserKey, UserMut,
-    UserRef, UserScopeMut, UserScopeRef, WorldUser,
+    NaiaServerError, Publicity, ReplicationConfig, RoomKey, RoomMut, RoomRef, ScopeExit,
+    ServerConfig, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, WorldUser,
 };
 
 cfg_if! {
@@ -833,81 +833,97 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .unwrap();
         let server_owned: bool = entity_owner.is_server();
         let client_owned: bool = entity_owner.is_client();
-        let next_config = config;
         let prev_config = self
             .global_world_manager
             .entity_replication_config(&global_entity)
             .unwrap();
         if prev_config == config {
-            // Already in the desired state, no-op
+            // Fully identical — no-op
             return;
         }
 
-        match prev_config {
-            ReplicationConfig::Private => {
-                if server_owned {
-                    panic!("Server-owned entity should never be private");
-                }
-                match next_config {
-                    ReplicationConfig::Private => {
-                        panic!("Should not be able to happen");
+        // Handle publicity state machine only when publicity changed
+        if prev_config.publicity != config.publicity {
+            match prev_config.publicity {
+                Publicity::Private => {
+                    if server_owned {
+                        panic!("Server-owned entity should never be private");
                     }
-                    ReplicationConfig::Public => {
-                        // private -> public
-                        self.publish_entity(world, &global_entity, world_entity, true);
-                    }
-                    ReplicationConfig::Delegated => {
-                        // private -> delegated
-                        // Per spec [entity-ownership-11], server CAN enable delegation on client-owned entities,
-                        // which transfers ownership to server
-                        self.publish_entity(world, &global_entity, world_entity, true);
-                        self.entity_enable_delegation(world, &global_entity, world_entity, None);
-                    }
-                }
-            }
-            ReplicationConfig::Public => {
-                match next_config {
-                    ReplicationConfig::Private => {
-                        // public -> private
-                        if server_owned {
-                            panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                    match config.publicity {
+                        Publicity::Private => {
+                            unreachable!("publicity prev == next but outer check passed");
                         }
-                        self.unpublish_entity(world, &global_entity, world_entity, true);
-                    }
-                    ReplicationConfig::Public => {
-                        panic!("Should not be able to happen");
-                    }
-                    ReplicationConfig::Delegated => {
-                        // public -> delegated
-                        // Per spec [entity-ownership-11], server CAN enable delegation on client-owned entities,
-                        // which transfers ownership to server
-                        self.entity_enable_delegation(world, &global_entity, world_entity, None);
-                    }
-                }
-            }
-            ReplicationConfig::Delegated => {
-                if client_owned {
-                    panic!("Client-owned entity should never be delegated");
-                }
-                match next_config {
-                    ReplicationConfig::Private => {
-                        // delegated -> private
-                        if server_owned {
-                            panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                        Publicity::Public => {
+                            // private -> public
+                            self.publish_entity(world, &global_entity, world_entity, true);
                         }
-                        self.entity_disable_delegation(world, &global_entity, world_entity);
-                        self.unpublish_entity(world, &global_entity, world_entity, true);
+                        Publicity::Delegated => {
+                            // private -> delegated
+                            // Per spec [entity-ownership-11], server CAN enable delegation on client-owned entities,
+                            // which transfers ownership to server
+                            self.publish_entity(world, &global_entity, world_entity, true);
+                            self.entity_enable_delegation(
+                                world,
+                                &global_entity,
+                                world_entity,
+                                None,
+                            );
+                        }
                     }
-                    ReplicationConfig::Public => {
-                        // delegated -> public
-                        self.entity_disable_delegation(world, &global_entity, world_entity);
+                }
+                Publicity::Public => {
+                    match config.publicity {
+                        Publicity::Private => {
+                            // public -> private
+                            if server_owned {
+                                panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                            }
+                            self.unpublish_entity(world, &global_entity, world_entity, true);
+                        }
+                        Publicity::Public => {
+                            unreachable!("publicity prev == next but outer check passed");
+                        }
+                        Publicity::Delegated => {
+                            // public -> delegated
+                            // Per spec [entity-ownership-11], server CAN enable delegation on client-owned entities,
+                            // which transfers ownership to server
+                            self.entity_enable_delegation(
+                                world,
+                                &global_entity,
+                                world_entity,
+                                None,
+                            );
+                        }
                     }
-                    ReplicationConfig::Delegated => {
-                        panic!("Should not be able to happen");
+                }
+                Publicity::Delegated => {
+                    if client_owned {
+                        panic!("Client-owned entity should never be delegated");
+                    }
+                    match config.publicity {
+                        Publicity::Private => {
+                            // delegated -> private
+                            if server_owned {
+                                panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                            }
+                            self.entity_disable_delegation(world, &global_entity, world_entity);
+                            self.unpublish_entity(world, &global_entity, world_entity, true);
+                        }
+                        Publicity::Public => {
+                            // delegated -> public
+                            self.entity_disable_delegation(world, &global_entity, world_entity);
+                        }
+                        Publicity::Delegated => {
+                            unreachable!("publicity prev == next but outer check passed");
+                        }
                     }
                 }
             }
         }
+
+        // Always persist the scope_exit field regardless of whether publicity changed
+        self.global_world_manager
+            .entity_set_scope_exit(&global_entity, config.scope_exit);
     }
 
     /// This is used only for Hecs/Bevy adapter crates, do not use otherwise!
@@ -1371,7 +1387,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             let is_private = self
                 .global_world_manager
                 .entity_replication_config(&global_entity)
-                .map(|c| matches!(c, ReplicationConfig::Private))
+                .map(|c| matches!(c.publicity, Publicity::Private))
                 .unwrap_or(false);
             if is_private {
                 let is_owner = match self.global_world_manager.entity_owner(&global_entity) {
@@ -1403,7 +1419,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_world_manager
             .entity_replication_config(&global_entity)
         {
-            matches!(config, ReplicationConfig::Private)
+            matches!(config.publicity, Publicity::Private)
         } else {
             false
         };
@@ -2736,6 +2752,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                     if should_be_in_scope {
                         if currently_in_scope {
+                            // Entity already present — resume if paused (ScopeExit::Persist re-entry)
+                            if connection.base.world_manager.is_entity_paused(global_entity) {
+                                connection.base.world_manager.resume_entity(global_entity);
+                            }
                             continue;
                         }
                         let component_kinds = self
@@ -2763,8 +2783,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             global_entity,
                         );
                     } else if currently_in_scope {
-                        // remove entity from the connections local scope
-                        connection.base.world_manager.despawn_entity(global_entity);
+                        // Entity leaving scope — check ScopeExit policy
+                        let scope_exit = self
+                            .global_world_manager
+                            .entity_replication_config(global_entity)
+                            .map(|c| c.scope_exit)
+                            .unwrap_or(ScopeExit::Despawn);
+                        match scope_exit {
+                            ScopeExit::Persist => {
+                                // Pause replication: entity stays on client, updates frozen
+                                connection.base.world_manager.pause_entity(global_entity);
+                            }
+                            ScopeExit::Despawn => {
+                                // Default: remove entity from the connections local scope
+                                connection.base.world_manager.despawn_entity(global_entity);
+                            }
+                        }
                     }
                 }
             }

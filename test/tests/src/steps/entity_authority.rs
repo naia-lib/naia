@@ -45,7 +45,7 @@ fn given_server_spawns_non_delegated_entity_in_scope_for_client_a(ctx: &mut Test
                 entity
                     .insert_component(Position::new(0.0, 0.0))
                     // Explicitly Public — NOT Delegated
-                    .configure_replication(ServerReplicationConfig::Public)
+                    .configure_replication(ServerReplicationConfig::public())
                     .enter_room(&room_key);
             })
         })

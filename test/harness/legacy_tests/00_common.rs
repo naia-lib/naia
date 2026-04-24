@@ -54,7 +54,7 @@ fn api_misuse_returns_error_not_panic() {
         ctx.server(|server| {
              let (entity, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(0.0, 0.0));
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
             });
             entity
         })

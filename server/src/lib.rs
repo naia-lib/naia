@@ -66,5 +66,5 @@ pub use user::{MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser};
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
-    replication_config::ReplicationConfig,
+    replication_config::{Publicity, ReplicationConfig, ScopeExit},
 };

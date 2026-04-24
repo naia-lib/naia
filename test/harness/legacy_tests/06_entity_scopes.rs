@@ -619,7 +619,7 @@ fn authority_releases_when_holder_goes_out_of_scope() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -860,7 +860,7 @@ fn authority_releases_when_holder_disconnects() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });
@@ -1037,7 +1037,7 @@ fn re_entering_scope_yields_correct_current_auth_status() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(naia_server::ReplicationConfig::Delegated);
+                e.configure_replication(naia_server::ReplicationConfig::delegated());
             }
         });
     });

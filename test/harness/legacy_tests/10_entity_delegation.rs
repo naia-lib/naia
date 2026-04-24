@@ -141,7 +141,7 @@ fn client_request_authority_on_non_delegated_returns_err_not_delegated() {
     // Assert: no state/events change - entity replication config is still Public (not Delegated) and no auth events
     scenario.expect(|ctx| {
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(ReplicationConfig::Public);
+        let config_ok = config == Some(ReplicationConfig::public());
         let no_grant = !ctx.client(client_a_key, |c| {
             if c.has::<ClientEntityAuthGrantedEvent>() {
                 c.read_event::<ClientEntityAuthGrantedEvent>()
@@ -218,7 +218,7 @@ fn disable_delegation_clears_authority_semantics() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -226,7 +226,7 @@ fn disable_delegation_clears_authority_semantics() {
     // Wait for delegation to be enabled
     scenario.expect(|ctx| {
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        (config == Some(ReplicationConfig::Delegated)).then_some(())
+        (config == Some(ReplicationConfig::delegated())).then_some(())
     });
 
     // Server gives authority to A
@@ -262,7 +262,7 @@ fn disable_delegation_clears_authority_semantics() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Public);
+                entity_mut.configure_replication(ReplicationConfig::public());
             }
         });
     });
@@ -270,7 +270,7 @@ fn disable_delegation_clears_authority_semantics() {
     // Assert: Entity replication config is Public, clients no longer have authority status, subsequent request_authority returns ErrNotDelegated
     scenario.expect(|ctx| {
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(ReplicationConfig::Public);
+        let config_ok = config == Some(ReplicationConfig::public());
 
         let a_no_status = ctx.client(client_a_key, |c| {
             if let Some(entity) = c.entity(&entity_e) {
@@ -362,7 +362,7 @@ fn disable_delegation_while_client_holds_authority() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -371,7 +371,7 @@ fn disable_delegation_while_client_holds_authority() {
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(ReplicationConfig::Delegated);
+        let config_ok = config == Some(ReplicationConfig::delegated());
         let a_available = ctx.client(client_a_key, |c| {
             if let Some(entity) = c.entity(&entity_e) {
                 entity.authority() == Some(EntityAuthStatus::Available)
@@ -408,7 +408,7 @@ fn disable_delegation_while_client_holds_authority() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Public);
+                entity_mut.configure_replication(ReplicationConfig::public());
             }
         });
     });
@@ -437,7 +437,7 @@ fn disable_delegation_while_client_holds_authority() {
             }
         });
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(ReplicationConfig::Public);
+        let config_ok = config == Some(ReplicationConfig::public());
         (a_received_reset && a_no_status && b_no_status && config_ok).then_some(())
     });
 
@@ -514,7 +514,7 @@ fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -540,7 +540,7 @@ fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
         
         let a_available = a_status == Some(EntityAuthStatus::Available);
         let b_available = b_status == Some(EntityAuthStatus::Available);
-        let config_delegated = config == Some(ReplicationConfig::Delegated);
+        let config_delegated = config == Some(ReplicationConfig::delegated());
         let no_granted = a_status != Some(EntityAuthStatus::Granted) && b_status != Some(EntityAuthStatus::Granted);
         
         (a_available && b_available && config_delegated && no_granted).then_some(())
@@ -611,7 +611,7 @@ fn server_authority_apis_on_non_delegated_return_err_not_delegated() {
     // Assert: E remains undelegated (Public, not Delegated)
     scenario.expect(|ctx| {
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        (config == Some(ReplicationConfig::Public)).then_some(())
+        (config == Some(ReplicationConfig::public())).then_some(())
     });
 }
 
@@ -859,7 +859,7 @@ fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -870,7 +870,7 @@ fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
         let a_has = ctx.client(client_a_key, |c| c.has_entity(&entity_e));
         let b_has = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
         let server_config = ctx.server(|s| s.entity(&entity_e).map(|e| e.replication_config()));
-        (a_has && b_has && server_config == Some(Some(ReplicationConfig::Delegated))).then_some(())
+        (a_has && b_has && server_config == Some(Some(ReplicationConfig::delegated()))).then_some(())
     });
 }
 
@@ -926,7 +926,7 @@ fn migration_assigns_initial_authority_to_owner_if_owner_in_scope() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -991,7 +991,7 @@ fn migration_yields_no_holder_if_owner_out_of_scope() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -1106,7 +1106,7 @@ fn after_migration_writes_follow_delegated_rules() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -1183,7 +1183,7 @@ fn duplicate_set_authority_does_not_emit_duplicate_events() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -1266,7 +1266,7 @@ fn auth_granted_emitted_exactly_once_on_available_to_granted() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -1342,7 +1342,7 @@ fn auth_denied_emitted_exactly_once_per_transition_into_denied() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -1410,7 +1410,7 @@ fn auth_lost_emitted_exactly_once_per_transition_out_of_granted() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut e) = server.entity_mut(&entity_e) {
-                e.configure_replication(ReplicationConfig::Delegated);
+                e.configure_replication(ReplicationConfig::delegated());
             }
         });
     });

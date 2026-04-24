@@ -17,7 +17,7 @@ use crate::{
         mut_channel::MutChannelData,
         server_auth_handler::{AuthOwner, ServerAuthHandler},
     },
-    EntityOwner, ReplicationConfig, UserKey,
+    EntityOwner, Publicity, ReplicationConfig, ScopeExit, UserKey,
 };
 
 pub struct GlobalWorldManager {
@@ -201,13 +201,13 @@ impl GlobalWorldManager {
             EntityOwner::Client(user_key) => {
                 // info!("Publishing Entity owned by User: {:?}", user_key);
                 record.owner = EntityOwner::ClientPublic(user_key);
-                record.replication_config = ReplicationConfig::Public;
+                record.replication_config.publicity = Publicity::Public;
                 return true;
             }
             EntityOwner::ClientPublic(user_key) => {
                 warn!("Published Entity is being published again!");
                 record.owner = EntityOwner::ClientPublic(user_key);
-                record.replication_config = ReplicationConfig::Public;
+                record.replication_config.publicity = Publicity::Public;
                 return true;
             }
         }
@@ -219,7 +219,7 @@ impl GlobalWorldManager {
         };
         if let EntityOwner::ClientPublic(user_key) = record.owner {
             record.owner = EntityOwner::Client(user_key);
-            record.replication_config = ReplicationConfig::Private;
+            record.replication_config.publicity = Publicity::Private;
         } else {
             panic!("Can only unpublish an Entity that is Client-owned and Public!");
         }
@@ -259,9 +259,19 @@ impl GlobalWorldManager {
         return None;
     }
 
+    pub(crate) fn entity_set_scope_exit(
+        &mut self,
+        global_entity: &GlobalEntity,
+        scope_exit: ScopeExit,
+    ) {
+        if let Some(record) = self.entity_records.get_mut(global_entity) {
+            record.replication_config.scope_exit = scope_exit;
+        }
+    }
+
     pub(crate) fn entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
-            return record.replication_config == ReplicationConfig::Delegated;
+            return record.replication_config.publicity == Publicity::Delegated;
         }
         return false;
     }
@@ -270,11 +280,11 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Public {
+        if record.replication_config.publicity != Publicity::Public {
             panic!("Can only enable delegation on an Entity that is Public!");
         }
 
-        record.replication_config = ReplicationConfig::Delegated;
+        record.replication_config.publicity = Publicity::Delegated;
         self.auth_handler.register_entity(global_entity);
     }
 
@@ -302,11 +312,11 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config != ReplicationConfig::Delegated {
+        if record.replication_config.publicity != Publicity::Delegated {
             panic!("Can only disable delegation on an Entity that is Delegated!");
         }
 
-        record.replication_config = ReplicationConfig::Public;
+        record.replication_config.publicity = Publicity::Public;
         self.auth_handler.deregister_entity(global_entity);
     }
 

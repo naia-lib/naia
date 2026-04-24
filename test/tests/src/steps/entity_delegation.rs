@@ -51,7 +51,7 @@ fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut Test
             server.spawn(|mut entity| {
                 entity
                     .insert_component(Position::new(0.0, 0.0))
-                    .configure_replication(ServerReplicationConfig::Delegated)
+                    .configure_replication(ServerReplicationConfig::delegated())
                     .enter_room(&room_key);
             })
         })
@@ -103,7 +103,7 @@ fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorl
             server.spawn(|mut entity| {
                 entity
                     .insert_component(Position::new(0.0, 0.0))
-                    .configure_replication(ServerReplicationConfig::Delegated)
+                    .configure_replication(ServerReplicationConfig::delegated())
                     .enter_room(&room_key);
             })
         })

@@ -14,8 +14,8 @@ pub struct GlobalEntityRecord {
 impl GlobalEntityRecord {
     pub fn new(owner: EntityOwner) -> Self {
         let replication_config = match &owner {
-            EntityOwner::Server => ReplicationConfig::Public,
-            EntityOwner::Client(_) | EntityOwner::ClientWaiting(_) => ReplicationConfig::Private,
+            EntityOwner::Server => ReplicationConfig::public(),
+            EntityOwner::Client(_) | EntityOwner::ClientWaiting(_) => ReplicationConfig::private(),
             EntityOwner::ClientPublic(_) => {
                 panic!("Should not be able to insert a ClientPublic record this way");
             }

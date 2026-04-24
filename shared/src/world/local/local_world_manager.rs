@@ -52,6 +52,10 @@ pub struct LocalWorldManager {
     remote: RemoteWorldManager,
     updater: EntityUpdateManager,
 
+    /// Entities with ScopeExit::Persist that are currently out-of-scope.
+    /// Replication is frozen for these entities until re-entry.
+    paused_entities: HashSet<GlobalEntity>,
+
     // TODO: this is kind of specific to the receiver, put it somewhere else?
     incoming_components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
 
@@ -75,6 +79,8 @@ impl LocalWorldManager {
             host: HostWorldManager::new(host_type, user_key),
             remote: RemoteWorldManager::new(host_type),
             updater: EntityUpdateManager::new(address, global_world_manager),
+
+            paused_entities: HashSet::new(),
 
             incoming_components: HashMap::new(),
             incoming_updates: Vec::new(),
@@ -663,6 +669,9 @@ impl LocalWorldManager {
     // Joint router
 
     pub fn despawn_entity(&mut self, global_entity: &GlobalEntity) {
+        // Clean up pause state if entity was Paused (ScopeExit::Persist)
+        self.paused_entities.remove(global_entity);
+
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             panic!(
                 "Attempting to despawn entity which does not exist in local entity map! {:?}",
@@ -676,6 +685,23 @@ impl LocalWorldManager {
             self.remote
                 .send_entity_command(&self.entity_map, EntityCommand::Despawn(*global_entity));
         }
+    }
+
+    /// Pause replication for a `ScopeExit::Persist` entity that has left scope.
+    /// The entity stays in the client's entity pool; no further updates are sent
+    /// until `resume_entity` is called on re-entry.
+    pub fn pause_entity(&mut self, global_entity: &GlobalEntity) {
+        self.paused_entities.insert(*global_entity);
+    }
+
+    /// Resume replication for a paused `ScopeExit::Persist` entity that has re-entered scope.
+    /// Accumulated deltas will be delivered on the next update cycle.
+    pub fn resume_entity(&mut self, global_entity: &GlobalEntity) {
+        self.paused_entities.remove(global_entity);
+    }
+
+    pub fn is_entity_paused(&self, global_entity: &GlobalEntity) -> bool {
+        self.paused_entities.contains(global_entity)
     }
 
     pub fn insert_component(
@@ -949,6 +975,7 @@ impl LocalWorldManager {
         let local_converter = self.entity_map.entity_converter();
         self.remote
             .append_updatable_world(local_converter, &mut updatable_world);
+        updatable_world.retain(|ge, _| !self.paused_entities.contains(ge));
         self.updater.take_outgoing_events(
             world,
             world_converter,

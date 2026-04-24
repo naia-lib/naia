@@ -187,7 +187,7 @@ fn client_writes_to_nondelegated_server_entity_are_ignored() {
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         let config = ctx.server(|s| s.entity(&entity_e).map(|e| e.replication_config()));
         let is_server_owned = owner == Some(EntityOwner::Server);
-        let is_not_delegated = config != Some(Some(ReplicationConfig::Delegated));
+        let is_not_delegated = config != Some(Some(ReplicationConfig::delegated()));
 
         if !(is_server_owned && is_not_delegated) {
             return None;
@@ -594,7 +594,7 @@ fn enabling_delegation_transfers_ownership_to_server() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
-                entity_mut.configure_replication(ReplicationConfig::Delegated);
+                entity_mut.configure_replication(ReplicationConfig::delegated());
             }
         });
     });
@@ -603,7 +603,7 @@ fn enabling_delegation_transfers_ownership_to_server() {
     scenario.expect(|ctx| {
         let owner = ctx.server(|s| s.entity(&entity_e).map(|e| e.owner()));
         let config = ctx.server(|s| s.entity(&entity_e).map(|e| e.replication_config()));
-        (owner == Some(EntityOwner::Server) && config == Some(Some(ReplicationConfig::Delegated))).then_some(())
+        (owner == Some(EntityOwner::Server) && config == Some(Some(ReplicationConfig::delegated()))).then_some(())
     });
 }
 

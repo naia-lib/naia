@@ -205,7 +205,7 @@ pub fn contract10_delegation_grant() -> Trace {
             s.spawn(|mut entity| {
                 entity
                     .insert_component(Position::new(0.0, 0.0))
-                    .configure_replication(ServerReplicationConfig::Delegated)
+                    .configure_replication(ServerReplicationConfig::delegated())
                     .enter_room(&room_key);
             })
         })

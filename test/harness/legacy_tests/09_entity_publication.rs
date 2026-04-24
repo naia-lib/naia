@@ -621,7 +621,7 @@ fn only_owner_or_server_may_change_publication() {
     // Verify server observes the publication change
     scenario.expect(|ctx| {
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        (config == Some(ReplicationConfig::Public)).then_some(())
+        (config == Some(ReplicationConfig::public())).then_some(())
     });
 
     scenario.allow_flexible_next();
@@ -652,7 +652,7 @@ fn only_owner_or_server_may_change_publication() {
     scenario.expect(|ctx| {
         let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        (!b_sees_e && config == Some(ReplicationConfig::Private)).then_some(())
+        (!b_sees_e && config == Some(ReplicationConfig::private())).then_some(())
     });
 }
 
@@ -901,7 +901,7 @@ fn delegation_migration_ends_client_owned_publication_semantics() {
     // Verify: E is now Delegated and both clients observe authority semantics
     scenario.expect(|ctx| {
         let config = ctx.server(|server| server.entity(&entity_e)?.replication_config());
-        let config_ok = config == Some(ReplicationConfig::Delegated);
+        let config_ok = config == Some(ReplicationConfig::delegated());
 
         // After delegation migration, clients should have authority status (not None)
         let a_has_auth = ctx.client(client_a_key, |c| {

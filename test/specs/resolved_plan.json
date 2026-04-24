@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "90ef820cc6161007852a132ae76b0b4980713e2c227a0c795e7de81534d7ccf0",
-    "step_registry_hash": "5e904e7c02f7cdaae2eca2b4402999f42499f3696d11dd85fa4855e36709773c",
-    "resolved_plan_hash": "5e157781751e4233faccad3b4cfc200e170678f9a9cfb7512e03a0ca51b2be45"
+    "feature_fingerprint_hash": "af25bff73ea9116b891507d62141ef0c28d80ae7b3461e951a1082196f36a911",
+    "step_registry_hash": "3efc5da6ce180177cd3ee190d16fa90b1584de33a2697cf0f1a401e5cc118040",
+    "resolved_plan_hash": "94a4ae26be88ecba3d9a868d4b13c2f572adce478ce992c0e91b1a11f368c96d"
   },
   "scenarios": [
     {
@@ -6002,6 +6002,700 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "7b4995bec80b3ea9b87a3e77a051ccb88a040cc3b2a2f42e93afebe6d7f89f72"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(01):Scenario(01)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-01 — Default config entity is despawned when leaving scope",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with a replicated component",
+          "binding_id": "f20159a328b3a1860cc2107f9c88b0165fc6a8b716aad3396fe35617838cc721",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a807dd4c187b68fa877b0442ad648ac45ad8b79912964c4bd883139920482765"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity despawns on the client",
+          "binding_id": "098896fa9169bf5bce36ba611565cf2812b692a0390cf6c241fa795e25c38992",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "477a904a0b7a6c34d7f9b2d56b9bb089e8cf30847609a7aa95ecd5421e15c62c"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(02):Scenario(01)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-02 — Persist entity is not despawned when leaving scope",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured",
+          "binding_id": "167473f1ad6c7849ce0a7bd4b20253e4de20dcf46ee745bc96feea560e43f704",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4e3aa1288a85de81cee2445025e2352b13dd527f0c68ccb007ebd3fced07a126"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client still has the entity",
+          "binding_id": "2e65b8bd14996faab26f571aa0aada6e3ed9d522bb4e1fcf96877478aa8241df",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a688f9d350d4aeeae1f9d585f0bee71ae359faab3ddbf848551cc6e7994e93eb"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(02):Scenario(02)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-03-and-04 — Persist entity accumulates updates and delivers on re-entry",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured",
+          "binding_id": "167473f1ad6c7849ce0a7bd4b20253e4de20dcf46ee745bc96feea560e43f704",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4e3aa1288a85de81cee2445025e2352b13dd527f0c68ccb007ebd3fced07a126"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server updates the entity position to 100 100",
+          "binding_id": "a2e4819fb9c8b99aa3367631c3c19ce116a21cb95c81a748666624e5145e824d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "06d0a3f1d2cc91f95636e16f288dc1e172fa442e5809905ace221e7bdfed43da"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server advances 5 ticks",
+          "binding_id": "f589acf8ed033d5c68c7b4bb291bf4a75f62d78e5b3c1cbec71fa2106154714f",
+          "captures": [
+            "5"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "fee4048ba55d711f887b4fa9ebfaf188dcef76742442646e7458271f3d378e18"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client entity position is still 0.0",
+          "binding_id": "78ffd81dcb30cc9e341ee1b2857d3ab9e86d2e681f3e18e0cb6a2d20706b0588",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5584721cc9e06854f9b895f0c565f612482edf7102d84e6dede07dfe425b26f4"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client entity position becomes 100.0",
+          "binding_id": "4da9a9dfd1c6016475aae7c232937cb4fedec49a908a9601960ee0e1830f29a2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "e6541f34f7315ad054b8d56b777e6d9b49efe71f6c92e167287dfa6d33643c48"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(02):Scenario(03)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-04-t2 — Persist entity re-entering scope with no mutations is still present",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured",
+          "binding_id": "167473f1ad6c7849ce0a7bd4b20253e4de20dcf46ee745bc96feea560e43f704",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4e3aa1288a85de81cee2445025e2352b13dd527f0c68ccb007ebd3fced07a126"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server advances 5 ticks",
+          "binding_id": "f589acf8ed033d5c68c7b4bb291bf4a75f62d78e5b3c1cbec71fa2106154714f",
+          "captures": [
+            "5"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "fee4048ba55d711f887b4fa9ebfaf188dcef76742442646e7458271f3d378e18"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client still has the entity",
+          "binding_id": "2e65b8bd14996faab26f571aa0aada6e3ed9d522bb4e1fcf96877478aa8241df",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a688f9d350d4aeeae1f9d585f0bee71ae359faab3ddbf848551cc6e7994e93eb"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(03):Scenario(01)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-05 — Global despawn while Paused reaches client",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured",
+          "binding_id": "167473f1ad6c7849ce0a7bd4b20253e4de20dcf46ee745bc96feea560e43f704",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4e3aa1288a85de81cee2445025e2352b13dd527f0c68ccb007ebd3fced07a126"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server advances 2 ticks",
+          "binding_id": "f589acf8ed033d5c68c7b4bb291bf4a75f62d78e5b3c1cbec71fa2106154714f",
+          "captures": [
+            "2"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "94f7ce4f2a2c86b7c05cde511b14830f4334e7bbb37b94070cde27b6b1d1b31f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server globally despawns the entity",
+          "binding_id": "edbf5244c3375a53f97822f14bb90ec6ea7a4b72110cb75b1da1a82fdc7e1a61",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c2086c30b10397bc9b825daea11a422b0ec7ac97864abceb87d221d7d6a75cde"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity despawns on the client",
+          "binding_id": "098896fa9169bf5bce36ba611565cf2812b692a0390cf6c241fa795e25c38992",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "477a904a0b7a6c34d7f9b2d56b9bb089e8cf30847609a7aa95ecd5421e15c62c"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(04):Scenario(01)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-06 — Component inserted during Persist absence appears on re-entry",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured without ImmutableLabel",
+          "binding_id": "dacf6bc5d98b81ed065a5ff6b8dad04838d7c58b0e5416f8bd6ecdb7da76d7b4",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "883a3fa1d8e9d9640b434aefab24d8b9e26594dc5f80b69c2fa03ff79b0ab3a4"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server inserts ImmutableLabel on the entity",
+          "binding_id": "07801297d2f74e6802a3faf99b4aa56b99d69dfa4784757b825e862c17df21b2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b8ea5bbbf892ac29e7c5ced6fdd4e95b81081124b2469cac9d502d760e8d91b4"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client entity has ImmutableLabel",
+          "binding_id": "fea8f0085662548533c9bb5ac6adf26f002f5f9d11632c81146852f37b4f1633",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5869a4b5f22fd376807375d948f62c61c7d8681e59e668002103ab2e6ebceac1"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(04):Scenario(02)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-07 — Component removed during Persist absence is gone on re-entry",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured with ImmutableLabel",
+          "binding_id": "f60382061e83d4e96ffa54c081e2670c0fb881d58df68d6d9819cb87358207c1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "201eaa4a5dbebd97e8384527fd08264ae3ab339375b8003de8c7d8589c338d06"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server removes ImmutableLabel from the entity",
+          "binding_id": "43cdab38edb03884ec48f54eb9668d0d67c1b3f1d19b8266db235ddbcc79aa9b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "48e02184a2d16e9fefa7e687ac44a80958d79030eabc5a649613ca0948eff23b"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client entity does not have ImmutableLabel",
+          "binding_id": "12ff97b928f974771f5bbf647efb4407ff77e9b81fda7b53a850c9d92ea4d2da",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "53524abd43e3f5a93607068ac3e750ec68901ee3a799ffe480770b6672319fc8"
+        }
+      ]
+    },
+    {
+      "scenario_key": "scope_exit_policy:Rule(05):Scenario(01)",
+      "feature_path": "features/15_scope_exit_policy.feature",
+      "scenario_name": "scope-exit-08 — Disconnect while Persist entity is Paused does not crash",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with ScopeExit::Persist configured",
+          "binding_id": "167473f1ad6c7849ce0a7bd4b20253e4de20dcf46ee745bc96feea560e43f704",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4e3aa1288a85de81cee2445025e2352b13dd527f0c68ccb007ebd3fced07a126"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for the client",
+          "binding_id": "af83aede53a7a557990971d018a3aa839ff3a9aac0ea14aad24767ab48a9cb5c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ec7fb83c32619bc56b544462c47369c33e73b5995846aa1e5ad060b21915c80f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server advances 2 ticks",
+          "binding_id": "f589acf8ed033d5c68c7b4bb291bf4a75f62d78e5b3c1cbec71fa2106154714f",
+          "captures": [
+            "2"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "94f7ce4f2a2c86b7c05cde511b14830f4334e7bbb37b94070cde27b6b1d1b31f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client disconnects",
+          "binding_id": "1a2c5c87485998b897bf39449fc8e8ace74edc19718d530b933a78eaa7c9e287",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ff7fd15fe045e15a6b6081b5ff8f6ae59eb0140e3b6b5f2cad9e0c42199c1087"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server stops replicating entities to that client",
+          "binding_id": "0314f80078825685e0484d028f2ce7b6756bc0921ae2dc42bb9886051af7eaae",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0cd356f152ed188f65ef270dbbd3bb6595842a9eea6fb2944132b5fa76ad5b4f"
         }
       ]
     },
