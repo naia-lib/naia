@@ -51,6 +51,7 @@ fn is_immutable_attr(input: &DeriveInput) -> bool {
 pub fn replicate_impl(
     input: proc_macro::TokenStream,
     shared_crate_name: TokenStream,
+    auto_emit_bevy_component: bool,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
@@ -165,6 +166,17 @@ pub fn replicate_impl(
     let split_update_method =
         get_split_update_method(&replica_name, &properties, &untyped_generics);
 
+    let bevy_component_impl = if auto_emit_bevy_component {
+        bevy_component_impl(
+            &replica_name,
+            &typed_generics,
+            &untyped_generics,
+            &shared_crate_name,
+        )
+    } else {
+        quote! {}
+    };
+
     let gen = quote! {
         mod #module_name {
 
@@ -246,10 +258,49 @@ pub fn replicate_impl(
             impl #typed_generics Clone for #replica_name #untyped_generics {
                 #clone_method
             }
+
+            // When naia-shared is compiled with `bevy_support` on, workspace-wide
+            // feature unification makes `ReplicatedComponent` require Bevy's
+            // `Component` trait — even in non-Bevy crates. Auto-emit the impl
+            // here so any `#[derive(Replicate)]` type satisfies the bound
+            // transparently. Gated at proc-macro compile time: the naia-shared
+            // bevy_support feature forwards to naia-derive/bevy_support.
+            #bevy_component_impl
         }
     };
 
     proc_macro::TokenStream::from(gen)
+}
+
+/// When the derive crate itself has `bevy_support` active, emit a Bevy
+/// `Component` impl alongside the `Replicate` impl. References Bevy through
+/// `naia_shared::bevy_ecs` so consumers don't need a direct `bevy_ecs` dep.
+#[cfg(feature = "bevy_support")]
+fn bevy_component_impl(
+    replica_name: &Ident,
+    typed_generics: &proc_macro2::TokenStream,
+    untyped_generics: &proc_macro2::TokenStream,
+    shared_crate_name: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    quote! {
+        impl #typed_generics #shared_crate_name::bevy_ecs::component::Component
+            for #replica_name #untyped_generics
+        {
+            const STORAGE_TYPE: #shared_crate_name::bevy_ecs::component::StorageType =
+                #shared_crate_name::bevy_ecs::component::StorageType::Table;
+            type Mutability = #shared_crate_name::bevy_ecs::component::Mutable;
+        }
+    }
+}
+
+#[cfg(not(feature = "bevy_support"))]
+fn bevy_component_impl(
+    _replica_name: &Ident,
+    _typed_generics: &proc_macro2::TokenStream,
+    _untyped_generics: &proc_macro2::TokenStream,
+    _shared_crate_name: &proc_macro2::TokenStream,
+) -> proc_macro2::TokenStream {
+    quote! {}
 }
 
 /// Create a variable name for unnamed fields

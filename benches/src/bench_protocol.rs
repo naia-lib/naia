@@ -1,4 +1,3 @@
-use bevy_ecs::prelude::Component;
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, Message, Property, Protocol, ReliableSettings, Replicate,
 };
@@ -17,7 +16,7 @@ pub struct BenchAuth;
 // ─── Components ───────────────────────────────────────────────────────────────
 
 /// Mutable benchmark component. Used by all active-workload benchmarks.
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 pub struct BenchComponent {
     pub value: Property<u32>,
 }
@@ -29,7 +28,7 @@ impl BenchComponent {
 }
 
 /// Immutable benchmark component. Used by Win-5 (zero-allocation) benchmarks.
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 #[replicate(immutable)]
 pub struct BenchImmutableComponent;
 

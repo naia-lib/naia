@@ -19,7 +19,7 @@ maintenance = { status = "actively-developed" }
 [features]
 wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
-bevy_support = [ "bevy_ecs" ]
+bevy_support = [ "bevy_ecs", "naia-derive/bevy_support" ]
 zstd_support = [ "zstd" ]
 transport_udp = [ "http" ]
 transport_local = [ "http", "parking_lot" ]

@@ -228,7 +228,7 @@ pub fn spawn_entity_events(
         // make public to other clients as well
         commands
             .entity(client_entity)
-            .configure_replication(ReplicationConfig::Public);
+            .configure_replication(ReplicationConfig::public());
 
         server
             .room_mut(&global.main_room_key)

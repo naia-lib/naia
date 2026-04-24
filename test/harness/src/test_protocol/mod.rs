@@ -1,6 +1,4 @@
 /// Minimal test protocol for E2E testing
-use bevy_ecs::prelude::Component;
-
 use naia_shared::{
     Channel, ChannelDirection, ChannelMode, EntityProperty, Message, Property, Protocol,
     ReliableSettings, Replicate, TickBufferSettings,
@@ -120,7 +118,7 @@ pub struct RequestResponseChannel;
 #[derive(Channel)]
 pub struct ServerToClientChannel;
 
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 pub struct Position {
     pub x: Property<f32>,
     pub y: Property<f32>,
@@ -132,7 +130,7 @@ impl Position {
     }
 }
 
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 pub struct Velocity {
     pub vx: Property<f32>,
     pub vy: Property<f32>,
@@ -146,7 +144,7 @@ impl Velocity {
 
 /// Marker component that is replicated immutably.
 /// Used by Phase 5 spike tests to verify zero GlobalDiffHandler allocation.
-#[derive(Component, Replicate)]
+#[derive(Replicate)]
 #[replicate(immutable)]
 pub struct ImmutableLabel;
 

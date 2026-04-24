@@ -70,10 +70,10 @@ impl App {
         for server_address in world_events.read::<ConnectEvent>() {
             info!("Client connected to: {}", server_address);
         }
-        for server_address in world_events.read::<RejectEvent>() {
+        for (server_address, reason) in world_events.read::<RejectEvent>() {
             info!(
-                "Client received unauthorized response from: {}",
-                server_address
+                "Client received unauthorized response from: {} (reason: {:?})",
+                server_address, reason
             );
 
             // Now give the correct username / password

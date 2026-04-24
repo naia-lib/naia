@@ -35,6 +35,12 @@ pub use naia_socket_shared::{
     Random, SocketConfig, TimeQueue,
 };
 
+// Re-export bevy_ecs when bevy_support is active so the Replicate derive can
+// reference it as `naia_shared::bevy_ecs::...` — makes non-Bevy downstream
+// crates compile correctly under workspace-wide feature unification.
+#[cfg(feature = "bevy_support")]
+pub use bevy_ecs;
+
 #[cfg(all(
     feature = "test_time",
     not(all(target_arch = "wasm32", any(feature = "wbindgen", feature = "mquad")))
