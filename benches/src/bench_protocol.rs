@@ -42,6 +42,7 @@ pub struct BenchChannel;
 
 pub fn bench_protocol() -> Protocol {
     Protocol::builder()
+        .enable_client_authoritative_entities()
         .add_component::<BenchComponent>()
         .add_component::<BenchImmutableComponent>()
         .add_message::<BenchAuth>()

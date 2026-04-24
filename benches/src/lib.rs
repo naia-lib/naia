@@ -394,9 +394,19 @@ impl BenchWorld {
 
 // ─── advance_tick (free function) ─────────────────────────────────────────────
 
-/// Advance one tick: clock, hub queues, then client+server I/O pairs.
+/// Advance one tick: clock, hub queues, all-clients I/O, then ONE server step.
 ///
-/// Called from both `BenchWorld::tick()` (measured) and setup loops (not measured).
+/// Ordering per tick:
+///   1. Advance TestClock + flush any time-delayed hub packets.
+///   2. Each client: receive → process → send.
+///   3. Server: receive → process → send (ONCE, regardless of client count).
+///
+/// The pre-fix version ran server I/O inside the per-client loop, which
+/// executed `update_entity_scopes` and per-connection send K times per tick
+/// for K clients — inflating multi-user measurements. Server I/O is global
+/// state; one call per tick is the correct semantics.
+///
+/// Called from `BenchWorld::tick()` (measured) and setup loops (not measured).
 pub fn advance_tick(
     hub: &LocalTransportHub,
     server: &mut NaiaServer<BenchEntity>,
@@ -411,9 +421,9 @@ pub fn advance_tick(
         client.receive_all_packets();
         client.process_all_packets(client_world.proxy_mut(), &now);
         client.send_all_packets(client_world.proxy_mut());
-
-        server.receive_all_packets();
-        server.process_all_packets(server_world.proxy_mut(), &now);
-        server.send_all_packets(server_world.proxy());
     }
+
+    server.receive_all_packets();
+    server.process_all_packets(server_world.proxy_mut(), &now);
+    server.send_all_packets(server_world.proxy());
 }
