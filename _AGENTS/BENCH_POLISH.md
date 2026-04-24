@@ -77,7 +77,7 @@ Call from all three sites. Saves ~30 lines; removes a class of
 
 ---
 
-### 4. [x] Document magic numbers in bench harness  (commit pending)
+### 4. [x] Document magic numbers in bench harness  (`4c122d80`)
 
 **File**: `benches/src/lib.rs:25-27`
 
@@ -91,7 +91,7 @@ without understanding could corrupt bench results silently.
 
 ---
 
-### 5. [ ] Add `--assert-wins` mode to `naia-bench-report`
+### 5. [x] Add `--assert-wins` mode to `naia-bench-report`  (commit pending)
 
 **Files**: `test/bench_report/src/main.rs`, plus probably a new
 `test/bench_report/src/assert_wins.rs`.

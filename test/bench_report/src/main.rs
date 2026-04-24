@@ -1,3 +1,4 @@
+mod assert_wins;
 mod charts;
 mod grouper;
 mod model;
@@ -13,9 +14,20 @@ fn main() {
         std::process::exit(1);
     }
 
-    let title = std::env::args()
-        .skip_while(|a| a != "--title")
-        .nth(1)
+    let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--assert-wins") {
+        let outcome = assert_wins::run(&results);
+        if outcome.failed() {
+            std::process::exit(1);
+        }
+        return;
+    }
+
+    let title = args
+        .iter()
+        .position(|a| a == "--title")
+        .and_then(|i| args.get(i + 1))
+        .cloned()
         .unwrap_or_else(|| "Naia Benchmark Report".to_string());
 
     let groups = grouper::group_results(results.clone());
