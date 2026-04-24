@@ -30,6 +30,34 @@ cfg_if! {
     }
 }
 
+/// Fine-grained timing of `Connection::send_packets` sub-phases. Used by
+/// `examples/phase4_tick_internals.rs` to localize per-user cost inside the
+/// idle send path. Disabled in release unless `bench_instrumentation`.
+#[cfg(feature = "bench_instrumentation")]
+pub mod bench_send_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    pub static NS_COLLECT_MESSAGES: AtomicU64 = AtomicU64::new(0);
+    pub static NS_TAKE_OUTGOING_EVENTS: AtomicU64 = AtomicU64::new(0);
+    pub static NS_SEND_PACKET_LOOP: AtomicU64 = AtomicU64::new(0);
+
+    pub fn reset() {
+        NS_COLLECT_MESSAGES.store(0, Ordering::Relaxed);
+        NS_TAKE_OUTGOING_EVENTS.store(0, Ordering::Relaxed);
+        NS_SEND_PACKET_LOOP.store(0, Ordering::Relaxed);
+        // The take_outgoing_events breakdown lives in naia-shared
+        // (bench_take_events_counters) because the interesting work is
+        // inside LocalWorldManager.
+        naia_shared::bench_take_events_counters::reset();
+    }
+    pub fn snapshot() -> (u64, u64, u64) {
+        (
+            NS_COLLECT_MESSAGES.load(Ordering::Relaxed),
+            NS_TAKE_OUTGOING_EVENTS.load(Ordering::Relaxed),
+            NS_SEND_PACKET_LOOP.load(Ordering::Relaxed),
+        )
+    }
+}
+
 pub struct Connection {
     pub address: SocketAddr,
     pub user_key: UserKey,
@@ -200,11 +228,23 @@ impl Connection {
         time_manager: &TimeManager,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
+
+        #[cfg(feature = "bench_instrumentation")]
+        let t = std::time::Instant::now();
         self.base.collect_messages(now, &rtt_millis);
+        #[cfg(feature = "bench_instrumentation")]
+        bench_send_counters::NS_COLLECT_MESSAGES
+            .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+
+        #[cfg(feature = "bench_instrumentation")]
+        let t = std::time::Instant::now();
         let (mut host_world_events, mut update_events) = self
             .base
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+        #[cfg(feature = "bench_instrumentation")]
+        bench_send_counters::NS_TAKE_OUTGOING_EVENTS
+            .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
         // Count drained commands and messages for this connection
         #[cfg(feature = "e2e_debug")]
         {
@@ -218,6 +258,8 @@ impl Connection {
             }
         }
 
+        #[cfg(feature = "bench_instrumentation")]
+        let t = std::time::Instant::now();
         let mut any_sent = false;
         loop {
             if self.send_packet(
@@ -241,6 +283,9 @@ impl Connection {
         if any_sent {
             self.base.mark_sent();
         }
+        #[cfg(feature = "bench_instrumentation")]
+        bench_send_counters::NS_SEND_PACKET_LOOP
+            .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
     }
 
     /// Send any message, component actions and component updates to the client

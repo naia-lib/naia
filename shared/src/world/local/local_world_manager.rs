@@ -6,6 +6,30 @@ use std::{
     time::Duration,
 };
 
+/// Fine-grained timing inside `take_outgoing_events` — see Phase 4 diagnostic
+/// `examples/phase4_tick_internals.rs`. Counters are cumulative across all
+/// user connections within a tick; reset/snapshot from the bench harness.
+#[cfg(feature = "bench_instrumentation")]
+pub mod bench_take_events_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    pub static NS_HOST_REMOTE_COMMANDS: AtomicU64 = AtomicU64::new(0);
+    pub static NS_SENDER_COLLECT: AtomicU64 = AtomicU64::new(0);
+    pub static NS_TAKE_UPDATE_EVENTS: AtomicU64 = AtomicU64::new(0);
+
+    pub fn reset() {
+        NS_HOST_REMOTE_COMMANDS.store(0, Ordering::Relaxed);
+        NS_SENDER_COLLECT.store(0, Ordering::Relaxed);
+        NS_TAKE_UPDATE_EVENTS.store(0, Ordering::Relaxed);
+    }
+    pub fn snapshot() -> (u64, u64, u64) {
+        (
+            NS_HOST_REMOTE_COMMANDS.load(Ordering::Relaxed),
+            NS_SENDER_COLLECT.load(Ordering::Relaxed),
+            NS_TAKE_UPDATE_EVENTS.load(Ordering::Relaxed),
+        )
+    }
+}
+
 use log::info;
 use naia_socket_shared::Instant;
 
@@ -945,6 +969,8 @@ impl LocalWorldManager {
         HashMap<GlobalEntity, HashSet<ComponentKind>>,
     ) {
         // get outgoing world commands
+        #[cfg(feature = "bench_instrumentation")]
+        let t = std::time::Instant::now();
         let host_commands = self.host.take_outgoing_commands();
         let remote_commands = self.remote.take_outgoing_commands();
         for commands in [host_commands, remote_commands] {
@@ -952,11 +978,34 @@ impl LocalWorldManager {
                 self.sender.send_message(command);
             }
         }
+        #[cfg(feature = "bench_instrumentation")]
+        {
+            use std::sync::atomic::Ordering;
+            bench_take_events_counters::NS_HOST_REMOTE_COMMANDS
+                .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        }
+
+        #[cfg(feature = "bench_instrumentation")]
+        let t = std::time::Instant::now();
         self.sender.collect_messages(now, rtt_millis);
         let world_commands = self.sender.take_next_messages();
+        #[cfg(feature = "bench_instrumentation")]
+        {
+            use std::sync::atomic::Ordering;
+            bench_take_events_counters::NS_SENDER_COLLECT
+                .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        }
 
         // get update events
+        #[cfg(feature = "bench_instrumentation")]
+        let t = std::time::Instant::now();
         let update_events = self.take_update_events(world, converter, global_world_manager);
+        #[cfg(feature = "bench_instrumentation")]
+        {
+            use std::sync::atomic::Ordering;
+            bench_take_events_counters::NS_TAKE_UPDATE_EVENTS
+                .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
+        }
 
         // return both
         (world_commands, update_events)

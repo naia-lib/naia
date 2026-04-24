@@ -118,6 +118,16 @@ impl BenchWorldBuilder {
 
 // ─── BenchWorld ───────────────────────────────────────────────────────────────
 
+/// Per-phase wall-time breakdown of one tick. See `BenchWorld::tick_timed`.
+#[derive(Debug, Clone, Copy)]
+pub struct TickBreakdown {
+    pub hub: std::time::Duration,
+    pub clients: std::time::Duration,
+    pub srv_rx: std::time::Duration,
+    pub srv_tx: std::time::Duration,
+    pub drain: std::time::Duration,
+}
+
 /// A Naia server + N clients in steady state, using local (in-memory) transport.
 ///
 /// `tick()` is the measured operation for most benchmarks. Setup cost lives in
@@ -286,6 +296,50 @@ impl BenchWorld {
             &mut self.clients,
         );
         drain_all_events(&mut self.server, &mut self.clients);
+    }
+
+    /// Diagnostic-only variant of `tick()` that reports per-phase wall time.
+    /// Used by `examples/phase4_tick_internals.rs` to localize remaining
+    /// per-tick cost inside the server idle path. Not exposed through the
+    /// criterion benches — keeping `tick()` itself as the canonical surface.
+    pub fn tick_timed(&mut self) -> TickBreakdown {
+        use std::time::Instant as StdInstant;
+        TestClock::advance(TICK_MS);
+        let now = Instant::now();
+
+        let t = StdInstant::now();
+        self.hub.process_time_queues();
+        let hub = t.elapsed();
+
+        let t = StdInstant::now();
+        for (client, client_world) in self.clients.iter_mut() {
+            client.receive_all_packets();
+            client.process_all_packets(client_world.proxy_mut(), &now);
+            client.send_all_packets(client_world.proxy_mut());
+        }
+        let clients = t.elapsed();
+
+        let t = StdInstant::now();
+        self.server.receive_all_packets();
+        self.server
+            .process_all_packets(self.server_world.proxy_mut(), &now);
+        let srv_rx = t.elapsed();
+
+        let t = StdInstant::now();
+        self.server.send_all_packets(self.server_world.proxy());
+        let srv_tx = t.elapsed();
+
+        let t = StdInstant::now();
+        drain_all_events(&mut self.server, &mut self.clients);
+        let drain = t.elapsed();
+
+        TickBreakdown {
+            hub,
+            clients,
+            srv_rx,
+            srv_tx,
+            drain,
+        }
     }
 
     /// Mutate the first `count` entities' mutable component values.

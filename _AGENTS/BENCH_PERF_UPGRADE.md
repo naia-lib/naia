@@ -1,6 +1,6 @@
 # Naia Perf Upgrade — 2-Orders-of-Magnitude Plan
 
-**Status:** in progress — Phases 0–3 complete (2026-04-24)
+**Status:** in progress — Phases 0–4 complete; Phase 4.5 (mutable spike) is the next blocker before Phase 5 (2026-04-24)
 **Ref commits:** `4d73ad41` (U×N idle matrix bench) · GDD `862dcab` (LEVEL_SPEC §10 canonical)
 **Scope:** this document is the durable plan. Update it as phases land. Do not fork.
 
@@ -12,8 +12,9 @@
 | 1 — Instrument server tick | ✅ complete | `ed7b4012` | `phase-01.md` |
 | 2 — Immutable matrix | ✅ complete | `ed7b4012` | `phase-02.md` |
 | 3 — Kill O(U·N) idle | ✅ complete (189× at 16u_10000e) | `db1b706d` | `phase-03.md` |
-| 4 — Immutable skip idle | ⏳ in progress | — | — |
-| 5 — Spatial scope index | ⏸️ pending | — | — |
+| 4 — Immutable skip idle | ✅ complete (21× at 16u_10000e imm) | TBD | `phase-04.md` |
+| 4.5 — Mutable resend-window spike | ⏳ in progress — blocker for Phase 5 | — | `phase-04.5.md` (pending) |
+| 5 — Spatial scope index | ⏸️ pending (blocked on 4.5) | — | — |
 | 6 — Coalesce audit | ⏸️ pending | — | — |
 | 7 — Regression gate + close-out | ⏸️ pending | — | — |
 
@@ -180,7 +181,11 @@ Expected win: **50–100×** on idle cells at N≥1K. This phase alone is most o
 
 ---
 
-### Phase 4 — Immutable-bypass extends to idle scan
+### Phase 4 — Immutable-bypass extends to idle scan ✅ COMPLETE (2026-04-24)
+
+Gate met at **21×** on 16u_10000e_imm (1.05 ms → 49 µs; per-receiver idle cost ≈ 0.3 ns, effectively noise). See `_AGENTS/BENCH_UPGRADE_LOG/phase-04.md`.
+
+The landing fix was not an immutable partition but a **ReliableSender fast-path** (`collect_messages` short-circuits when nothing is due for resend via cached `min_last_sent` + `has_unsent`). Attacking that hotspot made the immutable path contribute zero work to idle — achieving the phase goal in spirit. The mutable pipeline, however, revealed a latent periodic spike — tracked as Phase 4.5 below.
 
 **Goal:** immutable entities contribute exactly zero work to idle ticks.
 
@@ -196,7 +201,40 @@ Tasks:
 
 Expected win: **another 2–3×** on immutable-heavy workloads (i.e., all tile-dominant Cyberlith sessions).
 
-**Deliverable:** `_AGENTS/BENCH_UPGRADE_LOG/phase-04.md`.
+**Deliverable:** `_AGENTS/BENCH_UPGRADE_LOG/phase-04.md`. ✅ landed.
+
+---
+
+### Phase 4.5 — Mutable resend-window spike (blocker for Phase 5)
+
+**Goal:** eliminate the periodic ~17-tick latency spike on mutable idle ticks. No cell of the matrix may exceed `p99 × 10` (i.e., `idle_distribution` reports no `SPIKE`).
+
+**Status:** discovered during Phase 4 via the new `idle_distribution.rs` harness. Scope is strictly this pre-existing bug (not a new optimization); Phase 5 is blocked until it is resolved cleanly — per Connor's rigor mandate, no hand-waving past real bugs.
+
+**Evidence (2026-04-24, `cargo run --release --example idle_distribution`):**
+
+| cell              | p50     | max        | max/p50  | flag      |
+|-------------------|---------|------------|----------|-----------|
+| 1u_10000e_mut     | 3.5 µs  | 10.5 ms    | 3007×    | **SPIKE** |
+| 4u_10000e_mut     | 8.4 µs  | 34.0 ms    | 4033×    | **SPIKE** |
+| 16u_10000e_mut    | 31.6 µs | 86.5 ms    | 2741×    | **SPIKE** |
+
+Spike cadence is cyclic: ticks +11, +12, +13, +28, +29, +30, …, every ~17 ticks ≈ 850 ms ≈ `1.5 × 567 ms` (default rtt, `rtt_resend_factor = 1.5`). Immutable cells are clean (`max/p50 ≤ 6×`). Aligns with the reliable-sender **resend window** cadence.
+
+**Narrowed hypothesis (to prove or refute):** Phase 4's `ReliableSender` fast-path neutralized the sender-side scan, so the remaining mutable-only periodic work lives elsewhere on the resend boundary — most likely `handle_dropped_update_packets` (`shared/src/world/update/entity_update_manager.rs:~126`), which iterates the `sent_updates` HashMap per-tick and re-queues update work for dropped packets. At 10K mutable entities this could be the O(N) spike.
+
+**Tasks:**
+
+- [ ] Extend `phase4_tick_internals.rs` (or new probe) to instrument the update-manager dropped-packet path + scope-check + outbound-packet-assembly sub-phases during the spike tick. Capture ns per sub-phase.
+- [ ] Confirm or refute the `handle_dropped_update_packets` hypothesis with hard data before writing any fix. If not there, follow the probe to the real hotspot.
+- [ ] Fix the root cause (likely: a dirty-state cache analogous to Phase 3/4 — bookkeeping should be O(dropped), not O(sent)).
+- [ ] **Re-run `idle_distribution` until every mut cell reports `OK`** (`max/p50 ≤ 10×`). No hand-waving, no "close enough" — spike gates to zero.
+- [ ] **Regression gate:** immutable cells must not regress. `16u_10000e_imm` p50 stays ≤ 60 µs. Idle_distribution output is committed alongside the fix.
+- [ ] Test safety: `cargo test --workspace`, namako integration tests, and `namako gate --specs-dir test/specs` must all stay green.
+
+**Expected win:** surfaces as cleaner tail at any mutable-cell; headline p50s shouldn't change much (already excellent post-Phase-3/4), but p99/max and mean collapse to p90 territory.
+
+**Deliverable:** `_AGENTS/BENCH_UPGRADE_LOG/phase-04.5.md` — sub-phase probe readout on a spike tick, root-cause narrative, before/after `idle_distribution` matrix with all cells `OK`, files touched.
 
 ---
 

@@ -44,6 +44,8 @@ cfg_if! {
 }
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
+#[cfg(feature = "bench_instrumentation")]
+pub use connection::connection::bench_send_counters;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,

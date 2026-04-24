@@ -10,6 +10,13 @@ pub struct ReliableSender<P: Send + Sync> {
     sending_messages: VecDeque<Option<(MessageIndex, Option<Instant>, P)>>,
     next_send_message_index: MessageIndex,
     pub(crate) outgoing_messages: VecDeque<(MessageIndex, P)>,
+    // Earliest `last_sent` across all currently-pending entries, recomputed on
+    // each collect_messages pass. Combined with `has_unsent`, lets
+    // collect_messages short-circuit when nothing is due for resend — avoiding
+    // an O(N) scan of `sending_messages` every tick even when the channel is
+    // idle (e.g. 10k entity-spawn commands waiting on acks).
+    min_last_sent: Option<Instant>,
+    has_unsent: bool,
 }
 
 impl<P: Send + Sync> ReliableSender<P> {
@@ -19,6 +26,8 @@ impl<P: Send + Sync> ReliableSender<P> {
             next_send_message_index: 0,
             sending_messages: VecDeque::new(),
             outgoing_messages: VecDeque::new(),
+            min_last_sent: None,
+            has_unsent: false,
         }
     }
 
@@ -82,11 +91,26 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         self.sending_messages
             .push_back(Some((self.next_send_message_index, None, message)));
         self.next_send_message_index = self.next_send_message_index.wrapping_add(1);
+        self.has_unsent = true;
     }
 
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         let resend_duration = Duration::from_millis((self.rtt_resend_factor * rtt_millis) as u64);
 
+        // Fast path: no newly-queued messages and min(last_sent) + resend_duration > now
+        // means nothing is due for resend. Skip the O(N) scan of sending_messages.
+        if !self.has_unsent {
+            if self.sending_messages.is_empty() {
+                return;
+            }
+            if let Some(min) = self.min_last_sent.as_ref() {
+                if min.elapsed(now) < resend_duration {
+                    return;
+                }
+            }
+        }
+
+        let mut new_min: Option<Instant> = None;
         for (message_index, last_sent_opt, message) in self.sending_messages.iter_mut().flatten() {
             let mut should_send = false;
             if let Some(last_sent) = last_sent_opt {
@@ -101,7 +125,15 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
                     .push_back((*message_index, message.clone()));
                 *last_sent_opt = Some(now.clone());
             }
+            if let Some(t) = last_sent_opt.as_ref() {
+                new_min = Some(match new_min {
+                    None => t.clone(),
+                    Some(cur) => if t < &cur { t.clone() } else { cur },
+                });
+            }
         }
+        self.min_last_sent = new_min;
+        self.has_unsent = false;
     }
 
     fn has_messages(&self) -> bool {
