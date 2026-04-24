@@ -62,6 +62,7 @@ pub struct BenchWorldBuilder {
     user_count: usize,
     entity_count: usize,
     entity_kind: EntityKind,
+    scoped: bool,
 }
 
 impl Default for BenchWorldBuilder {
@@ -76,6 +77,7 @@ impl BenchWorldBuilder {
             user_count: 1,
             entity_count: 0,
             entity_kind: EntityKind::Mutable,
+            scoped: true,
         }
     }
 
@@ -94,9 +96,23 @@ impl BenchWorldBuilder {
         self
     }
 
+    /// Skip adding entities to the room. They remain server-local with no
+    /// dirty receivers attached — a baseline for the Win-3 push model,
+    /// where the idle/mutation cost is purely framework overhead with no
+    /// per-entity dispatch at all.
+    pub fn unscoped(mut self) -> Self {
+        self.scoped = false;
+        self
+    }
+
     /// Build to steady-state. Not measured — call from `iter_batched` setup.
     pub fn build(self) -> BenchWorld {
-        BenchWorld::new(self.user_count, self.entity_count, self.entity_kind)
+        BenchWorld::new(
+            self.user_count,
+            self.entity_count,
+            self.entity_kind,
+            self.scoped,
+        )
     }
 }
 
@@ -118,7 +134,7 @@ pub struct BenchWorld {
 }
 
 impl BenchWorld {
-    fn new(user_count: usize, entity_count: usize, entity_kind: EntityKind) -> Self {
+    fn new(user_count: usize, entity_count: usize, entity_kind: EntityKind, scoped: bool) -> Self {
         TestClock::init(0);
 
         let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().expect("invalid addr");
@@ -226,12 +242,14 @@ impl BenchWorld {
                 }
                 entity
             };
-            server.room_mut(&room_key).add_entity(&entity);
+            if scoped {
+                server.room_mut(&room_key).add_entity(&entity);
+            }
             server_entities.push(entity);
         }
 
         // Run until all entities replicated to all clients
-        if entity_count > 0 && user_count > 0 {
+        if scoped && entity_count > 0 && user_count > 0 {
             for _ in 0..REPLICATE_TIMEOUT {
                 advance_tick(&hub, &mut server, &mut server_world, &mut clients);
                 drain_all_events(&mut server, &mut clients);

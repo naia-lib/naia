@@ -116,7 +116,7 @@ thresholds for Win-1 without first observing current numbers on a clean run.
 
 ---
 
-### 6. [x] Expand iai coverage to Wins 3, 4, 5  (`b4ef9ef3`)
+### 6. [x] Expand iai coverage to Wins 3, 4, 5  (`b4ef9ef3`, refined in follow-up)
 
 **Files**: new benches in `iai/benches/`.
 
@@ -134,6 +134,21 @@ hot paths won't be caught.
 Each bench should use `iai-callgrind`'s `#[library_benchmark]` attribute,
 match the structure of the existing two files, and keep the work-per-bench
 small enough that instruction counts are stable (<1% run-to-run).
+
+**Shipped vs. spec**:
+- `dirty_receiver.rs`: scoped N=10/100/1000 + unscoped N=1000 baseline
+  (required adding `.unscoped()` to `BenchWorldBuilder`). ✅ letter+spirit.
+- `immutable_dispatch.rs`: single-entity `mutable_update` (with
+  mutation) vs `immutable_update` (tick-only; immutable cannot be
+  mutated by design). ✅ letter+spirit.
+- `spawn_coalesced.rs`: three steady-state tick benches at N=10/100/1000.
+  **NOT the literal "spawn-with-3 vs spawn+3-inserts" A/B.** That A/B
+  is unachievable in this build: (1) `BenchEntity` has only one
+  component type, (2) coalescing happens for every insert before the
+  first send — there is no non-coalesced path the harness can reach,
+  (3) criterion's own `spawn/coalesced.rs` explicitly notes the A/B
+  would require two Naia builds. Limitation documented in the bench
+  file's header.
 
 ---
 

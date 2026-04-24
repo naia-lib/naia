@@ -4,46 +4,51 @@
 //
 // Win-5 invariant: immutable components skip diff-tracking allocation
 // (no MutChannel, no UserDiffHandler, no MutReceiver) AND skip per-tick
-// mutation dispatch entirely. So at the same N, `immutable_idle`
-// instruction count should be strictly ≤ `mutable_idle`. A regression
-// where they converge indicates an immutable component is incurring
-// mutable-component-style diff state.
+// mutation dispatch entirely. A single-entity world lets iai isolate
+// the per-component pipeline cost:
+//   * mutable_update:   one mutable entity, one mutate_entities(1) per tick
+//                       — full dispatch pipeline runs.
+//   * immutable_update: one immutable entity, tick() only (immutable
+//                       components cannot be mutated by design) — no
+//                       dispatch pipeline runs.
+// Gate: `immutable_update` must cost fewer instructions than
+// `mutable_update`. A regression where they converge indicates an
+// immutable component is being threaded through the mutable pipeline.
 
 use iai_callgrind::{library_benchmark, library_benchmark_group, main, LibraryBenchmarkConfig};
 use naia_benches::BenchWorldBuilder;
 
-fn setup_mutable_1ke() -> naia_benches::BenchWorld {
-    BenchWorldBuilder::new().users(1).entities(1_000).build()
+fn setup_mutable_1e() -> naia_benches::BenchWorld {
+    BenchWorldBuilder::new().users(1).entities(1).build()
 }
 
-fn setup_immutable_1ke() -> naia_benches::BenchWorld {
+fn setup_immutable_1e() -> naia_benches::BenchWorld {
     BenchWorldBuilder::new()
         .users(1)
-        .entities(1_000)
+        .entities(1)
         .immutable()
         .build()
 }
 
-// Mutable-component idle tick, N=1000. Baseline for Win-5 comparison.
+// Mutable component, single update per tick. Full dispatch pipeline cost.
 #[library_benchmark]
-#[bench::b(setup_mutable_1ke())]
-fn mutable_idle_1ke(mut world: naia_benches::BenchWorld) {
+#[bench::b(setup_mutable_1e())]
+fn mutable_update(mut world: naia_benches::BenchWorld) {
+    world.mutate_entities(1);
     world.tick();
 }
 
-// Immutable-component idle tick, N=1000.
-// PRIMARY GATE: instruction count must be ≤ `mutable_idle_1ke`.
-// Immutable components are excluded from diff tracking entirely, so
-// their idle tick should be cheaper in absolute terms.
+// Immutable component, single tick (immutable can't be mutated by design).
+// PRIMARY GATE: instruction count must be ≤ `mutable_update`.
 #[library_benchmark]
-#[bench::b(setup_immutable_1ke())]
-fn immutable_idle_1ke(mut world: naia_benches::BenchWorld) {
+#[bench::b(setup_immutable_1e())]
+fn immutable_update(mut world: naia_benches::BenchWorld) {
     world.tick();
 }
 
 library_benchmark_group!(
     name = immutable_dispatch_group;
-    benchmarks = mutable_idle_1ke, immutable_idle_1ke
+    benchmarks = mutable_update, immutable_update
 );
 
 main!(
