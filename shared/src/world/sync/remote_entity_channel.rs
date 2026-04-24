@@ -211,13 +211,6 @@ impl RemoteEntityChannel {
         self.component_channels.keys().cloned().collect()
     }
 
-    pub(crate) fn component_kinds_intersection(
-        &self,
-        other_component_kinds: &HashSet<ComponentKind>,
-    ) -> HashSet<ComponentKind> {
-        intersection_keys(other_component_kinds, &self.component_channels)
-    }
-
     fn process_messages(&mut self) {
         loop {
             let Some((id, msg)) = self.buffered_messages.peek_front() else {
@@ -415,33 +408,6 @@ impl RemoteEntityChannel {
     }
 }
 
-// This function computes the intersection of keys between a `HashSet` and a `HashMap`.
-use std::hash::BuildHasher;
-
 use crate::world::sync::auth_channel::AuthChannel;
 use crate::world::sync::ordered_ids::OrderedIds;
 
-fn intersection_keys<K, V, SA, SB>(a: &HashSet<K, SA>, b: &HashMap<K, V, SB>) -> HashSet<K, SA>
-where
-    K: Eq + Hash + Copy,
-    SA: BuildHasher + Clone,
-    SB: BuildHasher,
-{
-    let cap = a.len().min(b.len());
-    let mut out = HashSet::with_capacity_and_hasher(cap, a.hasher().clone());
-
-    if a.len() <= b.len() {
-        for &k in a {
-            if b.contains_key(&k) {
-                out.insert(k);
-            }
-        }
-    } else {
-        for &k in b.keys() {
-            if a.contains(&k) {
-                out.insert(k);
-            }
-        }
-    }
-    out
-}

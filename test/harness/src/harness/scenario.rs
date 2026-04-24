@@ -1307,6 +1307,15 @@ impl Scenario {
         server.scope_change_queue_len()
     }
 
+    /// Returns the total dirty update candidate count across all server connections.
+    ///
+    /// Returns 0 on the legacy full-scan path (no dirty set exists).
+    /// Returns 0 after a Phase 3 tick that drained the dirty set cleanly.
+    pub fn total_dirty_update_count(&self) -> usize {
+        let server = self.server.as_ref().expect("server not started");
+        server.total_dirty_update_count()
+    }
+
     // ========================================================================
     // Wire Trace Capture API (Phase 0.5)
     // ========================================================================

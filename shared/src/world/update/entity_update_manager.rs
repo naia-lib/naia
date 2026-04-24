@@ -112,6 +112,15 @@ impl EntityUpdateManager {
         self.diff_handler.receiver_count()
     }
 
+    #[cfg(feature = "test_utils")]
+    pub fn dirty_candidates_len(&self) -> usize {
+        self.diff_handler.dirty_candidates_count()
+    }
+
+    pub fn build_dirty_candidates_from_receivers(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        self.diff_handler.dirty_receiver_candidates()
+    }
+
     // Collect
 
     pub fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {

@@ -971,17 +971,22 @@ impl LocalWorldManager {
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let mut updatable_world = self.host.get_updatable_world(&self.entity_map);
+        let dirty = self.updater.build_dirty_candidates_from_receivers();
         let local_converter = self.entity_map.entity_converter();
-        self.remote
-            .append_updatable_world(local_converter, &mut updatable_world);
-        updatable_world.retain(|ge, _| !self.paused_entities.contains(ge));
-        self.updater.take_outgoing_events(
-            world,
-            world_converter,
-            global_world_manager,
-            updatable_world,
-        )
+        let mut updatable_world: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
+        for (global_entity, kinds) in dirty {
+            if self.paused_entities.contains(&global_entity) {
+                continue;
+            }
+            for kind in kinds {
+                if self.host.is_component_updatable(local_converter, &global_entity, &kind)
+                    || self.remote.is_component_updatable(local_converter, &global_entity, &kind)
+                {
+                    updatable_world.entry(global_entity).or_default().insert(kind);
+                }
+            }
+        }
+        self.updater.take_outgoing_events(world, world_converter, global_world_manager, updatable_world)
     }
 
     // pub(crate) fn get_message_reader_helpers<'a, 'b, 'c, E: Copy + Eq + Hash + Sync + Send>(
@@ -1191,5 +1196,9 @@ cfg_if! {
 impl LocalWorldManager {
     pub fn diff_handler_receiver_count(&self) -> usize {
         self.updater.diff_handler_receiver_count()
+    }
+
+    pub fn dirty_update_count(&self) -> usize {
+        self.updater.dirty_candidates_len()
     }
 }

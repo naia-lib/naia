@@ -554,4 +554,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn scope_change_queue_len(&self) -> usize {
         self.world_server.scope_change_queue_len()
     }
+
+    pub fn total_dirty_update_count(&self) -> usize {
+        self.world_server.total_dirty_update_count()
+    }
 }

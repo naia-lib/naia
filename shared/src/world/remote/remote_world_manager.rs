@@ -142,32 +142,25 @@ impl RemoteWorldManager {
         authed_entities.remove(remote_entity);
     }
 
-    pub(crate) fn append_updatable_world(
+    pub(crate) fn is_component_updatable(
         &self,
         local_converter: &dyn LocalEntityAndGlobalEntityConverter,
-        updatable_world: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
-    ) {
+        global_entity: &GlobalEntity,
+        kind: &ComponentKind,
+    ) -> bool {
         let Some(authed_entities) = self.authed_entities_opt.as_ref() else {
-            return;
+            return false;
         };
-
-        for remote_entity in authed_entities {
-            let Some(remote_channel) = self.remote_engine.get_world().get(remote_entity) else {
-                continue;
-            };
-            // Entity may no longer exist in the map if it went out of scope.
-            // In that case, skip this entity - it's no longer relevant for updates.
-            let Ok(global_entity) = local_converter.remote_entity_to_global_entity(remote_entity)
-            else {
-                continue;
-            };
-            let remote_component_kinds = remote_channel.component_kinds();
-            if let Some(existing) = updatable_world.get_mut(&global_entity) {
-                existing.extend(&remote_component_kinds);
-            } else {
-                updatable_world.insert(global_entity, remote_component_kinds);
-            }
+        let Ok(remote_entity) = local_converter.global_entity_to_remote_entity(global_entity) else {
+            return false;
+        };
+        if !authed_entities.contains(&remote_entity) {
+            return false;
         }
+        let Some(remote_channel) = self.remote_engine.get_world().get(&remote_entity) else {
+            return false;
+        };
+        remote_channel.has_component_kind(kind)
     }
 
     pub fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {

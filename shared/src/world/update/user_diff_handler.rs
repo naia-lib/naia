@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::{Arc, RwLock, RwLockReadGuard},
 };
@@ -113,5 +113,20 @@ impl UserDiffHandler {
     #[cfg(feature = "test_utils")]
     pub fn receiver_count(&self) -> usize {
         self.receivers.len()
+    }
+
+    #[cfg(feature = "test_utils")]
+    pub fn dirty_candidates_count(&self) -> usize {
+        self.receivers.values().filter(|r| !r.diff_mask_is_clear()).count()
+    }
+
+    pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
+        for ((entity, kind), receiver) in &self.receivers {
+            if !receiver.diff_mask_is_clear() {
+                result.entry(*entity).or_default().insert(*kind);
+            }
+        }
+        result
     }
 }

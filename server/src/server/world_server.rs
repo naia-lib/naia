@@ -2980,6 +2980,13 @@ cfg_if! {
             pub fn scope_change_queue_len(&self) -> usize {
                 self.scope_change_queue.len()
             }
+
+            pub fn total_dirty_update_count(&self) -> usize {
+                self.user_connections
+                    .values()
+                    .map(|conn| conn.base.world_manager.dirty_update_count())
+                    .sum()
+            }
         }
     }
 }

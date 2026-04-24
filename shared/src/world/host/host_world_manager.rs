@@ -159,28 +159,25 @@ impl HostWorldManager {
         self.delivered_engine.get_world()
     }
 
-    pub(crate) fn get_updatable_world(
+    pub(crate) fn is_component_updatable(
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let mut output = HashMap::new();
-        for (host_entity, host_channel) in self.get_host_world() {
-            let Some(delivered_channel) = self.get_delivered_world().get(host_entity) else {
-                continue;
-            };
-            let host_component_kinds = host_channel.component_kinds();
-            let joined_component_kinds =
-                delivered_channel.component_kinds_intersection(host_component_kinds);
-            if joined_component_kinds.is_empty() {
-                continue;
-            }
-
-            let global_entity = converter
-                .host_entity_to_global_entity(host_entity)
-                .expect("Host entity not found in local entity map");
-            output.insert(global_entity, joined_component_kinds);
+        global_entity: &GlobalEntity,
+        kind: &ComponentKind,
+    ) -> bool {
+        let Ok(host_entity) = converter.global_entity_to_host_entity(global_entity) else {
+            return false;
+        };
+        let Some(host_channel) = self.get_host_world().get(&host_entity) else {
+            return false;
+        };
+        if !host_channel.component_kinds().contains(kind) {
+            return false;
         }
-        output
+        let Some(delivered_channel) = self.get_delivered_world().get(&host_entity) else {
+            return false;
+        };
+        delivered_channel.has_component_kind(kind)
     }
 
     pub(crate) fn deliver_message(
