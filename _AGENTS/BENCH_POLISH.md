@@ -91,7 +91,7 @@ without understanding could corrupt bench results silently.
 
 ---
 
-### 5. [x] Add `--assert-wins` mode to `naia-bench-report`  (commit pending)
+### 5. [x] Add `--assert-wins` mode to `naia-bench-report`  (`83c3e7d0`)
 
 **Files**: `test/bench_report/src/main.rs`, plus probably a new
 `test/bench_report/src/assert_wins.rs`.
@@ -116,7 +116,7 @@ thresholds for Win-1 without first observing current numbers on a clean run.
 
 ---
 
-### 6. [ ] Expand iai coverage to Wins 3, 4, 5
+### 6. [x] Expand iai coverage to Wins 3, 4, 5  (`PENDING_COMMIT`)
 
 **Files**: new benches in `iai/benches/`.
 

@@ -15,6 +15,18 @@ harness = false
 name = "update_dispatch"
 harness = false
 
+[[bench]]
+name = "dirty_receiver"
+harness = false
+
+[[bench]]
+name = "spawn_coalesced"
+harness = false
+
+[[bench]]
+name = "immutable_dispatch"
+harness = false
+
 [build-dependencies]
 iai-callgrind-runner = "0.14"
 
