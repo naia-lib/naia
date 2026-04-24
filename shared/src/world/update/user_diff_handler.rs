@@ -9,7 +9,7 @@ use log::warn;
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
-use crate::world::update::mut_channel::MutReceiver;
+use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
 
 // Diagnostic counters for the perf-upgrade project. These measure how much
 // work `dirty_receiver_candidates` does per invocation. On idle ticks today
@@ -41,6 +41,11 @@ pub mod dirty_scan_counters {
 pub struct UserDiffHandler {
     receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
+    // Dirty-set: the (entity, kind) keys whose MutReceivers currently hold a
+    // non-clear DiffMask. Maintained incrementally by DirtyNotifier callbacks
+    // fired inside MutReceiver::mutate / or_mask / clear_mask. The scan in
+    // `dirty_receiver_candidates` reads this directly — O(dirty), not O(N).
+    dirty_set: Arc<DirtySet>,
 }
 
 impl UserDiffHandler {
@@ -48,6 +53,7 @@ impl UserDiffHandler {
         Self {
             receivers: HashMap::new(),
             global_diff_handler: global_world_manager.diff_handler(),
+            dirty_set: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -76,11 +82,24 @@ impl UserDiffHandler {
             return;
         };
 
+        receiver.attach_notifier(DirtyNotifier::new(
+            *entity,
+            *component_kind,
+            Arc::downgrade(&self.dirty_set),
+        ));
         self.receivers.insert((*entity, *component_kind), receiver);
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.receivers.remove(&(*entity, *component_kind));
+        if let Ok(mut set) = self.dirty_set.write() {
+            if let Some(kinds) = set.get_mut(entity) {
+                kinds.remove(component_kind);
+                if kinds.is_empty() {
+                    set.remove(entity);
+                }
+            }
+        }
     }
 
     pub fn has_component(&self, entity: &GlobalEntity, component: &ComponentKind) -> bool {
@@ -143,24 +162,20 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        let result: HashMap<GlobalEntity, HashSet<ComponentKind>> = match self.dirty_set.read() {
+            Ok(guard) => guard.clone(),
+            Err(_) => HashMap::new(),
+        };
         #[cfg(feature = "bench_instrumentation")]
         {
             use std::sync::atomic::Ordering;
             dirty_scan_counters::SCAN_CALLS.fetch_add(1, Ordering::Relaxed);
-            dirty_scan_counters::RECEIVERS_VISITED
-                .fetch_add(self.receivers.len() as u64, Ordering::Relaxed);
-        }
-        let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
-        for ((entity, kind), receiver) in &self.receivers {
-            if !receiver.diff_mask_is_clear() {
-                result.entry(*entity).or_default().insert(*kind);
-            }
-        }
-        #[cfg(feature = "bench_instrumentation")]
-        {
-            use std::sync::atomic::Ordering;
-            let dirty: u64 = result.values().map(|s| s.len() as u64).sum();
-            dirty_scan_counters::DIRTY_RESULTS.fetch_add(dirty, Ordering::Relaxed);
+            // With the dirty-push model, this is the number of dirty entries we
+            // actually touched — O(dirty), not O(receivers). If the ratio to
+            // (U·N) is > 0.01 on an idle tick, Phase 3 has regressed.
+            let visited: u64 = result.values().map(|s| s.len() as u64).sum();
+            dirty_scan_counters::RECEIVERS_VISITED.fetch_add(visited, Ordering::Relaxed);
+            dirty_scan_counters::DIRTY_RESULTS.fetch_add(visited, Ordering::Relaxed);
         }
         result
     }
