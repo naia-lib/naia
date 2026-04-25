@@ -18,6 +18,7 @@ mod spawn {
 mod update {
     pub mod bulk;
     pub mod immutable;
+    pub mod mutate_path;
     pub mod mutation;
 }
 
@@ -29,6 +30,7 @@ mod authority {
 mod wire {
     pub mod bandwidth;
     pub mod bandwidth_realistic;
+    pub mod bandwidth_realistic_quantized;
     pub mod framing;
 }
 
@@ -43,6 +45,7 @@ criterion_main!(
     spawn::coalesced::spawn_coalesced,
     spawn::paint_rect::spawn_paint_rect,
     update::mutation::update_mutation,
+    update::mutate_path::mutate_path_group,
     update::bulk::update_bulk,
     update::immutable::update_immutable,
     authority::grant::authority_grant_group,
@@ -50,4 +53,5 @@ criterion_main!(
     wire::framing::wire_framing_group,
     wire::bandwidth::wire_bandwidth,
     wire::bandwidth_realistic::wire_bandwidth_realistic_group,
+    wire::bandwidth_realistic_quantized::wire_bandwidth_realistic_quantized_group,
 );

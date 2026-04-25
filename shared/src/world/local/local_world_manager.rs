@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
-    sync::RwLockReadGuard,
     time::Duration,
 };
 
@@ -768,7 +767,7 @@ impl LocalWorldManager {
         &self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
-    ) -> RwLockReadGuard<'_, DiffMask> {
+    ) -> DiffMask {
         self.updater.get_diff_mask(global_entity, component_kind)
     }
 

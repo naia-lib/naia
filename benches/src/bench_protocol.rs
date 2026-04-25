@@ -1,6 +1,9 @@
 use naia_shared::{
-    Channel, ChannelDirection, ChannelMode, Message, Property, Protocol, ReliableSettings, Replicate,
+    Channel, ChannelDirection, ChannelMode, Message, Property, Protocol, ReliableSettings,
+    Replicate, Serde, SignedVariableFloat,
 };
+
+use crate::serde_quat::BenchQuat;
 
 // ─── Entity type ─────────────────────────────────────────────────────────────
 
@@ -74,6 +77,78 @@ impl Rotation {
     }
 }
 
+// ─── Quantized realistic-archetype components ────────────────────────────────
+//
+// Mirror cyberlith's production wire encoding for `wire/bandwidth_realistic_quantized`.
+// Cyberlith wraps multi-axis state into a single `Property<State>` (see
+// `cyberlith/services/game/naia_proto/src/components/networked/{position,velocity,rotation}.rs`),
+// so mutation tracking is at the whole-component level — one DiffMask bit per
+// component, not per axis. The encodings:
+//   - Position: i16 tile × 3  + SignedVariableFloat<14, 0> delta × 3 (~93–138 bits/state)
+//   - Velocity: SignedVariableFloat<11, 2> × 3  (~3–39 bits/state)
+//   - Rotation: BenchQuat smallest-three (~21 bits/state, mirrors `SerdeQuat`)
+
+#[derive(Serde, PartialEq, Clone)]
+pub struct PositionQState {
+    pub tile_x: i16,
+    pub tile_y: i16,
+    pub tile_z: i16,
+    pub dx: SignedVariableFloat<14, 0>,
+    pub dy: SignedVariableFloat<14, 0>,
+    pub dz: SignedVariableFloat<14, 0>,
+}
+
+#[derive(Replicate)]
+pub struct PositionQ {
+    pub state: Property<PositionQState>,
+}
+
+impl PositionQ {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self::new_complete(PositionQState {
+            tile_x: x.round() as i16,
+            tile_y: y.round() as i16,
+            tile_z: z.round() as i16,
+            dx: SignedVariableFloat::new(0.0),
+            dy: SignedVariableFloat::new(0.0),
+            dz: SignedVariableFloat::new(0.0),
+        })
+    }
+}
+
+#[derive(Serde, PartialEq, Clone)]
+pub struct VelocityQState {
+    pub vx: SignedVariableFloat<11, 2>,
+    pub vy: SignedVariableFloat<11, 2>,
+    pub vz: SignedVariableFloat<11, 2>,
+}
+
+#[derive(Replicate)]
+pub struct VelocityQ {
+    pub state: Property<VelocityQState>,
+}
+
+impl VelocityQ {
+    pub fn new(x: f32, y: f32, z: f32) -> Self {
+        Self::new_complete(VelocityQState {
+            vx: SignedVariableFloat::new(x),
+            vy: SignedVariableFloat::new(y),
+            vz: SignedVariableFloat::new(z),
+        })
+    }
+}
+
+#[derive(Replicate)]
+pub struct RotationQ {
+    pub state: Property<BenchQuat>,
+}
+
+impl RotationQ {
+    pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
+        Self::new_complete(BenchQuat::new(x, y, z, w))
+    }
+}
+
 // ─── Channel ─────────────────────────────────────────────────────────────────
 
 #[derive(Channel)]
@@ -89,6 +164,9 @@ pub fn bench_protocol() -> Protocol {
         .add_component::<Position>()
         .add_component::<Velocity>()
         .add_component::<Rotation>()
+        .add_component::<PositionQ>()
+        .add_component::<VelocityQ>()
+        .add_component::<RotationQ>()
         .add_message::<BenchAuth>()
         .add_channel::<BenchChannel>(
             ChannelDirection::Bidirectional,

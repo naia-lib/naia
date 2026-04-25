@@ -2,7 +2,6 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     net::SocketAddr,
-    sync::RwLockReadGuard,
     time::Duration,
 };
 
@@ -86,11 +85,11 @@ impl EntityUpdateManager {
     }
 
     pub fn get_diff_mask(
-        &'_ self,
+        &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
-    ) -> RwLockReadGuard<'_, DiffMask> {
-        self.diff_handler.diff_mask(entity, component_kind)
+    ) -> DiffMask {
+        self.diff_handler.diff_mask_snapshot(entity, component_kind)
     }
 
     pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {

@@ -848,9 +848,7 @@ impl WorldWriter {
         let component_kind_set = next_send_updates.get(global_entity).unwrap();
         for component_kind in component_kind_set {
             // get diff mask
-            let diff_mask = world_manager
-                .get_diff_mask(global_entity, component_kind)
-                .clone();
+            let diff_mask = world_manager.get_diff_mask(global_entity, component_kind);
 
             let mut converter = world_manager.entity_converter_mut(global_world_manager);
 

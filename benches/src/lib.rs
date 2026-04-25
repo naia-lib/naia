@@ -1,4 +1,5 @@
 pub mod bench_protocol;
+pub mod serde_quat;
 
 use std::{net::SocketAddr, sync::Arc};
 
@@ -20,8 +21,10 @@ use naia_shared::{
 
 use crate::bench_protocol::{
     bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent, Position,
-    Rotation, Velocity,
+    PositionQ, PositionQState, Rotation, RotationQ, Velocity, VelocityQ, VelocityQState,
 };
+use crate::serde_quat::BenchQuat;
+use naia_shared::SignedVariableFloat;
 
 /// Simulated tick duration. 16 ms = 62.5 Hz, a reasonable game-server
 /// default. Load-bearing: don't change without auditing callers that
@@ -81,6 +84,7 @@ pub struct BenchWorldBuilder {
     entity_count: usize,
     entity_kind: EntityKind,
     scoped: bool,
+    uncapped_bandwidth: bool,
 }
 
 impl Default for BenchWorldBuilder {
@@ -96,7 +100,19 @@ impl BenchWorldBuilder {
             entity_count: 0,
             entity_kind: EntityKind::Mutable,
             scoped: true,
+            uncapped_bandwidth: false,
         }
+    }
+
+    /// Disable the per-connection bandwidth cap on the server (sets
+    /// `target_bytes_per_sec = u32::MAX`). Required when the bench needs to
+    /// measure *raw* bytes/tick of the dirty workload — the default 64 KB/s
+    /// cap clips dense-update scenarios at ~1288 B/tick, masking compaction
+    /// wins. The bandwidth_realistic_quantized bench uses this so the
+    /// quantized-vs-naive comparison reflects the wire format, not the cap.
+    pub fn uncapped_bandwidth(mut self) -> Self {
+        self.uncapped_bandwidth = true;
+        self
     }
 
     pub fn users(mut self, n: usize) -> Self {
@@ -130,6 +146,7 @@ impl BenchWorldBuilder {
             self.entity_count,
             self.entity_kind,
             self.scoped,
+            self.uncapped_bandwidth,
         )
     }
 }
@@ -162,14 +179,23 @@ pub struct BenchWorld {
 }
 
 impl BenchWorld {
-    fn new(user_count: usize, entity_count: usize, entity_kind: EntityKind, scoped: bool) -> Self {
+    fn new(
+        user_count: usize,
+        entity_count: usize,
+        entity_kind: EntityKind,
+        scoped: bool,
+        uncapped_bandwidth: bool,
+    ) -> Self {
         TestClock::init(0);
 
         let server_addr: SocketAddr = FAKE_SERVER_ADDR.parse().expect("invalid addr");
         let hub = LocalTransportHub::new(server_addr);
 
         let protocol = bench_protocol();
-        let server_config = ServerConfig::default();
+        let mut server_config = ServerConfig::default();
+        if uncapped_bandwidth {
+            server_config.connection.bandwidth.target_bytes_per_sec = u32::MAX;
+        }
         let mut server: NaiaServer<BenchEntity> =
             NaiaServer::new(server_config, protocol.clone());
         server.listen(ServerSocket::new(
@@ -440,6 +466,84 @@ impl BenchWorld {
             self.server_entities.push(entity);
         }
         start..self.server_entities.len()
+    }
+
+    /// Spawn `count` entities with cyberlith-shape **quantized** components for
+    /// `wire/bandwidth_realistic_quantized`.
+    ///
+    /// Composition by archetype:
+    /// - `Player`     → `PositionQ` + `VelocityQ` + `RotationQ`
+    /// - `Projectile` → `PositionQ` + `VelocityQ`
+    /// - `Vehicle`    → `PositionQ` + `VelocityQ` + `RotationQ`
+    ///
+    /// Returns the index range in `server_entities` that was just appended.
+    pub fn spawn_archetype_quantized(
+        &mut self,
+        archetype: Archetype,
+        count: usize,
+    ) -> std::ops::Range<usize> {
+        let start = self.server_entities.len();
+        for i in 0..count {
+            let f = i as f32;
+            let entity = {
+                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                let id = em.id();
+                em.insert_component(PositionQ::new(f, f, f));
+                em.insert_component(VelocityQ::new(f, f, f));
+                if matches!(archetype, Archetype::Player | Archetype::Vehicle) {
+                    em.insert_component(RotationQ::new(0.0, 0.0, 0.0, 1.0));
+                }
+                id
+            };
+            self.server.room_mut(&self.room_key).add_entity(&entity);
+            self.server_entities.push(entity);
+        }
+        start..self.server_entities.len()
+    }
+
+    /// Mutate the quantized state on every entity in `range`. Mirrors
+    /// `mutate_archetype_range` but writes the whole `Property<State>`
+    /// per component (matches cyberlith's per-component dirty pattern).
+    pub fn mutate_archetype_range_quantized(&mut self, range: std::ops::Range<usize>) {
+        for idx in range {
+            if idx >= self.server_entities.len() {
+                continue;
+            }
+            let entity = self.server_entities[idx];
+            let f = idx as f32;
+            if let Some(mut p) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<PositionQ>()
+            {
+                *p.state = PositionQState {
+                    tile_x: (f as i16).wrapping_add(1),
+                    tile_y: (f as i16).wrapping_add(1),
+                    tile_z: (f as i16).wrapping_add(1),
+                    dx: SignedVariableFloat::new(0.5),
+                    dy: SignedVariableFloat::new(0.5),
+                    dz: SignedVariableFloat::new(0.5),
+                };
+            }
+            if let Some(mut v) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<VelocityQ>()
+            {
+                *v.state = VelocityQState {
+                    vx: SignedVariableFloat::new(f + 1.0),
+                    vy: SignedVariableFloat::new(f + 1.0),
+                    vz: SignedVariableFloat::new(f + 1.0),
+                };
+            }
+            if let Some(mut r) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<RotationQ>()
+            {
+                *r.state = BenchQuat::new(0.0, 0.0, 0.0, 1.0);
+            }
+        }
     }
 
     /// Drive ticks until all clients have caught up to `target_count` entities.

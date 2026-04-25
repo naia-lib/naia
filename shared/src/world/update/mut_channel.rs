@@ -1,9 +1,10 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::{Arc, OnceLock, RwLock, RwLockReadGuard, Weak},
+    sync::{Arc, OnceLock, RwLock, Weak},
 };
 
+use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType, PropertyMutate};
 
 /// Shared dirty-component set owned by a UserDiffHandler. MutReceivers hold a
@@ -96,17 +97,29 @@ impl MutChannel {
     }
 }
 
-// MutReceiver
+// MutReceiver — atomic, lock-free hot path.
+//
+// Phase 8.1 Stage C (2026-04-25): replaced `Arc<RwLock<DiffMask>>` with
+// `Arc<AtomicDiffMask>`. `mutate(prop_idx)` is now a single atomic
+// `fetch_or` instead of a `RwLock::write` + `Vec<u8>::set`-bit dance. The
+// `was_clear` signal that gates `notify_dirty` is the same `prev == 0`
+// check the atomic returns — semantics are byte-for-byte identical to
+// the prior implementation, but the per-mutation cost drops from a
+// lock-acquire round trip to one cache-line atomic.
+//
+// `Arc` is retained only because each user clones the same receiver via
+// `MutChannelData::new_receiver`, so the inner mask must be shared. The
+// notifier is `Arc<OnceLock<...>>` for the same reason.
 #[derive(Clone)]
 pub struct MutReceiver {
-    mask: Arc<RwLock<DiffMask>>,
+    mask: Arc<AtomicDiffMask>,
     notifier: Arc<OnceLock<DirtyNotifier>>,
 }
 
 impl MutReceiver {
     pub fn new(diff_mask_length: u8) -> Self {
         Self {
-            mask: Arc::new(RwLock::new(DiffMask::new(diff_mask_length))),
+            mask: Arc::new(AtomicDiffMask::new(diff_mask_length)),
             notifier: Arc::new(OnceLock::new()),
         }
     }
@@ -117,27 +130,28 @@ impl MutReceiver {
         let _ = self.notifier.set(notifier);
     }
 
-    pub fn mask(&'_ self) -> RwLockReadGuard<'_, DiffMask> {
-        let Ok(mask) = self.mask.as_ref().read() else {
-            panic!("Mask held on current thread");
-        };
+    /// Snapshot the receiver's current mask into an owned `DiffMask`.
+    /// Used by `world_writer` when copying the mask into `sent_updates`
+    /// before clearing the receiver. Replaces the prior
+    /// `RwLockReadGuard<'_, DiffMask>` API which forced callers to clone
+    /// while holding a read lock.
+    pub fn mask_snapshot(&self) -> DiffMask {
+        self.mask.snapshot()
+    }
 
-        mask
+    /// Read one byte of the receiver's mask. Cheaper than `mask_snapshot()`
+    /// when callers only need a single byte (currently unused but kept as
+    /// the obvious primitive on top of the atomic representation).
+    pub fn mask_byte(&self, index: usize) -> u8 {
+        self.mask.byte(index)
     }
 
     pub fn diff_mask_is_clear(&self) -> bool {
-        let Ok(mask) = self.mask.as_ref().read() else {
-            panic!("Mask held on current thread");
-        };
-        return mask.is_clear();
+        self.mask.is_clear()
     }
 
     pub fn mutate(&self, property_index: u8) {
-        let Ok(mut mask) = self.mask.as_ref().write() else {
-            panic!("Mask held on current thread");
-        };
-        let was_clear = mask.is_clear();
-        mask.set_bit(property_index, true);
+        let was_clear = self.mask.set_bit(property_index);
         if was_clear {
             if let Some(n) = self.notifier.get() {
                 n.notify_dirty();
@@ -146,12 +160,8 @@ impl MutReceiver {
     }
 
     pub fn or_mask(&self, other_mask: &DiffMask) {
-        let Ok(mut mask) = self.mask.as_ref().write() else {
-            panic!("Mask held on current thread");
-        };
-        let was_clear = mask.is_clear();
-        mask.or(other_mask);
-        if was_clear && !mask.is_clear() {
+        let was_clear_now_dirty = self.mask.or_with(other_mask);
+        if was_clear_now_dirty {
             if let Some(n) = self.notifier.get() {
                 n.notify_dirty();
             }
@@ -159,12 +169,8 @@ impl MutReceiver {
     }
 
     pub fn clear_mask(&self) {
-        let Ok(mut mask) = self.mask.as_ref().write() else {
-            panic!("Mask held on current thread");
-        };
-        let was_clear = mask.is_clear();
-        mask.clear();
-        if !was_clear {
+        let was_dirty = self.mask.clear();
+        if was_dirty {
             if let Some(n) = self.notifier.get() {
                 n.notify_clean();
             }

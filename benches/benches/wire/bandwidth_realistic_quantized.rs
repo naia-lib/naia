@@ -4,25 +4,24 @@ use criterion::{criterion_group, BatchSize, BenchmarkId, Criterion, Throughput};
 
 use naia_benches::{Archetype, BenchWorldBuilder};
 
-/// Realistic-archetype bandwidth scenarios.
+/// Cyberlith-shape quantized bandwidth scenarios.
 ///
-/// Unlike `wire/bandwidth/scenario` (which mutates a single `u32` per
-/// entity), this group composes `Position` + `Velocity` (+ optional
-/// `Rotation`) per entity to measure bytes/tick under a Halo-shaped state
-/// load. Each scenario:
+/// Mirrors `wire/bandwidth_realistic` exactly, but composes
+/// `PositionQ` + `VelocityQ` (+ optional `RotationQ`) — the cyberlith
+/// production wire shapes. Where the unquantized bench uses three
+/// independent `Property<f32>` axes per component (≈ 32 bits each),
+/// the quantized bench uses a single `Property<State>` per component
+/// where `State` packs the axes as `i16 + SignedVariableFloat<14, 0>`
+/// (position), `SignedVariableFloat<11, 2>` (velocity), and
+/// smallest-three quaternion (rotation, 21 bits) — see
+/// `crate::bench_protocol`.
 ///
-/// 1. Builds a `BenchWorld` with a single receiving client and zero entities.
-/// 2. Spawns the requested mix of archetypes (Player / Projectile / Vehicle).
-/// 3. Drives ticks until the client catches up — replication is *not* measured.
-/// 4. Mutates every dynamic entity's position+velocity(+rotation) each tick.
-/// 5. Calibrates `Throughput::Bytes` from `server.outgoing_bytes_last_tick()`
-///    after a 60-tick warmup, so criterion reports bytes/sec directly.
+/// Phase 8.0's contract: at the same scenario the quantized variant
+/// reports ≤ 0.65× of the unquantized bytes/tick, with
+/// `halo_btb_16v16` ≤ 700 B/tick (down from ~1226 B/tick naive).
 ///
-/// Most scenarios target one receiving client; the `_4u` / `_16u` variants
-/// fan out to 4 and 16 receiving clients respectively, to confirm that
-/// per-tick server egress scales linearly with client count for archetype
-/// shapes (the toy `BenchComponent` cells already showed this in
-/// `wire/bandwidth/scenario/4u_*`).
+/// All scenarios match the unquantized bench's parameters one-for-one,
+/// so paired comparisons are mechanical.
 struct Scenario {
     label: &'static str,
     users: usize,
@@ -60,14 +59,14 @@ fn build_and_seed(s: &Scenario) -> (naia_benches::BenchWorld, std::ops::Range<us
     let mut all_dynamic_start = world.server_entities_len();
 
     if s.players > 0 {
-        let r = world.spawn_archetype(Archetype::Player, s.players);
+        let r = world.spawn_archetype_quantized(Archetype::Player, s.players);
         all_dynamic_start = all_dynamic_start.min(r.start);
     }
     if s.projectiles > 0 {
-        world.spawn_archetype(Archetype::Projectile, s.projectiles);
+        world.spawn_archetype_quantized(Archetype::Projectile, s.projectiles);
     }
     if s.vehicles > 0 {
-        world.spawn_archetype(Archetype::Vehicle, s.vehicles);
+        world.spawn_archetype_quantized(Archetype::Vehicle, s.vehicles);
     }
 
     let total = s.players + s.projectiles + s.vehicles;
@@ -77,8 +76,8 @@ fn build_and_seed(s: &Scenario) -> (naia_benches::BenchWorld, std::ops::Range<us
     (world, all_dynamic_start..dynamic_end)
 }
 
-pub fn wire_bandwidth_realistic(c: &mut Criterion) {
-    let mut group = c.benchmark_group("wire/bandwidth_realistic");
+pub fn wire_bandwidth_realistic_quantized(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wire/bandwidth_realistic_quantized");
     group.warm_up_time(Duration::from_millis(500));
     group.measurement_time(Duration::from_secs(5));
 
@@ -87,7 +86,7 @@ pub fn wire_bandwidth_realistic(c: &mut Criterion) {
         let bytes_per_tick = {
             let (mut probe, range) = build_and_seed(s);
             for _ in 0..60 {
-                probe.mutate_archetype_range(range.clone());
+                probe.mutate_archetype_range_quantized(range.clone());
                 probe.tick();
             }
             probe.server_outgoing_bytes_per_tick()
@@ -98,7 +97,7 @@ pub fn wire_bandwidth_realistic(c: &mut Criterion) {
             b.iter_batched(
                 || build_and_seed(s),
                 |(mut world, range)| {
-                    world.mutate_archetype_range(range);
+                    world.mutate_archetype_range_quantized(range);
                     world.tick();
                 },
                 BatchSize::LargeInput,
@@ -109,7 +108,7 @@ pub fn wire_bandwidth_realistic(c: &mut Criterion) {
 }
 
 criterion_group!(
-    name = wire_bandwidth_realistic_group;
+    name = wire_bandwidth_realistic_quantized_group;
     config = Criterion::default();
-    targets = wire_bandwidth_realistic
+    targets = wire_bandwidth_realistic_quantized
 );

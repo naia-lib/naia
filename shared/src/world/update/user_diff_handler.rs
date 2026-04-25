@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::{Arc, RwLock, RwLockReadGuard},
+    sync::{Arc, RwLock},
 };
 
 use log::warn;
@@ -107,15 +107,15 @@ impl UserDiffHandler {
     }
 
     // Diff masks
-    pub fn diff_mask(
-        &'_ self,
+    pub fn diff_mask_snapshot(
+        &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
-    ) -> RwLockReadGuard<'_, DiffMask> {
+    ) -> DiffMask {
         let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
-        return receiver.mask();
+        receiver.mask_snapshot()
     }
 
     pub fn diff_mask_is_clear(
