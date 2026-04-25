@@ -1,6 +1,7 @@
 pub mod component;
 pub mod delegation;
 pub mod entity;
+pub mod entity_index;
 pub mod host;
 pub mod remote;
 pub mod shared_global_world_manager;

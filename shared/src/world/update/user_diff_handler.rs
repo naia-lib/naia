@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use log::warn;
@@ -9,7 +9,7 @@ use log::warn;
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
-use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
+use crate::world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet, MutReceiver};
 
 // Diagnostic counters for the perf-upgrade project. These measure how much
 // work `dirty_receiver_candidates` does per invocation. On idle ticks today
@@ -37,6 +37,7 @@ pub mod dirty_scan_counters {
     }
 }
 
+/// Per-user diff handler.
 #[derive(Clone)]
 pub struct UserDiffHandler {
     receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
@@ -53,7 +54,7 @@ impl UserDiffHandler {
         Self {
             receivers: HashMap::new(),
             global_diff_handler: global_world_manager.diff_handler(),
-            dirty_set: Arc::new(RwLock::new(HashMap::new())),
+            dirty_set: Arc::new(Mutex::new(DirtyQueue::new())),
         }
     }
 
@@ -92,13 +93,8 @@ impl UserDiffHandler {
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.receivers.remove(&(*entity, *component_kind));
-        if let Ok(mut set) = self.dirty_set.write() {
-            if let Some(kinds) = set.get_mut(entity) {
-                kinds.remove(component_kind);
-                if kinds.is_empty() {
-                    set.remove(entity);
-                }
-            }
+        if let Ok(mut set) = self.dirty_set.lock() {
+            set.cancel(*entity, *component_kind);
         }
     }
 
@@ -162,8 +158,8 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let result: HashMap<GlobalEntity, HashSet<ComponentKind>> = match self.dirty_set.read() {
-            Ok(guard) => guard.clone(),
+        let result: HashMap<GlobalEntity, HashSet<ComponentKind>> = match self.dirty_set.lock() {
+            Ok(guard) => guard.snapshot(),
             Err(_) => HashMap::new(),
         };
         #[cfg(feature = "bench_instrumentation")]

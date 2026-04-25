@@ -1,18 +1,89 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashSet,
     net::SocketAddr,
-    sync::{Arc, OnceLock, RwLock, Weak},
+    sync::{Arc, Mutex, OnceLock, RwLock, Weak},
 };
 
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType, PropertyMutate};
 
-/// Shared dirty-component set owned by a UserDiffHandler. MutReceivers hold a
-/// Weak pointer into it and push their own (entity, kind) key whenever their
-/// diff mask transitions clean → dirty (or pop it on the reverse transition).
-/// This lets `dirty_receiver_candidates` read the set in O(dirty) instead of
-/// scanning every receiver every tick — the core of the Phase-3 win.
-pub type DirtySet = RwLock<HashMap<GlobalEntity, HashSet<ComponentKind>>>;
+/// Per-user dirty queue.
+///
+/// Phase 8.1 Stage B (2026-04-25) replaces the previous
+/// `RwLock<HashMap<GlobalEntity, HashSet<ComponentKind>>>` DirtySet with
+/// a flat `Mutex<DirtyQueue>` whose drain semantics avoid the O(N)
+/// HashMap clone the prior implementation paid every tick. Each entry is
+/// pushed on its mask's clean→dirty transition and stays in `queue` until
+/// a tick-time drain. `in_dirty` deduplicates pushes against repeat
+/// transitions while the entry is still queued.
+///
+/// Wire-format invariant unchanged — this is purely a CPU-side bookkeeping
+/// substitution; the eventual outgoing-update payload contents are
+/// determined by the per-receiver `AtomicDiffMask`, which is the truth
+/// source. Stale queue entries (dirty bit cleared after enqueue, e.g. by
+/// `clear_diff_mask`) are tolerated; the caller filters them out at drain
+/// time by re-checking `MutReceiver::diff_mask_is_clear`.
+pub struct DirtyQueue {
+    /// Flat membership of `(GlobalEntity, ComponentKind)` keys whose
+    /// masks are currently non-clear. Stage B uses this directly as the
+    /// dirty cache; Stage D will swap to an index-keyed bitset when
+    /// `MutChannelData` plumbs `EntityIndex` end-to-end.
+    in_dirty: HashSet<(GlobalEntity, ComponentKind)>,
+}
+
+impl DirtyQueue {
+    pub fn new() -> Self {
+        Self { in_dirty: HashSet::new() }
+    }
+
+    /// Mark `(entity, kind)` dirty. Idempotent; cheap on already-dirty
+    /// entries (single HashSet probe). The pre-Stage-B implementation
+    /// did `HashMap::entry(entity).or_default().insert(kind)` — two
+    /// hashes plus a possible HashSet allocation per call. The flat
+    /// HashSet here is one hash per call.
+    pub fn push(&mut self, entity: GlobalEntity, kind: ComponentKind) {
+        self.in_dirty.insert((entity, kind));
+    }
+
+    /// Cancel a dirty entry (mask cleared). Cheap removal.
+    pub fn cancel(&mut self, entity: GlobalEntity, kind: ComponentKind) {
+        self.in_dirty.remove(&(entity, kind));
+    }
+
+    /// Build a `HashMap<GlobalEntity, HashSet<ComponentKind>>` snapshot
+    /// shaped to match the pre-Stage-B return type expected by callers.
+    /// Allocates only the unique entities + their kind sets — no nested
+    /// HashMap clone (the prior implementation cloned a `HashMap<_,
+    /// HashSet<_>>` whose nested HashSets each entailed a per-entity
+    /// re-allocation).
+    pub fn snapshot(&self) -> std::collections::HashMap<GlobalEntity, HashSet<ComponentKind>> {
+        let mut result: std::collections::HashMap<GlobalEntity, HashSet<ComponentKind>> =
+            std::collections::HashMap::with_capacity(self.in_dirty.len());
+        for &(entity, kind) in self.in_dirty.iter() {
+            result.entry(entity).or_default().insert(kind);
+        }
+        result
+    }
+
+    pub fn len(&self) -> usize {
+        self.in_dirty.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.in_dirty.is_empty()
+    }
+}
+
+impl Default for DirtyQueue {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Shared dirty queue owned by a `UserDiffHandler`. MutReceivers hold a
+/// `Weak` into this and push their own `(entity, kind)` key whenever their
+/// diff mask transitions clean→dirty.
+pub type DirtySet = Mutex<DirtyQueue>;
 
 /// Identifies a MutReceiver's position inside its owning UserDiffHandler's
 /// dirty set. Installed once per receiver via `MutReceiver::attach_notifier`
@@ -24,27 +95,26 @@ pub struct DirtyNotifier {
 }
 
 impl DirtyNotifier {
-    pub fn new(entity: GlobalEntity, kind: ComponentKind, set: Weak<DirtySet>) -> Self {
+    pub fn new(
+        entity: GlobalEntity,
+        kind: ComponentKind,
+        set: Weak<DirtySet>,
+    ) -> Self {
         Self { entity, kind, set }
     }
 
     fn notify_dirty(&self) {
         if let Some(set) = self.set.upgrade() {
-            if let Ok(mut guard) = set.write() {
-                guard.entry(self.entity).or_default().insert(self.kind);
+            if let Ok(mut guard) = set.lock() {
+                guard.push(self.entity, self.kind);
             }
         }
     }
 
     fn notify_clean(&self) {
         if let Some(set) = self.set.upgrade() {
-            if let Ok(mut guard) = set.write() {
-                if let Some(kinds) = guard.get_mut(&self.entity) {
-                    kinds.remove(&self.kind);
-                    if kinds.is_empty() {
-                        guard.remove(&self.entity);
-                    }
-                }
+            if let Ok(mut guard) = set.lock() {
+                guard.cancel(self.entity, self.kind);
             }
         }
     }
