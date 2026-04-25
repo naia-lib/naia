@@ -28,6 +28,7 @@ mod authority {
 
 mod wire {
     pub mod bandwidth;
+    pub mod bandwidth_realistic;
     pub mod framing;
 }
 
@@ -48,4 +49,5 @@ criterion_main!(
     authority::contention::authority_contention,
     wire::framing::wire_framing_group,
     wire::bandwidth::wire_bandwidth,
+    wire::bandwidth_realistic::wire_bandwidth_realistic_group,
 );

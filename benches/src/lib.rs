@@ -19,7 +19,8 @@ use naia_shared::{
 };
 
 use crate::bench_protocol::{
-    bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent,
+    bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent, Position,
+    Rotation, Velocity,
 };
 
 /// Simulated tick duration. 16 ms = 62.5 Hz, a reasonable game-server
@@ -52,6 +53,23 @@ macro_rules! bench {
 pub enum EntityKind {
     Mutable,
     Immutable,
+}
+
+/// Realistic-archetype categories for `wire/bandwidth_realistic`.
+///
+/// Each archetype is a fixed component composition that stands in for a
+/// canonical netgame state shape. Sizes are intentionally typical (3×f32
+/// position, 3×f32 velocity, 2×f32 camera rotation) — measured bytes
+/// reflect Naia's framing on top of these shapes.
+#[derive(Copy, Clone, Debug)]
+pub enum Archetype {
+    /// `Position` + `Velocity` + `Rotation` — first-class avatar.
+    Player,
+    /// `Position` + `Velocity` — physics-driven projectile, no aim.
+    Projectile,
+    /// `Position` + `Velocity` + `Rotation` — same shape as Player; kept
+    /// distinct so benches can track per-class budgets independently.
+    Vehicle,
 }
 
 // ─── BenchWorldBuilder ────────────────────────────────────────────────────────
@@ -390,6 +408,95 @@ impl BenchWorld {
         self.server_entities.push(entity);
     }
 
+    /// Spawn `count` entities of the given archetype, add to the room, and
+    /// drive ticks until all clients have received them. Used by
+    /// `wire/bandwidth_realistic`.
+    ///
+    /// Component composition by archetype:
+    /// - `Player`     → `Position` + `Velocity` + `Rotation`
+    /// - `Projectile` → `Position` + `Velocity`
+    /// - `Vehicle`    → `Position` + `Velocity` + `Rotation`
+    ///
+    /// Returns the index range in `server_entities` that was just appended.
+    pub fn spawn_archetype(
+        &mut self,
+        archetype: Archetype,
+        count: usize,
+    ) -> std::ops::Range<usize> {
+        let start = self.server_entities.len();
+        for i in 0..count {
+            let f = i as f32;
+            let entity = {
+                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                let id = em.id();
+                em.insert_component(Position::new(f, f, f));
+                em.insert_component(Velocity::new(f, f, f));
+                if matches!(archetype, Archetype::Player | Archetype::Vehicle) {
+                    em.insert_component(Rotation::new(f, f));
+                }
+                id
+            };
+            self.server.room_mut(&self.room_key).add_entity(&entity);
+            self.server_entities.push(entity);
+        }
+        start..self.server_entities.len()
+    }
+
+    /// Drive ticks until all clients have caught up to `target_count` entities.
+    /// Used by archetype benches after `spawn_archetype` and *before* the
+    /// measured loop, so the steady-state bytes/tick reflects mutations only.
+    pub fn replicate_until_caught_up(&mut self, target_count: usize) {
+        for _ in 0..REPLICATE_TIMEOUT {
+            self.tick();
+            let all_visible = self
+                .clients
+                .iter()
+                .all(|(client, world)| client.entities(&world.proxy()).len() >= target_count);
+            if all_visible {
+                break;
+            }
+        }
+    }
+
+    /// Mutate Position + Velocity (+ Rotation if present) on every entity in
+    /// `range`. Each property gets `+= 1.0` to dirty all axes — simulates
+    /// continuously-moving units. Mirrors `mutate_entities` for archetype
+    /// shapes.
+    pub fn mutate_archetype_range(&mut self, range: std::ops::Range<usize>) {
+        for idx in range {
+            if idx >= self.server_entities.len() {
+                continue;
+            }
+            let entity = self.server_entities[idx];
+            if let Some(mut p) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<Position>()
+            {
+                *p.x += 1.0;
+                *p.y += 1.0;
+                *p.z += 1.0;
+            }
+            if let Some(mut v) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<Velocity>()
+            {
+                *v.x += 1.0;
+                *v.y += 1.0;
+                *v.z += 1.0;
+            }
+            if let Some(mut r) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<Rotation>()
+            {
+                *r.yaw += 1.0;
+                *r.pitch += 1.0;
+            }
+        }
+    }
+
     /// PaintRect-style burst: spawn `n` entities with `components_per_entity`
     /// components each (`Mutable` + optionally `Immutable`) and add them all
     /// to the room — within a single tick boundary, with NO ticks in between.
@@ -438,6 +545,12 @@ impl BenchWorld {
     /// is always tracked.
     pub fn server_outgoing_bytes_per_tick(&self) -> u64 {
         self.server.outgoing_bytes_last_tick().max(1)
+    }
+
+    /// Number of entities the server currently tracks. Used by archetype
+    /// benches to anchor the dynamic-entity index range after spawn.
+    pub fn server_entities_len(&self) -> usize {
+        self.server_entities.len()
     }
 
     /// Grant authority on entity[entity_idx] to user[0].
