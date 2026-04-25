@@ -18,11 +18,14 @@ use naia_benches::{Archetype, BenchWorldBuilder};
 /// 5. Calibrates `Throughput::Bytes` from `server.outgoing_bytes_last_tick()`
 ///    after a 60-tick warmup, so criterion reports bytes/sec directly.
 ///
-/// All scenarios target one receiving client. To extrapolate per-server
-/// egress, multiply per-client bytes by player count (the existing
-/// `wire/bandwidth/scenario/4u_*` cells already confirmed linear scaling).
+/// Most scenarios target one receiving client; the `_4u` / `_16u` variants
+/// fan out to 4 and 16 receiving clients respectively, to confirm that
+/// per-tick server egress scales linearly with client count for archetype
+/// shapes (the toy `BenchComponent` cells already showed this in
+/// `wire/bandwidth/scenario/4u_*`).
 struct Scenario {
     label: &'static str,
+    users: usize,
     players: usize,
     projectiles: usize,
     vehicles: usize,
@@ -30,22 +33,26 @@ struct Scenario {
 
 const SCENARIOS: &[Scenario] = &[
     // Pure-player scenarios — isolate the per-player cost.
-    Scenario { label: "player_8",  players: 8,  projectiles: 0, vehicles: 0 },
-    Scenario { label: "player_16", players: 16, projectiles: 0, vehicles: 0 },
-    Scenario { label: "player_32", players: 32, projectiles: 0, vehicles: 0 },
+    Scenario { label: "player_8",  users: 1, players: 8,  projectiles: 0, vehicles: 0 },
+    Scenario { label: "player_16", users: 1, players: 16, projectiles: 0, vehicles: 0 },
+    Scenario { label: "player_32", users: 1, players: 32, projectiles: 0, vehicles: 0 },
     // Pure-projectile — isolate the smaller P+V archetype.
-    Scenario { label: "projectile_30", players: 0, projectiles: 30, vehicles: 0 },
-    Scenario { label: "projectile_50", players: 0, projectiles: 50, vehicles: 0 },
-    // Mixed match shapes.
-    Scenario { label: "halo_4v4",      players: 8,  projectiles: 15, vehicles: 0 },
-    Scenario { label: "halo_8v8",      players: 16, projectiles: 30, vehicles: 2 },
-    Scenario { label: "halo_btb_12v12",players: 24, projectiles: 40, vehicles: 6 },
-    Scenario { label: "halo_btb_16v16",players: 32, projectiles: 50, vehicles: 8 },
-    Scenario { label: "halo_mega_64",  players: 64, projectiles: 80, vehicles: 12 },
+    Scenario { label: "projectile_30", users: 1, players: 0, projectiles: 30, vehicles: 0 },
+    Scenario { label: "projectile_50", users: 1, players: 0, projectiles: 50, vehicles: 0 },
+    // Mixed match shapes (1 receiving client — per-client envelope).
+    Scenario { label: "halo_4v4",       users: 1, players: 8,  projectiles: 15, vehicles: 0 },
+    Scenario { label: "halo_8v8",       users: 1, players: 16, projectiles: 30, vehicles: 2 },
+    Scenario { label: "halo_btb_12v12", users: 1, players: 24, projectiles: 40, vehicles: 6 },
+    Scenario { label: "halo_btb_16v16", users: 1, players: 32, projectiles: 50, vehicles: 8 },
+    Scenario { label: "halo_mega_64",   users: 1, players: 64, projectiles: 80, vehicles: 12 },
+    // Multi-client fan-out — confirms server egress = per_client × users.
+    Scenario { label: "halo_8v8_4u",       users: 4,  players: 16, projectiles: 30, vehicles: 2 },
+    Scenario { label: "halo_8v8_16u",      users: 16, players: 16, projectiles: 30, vehicles: 2 },
+    Scenario { label: "halo_btb_16v16_4u", users: 4,  players: 32, projectiles: 50, vehicles: 8 },
 ];
 
 fn build_and_seed(s: &Scenario) -> (naia_benches::BenchWorld, std::ops::Range<usize>) {
-    let mut world = BenchWorldBuilder::new().users(1).entities(0).build();
+    let mut world = BenchWorldBuilder::new().users(s.users).entities(0).build();
     let mut all_dynamic_start = world.server_entities_len();
 
     if s.players > 0 {
