@@ -6,8 +6,8 @@ use log::warn;
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
-    SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook,
+    PacketType, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -226,6 +226,7 @@ impl Connection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
+        priority_hook: &mut dyn OutgoingPriorityHook,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
 
@@ -262,6 +263,22 @@ impl Connection {
         // before the send cycle. Refreshes budget + one-packet overshoot.
         self.base.accumulate_bandwidth(now);
 
+        // Phase B: advance the per-user priority accumulator for every dirty
+        // entity bundle this tick (canonical `accumulator += effective_gain`
+        // rule from PRIORITY_ACCUMULATOR_PLAN.md III.7.1), then sort entities
+        // descending by accumulated priority. The k-way merge inside
+        // `write_updates` consumes this order to emit highest-priority bundles
+        // first. Captured `initial_dirty` is diffed against `update_events`
+        // after the loop to detect drained bundles for reset.
+        let initial_dirty: Vec<GlobalEntity> = update_events.keys().copied().collect();
+        let mut prioritized: Vec<(GlobalEntity, f32)> = initial_dirty
+            .iter()
+            .map(|e| (*e, priority_hook.advance(e)))
+            .collect();
+        prioritized.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+        let entity_priority_order: Vec<GlobalEntity> =
+            prioritized.into_iter().map(|(e, _)| e).collect();
+
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
         let mut any_sent = false;
@@ -278,6 +295,7 @@ impl Connection {
                 time_manager,
                 &mut host_world_events,
                 &mut update_events,
+                Some(&entity_priority_order),
             ) {
                 any_sent = true;
             } else {
@@ -286,6 +304,16 @@ impl Connection {
         }
         if any_sent {
             self.base.mark_sent();
+        }
+
+        // Phase B (reset): any entity that was dirty entering the loop but is
+        // no longer in `update_events` had its bundle fully drained onto the
+        // wire — apply the canonical reset-on-send rule (III.7.5).
+        let current_tick = time_manager.current_tick();
+        for entity in &initial_dirty {
+            if !update_events.contains_key(entity) {
+                priority_hook.reset_after_send(entity, current_tick as u32);
+            }
         }
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_SEND_PACKET_LOOP
@@ -307,6 +335,7 @@ impl Connection {
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        entity_priority_order: Option<&[GlobalEntity]>,
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_events.is_empty();
@@ -373,6 +402,7 @@ impl Connection {
                 time_manager,
                 host_world_events,
                 update_events,
+                entity_priority_order,
             );
 
             // send packet, measuring actual size before the move so we can
@@ -409,6 +439,7 @@ impl Connection {
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        entity_priority_order: Option<&[GlobalEntity]>,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -460,6 +491,7 @@ impl Connection {
             true,
             host_world_events,
             update_events,
+            entity_priority_order,
         );
 
         #[cfg(feature = "e2e_debug")]

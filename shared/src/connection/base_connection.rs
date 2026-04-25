@@ -208,6 +208,7 @@ impl BaseConnection {
         write_world_events: bool,
         host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        entity_priority_order: Option<&[GlobalEntity]>,
     ) {
         // write messages
         self.write_messages(
@@ -233,6 +234,7 @@ impl BaseConnection {
                 has_written,
                 host_world_events,
                 update_events,
+                entity_priority_order,
             );
         }
     }

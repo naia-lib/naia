@@ -350,7 +350,9 @@ impl Connection {
             &mut has_written,
         );
 
-        // write common parts of packet (messages & world events)
+        // write common parts of packet (messages & world events).
+        // Client has only one connection — no priority arbitration needed,
+        // so we pass `None` and `write_updates` falls back to HashMap order.
         self.base.write_packet(
             &protocol.channel_kinds,
             &protocol.message_kinds,
@@ -365,6 +367,7 @@ impl Connection {
             protocol.client_authoritative_entities,
             host_world_events,
             update_events,
+            None,
         );
 
         writer

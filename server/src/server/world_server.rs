@@ -14,7 +14,7 @@ use naia_shared::{
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
-    UserPriorityState,
+    OutgoingPriorityHook, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
     Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
     ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer,
@@ -68,6 +68,40 @@ pub static SERVER_WORLD_MSGS_DRAINED: AtomicUsize = AtomicUsize::new(0);
 pub static SERVER_WROTE_SET_AUTH: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_WORLD_PKTS_SENT: AtomicUsize = AtomicUsize::new(0);
+
+/// Adapter that bridges the `OutgoingPriorityHook` trait (keyed by
+/// `GlobalEntity`) to the per-user `UserPriorityState<E>` plus the read-only
+/// `GlobalPriorityState<E>` layer. Constructed per-connection inside
+/// `send_all_packets` from split-borrowed disjoint fields on `WorldServer`.
+///
+/// `advance` returns `effective_gain = global.gain × user.gain` (defaults 1.0)
+/// added cumulatively into the user-layer accumulator — the canonical rule
+/// from PRIORITY_ACCUMULATOR_PLAN.md III.7.1.
+struct WorldServerPriorityHook<'a, E: Copy + Eq + Hash + Send + Sync> {
+    global: &'a GlobalPriorityState<E>,
+    user: &'a mut UserPriorityState<E>,
+    converter: &'a GlobalEntityMap<E>,
+}
+
+impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook
+    for WorldServerPriorityHook<'a, E>
+{
+    fn advance(&mut self, entity: &GlobalEntity) -> f32 {
+        let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
+            return 0.0;
+        };
+        let g = self.global.gain_override(&world_entity).unwrap_or(1.0);
+        let u = self.user.gain_override(&world_entity).unwrap_or(1.0);
+        self.user.advance(world_entity, g * u)
+    }
+
+    fn reset_after_send(&mut self, entity: &GlobalEntity, current_tick: u32) {
+        let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
+            return;
+        };
+        self.user.reset_after_send(&world_entity, current_tick);
+    }
+}
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -636,6 +670,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
+            // Build a per-user priority hook over the (global, user) layers.
+            // `global` provides the read-only `gain_override`; `user` is
+            // mutated by `advance` / `reset_after_send`. Split-borrow is safe
+            // because `user_priorities` and `global_priority` are disjoint
+            // fields on `WorldServer`.
+            let user_layer = self
+                .user_priorities
+                .entry(connection.user_key)
+                .or_insert_with(UserPriorityState::new);
+            let mut hook = WorldServerPriorityHook {
+                global: &self.global_priority,
+                user: user_layer,
+                converter: &self.global_entity_map,
+            };
             connection.send_packets(
                 &self.channel_kinds,
                 &self.message_kinds,
@@ -646,6 +694,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_entity_map,
                 &self.global_world_manager,
                 &self.time_manager,
+                &mut hook,
             );
         }
 

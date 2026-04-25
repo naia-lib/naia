@@ -1,6 +1,6 @@
 # Sidequest — Priority Accumulator
 
-**Status:** 🔨 core implementation complete 2026-04-24 (opened between Phase 4 and Phase 5 of `BENCH_PERF_UPGRADE.md`). Research complete; decisions resolved (D1–D16); Part III API design approved; **Phases A + B functional code landed, unit tests green, Phase C close-out remaining** (integration BDD specs + `idle_distribution` verification for Phase 4.5 absorption).
+**Status:** ✅ COMPLETE 2026-04-24 — full sidequest closed. Phases A + B + C all landed, all 17 integration BDD tests + 3 cucumber round-trip scenarios green, `namako gate` passes the full corpus, `idle_distribution` matrix returns to `OK` across every cell. See `BENCH_UPGRADE_LOG/sidequest-priority-accumulator.md` for the post-mortem. Phase 4.5 closed by absorption.
 
 **Implementation state (2026-04-24):**
 - ✅ Bandwidth accumulator (`shared/src/connection/bandwidth_accumulator.rs`) — token-bucket + one-packet overshoot. 9 unit tests.

@@ -85,7 +85,7 @@ pub use connection::{
     decoder::Decoder,
     encoder::Encoder,
     entity_priority::{EntityPriorityMut, EntityPriorityRef},
-    priority_state::{GlobalPriorityState, UserPriorityState},
+    priority_state::{GlobalPriorityState, OutgoingPriorityHook, UserPriorityState},
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},

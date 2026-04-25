@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "4681bd750acce8bb711ab99c35a5173b861f6fa5f7b2598b0cc5ebb485ec5fa3",
-    "step_registry_hash": "9d1ae01640cd2c8fcd1c1d4bda95d6844811af8ad84662f192490228c000ae9f",
-    "resolved_plan_hash": "83386c9a52fe139d3676cb6368b8756fc80052243aeff5f1c155a56a05adff24"
+    "feature_fingerprint_hash": "0b3ccbc2367639a92e01901feae4d386dcef767d56dbd7367111b6c08faff4d5",
+    "step_registry_hash": "52b1dc97d7e546c166448711ef159429b2108e0c910059c3e7f7ea62cd569199",
+    "resolved_plan_hash": "d7411a407ebb165c924e23feb1d824f520109bede62cb85ffa513648bc8b5ed6"
   },
   "scenarios": [
     {
@@ -6185,6 +6185,246 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "7b4995bec80b3ea9b87a3e77a051ccb88a040cc3b2a2f42e93afebe6d7f89f72"
+        }
+      ]
+    },
+    {
+      "scenario_key": "priority_accumulator:Rule(01):Scenario(01)",
+      "feature_path": "features/20_priority_accumulator.feature",
+      "scenario_name": "priority-accumulator-01-a — 16-entity spawn burst eventually reaches client",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server spawns 16 entities in one tick and scopes them for the client",
+          "binding_id": "c735df51676234985a97b52f0356038f3d20b6c95970dd227b384d6796cfba8b",
+          "captures": [
+            "16"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6eaefb7d0adb6fef0ea8848590924e307f26c8dd2e21dc0debece4e71fb2392d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client eventually observes all 16 spawned entities",
+          "binding_id": "3131555349070833cab24e3bd33d465e3d78df7115d64c8071b88fcb71e5bd65",
+          "captures": [
+            "16"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "8f8aaed471040782948b928219bb1e315c375014376787cb4edcaf23a6fed032"
+        }
+      ]
+    },
+    {
+      "scenario_key": "priority_accumulator:Rule(02):Scenario(01)",
+      "feature_path": "features/20_priority_accumulator.feature",
+      "scenario_name": "priority-accumulator-02-a — global gain stays set after entity replicates",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with a replicated component",
+          "binding_id": "f20159a328b3a1860cc2107f9c88b0165fc6a8b716aad3396fe35617838cc721",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a807dd4c187b68fa877b0442ad648ac45ad8b79912964c4bd883139920482765"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server sets the global priority gain on the last entity to 5.0",
+          "binding_id": "fdba0759880b996e42d114f1e71924a643abbd4b61e802cdef42dd707d9c7954",
+          "captures": [
+            "5.0"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "900dd7a1d508afb0b4e37c1aeccfe13818d0156c5de13b673442c8da50955e56"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the global priority gain on the last entity is 5.0",
+          "binding_id": "a09ebb2fc8e8e3bf9851e06841897b580bfd11381798bc035e4e90bc68557b6e",
+          "captures": [
+            "5.0"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0b6792f1a9fae2933a34429bce03b6b11de8a488dec87395bb6494a8db959b9c"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client eventually sees the last entity",
+          "binding_id": "757aa43cccfc4e94135fae7de7a60bed20c3a296797348b6976a0d0826ca32fd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2a8903fdfef75e876400247e4a69ecd4d4ee8d0790ad1e8566aac505f05636ca"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the global priority gain on the last entity is still 5.0",
+          "binding_id": "2c086f2bc0fb89c2f6cbe476aebb0924360e73fe09c1a41ddf528164239b3083",
+          "captures": [
+            "5.0"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "288d8de60c19ca04fff666578c7a57a6965167a57e1ad3c9a9a02aeca175780c"
+        }
+      ]
+    },
+    {
+      "scenario_key": "priority_accumulator:Rule(03):Scenario(01)",
+      "feature_path": "features/20_priority_accumulator.feature",
+      "scenario_name": "priority-accumulator-03-a — interleaved mutations converge per-entity",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "two server-owned entities A and B exist each with a replicated component in-scope for the client",
+          "binding_id": "8e0799f9af60282c0ed0e6db767c9913faa8f96cd1fe8bb1ab86639f67c3a412",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab82667479a08979cbd636adaa6bd7f76882c4bb1cf27bcb1648bb866bd2cda4"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server mutates entity A's component to x=10 y=20",
+          "binding_id": "343aee77783b4aef6275c10e26efc006ff75dec091e44f3f38a6005fe853dbb0",
+          "captures": [
+            "A",
+            "10",
+            "20"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6188315a9d5950bcf5b6de32ee25e81df6b4c55b410aa95aa5d19e0e45f477cb"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server mutates entity B's component to x=30 y=40",
+          "binding_id": "343aee77783b4aef6275c10e26efc006ff75dec091e44f3f38a6005fe853dbb0",
+          "captures": [
+            "B",
+            "30",
+            "40"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dbf6fef835fc9cd900dc4279c7a415e369d169c7a503de1bbe7b411f42c7e6c6"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server mutates entity A's component to x=50 y=60",
+          "binding_id": "343aee77783b4aef6275c10e26efc006ff75dec091e44f3f38a6005fe853dbb0",
+          "captures": [
+            "A",
+            "50",
+            "60"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "96ae13625dab5efd3563063ea85614cbf781b5745be19e82e8c98db548cad4f3"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client eventually observes entity A at x=50 y=60",
+          "binding_id": "236c31a62b65c15c220168e15e4ebb278b22d26d122def9a934314677ebff8b4",
+          "captures": [
+            "A",
+            "50",
+            "60"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5bb4c158d592ef3d4570c2698b009eab793c2ba7d5ab16ef7e8b5314511845dc"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client eventually observes entity B at x=30 y=40",
+          "binding_id": "236c31a62b65c15c220168e15e4ebb278b22d26d122def9a934314677ebff8b4",
+          "captures": [
+            "B",
+            "30",
+            "40"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7b7c2f80e6c58155c856da57563e5700cf78cda1c68b7ccd31be4e1514106020"
         }
       ]
     },

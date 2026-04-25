@@ -392,4 +392,51 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let (server, _, _, _) = scenario.split_for_server_mut();
         server.set_global_entity_counter_for_test(value);
     }
+
+    // Priority accumulator bridges — expose the per-entity priority knobs the
+    // plan formalizes in Part III.4 so cucumber specs can drive them.
+
+    /// Set the sender-wide (global) priority gain for an entity. Persistent
+    /// until `reset_global_entity_gain` or another set call. Lazy-creates the
+    /// backing entry so set-and-forget works even before scope-in.
+    pub fn set_global_entity_gain(&mut self, entity_key: &EntityKey, gain: f32) {
+        let scenario = self.ctx.scenario_mut();
+        let Some(entity) = scenario.entity_registry().server_entity(entity_key) else {
+            return;
+        };
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.global_entity_priority_mut(entity).set_gain(gain);
+    }
+
+    /// Clear the sender-wide gain override (returns to default 1.0). Retains
+    /// the accumulator value.
+    pub fn reset_global_entity_gain(&mut self, entity_key: &EntityKey) {
+        let scenario = self.ctx.scenario_mut();
+        let Some(entity) = scenario.entity_registry().server_entity(entity_key) else {
+            return;
+        };
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.global_entity_priority_mut(entity).reset();
+    }
+
+    /// Set the per-user priority gain for an entity on the given client's
+    /// connection. Lazy-creates the user's priority layer.
+    pub fn set_user_entity_gain(
+        &mut self,
+        client_key: &ClientKey,
+        entity_key: &EntityKey,
+        gain: f32,
+    ) {
+        let scenario = self.ctx.scenario_mut();
+        let Some(user_key) = scenario.client_to_user_key(client_key) else {
+            return;
+        };
+        let Some(entity) = scenario.entity_registry().server_entity(entity_key) else {
+            return;
+        };
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server
+            .user_entity_priority_mut(&user_key, entity)
+            .set_gain(gain);
+    }
 }

@@ -1,6 +1,6 @@
 # Priority Accumulator — Implementation Plan
 
-**Status:** 📝 API design approved 2026-04-24. Implementation gated on Part VIII sign-off preconditions.
+**Status:** ✅ COMPLETE 2026-04-24. All phases landed, all gates green. See `BENCH_UPGRADE_LOG/sidequest-priority-accumulator.md` for post-mortem. Do not re-implement any part of this plan.
 **Companions:** `PRIORITY_ACCUMULATOR_SIDEQUEST.md` (scope) · `PRIORITY_ACCUMULATOR_RESEARCH.md` (Fiedler distillation + prior art).
 **Scope reminder:** sender-side, symmetric. Both server and client assemble outbound packets and need the same pacing/priority machinery. Naia supports client-authoritative messages/requests/responses/entities, so everything below applies identically to both peers.
 

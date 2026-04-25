@@ -14,6 +14,7 @@ pub mod entity_replication;
 pub mod entity_scopes;
 pub mod messaging;
 pub mod observability;
+pub mod priority_accumulator;
 pub mod scope_exit;
 pub mod scope_propagation;
 pub mod server_events;

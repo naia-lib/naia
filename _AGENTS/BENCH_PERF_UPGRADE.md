@@ -1,6 +1,6 @@
 # Naia Perf Upgrade — 2-Orders-of-Magnitude Plan
 
-**Status:** in progress — Phases 0–4 complete. **Sidequest (Priority Accumulator): core implementation landed 2026-04-24** (Phases A + B functional code, unit + integration BDD tests green, commit `b710ca4e`). Phase C close-out (full cucumber .feature harness + `idle_distribution` absorption verification for Phase 4.5) pending. See `_AGENTS/PRIORITY_ACCUMULATOR_SIDEQUEST.md`.
+**Status:** in progress — Phases 0–4 complete. **Sidequest (Priority Accumulator): ✅ COMPLETE 2026-04-24** — full A+B+C close-out, all gates green. Phase 5 (spatial scope index) **removed from plan 2026-04-24** per Connor — not pursued. See `_AGENTS/BENCH_UPGRADE_LOG/sidequest-priority-accumulator.md` post-mortem.
 **Ref commits:** `4d73ad41` (U×N idle matrix bench) · GDD `862dcab` (LEVEL_SPEC §10 canonical)
 **Scope:** this document is the durable plan. Update it as phases land. Do not fork.
 
@@ -13,9 +13,8 @@
 | 2 — Immutable matrix | ✅ complete | `ed7b4012` | `phase-02.md` |
 | 3 — Kill O(U·N) idle | ✅ complete (189× at 16u_10000e) | `db1b706d` | `phase-03.md` |
 | 4 — Immutable skip idle | ✅ complete (21× at 16u_10000e imm) | TBD | `phase-04.md` |
-| Sidequest — Priority Accumulator | 🔨 A+B core complete; C close-out in progress | `b710ca4e` | `PRIORITY_ACCUMULATOR_SIDEQUEST.md` |
+| Sidequest — Priority Accumulator | ✅ complete (A+B+C closed, all gates green) | `b710ca4e` + 2026-04-24 | `sidequest-priority-accumulator.md` |
 | 4.5 — Mutable resend-window spike | ✅ closed by absorption (sidequest Phase A bandwidth cap) | `b710ca4e` | `phase-04.5.md` |
-| 5 — Spatial scope index | ⏸️ pending (blocked on sidequest) | — | — |
 | 6 — Coalesce audit | ⏸️ pending | — | — |
 | 7 — Regression gate + close-out | ⏸️ pending | — | — |
 
@@ -223,7 +222,7 @@ Scope surfaces under survey:
 - Plain Naia messages (`ChannelSender`)
 - Request / response (built on messages)
 
-**Blocks:** Phase 4.5 and Phase 5. Phase 6 and 7 are independent and can be resequenced if useful.
+**Blocks:** Phase 4.5. Phase 6 and 7 are independent and can be resequenced if useful.
 
 ---
 
@@ -237,7 +236,7 @@ Scope surfaces under survey:
 
 **Goal:** eliminate the periodic ~17-tick latency spike on mutable idle ticks. No cell of the matrix may exceed `p99 × 10` (i.e., `idle_distribution` reports no `SPIKE`).
 
-**Status:** discovered during Phase 4 via the new `idle_distribution.rs` harness. Scope is strictly this pre-existing bug (not a new optimization); Phase 5 is blocked until it is resolved cleanly — per Connor's rigor mandate, no hand-waving past real bugs.
+**Status:** discovered during Phase 4 via the new `idle_distribution.rs` harness. Scope is strictly this pre-existing bug (not a new optimization) — per Connor's rigor mandate, no hand-waving past real bugs.
 
 **Evidence (2026-04-24, `cargo run --release --example idle_distribution`):**
 
@@ -263,26 +262,6 @@ Spike cadence is cyclic: ticks +11, +12, +13, +28, +29, +30, …, every ~17 tick
 **Expected win:** surfaces as cleaner tail at any mutable-cell; headline p50s shouldn't change much (already excellent post-Phase-3/4), but p99/max and mean collapse to p90 territory.
 
 **Deliverable:** `_AGENTS/BENCH_UPGRADE_LOG/phase-04.5.md` — sub-phase probe readout on a spike tick, root-cause narrative, before/after `idle_distribution` matrix with all cells `OK`, files touched.
-
----
-
-### Phase 5 — Region-indexed scope predicates
-
-**Goal:** scope-entry / scope-exit at 65K tiles becomes O(local tiles), not O(level).
-
-Hypothesis: current scope evaluation is `for entity in world { if predicate(user, entity) { ... } }` — linear in entity count. For spatial FoW at tile scale, the predicate is "within radius R of user position." A spatial index (fixed grid bucketed by `TilePos`) reduces this to O(local) per user-scope-update.
-
-Tasks:
-
-- [ ] Add `spatial_index: HashMap<(i32, i32), SmallVec<EntityHandle>>` to `Server`, keyed by coarse grid cells (e.g., 16×16 tile buckets).
-- [ ] Optional `SpatialComponent`-like trait on replicated components that opt-in to indexing (tiles have `TilePos`; most game entities don't). Non-indexed entities fall through the slow path unchanged.
-- [ ] Scope-entry evaluates nearby buckets only. Scope-exit is symmetric.
-- [ ] Gate: `tick/scope_enter @ N=10000` must drop from 31 ms to ≤ 3 ms.
-- [ ] **Test safety:** scope predicates with non-spatial entities must behave byte-identically (capture the pre-phase scope-ordering in a snapshot test first).
-
-Expected win: **10×** on scope-entry, and more importantly **unblocks FoW-per-player** at 65K tiles without every join costing 200 ms.
-
-**Deliverable:** `_AGENTS/BENCH_UPGRADE_LOG/phase-05.md`.
 
 ---
 
@@ -326,7 +305,7 @@ Success criteria (all must hold):
 - `cargo test --workspace` green.
 - All 15 BDD contracts green (`b465c32f` baseline or later).
 - `naia-bench-report --assert-wins --baseline perf_v0` green.
-- `_AGENTS/BENCH_UPGRADE_LOG/phase-0{1..6}.md` present with before/after artifacts.
+- `_AGENTS/BENCH_UPGRADE_LOG/phase-0{1,2,3,4,4.5,6}.md` present with before/after artifacts.
 
 ---
 
@@ -335,7 +314,6 @@ Success criteria (all must hold):
 | Risk | Mitigation |
 |---|---|
 | Phase 3 refactor breaks a subtle ordering guarantee in `process_updates` | Snapshot pre-phase behavior via a scope-replay test. Any byte-diff in the outbound stream at same inputs blocks merge. |
-| Spatial index (Phase 5) doesn't match arbitrary scope predicates | Opt-in per-component. Non-spatial entities fall through unchanged. |
 | Instrumentation (Phase 1) leaks into release builds | All counters behind `cfg(feature = "bench_instrumentation")`, default off. CI verifies release builds exclude the feature. |
 | 100× goal is unreachable even with all phases | Phase 1 flamegraph will tell us this *before* we refactor. If the budget doesn't fit, we escalate to protocol-level changes (delta batching across ticks, protocol v2) — out of scope for this plan but a known fallback. |
 | iai coverage stays behind until home-machine | Acceptable: criterion is the source of truth for wall-clock. iai becomes a cross-check when available. Plan does not block on it. |

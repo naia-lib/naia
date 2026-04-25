@@ -39,6 +39,7 @@ impl WorldWriter {
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        entity_priority_order: Option<&[GlobalEntity]>,
     ) {
         // write entity updates
         Self::write_updates(
@@ -52,6 +53,7 @@ impl WorldWriter {
             world_manager,
             has_written,
             update_events,
+            entity_priority_order,
         );
 
         // write entity commands
@@ -753,8 +755,20 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        entity_priority_order: Option<&[GlobalEntity]>,
     ) {
-        let all_update_entities: Vec<GlobalEntity> = next_send_updates.keys().copied().collect();
+        // When a priority order is supplied, iterate entities in that order
+        // (filtered to those with pending updates this cycle). This is the
+        // intra-section k-way merge ordering for priority-sorted entity bundles.
+        // Without priority guidance we fall back to HashMap iteration order.
+        let all_update_entities: Vec<GlobalEntity> = match entity_priority_order {
+            Some(order) => order
+                .iter()
+                .copied()
+                .filter(|e| next_send_updates.contains_key(e))
+                .collect(),
+            None => next_send_updates.keys().copied().collect(),
+        };
 
         for global_entity in all_update_entities {
             // get LocalEntity

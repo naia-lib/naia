@@ -187,6 +187,20 @@ impl<'a> ServerExpectCtx<'a> {
         })
     }
 
+    /// Read the sender-wide (global) priority gain override for an entity.
+    /// Returns `None` when no override is in effect (default 1.0 applies).
+    pub fn global_entity_gain(&self, entity_key: &EntityKey) -> Option<f32> {
+        let entity = self.scenario.entity_registry().server_entity(entity_key)?;
+        let (server, _) = self.scenario.server_and_registry()?;
+        server.global_entity_priority(entity).gain()
+    }
+
+    /// True iff the sender-wide priority gain is explicitly overridden for
+    /// this entity (i.e. the handle's `is_overridden()`).
+    pub fn global_entity_priority_is_overridden(&self, entity_key: &EntityKey) -> bool {
+        self.global_entity_gain(entity_key).is_some()
+    }
+
     /// Read requests from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, ResponseId, Request) tuples received on channel C
     pub fn read_request<C: naia_shared::Channel, Q: naia_shared::Request>(
