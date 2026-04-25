@@ -11,6 +11,7 @@ mod tick {
 mod spawn {
     pub mod burst;
     pub mod coalesced;
+    pub mod paint_rect;
     pub mod single;
 }
 
@@ -39,6 +40,7 @@ criterion_main!(
     spawn::single::spawn_single_group,
     spawn::burst::spawn_burst,
     spawn::coalesced::spawn_coalesced,
+    spawn::paint_rect::spawn_paint_rect,
     update::mutation::update_mutation,
     update::bulk::update_bulk,
     update::immutable::update_immutable,

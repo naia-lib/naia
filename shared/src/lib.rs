@@ -188,6 +188,8 @@ pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
 pub use world::local::local_world_manager::bench_take_events_counters;
 #[cfg(feature = "bench_instrumentation")]
+pub use world::local::local_world_manager::cmd_emission_counters;
+#[cfg(feature = "bench_instrumentation")]
 pub use world::update::user_diff_handler::dirty_scan_counters;
 pub use wrapping_number::{
     sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than,

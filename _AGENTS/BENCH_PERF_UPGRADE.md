@@ -15,7 +15,7 @@
 | 4 — Immutable skip idle | ✅ complete (21× at 16u_10000e imm) | TBD | `phase-04.md` |
 | Sidequest — Priority Accumulator | ✅ complete (A+B+C closed, all gates green) | `b710ca4e` + 2026-04-24 | `sidequest-priority-accumulator.md` |
 | 4.5 — Mutable resend-window spike | ✅ closed by absorption (sidequest Phase A bandwidth cap) | `b710ca4e` | `phase-04.5.md` |
-| 6 — Coalesce audit | ⏸️ pending | — | — |
+| 6 — Coalesce audit | ✅ complete (hypothesis (a) confirmed — coalescing correct) | TBD | `phase-06.md` |
 | 7 — Regression gate + close-out | ⏸️ pending | — | — |
 
 ---

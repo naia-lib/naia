@@ -390,6 +390,33 @@ impl BenchWorld {
         self.server_entities.push(entity);
     }
 
+    /// PaintRect-style burst: spawn `n` entities with `components_per_entity`
+    /// components each (`Mutable` + optionally `Immutable`) and add them all
+    /// to the room — within a single tick boundary, with NO ticks in between.
+    /// Used by Phase 6's coalescing audit. The audit assertion is that each
+    /// resulting send carries one `SpawnWithComponents` per entity (with all
+    /// components inlined), not `Spawn + N×InsertComponent`.
+    ///
+    /// `components_per_entity` is clamped to `[1, 2]` — the bench protocol
+    /// has exactly two component kinds, `BenchComponent` (mutable) and
+    /// `BenchImmutableComponent` (immutable). 1 → mutable only; 2 → both.
+    pub fn paint_rect_spawn_burst(&mut self, n: usize, components_per_entity: usize) {
+        let k = components_per_entity.clamp(1, 2);
+        for i in 0..n {
+            let entity = {
+                let mut entity_mut = self.server.spawn_entity(self.server_world.proxy_mut());
+                let entity = entity_mut.id();
+                entity_mut.insert_component(BenchComponent::new(i as u32));
+                if k >= 2 {
+                    entity_mut.insert_component(BenchImmutableComponent);
+                }
+                entity
+            };
+            self.server.room_mut(&self.room_key).add_entity(&entity);
+            self.server_entities.push(entity);
+        }
+    }
+
     /// Have ALL connected clients request authority on server_entities[entity_idx].
     /// Used by authority contention benchmarks to simulate simultaneous requests.
     pub fn request_authority_all_clients(&mut self, entity_idx: usize) {

@@ -30,6 +30,67 @@ pub mod bench_take_events_counters {
     }
 }
 
+/// Phase 6 — per-`EntityMessageType` emission counters. Incremented exactly
+/// when a command is genuinely committed to a packet (the `is_writing == true`
+/// path in `WorldWriter::write_command`, via `record_command_written`). Sized
+/// to answer the audit question: "PaintRect of N tiles → does the wire carry
+/// N `SpawnWithComponents`, or does it degenerate to N `Spawn` + N×K
+/// `InsertComponent`?" Enabled via `bench_instrumentation`.
+#[cfg(feature = "bench_instrumentation")]
+pub mod cmd_emission_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    pub static SPAWN: AtomicU64 = AtomicU64::new(0);
+    pub static SPAWN_WITH_COMPONENTS: AtomicU64 = AtomicU64::new(0);
+    pub static DESPAWN: AtomicU64 = AtomicU64::new(0);
+    pub static INSERT_COMPONENT: AtomicU64 = AtomicU64::new(0);
+    pub static REMOVE_COMPONENT: AtomicU64 = AtomicU64::new(0);
+    pub static NOOP: AtomicU64 = AtomicU64::new(0);
+    pub static OTHER: AtomicU64 = AtomicU64::new(0);
+
+    /// `SpawnWithComponents` payload total — sum of `Vec<ComponentKind>.len()`
+    /// across emissions. Cross-checks N×K accounting against the spawn-count
+    /// audit (a coalesced PaintRect of N tiles with K components each should
+    /// emit `spawn_with_components == N` AND `payload_components == N*K`).
+    pub static PAYLOAD_COMPONENTS: AtomicU64 = AtomicU64::new(0);
+
+    pub fn reset() {
+        SPAWN.store(0, Ordering::Relaxed);
+        SPAWN_WITH_COMPONENTS.store(0, Ordering::Relaxed);
+        DESPAWN.store(0, Ordering::Relaxed);
+        INSERT_COMPONENT.store(0, Ordering::Relaxed);
+        REMOVE_COMPONENT.store(0, Ordering::Relaxed);
+        NOOP.store(0, Ordering::Relaxed);
+        OTHER.store(0, Ordering::Relaxed);
+        PAYLOAD_COMPONENTS.store(0, Ordering::Relaxed);
+    }
+
+    #[derive(Debug, Clone, Copy)]
+    pub struct CmdEmissionSnapshot {
+        pub spawn: u64,
+        pub spawn_with_components: u64,
+        pub despawn: u64,
+        pub insert_component: u64,
+        pub remove_component: u64,
+        pub noop: u64,
+        pub other: u64,
+        pub payload_components: u64,
+    }
+
+    pub fn snapshot() -> CmdEmissionSnapshot {
+        CmdEmissionSnapshot {
+            spawn: SPAWN.load(Ordering::Relaxed),
+            spawn_with_components: SPAWN_WITH_COMPONENTS.load(Ordering::Relaxed),
+            despawn: DESPAWN.load(Ordering::Relaxed),
+            insert_component: INSERT_COMPONENT.load(Ordering::Relaxed),
+            remove_component: REMOVE_COMPONENT.load(Ordering::Relaxed),
+            noop: NOOP.load(Ordering::Relaxed),
+            other: OTHER.load(Ordering::Relaxed),
+            payload_components: PAYLOAD_COMPONENTS.load(Ordering::Relaxed),
+        }
+    }
+}
+
 use log::info;
 use naia_socket_shared::Instant;
 
@@ -398,6 +459,37 @@ impl LocalWorldManager {
         command_id: &CommandId,
         message: EntityMessage<OwnedLocalEntity>,
     ) {
+        #[cfg(feature = "bench_instrumentation")]
+        {
+            use std::sync::atomic::Ordering;
+            match &message {
+                EntityMessage::Spawn(_) => {
+                    cmd_emission_counters::SPAWN.fetch_add(1, Ordering::Relaxed);
+                }
+                EntityMessage::SpawnWithComponents(_, kinds) => {
+                    cmd_emission_counters::SPAWN_WITH_COMPONENTS
+                        .fetch_add(1, Ordering::Relaxed);
+                    cmd_emission_counters::PAYLOAD_COMPONENTS
+                        .fetch_add(kinds.len() as u64, Ordering::Relaxed);
+                }
+                EntityMessage::Despawn(_) => {
+                    cmd_emission_counters::DESPAWN.fetch_add(1, Ordering::Relaxed);
+                }
+                EntityMessage::InsertComponent(_, _) => {
+                    cmd_emission_counters::INSERT_COMPONENT.fetch_add(1, Ordering::Relaxed);
+                }
+                EntityMessage::RemoveComponent(_, _) => {
+                    cmd_emission_counters::REMOVE_COMPONENT.fetch_add(1, Ordering::Relaxed);
+                }
+                EntityMessage::Noop => {
+                    cmd_emission_counters::NOOP.fetch_add(1, Ordering::Relaxed);
+                }
+                _ => {
+                    cmd_emission_counters::OTHER.fetch_add(1, Ordering::Relaxed);
+                }
+            }
+        }
+
         let (_, sent_actions_list) = self
             .sent_command_packets
             .get_mut_scan_from_back(packet_index)
