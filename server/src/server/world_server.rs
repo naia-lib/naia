@@ -27,6 +27,7 @@ use crate::{
     handshake::HandshakeManager,
     request::{GlobalRequestManager, GlobalResponseManager},
     room::Room,
+    server::scope_checks_cache::ScopeChecksCache,
     time_manager::TimeManager,
     transport::{PacketReceiver, PacketSender},
     world::{
@@ -150,6 +151,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     // Entries evicted on scope exit for that user; whole map entry dropped
     // when the user disconnects.
     user_priorities: HashMap<UserKey, UserPriorityState<E>>,
+    // Push-based mirror of the (room, user, entity) tuples returned by
+    // `scope_checks()`. Maintained on room/user/entity churn; reads are
+    // O(1) and zero-allocation.
+    scope_checks_cache: ScopeChecksCache<E>,
 }
 
 /// Events that drive scope re-evaluation.
@@ -229,6 +234,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             scope_change_queue: VecDeque::new(),
             global_priority: GlobalPriorityState::new(),
             user_priorities: HashMap::new(),
+            scope_checks_cache: ScopeChecksCache::new(),
         }
     }
 
@@ -626,10 +632,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// a related Room, User, and Entity, used to determine which Entities to
     /// replicate to which Users
     pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, E)> {
-        let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
+        // Every Nth call (default 1024) in debug builds, recompute from scratch
+        // and assert set-equality with the cache. Production reads pay only
+        // the counter increment.
+        #[cfg(debug_assertions)]
+        if self.scope_checks_cache.should_assert_equivalence(1024) {
+            let cache: HashSet<_> = self.scope_checks_cache.as_slice().iter().copied().collect();
+            let fresh: HashSet<_> = self.scope_checks_recompute_slow().into_iter().collect();
+            if cache != fresh {
+                panic!(
+                    "scope_checks_cache diverged from slow-path recompute: \
+                     cache.len() = {}, fresh.len() = {}",
+                    cache.len(),
+                    fresh.len(),
+                );
+            }
+        }
+        self.scope_checks_cache.as_slice().to_vec()
+    }
 
-        // TODO: precache this, instead of generating a new list every call
-        // likely this is called A LOT
+    /// Slow-path equivalent of `scope_checks()` — used by tests and the
+    /// debug-build assertion in `scope_checks()` to verify the cache stays
+    /// in sync with `(rooms × users × entities)` truth.
+    pub(crate) fn scope_checks_recompute_slow(&self) -> Vec<(RoomKey, UserKey, E)> {
+        let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
         for (room_key, room) in self.rooms.iter() {
             for user_key in room.user_keys() {
                 for global_entity in room.entities() {
@@ -642,7 +668,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
             }
         }
-
         list
     }
 
@@ -1444,6 +1469,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         for layer in self.user_priorities.values_mut() {
             layer.on_scope_exit(world_entity);
         }
+        // Drop every (*, *, world_entity) tuple from the scope-checks cache.
+        // Single linear retain — covers all rooms that previously contained
+        // the entity, replacing what would otherwise be one retain per
+        // affected room.
+        self.scope_checks_cache
+            .on_entity_despawned(*world_entity);
         self.cleanup_entity_replication(&global_entity);
         self.global_world_manager
             .remove_entity_record(&global_entity);
@@ -2176,6 +2207,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .get_mut(room_key)
                 .unwrap()
                 .unsubscribe_user(user_key);
+            // Mirror the room→user removal into the scope-checks cache —
+            // this path bypasses `room_remove_user`.
+            self.scope_checks_cache
+                .on_user_removed_from_room(*room_key, *user_key);
         }
 
         // remove from bandwidth monitor
@@ -2224,6 +2259,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             for user_key in room.user_keys() {
                 self.users.get_mut(user_key).unwrap().uncache_room(room_key);
             }
+            // Drop every (room_key, *, *) tuple from the scope-checks cache
+            // in one pass — covers users-in-room and entities-in-room that
+            // `room_remove_all_entities` cleared above.
+            self.scope_checks_cache.on_room_destroyed(*room_key);
 
             true
         } else {
@@ -2250,11 +2289,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
+        let mut subscribed = false;
         if let Some(user) = self.users.get_mut(user_key) {
             if let Some(room) = self.rooms.get_mut(room_key) {
                 room.subscribe_user(user_key);
                 user.cache_room(room_key);
+                subscribed = true;
             }
+        }
+        if subscribed {
+            // Mirror the new (room, user, *) tuples into the cache for every
+            // entity already in this room. Resolves global → world per entity
+            // once at churn time so per-tick `scope_checks()` is zero lookups.
+            let entities: Vec<E> = self
+                .rooms
+                .get(room_key)
+                .map(|room| {
+                    room.entities()
+                        .filter_map(|ge| {
+                            self.global_entity_map
+                                .global_entity_to_entity(ge)
+                                .ok()
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            self.scope_checks_cache
+                .on_user_added_to_room(*room_key, *user_key, entities);
         }
         self.scope_change_queue
             .push_back(ScopeChange::UserEnteredRoom(*user_key, *room_key));
@@ -2270,6 +2331,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             if let Some(room) = self.rooms.get_mut(room_key) {
                 room.unsubscribe_user(user_key);
                 user.uncache_room(room_key);
+                self.scope_checks_cache
+                    .on_user_removed_from_room(*room_key, *user_key);
             }
         }
         self.scope_change_queue
@@ -2347,6 +2410,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         self.entity_room_map
             .entity_add_room(&global_entity, room_key);
+        // Mirror new (room, *, entity) tuples for every user already in the
+        // room — keeps the scope-checks cache in sync with the slow path.
+        let users: Vec<UserKey> = self
+            .rooms
+            .get(room_key)
+            .map(|room| room.user_keys().copied().collect())
+            .unwrap_or_default();
+        self.scope_checks_cache
+            .on_entity_added_to_room(*room_key, *world_entity, users);
         self.scope_change_queue
             .push_back(ScopeChange::EntityEnteredRoom(global_entity, *room_key));
     }
@@ -2361,6 +2433,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             room.remove_entity(&global_entity, false);
             self.entity_room_map
                 .remove_from_room(&global_entity, room_key);
+            self.scope_checks_cache
+                .on_entity_removed_from_room(*room_key, *world_entity);
         }
     }
 
@@ -2373,6 +2447,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 self.entity_room_map
                     .remove_from_room(&global_entity, room_key);
             }
+            // The scope-checks cache cleanup for these tuples is performed by
+            // the caller (`room_destroy`) via `on_room_destroyed`, which is a
+            // single linear scan instead of per-entity retain calls.
         }
     }
 

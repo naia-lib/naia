@@ -342,6 +342,15 @@ impl BenchWorld {
         drain_all_events(&mut self.server, &mut self.clients);
     }
 
+    /// Invokes `server.scope_checks()` and discards the result. The realistic
+    /// per-tick game-code pattern (see demos/basic, demos/macroquad) is to
+    /// iterate the returned tuples once per tick to make scope decisions.
+    /// Exposed here so the `tick/scope_with_rooms` bench measures the rebuild
+    /// cost that game code actually pays.
+    pub fn scope_checks_tuple_count(&self) -> usize {
+        self.server.scope_checks().len()
+    }
+
     /// Diagnostic-only variant of `tick()` that reports per-phase wall time.
     /// Used by `examples/phase4_tick_internals.rs` to localize remaining
     /// per-tick cost inside the server idle path. Not exposed through the

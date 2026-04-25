@@ -8,3 +8,5 @@ mod main_server;
 pub use main_server::MainServer;
 pub mod world_server;
 pub use world_server::WorldServer;
+
+mod scope_checks_cache;

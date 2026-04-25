@@ -6,6 +6,7 @@ mod tick {
     pub mod active;
     pub mod idle;
     pub mod scope;
+    pub mod scope_with_rooms;
 }
 
 mod spawn {
@@ -40,6 +41,7 @@ criterion_main!(
     tick::idle::tick_idle,
     tick::active::tick_active,
     tick::scope::tick_scope,
+    tick::scope_with_rooms::tick_scope_with_rooms,
     spawn::single::spawn_single_group,
     spawn::burst::spawn_burst,
     spawn::coalesced::spawn_coalesced,
