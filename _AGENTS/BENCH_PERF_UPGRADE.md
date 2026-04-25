@@ -88,6 +88,16 @@ Slope is sub-linear in N because each tick's outbound bytes are capped by the ba
 win-assert summary: 29 passed, 0 failed, 0 skipped
 ```
 
+### Hard gates for any perf-touching commit
+
+Three gates must stay green on every commit that lands in or after Phase 9:
+
+1. **`cargo test --workspace`** — correctness floor. Was red Phase 0–8 (TestClock uninit panics swallowed by parallel test threads); fixed in Phase 9.1 via lazy-init.
+2. **namako BDD gate** — wire-format / behavioral floor. `lint=PASS run=PASS verify=PASS`.
+3. **`naia-bench-report --assert-wins`** — perf-regression gate (the 29-win matrix above).
+
+A passing perf gate is meaningless if the test suite is red — it only proves the *unbroken* paths got faster. From Phase 9 onward, all three are run in concert per sub-phase.
+
 ### Capacity envelope (post-upgrade)
 
 At ≈51 µs per idle tick at `16u_10000e_immutable`, the per-user-tile cost is **~3 ns**. Extrapolating to the canonical Cyberlith shape:

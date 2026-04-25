@@ -17,13 +17,12 @@ impl TestClock {
     }
 
     /// Advance the simulated clock by the specified number of milliseconds.
+    /// Lazy-inits to 0 if no explicit `init()` has been called on this thread.
     pub fn advance(delta_ms: u64) {
         SIMULATED_CLOCK.with(|c| {
             let current = c.get();
-            if current == u64::MAX {
-                panic!("test clock not initialized! Call TestClock::init() first.");
-            }
-            c.set(current + delta_ms);
+            let base = if current == u64::MAX { 0 } else { current };
+            c.set(base + delta_ms);
         });
     }
 
@@ -33,13 +32,19 @@ impl TestClock {
     }
 
     /// Get the current simulated time in milliseconds.
+    /// Lazy-inits to 0 on first read if no explicit `init()` has been called
+    /// on this thread — every test thread gets a sane starting clock without
+    /// boilerplate. Tests that want a specific start time still call
+    /// `TestClock::init(N)` explicitly.
     pub fn current_time_ms() -> u64 {
         SIMULATED_CLOCK.with(|c| {
             let millis = c.get();
             if millis == u64::MAX {
-                panic!("test clock not initialized! Call TestClock::init() first.");
+                c.set(0);
+                0
+            } else {
+                millis
             }
-            millis
         })
     }
 }

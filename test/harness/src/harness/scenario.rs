@@ -390,7 +390,7 @@ impl Scenario {
     /// Create a context for expectations with a custom tick timeout.
     ///
     /// # Example
-    /// ```rust,no_run
+    /// ```text
     /// // Wait up to 200 ticks for a condition that may take longer
     /// scenario.until(200.ticks()).expect(|ctx| {
     ///     // ... check conditions

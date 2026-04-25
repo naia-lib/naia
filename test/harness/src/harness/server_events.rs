@@ -621,7 +621,7 @@ pub(crate) fn register_auth_event(
 
             // Re-create MessageContainer
             let auth_container =
-                MessageContainer::from_read(Box::new(auth) as Box<dyn naia_shared::Message>);
+                MessageContainer::new(Box::new(auth) as Box<dyn naia_shared::Message>);
             return Some((client_key, auth_container));
         }
     }

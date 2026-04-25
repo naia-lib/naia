@@ -175,7 +175,7 @@ impl MessageManager {
             panic!("Channel not configured correctly! Cannot send message.");
         };
 
-        let message_bit_length = message.bit_length();
+        let message_bit_length = message.bit_length(message_kinds, converter);
         if message_bit_length > FRAGMENTATION_LIMIT_BITS {
             let Some(settings) = self.channel_settings.get(channel_kind) else {
                 panic!("Channel not configured correctly! Cannot send message.");

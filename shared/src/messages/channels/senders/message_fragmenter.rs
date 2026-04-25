@@ -27,7 +27,7 @@ impl MessageFragmenter {
         let mut fragmenter = FragmentWriter::new(self.current_fragment_id);
         self.current_fragment_id.increment();
         message.write(message_kinds, &mut fragmenter, converter);
-        fragmenter.to_messages(message_kinds, converter)
+        fragmenter.to_messages()
     }
 }
 
@@ -61,22 +61,14 @@ impl FragmentWriter {
         self.fragments.push(fragmented_message);
     }
 
-    fn to_messages(
-        mut self,
-        message_kinds: &MessageKinds,
-        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-    ) -> Vec<MessageContainer> {
+    fn to_messages(mut self) -> Vec<MessageContainer> {
         self.flush_current();
 
         let mut output = Vec::with_capacity(self.fragments.len());
 
         for mut fragment in self.fragments {
             fragment.set_total(self.current_fragment_index);
-            output.push(MessageContainer::from_write(
-                Box::new(fragment),
-                message_kinds,
-                converter,
-            ));
+            output.push(MessageContainer::new(Box::new(fragment)));
         }
 
         output

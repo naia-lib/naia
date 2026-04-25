@@ -540,7 +540,7 @@ pub fn get_builder_read_method(
         fn read(&self, reader: &mut BitReader, converter: &dyn LocalEntityAndGlobalEntityConverter) -> Result<MessageContainer, SerdeErr> {
             #field_reads
 
-            return Ok(MessageContainer::from_read(Box::new(#struct_build)));
+            return Ok(MessageContainer::new(Box::new(#struct_build)));
         }
     }
 }

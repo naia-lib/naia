@@ -21,3 +21,6 @@ maintenance = { status = "actively-developed" }
 naia-serde-derive = { version = "0.24", path = "derive" }
 log = { version = "0.4" }
 cfg-if = { version = "1.0" }
+
+[dev-dependencies]
+proptest = { version = "1" }

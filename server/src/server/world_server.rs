@@ -470,11 +470,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .base
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
-        let message = MessageContainer::from_write(
-            message_box,
-            &self.message_kinds,
-            &mut converter,
-        );
+        let message = MessageContainer::new(message_box);
         connection.base.message_manager.send_message(
             &self.message_kinds,
             &mut converter,
@@ -539,11 +535,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
 
-        let message = MessageContainer::from_write(
-            request_box,
-            &self.message_kinds,
-            &mut converter,
-        );
+        let message = MessageContainer::new(request_box);
         connection.base.message_manager.send_request(
             &self.message_kinds,
             &mut converter,
@@ -590,11 +582,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .base
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
-        let response = MessageContainer::from_write(
-            response_box,
-            &self.message_kinds,
-            &mut converter,
-        );
+        let response = MessageContainer::new(response_box);
         connection.base.message_manager.send_response(
             &self.message_kinds,
             &mut converter,
