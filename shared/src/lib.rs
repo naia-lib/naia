@@ -22,7 +22,7 @@ cfg_if! {
 
 pub use naia_derive::{Channel, Message, MessageBevy, Replicate, ReplicateBevy};
 pub use naia_serde::{
-    BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
+    BitCounter, BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
     Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger, SignedVariableFloat,
     SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,

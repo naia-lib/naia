@@ -15,7 +15,7 @@
 | 8.0 — Bench protocol calibration (quantized types) | ✅ COMPLETE 2026-04-25 | `halo_btb_16v16` quantized 2676 B/tick = 0.81× of naive 3304 B/tick (uncapped) | bench-only | `phase-08.0.md` |
 | 8.1 — Columnar dirty + `EntityIndex` (Stages A-D) | 🔲 planned | `mutate_path/single_user/single_property` ≤ 25 ns; `tick/active/mutations/1000` ≥ 3× faster | — | `phase-08.1.md` |
 | 8.2 — `scope_checks` precache | ✅ COMPLETE 2026-04-25 | rebuild eliminated (cache mirrors `(room, user, entity)` tuples on churn); `tick/scope_with_rooms/u_x_n/16u_10000e` 403.31 → 338.54 ms (-16.1%, -64.77 ms/tick); 8/9 cells improved. **Original ≤ 200 µs target was unreachable** — `tick()` itself (send_all_packets) is multi-hundred ms at 16u_10000e and floors the bench cell. The realistic win is the rebuild-cost delta. | bench-improvement | `phase-08.2.md` |
-| 8.3 — Variable-length ComponentKind NetId | 🔲 planned | `wire/component_kind_encoding/16_kinds` ≥ 8% smaller | — | `phase-08.3.md` |
+| 8.3 — Protocol-sized ComponentKind/ChannelKind/MessageKind NetId | ✅ COMPLETE 2026-04-25 | `wire/bandwidth_realistic_quantized/halo_btb_16v16` 2695 → 2310 B/tick (-14.3%, target was 8%); 29/0/0 wins; Phase 4 idle 134µs ≤ 200µs ceiling | wire-format break (cyberlith pre-public) | `phase-08.3.md` |
 
 ---
 

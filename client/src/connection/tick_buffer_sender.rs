@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use naia_shared::{
-    BaseConnection, BitWrite, BitWriter, ChannelKind, ChannelKinds, ChannelMode, ConstBitLength,
-    MessageContainer, PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
+    BaseConnection, BitWriter, ChannelKind, ChannelKinds, ChannelMode, MessageContainer,
+    PacketIndex, PacketNotifiable, Protocol, Serde, ShortMessageIndex, Tick,
 };
 
 use crate::{
@@ -86,8 +86,9 @@ impl TickBufferSender {
             true.ser(&mut counter);
             // write ChannelContinue bit
             true.ser(&mut counter);
-            // write ChannelIndex
-            counter.count_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            // write ChannelIndex (variable-width — count the actual bits this
+            // channel will take rather than a const upper bound)
+            channel_kind.ser(&protocol.channel_kinds, &mut counter);
 
             if counter.overflowed() {
                 break;

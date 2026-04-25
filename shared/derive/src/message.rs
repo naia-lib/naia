@@ -326,9 +326,13 @@ fn get_bit_length_method(fields: &[Field], struct_type: &StructType) -> TokenStr
     }
 
     quote! {
-        fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
+        fn bit_length(
+            &self,
+            message_kinds: &MessageKinds,
+            converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) -> u32 {
             let mut output = 0;
-            output += <MessageKind as ConstBitLength>::const_bit_length();
+            output += message_kinds.kind_bit_length();
             #field_bit_lengths
             output
         }

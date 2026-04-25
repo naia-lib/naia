@@ -2,11 +2,16 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{DataEnum, Fields};
 
-fn bits_needed_for(max_value: usize) -> u8 {
-    let mut bits = 1;
-    while 2_usize.pow(bits) <= max_value {
-        bits += 1;
+/// Number of bits needed to encode any of `variant_count` distinct
+/// indices `0..variant_count`. Equivalent to `ceil(log2(variant_count))`,
+/// with a floor of 1 bit so that `UnsignedInteger<N>` (which rejects
+/// `N == 0`) stays valid for trivial 1-variant enums.
+fn bits_needed_for(variant_count: usize) -> u8 {
+    if variant_count <= 2 {
+        return 1;
     }
+    let max_index = variant_count - 1;
+    let bits = usize::BITS - max_index.leading_zeros();
     if bits >= 256 {
         panic!("cannot encode a number in more than 255 bits!");
     }

@@ -34,7 +34,7 @@ impl RequestSender {
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
         let request_message = RequestOrResponse::request(local_request_id, request_bytes);
-        MessageContainer::from_write(Box::new(request_message), converter)
+        MessageContainer::from_write(Box::new(request_message), message_kinds, converter)
     }
 
     pub(crate) fn process_outgoing_response(
@@ -48,7 +48,7 @@ impl RequestSender {
         response.write(message_kinds, &mut writer, converter);
         let response_bytes = writer.to_bytes();
         let response_message = RequestOrResponse::response(local_response_id, response_bytes);
-        MessageContainer::from_write(Box::new(response_message), converter)
+        MessageContainer::from_write(Box::new(response_message), message_kinds, converter)
     }
 
     pub(crate) fn process_incoming_response(

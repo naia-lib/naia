@@ -17,9 +17,10 @@ pub struct MessageContainer {
 impl MessageContainer {
     pub fn from_write(
         message: Box<dyn Message>,
+        message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) -> Self {
-        let bit_length = message.bit_length(converter);
+        let bit_length = message.bit_length(message_kinds, converter);
         Self {
             inner: message,
             bit_length: Some(bit_length),

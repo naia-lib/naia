@@ -10,7 +10,7 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
         local::local_world_manager::LocalWorldManager,
     },
-    BitWrite, BitWriter, ComponentKind, ComponentKinds, ConstBitLength,
+    BitWrite, BitWriter, ComponentKind, ComponentKinds,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
     Instant, MessageIndex, PacketIndex, Serde, WorldRefType,
 };
@@ -856,8 +856,10 @@ impl WorldWriter {
             let mut counter = writer.counter();
             // write ComponentContinue bit
             true.ser(&mut counter);
-            // write component kind
-            counter.count_bits(<ComponentKind as ConstBitLength>::const_bit_length());
+            // write component kind (variable-length encoding — count the
+            // actual bits this kind will take rather than a const upper
+            // bound)
+            component_kind.ser(component_kinds, &mut counter);
             // write data
             world
                 .component_of_kind(&world_entity, component_kind)

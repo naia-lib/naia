@@ -386,7 +386,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .world_manager
                 .entity_converter_mut(&self.global_world_manager);
-            let message = MessageContainer::from_write(message_box, &mut converter);
+            let message = MessageContainer::from_write(
+                message_box,
+                &self.protocol.message_kinds,
+                &mut converter,
+            );
             connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
                 &mut converter,
@@ -435,7 +439,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_converter_mut(&self.global_world_manager);
 
         let request_id = connection.global_request_manager.create_request_id();
-        let message = MessageContainer::from_write(request_box, &mut converter);
+        let message = MessageContainer::from_write(
+            request_box,
+            &self.protocol.message_kinds,
+            &mut converter,
+        );
         connection.base.message_manager.send_request(
             &self.protocol.message_kinds,
             &mut converter,
@@ -480,7 +488,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
 
-        let response = MessageContainer::from_write(response_box, &mut converter);
+        let response = MessageContainer::from_write(
+            response_box,
+            &self.protocol.message_kinds,
+            &mut converter,
+        );
         connection.base.message_manager.send_response(
             &self.protocol.message_kinds,
             &mut converter,
@@ -556,7 +568,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .world_manager
                 .entity_converter_mut(&self.global_world_manager);
-            let message = MessageContainer::from_write(message_box, &mut converter);
+            let message = MessageContainer::from_write(
+                message_box,
+                &self.protocol.message_kinds,
+                &mut converter,
+            );
             connection
                 .tick_buffer
                 .send_message(tick, channel_kind, message);

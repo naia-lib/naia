@@ -1,24 +1,29 @@
 use std::{any::TypeId, collections::HashMap};
 
-use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
 use crate::{LocalEntityAndGlobalEntityConverter, Message, MessageBuilder, MessageContainer};
 
 type NetId = u16;
+
+/// Wire encoding for `MessageKind` NetIds: a fixed-width raw bit field
+/// whose width is `ceil(log2(N))` for the protocol's registered message
+/// count. Both ends share registration order, so both compute the same
+/// width. See `world::component::component_kinds` for the matching
+/// rationale on the component side — same logic, same shape.
+fn bit_width_for_kind_count(count: NetId) -> u8 {
+    if count < 2 {
+        0
+    } else {
+        (count as u32).next_power_of_two().trailing_zeros() as u8
+    }
+}
 
 /// MessageKind - should be one unique value for each type of Message
 #[derive(Eq, Hash, Copy, Clone, PartialEq, Debug)]
 pub struct MessageKind {
     type_id: TypeId,
 }
-
-// impl From<TypeId> for MessageKind {
-//     fn from(type_id: TypeId) -> Self {
-//         Self {
-//             type_id
-//         }
-//     }
-// }
 
 impl MessageKind {
     pub fn of<M: Message>() -> Self {
@@ -28,24 +33,32 @@ impl MessageKind {
     }
 
     pub fn ser(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite) {
-        message_kinds.kind_to_net_id(self).ser(writer);
+        let net_id = message_kinds.kind_to_net_id(self);
+        let bits = message_kinds.kind_bit_width;
+        for i in 0..bits {
+            writer.write_bit((net_id >> i) & 1 != 0);
+        }
     }
 
     pub fn de(message_kinds: &MessageKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        let net_id: NetId = NetId::de(reader)?;
+        let bits = message_kinds.kind_bit_width;
+        let mut net_id: NetId = 0;
+        for i in 0..bits {
+            if bool::de(reader)? {
+                net_id |= 1 << i;
+            }
+        }
         Ok(message_kinds.net_id_to_kind(&net_id))
-    }
-}
-
-impl ConstBitLength for MessageKind {
-    fn const_bit_length() -> u32 {
-        <NetId as ConstBitLength>::const_bit_length()
     }
 }
 
 // MessageKinds
 pub struct MessageKinds {
     current_net_id: NetId,
+    /// Number of bits needed to encode any registered NetId — recomputed
+    /// on every `add_message`. Read directly by `MessageKind::ser`/`de`
+    /// on the hot path.
+    kind_bit_width: u8,
     kind_map: HashMap<MessageKind, (NetId, Box<dyn MessageBuilder>, String)>,
     net_id_map: HashMap<NetId, MessageKind>,
 }
@@ -53,6 +66,7 @@ pub struct MessageKinds {
 impl Clone for MessageKinds {
     fn clone(&self) -> Self {
         let current_net_id = self.current_net_id;
+        let kind_bit_width = self.kind_bit_width;
         let net_id_map = self.net_id_map.clone();
 
         let mut kind_map = HashMap::new();
@@ -62,6 +76,7 @@ impl Clone for MessageKinds {
 
         Self {
             current_net_id,
+            kind_bit_width,
             kind_map,
             net_id_map,
         }
@@ -72,6 +87,7 @@ impl MessageKinds {
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
+            kind_bit_width: 0,
             kind_map: HashMap::new(),
             net_id_map: HashMap::new(),
         }
@@ -87,7 +103,14 @@ impl MessageKinds {
         );
         self.net_id_map.insert(net_id, message_kind);
         self.current_net_id += 1;
+        self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
         //TODO: check for current_id overflow?
+    }
+
+    /// Bit width of every encoded `MessageKind` in this registry. Used by
+    /// derived `Message::bit_length` impls to size the kind-tag prefix.
+    pub fn kind_bit_length(&self) -> u32 {
+        self.kind_bit_width as u32
     }
 
     pub fn read(

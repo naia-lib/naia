@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use log::error;
-use naia_serde::{BitReader, BitWrite, BitWriter, ConstBitLength, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
 use crate::world::local::local_world_manager::LocalWorldManager;
@@ -284,8 +284,9 @@ impl MessageManager {
             counter.write_bit(false);
             // write ChannelContinue bit
             counter.write_bit(false);
-            // write ChannelIndex
-            counter.count_bits(<ChannelKind as ConstBitLength>::const_bit_length());
+            // write ChannelIndex (variable-width — count the actual bits this
+            // channel will take rather than a const upper bound)
+            channel_kind.ser(channel_kinds, &mut counter);
             if counter.overflowed() {
                 break;
             }
