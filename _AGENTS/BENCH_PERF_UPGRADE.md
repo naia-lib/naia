@@ -1,6 +1,6 @@
 # Naia Perf Upgrade — 2-Orders-of-Magnitude Plan
 
-**Status:** in progress — Phases 0–4 complete. **Sidequest (Priority Accumulator): ✅ COMPLETE 2026-04-24** — full A+B+C close-out, all gates green. Phase 5 (spatial scope index) **removed from plan 2026-04-24** per Connor — not pursued. See `_AGENTS/BENCH_UPGRADE_LOG/sidequest-priority-accumulator.md` post-mortem.
+**Status:** ✅ COMPLETE 2026-04-24 — Phases 0–7 landed. Headline win: `tick/idle_matrix/16u_10000e` 302.6 ms → 47.6 µs (**6,356×**). `naia-bench-report --assert-wins` reports 29/29 PASS, 0 FAIL, 0 SKIP. Sidequest (Priority Accumulator) closed same day — full A+B+C, all gates green. Phase 5 (spatial scope index) **removed from plan 2026-04-24** per Connor — not pursued. See `_AGENTS/BENCH_UPGRADE_LOG/sidequest-priority-accumulator.md` and `_AGENTS/BENCH_UPGRADE_LOG/phase-07.md` for the close-out artifacts.
 **Ref commits:** `4d73ad41` (U×N idle matrix bench) · GDD `862dcab` (LEVEL_SPEC §10 canonical)
 **Scope:** this document is the durable plan. Update it as phases land. Do not fork.
 
@@ -16,7 +16,7 @@
 | Sidequest — Priority Accumulator | ✅ complete (A+B+C closed, all gates green) | `b710ca4e` + 2026-04-24 | `sidequest-priority-accumulator.md` |
 | 4.5 — Mutable resend-window spike | ✅ closed by absorption (sidequest Phase A bandwidth cap) | `b710ca4e` | `phase-04.5.md` |
 | 6 — Coalesce audit | ✅ complete (hypothesis (a) confirmed — coalescing correct) | TBD | `phase-06.md` |
-| 7 — Regression gate + close-out | ⏸️ pending | — | — |
+| 7 — Regression gate + close-out | ✅ complete (29/29 PASS; idle 6,356× vs perf_v0) | TBD | `phase-07.md` |
 
 ---
 
@@ -29,45 +29,77 @@ Cyberlith's canonical model (GDD §10) is one **immutable Naia entity per tile**
 - **Tick rate:** 25 Hz → **40 ms / tick budget**, server-side.
 - **Session shape:** steady state is mostly idle ticks (nothing changes) + sparse mutation bursts (unit moves, combat) + edit-session spawn/despawn flurries.
 
-## 2. Where we are (measured, 2026-04-24)
+## 2. Where we are (measured, 2026-04-24, post-Phase-7)
 
-All numbers from `cargo bench -p naia-benches --bench naia`. Medians.
+All numbers from `cargo criterion -p naia-benches --bench naia`. Medians.
 
-### Idle-tick matrix — `tick/idle_matrix`
+### Idle-tick matrix — `tick/idle_matrix` (mutable)
 
-| U \ N | 100    | 1,000  | 10,000  |
-|-------|--------|--------|---------|
-| 1     | 142 µs | 1.84 ms| 26.6 ms |
-| 4     | 500 µs | 6.25 ms| 84.9 ms |
-| 16    | 1.96 ms| 23.7 ms| **299 ms** |
+| U \ N | 100      | 1,000    | 10,000    |
+|-------|----------|----------|-----------|
+| 1     | 3.9 µs   | 5.0 µs   | 4.3 µs    |
+| 4     | 13.8 µs  | 11.4 µs  | 12.7 µs   |
+| 16    | 53.4 µs  | 52.7 µs  | **47.6 µs** |
 
-- **Scaling:** linear in `U`, linear in `N`. Idle is **O(U·N)**.
-- **Per-cell cost:** 1.2–2.7 µs per user·entity; mid-range ≈ 1.5 µs.
-- **Win-2 (O(1) idle) is NOT holding** on the server-side scan. This is the #1 optimization target.
+### Idle-tick matrix — `tick/idle_matrix_immutable`
 
-### Immutable dispatch — `update_immutable`
+| U \ N | 100      | 1,000    | 10,000    |
+|-------|----------|----------|-----------|
+| 1     | 4.1 µs   | 4.6 µs   | 3.7 µs    |
+| 4     | 14.5 µs  | 11.6 µs  | 12.8 µs   |
+| 16    | 52.2 µs  | 49.3 µs  | **51.3 µs** |
 
-- `mutable_idle @ N=10K`:   29.23 ms
-- `immutable_idle @ N=10K`: 14.27 ms
-- **2.05× faster**, but **still linear in N** — the save is on mutation dispatch, not the idle scan.
+- **Scaling: O(U), constant in N.** Phase 3 + 4 made the dirty-set the only walk; idle ticks no longer touch the entity count.
+- **Headline `16u_10000e` mutable: 299 ms → 47.6 µs = 6,283×** vs. the original `perf_v0` baseline.
+- Idle is now firmly under the 40 ms (25 Hz) tick budget at every measured cell.
+
+### Phase-6 burst — `spawn/paint_rect`
+
+| N    | Median  | Throughput   |
+|------|---------|--------------|
+| 100  | 1.38 ms | 72.6K elem/s |
+| 1000 | 17.98 ms| 55.6K elem/s |
+| 5000 | 159.1 ms| 31.4K elem/s |
+
+Slope is sub-linear in N because each tick's outbound bytes are capped by the bandwidth accumulator — large bursts drain across multiple ticks. Wire-correctness gate (`phase6_paint_rect_audit`) confirms one `SpawnWithComponents` per entity, no stray `Spawn`/`InsertComponent`.
 
 ### Other measured costs
 
-| Bench | Result | Implication |
-|---|---|---|
-| `tick/scope_enter` | 3.1 µs/entity (linear) | scope-entry at 65K tiles = ~200 ms per join |
-| `tick/scope_exit` | 4.7 µs/entity (linear) | disconnect at 65K tiles = ~310 ms |
-| `update/mutation/single` | 23.5 µs per (user·mutation·tick) | bandwidth-bound, scales as U·K |
-| `spawn/coalesced vs burst @ N=1K` | ~10% win only | coalesce is weaker than expected |
-| `wire_bandwidth 4u_1000m` | 22.5 ms | wire is fine; server tick is not |
+| Bench | Today | Pre-upgrade | Notes |
+|---|---|---|---|
+| `update/immutable/immutable_idle` | 14.06 ms | 14.27 ms | Win-5 holds (≤ mutable × 1.05) |
+| `update/immutable/mutable_idle`   | 28.57 ms | 29.23 ms | mutable steady-state cost; idle path replaced by matrix above |
+| `tick/scope_enter @ 10K` | 31.15 ms | 31.2 ms   | scope-entry is one-shot, not per-tick — OK as-is |
+| `tick/scope_exit @ 10K`  | 43.05 ms | ~47 ms    | one-shot disconnect cost |
+| `spawn/coalesced @ N=1K` | 1.82 ms  | 1.84 ms   | this bench measures *idle-after-build*, not coalesce — phase-06.md explains why |
 
-### Capacity gap (immutable-tile assumption, ~0.91 µs/cell)
+### `--assert-wins` gate (live, 2026-04-24)
 
-| U | N=10K | N=65K |
+```
+[PASS] Win-2 idle O(1):   tick/idle 100→10000 ratio 0.98× (≤ 3.0×)
+[PASS] Win-3 push model:  tick/active 10→1000 mutations ratio 1.2× (≤ 200×)
+[PASS] Win-4 coalesced:   spawn/coalesced/spawn/burst = 1.06× (≤ 1.20×) at N=1000
+[PASS] Win-5 immutable:   immutable_idle (14.06 ms) ≤ mutable_idle (28.57 ms) × 1.05
+[PASS] Phase-thr Phase 3 mutable idle:        47.6 µs ≤ 3 ms
+[PASS] Phase-thr Phase 4 immutable idle:      51.3 µs ≤ 200 µs
+[PASS] Phase-thr Phase 6 paint_rect/1000:    18.0 ms ≤ 28 ms
+[PASS] Phase-thr Phase 6 paint_rect/5000:   159.1 ms ≤ 220 ms
+[INFO] Baseline regression sweep: 71 cells vs perf_v0, all ≤ 1.20× (median ≪ 1.20× — Phase 3+4 cells are 6,000×+ improved)
+win-assert summary: 29 passed, 0 failed, 0 skipped
+```
+
+### Capacity envelope (post-upgrade)
+
+At ≈51 µs per idle tick at `16u_10000e_immutable`, the per-user-tile cost is **~3 ns**. Extrapolating to the canonical Cyberlith shape:
+
+| Players × Tiles | Idle floor | Headroom @ 40 ms tick |
 |---|---|---|
-| 16 | 146 ms (**3.6×** budget) | **954 ms (24×)** |
-| 64 | 582 ms (15×) | 3.8 s (95×) |
-| 128 | 1.16 s (29×) | 7.6 s (**191×**) |
+| 16 × 10,000 | 51 µs   | 784× |
+| 16 × 65,536 | (constant in N) ≈ 51 µs | 784× |
+| 64 × 65,536 | ~205 µs | 195× |
+| 128 × 65,536 | ~410 µs | 97× |
+
+Idle is no longer the bottleneck. Spawn-burst latency is now bandwidth-bound (paint_rect/5000 = 159 ms drain across ticks), which is the correct constraint.
 
 ## 3. Target
 
@@ -287,25 +319,25 @@ Expected win: depends on the finding; if (b), potentially 10× on edit paths. If
 
 ---
 
-### Phase 7 — Continuous regression gate + final measurement
+### Phase 7 — Continuous regression gate + final measurement ✅ COMPLETE 2026-04-24
 
-**Goal:** the 100× gain is permanent, protected by the test suite, and reproducible from a clean clone.
+**Outcome:** the 100× gain landed and is now permanent. `naia-bench-report --assert-wins` reports **29/29 PASS, 0 FAIL, 0 SKIP** against the post-sidequest codebase. Headline cell `tick/idle_matrix/16u_10000e` collapsed 302.6 ms → 47.6 µs (**6,356×** vs perf_v0 baseline) — well past the 100× target.
 
 Tasks:
 
-- [ ] Harden `test/bench_report --assert-wins` with all the thresholds from this doc baked in. Any PR that regresses a matrix cell by >20% fails the assert.
-- [ ] Run the full bench suite vs `perf_v0`. Publish the final comparative table in this doc's §2.
-- [ ] Update the LEVEL_SPEC §10.3 open-performance-questions section to state the realized capacity envelope.
-- [ ] When home-machine iai is available: re-run iai benches and confirm instruction counts moved in the same direction as criterion wall-clock. This is a correlation check, not a gate.
+- [x] Harden `test/bench_report --assert-wins` — added `check_phase_thresholds` (4 absolute ns ceilings) + `check_baseline_regression` (per-cell `current/perf_v0 ≤ 1.20`, 71 cells scanned). Fixed Win-2 small-end cell (was looking up non-existent `/10`); relaxed Win-4 to noise-tolerant 1.20× ratio (per phase-06.md, both `spawn/coalesced` and `spawn/burst` measure steady-state idle, not the burst itself — the actual coalesce gate is `phase6_paint_rect_audit` + the new `Phase 6 paint_rect/{1000,5000}` thresholds).
+- [x] Run the full bench suite vs `perf_v0`. Comparative table published in §2 above.
+- [x] Update the LEVEL_SPEC §10.3 open-performance-questions section to state the realized capacity envelope.
+- [ ] When home-machine iai is available: re-run iai benches and confirm instruction counts moved in the same direction as criterion wall-clock. (Correlation check, not a gate; deferred until home-machine iai is online.)
 
-Success criteria (all must hold):
+Success criteria (all hold):
 
-- `tick/idle_matrix/16u_10000e` ≤ 3 ms.
-- `tick/idle_matrix/16u_10000e/immutable` ≤ 1.5 ms (once Phase 2 lands immutable cells).
-- `cargo test --workspace` green.
-- All 15 BDD contracts green (`b465c32f` baseline or later).
-- `naia-bench-report --assert-wins --baseline perf_v0` green.
-- `_AGENTS/BENCH_UPGRADE_LOG/phase-0{1,2,3,4,4.5,6}.md` present with before/after artifacts.
+- `tick/idle_matrix/16u_10000e` = 47.6 µs ≤ 3 ms ✅
+- `tick/idle_matrix_immutable/16u_10000e` = 51.3 µs ≤ 200 µs ✅ (tightened from doc's 1.5 ms — Phase 4 actually landed 49 µs, leaving 1.5 ms in place would absorb a 30× regression silently)
+- `cargo test --workspace` green ✅ (was green pre-Phase-7 and remained so through gate hardening)
+- BDD contracts green ✅ (sidequest closed all 15)
+- `naia-bench-report --assert-wins` green ✅ (29/29)
+- `_AGENTS/BENCH_UPGRADE_LOG/phase-0{1,2,3,4,4.5,6,7}.md` present ✅
 
 ---
 
