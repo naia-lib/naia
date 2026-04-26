@@ -149,6 +149,30 @@ impl RotationQ {
     }
 }
 
+// ─── Halo scenario components ─────────────────────────────────────────────────
+//
+// Used by `scenarios/halo_btb_16v16`: a cyberlith-shaped scenario with 10K
+// immutable tiles and 32 mutable units per room.
+
+/// Immutable tile — stands in for cyberlith's NetworkedTile.
+/// No properties: presence is the data (zero diff-tracking cost per tick).
+#[derive(Replicate)]
+#[replicate(immutable)]
+pub struct HaloTile;
+
+/// Mutable unit — stands in for a moving character (position + facing).
+#[derive(Replicate)]
+pub struct HaloUnit {
+    pub pos: Property<[i16; 2]>,
+    pub facing: Property<u8>,
+}
+
+impl HaloUnit {
+    pub fn new(x: i16, y: i16, facing: u8) -> Self {
+        Self::new_complete([x, y], facing)
+    }
+}
+
 // ─── Channel ─────────────────────────────────────────────────────────────────
 
 #[derive(Channel)]
@@ -167,10 +191,31 @@ pub fn bench_protocol() -> Protocol {
         .add_component::<PositionQ>()
         .add_component::<VelocityQ>()
         .add_component::<RotationQ>()
+        .add_component::<HaloTile>()
+        .add_component::<HaloUnit>()
         .add_message::<BenchAuth>()
         .add_channel::<BenchChannel>(
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
         )
         .build()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn halo_unit_new_round_trips() {
+        let u = HaloUnit::new(5, -3, 128);
+        assert_eq!(*u.pos, [5i16, -3i16]);
+        assert_eq!(*u.facing, 128u8);
+    }
+
+    #[test]
+    fn halo_unit_facing_wraps() {
+        let mut u = HaloUnit::new(0, 0, 255);
+        *u.facing = u.facing.wrapping_add(1);
+        assert_eq!(*u.facing, 0u8);
+    }
 }

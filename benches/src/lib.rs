@@ -20,8 +20,9 @@ use naia_shared::{
 };
 
 use crate::bench_protocol::{
-    bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent, Position,
-    PositionQ, PositionQState, Rotation, RotationQ, Velocity, VelocityQ, VelocityQState,
+    bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent, HaloTile,
+    HaloUnit, Position, PositionQ, PositionQState, Rotation, RotationQ, Velocity, VelocityQ,
+    VelocityQState,
 };
 use crate::serde_quat::BenchQuat;
 use naia_shared::SignedVariableFloat;
@@ -85,6 +86,7 @@ pub struct BenchWorldBuilder {
     entity_kind: EntityKind,
     scoped: bool,
     uncapped_bandwidth: bool,
+    tick_ms: u64,
 }
 
 impl Default for BenchWorldBuilder {
@@ -101,7 +103,15 @@ impl BenchWorldBuilder {
             entity_kind: EntityKind::Mutable,
             scoped: true,
             uncapped_bandwidth: false,
+            tick_ms: TICK_MS,
         }
+    }
+
+    /// Override the simulated tick clock. Default is 16 ms (62.5 Hz).
+    /// Use `tick_rate_hz(25)` for a 25 Hz / 40 ms cyberlith-scale scenario.
+    pub fn tick_rate_hz(mut self, hz: u16) -> Self {
+        self.tick_ms = 1000 / hz as u64;
+        self
     }
 
     /// Disable the per-connection bandwidth cap on the server (sets
@@ -147,6 +157,7 @@ impl BenchWorldBuilder {
             self.entity_kind,
             self.scoped,
             self.uncapped_bandwidth,
+            self.tick_ms,
         )
     }
 }
@@ -176,6 +187,7 @@ pub struct BenchWorld {
     connected_user_keys: Vec<UserKey>,
     room_key: RoomKey,
     pub server_entities: Vec<BenchEntity>,
+    tick_ms: u64,
 }
 
 impl BenchWorld {
@@ -185,6 +197,7 @@ impl BenchWorld {
         entity_kind: EntityKind,
         scoped: bool,
         uncapped_bandwidth: bool,
+        tick_ms: u64,
     ) -> Self {
         TestClock::init(0);
 
@@ -237,7 +250,7 @@ impl BenchWorld {
         let mut room_key: Option<RoomKey> = None;
 
         for _ in 0..SETUP_TIMEOUT {
-            advance_tick(&hub, &mut server, &mut server_world, &mut clients);
+            advance_tick(&hub, &mut server, &mut server_world, &mut clients, tick_ms);
 
             let mut events = server.take_world_events();
             let _ = server.take_tick_events(&Instant::now());
@@ -305,7 +318,7 @@ impl BenchWorld {
         // Run until all entities replicated to all clients
         if scoped && entity_count > 0 && user_count > 0 {
             for _ in 0..REPLICATE_TIMEOUT {
-                advance_tick(&hub, &mut server, &mut server_world, &mut clients);
+                advance_tick(&hub, &mut server, &mut server_world, &mut clients, tick_ms);
                 drain_all_events(&mut server, &mut clients);
 
                 let all_visible = clients.iter().all(|(client, world)| {
@@ -325,6 +338,7 @@ impl BenchWorld {
             connected_user_keys,
             room_key,
             server_entities,
+            tick_ms,
         }
     }
 
@@ -338,6 +352,7 @@ impl BenchWorld {
             &mut self.server,
             &mut self.server_world,
             &mut self.clients,
+            self.tick_ms,
         );
         drain_all_events(&mut self.server, &mut self.clients);
     }
@@ -357,7 +372,7 @@ impl BenchWorld {
     /// criterion benches — keeping `tick()` itself as the canonical surface.
     pub fn tick_timed(&mut self) -> TickBreakdown {
         use std::time::Instant as StdInstant;
-        TestClock::advance(TICK_MS);
+        TestClock::advance(self.tick_ms);
         let now = Instant::now();
 
         let t = StdInstant::now();
@@ -410,6 +425,131 @@ impl BenchWorld {
                 *comp.value = (*comp.value).wrapping_add(1);
             }
         }
+    }
+
+    /// Spawn `tile_count` immutable [`HaloTile`] entities and `unit_count` mutable
+    /// [`HaloUnit`] entities, add all to the room, then drive ticks until every
+    /// entity is replicated to every client.
+    ///
+    /// **Not measured** — call from `iter_custom` setup or `iter_batched` setup.
+    pub fn spawn_halo_scene(&mut self, tile_count: usize, unit_count: usize) {
+        for _ in 0..tile_count {
+            let entity = {
+                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                let id = em.id();
+                em.insert_component(HaloTile);
+                id
+            };
+            self.server.room_mut(&self.room_key).add_entity(&entity);
+            self.server_entities.push(entity);
+        }
+        for i in 0..unit_count {
+            let entity = {
+                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                let id = em.id();
+                em.insert_component(HaloUnit::new(i as i16, 0, 0));
+                id
+            };
+            self.server.room_mut(&self.room_key).add_entity(&entity);
+            self.server_entities.push(entity);
+        }
+        // Drive ticks until all entities reach all clients.
+        let target_per_client = tile_count + unit_count;
+        if target_per_client > 0 && !self.clients.is_empty() {
+            let t0 = std::time::Instant::now();
+            let mut last_reported = 0usize;
+            for tick_n in 0..REPLICATE_TIMEOUT {
+                self.tick();
+                let min_visible = self.clients.iter()
+                    .map(|(client, world)| client.entities(&world.proxy()).len())
+                    .min()
+                    .unwrap_or(0);
+                // Print progress every 1 000 entities replicated (to stderr — not captured by criterion).
+                if min_visible / 1_000 > last_reported / 1_000 {
+                    last_reported = min_visible;
+                    eprintln!(
+                        "[spawn_halo_scene] tick {tick_n}: {min_visible}/{target_per_client} entities replicated ({:.1}s)",
+                        t0.elapsed().as_secs_f64()
+                    );
+                }
+                if min_visible >= target_per_client {
+                    eprintln!(
+                        "[spawn_halo_scene] complete: {target_per_client} entities in {tick_n} ticks ({:.1}s)",
+                        t0.elapsed().as_secs_f64()
+                    );
+                    break;
+                }
+            }
+            assert!(
+                self.clients.iter().all(|(client, world)| {
+                    client.entities(&world.proxy()).len() >= target_per_client
+                }),
+                "spawn_halo_scene: {target_per_client} entities did not replicate within \
+                 {REPLICATE_TIMEOUT} ticks"
+            );
+        }
+    }
+
+    /// Mutate the first `count` [`HaloUnit`] entities (increment facing by 1).
+    /// Call before `tick()` to drive an active-workload scenario.
+    #[inline]
+    pub fn mutate_halo_units(&mut self, count: usize) {
+        let count = count.min(self.server_entities.len());
+        for i in 0..count {
+            let entity = self.server_entities[i];
+            if let Some(mut unit) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<HaloUnit>()
+            {
+                *unit.facing = unit.facing.wrapping_add(1);
+            }
+        }
+    }
+
+    /// Run a complete server tick, then time **one** client's receive path in
+    /// isolation. All other clients are drained without timing.
+    ///
+    /// Use as the measured operation for client-side capacity benches. The
+    /// returned [`std::time::Duration`] is the cost a single game client pays
+    /// to consume one server tick worth of updates.
+    pub fn tick_server_then_measure_one_client(
+        &mut self,
+        client_idx: usize,
+    ) -> std::time::Duration {
+        use std::time::Instant as StdInstant;
+
+        let tick_ms = self.tick_ms;
+        TestClock::advance(tick_ms);
+        let now = Instant::now();
+
+        self.hub.process_time_queues();
+
+        // Full server step (produces outgoing packets for all clients).
+        self.server.receive_all_packets();
+        self.server.process_all_packets(self.server_world.proxy_mut(), &now);
+        self.server.send_all_packets(self.server_world.proxy());
+
+        // Time only the target client's receive path.
+        let (client, world) = &mut self.clients[client_idx];
+        let t = StdInstant::now();
+        client.receive_all_packets();
+        client.process_all_packets(world.proxy_mut(), &now);
+        let elapsed = t.elapsed();
+
+        // Drain remaining clients (no timing), then send all.
+        for (i, (c, w)) in self.clients.iter_mut().enumerate() {
+            if i == client_idx {
+                c.send_all_packets(w.proxy_mut());
+                continue;
+            }
+            c.receive_all_packets();
+            c.process_all_packets(w.proxy_mut(), &now);
+            c.send_all_packets(w.proxy_mut());
+        }
+        drain_all_events(&mut self.server, &mut self.clients);
+
+        elapsed
     }
 
     pub fn room_key(&self) -> &RoomKey {
@@ -745,8 +885,9 @@ pub fn advance_tick(
     server: &mut NaiaServer<BenchEntity>,
     server_world: &mut World,
     clients: &mut Vec<(NaiaClient<BenchEntity>, World)>,
+    tick_ms: u64,
 ) {
-    TestClock::advance(TICK_MS);
+    TestClock::advance(tick_ms);
     let now = Instant::now();
     hub.process_time_queues();
 

@@ -35,6 +35,10 @@ mod wire {
     pub mod framing;
 }
 
+mod scenarios {
+    pub mod halo_btb_16v16;
+}
+
 use criterion::criterion_main;
 
 criterion_main!(
@@ -56,4 +60,5 @@ criterion_main!(
     wire::bandwidth::wire_bandwidth,
     wire::bandwidth_realistic::wire_bandwidth_realistic_group,
     wire::bandwidth_realistic_quantized::wire_bandwidth_realistic_quantized_group,
+    scenarios::halo_btb_16v16::halo_btb,
 );

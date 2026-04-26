@@ -6,7 +6,7 @@ use serde::Deserialize;
 pub struct BenchResult {
     /// Full benchmark id, e.g. "tick/idle/entities/10000"
     pub id: String,
-    /// Top-level category: "tick", "spawn", "update", "authority", "wire"
+    /// Top-level category: "tick", "spawn", "update", "authority", "wire", "scenarios"
     pub category: String,
     /// Sub-benchmark name within category, e.g. "idle/entities/10000"
     pub sub_id: String,

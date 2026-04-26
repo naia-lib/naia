@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::model::BenchResult;
+use crate::core::model::BenchResult;
 
 /// A named group of bench results that map to one chart.
 #[derive(Debug)]
@@ -24,7 +24,6 @@ pub fn group_results(results: Vec<BenchResult>) -> Vec<BenchGroup> {
     let mut groups: Vec<BenchGroup> = map
         .into_iter()
         .map(|((category, sub_name), mut results)| {
-            // Sort within each group by numeric param where possible.
             results.sort_by(|a, b| {
                 let an = a.param.parse::<f64>().unwrap_or(0.0);
                 let bn = b.param.parse::<f64>().unwrap_or(0.0);
@@ -34,23 +33,16 @@ pub fn group_results(results: Vec<BenchResult>) -> Vec<BenchGroup> {
         })
         .collect();
 
-    // Stable canonical order: category, then sub_name.
     groups.sort_by(|a, b| {
         a.category.cmp(&b.category).then(a.sub_name.cmp(&b.sub_name))
     });
     groups
 }
 
-/// Strip the last path segment (the parameter value) to get the prefix.
-/// "idle/entities/10000" → "idle/entities"
-/// "idle/entities"       → "idle/entities"   (no param segment)
-/// "burst/entities/1000" → "burst/entities"
 fn sub_prefix(sub_id: &str) -> String {
-    // If the last segment looks like a number or is a known variant, strip it.
     let parts: Vec<&str> = sub_id.rsplitn(2, '/').collect();
     if parts.len() == 2 {
         let last = parts[0];
-        // Keep as prefix if last segment is numeric or a known variant tag.
         if last.parse::<f64>().is_ok() || looks_like_variant(last) {
             return parts[1].to_string();
         }
