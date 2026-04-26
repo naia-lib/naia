@@ -1,6 +1,6 @@
 # Phase 9 — Elegance & Correctness Floor
 
-**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 🔄 Stage E shipped (commit `a21e9387`); B-strict in progress (bench redesign + lock-free notify_dirty); 9.5 pending.
+**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 🔄 Stage E shipped (commit `a21e9387`); B-strict landed (lock-free DirtyQueue, AtomicU64 bits + parking_lot, bench cells, pre-push wasm32 hook); wins gate in progress; 9.5 pending.
 **Theme:** Subtraction. Five moves, each removing more than it adds: broken tests, latent off-by-ones, eager caches with panics, half-built dead code, untested adapter surfaces.
 
 ---
@@ -42,11 +42,17 @@ cargo build --release -p naia_npa
 ~/Work/specops/namako/target/debug/namako gate --specs-dir test/specs --adapter-cmd target/release/naia_npa --auto-cert
 
 # 3. Perf-regression gate — 29/0/0 must persist
-cargo criterion --message-format=json --bench naia -p naia-benches 2>/tmp/crit-stderr.log > /tmp/crit-stdout.json
-cargo run --release -p naia-bench-report -- --assert-wins < /tmp/crit-stdout.json
+cargo-criterion -p naia-benches --bench naia --message-format=json 2>/dev/null | cargo run -p naia-bench-report -- --assert-wins
+
+# 4. wasm32-unknown-unknown build — must stay green throughout (enforced by pre-push hook)
+cargo check -p naia-shared --target wasm32-unknown-unknown --features wbindgen --quiet
+cargo check -p naia-client --target wasm32-unknown-unknown --features wbindgen --quiet
+cargo check -p naia-bevy-client --target wasm32-unknown-unknown --quiet
 ```
 
-**Hard rule:** no sub-phase merges if any of (1), (2), (3) regresses. Sub-phases 9.4 has additional bench gates documented inline.
+**Hard rule:** no sub-phase merges if any of (1)–(4) regresses. 9.4 has additional bench gates documented inline.
+
+**Pre-push hook:** `.git/hooks/pre-push` runs all four checks automatically on every `git push`.
 
 ---
 

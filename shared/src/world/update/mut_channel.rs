@@ -1,89 +1,125 @@
 use std::{
     net::SocketAddr,
-    sync::{Arc, Mutex, OnceLock, RwLock, Weak},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, OnceLock, RwLock, Weak,
+    },
 };
+
+use parking_lot::{Mutex as PlMutex, RwLock as PlRwLock};
 
 use crate::world::entity_index::EntityIndex;
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
 
-/// Per-user dirty queue (Phase 9.4 / Stage E).
+/// Per-user dirty queue (Phase 9.4 / Stage E + B-strict).
 ///
-/// Bitset over per-user `EntityIndex`. Each entity slot is a `u64` — one
-/// bit per registered `ComponentKind` (max 64; asserted at registry build
-/// in `ComponentKinds::add_component`). `dirty_indices` is a sparse list
-/// of EntityIndices whose slots are non-zero; it tolerates duplicates and
-/// is deduped at drain time via the bitset.
+/// **B-strict (2026-04-25):** the hot-path `notify_dirty` chain no longer
+/// takes a `Mutex<DirtyQueue>` write lock. The bits side is a
+/// `Vec<AtomicU64>` (one slot per `EntityIndex`, one bit per
+/// `ComponentKind`); `push` and `cancel` are pure `fetch_or` /
+/// `fetch_and` calls under a parking_lot `RwLock` *read* guard, so a
+/// resize (cold path) is the only operation that excludes the hot path.
+/// `dirty_indices` is locked only on the first-bit-set transition per
+/// entity (the cold-path push) and at drain.
 ///
-/// Replaces Stage B's `HashSet<(GlobalEntity, ComponentKind)>` — every
-/// mutation now pays a Vec index + bitwise OR + (cold-path) push instead
-/// of a hash insert. The receiver's `notify_dirty` callback fires only on
-/// clean→dirty transitions of the `AtomicDiffMask`, so push frequency is
-/// already minimal; this stage cuts the per-push CPU cost.
+/// The bits Vec grows only via `ensure_capacity`, called from
+/// `UserDiffHandler::allocate_entity_index` before any mutation can
+/// reference the new slot. `cancel` is fire-and-forget — it clears the
+/// bit but leaves any stale index in `dirty_indices`; drain dedupes via
+/// the bitset.
 ///
-/// Wire-format invariant unchanged — Stage E is CPU-only bookkeeping.
-/// Stale entries (dirty bit cleared via `clear_diff_mask`) are tolerated;
-/// `dirty_receiver_candidates` rebuilds the entity/kind keys from the
-/// stored maps and the caller re-checks `diff_mask_is_clear` at drain
-/// time.
+/// Wire-format invariant unchanged — this is CPU-only bookkeeping.
 pub struct DirtyQueue {
-    /// `dirty_bits[entity_idx]` is a u64 with bit `kind_bit` set for every
-    /// component kind currently dirty on that entity. Grows on demand.
-    pub(crate) dirty_bits: Vec<u64>,
-    /// Sparse list of dirty entity indices. Pushed on the first
-    /// kind-bit-set-on-this-entity transition (`slot 0 → kind_mask`).
-    /// May contain duplicates if an entity goes clean→dirty→clean→dirty
-    /// across drains; drain handles the dedup via `dirty_bits`.
-    pub(crate) dirty_indices: Vec<EntityIndex>,
+    /// `bits[entity_idx]` is a u64 with bit `kind_bit` set for every
+    /// component kind currently dirty on that entity. Resized only by
+    /// `ensure_capacity` under the `RwLock` write guard; hot-path
+    /// `fetch_or`/`fetch_and`/`swap` access individual slots under the
+    /// read guard.
+    bits: PlRwLock<Vec<AtomicU64>>,
+    /// Cold-path-only mutex: locked at first-bit-set-per-entity push and
+    /// at drain. Tolerates duplicate entries — drain dedupes via `bits`.
+    indices: PlMutex<Vec<EntityIndex>>,
 }
 
 impl DirtyQueue {
     pub fn new() -> Self {
-        Self { dirty_bits: Vec::new(), dirty_indices: Vec::new() }
+        Self {
+            bits: PlRwLock::new(Vec::new()),
+            indices: PlMutex::new(Vec::new()),
+        }
     }
 
-    /// Mark `(entity_idx, kind_bit)` dirty. Vec index + bitwise OR.
-    /// Pushes `entity_idx` into `dirty_indices` only on the first bit
-    /// set on this entity (the slot was zero before).
+    /// Pre-grow `bits` to cover at least `slot + 1` entries. Cold path —
+    /// called from `UserDiffHandler::allocate_entity_index` synchronously
+    /// before the issued `EntityIndex` is exposed to any mutation. Takes
+    /// the write guard, which excludes hot-path readers; safe because
+    /// allocation runs on the same thread that issues mutations.
+    pub fn ensure_capacity(&self, slot: usize) {
+        // Fast path: capacity already covers slot.
+        if self.bits.read().len() > slot {
+            return;
+        }
+        let mut w = self.bits.write();
+        while w.len() <= slot {
+            w.push(AtomicU64::new(0));
+        }
+    }
+
+    /// Mark `(entity_idx, kind_bit)` dirty. Lock-free atomic on the bits
+    /// side; cold-path mutex push only when this entity was previously
+    /// clean (`prev == 0`). Holds the bits read guard for the duration
+    /// of the `fetch_or`; never under the indices mutex.
     #[inline]
-    pub fn push(&mut self, entity_idx: EntityIndex, kind_bit: u8) {
+    pub fn push(&self, entity_idx: EntityIndex, kind_bit: u8) {
         let kind_mask = 1u64 << kind_bit;
         let i = entity_idx.0 as usize;
-        if i >= self.dirty_bits.len() {
-            self.dirty_bits.resize(i + 1, 0);
-        }
-        let slot = &mut self.dirty_bits[i];
-        let was_zero = *slot == 0;
-        *slot |= kind_mask;
-        if was_zero {
-            self.dirty_indices.push(entity_idx);
+        let prev = {
+            let bits = self.bits.read();
+            if let Some(slot) = bits.get(i) {
+                slot.fetch_or(kind_mask, Ordering::Relaxed)
+            } else {
+                drop(bits);
+                // Defensive: ensure capacity then retry. Should not happen
+                // in production — UserDiffHandler::allocate_entity_index
+                // pre-grows. Cost: one extra read + write lock pair, only
+                // on misconfigured callers.
+                self.ensure_capacity(i);
+                let bits = self.bits.read();
+                bits[i].fetch_or(kind_mask, Ordering::Relaxed)
+            }
+        };
+        if prev == 0 {
+            self.indices.lock().push(entity_idx);
         }
     }
 
-    /// Clear `(entity_idx, kind_bit)`. Tolerates entries that were never
-    /// set; we only clear the bit, leaving any stale index in
-    /// `dirty_indices` for drain to dedupe.
+    /// Clear `(entity_idx, kind_bit)`. Atomic `fetch_and` on the bits
+    /// side; never touches the indices mutex (drain dedupes stale
+    /// entries). Tolerates out-of-range slots (returns silently).
     #[inline]
-    pub fn cancel(&mut self, entity_idx: EntityIndex, kind_bit: u8) {
+    pub fn cancel(&self, entity_idx: EntityIndex, kind_bit: u8) {
         let kind_mask = 1u64 << kind_bit;
-        if let Some(slot) = self.dirty_bits.get_mut(entity_idx.0 as usize) {
-            *slot &= !kind_mask;
+        let i = entity_idx.0 as usize;
+        let bits = self.bits.read();
+        if let Some(slot) = bits.get(i) {
+            slot.fetch_and(!kind_mask, Ordering::Relaxed);
         }
     }
 
-    /// Drain: returns owned `(EntityIndex, kind_bits)` pairs and zeros each
-    /// slot as it's read. Caller decodes the bits and the index→entity
-    /// mapping. Deduplicates via the bitset — slots already zero (canceled
-    /// or visited earlier in the drain) are skipped.
-    pub fn drain(&mut self) -> Vec<(EntityIndex, u64)> {
-        let mut out: Vec<(EntityIndex, u64)> = Vec::with_capacity(self.dirty_indices.len());
-        for idx in self.dirty_indices.drain(..) {
-            let slot_idx = idx.0 as usize;
-            if let Some(slot) = self.dirty_bits.get_mut(slot_idx) {
-                let bits = *slot;
-                if bits != 0 {
-                    *slot = 0;
-                    out.push((idx, bits));
+    /// Drain: take ownership of the indices list, then atomically swap-zero
+    /// each slot's bits. Returns owned `(EntityIndex, kind_bits)` pairs.
+    /// Slots that ended up zero (cancelled or already drained earlier) are
+    /// skipped, so drain naturally dedupes stale `dirty_indices` entries.
+    pub fn drain(&self) -> Vec<(EntityIndex, u64)> {
+        let indices: Vec<EntityIndex> = std::mem::take(&mut *self.indices.lock());
+        let mut out: Vec<(EntityIndex, u64)> = Vec::with_capacity(indices.len());
+        let bits = self.bits.read();
+        for idx in indices {
+            if let Some(slot) = bits.get(idx.0 as usize) {
+                let v = slot.swap(0, Ordering::Relaxed);
+                if v != 0 {
+                    out.push((idx, v));
                 }
             }
         }
@@ -91,7 +127,7 @@ impl DirtyQueue {
     }
 
     pub fn is_empty(&self) -> bool {
-        self.dirty_indices.is_empty()
+        self.indices.lock().is_empty()
     }
 }
 
@@ -102,9 +138,11 @@ impl Default for DirtyQueue {
 }
 
 /// Shared dirty queue owned by a `UserDiffHandler`. MutReceivers hold a
-/// `Weak` into this and push their own `(entity_idx, kind_bit)` whenever
-/// their diff mask transitions clean→dirty.
-pub type DirtySet = Mutex<DirtyQueue>;
+/// `Weak` into this and call `push` directly — `DirtyQueue` provides
+/// interior mutability via its inner `RwLock`/`Mutex` so there is no
+/// outer `Mutex<DirtyQueue>` wrapper. B-strict made the bits-side
+/// fetch_or lock-free under a read guard.
+pub type DirtySet = DirtyQueue;
 
 /// Identifies a MutReceiver's position inside its owning UserDiffHandler's
 /// dirty set. Installed once per receiver via `MutReceiver::attach_notifier`
@@ -129,17 +167,13 @@ impl DirtyNotifier {
 
     fn notify_dirty(&self) {
         if let Some(set) = self.set.upgrade() {
-            if let Ok(mut guard) = set.lock() {
-                guard.push(self.entity_idx, self.kind_bit);
-            }
+            set.push(self.entity_idx, self.kind_bit);
         }
     }
 
     fn notify_clean(&self) {
         if let Some(set) = self.set.upgrade() {
-            if let Ok(mut guard) = set.lock() {
-                guard.cancel(self.entity_idx, self.kind_bit);
-            }
+            set.cancel(self.entity_idx, self.kind_bit);
         }
     }
 }

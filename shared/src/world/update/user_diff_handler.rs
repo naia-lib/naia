@@ -1,7 +1,7 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
     time::Duration,
 };
 
@@ -11,7 +11,7 @@ use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
 use crate::world::entity_index::{EntityIndex, KeyGenerator32};
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
-use crate::world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet, MutReceiver};
+use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
 
 /// EntityIndex recycle timeout — long enough to cover packet drop / RTT
 /// retries that may still reference an entity_idx briefly after dereg.
@@ -86,7 +86,7 @@ impl UserDiffHandler {
             components_per_entity: HashMap::new(),
             key_gen: KeyGenerator32::new(ENTITY_INDEX_RECYCLE_TIMEOUT),
             kinds_by_bit: [None; 64],
-            dirty_set: Arc::new(Mutex::new(DirtyQueue::new())),
+            dirty_set: Arc::new(DirtySet::new()),
         }
     }
 
@@ -101,6 +101,11 @@ impl UserDiffHandler {
         }
         self.index_to_entity[slot] = Some(*entity);
         self.entity_to_index.insert(*entity, idx);
+        // B-strict: pre-grow the lock-free DirtyQueue's atomic bits
+        // Vec to cover this slot before any mutation can reference it.
+        // Cold-path RwLock write — never contended on the hot path
+        // because mutations on this entity haven't started yet.
+        self.dirty_set.ensure_capacity(slot);
         idx
     }
 
@@ -165,9 +170,7 @@ impl UserDiffHandler {
             return;
         };
         if let Some(kind_bit) = global_handler.kind_bit(component_kind) {
-            if let Ok(mut set) = self.dirty_set.lock() {
-                set.cancel(entity_idx, kind_bit);
-            }
+            self.dirty_set.cancel(entity_idx, kind_bit);
         }
         drop(global_handler);
 
@@ -245,29 +248,21 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let drained: Vec<(EntityIndex, u64)> = match self.dirty_set.lock() {
-            Ok(mut guard) => guard.drain(),
-            Err(_) => Vec::new(),
-        };
+        // B-strict: lock-free drain. `drain()` atomically swap-zeroes each
+        // slot and returns owned `(EntityIndex, kind_bits)` pairs.
+        let drained: Vec<(EntityIndex, u64)> = self.dirty_set.drain();
 
         // Re-mark the drained entries: this method is read-only by contract,
         // so the bits must persist for downstream callers / next call.
-        // Drain returns owned (idx, bits); push them back under the same
-        // lock so concurrent mutators observe the pre-drain set + any new
-        // pushes.
-        if !drained.is_empty() {
-            if let Ok(mut guard) = self.dirty_set.lock() {
-                for (idx, bits) in &drained {
-                    let slot_idx = idx.0 as usize;
-                    if slot_idx >= guard.dirty_bits.len() {
-                        guard.dirty_bits.resize(slot_idx + 1, 0);
-                    }
-                    let was_zero = guard.dirty_bits[slot_idx] == 0;
-                    guard.dirty_bits[slot_idx] |= bits;
-                    if was_zero {
-                        guard.dirty_indices.push(*idx);
-                    }
-                }
+        // Each `push` is now lock-free (atomic fetch_or under a read guard);
+        // the cold-path indices mutex is acquired once per first-bit-set
+        // per entity, which is the same number of pushes as before.
+        for (idx, bits) in &drained {
+            let mut remaining = *bits;
+            while remaining != 0 {
+                let bit = remaining.trailing_zeros() as u8;
+                self.dirty_set.push(*idx, bit);
+                remaining &= remaining - 1;
             }
         }
 

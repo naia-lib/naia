@@ -1,8 +1,10 @@
-use std::time::Duration;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use criterion::{criterion_group, BatchSize, Criterion};
 
 use naia_benches::{bench, BenchWorldBuilder};
+use naia_shared::{DirtyNotifier, DirtySet, EntityIndex, MutReceiver};
 
 /// Phase 8.1 hot-path microbenches.
 ///
@@ -104,7 +106,103 @@ pub fn mutate_path(c: &mut Criterion) {
         )
     });
 
+    // ── single_user / notify_clean_to_dirty (B-strict) ──
+    //
+    // Direct microbench of the per-mutation hot path with the harness
+    // floor removed. Builds a `MutReceiver` + `DirtySet` + `DirtyNotifier`
+    // by hand, caches them outside the timed loop, and times one
+    // clean→dirty mutation per iteration. The clean state between iters
+    // is restored by `mask.clear()` (atomic swap-zero) + a `drain` of
+    // the dirty set; both are *also* timed and serve as the post-mutate
+    // reset constant — they cancel out of the pre/post-B delta.
+    //
+    // The existing `single_user/single_property` cell pays a ~350 ns
+    // harness floor for `world.entity_mut(...).component::<...>()` per
+    // iteration; this cell's measured cost is dominated by `mutate` +
+    // `clear_mask` + `drain`, which is what production code actually
+    // exercises on every replicated mutation. Lock-free `notify_dirty`
+    // (B-strict step 2) shows here as a direct ns-level win.
+    group.bench_function(bench!("single_user/notify_clean_to_dirty"), |b| {
+        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::default());
+        let receiver = MutReceiver::new(1);
+        receiver.attach_notifier(DirtyNotifier::new(
+            EntityIndex(0),
+            0,
+            Arc::downgrade(&dirty_set),
+        ));
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+            for _ in 0..iters {
+                receiver.mutate(0); // clean → dirty: atomic set + notify
+                receiver.clear_mask(); // dirty → clean: atomic clear + cancel
+                drain_dirty_set(&dirty_set); // dedupe stale indices
+            }
+            start.elapsed()
+        })
+    });
+
+    // ── single_user / notify_dirty_repeat (B-strict, atomic floor) ──
+    //
+    // Pre-warms the receiver into the dirty state, then times back-to-back
+    // mutations. Subsequent `mutate(0)` calls hit `set_bit` on an
+    // already-dirty mask: `was_clear == false`, so `notify_dirty` is
+    // skipped — we measure only the `AtomicU64::fetch_or` cost. This is
+    // the lower bound for `MutReceiver::mutate` regardless of dirty-set
+    // implementation. Used to confirm that the lock-free win in
+    // `notify_clean_to_dirty` is not a measurement artifact.
+    group.bench_function(bench!("single_user/notify_dirty_repeat"), |b| {
+        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::default());
+        let receiver = MutReceiver::new(1);
+        receiver.attach_notifier(DirtyNotifier::new(
+            EntityIndex(0),
+            0,
+            Arc::downgrade(&dirty_set),
+        ));
+        receiver.mutate(0); // pre-warm into dirty
+        b.iter(|| receiver.mutate(0))
+    });
+
+    // ── 16_users_in_scope / notify_clean_to_dirty (B-strict) ──
+    //
+    // 16 receivers share one DirtySet (the per-user wiring under fan-out).
+    // Each iter performs 16 clean→dirty mutations + 16 clear_masks + 1
+    // drain. The fan-out cost is what `MutChannel::send` pays in
+    // production; lock-free `notify_dirty` removes the per-receiver
+    // mutex acquire that today shows up 16× per fan-out.
+    group.bench_function(bench!("16_users_in_scope/notify_clean_to_dirty"), |b| {
+        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::default());
+        let receivers: Vec<MutReceiver> = (0..16u8)
+            .map(|i| {
+                let r = MutReceiver::new(1);
+                r.attach_notifier(DirtyNotifier::new(
+                    EntityIndex(i as u32),
+                    0,
+                    Arc::downgrade(&dirty_set),
+                ));
+                r
+            })
+            .collect();
+        b.iter_custom(|iters| {
+            let start = Instant::now();
+            for _ in 0..iters {
+                for r in &receivers {
+                    r.mutate(0);
+                }
+                for r in &receivers {
+                    r.clear_mask();
+                }
+                drain_dirty_set(&dirty_set);
+            }
+            start.elapsed()
+        })
+    });
+
     group.finish();
+}
+
+#[inline]
+fn drain_dirty_set(dirty_set: &Arc<DirtySet>) {
+    let _ = dirty_set.drain();
 }
 
 criterion_group!(

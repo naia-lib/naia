@@ -187,6 +187,8 @@ pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;
 pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
+pub use world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet};
+#[cfg(feature = "bench_instrumentation")]
 pub use world::local::local_world_manager::bench_take_events_counters;
 #[cfg(feature = "bench_instrumentation")]
 pub use world::local::local_world_manager::cmd_emission_counters;

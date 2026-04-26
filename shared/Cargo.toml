@@ -22,7 +22,7 @@ mquad = [ "naia-socket-shared/mquad" ]
 bevy_support = [ "bevy_ecs", "naia-derive/bevy_support" ]
 zstd_support = [ "zstd" ]
 transport_udp = [ "http" ]
-transport_local = [ "http", "parking_lot" ]
+transport_local = [ "http" ]
 interior_visibility = []
 test_time = [ "naia-socket-shared/test_time" ]
 test_utils = []
@@ -42,5 +42,5 @@ js-sys = { version = "0.3.64", optional = true }
 bevy_ecs = { version = "0.18", default-features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }
 http = { version = "1.2", optional = true }
-parking_lot = { version = "0.12", optional = true }
+parking_lot = "0.12"
 blake3 = "1"
