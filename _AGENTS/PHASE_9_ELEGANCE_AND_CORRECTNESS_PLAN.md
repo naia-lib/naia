@@ -1,6 +1,6 @@
 # Phase 9 — Elegance & Correctness Floor
 
-**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 + 9.5 pending.
+**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 🔄 (Stage E architecture landed, gates green, pursuing further mutate-path optimization); 9.5 pending.
 **Theme:** Subtraction. Five moves, each removing more than it adds: broken tests, latent off-by-ones, eager caches with panics, half-built dead code, untested adapter surfaces.
 
 ---

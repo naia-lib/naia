@@ -1,76 +1,97 @@
 use std::{
-    collections::HashSet,
     net::SocketAddr,
     sync::{Arc, Mutex, OnceLock, RwLock, Weak},
 };
 
+use crate::world::entity_index::EntityIndex;
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
-use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType, PropertyMutate};
+use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
 
-/// Per-user dirty queue.
+/// Per-user dirty queue (Phase 9.4 / Stage E).
 ///
-/// Phase 8.1 Stage B (2026-04-25) replaces the previous
-/// `RwLock<HashMap<GlobalEntity, HashSet<ComponentKind>>>` DirtySet with
-/// a flat `Mutex<DirtyQueue>` whose drain semantics avoid the O(N)
-/// HashMap clone the prior implementation paid every tick. Each entry is
-/// pushed on its mask's clean→dirty transition and stays in `queue` until
-/// a tick-time drain. `in_dirty` deduplicates pushes against repeat
-/// transitions while the entry is still queued.
+/// Bitset over per-user `EntityIndex`. Each entity slot is a `u64` — one
+/// bit per registered `ComponentKind` (max 64; asserted at registry build
+/// in `ComponentKinds::add_component`). `dirty_indices` is a sparse list
+/// of EntityIndices whose slots are non-zero; it tolerates duplicates and
+/// is deduped at drain time via the bitset.
 ///
-/// Wire-format invariant unchanged — this is purely a CPU-side bookkeeping
-/// substitution; the eventual outgoing-update payload contents are
-/// determined by the per-receiver `AtomicDiffMask`, which is the truth
-/// source. Stale queue entries (dirty bit cleared after enqueue, e.g. by
-/// `clear_diff_mask`) are tolerated; the caller filters them out at drain
-/// time by re-checking `MutReceiver::diff_mask_is_clear`.
+/// Replaces Stage B's `HashSet<(GlobalEntity, ComponentKind)>` — every
+/// mutation now pays a Vec index + bitwise OR + (cold-path) push instead
+/// of a hash insert. The receiver's `notify_dirty` callback fires only on
+/// clean→dirty transitions of the `AtomicDiffMask`, so push frequency is
+/// already minimal; this stage cuts the per-push CPU cost.
+///
+/// Wire-format invariant unchanged — Stage E is CPU-only bookkeeping.
+/// Stale entries (dirty bit cleared via `clear_diff_mask`) are tolerated;
+/// `dirty_receiver_candidates` rebuilds the entity/kind keys from the
+/// stored maps and the caller re-checks `diff_mask_is_clear` at drain
+/// time.
 pub struct DirtyQueue {
-    /// Flat membership of `(GlobalEntity, ComponentKind)` keys whose
-    /// masks are currently non-clear. Stage B uses this directly as the
-    /// dirty cache; Stage D will swap to an index-keyed bitset when
-    /// `MutChannelData` plumbs `EntityIndex` end-to-end.
-    in_dirty: HashSet<(GlobalEntity, ComponentKind)>,
+    /// `dirty_bits[entity_idx]` is a u64 with bit `kind_bit` set for every
+    /// component kind currently dirty on that entity. Grows on demand.
+    pub(crate) dirty_bits: Vec<u64>,
+    /// Sparse list of dirty entity indices. Pushed on the first
+    /// kind-bit-set-on-this-entity transition (`slot 0 → kind_mask`).
+    /// May contain duplicates if an entity goes clean→dirty→clean→dirty
+    /// across drains; drain handles the dedup via `dirty_bits`.
+    pub(crate) dirty_indices: Vec<EntityIndex>,
 }
 
 impl DirtyQueue {
     pub fn new() -> Self {
-        Self { in_dirty: HashSet::new() }
+        Self { dirty_bits: Vec::new(), dirty_indices: Vec::new() }
     }
 
-    /// Mark `(entity, kind)` dirty. Idempotent; cheap on already-dirty
-    /// entries (single HashSet probe). The pre-Stage-B implementation
-    /// did `HashMap::entry(entity).or_default().insert(kind)` — two
-    /// hashes plus a possible HashSet allocation per call. The flat
-    /// HashSet here is one hash per call.
-    pub fn push(&mut self, entity: GlobalEntity, kind: ComponentKind) {
-        self.in_dirty.insert((entity, kind));
-    }
-
-    /// Cancel a dirty entry (mask cleared). Cheap removal.
-    pub fn cancel(&mut self, entity: GlobalEntity, kind: ComponentKind) {
-        self.in_dirty.remove(&(entity, kind));
-    }
-
-    /// Build a `HashMap<GlobalEntity, HashSet<ComponentKind>>` snapshot
-    /// shaped to match the pre-Stage-B return type expected by callers.
-    /// Allocates only the unique entities + their kind sets — no nested
-    /// HashMap clone (the prior implementation cloned a `HashMap<_,
-    /// HashSet<_>>` whose nested HashSets each entailed a per-entity
-    /// re-allocation).
-    pub fn snapshot(&self) -> std::collections::HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let mut result: std::collections::HashMap<GlobalEntity, HashSet<ComponentKind>> =
-            std::collections::HashMap::with_capacity(self.in_dirty.len());
-        for &(entity, kind) in self.in_dirty.iter() {
-            result.entry(entity).or_default().insert(kind);
+    /// Mark `(entity_idx, kind_bit)` dirty. Vec index + bitwise OR.
+    /// Pushes `entity_idx` into `dirty_indices` only on the first bit
+    /// set on this entity (the slot was zero before).
+    #[inline]
+    pub fn push(&mut self, entity_idx: EntityIndex, kind_bit: u8) {
+        let kind_mask = 1u64 << kind_bit;
+        let i = entity_idx.0 as usize;
+        if i >= self.dirty_bits.len() {
+            self.dirty_bits.resize(i + 1, 0);
         }
-        result
+        let slot = &mut self.dirty_bits[i];
+        let was_zero = *slot == 0;
+        *slot |= kind_mask;
+        if was_zero {
+            self.dirty_indices.push(entity_idx);
+        }
     }
 
-    pub fn len(&self) -> usize {
-        self.in_dirty.len()
+    /// Clear `(entity_idx, kind_bit)`. Tolerates entries that were never
+    /// set; we only clear the bit, leaving any stale index in
+    /// `dirty_indices` for drain to dedupe.
+    #[inline]
+    pub fn cancel(&mut self, entity_idx: EntityIndex, kind_bit: u8) {
+        let kind_mask = 1u64 << kind_bit;
+        if let Some(slot) = self.dirty_bits.get_mut(entity_idx.0 as usize) {
+            *slot &= !kind_mask;
+        }
+    }
+
+    /// Drain: returns owned `(EntityIndex, kind_bits)` pairs and zeros each
+    /// slot as it's read. Caller decodes the bits and the index→entity
+    /// mapping. Deduplicates via the bitset — slots already zero (canceled
+    /// or visited earlier in the drain) are skipped.
+    pub fn drain(&mut self) -> Vec<(EntityIndex, u64)> {
+        let mut out: Vec<(EntityIndex, u64)> = Vec::with_capacity(self.dirty_indices.len());
+        for idx in self.dirty_indices.drain(..) {
+            let slot_idx = idx.0 as usize;
+            if let Some(slot) = self.dirty_bits.get_mut(slot_idx) {
+                let bits = *slot;
+                if bits != 0 {
+                    *slot = 0;
+                    out.push((idx, bits));
+                }
+            }
+        }
+        out
     }
 
     pub fn is_empty(&self) -> bool {
-        self.in_dirty.is_empty()
+        self.dirty_indices.is_empty()
     }
 }
 
@@ -81,32 +102,35 @@ impl Default for DirtyQueue {
 }
 
 /// Shared dirty queue owned by a `UserDiffHandler`. MutReceivers hold a
-/// `Weak` into this and push their own `(entity, kind)` key whenever their
-/// diff mask transitions clean→dirty.
+/// `Weak` into this and push their own `(entity_idx, kind_bit)` whenever
+/// their diff mask transitions clean→dirty.
 pub type DirtySet = Mutex<DirtyQueue>;
 
 /// Identifies a MutReceiver's position inside its owning UserDiffHandler's
 /// dirty set. Installed once per receiver via `MutReceiver::attach_notifier`
-/// (OnceLock — all clones share the notifier).
+/// (OnceLock — all clones share the notifier). Carries the per-user
+/// `EntityIndex` and the protocol-wide `kind_bit` (= ComponentKind's NetId)
+/// — both resolved once at registration time, so notify is a Vec OR, not a
+/// hash.
 pub struct DirtyNotifier {
-    entity: GlobalEntity,
-    kind: ComponentKind,
+    entity_idx: EntityIndex,
+    kind_bit: u8,
     set: Weak<DirtySet>,
 }
 
 impl DirtyNotifier {
     pub fn new(
-        entity: GlobalEntity,
-        kind: ComponentKind,
+        entity_idx: EntityIndex,
+        kind_bit: u8,
         set: Weak<DirtySet>,
     ) -> Self {
-        Self { entity, kind, set }
+        Self { entity_idx, kind_bit, set }
     }
 
     fn notify_dirty(&self) {
         if let Some(set) = self.set.upgrade() {
             if let Ok(mut guard) = set.lock() {
-                guard.push(self.entity, self.kind);
+                guard.push(self.entity_idx, self.kind_bit);
             }
         }
     }
@@ -114,7 +138,7 @@ impl DirtyNotifier {
     fn notify_clean(&self) {
         if let Some(set) = self.set.upgrade() {
             if let Ok(mut guard) = set.lock() {
-                guard.cancel(self.entity, self.kind);
+                guard.cancel(self.entity_idx, self.kind_bit);
             }
         }
     }

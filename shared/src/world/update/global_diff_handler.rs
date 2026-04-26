@@ -6,6 +6,11 @@ use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuil
 
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
+    /// `ComponentKind` → NetId (== bit position in the per-user
+    /// `DirtyQueue` u64 mask). Populated lazily as `register_component`
+    /// fires; `UserDiffHandler` reads this to wire `DirtyNotifier`s with
+    /// a precomputed `kind_bit`. Phase 9.4 / Stage E.
+    kind_bits: HashMap<ComponentKind, u8>,
 }
 
 #[cfg(feature = "test_utils")]
@@ -27,7 +32,15 @@ impl GlobalDiffHandler {
     pub fn new() -> Self {
         Self {
             mut_receiver_builders: HashMap::new(),
+            kind_bits: HashMap::new(),
         }
+    }
+
+    /// NetId of a registered kind, used as bit position in the per-user
+    /// `DirtyQueue` u64 mask. Returns `None` if the kind has never gone
+    /// through `register_component` here.
+    pub fn kind_bit(&self, component_kind: &ComponentKind) -> Option<u8> {
+        self.kind_bits.get(component_kind).copied()
     }
 
     pub fn register_component(
@@ -54,6 +67,14 @@ impl GlobalDiffHandler {
 
         self.mut_receiver_builders
             .insert((*global_entity, *component_kind), builder);
+
+        if let std::collections::hash_map::Entry::Vacant(entry) =
+            self.kind_bits.entry(*component_kind)
+        {
+            if let Some(net_id) = component_kinds.net_id_of(component_kind) {
+                entry.insert(net_id as u8);
+            }
+        }
 
         sender
     }

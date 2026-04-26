@@ -36,6 +36,7 @@ impl From<EntityIndex> for u32 {
 /// u32 variant of [`crate::KeyGenerator`] — same recycling semantics, wider
 /// key space. Forked rather than generic-ified to keep the existing u16
 /// generator's call sites untouched.
+#[derive(Clone)]
 pub struct KeyGenerator32<K: From<u32> + Into<u32> + Copy> {
     recycling_keys: VecDeque<(u32, Instant)>,
     recycled_keys: VecDeque<u32>,

@@ -133,6 +133,12 @@ impl ComponentKinds {
         let component_kind = ComponentKind::of::<C>();
 
         let net_id = self.current_net_id;
+        assert!(
+            net_id < 64,
+            "DirtySet bitset supports max 64 component kinds; protocol has {}. \
+             Extend `DirtyQueue::dirty_bits` to two u64s per entity if you need more.",
+            net_id + 1,
+        );
         self.kind_map.insert(
             component_kind,
             (net_id, C::create_builder(), C::protocol_name().to_string()),
@@ -140,7 +146,6 @@ impl ComponentKinds {
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
-        //TODO: check for current_id overflow?
     }
 
     pub fn read(
@@ -203,6 +208,13 @@ impl ComponentKinds {
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
             .0;
+    }
+
+    /// Public accessor for a kind's NetId (== bit position in the
+    /// `DirtyQueue` u64 mask, max 64). Returns `None` for unregistered
+    /// kinds.
+    pub fn net_id_of(&self, component_kind: &ComponentKind) -> Option<u16> {
+        self.kind_map.get(component_kind).map(|(net_id, _, _)| *net_id)
     }
 
     fn kind_to_builder(&self, component_kind: &ComponentKind) -> &Box<dyn ReplicateBuilder> {

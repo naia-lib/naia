@@ -2,14 +2,20 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::{Arc, Mutex, RwLock},
+    time::Duration,
 };
 
 use log::warn;
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
+use crate::world::entity_index::{EntityIndex, KeyGenerator32};
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet, MutReceiver};
+
+/// EntityIndex recycle timeout — long enough to cover packet drop / RTT
+/// retries that may still reference an entity_idx briefly after dereg.
+const ENTITY_INDEX_RECYCLE_TIMEOUT: Duration = Duration::from_secs(2);
 
 // Diagnostic counters for the perf-upgrade project. These measure how much
 // work `dirty_receiver_candidates` does per invocation. On idle ticks today
@@ -38,14 +44,35 @@ pub mod dirty_scan_counters {
 }
 
 /// Per-user diff handler.
+///
+/// Phase 9.4 / Stage E (2026-04-25): per-user `EntityIndex` issuance lives
+/// here — `entity_to_index` maps `GlobalEntity → EntityIndex`,
+/// `index_to_entity` is the dense reverse table consulted at drain time.
+/// `kinds_by_bit` records `kind_bit → ComponentKind` so the snapshot can
+/// rebuild the legacy `HashMap<GlobalEntity, HashSet<ComponentKind>>`
+/// shape consumers expect, without needing access to `ComponentKinds` on
+/// the read path.
 #[derive(Clone)]
 pub struct UserDiffHandler {
     receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
-    // Dirty-set: the (entity, kind) keys whose MutReceivers currently hold a
-    // non-clear DiffMask. Maintained incrementally by DirtyNotifier callbacks
-    // fired inside MutReceiver::mutate / or_mask / clear_mask. The scan in
-    // `dirty_receiver_candidates` reads this directly — O(dirty), not O(N).
+    /// Per-user dense indices for entities the handler is tracking.
+    entity_to_index: HashMap<GlobalEntity, EntityIndex>,
+    /// `index_to_entity[idx]` is `Some(entity)` while the entity is
+    /// registered; `None` after deregistration (slot held until recycle).
+    index_to_entity: Vec<Option<GlobalEntity>>,
+    /// Refcount of registered components per entity_idx. When the count
+    /// drops to zero we recycle the index.
+    components_per_entity: HashMap<EntityIndex, u32>,
+    /// EntityIndex allocator (recycling, u32 keyspace).
+    key_gen: KeyGenerator32<EntityIndex>,
+    /// Reverse table for rebuilding `ComponentKind` from a kind_bit at
+    /// snapshot time. Bit position == NetId per
+    /// `ComponentKinds::add_component`. None at indices not yet registered.
+    kinds_by_bit: [Option<ComponentKind>; 64],
+    // Dirty-set bitset: per-user pure-CPU bookkeeping.
+    // `MutReceiver::mutate` fires `notify_dirty` on clean→dirty
+    // transitions; the resulting push is a Vec OR + (cold) push.
     dirty_set: Arc<DirtySet>,
 }
 
@@ -54,8 +81,27 @@ impl UserDiffHandler {
         Self {
             receivers: HashMap::new(),
             global_diff_handler: global_world_manager.diff_handler(),
+            entity_to_index: HashMap::new(),
+            index_to_entity: Vec::new(),
+            components_per_entity: HashMap::new(),
+            key_gen: KeyGenerator32::new(ENTITY_INDEX_RECYCLE_TIMEOUT),
+            kinds_by_bit: [None; 64],
             dirty_set: Arc::new(Mutex::new(DirtyQueue::new())),
         }
+    }
+
+    fn allocate_entity_index(&mut self, entity: &GlobalEntity) -> EntityIndex {
+        if let Some(&idx) = self.entity_to_index.get(entity) {
+            return idx;
+        }
+        let idx = self.key_gen.generate();
+        let slot = idx.0 as usize;
+        if slot >= self.index_to_entity.len() {
+            self.index_to_entity.resize(slot + 1, None);
+        }
+        self.index_to_entity[slot] = Some(*entity);
+        self.entity_to_index.insert(*entity, idx);
+        idx
     }
 
     // Component Registration
@@ -83,18 +129,59 @@ impl UserDiffHandler {
             return;
         };
 
+        let kind_bit = global_handler.kind_bit(component_kind);
+        drop(global_handler);
+        // GlobalDiffHandler should always be able to resolve kind_bit at this
+        // point (component registration goes through the same ComponentKinds
+        // that issued the receiver above). Bail with a no-op if not.
+        let Some(kind_bit) = kind_bit else {
+            warn!("UserDiffHandler: kind_bit unresolved for {:?}; notifier not attached", component_kind);
+            return;
+        };
+        let entity_idx = self.allocate_entity_index(entity);
+
+        // Cache kind_bit → ComponentKind once for snapshot decode.
+        if self.kinds_by_bit[kind_bit as usize].is_none() {
+            self.kinds_by_bit[kind_bit as usize] = Some(*component_kind);
+        }
+
         receiver.attach_notifier(DirtyNotifier::new(
-            *entity,
-            *component_kind,
+            entity_idx,
+            kind_bit,
             Arc::downgrade(&self.dirty_set),
         ));
         self.receivers.insert((*entity, *component_kind), receiver);
+        *self.components_per_entity.entry(entity_idx).or_insert(0) += 1;
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.receivers.remove(&(*entity, *component_kind));
-        if let Ok(mut set) = self.dirty_set.lock() {
-            set.cancel(*entity, *component_kind);
+
+        let Some(&entity_idx) = self.entity_to_index.get(entity) else {
+            return;
+        };
+
+        let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
+            return;
+        };
+        if let Some(kind_bit) = global_handler.kind_bit(component_kind) {
+            if let Ok(mut set) = self.dirty_set.lock() {
+                set.cancel(entity_idx, kind_bit);
+            }
+        }
+        drop(global_handler);
+
+        // Refcount the entity_idx; recycle when no components remain.
+        if let Some(count) = self.components_per_entity.get_mut(&entity_idx) {
+            *count = count.saturating_sub(1);
+            if *count == 0 {
+                self.components_per_entity.remove(&entity_idx);
+                self.entity_to_index.remove(entity);
+                if let Some(slot) = self.index_to_entity.get_mut(entity_idx.0 as usize) {
+                    *slot = None;
+                }
+                self.key_gen.recycle_key(&entity_idx);
+            }
         }
     }
 
@@ -158,17 +245,56 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        let result: HashMap<GlobalEntity, HashSet<ComponentKind>> = match self.dirty_set.lock() {
-            Ok(guard) => guard.snapshot(),
-            Err(_) => HashMap::new(),
+        let drained: Vec<(EntityIndex, u64)> = match self.dirty_set.lock() {
+            Ok(mut guard) => guard.drain(),
+            Err(_) => Vec::new(),
         };
+
+        // Re-mark the drained entries: this method is read-only by contract,
+        // so the bits must persist for downstream callers / next call.
+        // Drain returns owned (idx, bits); push them back under the same
+        // lock so concurrent mutators observe the pre-drain set + any new
+        // pushes.
+        if !drained.is_empty() {
+            if let Ok(mut guard) = self.dirty_set.lock() {
+                for (idx, bits) in &drained {
+                    let slot_idx = idx.0 as usize;
+                    if slot_idx >= guard.dirty_bits.len() {
+                        guard.dirty_bits.resize(slot_idx + 1, 0);
+                    }
+                    let was_zero = guard.dirty_bits[slot_idx] == 0;
+                    guard.dirty_bits[slot_idx] |= bits;
+                    if was_zero {
+                        guard.dirty_indices.push(*idx);
+                    }
+                }
+            }
+        }
+
+        let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> =
+            HashMap::with_capacity(drained.len());
+        for (idx, bits) in drained {
+            let Some(Some(entity)) = self.index_to_entity.get(idx.0 as usize) else {
+                continue;
+            };
+            let mut set = HashSet::new();
+            let mut remaining = bits;
+            while remaining != 0 {
+                let bit = remaining.trailing_zeros() as usize;
+                if let Some(kind) = self.kinds_by_bit[bit] {
+                    set.insert(kind);
+                }
+                remaining &= remaining - 1;
+            }
+            if !set.is_empty() {
+                result.insert(*entity, set);
+            }
+        }
+
         #[cfg(feature = "bench_instrumentation")]
         {
             use std::sync::atomic::Ordering;
             dirty_scan_counters::SCAN_CALLS.fetch_add(1, Ordering::Relaxed);
-            // With the dirty-push model, this is the number of dirty entries we
-            // actually touched — O(dirty), not O(receivers). If the ratio to
-            // (U·N) is > 0.01 on an idle tick, Phase 3 has regressed.
             let visited: u64 = result.values().map(|s| s.len() as u64).sum();
             dirty_scan_counters::RECEIVERS_VISITED.fetch_add(visited, Ordering::Relaxed);
             dirty_scan_counters::DIRTY_RESULTS.fetch_add(visited, Ordering::Relaxed);
