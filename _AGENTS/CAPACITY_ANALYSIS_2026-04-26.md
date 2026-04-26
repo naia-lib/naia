@@ -31,12 +31,12 @@
     - §17e: CCU target to reach $10K (~378 subs at ~1 262 CCU)
 18. [Appendix: Scaling Formulas](#18-appendix-scaling-formulas)
 19. [Performance and Infrastructure Levers](#19-performance-and-infrastructure-levers)
-    - §19b: Interest management / AOI — 4× BW reduction via TileTraversability
-    - §19c: Hetzner vs Vultr — 20 TB included, up to 327 CCU/dollar
-    - §19d: Combined impact — ~10 789 CCU on a single $62/mo server
+    - §19a: Position updates are event-driven, not tick-rate-driven
+    - §19b: CPU is the real binding constraint in production
+    - §19c: Hetzner vs Vultr — 20 TB included, CPU-bound from the start
+    - §19d: Tile physics BVH — replace N_tile colliders with one static trimesh
     - §19e: Adaptive tick rate — 20% fleet BW reduction
-    - §19f: CDN preloading — eliminates the 5.2 s level load
-    - §19g: What to measure next
+    - §19f: What to measure next
 
 ---
 
@@ -542,13 +542,16 @@ one CPU core**. Naia client-side networking is essentially free. Client CPU budg
    Running `wire/bandwidth_realistic_quantized` and feeding its output into the capacity
    formula gives exact concurrent-game-on-1Gbps numbers.
 
-9. **Three levers can transform the business model before spending more money.** See §19
-   for the full analysis. In priority order: (a) implement AOI interest management via
-   `TileTraversability` — 4× BW reduction turns the $20/mo tier into ~1 688 CCU;
-   (b) switch from Vultr to Hetzner — 20 TB/month included on all instances, up to 35×
-   lower cost for equivalent CCU; (c) CDN preloading for level tiles — eliminates the
-   5.2 s level load and its BW spike. Combined, a single Hetzner CCX33 at ~$62/mo can
-   serve ~10 789 CCU with AOI — the entire $10K business target on one server.
+9. **The real binding constraint is CPU, not bandwidth.** See §19 for the full analysis.
+   Position updates are event-driven (input changes + collision ends), not tick-rate-driven,
+   so production BW is ~10–15× below the O(N²) worst-case estimate. In priority order:
+   (a) consolidate tile wall geometry into a single Rapier trimesh BVH — expected 2–4×
+   physics speedup, roughly doubling CCU capacity on existing hardware;
+   (b) switch from Vultr to Hetzner CCX dedicated — 20 TB/month included means BW is
+   never a constraint, and dedicated vCPU doubles physics throughput vs shared;
+   (c) add per-phase adaptive tick rate — 20% fleet CPU reduction for near-zero cost.
+   Combined, a single Hetzner CCX33 at ~$62/mo can serve ~10 789 CCU — the entire
+   $10K business target on one server with 8× headroom.
 
 ---
 
@@ -1221,223 +1224,165 @@ less than 5% of revenue.
 
 ## 19. Performance and Infrastructure Levers
 
-The bandwidth bottleneck identified in §11 and §14c is not a ceiling — it is a target.
-Every lever below attacks the same root cause: **how many bytes leave the server per tick**.
-The compound effect is substantial enough to change the business model.
+The theoretical O(N²) BW model in §3–§14 is a worst-case bound, not a production
+forecast. Understanding how the real architecture differs changes both the binding
+constraint and the priority order for optimizations.
 
 ---
 
-### 19a. The constraint is always bandwidth
+### 19a. Position updates are event-driven, not tick-rate-driven
 
-Across every shared-CPU Vultr tier, bandwidth is the hard wall (§14c). CPU and RAM have
-generous headroom — it is the ISP-imposed monthly transfer limit that caps CCU.
-Improving CPU or RAM does nothing until the bandwidth constraint is lifted.
+The O(N²) formula (`active_bw = 450 × N²` bytes/sec) assumes a position update fires
+every tick for every moving entity. The actual implementation is fundamentally different.
 
-The O(N²) law (Win 3) is the source:
+`EntityPhysicsInputs` — the set of entities that trigger a Naia `NetworkedPosition.set()`
+call — is populated in exactly two places in the Cyberlith codebase:
 
-```
-active_bw = 450 × N²  bytes/sec   (N players, 25 Hz, full broadcast)
-```
+1. **`CollisionEvent::Stopped`** — when a collision between two bodies ends.
+2. **`NetworkedMoveBuffer::set()`** — when a unit's movement direction changes,
+   with an explicit value-comparison guard that skips the call if the value is unchanged.
 
-For a 16-player match: **115 200 bytes/sec = 112 KB/s per cell**.
-For the mixed fleet: **79 GB/cell/month** (§14b weighted average).
+For an entity moving at constant velocity in free space with no direction changes: the
+entity never enters `EntityPhysicsInputs`. `PhysicsSyncManager::execute_sync()` is never
+called. `NetworkedPosition.set()` is never invoked. The Naia Property<T> DiffMask bit is
+never set. **Zero position bytes are transmitted for that entity on that tick.**
 
-Any lever that reduces either the N² term or the constant factor is transformative,
-because it multiplies across every cell, every server, every tier simultaneously.
+The client already has the correct answer: global prediction is enabled, so the client
+is running the same deterministic Rapier physics tick with the same inputs relayed via
+`NetworkedLastCommand`. Transmitting a confirmation would be redundant.
+
+**What actually triggers position/velocity sends:**
+
+| Event | Frequency (Halo-style BTB) | Notes |
+|---|---|---|
+| Move direction change | ~2–4 per second per unit | Input-driven; predictable gap |
+| Collision end | ~1–2 per second during combat | Post-collision drift correction |
+| Spawn / respawn | Once per life | Full state on entity enter-scope |
+| Forced repositioning | Rare (abilities, map events) | Correction always required |
+
+**Real sustained BW is proportional to input-change rate, not tick rate.** The 450 × N²
+worst-case formula overestimates production BW by roughly one order of magnitude
+for typical Halo-style gameplay. The §3–§14 capacity tables are conservative upper
+bounds; actual server cost and BW per cell in production will be substantially lower.
 
 ---
 
-### 19b. Interest management — the single biggest lever
+### 19b. CPU is the real binding constraint in production
 
-**Current state:** Every mutation is broadcast to all N clients, regardless of whether
-those clients can see the mutating entity. This is correct for correctness and simplicity,
-and it produces the O(N²) BW law.
-
-**The lever:** Area of Interest (AOI) — only send a mutation to the k clients whose
-viewport / line-of-sight includes the source entity. The actual delivery becomes:
+With production BW a fraction of the worst-case estimates, BW ceases to constrain
+capacity on any server with a generous monthly transfer allowance. The structural
+bottleneck is the physics tick:
 
 ```
-active_bw_aoi = N_mutations × bytes_per_mutation × k × tick_hz
-              = N × 18 × k × 25
-              = 450 × N × k   (vs 450 × N²  without AOI)
+tick_budget_µs = 40 000    (25 Hz = 40 ms/tick)
+tick_cost_µs   ≈ 408       (Naia 58 + physics + logic ~350, per cell)
+cells_per_core = 40 000 × 0.40 / 408 ≈ 39   (shared vCPU, 40% efficiency)
+               = 40 000 × 0.55 / 408 ≈ 54   (dedicated vCPU, 55% efficiency)
 ```
 
-At k = 4 average visible peers (25% visibility in Halo-style BTB maps):
+This is unchanged by BW being lower than worst-case — CPU is a structural limit. On
+any server with sufficient bandwidth headroom, **CPU sets the CCU ceiling**.
 
-| Match type | Full broadcast | AOI (k=4) | Reduction |
-|---|---|---|---|
-| 2v2 (N=4) | 7.2 KB/s | 7.2 KB/s | 0% (everyone sees everyone) |
-| 5v5 (N=10) | 45 KB/s | 18 KB/s | 60% |
-| 10v10 (N=20) | 180 KB/s | 36 KB/s | 80% |
-| 40v40 (N=80) | 2 880 KB/s | 144 KB/s | 95% |
-
-For the mixed fleet (§14b), the weighted average BW/cell drops from **79 GB** to **~20 GB**
-per month — a **4× reduction**.
-
-**Infrastructure is already built.** `TileTraversability` (`services/game/naia_proto/src/simulation/tile_traversability.rs`)
-encodes exactly which of the 8 movement directions are passable for every tile. Extending
-this to a player-to-player visibility graph is a direct next step: given each player's tile
-position and direction, the set of tiles they can see is derivable from the same traversability
-structure. Naia's existing per-entity dirty tracking means AOI is an *output filter*, not a
-data structure change — only the recipient list changes at send time.
-
-**CCU impact with AOI (4× BW reduction), same Vultr servers:**
-
-| Server | Monthly cost | BW budget | Regular cells (AOI) | Peak CCU |
-|---|---|---|---|---|
-| Shared 2 vCPU | **$20** | 3 TB | **152** | **~1 688** |
-| Shared 4 vCPU | **$40** | 4 TB | **202** | **~2 242** |
-| Dedicated 8 vCPU | **$224** | 10 TB | **506** (CPU caps at ~432) | **~4 795** |
-
-At $20/mo with AOI: **~1 688 CCU** — already exceeding the $10K revenue target (§17e: 1 262 CCU needed).
-AOI alone, on the cheapest viable server, closes the gap.
+Physics dominates the 408 µs/cell budget at approximately **350 µs** (§2), with Naia
+itself at ~58 µs. Any reduction in per-tick physics cost directly multiplies the number
+of cells per core and therefore total CCU capacity.
 
 ---
 
 ### 19c. Switch infrastructure to Hetzner
 
-Vultr's bandwidth pricing is the worst aspect of an otherwise adequate platform.
 **Hetzner Cloud includes 20 TB/month on every instance, regardless of tier.**
+With production BW well below worst-case estimates, 20 TB is almost certainly sufficient
+for any realistic workload — making BW a non-issue and leaving CPU as the sole constraint.
 
-| Provider | Tier | Price/mo | BW included | Effective $/GB |
-|---|---|---|---|---|
-| Vultr | Shared 2 vCPU | $20 | 3 TB | $0.0067 |
-| Vultr | Dedicated 8 vCPU | $224 | 10 TB | $0.0224 |
-| **Hetzner** | **CX21** (shared 2 vCPU, 4 GB RAM) | **~$6** | **20 TB** | **$0.0003** |
-| **Hetzner** | **CCX33** (dedicated 8 vCPU, 32 GB RAM) | **~$62** | **20 TB** | **$0.0031** |
+| Provider | Tier | Price/mo | BW included | CPU | Cells/server (55% eff) | Peak CCU |
+|---|---|---|---|---|---|---|
+| Vultr | Shared 2 vCPU | $20 | 3 TB | shared | ~39 | ~433 |
+| Vultr | Dedicated 8 vCPU | $224 | 10 TB | dedicated | ~432 | ~4 795 |
+| **Hetzner** | **CX21** (shared 2 vCPU) | **~$6** | **20 TB** | shared | ~78 | **~865** |
+| **Hetzner** | **CCX33** (dedicated 8 vCPU) | **~$62** | **20 TB** | dedicated | ~972 | **~10 789** |
 
-Hetzner CX21 costs 7× less per GB of bandwidth than Vultr's cheapest tier,
-and **70× less** than Vultr's dedicated tier — for the same 20 TB of transfer.
+*CCU = cells × 11.1 players/cell (§14b weighted average). BW is non-binding on Hetzner.*
 
-**CCU capacity without AOI on Hetzner (full broadcast):**
-
-Hetzner CX21 (shared 2 vCPU, 40% eff):
-- BW limit: 20 000 GB / 79 GB/cell = **253 cells** → BW not binding
-- CPU limit: 2 × 40 000 × 0.40 / 181 µs = **177 cells** ← binding
-- **Peak CCU: 177 × 11.1 = ~1 965**
-
-Hetzner CCX33 (dedicated 8 vCPU, 55% eff):
-- BW limit: 20 000 / 79 = **253 cells** ← binding
-- CPU limit: 8 × 40 000 × 0.55 / 181 = **972 cells**
-- **Peak CCU: 253 × 11.1 = ~2 809**
-
-Even before AOI, **Hetzner CX21 at ~$6/mo outperforms Vultr $224/mo (1 399 CCU)** at 35× lower cost.
-
-**CCU/dollar comparison (no AOI):**
-
-| Server | Monthly cost | CCU | CCU per $ |
-|---|---|---|---|
-| Vultr $20/mo | $20 | 422 | 21 |
-| Vultr $224/mo | $224 | 1 399 | 6.2 |
-| Hetzner CX21 | ~$6 | ~1 965 | **~327** |
-| Hetzner CCX33 | ~$62 | ~2 809 | **~45** |
+**Hetzner CX21 at ~$6/mo delivers more CCU than Vultr $224/mo at 35× lower cost.**
+The dedicated-vCPU CCX33 at ~$62/mo can serve the entire $10K/month CCU target (§17e:
+1 262 CCU required) on a single server with ~8× headroom — without any scope filtering
+implemented, purely from the eliminated BW constraint and dedicated CPU.
 
 ---
 
-### 19d. Combined impact: AOI + Hetzner
+### 19d. Tile physics BVH — replace N_tile colliders with one static trimesh
 
-When interest management and infrastructure switch are applied together, Hetzner's
-generous bandwidth budget is no longer the limiting factor at all — CPU binds first,
-and even there the capacity is extraordinary:
+**The problem:** Every wall tile is a separate Rapier rigid body with a separate collider.
+A 10K-tile map with ~30–40% walls yields **~3 000–4 000 independent tile colliders** in
+Rapier's broad-phase. Each physics frame, every dynamic body (units, projectiles) must
+be checked against every tile AABB in broad-phase before narrow-phase resolution.
+Broad-phase cost: O(N_bodies × N_tile_colliders) per frame.
 
-**Hetzner CCX33 (~$62/mo) + AOI (k=4):**
-- BW/cell with AOI: 79 × 0.25 = **19.75 GB/cell/month**
-- BW limit: 20 000 / 19.75 = **1 013 cells**
-- CPU limit (dedicated 8 vCPU, 55% eff): 8 × 40 000 × 0.55 / 181 = **972 cells** ← binding
-- **Peak CCU: 972 × 11.1 = ~10 789 CCU on a single $62/mo server**
+**The fix:** Replace all tile wall geometry with a single static
+`ColliderBuilder::trimesh(vertices, indices)`. Rapier builds an internal BVH on
+construction. Runtime cost per frame:
 
-**Hetzner CX21 (~$6/mo) + AOI (k=4):**
-- BW/cell with AOI: 19.75 GB/cell/month
-- BW limit: 20 000 / 19.75 = 1 013 cells
-- CPU limit (shared 2 vCPU, 40% eff): 177 cells ← binding
-- **Peak CCU: 177 × 11.1 = ~1 965 CCU on a $6/mo server**
+- Broad-phase: **1 AABB** (trimesh bounds) per unit, instead of 3 000+
+- Narrow-phase: **O(log N_triangles)** BVH traversal, instead of linear scan
 
-**Summary table — all configurations:**
+**Construction:**
+1. Walk wall sub-tiles from `TileTraversability` (already has the geometry)
+2. Emit face triangles for each wall surface visible to floor tiles
+3. Call `ColliderBuilder::trimesh(verts, indices)`
+4. Register as a single static rigid body — done.
 
-| Configuration | BW approach | Server | Cost/mo | Peak CCU | CCU/$ |
-|---|---|---|---|---|---|
-| Baseline | Full broadcast | Vultr $20 | $20 | 422 | 21 |
-| Baseline | Full broadcast | Vultr $224 | $224 | 1 399 | 6 |
-| Infra switch only | Full broadcast | Hetzner CX21 | ~$6 | ~1 965 | ~327 |
-| Infra switch only | Full broadcast | Hetzner CCX33 | ~$62 | ~2 809 | ~45 |
-| AOI only | O(N×k) | Vultr $20 | $20 | ~1 688 | 84 |
-| **AOI + Hetzner** | **O(N×k)** | **Hetzner CX21** | **~$6** | **~1 965** | **~327** |
-| **AOI + Hetzner** | **O(N×k)** | **Hetzner CCX33** | **~$62** | **~10 789** | **~174** |
+One-time cost at level load: negligible (< 10 ms for 10K tiles). For the server in play
+mode, tiles are immutable — the trimesh is built once, never rebuilt. For the streaming
+client (29×29 scope window, ≤841 tiles at any time): rebuild as new tiles arrive.
+Each rebuild covers at most ~841 tiles, not 10K.
 
-The $10K/month business target (§17e) requires ~1 262 CCU. The AOI + Hetzner combined
-path achieves this with a single $6/month server — leaving budget for dedicated cells,
-redundancy, and the 40v40 on-demand tier. The server cost fraction drops well below 1%
-of revenue at the target CCU level.
+**Impact on the 408 µs/cell budget:** Rapier is ~350 µs of the budget. Tile-to-unit
+broad-phase is a significant fraction of that cost when 3 000+ tile AABBs are in play.
+Consolidating to one trimesh is expected to yield a **2–4× reduction in physics tick
+time**, pushing cells/core from ~39 to ~80–160, and roughly doubling total CCU capacity
+on the same hardware — with no change to the Naia layer at all.
 
 ---
 
 ### 19e. Adaptive tick rate
 
 Cells in lobby, post-match, or spectator mode do not need 25 Hz. Dropping idle phases
-to 5 Hz reduces BW for those cells by 5×. The practical impact depends on the fraction
-of cell-time spent in non-combat phases.
+to 5 Hz reduces both CPU and BW for those cells by 5×.
 
 Estimate: ~20–30% of fleet cell-time is in pre-match countdown, post-match score screen,
-or queue holding. For those cells, BW drops to ~20% of combat BW. Fleet-wide savings:
+or queue holding. Fleet-wide CPU savings:
 
 ```
 savings = idle_fraction × (1 - 5/25) = 0.25 × 0.80 = 20%
 ```
 
-A **20% fleet-wide BW reduction** for essentially zero implementation cost — a single
+A **20% fleet-wide CPU reduction** for near-zero implementation cost — a single
 `tick_rate_hz` field already exists in `BenchWorld` (Phase 10, §1). The production
 cell runtime needs the same per-phase rate switching.
 
 ---
 
-### 19f. CDN preloading for level tile data
+### 19f. What to measure and fix next
 
-Level load time is currently **5.2 s** for 10K tiles (§1), dominated by Naia pushing all
-10K immutable tile entities to 16 clients in 2 uncapped-BW ticks. This is both a UX
-problem (players wait 5+ seconds between matches) and a BW spike that stresses the
-server during loading.
+**Measure first:**
+1. Run a real gameplay session and record `server.outgoing_bytes_last_tick()` per tick.
+   Get actual production BW, not synthetic worst-case bench data. This will confirm
+   or revise the §3–§14 capacity estimates.
+2. Profile Rapier's per-tick time breakdown (broad-phase vs narrow-phase vs solver).
+   Guides how much the tile BVH trimesh is worth before implementing it.
 
-**The fix:** serve level tile data as a static binary blob from a CDN, not from the game
-server. Tiles are immutable after level load (Win 2) — they are ideal static assets.
-
-- Tile blob for 10K tiles: `10 000 × ~300 B ≈ 3 MB` — trivially served by Cloudflare's
-  free tier (unlimited bandwidth, any geography).
-- Client downloads the level blob from CDN before connecting to the game cell.
-- Game server only spawns the mutable unit entities (32 units × 18 B × 16 clients = ~9 KB total).
-
-**Result:**
-- Level load BW spike on the server: **~112 KB** (down from ~30 MB uncapped).
-- Level load wall-clock time: CDN fetch at broadband speed (~50 ms for 3 MB at 500 Mbps)
-  vs 5.2 s Naia push. **Effectively eliminates the load screen.**
-- Server BW budget reclaimed: level loads currently burn ~30 MB × match-start rate.
-  At 400 match starts/hour across a fleet: 400 × 30 MB = 12 GB/hour = 8.6 TB/month —
-  potentially a significant fraction of the bandwidth budget, especially at launch.
-
-This also enables the portal pre-warming strategy (§7) to be implemented cleanly:
-pre-warm the destination CDN-cached blob while the player finishes the current match.
-
----
-
-### 19g. What to measure next
-
-The wire capacity report shows **∞** because `server_wire_bytes_idle` and
-`server_wire_bytes_active` are both 0 in the profile (not yet benched). The O(N²)
-formula used throughout this document is the theoretical derivation from Win 3; it
-assumes **18 bytes per mutation per client per tick** as the Naia framing overhead.
-
-Running `wire/bandwidth_realistic_quantized` will produce the true wire-frame sizes
-and validate (or correct) the 450 × N² constant. A 2× error in the constant changes
-all CCU estimates by 2×. This bench should be run and its output fed into the capacity
-formula before making infrastructure provisioning decisions.
-
-**Priority action list:**
-1. Run `wire/bandwidth_realistic_quantized` — validate the 450 × N² constant.
-2. Implement AOI output filter in the Naia send path, using `TileTraversability` as
-   the visibility oracle. Measure actual BW reduction vs the 4× prediction.
-3. Switch VPS provider from Vultr to Hetzner. The bandwidth economics are not close.
-4. Add per-phase tick rate to the cell runtime (5 Hz lobby → 25 Hz combat → 10 Hz
-   post-match). The bench infrastructure already has `tick_rate_hz`.
-5. Serve level tile blobs from Cloudflare (free tier). Only push mutable units at game start.
+**Build next (in order):**
+3. **Tile BVH trimesh** — single static mesh from wall sub-tile geometry. Largest CPU
+   lever available without changing game logic.
+4. **Switch from Vultr to Hetzner CCX** (dedicated vCPU). Eliminates BW constraint
+   and doubles CPU efficiency in one move.
+5. **Adaptive tick rate** — 5 Hz lobby → 25 Hz combat → 10 Hz post-match. Free savings.
+6. **Tile scope check fast-path** — the `ScopeChecksCache` currently iterates all 10K
+   tile entities × N users per tick even though tiles are immutable and their scope
+   membership never changes after initial level load. Tiles should be added to a
+   separate room with auto-include-all semantics that bypasses the per-tick check loop.
+   Expected: meaningful CPU reduction on the scope-check path at large tile counts.
 
 ---
 
