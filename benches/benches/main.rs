@@ -33,6 +33,7 @@ mod wire {
     pub mod bandwidth_realistic;
     pub mod bandwidth_realistic_quantized;
     pub mod framing;
+    pub mod serde_throughput;
 }
 
 mod scenarios {
@@ -60,5 +61,6 @@ criterion_main!(
     wire::bandwidth::wire_bandwidth,
     wire::bandwidth_realistic::wire_bandwidth_realistic_group,
     wire::bandwidth_realistic_quantized::wire_bandwidth_realistic_quantized_group,
+    wire::serde_throughput::serde_throughput,
     scenarios::halo_btb_16v16::halo_btb,
 );

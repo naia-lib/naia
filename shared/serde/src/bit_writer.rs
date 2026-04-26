@@ -13,11 +13,17 @@ pub trait BitWrite {
 }
 
 // BitWriter
+//
+// Internals: bits accumulate LSB-first into a u32 scratch register and flush
+// as a little-endian u32 word every 32 bits. Using u32 (not u64) keeps all
+// operations native on wasm32 targets where 64-bit arithmetic is emulated.
+// The approach eliminates the per-byte reverse_bits call of the old u8 design.
+// (Inspired by Gaffer on Games, "Reading and Writing Packets", 2015.)
 pub struct BitWriter {
-    scratch: u8,
-    scratch_index: u8,
+    scratch: u32,
+    scratch_bits: u32,
     buffer: [u8; MTU_SIZE_BYTES],
-    buffer_index: usize,
+    byte_count: usize,
     current_bits: u32,
     max_bits: u32,
 }
@@ -27,9 +33,9 @@ impl BitWriter {
     pub fn new() -> Self {
         Self {
             scratch: 0,
-            scratch_index: 0,
+            scratch_bits: 0,
             buffer: [0; MTU_SIZE_BYTES],
-            buffer_index: 0,
+            byte_count: 0,
             current_bits: 0,
             max_bits: MTU_SIZE_BITS,
         }
@@ -38,9 +44,9 @@ impl BitWriter {
     pub fn with_capacity(bit_capacity: u32) -> Self {
         Self {
             scratch: 0,
-            scratch_index: 0,
+            scratch_bits: 0,
             buffer: [0; MTU_SIZE_BYTES],
-            buffer_index: 0,
+            byte_count: 0,
             current_bits: 0,
             max_bits: bit_capacity,
         }
@@ -50,32 +56,42 @@ impl BitWriter {
         Self::with_capacity(u32::MAX)
     }
 
+    fn flush_word(&mut self) {
+        self.buffer[self.byte_count..self.byte_count + 4]
+            .copy_from_slice(&self.scratch.to_le_bytes());
+        self.byte_count += 4;
+        self.scratch = 0;
+        self.scratch_bits = 0;
+    }
+
     fn finalize(&mut self) {
-        if self.scratch_index > 0 {
-            self.buffer[self.buffer_index] =
-                (self.scratch << (8 - self.scratch_index)).reverse_bits();
-            self.buffer_index += 1;
+        if self.scratch_bits > 0 {
+            let remaining_bytes = (self.scratch_bits as usize + 7) / 8;
+            let word = self.scratch.to_le_bytes();
+            self.buffer[self.byte_count..self.byte_count + remaining_bytes]
+                .copy_from_slice(&word[..remaining_bytes]);
+            self.byte_count += remaining_bytes;
         }
         self.max_bits = 0;
     }
 
     pub fn to_packet(mut self) -> OutgoingPacket {
         self.finalize();
-        OutgoingPacket::new(self.buffer_index, self.buffer)
+        OutgoingPacket::new(self.byte_count, self.buffer)
     }
 
     pub fn to_owned_reader(mut self) -> OwnedBitReader {
         self.finalize();
-        OwnedBitReader::new(&self.buffer[0..self.buffer_index])
+        OwnedBitReader::new(&self.buffer[0..self.byte_count])
     }
 
     pub fn to_bytes(mut self) -> Box<[u8]> {
         self.finalize();
-        Box::from(&self.buffer[0..self.buffer_index])
+        Box::from(&self.buffer[0..self.byte_count])
     }
 
     pub fn counter(&self) -> BitCounter {
-        return BitCounter::new(self.current_bits, self.current_bits, self.max_bits);
+        BitCounter::new(self.current_bits, self.current_bits, self.max_bits)
     }
 
     pub fn reserve_bits(&mut self, bits: u32) {
@@ -92,33 +108,39 @@ impl BitWriter {
 }
 
 impl BitWrite for BitWriter {
+    #[inline(always)]
     fn write_bit(&mut self, bit: bool) {
         if self.current_bits >= self.max_bits {
             panic!("Write overflow!");
         }
-        self.scratch <<= 1;
-
-        if bit {
-            self.scratch |= 1;
-        }
-
-        self.scratch_index += 1;
+        self.scratch |= (bit as u32) << self.scratch_bits;
+        self.scratch_bits += 1;
         self.current_bits += 1;
-
-        if self.scratch_index >= 8 {
-            self.buffer[self.buffer_index] = self.scratch.reverse_bits();
-
-            self.buffer_index += 1;
-            self.scratch_index -= 8;
-            self.scratch = 0;
+        if self.scratch_bits == 32 {
+            self.flush_word();
         }
     }
 
+    #[inline(always)]
     fn write_byte(&mut self, byte: u8) {
-        let mut temp = byte;
-        for _ in 0..8 {
-            self.write_bit(temp & 1 != 0);
-            temp >>= 1;
+        if self.current_bits + 8 > self.max_bits {
+            panic!("Write overflow!");
+        }
+        self.current_bits += 8;
+        let available = 32 - self.scratch_bits;
+        if available >= 8 {
+            self.scratch |= (byte as u32) << self.scratch_bits;
+            self.scratch_bits += 8;
+            if self.scratch_bits == 32 {
+                self.flush_word();
+            }
+        } else {
+            // byte spans a 32-bit word boundary
+            let lo = (byte as u32) & ((1 << available) - 1);
+            self.scratch |= lo << self.scratch_bits;
+            self.flush_word();
+            self.scratch = (byte as u32) >> available;
+            self.scratch_bits = 8 - available;
         }
     }
 
@@ -132,6 +154,60 @@ impl BitWrite for BitWriter {
 }
 
 mod tests {
+
+    // ─── word-boundary regression tests (targets for word-aligned optimization) ─
+
+    #[test]
+    fn read_write_33_bits() {
+        // 33 bits spans the 32-bit word boundary in the new implementation.
+        use crate::{bit_reader::BitReader, bit_writer::{BitWrite, BitWriter}};
+        let mut writer = BitWriter::with_max_capacity();
+        // write 33 known bits: alternating pattern
+        for i in 0..33usize {
+            writer.write_bit(i % 3 == 0);
+        }
+        let buffer = writer.to_bytes();
+        let mut reader = BitReader::new(&buffer);
+        for i in 0..33usize {
+            assert_eq!(reader.read_bit().unwrap(), i % 3 == 0, "bit {i} mismatch");
+        }
+    }
+
+    #[test]
+    fn read_write_64_bits_exact() {
+        // exactly 2 words — tests two full-word flushes
+        use crate::{bit_reader::BitReader, bit_writer::{BitWrite, BitWriter}};
+        let mut writer = BitWriter::with_max_capacity();
+        for i in 0..64usize {
+            writer.write_bit(i % 5 < 2);
+        }
+        let buffer = writer.to_bytes();
+        let mut reader = BitReader::new(&buffer);
+        for i in 0..64usize {
+            assert_eq!(reader.read_bit().unwrap(), i % 5 < 2, "bit {i} mismatch");
+        }
+    }
+
+    #[test]
+    fn read_write_5_bytes_via_write_byte_then_read_bit() {
+        // mix write_byte (8 aligned) with read_bit to verify no endian confusion
+        use crate::{bit_reader::BitReader, bit_writer::{BitWrite, BitWriter}};
+        let data: &[u8] = &[0b10110001, 0b01001110, 0b11010101, 0b00110011, 0b11111010];
+        let mut writer = BitWriter::with_max_capacity();
+        for &b in data {
+            writer.write_byte(b);
+        }
+        let buffer = writer.to_bytes();
+        let mut reader = BitReader::new(&buffer);
+        for &b in data {
+            for bit in 0..8usize {
+                let expected = (b >> bit) & 1 != 0;
+                assert_eq!(reader.read_bit().unwrap(), expected, "byte {b:#010b} bit {bit}");
+            }
+        }
+    }
+
+    // ─── existing bit/byte round-trip tests ────────────────────────────────────
 
     #[test]
     fn read_write_1_bit() {

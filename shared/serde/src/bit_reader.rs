@@ -1,4 +1,9 @@
 // BitReader
+//
+// Internals: bits are consumed from a u32 scratch register, refilled one byte
+// at a time from the wire buffer. Bits are stored LSB-first, matching the
+// writer's encoding, which lets the decoder accumulate values without any
+// reverse_bits call. u32 scratch keeps all operations native on wasm32.
 
 use crate::SerdeErr;
 
@@ -12,7 +17,7 @@ impl<'b> BitReader<'b> {
         Self {
             state: BitReaderState {
                 scratch: 0,
-                scratch_index: 0,
+                scratch_bits: 0,
                 buffer_index: 0,
             },
             buffer,
@@ -30,37 +35,37 @@ impl<'b> BitReader<'b> {
         }
     }
 
+    #[inline(always)]
     pub fn read_bit(&mut self) -> Result<bool, SerdeErr> {
-        if self.state.scratch_index == 0 {
+        if self.state.scratch_bits == 0 {
             if self.state.buffer_index == self.buffer.len() {
                 return Err(SerdeErr);
             }
-
-            self.state.scratch = self.buffer[self.state.buffer_index];
-
+            self.state.scratch = self.buffer[self.state.buffer_index] as u32;
             self.state.buffer_index += 1;
-            self.state.scratch_index += 8;
+            self.state.scratch_bits = 8;
         }
-
-        let value = self.state.scratch & 1;
-
+        let bit = self.state.scratch & 1 != 0;
         self.state.scratch >>= 1;
-
-        self.state.scratch_index -= 1;
-
-        Ok(value != 0)
+        self.state.scratch_bits -= 1;
+        Ok(bit)
     }
 
+    #[inline(always)]
     pub(crate) fn read_byte(&mut self) -> Result<u8, SerdeErr> {
-        let mut output = 0;
-        for _ in 0..7 {
-            if self.read_bit()? {
-                output |= 128;
-            }
-            output >>= 1;
+        // Fast path: a full byte is already in scratch.
+        if self.state.scratch_bits >= 8 {
+            let byte = (self.state.scratch & 0xFF) as u8;
+            self.state.scratch >>= 8;
+            self.state.scratch_bits -= 8;
+            return Ok(byte);
         }
-        if self.read_bit()? {
-            output |= 128;
+        // General path: accumulate 8 bits LSB-first.
+        let mut output = 0u8;
+        for i in 0..8u8 {
+            if self.read_bit()? {
+                output |= 1 << i;
+            }
         }
         Ok(output)
     }
@@ -78,7 +83,7 @@ impl OwnedBitReader {
         Self {
             state: BitReaderState {
                 scratch: 0,
-                scratch_index: 0,
+                scratch_bits: 0,
                 buffer_index: 0,
             },
             buffer: buffer.into(),
@@ -100,7 +105,7 @@ impl OwnedBitReader {
 // BitReaderState
 #[derive(Copy, Clone)]
 struct BitReaderState {
-    scratch: u8,
-    scratch_index: u8,
+    scratch: u32,
+    scratch_bits: u32,
     buffer_index: usize,
 }

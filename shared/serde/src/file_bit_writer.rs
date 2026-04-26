@@ -1,9 +1,10 @@
 use crate::BitWrite;
 
-// FileBitWriter
+// FileBitWriter — heap-backed writer for files/snapshots, no MTU cap.
+// Uses the same u32-scratch word-aligned approach as BitWriter.
 pub struct FileBitWriter {
-    scratch: u8,
-    scratch_index: u8,
+    scratch: u32,
+    scratch_bits: u32,
     buffer: Vec<u8>,
 }
 
@@ -12,15 +13,22 @@ impl FileBitWriter {
     pub fn new() -> Self {
         Self {
             scratch: 0,
-            scratch_index: 0,
+            scratch_bits: 0,
             buffer: Vec::new(),
         }
     }
 
+    fn flush_word(&mut self) {
+        self.buffer.extend_from_slice(&self.scratch.to_le_bytes());
+        self.scratch = 0;
+        self.scratch_bits = 0;
+    }
+
     fn finalize(&mut self) {
-        if self.scratch_index > 0 {
-            let value = (self.scratch << (8 - self.scratch_index)).reverse_bits();
-            self.buffer.push(value);
+        if self.scratch_bits > 0 {
+            let remaining_bytes = (self.scratch_bits as usize + 7) / 8;
+            let word = self.scratch.to_le_bytes();
+            self.buffer.extend_from_slice(&word[..remaining_bytes]);
         }
     }
 
@@ -36,28 +44,30 @@ impl FileBitWriter {
 }
 
 impl BitWrite for FileBitWriter {
+    #[inline(always)]
     fn write_bit(&mut self, bit: bool) {
-        self.scratch <<= 1;
-
-        if bit {
-            self.scratch |= 1;
-        }
-
-        self.scratch_index += 1;
-
-        if self.scratch_index >= 8 {
-            let value = self.scratch.reverse_bits();
-            self.buffer.push(value);
-            self.scratch_index -= 8;
-            self.scratch = 0;
+        self.scratch |= (bit as u32) << self.scratch_bits;
+        self.scratch_bits += 1;
+        if self.scratch_bits == 32 {
+            self.flush_word();
         }
     }
 
+    #[inline(always)]
     fn write_byte(&mut self, byte: u8) {
-        let mut temp = byte;
-        for _ in 0..8 {
-            self.write_bit(temp & 1 != 0);
-            temp >>= 1;
+        let available = 32 - self.scratch_bits;
+        if available >= 8 {
+            self.scratch |= (byte as u32) << self.scratch_bits;
+            self.scratch_bits += 8;
+            if self.scratch_bits == 32 {
+                self.flush_word();
+            }
+        } else {
+            let lo = (byte as u32) & ((1 << available) - 1);
+            self.scratch |= lo << self.scratch_bits;
+            self.flush_word();
+            self.scratch = (byte as u32) >> available;
+            self.scratch_bits = 8 - available;
         }
     }
 

@@ -292,8 +292,9 @@ impl SerdeNumberInner {
         }
 
         if self.variable {
+            let chunk_threshold = 1u128 << self.bits;
             loop {
-                let proceed = value >= 2_u128.pow(self.bits as u32);
+                let proceed = value >= chunk_threshold;
                 writer.write_bit(proceed);
                 for _ in 0..self.bits {
                     writer.write_bit(value & 1 != 0);
@@ -323,73 +324,74 @@ impl SerdeNumberInner {
             negative = reader.read_bit()?;
         }
 
+        // Decode strategy: accumulate each chunk/field LSB-first into a u32
+        // (single-instruction shift on every target, including wasm32 and ARM),
+        // then widen and place into u128 output with a u32→u128 zero extension.
+        // This replaces the old MSB-first u128 accumulation + u128::reverse_bits
+        // (which is a software sequence on every target, not a single instruction).
         if variable {
-            let mut total_bits: usize = 0;
             let mut output: u128 = 0;
-
+            let mut shift: u32 = 0;
             loop {
                 let proceed = reader.read_bit()?;
-
-                for _ in 0..bits {
-                    total_bits += 1;
-                    output <<= 1;
+                // Accumulate chunk in u32: LSB-first, `1u32 << i` is one instruction.
+                let mut chunk = 0u32;
+                for i in 0..bits as u32 {
                     if reader.read_bit()? {
-                        output |= 1;
+                        chunk |= 1u32 << i;
                     }
                 }
-
+                output |= (chunk as u128) << shift;
+                shift += bits as u32;
                 if !proceed {
-                    output <<= 128 - total_bits;
-                    output = output.reverse_bits();
-                    let value: i128 = output as i128;
-                    if negative {
-                        return Ok(Self::new_unchecked(
-                            signed,
-                            variable,
-                            bits,
-                            fraction_digits,
-                            -value,
-                        ));
-                    } else {
-                        return Ok(Self::new_unchecked(
-                            signed,
-                            variable,
-                            bits,
-                            fraction_digits,
-                            value,
-                        ));
-                    }
+                    let value = output as i128;
+                    return Ok(Self::new_unchecked(
+                        signed,
+                        variable,
+                        bits,
+                        fraction_digits,
+                        if negative { -value } else { value },
+                    ));
                 }
             }
         } else {
-            let mut output: u128 = 0;
-            for _ in 0..bits {
-                output <<= 1;
-                if reader.read_bit()? {
-                    output |= 1;
+            // Fixed-width: accumulate LSB-first.
+            let output = if bits <= 32 {
+                let mut raw = 0u32;
+                for i in 0..bits as u32 {
+                    if reader.read_bit()? {
+                        raw |= 1u32 << i;
+                    }
                 }
-            }
-            output <<= 128 - bits;
-            output = output.reverse_bits();
-
-            let value: i128 = output as i128;
-            if negative {
-                Ok(Self::new_unchecked(
-                    signed,
-                    variable,
-                    bits,
-                    fraction_digits,
-                    -value,
-                ))
+                raw as u128
+            } else if bits <= 64 {
+                let mut raw = 0u64;
+                for i in 0..bits as u32 {
+                    if reader.read_bit()? {
+                        raw |= 1u64 << i;
+                    }
+                }
+                raw as u128
             } else {
-                Ok(Self::new_unchecked(
-                    signed,
-                    variable,
-                    bits,
-                    fraction_digits,
-                    value,
-                ))
-            }
+                // bits > 64 (unusual): MSB-first + reverse to avoid u128 variable shift.
+                let mut raw: u128 = 0;
+                for _ in 0..bits {
+                    raw <<= 1;
+                    if reader.read_bit()? {
+                        raw |= 1;
+                    }
+                }
+                raw <<= 128 - bits as u32;
+                raw.reverse_bits()
+            };
+            let value = output as i128;
+            Ok(Self::new_unchecked(
+                signed,
+                variable,
+                bits,
+                fraction_digits,
+                if negative { -value } else { value },
+            ))
         }
     }
 
