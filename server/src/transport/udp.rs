@@ -38,7 +38,6 @@ impl Socket {
         data_socket
             .as_ref()
             .lock()
-            .unwrap()
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
 
@@ -110,7 +109,6 @@ impl TransportSender for UdpPacketSender {
             .socket
             .as_ref()
             .lock()
-            .unwrap()
             .send_to(payload, *socket_addr)
             .is_err()
         {
@@ -143,7 +141,6 @@ impl PacketReceiver for UdpPacketReceiver {
             .socket
             .as_ref()
             .lock()
-            .unwrap()
             .recv_from(&mut self.buffer)
         {
             Ok((recv_len, address)) => Ok(Some((address, &self.buffer[..recv_len]))),
