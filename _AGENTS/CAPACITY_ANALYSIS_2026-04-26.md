@@ -30,6 +30,13 @@
     - §17d: Full picture at 250 subs, 2 DLC/year at $15
     - §17e: CCU target to reach $10K (~378 subs at ~1 262 CCU)
 18. [Appendix: Scaling Formulas](#18-appendix-scaling-formulas)
+19. [Performance and Infrastructure Levers](#19-performance-and-infrastructure-levers)
+    - §19b: Interest management / AOI — 4× BW reduction via TileTraversability
+    - §19c: Hetzner vs Vultr — 20 TB included, up to 327 CCU/dollar
+    - §19d: Combined impact — ~10 789 CCU on a single $62/mo server
+    - §19e: Adaptive tick rate — 20% fleet BW reduction
+    - §19f: CDN preloading — eliminates the 5.2 s level load
+    - §19g: What to measure next
 
 ---
 
@@ -534,6 +541,14 @@ one CPU core**. Naia client-side networking is essentially free. Client CPU budg
 8. **Measure wire bytes.** Wire capacity shows ∞ in the capacity report (not yet measured).
    Running `wire/bandwidth_realistic_quantized` and feeding its output into the capacity
    formula gives exact concurrent-game-on-1Gbps numbers.
+
+9. **Three levers can transform the business model before spending more money.** See §19
+   for the full analysis. In priority order: (a) implement AOI interest management via
+   `TileTraversability` — 4× BW reduction turns the $20/mo tier into ~1 688 CCU;
+   (b) switch from Vultr to Hetzner — 20 TB/month included on all instances, up to 35×
+   lower cost for equivalent CCU; (c) CDN preloading for level tiles — eliminates the
+   5.2 s level load and its BW spike. Combined, a single Hetzner CCX33 at ~$62/mo can
+   serve ~10 789 CCU with AOI — the entire $10K business target on one server.
 
 ---
 
@@ -1201,6 +1216,228 @@ pushes the organic CCU ceiling higher.
 releasing 2 co-op campaign DLCs per year at $15, with rewarded ads enabled →
 **$10 000/month net profit** as a solo indie developer. The server bill is $224–448/month —
 less than 5% of revenue.
+
+---
+
+## 19. Performance and Infrastructure Levers
+
+The bandwidth bottleneck identified in §11 and §14c is not a ceiling — it is a target.
+Every lever below attacks the same root cause: **how many bytes leave the server per tick**.
+The compound effect is substantial enough to change the business model.
+
+---
+
+### 19a. The constraint is always bandwidth
+
+Across every shared-CPU Vultr tier, bandwidth is the hard wall (§14c). CPU and RAM have
+generous headroom — it is the ISP-imposed monthly transfer limit that caps CCU.
+Improving CPU or RAM does nothing until the bandwidth constraint is lifted.
+
+The O(N²) law (Win 3) is the source:
+
+```
+active_bw = 450 × N²  bytes/sec   (N players, 25 Hz, full broadcast)
+```
+
+For a 16-player match: **115 200 bytes/sec = 112 KB/s per cell**.
+For the mixed fleet: **79 GB/cell/month** (§14b weighted average).
+
+Any lever that reduces either the N² term or the constant factor is transformative,
+because it multiplies across every cell, every server, every tier simultaneously.
+
+---
+
+### 19b. Interest management — the single biggest lever
+
+**Current state:** Every mutation is broadcast to all N clients, regardless of whether
+those clients can see the mutating entity. This is correct for correctness and simplicity,
+and it produces the O(N²) BW law.
+
+**The lever:** Area of Interest (AOI) — only send a mutation to the k clients whose
+viewport / line-of-sight includes the source entity. The actual delivery becomes:
+
+```
+active_bw_aoi = N_mutations × bytes_per_mutation × k × tick_hz
+              = N × 18 × k × 25
+              = 450 × N × k   (vs 450 × N²  without AOI)
+```
+
+At k = 4 average visible peers (25% visibility in Halo-style BTB maps):
+
+| Match type | Full broadcast | AOI (k=4) | Reduction |
+|---|---|---|---|
+| 2v2 (N=4) | 7.2 KB/s | 7.2 KB/s | 0% (everyone sees everyone) |
+| 5v5 (N=10) | 45 KB/s | 18 KB/s | 60% |
+| 10v10 (N=20) | 180 KB/s | 36 KB/s | 80% |
+| 40v40 (N=80) | 2 880 KB/s | 144 KB/s | 95% |
+
+For the mixed fleet (§14b), the weighted average BW/cell drops from **79 GB** to **~20 GB**
+per month — a **4× reduction**.
+
+**Infrastructure is already built.** `TileTraversability` (`services/game/naia_proto/src/simulation/tile_traversability.rs`)
+encodes exactly which of the 8 movement directions are passable for every tile. Extending
+this to a player-to-player visibility graph is a direct next step: given each player's tile
+position and direction, the set of tiles they can see is derivable from the same traversability
+structure. Naia's existing per-entity dirty tracking means AOI is an *output filter*, not a
+data structure change — only the recipient list changes at send time.
+
+**CCU impact with AOI (4× BW reduction), same Vultr servers:**
+
+| Server | Monthly cost | BW budget | Regular cells (AOI) | Peak CCU |
+|---|---|---|---|---|
+| Shared 2 vCPU | **$20** | 3 TB | **152** | **~1 688** |
+| Shared 4 vCPU | **$40** | 4 TB | **202** | **~2 242** |
+| Dedicated 8 vCPU | **$224** | 10 TB | **506** (CPU caps at ~432) | **~4 795** |
+
+At $20/mo with AOI: **~1 688 CCU** — already exceeding the $10K revenue target (§17e: 1 262 CCU needed).
+AOI alone, on the cheapest viable server, closes the gap.
+
+---
+
+### 19c. Switch infrastructure to Hetzner
+
+Vultr's bandwidth pricing is the worst aspect of an otherwise adequate platform.
+**Hetzner Cloud includes 20 TB/month on every instance, regardless of tier.**
+
+| Provider | Tier | Price/mo | BW included | Effective $/GB |
+|---|---|---|---|---|
+| Vultr | Shared 2 vCPU | $20 | 3 TB | $0.0067 |
+| Vultr | Dedicated 8 vCPU | $224 | 10 TB | $0.0224 |
+| **Hetzner** | **CX21** (shared 2 vCPU, 4 GB RAM) | **~$6** | **20 TB** | **$0.0003** |
+| **Hetzner** | **CCX33** (dedicated 8 vCPU, 32 GB RAM) | **~$62** | **20 TB** | **$0.0031** |
+
+Hetzner CX21 costs 7× less per GB of bandwidth than Vultr's cheapest tier,
+and **70× less** than Vultr's dedicated tier — for the same 20 TB of transfer.
+
+**CCU capacity without AOI on Hetzner (full broadcast):**
+
+Hetzner CX21 (shared 2 vCPU, 40% eff):
+- BW limit: 20 000 GB / 79 GB/cell = **253 cells** → BW not binding
+- CPU limit: 2 × 40 000 × 0.40 / 181 µs = **177 cells** ← binding
+- **Peak CCU: 177 × 11.1 = ~1 965**
+
+Hetzner CCX33 (dedicated 8 vCPU, 55% eff):
+- BW limit: 20 000 / 79 = **253 cells** ← binding
+- CPU limit: 8 × 40 000 × 0.55 / 181 = **972 cells**
+- **Peak CCU: 253 × 11.1 = ~2 809**
+
+Even before AOI, **Hetzner CX21 at ~$6/mo outperforms Vultr $224/mo (1 399 CCU)** at 35× lower cost.
+
+**CCU/dollar comparison (no AOI):**
+
+| Server | Monthly cost | CCU | CCU per $ |
+|---|---|---|---|
+| Vultr $20/mo | $20 | 422 | 21 |
+| Vultr $224/mo | $224 | 1 399 | 6.2 |
+| Hetzner CX21 | ~$6 | ~1 965 | **~327** |
+| Hetzner CCX33 | ~$62 | ~2 809 | **~45** |
+
+---
+
+### 19d. Combined impact: AOI + Hetzner
+
+When interest management and infrastructure switch are applied together, Hetzner's
+generous bandwidth budget is no longer the limiting factor at all — CPU binds first,
+and even there the capacity is extraordinary:
+
+**Hetzner CCX33 (~$62/mo) + AOI (k=4):**
+- BW/cell with AOI: 79 × 0.25 = **19.75 GB/cell/month**
+- BW limit: 20 000 / 19.75 = **1 013 cells**
+- CPU limit (dedicated 8 vCPU, 55% eff): 8 × 40 000 × 0.55 / 181 = **972 cells** ← binding
+- **Peak CCU: 972 × 11.1 = ~10 789 CCU on a single $62/mo server**
+
+**Hetzner CX21 (~$6/mo) + AOI (k=4):**
+- BW/cell with AOI: 19.75 GB/cell/month
+- BW limit: 20 000 / 19.75 = 1 013 cells
+- CPU limit (shared 2 vCPU, 40% eff): 177 cells ← binding
+- **Peak CCU: 177 × 11.1 = ~1 965 CCU on a $6/mo server**
+
+**Summary table — all configurations:**
+
+| Configuration | BW approach | Server | Cost/mo | Peak CCU | CCU/$ |
+|---|---|---|---|---|---|
+| Baseline | Full broadcast | Vultr $20 | $20 | 422 | 21 |
+| Baseline | Full broadcast | Vultr $224 | $224 | 1 399 | 6 |
+| Infra switch only | Full broadcast | Hetzner CX21 | ~$6 | ~1 965 | ~327 |
+| Infra switch only | Full broadcast | Hetzner CCX33 | ~$62 | ~2 809 | ~45 |
+| AOI only | O(N×k) | Vultr $20 | $20 | ~1 688 | 84 |
+| **AOI + Hetzner** | **O(N×k)** | **Hetzner CX21** | **~$6** | **~1 965** | **~327** |
+| **AOI + Hetzner** | **O(N×k)** | **Hetzner CCX33** | **~$62** | **~10 789** | **~174** |
+
+The $10K/month business target (§17e) requires ~1 262 CCU. The AOI + Hetzner combined
+path achieves this with a single $6/month server — leaving budget for dedicated cells,
+redundancy, and the 40v40 on-demand tier. The server cost fraction drops well below 1%
+of revenue at the target CCU level.
+
+---
+
+### 19e. Adaptive tick rate
+
+Cells in lobby, post-match, or spectator mode do not need 25 Hz. Dropping idle phases
+to 5 Hz reduces BW for those cells by 5×. The practical impact depends on the fraction
+of cell-time spent in non-combat phases.
+
+Estimate: ~20–30% of fleet cell-time is in pre-match countdown, post-match score screen,
+or queue holding. For those cells, BW drops to ~20% of combat BW. Fleet-wide savings:
+
+```
+savings = idle_fraction × (1 - 5/25) = 0.25 × 0.80 = 20%
+```
+
+A **20% fleet-wide BW reduction** for essentially zero implementation cost — a single
+`tick_rate_hz` field already exists in `BenchWorld` (Phase 10, §1). The production
+cell runtime needs the same per-phase rate switching.
+
+---
+
+### 19f. CDN preloading for level tile data
+
+Level load time is currently **5.2 s** for 10K tiles (§1), dominated by Naia pushing all
+10K immutable tile entities to 16 clients in 2 uncapped-BW ticks. This is both a UX
+problem (players wait 5+ seconds between matches) and a BW spike that stresses the
+server during loading.
+
+**The fix:** serve level tile data as a static binary blob from a CDN, not from the game
+server. Tiles are immutable after level load (Win 2) — they are ideal static assets.
+
+- Tile blob for 10K tiles: `10 000 × ~300 B ≈ 3 MB` — trivially served by Cloudflare's
+  free tier (unlimited bandwidth, any geography).
+- Client downloads the level blob from CDN before connecting to the game cell.
+- Game server only spawns the mutable unit entities (32 units × 18 B × 16 clients = ~9 KB total).
+
+**Result:**
+- Level load BW spike on the server: **~112 KB** (down from ~30 MB uncapped).
+- Level load wall-clock time: CDN fetch at broadband speed (~50 ms for 3 MB at 500 Mbps)
+  vs 5.2 s Naia push. **Effectively eliminates the load screen.**
+- Server BW budget reclaimed: level loads currently burn ~30 MB × match-start rate.
+  At 400 match starts/hour across a fleet: 400 × 30 MB = 12 GB/hour = 8.6 TB/month —
+  potentially a significant fraction of the bandwidth budget, especially at launch.
+
+This also enables the portal pre-warming strategy (§7) to be implemented cleanly:
+pre-warm the destination CDN-cached blob while the player finishes the current match.
+
+---
+
+### 19g. What to measure next
+
+The wire capacity report shows **∞** because `server_wire_bytes_idle` and
+`server_wire_bytes_active` are both 0 in the profile (not yet benched). The O(N²)
+formula used throughout this document is the theoretical derivation from Win 3; it
+assumes **18 bytes per mutation per client per tick** as the Naia framing overhead.
+
+Running `wire/bandwidth_realistic_quantized` will produce the true wire-frame sizes
+and validate (or correct) the 450 × N² constant. A 2× error in the constant changes
+all CCU estimates by 2×. This bench should be run and its output fed into the capacity
+formula before making infrastructure provisioning decisions.
+
+**Priority action list:**
+1. Run `wire/bandwidth_realistic_quantized` — validate the 450 × N² constant.
+2. Implement AOI output filter in the Naia send path, using `TileTraversability` as
+   the visibility oracle. Measure actual BW reduction vs the 4× prediction.
+3. Switch VPS provider from Vultr to Hetzner. The bandwidth economics are not close.
+4. Add per-phase tick rate to the cell runtime (5 Hz lobby → 25 Hz combat → 10 Hz
+   post-match). The bench infrastructure already has `tick_rate_hz`.
+5. Serve level tile blobs from Cloudflare (free tier). Only push mutable units at game start.
 
 ---
 
