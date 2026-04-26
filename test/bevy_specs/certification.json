@@ -1,0 +1,14 @@
+{
+  "identity": {
+    "hash_contract_version": "namako-v1-json+blake3-256",
+    "feature_fingerprint_hash": "55a5a5cacc979f8df8dd2a663b8a687ecfd7079a46156230f436b0e50b3ef56b",
+    "step_registry_hash": "4cb5ed6b6e838d5926e9a07b4fe60a84a155345a09785f8cd318ec4f8e676ada",
+    "resolved_plan_hash": "660f775156937d767e3cbf740ca360a3efd7f161bb875425ac97315c58ad7c02"
+  },
+  "metadata": {
+    "timestamp": "2026-04-26T03:07:15.712607228+00:00",
+    "namako_version": "0.1.0",
+    "npap_version": 1,
+    "run_report_hash": "08045dcc0b58fd13808dc27b5be7b582b6bb1726158ee5d430e7d80b07c9560d"
+  }
+}

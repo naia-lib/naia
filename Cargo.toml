@@ -16,6 +16,7 @@ members = [
     "test/harness",
     "test/loom",
     "test/npa",
+    "test/bevy_npa",
     "test/spec_tool",
     "test/tests",
     "test/bench_report",
