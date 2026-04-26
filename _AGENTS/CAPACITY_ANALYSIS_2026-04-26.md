@@ -1,6 +1,5 @@
 # Cyberlith Capacity, Scaling, and Business Plan — Living Source of Truth
 
-**Title:** Cyberlith Capacity, Scaling, and Business Plan — Living Source of Truth
 **Last Updated:** 2026-04-26
 **Repo Commit:** `0a57c753` (naia repo, `git rev-parse --short HEAD`)
 **Machine:** lifetop — Intel Core i9-12900HK (20 logical CPUs, 2 threads/core), 62 GiB RAM, Linux 6.8.0-110-generic x86\_64
@@ -20,7 +19,7 @@
 - [6. Tile Count as a Design Lever](#6-tile-count-as-a-design-lever)
 - [7. Portal Pre-Warming (Critical UX Requirement)](#7-portal-pre-warming-critical-ux-requirement)
 - [8. 40v40 Match Analysis (80 Players/Cell)](#8-40v40-match-analysis-80-playerscell)
-- [9. Validation Ladder — 4 Tiers](#9-validation-ladder--4-tiers)
+- [9. Validation Ladder](#9-validation-ladder)
 - [10. Client-Side Capacity](#10-client-side-capacity)
 - [11. The Three Binding Constraints (Ranked by Frequency)](#11-the-three-binding-constraints-ranked-by-frequency)
 - [12. Recommendations for the Cyberlith Business Plan](#12-recommendations-for-the-cyberlith-business-plan)
@@ -29,14 +28,15 @@
 - [15. Revenue Model and Scaling Plan](#15-revenue-model-and-scaling-plan)
 - [16. Business Plan Scenarios (Three Paths)](#16-business-plan-scenarios-three-paths)
 - [17. DLC Campaigns as a Revenue Accelerator](#17-dlc-campaigns-as-a-revenue-accelerator)
-- [18. Distribution and Steam/Platform Risk](#18-distribution-and-steamplatform-risk)
-- [19. Risk Register](#19-risk-register)
-- [20. Decision Gates](#20-decision-gates)
-- [21. Performance and Infrastructure Levers](#21-performance-and-infrastructure-levers)
-- [22. Provider Pricing Table (as of 2026-04)](#22-provider-pricing-table-as-of-2026-04)
-- [23. Bandwidth Model — Worst-Case vs Event-Driven](#23-bandwidth-model--worst-case-vs-event-driven)
-- [24. Measurement Backlog](#24-measurement-backlog)
-- [25. Appendix: Scaling Formulas](#25-appendix-scaling-formulas)
+- [18. Distribution, Platform Matrix, and Steam Strategy](#18-distribution-platform-matrix-and-steam-strategy)
+- [19. Payment Architecture — One Backend, Multiple Purchase Providers](#19-payment-architecture--one-backend-multiple-purchase-providers)
+- [20. Risk Register](#20-risk-register)
+- [21. Decision Gates](#21-decision-gates)
+- [22. Performance and Infrastructure Levers](#22-performance-and-infrastructure-levers)
+- [23. Provider Pricing Table (as of 2026-04)](#23-provider-pricing-table-as-of-2026-04)
+- [24. Bandwidth Model — Worst-Case vs Event-Driven](#24-bandwidth-model--worst-case-vs-event-driven)
+- [25. Measurement Backlog](#25-measurement-backlog)
+- [26. Appendix: Scaling Formulas](#26-appendix-scaling-formulas)
 
 ---
 
@@ -51,16 +51,16 @@
 
 ### What is NOT proven (full-stack unknowns)
 
-- **Rapier physics tick cost is unquantified.** The ~350 µs physics estimate and the ~408 µs total full-stack tick are `[Estimated, no benchmark]`. No full-stack Cyberlith game server has been benchmarked under load.
+- **Rapier physics tick cost is unquantified.** The ~350 µs physics estimate and the ~558 µs total full-stack tick are `[Estimated, no benchmark]`. No full-stack Cyberlith game server has been benchmarked under load.
 - **Wire bytes are not measured.** The capacity report shows `∞` for wire capacity — the wire benches exist but have not been run for this scenario. All bandwidth figures are derived from a worst-case O(N²) formula, NOT from measured bytes-on-wire.
 - **No multi-player full-stack benchmark exists.** All CCU capacity figures for the full game stack are extrapolations from Naia-only measurements plus estimated physics cost. Error bars: ±30–50%.
 - **No cross-cell, multi-server, or WAN measurements exist.**
 
 ### What blocks business confidence
 
-1. **Full-stack tick cost is unknown.** The 408 µs/cell full-game estimate (→ ~39 cells/core) could be 2× wrong in either direction. This is the primary uncertainty in all capacity and revenue tables.
-2. **Bandwidth is not instrumented.** The event-driven position model (§23) likely makes the O(N²) formula a severe overestimate for production BW, but this has not been measured.
-3. **Steam payment policy is an open risk.** `[Policy risk, requires verification]` The plan to ship a free native Linux Steam app for discovery assumes players can complete purchases via external web checkout. Steam's current policy may require Steam Wallet for any in-app transactions from Steam users. This would reduce Steam-channel margins and require a separate lower-margin revenue model for that cohort.
+1. **Full-stack tick cost is unknown.** The ~558 µs/cell full-game estimate (→ ~29 cells/core realistic) could be 2× wrong in either direction. This is the primary uncertainty in all capacity and revenue tables.
+2. **Bandwidth is not instrumented.** The event-driven position model (§24) likely makes the O(N²) formula a severe overestimate for production BW, but this has not been measured.
+3. **Steam payment policy is an open risk.** `[Policy risk, requires verification]` Steam can be a free-to-play discovery channel, especially for Linux and Steam Deck players. However, monetization for Steam-channel users should be assumed to require Steam Wallet / Steam DLC / Steam microtransaction-compatible flows until verified otherwise. Therefore Steam should be modeled as a lower-margin but higher-discovery channel, while Web/PWA remains the high-margin direct-payment channel. Implementing Steam Wallet/DLC adapter is required before any paid items go live on Steam.
 
 ### Next gate to unlock business confidence
 
@@ -74,16 +74,16 @@ All measured data used in this document is registered here. Labels used througho
 
 | ID | Scenario | Command | Date | Machine | Includes | Excludes | Result | Confidence | Used in formulas? |
 |---|---|---|---|---|---|---|---|---|---|
-| M-001 | halo_btb_16v16 level load | `cargo criterion -p naia-benches -- "scenarios/halo_btb_16v16"` | 2026-04-26 | lifetop (i9-12900HK, 62 GiB) | Naia entity replication, 16 clients, 10K tiles + 32 units, uncapped BW | Rapier, game logic, actual network transport | **5.2 s** (5 511.6 ms from capacity report) | High (Naia-only) | §1, §6, §7, §13d, §25 |
-| M-002 | halo_btb_16v16 idle tick | same | 2026-04-26 | lifetop | Naia server tick, 16 clients, 10K tiles, 0 mutations | Rapier, game logic | **63 µs** | High (Naia-only) | §1, §2, §3, §25 |
-| M-003 | halo_btb_16v16 active tick | same | 2026-04-26 | lifetop | Naia server tick, 16 clients, 32 mutations | Rapier, game logic | **58 µs** | High (Naia-only) | §1, §2, §3, §25 |
+| M-001 | halo_btb_16v16 level load | `cargo criterion -p naia-benches -- "scenarios/halo_btb_16v16"` | 2026-04-26 | lifetop (i9-12900HK, 62 GiB) | Naia entity replication, 16 clients, 10K tiles + 32 units, uncapped BW | Rapier, game logic, actual network transport | **5.2 s** (5 511.6 ms from capacity report) | High (Naia-only) | §1, §6, §7, §13d, §26 |
+| M-002 | halo_btb_16v16 idle tick | same | 2026-04-26 | lifetop | Naia server tick, 16 clients, 10K tiles, 0 mutations | Rapier, game logic | **63 µs** | High (Naia-only) | §1, §2, §3, §26 |
+| M-003 | halo_btb_16v16 active tick | same | 2026-04-26 | lifetop | Naia server tick, 16 clients, 32 mutations | Rapier, game logic | **58 µs** | High (Naia-only) | §1, §2, §3, §26 |
 | M-004 | halo_btb_16v16 client receive | same | 2026-04-26 | lifetop | One client receive path, active tick | Server tick cost, other clients | **889 ns** | High (Naia-only) | §1, §10 |
-| E-001 | Full game tick — 16v16 | — | — | — | Naia (M-003) + Rapier estimate + logic estimate | Not yet measured | **~408 µs** `[Estimated, no benchmark]` | Low | §2, §3, §4, §9, §11, §13c, §21b |
-| E-002 | Rapier physics — 32 bodies + 10K tiles | — | — | — | Physics tick only | Not yet measured | **~350 µs** `[Estimated, no benchmark]` | Low | §2, §21b |
+| E-001 | Full game tick — 16v16 | — | — | — | Naia (M-003) + Rapier estimate + logic estimate + OS overhead | Not yet measured | **~558 µs** `[Estimated, no benchmark]` | Low | §2, §3, §4, §9, §11, §13c, §22b |
+| E-002 | Rapier physics — 32 bodies + 10K tiles | — | — | — | Physics tick only | Not yet measured | **~350 µs** `[Estimated, no benchmark]` | Low | §2, §22b |
 | E-003 | Active bandwidth — 16v16 | Formula | 2026-04-26 | — | O(N²) worst-case formula | Measured bytes; event-driven model | **~230 KB/s** `[Extrapolated, formula only]` | Low | §3c, §4, §8, §9, §13a |
 | E-004 | Player-count extrapolations | Naia M-002/M-003 linear scaling | 2026-04-26 | — | Naia scaling by N | Full-stack, physics, BW | Various (§3 tables) `[Extrapolated]` | Low–Medium | §3, §8, §13c |
 
-**Missing entries (see §24 Measurement Backlog):** Full-stack 2v2/5v5/10v10/40v40, wire bytes per tick, WAN latency, join burst, portal prewarm, multi-cell jitter, client performance under load.
+**Missing entries (see §25 Measurement Backlog):** Full-stack 2v2/5v5/10v10/40v40, wire bytes per tick, WAN latency, join burst, portal prewarm, multi-cell jitter, client performance under load.
 
 ---
 
@@ -158,9 +158,7 @@ At 25 Hz: **40 000 µs per tick** per thread.
 | **Cells per core — theoretical** | **~72** | 40 000 / 558 |
 | **Cells per core — realistic (40% efficiency)** | **~29** | Cache + scheduling overhead |
 
-> **IMPORTANT:** The prior version of this document used **~408 µs** total. This was a calculation error — the Naia 58 µs was already included in the 350 µs physics estimate in that version, so the document double-counted. The corrected figure is **~558 µs** (58 + 350 + 100 + 50). All downstream capacity tables inherited this error. They are labeled `[Estimated, no benchmark]` throughout. Until a full-stack benchmark runs, treat all derived CCU figures as approximate with ±50% error bars. The 408 µs figure is preserved in §E for historical reference only.
->
-> **Alternative reading:** If the 408 µs was intended to mean Naia is already inside the 350 µs physics estimate (Naia = subset of physics), then 408 µs could be correct. Either way, this MUST be resolved by running a full-stack benchmark.
+> **Note:** The prior version of this document used **~408 µs** total. That figure omitted game logic (~100 µs) and OS overhead (~50 µs). The corrected figure is **~558 µs** (Naia 58 + physics ~350 + logic ~100 + OS ~50). All downstream capacity tables inherit this estimate and carry ±50% error bars until a full-stack benchmark runs. Run BM-001 to resolve.
 
 The 40% efficiency factor accounts for L1/L2/L3 cache pressure (10K entities × ~300 B ≈
 3 MB working set per cell, competing across threads), memory bandwidth contention, and
@@ -217,7 +215,7 @@ is well-understood for the Naia layer. Physics scaling is separately estimated.*
 
 ### 3c. Bandwidth (Outbound Server → Clients)
 
-**This section uses the O(N²) worst-case formula, NOT measured bytes. See §23 for a full discussion of the event-driven model and why production BW is likely far lower.**
+**This section uses the O(N²) worst-case formula, NOT measured bytes. See §24 for a full discussion of the event-driven model and why production BW is likely far lower.**
 
 Bandwidth follows the **O(N²) worst-case law** `[Extrapolated, formula only]`: N players = N mutations/tick × N clients receiving =
 N² bytes/tick. This assumes every entity sends a position update every tick — which the actual
@@ -454,9 +452,9 @@ pre-warming 40+ seconds before the portal is used.
 
 ---
 
-## 9. Validation Ladder — 4 Tiers
+## 9. Validation Ladder
 
-This section defines the gates that must be passed before each match size is used in capacity planning or product decisions.
+Each tier below has three gates that must all pass before that match size enters capacity planning or product decisions.
 
 **Do not model any tier as a production default until its benchmark gate is passed.**
 
@@ -494,6 +492,21 @@ This section defines the gates that must be passed before each match size is use
 | Playtest gate | 40v40 beta event with live players | NOT DONE |
 | Business gate | 40v40 events self-sustaining with ≥5 concurrent matches; server cost absorbed by ~2 000 CCU revenue | NOT DONE |
 
+### 9e. Steam / Linux / Proton Client Validation
+
+This track must pass before Steam is modeled as a meaningful player acquisition channel (Gate 15). It is independent of the match-size tiers above.
+
+- [ ] Build native Linux binary (outside Steam)
+- [ ] Launch through Steam runtime; confirm startup, input, networking
+- [ ] Verify WebSocket/UDP transport under Steam runtime
+- [ ] Verify file paths, config, and cache under Steam runtime
+- [ ] Verify graphics backend on Steam Deck-class hardware
+- [ ] Verify controller layout on Steam Deck
+- [ ] Proton compatibility smoke test — Windows + Steam client
+- [ ] Confirm no Proton blockers (anti-cheat, WebView, launcher components)
+
+**Gate:** All checkboxes pass before Steam page goes live or Steam acquisition is modeled.
+
 ---
 
 ## 10. Client-Side Capacity
@@ -511,7 +524,7 @@ one CPU core**. Naia client-side networking is essentially free. Client CPU budg
 | Rank | Constraint | When binding | Mitigation | Provenance |
 |---|---|---|---|---|
 | 1 | **Bandwidth** | Always on budget shared-CPU plans (≤$40/mo); at high active duty on any plan | Reduce match size; lower tick rate for idle cells; delta compression; interest management | `[Extrapolated, formula only]` — BW not yet measured |
-| 2 | **CPU** | On dedicated servers at very low active duty (<5%); always if physics is more expensive than estimated | Win 2/3 already optimized Naia; tile BVH trimesh (§21d) targets physics | `[Estimated, no benchmark]` |
+| 2 | **CPU** | On dedicated servers at very low active duty (<5%); always if physics is more expensive than estimated | Win 2/3 already optimized Naia; tile BVH trimesh (§22d) targets physics | `[Estimated, no benchmark]` |
 | 3 | **RAM** | Only for 64K-tile maps or very large cell counts on small RAM plans | Keep maps ≤32K tiles; use 32+ GB RAM for dense servers | `[Estimated]` |
 
 ---
@@ -531,20 +544,20 @@ one CPU core**. Naia client-side networking is essentially free. Client CPU budg
    tear them down after the match. At 4% of match volume this costs ~$25–50/month extra, not
    a whole new server tier.
 
-5. **Target ~1 262 CCU (~378 premium subs) for $10 000/month net profit after taxes** (Base Case, §16b).
-   This accounts for subscription + microtx ($7.60/CCU), self-managed DLC (2 campaigns/year
-   at $15, no platform cut), and rewarded ads ($0.45/CCU). See §17 for the DLC model and §16 for all three scenarios.
+5. **Target ~1 312 CCU (~394 premium subs) for $10 000/month net profit after taxes** (Base Case, §16b).
+   This accounts for subscription + microtx ($7.60/CCU) and self-managed DLC (2 campaigns/year
+   at $15, with blended platform fees across Web/PWA and Steam channels). Rewarded ads are excluded from all three business scenarios. See §17 for the DLC model and §16 for all three scenarios.
 
-6. **Do not include Steam external checkout in revenue model until policy verified** (§18, §20). Model Steam as a separate lower-margin channel or exclude it until the policy is confirmed.
+6. **Model Steam as a separate lower-margin discovery channel.** Steam can be a free-to-play discovery channel, especially for Linux and Steam Deck players. Model Steam-channel monetization through Steam Wallet/DLC flows (not external checkout) until policy is verified. Web/PWA is the high-margin direct-payment channel. See §18 and §21 (Gate 9).
 
 7. **Measure wire bytes.** Wire capacity shows ∞ in the capacity report (not yet measured).
    Running `wire/bandwidth_realistic_quantized` and feeding its output into the capacity
    formula gives exact concurrent-game-on-1Gbps numbers.
 
-8. **The real binding constraint is likely CPU, not bandwidth.** See §21 and §23 for the full analysis.
+8. **The real binding constraint is likely CPU, not bandwidth.** See §22 and §24 for the full analysis.
    Position updates are event-driven, so production BW is likely 10–15× below the O(N²) worst-case estimate.
 
-9. **Switch from Vultr to Hetzner.** At ~$62/mo (CCX33 dedicated), Hetzner eliminates the BW constraint and provides dedicated vCPU at 35× lower cost for equivalent CCU. See §22.
+9. **Switch from Vultr to Hetzner.** At ~$62/mo (CCX33 dedicated), Hetzner eliminates the BW constraint and provides dedicated vCPU at 35× lower cost for equivalent CCU. See §23.
 
 ---
 
@@ -561,7 +574,7 @@ Naia scaling (0.113 µs × N² per tick `[Measured, Naia-only]`) plus estimated 
 active_bw_bytes_per_sec = N × 18 B × N × 25 Hz = 450 × N²
 ```
 
-This is the O(N²) worst-case formula. See §23 for event-driven production estimate.
+This is the O(N²) worst-case formula. See §24 for event-driven production estimate.
 
 | Tier | N total | Active BW | Idle BW |
 |---|---|---|---|
@@ -662,6 +675,10 @@ Binding constraint is always **bandwidth** on shared-CPU plans.
 
 ## 15. Revenue Model and Scaling Plan
 
+> **Channel note:** All prior revenue figures in this section assume the Web/PWA direct channel only (higher margin, Stripe fees only). Steam is a separate lower-margin channel with platform fees (~30% on Steam Wallet / DLC purchases). The blended effective margin depends on the Steam/Web player mix — see §16 channel-mix assumptions and §26 formulas for the two-channel model. Until the Steam Wallet/DLC adapter is built and the player mix is measured, use the Web/PWA figures as the upper bound and treat Steam-channel revenue as directional only.
+
+> **Rewarded ads:** Rewarded ads are not a Steam-channel assumption and are not part of the core business model. They may be considered only for non-Steam web/mobile experiments later, but they carry brand, UX, and policy risk. Excluded from all three business scenarios (Survival, Base, Upside).
+
 ### 15a. Revenue model assumptions
 
 | Parameter | Value | Provenance |
@@ -743,18 +760,14 @@ Track these three weekly. Upgrade when all three are green:
 | Medium | $10 | 1 000C | $0.590 | $9.410 | 5.9% |
 | Large | $20 | 2 000C | $0.880 | $19.120 | 4.4% |
 
-### 15f. Rewarded ads `[Assumption]`
+### 15f. Rewarded ads — excluded from core plan
+
+Rewarded ads are not a Steam-channel assumption and are not part of the core business model. They may be considered only for non-Steam web/mobile experiments later, but they carry brand, UX, and policy risk. **Excluded from all three business scenarios (Survival, Base, Upside).** The prior formula (`CCU × $0.45`) is preserved here for reference only — it does not appear in any scenario revenue calculations.
 
 ```
-monthly_ad_revenue ≈ MAU × 0.30 × 30 × ($5 / 1 000)
-                   = CCU × $0.45
+// Reference only — NOT included in any scenario:
+monthly_ad_revenue_ref ≈ MAU × 0.30 × 30 × ($5 / 1 000) = CCU × $0.45
 ```
-
-| CCU | Monthly ad revenue |
-|---|---|
-| 833 (250 subs) | ~$375 |
-| 1 262 (target) | ~$568 |
-| 2 025 | ~$911 |
 
 ### 15g. Guest slots and daily Crystal stipend
 
@@ -772,7 +785,7 @@ No anonymous free tier — every player is either a paying subscriber or a named
 
 ## 16. Business Plan Scenarios (Three Paths)
 
-All three scenarios assume self-platform (web/PWA, Stripe only, no platform cut on base revenue). Steam is treated as a separate discovery channel with uncertain payment policy — see §18.
+All three scenarios model Web/PWA as the primary high-margin channel. Steam is a separate lower-margin discovery channel with platform fees on Steam Wallet/DLC purchases. Rewarded ads are excluded from all three scenarios. See §18 for platform strategy and §26 for two-channel revenue formulas.
 
 ### 16a. Survival Case — Retention Proof
 
@@ -790,28 +803,42 @@ All three scenarios assume self-platform (web/PWA, Stripe only, no platform cut 
 
 **Gate to exit Survival Case:** D7 retention ≥ 30%, D30 retention ≥ 10%, microtx conversion rate ≥ 20%. These prove the product works before scaling costs.
 
+**Channel Mix (Survival):**
+- Mostly Web/PWA direct — founder packs + cosmetics via web payments
+- Steam: playtest/demo only, no paid items yet
+- No rewarded ads
+- Revenue assumes Web/PWA margin (Stripe fees only)
+
 ### 16b. Base Case — ~$10K/Month Net (Primary Target) `[Estimated]`
 
-This is the primary target documented throughout this file. Achievable via self-platform + DLC + ads.
+This is the primary target documented throughout this file. Achievable via Web/PWA direct payments + DLC campaigns.
 
 ```
-full_revenue_per_ccu = $7.60 (sub+microtx) + $0.45 (ads) + $4.04 (DLC, 2/yr, moderate) = $12.09
+full_revenue_per_ccu = $7.60 (sub+microtx) + $4.04 (DLC, 2/yr, moderate) = $11.64
 variable_costs_per_ccu = $0.43
-net_per_ccu = $11.66
+net_per_ccu = $11.21
 
-// Solve: 0.70 × (CCU × $11.66 − $424 fixed costs) = $10 000
-CCU = ($14 286 + $424) / $11.66 ≈ 1 262
+// Solve: 0.70 × (CCU × $11.21 − $424 fixed costs) = $10 000
+CCU = ($14 286 + $424) / $11.21 ≈ 1 312
 ```
 
 | Metric | Value | Provenance |
 |---|---|---|
-| Target CCU | ~1 262 | `[Estimated]` |
-| Premium subs (3% of MAU) | ~378 | `[Estimated]` |
-| Monthly gross | ~$15 258 | `[Estimated]` |
-| Monthly costs | ~$967 | `[Estimated]` |
-| After-tax net | **~$10 004** | `[Estimated]` |
+| Target CCU | ~1 312 | `[Estimated]` |
+| Premium subs (3% of MAU) | ~394 | `[Estimated]` |
+| Monthly gross | ~$15 272 | `[Estimated]` |
+| Monthly costs | ~$988 | `[Estimated]` |
+| After-tax net | **~$9 999** | `[Estimated]` |
 | Server tier | 1 × $224/mo dedicated | |
 | Match modes | 2v2, 5v5, 10v10 | |
+
+**Channel Mix (Base Case):**
+- Web/PWA: primary high-margin channel (Stripe fees ~2.9% + $0.30)
+- Steam: discovery + Steam-channel purchases via Steam Wallet/DLC (platform fee ~30% on Steam purchases)
+- Blended platform fees modeled at ~15–20% across channels `[Assumption]` — depends on Web/Steam player split
+- Linux-native / Steam Deck build quality matters at this scale
+- Proton compatibility should be validated before Steam launch
+- No rewarded ads
 
 ### 16c. Upside Case — ~$15K+/Month Net `[Estimated]`
 
@@ -819,18 +846,26 @@ CCU = ($14 286 + $424) / $11.66 ≈ 1 262
 |---|---|---|
 | Target CCU | ~2 025 | `[Estimated]` |
 | Premium subs | ~608 | `[Estimated]` |
-| Revenue model | Sub + microtx + DLC + ads + player market activity | |
-| Monthly gross | ~$15 390 (sub+microtx only baseline) + additional DLC/ads | `[Estimated]` |
+| Revenue model | Sub + microtx + DLC + player market (future, gated) | |
+| Monthly gross | ~$15 390 (sub+microtx only baseline) + additional DLC revenue | `[Estimated]` |
 | Monthly costs | ~$1 094 (2 × $224 server + overhead + processing) | `[Estimated]` |
 | After-tax net | **~$10 007 – $15 800** (depending on DLC performance) | `[Estimated]` |
 | Server tier | 2 × $224/mo dedicated | |
 | Match modes | All four tiers including 40v40 events | |
 
-> The Upside Case is the pure subscription + microtx model (§16b's former "§16c"). DLC accelerates this further.
+> At this CCU level, DLC campaigns become a significant accelerator on top of the base subscription + microtx revenue.
+
+**Channel Mix (Upside Case):**
+- Steam becomes a meaningful discovery engine at this scale
+- Web/PWA remains the high-margin hub for direct payments
+- Steam Wallet/DLC adapter mature; Steam-channel purchases handled through compliant flows
+- Campaign/content drops available on both channels
+- Player market only after fraud controls are in place
+- No rewarded ads
 
 ### 16d. Sensitivity analysis — what changes the timeline most
 
-*All deltas vs. the Base Case (1 262 CCU target at $7/mo sub, 27.5% microtx rate, 2 cosmetics/mo, 30% tax).*
+*All deltas vs. the Base Case (1 312 CCU target at $7/mo sub, 27.5% microtx rate, 2 cosmetics/mo, 30% tax).*
 
 | Lever | Effect | CCU target | Notes |
 |---|---|---|---|
@@ -854,12 +889,9 @@ CCU = ($14 286 + $424) / $11.66 ≈ 1 262
 | Google Play | $15 | 15% | $12.75 | `[External pricing, manually verified 2026-04]` |
 | **Self-managed (Stripe)** | **$15** | **0%** | **$14.27** (2.9% + $0.30 only) | `[External pricing, manually verified 2026-04]` |
 
-**Net: 36% more revenue per DLC sale than Steam.**
+**Net: Web/PWA direct yields 36% more per DLC sale than through Steam.** Steam-channel DLC sales should be modeled at $10.50 net (after ~30% Steam fee), not $14.27. The blended DLC margin depends on the Steam/Web player mix.
 
-The trade-off: without Steam's browse/recommendation engine, there is no passive discovery.
-Every new player must be acquired via social media, influencers, SEO, word of mouth, or direct
-marketing. DLC launch visibility spikes are smaller without a platform storefront — estimated
-5–8% new-player acquisition per campaign (vs 15%+ on Steam `[Assumption]`).
+The Web/PWA advantage: no platform cut on subscriptions, microtx, or DLC. The trade-off: without Steam's browse/recommendation engine, there is no passive discovery. Every new player acquired outside Steam must come via social media, influencers, SEO, word of mouth, or direct marketing. DLC launch visibility spikes are smaller without a Steam storefront — estimated 5–8% new-player acquisition per campaign (vs 15%+ on Steam `[Assumption]`).
 
 ### 17b. Co-op campaigns are architecturally cheap `[Extrapolated, formula only]`
 
@@ -879,15 +911,15 @@ marketing. DLC launch visibility spikes are smaller without a platform storefron
 
 ### 17d. Full revenue picture at 250 premium subs, 2 DLC/year `[Estimated]`
 
-**Base case at 8 333 MAU (250 subs, 833 CCU):**
+**Base case at 8 333 MAU (250 subs, 833 CCU) — Web/PWA channel only (upper-bound margin):**
 
 ```
 Revenue streams (monthly gross):
   Subscription:  250 × $7                        = $1 750
   Microtx:       8 333 × 27.5% × $2/mo           = $4 583
-  Rewarded ads:  8 333 × 0.30 × 30 × $5/1000     = $  375
   DLC (moderate, 2/year): $20 193 × 2 / 12        = $3 366
-  Total gross:                                     $10 074
+  // Rewarded ads: EXCLUDED from core plan
+  Total gross:                                     $9 699
 
 Costs (monthly):
   Server:         1 × $224                        = $  224
@@ -896,91 +928,170 @@ Costs (monthly):
   Processing (DLC): 1 415 × 2 / 12 × $0.74        = $  175
   Total costs:                                     $  783
 
-Pre-tax profit:   $10 074 − $783                   = $9 291
-After-tax (30%):                                   = $6 504/month
+Pre-tax profit:   $9 699 − $783                    = $8 916
+After-tax (30%):                                   = $6 241/month
 ```
 
-### 17e. CCU target with self-platform + ads + 2 DLC/year at $15 `[Estimated]`
+> Note: If Steam-channel players represent a meaningful share, DLC and microtx revenue net will be lower due to the ~30% Steam fee on Steam Wallet/DLC purchases. Model blended margin once Steam/Web player split is known.
 
-**CCU target: ~1 262 CCU → ~378 premium subs**
+### 17e. CCU target with Web/PWA direct + 2 DLC/year at $15 `[Estimated]`
 
-Verification at 1 262 CCU:
-- Revenue: 1 262 × $12.09 = $15 258
-- Costs: $424 + 1 262 × $0.43 = $967
-- Pre-tax: $15 258 − $967 = $14 291
-- After-tax (30%): $14 291 × 0.70 = **$10 004** ✓
+**CCU target: ~1 312 CCU → ~394 premium subs** (Web/PWA direct channel, upper-bound margin)
+
+Verification at 1 312 CCU (Web/PWA only, no rewarded ads):
+- Revenue per CCU: $7.60 (sub+microtx) + $4.04 (DLC moderate) = $11.64
+- Revenue: 1 312 × $11.64 = $15 272
+- Costs: $424 + 1 312 × $0.43 = $424 + $564 = $988
+- Pre-tax: $15 272 − $988 = $14 284
+- After-tax (30%): $14 284 × 0.70 = **~$9 999** ✓
 
 | CCU | Subs (~3% of MAU) | After-tax net |
 |---|---|---|
 | 833 (250 subs) | 250 | **~$6 500** |
 | 1 000 | 300 | **~$7 870** |
-| 1 262 | ~378 | **~$10 000** ✓ |
+| 1 312 | ~394 | **~$10 000** ✓ |
 | 1 500 | 450 | **~$11 700** |
 | 2 025 | 608 | **~$15 800** |
 
 ---
 
-## 18. Distribution and Steam/Platform Risk
+## 18. Distribution, Platform Matrix, and Steam Strategy
 
-### 18a. Web/PWA — Direct payments (primary channel)
+### 18a. Strategic framing
 
-- All transactions via Stripe, no platform cut
-- Safari PWA bypasses Apple IAP entirely
-- Full margin on subscriptions, microtx, DLC
-- Discovery is self-managed (no storefront algorithm)
-- **Confidence: High on payment mechanics** `[External pricing, manually verified 2026-04]`
+Cyberlith's preferred distribution model is multi-channel but single-account: Web/PWA for maximum reach and direct payments; Linux-native for the owned native target; Steam for discovery, Steam Deck/Linux legitimacy, and Steam-channel monetization through compliant purchase flows; Proton compatibility as the preferred Windows strategy rather than a Windows-native client. Windows-native support is intentionally out of scope unless later evidence shows it is cheap enough to justify.
 
-### 18b. Steam Linux native — Discovery channel
+Steam can be a free-to-play discovery channel, especially for Linux and Steam Deck players. However, monetization for Steam-channel users should be assumed to require Steam Wallet / Steam DLC / Steam microtransaction-compatible flows until verified otherwise. Therefore Steam should be modeled as a lower-margin but higher-discovery channel, while Web/PWA remains the high-margin direct-payment channel.
 
-- Plan: ship a free native Linux Steam app as a discovery vector
-- Advantage: Steam's browse and recommendation engine drives organic discovery
-- Trade-off: players acquired via Steam may be subject to Steam payment policies
-- **Estimated new-player acquisition from Steam vs self-platform: 15%+ vs 5–8% per DLC launch** `[Assumption]`
+### 18b. Platform matrix
+
+| Platform / Channel | Preferred Client Path | Payment Path |
+|---|---|---|
+| Web/PWA | Wasm/browser client | Direct Cyberlith web payments (Stripe) |
+| Linux desktop direct | Native Linux binary | Direct Cyberlith web payments (Stripe) |
+| Steam Linux | Native Linux Steam build | Steam Wallet / Steam DLC / Steam MTX |
+| Steam Deck | Native Linux; Proton compatibility as fallback/test target | Steam Wallet / Steam DLC / Steam MTX |
+| Windows Steam users | Proton compatibility, NOT Windows-native | Steam Wallet / Steam DLC / Steam MTX |
+| Mac | PWA unless native becomes cheap later | Direct Cyberlith web payments |
+| Mobile | PWA unless app-store native becomes worth it later | Direct web payments or future store-compliant path |
 
 ### 18c. Steam payment policy — OPEN RISK `[Policy risk, requires verification]`
 
 **Do NOT assume Steam users can complete external web checkout without restriction.**
 
 Current knowledge (as of 2026-04, unverified for the specific use case):
-- Steam's standard policy prohibits requiring Steam Wallet for free-to-play games' microtransactions in some contexts
-- However, linking to an external payment page from a Steam game may trigger review
+- Steam's standard policy may require Steam Wallet for any in-app transactions from Steam users
+- Linking to an external payment page from a Steam game may trigger review or policy violation
 - Steam's rules around "games that include in-game transactions" are version-dependent and subject to change
+- The "Steam page as a redirect to PWA only" approach requires a real playable Steam build (Linux-native), not just a marketing page
 
-**Required action:** Verify Steam's current Subscriber Agreement and game-specific DLC/IAP rules before:
-1. Modeling any Steam-channel revenue as equivalent to self-platform margin
-2. Claiming Steam-originated users can use external Stripe checkout
-3. Designing a Steam-specific pricing flow
+**Required action — verify before Steam launch:**
+1. Read current Steam Subscriber Agreement and Steamworks Partner documentation on payment policy
+2. Contact Valve developer support to confirm which purchase flows are permitted for this game type
+3. Do NOT model Steam-channel revenue as Web/PWA-margin equivalent until confirmed
+4. Design Steam Wallet/DLC adapter before listing any paid items on Steam
 
-**Conservative revenue model for Steam-channel players:**
-Until verified, model Steam-acquired players using Steam Wallet as their payment method, implying:
-- Platform cut: ~30% on any DLC/cosmetic purchase that flows through Steam
+**Conservative model for Steam-channel players:**
+Until verified, model Steam-acquired players with Steam Wallet as their payment method:
+- Platform cut: ~30% on any DLC/cosmetic/MTX that flows through Steam
 - Dev net: $10.50 per $15 DLC vs $14.27 self-platform (26% reduction)
-- Sub revenue: unaffected IF subscription is managed entirely outside Steam
+- Subscription revenue: model as unaffected only IF subscription is fully managed outside Steam and Steam policy permits
 
-**Decision gate:** See §20, Gate 5.
+**Decision gates:** See §21, Gates 9, 10, 11, 15.
+
+### 18d. Web/PWA — primary high-margin channel
+
+- All transactions via Stripe, no platform cut beyond processor fees (~2.9% + $0.30)
+- Safari PWA bypasses Apple IAP entirely
+- Full margin on subscriptions, microtx, DLC
+- Discovery is self-managed (no storefront algorithm)
+- **Confidence: High on payment mechanics** `[External pricing, manually verified 2026-04]`
+
+### 18e. Steam Linux / Steam Deck — discovery + compliant monetization channel
+
+- Ship real native Linux Steam build (NOT a redirect-only page)
+- Advantage: Steam's browse and recommendation engine drives organic discovery, especially Linux and Steam Deck players
+- Monetization: Steam Wallet / Steam DLC / Steam microtransaction flows (not external Stripe from Steam context)
+- Proton compatibility tested as fallback for Windows users via Steam
+- **Estimated new-player acquisition from Steam vs self-platform: 15%+ vs 5–8% per DLC launch** `[Assumption]`
+- **Gate:** Must ship real playable Linux-native app before using Steam as a meaningful acquisition channel (Gate 15)
 
 ---
 
-## 19. Risk Register
+## 19. Payment Architecture — One Backend, Multiple Purchase Providers
+
+### 19a. Core principle
+
+**Never let platform payment logic leak into game logic.**
+
+The backend entitlement system must be platform-agnostic. Payment providers are adapters, not game systems. Purchases are verified server-side, then converted into canonical Cyberlith entitlements. The client never self-grants.
+
+### 19b. Backend data model
+
+| Concept | Description |
+|---|---|
+| `CyberlithAccount` | Canonical player identity; linked to one or more identity providers including optional SteamID |
+| `Entitlement` | Canonical ownership record for a SKU (e.g., campaign unlocked, cosmetic owned) |
+| `CurrencyBalance` | Crystal/premium currency balance per account |
+| `PurchaseTransaction` | Audit record of every purchase event with provider, SKU, amount, and verification result |
+| `PurchaseProvider` | Enum: `WebStripe \| SteamWallet \| SteamDlc \| ManualGrant \| FutureApple \| FutureGoogle` |
+| `SkuCatalog` | Canonical SKU list with provider-specific ID mappings |
+
+### 19c. SKU catalog — canonical mapping table
+
+| Canonical SKU | Web Provider ID | Steam Item ID | Steam DLC App ID | Grant |
+|---|---|---|---|---|
+| `crystals_500` | Stripe price ID | Steam item ID | — | +500 Crystals |
+| `founder_pack_1` | Stripe price ID | Steam item ID | optional DLC | cosmetics + title + Crystals |
+| `campaign_1` | Stripe price ID | Steam item ID | Steam DLC app ID | campaign entitlement |
+
+> Note: Steam DLC App IDs and Steam item IDs must be registered in Steamworks. Stripe price IDs are created in the Stripe dashboard. The backend maps provider receipts to canonical SKUs before granting entitlements — no provider-specific logic enters the game layer.
+
+### 19d. Purchase flow invariants
+
+1. **Server-side verification always:** Receipt/token from any provider is verified against that provider's API before any entitlement is granted.
+2. **No client self-grant:** The client sends a purchase intent or receipt; only the server grants the entitlement.
+3. **Idempotent transactions:** Duplicate receipts must be detected and rejected (use provider transaction IDs as idempotency keys).
+4. **Refunds and chargebacks revoke entitlements:** The entitlement system must support revocation.
+
+### 19e. Steam account linking
+
+- Launch through Steam should identify the player via SteamID (via Steamworks SDK `GetPlayerSteamID`).
+- Backend creates or links a `CyberlithAccount` for that SteamID.
+- Avoid forcing manual account creation before the player can enter the game — the SteamID is sufficient for initial identity.
+- Allow email/password to be added later for cross-platform play.
+- If a player economy or trading system exists, Steam unlink/relink must be heavily restricted to prevent fraud (account trading abuse).
+- **Status: Future implementation note — not yet implemented. Design before Steam launch.**
+
+---
+
+## 20. Risk Register
 
 | Risk | Category | Severity | Likelihood | Current Evidence | Mitigation | Next Action |
 |---|---|---|---|---|---|---|
-| Full-stack tick cost unmeasured | Technical | **Critical** | Certain (it IS unknown) | Naia-only 58 µs measured; physics estimated at ~350 µs | Run 2v2 full-stack benchmark | See §24, BM-001 |
-| Bandwidth not instrumented | Technical | **High** | Certain (wire bench not run) | Wire capacity shows ∞ in capacity report | Add `server_outgoing_bytes_per_tick_total` metric; run wire bench | See §24, BM-005 |
-| Steam payment policy | Business/Legal | **High** | Uncertain — policy may allow or prohibit | Manually unverified as of 2026-04 | Read current Steam Subscriber Agreement + contact Valve support | See §18c, §20 Gate 5 |
+| Full-stack tick cost unmeasured | Technical | **Critical** | Certain (it IS unknown) | Naia-only 58 µs measured; physics estimated at ~350 µs | Run 2v2 full-stack benchmark | See §25, BM-001 |
+| Bandwidth not instrumented | Technical | **High** | Certain (wire bench not run) | Wire capacity shows ∞ in capacity report | Add `server_outgoing_bytes_per_tick_total` metric; run wire bench | See §25, BM-005 |
+| Steam payment policy misunderstood | Platform/Business | **High** | Uncertain | Manually unverified as of 2026-04; external checkout may be prohibited | Verify Steamworks rules; model Steam as separate payment channel with ~30% fee | Read Steamworks Partner docs; contact Valve support — see §18c |
+| Steam users cannot route to external checkout | Platform/Business | **High** | Medium | Steam policy likely requires Steam Wallet for in-app purchases | Implement Steam Wallet/DLC adapter before any paid Steam items | Design adapter before Steam launch — see §19 |
+| Linux-only Steam build limits discovery vs Windows users | Market | **Medium** | Medium | No Windows-native build planned; Proton unvalidated | Steam Deck-first quality; Proton compatibility validated | Add Proton validation gate — see §9 Steam/Proton track |
+| Windows-native avoided intentionally | Technical/Product | **Medium** | N/A — intentional decision | Proton + PWA is the Windows strategy | Proton compatibility + PWA fallback | Validate Proton before Steam launch — Gate 11 |
+| Proton compatibility not actually good enough | Technical | **Medium** | Medium | No Proton testing done yet | Add Steam/Proton validation track to §9 | See §9 Steam/Proton validation checklist |
+| Steam page cannot be used as PWA redirect only | Platform/Marketing | **Medium** | High | Steam requires a real playable app | Ship real native Linux/Steam Deck build before Steam page | Design Steam build before Steam page — Gate 15 |
+| Entitlement fragmentation across platforms | Architecture | **High** | Certain if not designed | No entitlement backend designed yet | One backend entitlement system with provider adapters (§19) | Design entitlement backend before first paid item |
+| Rewarded ads off-brand or policy-incompatible | Product/Platform | **Medium** | High | Steam policies restrict rewarded ads; brand risk | Excluded from core plan entirely | No action needed unless strategy changes |
 | Shared CPU jitter | Technical | **Medium** | High on shared vCPU plans | No production measurement; known industry problem | Use dedicated vCPU (Hetzner CCX or Vultr Optimized) for production | Switch to Hetzner CCX33 before production |
 | Content treadmill (DLC cadence) | Business | **High** | Medium | 2 DLC/year assumed; no proven release velocity | Pre-build campaign content before launch; set realistic cadence | Evaluate team velocity at 6-month mark |
 | Economy fraud / Crystal abuse | Business | **Medium** | Low-Medium | No fraud prevention system designed | Rate-limit Crystal purchases; flag anomalous player-market activity | Add fraud checks before opening player market |
-| Physics cost 2× estimate | Technical | **High** | Medium | Estimate only; no benchmark | Tile BVH trimesh (§21d) reduces Rapier cost before measuring | Run full-stack benchmark first; then optimize |
+| Physics cost 2× estimate | Technical | **High** | Medium | Estimate only; no benchmark | Tile BVH trimesh (§22d) reduces Rapier cost before measuring | Run full-stack benchmark first; then optimize |
 | Rapier order-sensitivity (determinism) | Technical | **Medium** | Known existing risk | Documented in cyberlith simulation determinism memory | HashMap key sorting for bulk collider spawns already documented | Enforce in tests |
-| Multi-cell cross-server jitter | Technical | **Medium** | Medium | No multi-cell benchmark exists | Design portal protocol before building multi-server | See §24, BM-009 |
-| WAN performance vs LAN | Technical | **Medium** | Medium | All benchmarks are loopback | WAN test with real clients required | See §24, BM-011 |
-| Client performance on target hardware (web/Wasm) | Technical | **High** | Unknown | Client networking is free (889 ns); rendering untested | Wasm perf test on mid-range laptop browser | See §24, BM-012 |
+| Multi-cell cross-server jitter | Technical | **Medium** | Medium | No multi-cell benchmark exists | Design portal protocol before building multi-server | See §25, BM-009 |
+| WAN performance vs LAN | Technical | **Medium** | Medium | All benchmarks are loopback | WAN test with real clients required | See §25, BM-011 |
+| Client performance on target hardware (web/Wasm) | Technical | **High** | Unknown | Client networking is free (889 ns); rendering untested | Wasm perf test on mid-range laptop browser | See §25, BM-012 |
 | Player acquisition without platform | Business | **High** | Medium | No marketing strategy documented | DLC launches as marketing events; creator program; Steam discovery | Define acquisition strategy post-launch |
 
 ---
 
-## 20. Decision Gates
+## 21. Decision Gates
 
 These are hard stops. The named decision cannot be made until the gate condition is met.
 
@@ -990,16 +1101,23 @@ These are hard stops. The named decision cannot be made until the gate condition
 | Gate 2 | Model 10v10 as a launch default | 10v10 full-stack benchmark gate passes (§9, Tier 3) | NOT DONE |
 | Gate 3 | Model 40v40 as anything other than aspirational/event | 40v40 full-stack benchmark AND ≥2 000 CCU sustained (§9, Tier 4) | NOT DONE |
 | Gate 4 | Include BW constraint as the primary capacity limit | Wire bytes measured per tick via `server_outgoing_bytes_per_tick_total` bench | NOT DONE |
-| Gate 5 | Include Steam external checkout in revenue model | Steam Subscriber Agreement reviewed; Valve support confirms external checkout allowed for this use case | NOT DONE |
+| Gate 5 | Include Steam external checkout in revenue model | Steam Subscriber Agreement reviewed; Valve support confirms external checkout allowed for this use case | NOT DONE — expected outcome is "NOT allowed"; model Steam as separate channel |
 | Gate 6 | Upgrade to dedicated production server | CCU ≥ 70% capacity for 3+ days AND revenue ≥ 3× next tier cost | NOT DONE (pre-launch) |
 | Gate 7 | Open player market | Fraud detection and rate-limiting implemented | NOT DONE |
 | Gate 8 | Open 40v40 as scheduled events | 40v40 benchmark passes AND ≥2 000 CCU sustained AND on-demand cell boot/teardown implemented | NOT DONE |
+| Gate 9 | Model Steam monetization as direct-margin (same as Web/PWA) | Steam policy verified; confirmed external checkout allowed OR adapter built for Steam Wallet/DLC | NOT DONE |
+| Gate 10 | Ship paid Steam items | Backend has Steam purchase adapter + server-side entitlement verification (§19) | NOT DONE |
+| Gate 11 | Claim Windows support | Proton/PWA path validated on real Windows+Steam environment; no blockers | NOT DONE |
+| Gate 12 | Start Windows-native client work | Connor explicitly changes strategy with evidence showing it is worth the cost | NOT DONE — intentionally deferred |
+| Gate 13 | Include rewarded ads in revenue model | Connor explicitly adds this after evaluating brand/policy risk | NOT DONE |
+| Gate 14 | Let Steam-specific purchase logic enter gameplay code | Never — all purchase logic stays in backend entitlement adapter layer (§19) | PERMANENT BLOCK |
+| Gate 15 | Launch Steam page as primary PWA redirect | Real Linux-native / Steam Deck-quality playable app ships first | NOT DONE |
 
 ---
 
-## 21. Performance and Infrastructure Levers
+## 22. Performance and Infrastructure Levers
 
-### 21a. Position updates are event-driven, not tick-rate-driven
+### 22a. Position updates are event-driven, not tick-rate-driven
 
 The O(N²) formula (`active_bw = 450 × N²` bytes/sec) assumes a position update fires
 every tick for every moving entity. The actual implementation is fundamentally different.
@@ -1013,7 +1131,7 @@ For an entity moving at constant velocity: zero position bytes transmitted on th
 
 **Real sustained BW is proportional to input-change rate, not tick rate.** The O(N²)
 worst-case formula overestimates production BW by roughly one order of magnitude
-for typical Halo-style gameplay.
+for typical Halo-style gameplay. See §24 for the detailed bandwidth model.
 
 **What actually triggers position/velocity sends:**
 
@@ -1024,7 +1142,7 @@ for typical Halo-style gameplay.
 | Spawn / respawn | Once per life | Full state on entity enter-scope |
 | Forced repositioning | Rare (abilities, map events) | Correction always required |
 
-### 21b. CPU is the real binding constraint in production `[Estimated, no benchmark]`
+### 22b. CPU is the real binding constraint in production `[Estimated, no benchmark]`
 
 ```
 tick_budget_µs = 40 000    (25 Hz = 40 ms/tick)
@@ -1035,15 +1153,15 @@ cells_per_core = 40 000 × 0.40 / 558 ≈ 29   (shared vCPU, 40% efficiency)
 
 Physics dominates the estimated budget at approximately **~350 µs** `[Estimated, no benchmark]`.
 
-### 21c. Switch infrastructure to Hetzner `[External pricing, manually verified 2026-04]`
+### 22c. Switch infrastructure to Hetzner `[External pricing, manually verified 2026-04]`
 
 **Hetzner Cloud includes 20 TB/month on every instance, regardless of tier.**
 With production BW well below worst-case estimates, 20 TB is sufficient — making BW
 a non-issue and leaving CPU as the sole constraint.
 
-See §22 for the full provider pricing table.
+See §23 for the full provider pricing table.
 
-### 21d. Tile physics BVH — replace N_tile colliders with one static trimesh
+### 22d. Tile physics BVH — replace N_tile colliders with one static trimesh
 
 **The problem:** Every wall tile is a separate Rapier rigid body. A 10K-tile map with ~30–40% walls
 yields ~3 000–4 000 independent tile colliders in Rapier's broad-phase.
@@ -1055,9 +1173,9 @@ Rapier builds an internal BVH on construction. Runtime cost per frame:
 
 **Expected impact:** Rapier is estimated at ~350 µs of the 558 µs budget `[Estimated, no benchmark]`.
 Consolidating to one trimesh is expected to yield a **2–4× reduction in physics tick time**,
-roughly doubling total CCU capacity on the same hardware.
+roughly doubling total CCU capacity on the same hardware. See §20 risk "Physics cost 2× estimate".
 
-### 21e. Adaptive tick rate
+### 22e. Adaptive tick rate
 
 Cells in lobby, post-match, or spectator mode do not need 25 Hz. Dropping idle phases
 to 5 Hz reduces both CPU and BW for those cells by 5×.
@@ -1070,7 +1188,7 @@ A **20% fleet-wide CPU reduction** for near-zero implementation cost.
 
 ---
 
-## 22. Provider Pricing Table (as of 2026-04)
+## 23. Provider Pricing Table (as of 2026-04)
 
 **All prices manually verified 2026-04. Re-verify before any production purchasing decision — cloud pricing changes frequently.**
 
@@ -1083,20 +1201,20 @@ A **20% fleet-wide CPU reduction** for near-zero implementation cost.
 
 *CCU = cells × 11.1 players/cell (§14b weighted average). BW is non-binding on Hetzner with event-driven model.*
 
-> Note: The prior version of this document showed Hetzner CCX33 at "~10 789 CCU" based on the 408 µs tick estimate and the old cells/core calculation. The corrected 558 µs estimate reduces this. The order-of-magnitude advantage of Hetzner vs Vultr is unchanged.
+> The prior version showed Hetzner CCX33 at "~10 789 CCU" based on the superseded 408 µs tick figure. The corrected 558 µs estimate reduces that figure. The order-of-magnitude advantage of Hetzner vs Vultr is unchanged.
 
 **Key finding:** Hetzner CX21 at ~$6/mo delivers more CCU than Vultr $20/mo at comparable quality.
-Hetzner CCX33 at ~$62/mo covers the entire Base Case (~1 262 CCU) on one server with headroom.
+Hetzner CCX33 at ~$62/mo covers the entire Base Case (~1 312 CCU) on one server with headroom.
 
 **Shared vCPU warning:** Shared vCPU plans (Vultr shared, Hetzner CX21) are subject to noisy-neighbor CPU jitter. For real-time game servers at 25 Hz, P99 tick latency spikes may violate the 40 ms budget. Use dedicated vCPU (Hetzner CCX, Vultr Optimized) for production.
 
 ---
 
-## 23. Bandwidth Model — Worst-Case vs Event-Driven
+## 24. Bandwidth Model — Worst-Case vs Event-Driven
 
 Two distinct models apply:
 
-### 23a. Worst-case O(N²) formula (all §3–§14 tables)
+### 24a. Worst-case O(N²) formula (all §3–§14 tables)
 
 ```
 active_bw_bytes_per_sec = N_mutations × bytes_per_mutation × N_clients × tick_hz
@@ -1105,11 +1223,11 @@ active_bw_bytes_per_sec = N_mutations × bytes_per_mutation × N_clients × tick
 
 This formula assumes every entity sends a delta update every tick. It is `[Extrapolated, formula only]` — NOT measured.
 
-**Overestimate factor:** The event-driven implementation means most entities send zero bytes on most ticks. Real production BW is estimated at 10–15× below this worst case `[Estimated]` based on input-change rate analysis in §21a. This estimate itself is not measured.
+**Overestimate factor:** The event-driven implementation means most entities send zero bytes on most ticks. Real production BW is estimated at 10–15× below this worst case `[Estimated]` based on input-change rate analysis in §22a. This estimate itself is not measured.
 
-### 23b. Proposed instrumentation — exact metrics to add
+### 24b. Proposed instrumentation — exact metrics to add
 
-The following metrics should be instrumented in the game server to replace formula-based BW estimates:
+Instrument these metrics in the game server to replace formula-based BW estimates with measured values:
 
 ```
 server_outgoing_bytes_per_tick_total        -- total bytes sent to all clients in one tick
@@ -1126,13 +1244,13 @@ server_naia_tick_time_p50_us               -- Naia-only tick time in production
 
 These replace all `[Extrapolated, formula only]` and `[Estimated, no benchmark]` labels in §3c and §4 with `[Measured]` labels.
 
-### 23c. Until BW is measured, use conservative (worst-case) BW figures
+### 24c. Until BW is measured, use conservative (worst-case) BW figures
 
-All capacity tables in §3–§14 use the worst-case O(N²) formula. If production BW is 10× lower than this formula, then BW-bound estimates actually become CPU-bound — which changes which constraint binds first. This is why Gate 4 (§20) must be resolved before trusting §4's binding constraint analysis.
+All capacity tables in §3–§14 use the worst-case O(N²) formula. If production BW is 10× lower than this formula, then BW-bound estimates actually become CPU-bound — which changes which constraint binds first. This is why Gate 4 (§21) must be resolved before trusting §4's binding constraint analysis.
 
 ---
 
-## 24. Measurement Backlog
+## 25. Measurement Backlog
 
 Prioritized list of missing benchmarks. Items marked with the gate they unblock.
 
@@ -1145,9 +1263,9 @@ Prioritized list of missing benchmarks. Items marked with the gate they unblock.
 | BM-005 | Wire bytes per tick — run `wire/bandwidth_realistic_quantized` bench | Actual bytes per active tick | Gate 4 (BW model validation) | **CRITICAL** |
 | BM-006 | Join burst — 16 clients joining an existing session simultaneously | Burst tick time during join; level load spike | Portal pre-warming design | High |
 | BM-007 | Portal prewarm — spawn cell, measure wall time to steady-state | Time from cell boot to first player ready | Portal UX design | High |
-| BM-008 | Tile BVH trimesh — run halo_btb_16v16 with trimesh vs per-tile colliders | Physics tick improvement ratio | §21d physics optimization | Medium |
+| BM-008 | Tile BVH trimesh — run halo_btb_16v16 with trimesh vs per-tile colliders | Physics tick improvement ratio | §22d physics optimization | Medium |
 | BM-009 | Multi-cell jitter — 4+ cells on same server under concurrent load | P99 tick variance with multiple cells sharing CPU | Multi-cell capacity model | Medium |
-| BM-010 | Adaptive tick rate — 5 Hz lobby vs 25 Hz active | CPU savings factor, BW savings factor | §21e adaptive tick optimization | Low |
+| BM-010 | Adaptive tick rate — 5 Hz lobby vs 25 Hz active | CPU savings factor, BW savings factor | §22e adaptive tick optimization | Low |
 | BM-011 | WAN test — real clients over internet vs loopback | Tick timing with real RTT; jitter behavior | Production readiness | High |
 | BM-012 | Client performance on web/Wasm — mid-range laptop, browser | Render frame time, Wasm heap, GC pressure | Client-side capacity confidence | High |
 
@@ -1155,7 +1273,7 @@ Prioritized list of missing benchmarks. Items marked with the gate they unblock.
 
 ---
 
-## 25. Appendix: Scaling Formulas
+## 26. Appendix: Scaling Formulas
 
 ```
 // O(N²) bandwidth law (Win 3) [Measured, Naia-only] — formula, not measured wire bytes
@@ -1193,15 +1311,37 @@ cells = min(cells_cpu, cells_ram, cells_bw)
 
 // Revenue formulas [Assumption]
 monthly_revenue_per_ccu = CCU × 10 × (sub_rate × sub_price + microtx_rate × avg_spend)
-                        = CCU × $7.60   // base case
+                        = CCU × $7.60   // base case (Web/PWA channel only)
 
-monthly_ad_revenue = CCU × 10 × 0.30 × 30 × (ecpm / 1000)
-                   = CCU × $0.45   // at $5 eCPM
+// Rewarded ads: EXCLUDED from all scenarios — reference formula only
+// monthly_ad_revenue_ref = CCU × 10 × 0.30 × 30 × (ecpm / 1000) = CCU × $0.45 at $5 eCPM
 
 dlc_revenue_per_ccu = dlc_conversion_rate × mau_multiplier × net_per_sale × releases_per_year / 12
-                    = 0.17 × 10 × $14.27 × 2 / 12 = $4.04   // moderate case
+                    = 0.17 × 10 × $14.27 × 2 / 12 = $4.04   // moderate case, Web/PWA channel
+
+// Two-channel revenue model [Assumption] — use once Steam/Web player split is known
+steam_player_share              // fraction of players via Steam
+web_player_share                // fraction via Web/PWA (1 - steam_player_share)
+steam_payer_share               // fraction of Steam players who make a purchase
+web_payer_share                 // fraction of web players who make a purchase
+steam_platform_fee_rate         // Steam cut (assumption ~30%) [Policy risk, requires verification]
+web_payment_processor_fee_rate  // Stripe ~2.9% + $0.30 per transaction
+refund_rate
+chargeback_rate
+tax_reserve_rate
+
+steam_gross = steam_players × steam_payer_share × avg_purchase_value
+web_gross   = web_players × web_payer_share × avg_purchase_value
+
+blended_net_revenue =
+    steam_gross × (1 - steam_platform_fee_rate)
+  + web_gross × (1 - web_payment_processor_fee_rate)
+  - refunds - chargebacks - taxes - server_cost - support_tools
+
+// Until steam_player_share is known from production data, use web-only upper bound:
+conservative_net_revenue = web_gross × (1 - web_payment_processor_fee_rate) - costs
 ```
 
 ---
 
-*This document is a living source of truth. Update the Evidence Registry (§ER) and provenance labels whenever new benchmarks run. Update pricing labels when re-verified. Update risk statuses when gates close. Last major revision: 2026-04-26 by Claude (hardening pass).*
+*This document is a living source of truth. Update the Evidence Registry (§ER) and provenance labels whenever new benchmarks run. Update pricing labels when re-verified. Update risk statuses when gates close. Last major revision: 2026-04-26 by Claude (Steam/Proton/Payments strategy update — §18 platform matrix, §19 payment architecture, §21 gates 9–15, §9 Steam/Proton validation track, two-channel revenue formulas in §26).*

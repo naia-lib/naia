@@ -127,3 +127,39 @@ Run `cargo criterion -p naia-benches -- "wire/bandwidth_realistic_quantized"` an
 **Priority 3: Gate 5 — Steam policy**
 
 Read current Steam Subscriber Agreement. Contact Valve developer support. Confirm whether external checkout (Stripe) is permitted for IAP from Steam-installed games. Document the verdict in §18c and close or downgrade the risk.
+
+---
+
+## Update: Steam/Proton/Payments Strategy (2026-04-26)
+
+**Date:** 2026-04-26
+**Scope:** Major strategic update to CAPACITY_ANALYSIS_2026-04-26.md covering platform distribution, Steam framing, payment architecture, and business scenario channel-mix.
+
+### Checklist
+
+1. Steam/Web/PWA strategy updated — §18 replaced with full platform matrix and multi-channel framing. ✓
+2. Steam modeled as separate lower-margin channel — explicit framing: Steam = lower-margin discovery; Web/PWA = high-margin direct payments. Two-channel revenue formula added to §26. ✓
+3. Linux-native + Proton-compatible / no Windows-native reflected — platform matrix in §18b shows native Linux Steam build for Steam/Steam Deck; Proton for Windows Steam users; no Windows-native build (intentionally out of scope). Steam/Proton validation checklist added to §9. ✓
+4. Rewarded ads removed from core plan — §15f downgraded to reference-only; ads excluded from all three business scenarios (Survival, Base, Upside). Revenue figures in §17d and §17e updated accordingly. ✓
+5. Backend entitlement/payment-provider architecture added — new §19 "Payment Architecture — One Backend, Multiple Purchase Providers" with data model, SKU catalog, purchase flow invariants, and Steam account linking notes. ✓
+
+### New sections added
+
+| Section | Title |
+|---|---|
+| §18 | Distribution, Platform Matrix, and Steam Strategy (replaces old §18) |
+| §19 | Payment Architecture — One Backend, Multiple Purchase Providers (new) |
+| §21, Gates 9–15 | Seven new decision gates covering Steam monetization, entitlement architecture, Proton validation, Windows-native deferral, rewarded ads, and permanent block on platform logic in game code |
+| §9 Steam/Proton track | 10-checkpoint validation checklist before Steam can be modeled as acquisition channel |
+| §20 Risk Register | 8 new/updated risk rows covering Steam policy, entitlement fragmentation, Proton compatibility, rewarded ads, and more |
+| §26 Formulas | Two-channel revenue model variables + `blended_net_revenue` formula |
+
+### Remaining policy questions requiring direct Steamworks verification
+
+1. **Can Steam games route users to external payment (Stripe) for in-app purchases?** Expected answer: no, or heavily restricted. Until confirmed, Steam-channel purchases must use Steam Wallet/DLC flows.
+2. **Are Steam Wallet microtransactions permitted for free-to-play games without going through Steam Direct?** Verify Steamworks Partner documentation on MTX policy for F2P titles.
+3. **What is the exact Steam fee structure for Steam Wallet purchases vs Steam DLC?** Confirm ~30% cut applies uniformly or varies by item type.
+4. **Are there special rules for games targeting Steam Deck (Proton vs native)?** Verify if a Proton-compatible game without a Windows-native build can receive Steam Deck Verified/Playable status.
+5. **Does linking to a PWA/web account from a Steam game violate any policy?** Verify the account-linking flow (SteamID → CyberlithAccount) is policy-compliant.
+
+**Action:** Read https://partner.steamgames.com/doc/home and contact Valve developer support before Gates 9, 10, or 15 can be closed.
