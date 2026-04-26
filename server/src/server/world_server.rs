@@ -651,6 +651,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.scope_checks_cache.as_slice().to_vec()
     }
 
+    /// Returns only (room, user, entity) tuples added since the last call to
+    /// `mark_scope_checks_pending_handled()`. After initial entity/user load
+    /// the returned Vec is empty every tick — zero per-tick allocation.
+    pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
+        self.scope_checks_cache.pending_slice().to_vec()
+    }
+
+    /// Clears the pending queue. Call after processing `scope_checks_pending()`.
+    pub fn mark_scope_checks_pending_handled(&mut self) {
+        self.scope_checks_cache.mark_pending_handled();
+    }
+
     /// Slow-path equivalent of `scope_checks()` — used by tests and the
     /// debug-build assertion in `scope_checks()` to verify the cache stays
     /// in sync with `(rooms × users × entities)` truth.

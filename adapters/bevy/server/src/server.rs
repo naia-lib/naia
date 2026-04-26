@@ -278,6 +278,20 @@ impl<'w> Server<'w> {
         }
     }
 
+    pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, Entity)> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.scope_checks_pending(),
+            ServerImpl::Full(server) => server.scope_checks_pending(),
+        }
+    }
+
+    pub fn mark_scope_checks_pending_handled(&mut self) {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.mark_scope_checks_pending_handled(),
+            ServerImpl::Full(server) => server.mark_scope_checks_pending_handled(),
+        }
+    }
+
     //// Users ////
 
     pub fn user_exists(&self, user_key: &UserKey) -> bool {

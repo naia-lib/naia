@@ -17,6 +17,10 @@ use crate::{RoomKey, UserKey};
 /// then mirrors the tuple here.
 pub(crate) struct ScopeChecksCache<E: Copy + Eq + Hash + Send + Sync> {
     tuples: Vec<(RoomKey, UserKey, E)>,
+    // Tuples added since the last call to mark_pending_handled(). Game code
+    // that uses "add everything to scope on first sight" can poll only this
+    // slice, which is empty on every tick after initial load.
+    pending: Vec<(RoomKey, UserKey, E)>,
     read_counter: AtomicU64,
 }
 
@@ -24,12 +28,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
     pub fn new() -> Self {
         Self {
             tuples: Vec::new(),
+            pending: Vec::new(),
             read_counter: AtomicU64::new(0),
         }
     }
 
     pub fn as_slice(&self) -> &[(RoomKey, UserKey, E)] {
         &self.tuples
+    }
+
+    /// Returns only tuples added since the last `mark_pending_handled()` call.
+    /// After initial entity/user load, this is empty every tick — zero work.
+    pub fn pending_slice(&self) -> &[(RoomKey, UserKey, E)] {
+        &self.pending
+    }
+
+    /// Clears the pending queue. Call after processing `pending_slice()`.
+    pub fn mark_pending_handled(&mut self) {
+        self.pending.clear();
     }
 
     /// Returns true once every `period` reads. Used by debug-build assertions
@@ -48,11 +64,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
     ) {
         for entity in entities_in_room {
             self.tuples.push((room_key, user_key, entity));
+            self.pending.push((room_key, user_key, entity));
         }
     }
 
     pub fn on_user_removed_from_room(&mut self, room_key: RoomKey, user_key: UserKey) {
         self.tuples
+            .retain(|&(rk, uk, _)| rk != room_key || uk != user_key);
+        self.pending
             .retain(|&(rk, uk, _)| rk != room_key || uk != user_key);
     }
 
@@ -64,11 +83,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
     ) {
         for user_key in users_in_room {
             self.tuples.push((room_key, user_key, entity));
+            self.pending.push((room_key, user_key, entity));
         }
     }
 
     pub fn on_entity_removed_from_room(&mut self, room_key: RoomKey, entity: E) {
         self.tuples
+            .retain(|&(rk, _, e)| rk != room_key || e != entity);
+        self.pending
             .retain(|&(rk, _, e)| rk != room_key || e != entity);
     }
 
@@ -77,10 +99,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
     /// cache stays in sync without an O(rooms × entities) per-room walk.
     pub fn on_entity_despawned(&mut self, entity: E) {
         self.tuples.retain(|&(_, _, e)| e != entity);
+        self.pending.retain(|&(_, _, e)| e != entity);
     }
 
     pub fn on_room_destroyed(&mut self, room_key: RoomKey) {
         self.tuples.retain(|&(rk, _, _)| rk != room_key);
+        self.pending.retain(|&(rk, _, _)| rk != room_key);
     }
 }
 

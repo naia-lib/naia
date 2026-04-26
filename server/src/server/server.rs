@@ -207,6 +207,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.scope_checks()
     }
 
+    pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
+        self.world_server.scope_checks_pending()
+    }
+
+    pub fn mark_scope_checks_pending_handled(&mut self) {
+        self.world_server.mark_scope_checks_pending_handled();
+    }
+
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
