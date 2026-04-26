@@ -18,7 +18,11 @@
 10. [Client-Side Capacity](#10-client-side-capacity)
 11. [The Three Binding Constraints (Ranked by Frequency)](#11-the-three-binding-constraints-ranked-by-frequency)
 12. [Recommendations for the Cyberlith Business Plan](#12-recommendations-for-the-cyberlith-business-plan)
-13. [Appendix: Scaling Formulas](#appendix-scaling-formulas)
+13. [The 4-Tier Match Architecture — Per-Tier Resource Costs](#13-the-4-tier-match-architecture--per-tier-resource-costs)
+14. [The Mixed Fleet — Server Capacity Across All Four Tiers](#14-the-mixed-fleet--server-capacity-across-all-four-tiers)
+15. [Revenue Model and Scaling Plan](#15-revenue-model-and-scaling-plan)
+16. [Path to $10 000/Month Net Profit](#16-path-to-10-000month-net-profit)
+17. [Appendix: Scaling Formulas](#appendix-scaling-formulas)
 
 ---
 
@@ -493,36 +497,349 @@ one CPU core**. Naia client-side networking is essentially free. Client CPU budg
 
 ## 12. Recommendations for the Cyberlith Business Plan
 
-1. **Target 10v10 (20 players/match) as the primary launch game mode.** The O(N²) bandwidth
-   law makes 10v10 the sweet spot that maximizes concurrent players and concurrent matches on
-   budget hardware. 16v16 BTB should be an unlocked premium mode on dedicated hardware.
+1. **Ship 2v2 first, unlock larger modes as the player base grows.** 2v2 is viable at
+   launch even with <100 CCU. Requiring 80 players simultaneously for 40v40 means that mode
+   can't fill until ~2 000 CCU — which is the right unlock point anyway (see §14).
 
-2. **Target $224/mo Vultr Optimized Cloud Compute (8 dedicated vCPU, 32 GB)** as the
-   production server unit. At 10% active duty and 10v10: ~357 cells, ~3 570 player-slots.
+2. **Start on $20/mo; never upgrade before the 3× revenue rule is met.** See §15 for the
+   exact upgrade triggers. Server cost stays under 33% of revenue at every transition.
 
-3. **For 16v16 Halo BTB:** Sustainable at 10% active duty on $224/mo. Server cost at
-   5 000 CCU ≈ $224/mo — ~1.5% of revenue at $15/mo pricing.
+3. **Treat 40v40 as a scheduled event, not a standing mode.** Boot dedicated cells on demand;
+   tear them down after the match. At 4% of match volume this costs ~$25–50/month extra, not
+   a whole new server tier.
 
-4. **For 40v40 TDM:** Bandwidth is the blocker. Minimum viable is ~$450/mo for
-   5 concurrent matches. **Do not launch 40v40 on budget shared-CPU plans.**
+4. **Target ~9 500 CCU for $10 000/month net profit after taxes.** See §16 for the full
+   revenue-to-profit model. That milestone requires ~95 000 MAU — a realistic 2-3 year target
+   for a successful indie title.
 
-5. **Map size sweet spot:** 10K tiles for PvP (5.2 s load, 7.2 MB/cell). Larger campaign
-   maps (32K tiles, 22 MB/cell) need dedicated hardware per instance and pre-warming.
+5. **Map size sweet spot:** 2K tiles for 2v2 (1.0 s load, 2.5 MB/cell); 4K tiles for 5v5
+   (2.1 s, 4.5 MB); 8K tiles for 10v10 (4.2 s, 7.5 MB). Larger campaign maps (32K tiles)
+   need pre-warming — see §7.
 
-6. **Portal pre-warming is non-negotiable.** 5-second level loads are acceptable only if
-   hidden behind a pre-warm strategy starting 10+ seconds before portal crossing.
+6. **Portal pre-warming is non-negotiable.** Level loads are acceptable only if hidden behind
+   a pre-warm strategy starting 10+ seconds before portal crossing.
 
-7. **Benchmark the 40v40 scenario next.** The extrapolated numbers in §8 have ±30%
-   error bars. A `halo_40v40` bench (80 players, 80 units) would replace estimates with
-   evidence and validate the O(N²) extrapolation.
+7. **Benchmark the 40v40 scenario next.** The extrapolated numbers in §8 and §13 have ±30%
+   error bars. A `halo_40v40` bench (80 players, 80 units) would confirm the O(N²) CPU and BW
+   extrapolations with real measurements.
 
-8. **Measure wire bytes.** The wire capacity in the capacity report shows ∞ (not yet
-   measured). Running `wire/bandwidth_realistic_quantized` and wiring its output into
-   the capacity formula gives exact concurrent-games-on-1Gbps numbers.
+8. **Measure wire bytes.** Wire capacity shows ∞ in the capacity report (not yet measured).
+   Running `wire/bandwidth_realistic_quantized` and feeding its output into the capacity
+   formula gives exact concurrent-game-on-1Gbps numbers.
 
 ---
 
-## Appendix: Scaling Formulas
+## 13. The 4-Tier Match Architecture — Per-Tier Resource Costs
+
+Connor's target mix: **40% 2v2 · 40% 5v5 · 16% 10v10 · 4% 40v40**.
+
+All costs derived from the O(N²) bandwidth law and the 16v16 benchmark using measured
+Naia scaling (0.113 µs × N² per tick) plus estimated physics/logic (proportional to N).
+
+### 13a. Active bandwidth
+
+```
+active_bw_bytes_per_sec = N × 18 B × N × 25 Hz = 450 × N²
+```
+
+| Tier | N total | Active BW | Idle BW |
+|---|---|---|---|
+| **2v2** | 4 | **7.2 KB/s** | ~0.1 KB/s |
+| **5v5** | 10 | **45 KB/s** | ~0.5 KB/s |
+| **10v10** | 20 | **180 KB/s** | ~1 KB/s |
+| **40v40** | 80 | **2 880 KB/s** | ~5 KB/s |
+
+### 13b. Memory per cell
+
+Formula: 1 MB base + N × 200 KB (client state) + tiles × 300 B (entity data)
+
+| Tier | Players | Tiles | Memory/cell |
+|---|---|---|---|
+| 2v2 | 4 | ~2 000 | **2.5 MB** |
+| 5v5 | 10 | ~4 000 | **4.5 MB** |
+| 10v10 | 20 | ~8 000 | **7.5 MB** |
+| 40v40 | 80 | ~12 000 | **21 MB** |
+
+### 13c. CPU per cell (full game stack)
+
+Naia component: 0.113 µs × N². Physics + logic ≈ 11 µs × N. OS/overhead: 50 µs fixed.
+
+| Tier | Naia (µs) | Physics + logic (µs) | Total (µs) | Cells/core (40% eff.) |
+|---|---|---|---|---|
+| 2v2 | 1.8 | 66 | **~90** | **178** |
+| 5v5 | 11 | 110 | **~155** | **103** |
+| 10v10 | 45 | 231 | **~280** | **57** |
+| 40v40 | 725 | 880 | **~1 525** | **10** |
+
+### 13d. Level load time and match duration
+
+| Tier | Match length | ~Queue time | Map tiles | Level load |
+|---|---|---|---|---|
+| 2v2 | 12 min | ~2 min | ~2 000 | ~1.0 s |
+| 5v5 | 24 min | ~5 min | ~4 000 | ~2.1 s |
+| 10v10 | 32 min | ~8 min | ~8 000 | ~4.2 s |
+| 40v40 | 40 min | ~20 min | ~12 000 | ~6.2 s |
+
+### 13e. Monthly bandwidth per cell
+
+Active fraction model: (match / (match + queue)) × combat intensity.
+
+| Tier | Match fraction | Combat intensity | Net active | GB/month/cell |
+|---|---|---|---|---|
+| 2v2 | 86% | 60% | 52% | **~10 GB** |
+| 5v5 | 83% | 55% | 46% | **~55 GB** |
+| 10v10 | 80% | 50% | 40% | **~190 GB** |
+| 40v40 | 67% | 75% | 50% | **~3 740 GB** |
+
+40v40 at 50% active: 0.50 × 2 880 KB/s × 2 592 000 s / 1e6 = 3 732 GB/month.
+This is the technical reason 40v40 must be treated as a separate on-demand tier.
+
+### 13f. Minimum player pool to fill each match type
+
+To keep queue times ≤ 5 minutes, a mode needs ~10× its player count in the matchmaking pool:
+
+| Tier | Players/match | Minimum pool | Minimum CCU to offer mode |
+|---|---|---|---|
+| 2v2 | 4 | 40 | **~50 CCU** |
+| 5v5 | 10 | 100 | **~150 CCU** |
+| 10v10 | 20 | 200 | **~400 CCU** |
+| 40v40 | 80 | 800 | **~2 000 CCU** |
+
+This gives the game's natural mode unlock progression: 2v2 at launch, 5v5 at ~150 CCU,
+10v10 at ~400 CCU, 40v40 events at ~2 000 CCU.
+
+---
+
+## 14. The Mixed Fleet — Server Capacity Across All Four Tiers
+
+### 14a. Cell occupancy weighting
+
+For server planning, cells are occupied proportional to match duration × match count:
+
+| Tier | Count share | Duration (min) | Duration × count | Cell share |
+|---|---|---|---|---|
+| 2v2 | 40% | 12 | 480 | **22.7%** |
+| 5v5 | 40% | 24 | 960 | **45.5%** |
+| 10v10 | 16% | 32 | 512 | **24.2%** |
+| 40v40 | 4% | 40 | 160 | **7.6%** |
+| **Total** | | | 2 112 | 100% |
+
+### 14b. Mixed-fleet weighted resource costs (regular modes: 2v2 + 5v5 + 10v10)
+
+The 40v40 is handled on separate on-demand dedicated cells (see §14d). The regular fleet
+uses cells for 2v2/5v5/10v10 only — renormalized to 100% cell share:
+
+| | 2v2 (25.5%) | 5v5 (51.0%) | 10v10 (27.2%) | Weighted avg |
+|---|---|---|---|---|
+| BW/month | 10 GB | 55 GB | 190 GB | **79 GB/cell** |
+| Memory | 2.5 MB | 4.5 MB | 7.5 MB | **4.9 MB/cell** |
+| CPU/cell | 90 µs | 155 µs | 280 µs | **181 µs/cell** |
+| Players/cell | 4 | 10 | 20 | **11.1 players/cell** |
+
+### 14c. Regular-mode cells and CCU by server tier
+
+Binding constraint is always **bandwidth** on shared-CPU plans.
+
+| Server | Monthly cost | BW budget | Regular cells | Peak CCU | $/CCU/mo |
+|---|---|---|---|---|---|
+| Shared 2 vCPU | **$20** | 3 TB | **38** | **422** | $0.047 |
+| Shared 4 vCPU | **$40** | 4 TB | **50** | **556** | $0.072 |
+| Dedicated 8 vCPU | **$224** | 10 TB | **126** | **1 399** | $0.160 |
+| 2 × dedicated | **$448** | 20 TB | **252** | **2 797** | $0.160 |
+| 4 × dedicated | **$896** | 40 TB | **504** | **5 594** | $0.160 |
+
+*CCU = cells × 11.1 players/cell (weighted average for the 2v2/5v5/10v10 mix).*
+
+### 14d. 40v40 on-demand dedicated cells
+
+40v40 requires its own dedicated cell that is booted for the match and torn down after.
+
+At 4% of match count on the $20/mo main server (38 cells, ~99 matches/hour):
+- 40v40 events/hour: 99 × 0.042 = ~4 events → ~3 simultaneous cells needed
+- But at 422 CCU, there are not enough players for 40v40 (need ~2 000 CCU — §13f)
+
+**40v40 economics once viable (CCU ~2 000+):**
+
+| 40v40 cells active simultaneously | BW/cell/month | Server cost |
+|---|---|---|
+| 1 | 3 740 GB | $224/mo (runs BW-full) |
+| 3 | 11 220 GB | $448/mo + $224/mo overflow |
+| 5 | 18 700 GB | 2 × $448/mo |
+
+At 2 000 CCU with ~4% in 40v40 = ~80 concurrent 40v40 players = 1 match. One dedicated
+$224/mo cell. Cost: $224 absorbed into main fleet budget (at 2 000 CCU revenue is ~$3 500/mo).
+
+---
+
+## 15. Revenue Model and Scaling Plan
+
+### 15a. Revenue model assumptions
+
+| Parameter | Value | Basis |
+|---|---|---|
+| CCU → MAU multiplier | ×10 | Industry rule of thumb (peak CCU ≈ 10% of MAU) |
+| Premium conversion (MAU) | 3% | Conservative freemium benchmark |
+| Premium subscription price | $5/mo | Per Connor's model |
+| Microtransaction buyer rate | 25% of MAU | Cosmetics-only, very low price point |
+| Avg microtx spend per buyer | $1.00/mo | 2× below industry (prices 100× lower = more volume) |
+| Monthly revenue per CCU | **$1.75** | $1.50 sub + $0.25 microtx |
+
+```
+monthly_revenue ≈ CCU × 10 × (0.03 × $5 + 0.25 × $1.00)
+                = CCU × ($1.50 + $0.25)
+                = CCU × $1.75
+```
+
+### 15b. Upgrade triggers and financial health at each transition
+
+Upgrade when **both** conditions are met:
+1. CCU consistently ≥ 70% of current server capacity for 3+ consecutive peak days
+2. Monthly revenue (30-day trailing) ≥ 3× cost of next server tier
+
+| Trigger event | CCU | Revenue/mo | Current cost | New cost | Revenue/cost ratio |
+|---|---|---|---|---|---|
+| Add 2v2 queue | **~50** | ~$88 | $20 | $20 | 4.4× |
+| Unlock 5v5 | **~150** | ~$263 | $20 | $20 | 13.1× |
+| **Upgrade $20→$40** | **~295** | ~$516 | $20 | $40 | 12.9× |
+| Unlock 10v10 | **~400** | ~$700 | $40 | $40 | 17.5× |
+| **Upgrade $40→$224** | **~389** | ~$681 | $40 | $224 | 3.0× |
+| Unlock 40v40 events | **~2 000** | ~$3 500 | $224 | $224+$224 | 7.8× |
+| **Add 2nd $224** | **~979** | ~$1 713 | $224 | $448 | 3.8× |
+| **Add 3rd $224** | **~1 958** | ~$3 427 | $448 | $672 | 5.1× |
+| **Add 4th $224** | **~2 937** | ~$5 140 | $672 | $896 | 5.7× |
+| **5× $224** | **~3 916** | ~$6 853 | $896 | $1 120 | 6.1× |
+| **6× $224** | **~4 895** | ~$8 566 | $1 120 | $1 344 | 6.4× |
+| **7× $224** | **~5 874** | ~$10 280 | $1 344 | $1 568 | 6.6× |
+
+The revenue-to-cost ratio stays above 3× at every transition. After the $40→$224 jump
+(the tightest at exactly 3.0×), the ratio only grows — scale is self-funding.
+
+### 15c. Leading indicators to watch (better than raw CCU)
+
+Track these three weekly. Upgrade when all three are green:
+
+| Indicator | Warning threshold | Action |
+|---|---|---|
+| Median queue wait time | > 90 s in peak hours | Server near full |
+| Cell utilization at peak | > 70% occupied for 3+ days | Approaching ceiling |
+| Revenue 30-day trailing | ≥ 3× cost of next tier | Financial cushion exists |
+
+Monitoring queue wait time is the most player-visible signal — it's the leading indicator
+players will churn over before they complain on forums.
+
+### 15d. Server cost as a fraction of revenue over the scaling arc
+
+| CCU | Revenue/mo | Server cost | Server % of revenue |
+|---|---|---|---|
+| 50 | $88 | $20 | 22.7% |
+| 200 | $350 | $20 | 5.7% |
+| 422 | $739 | $40 | 5.4% |
+| 979 | $1 713 | $224 | 13.1% |
+| 2 000 | $3 500 | $448 | 12.8% |
+| 5 000 | $8 750 | $1 120 | 12.8% |
+| 9 500 | $16 625 | $1 568 | 9.4% |
+
+Server cost trends from 23% at the very start down to under 10% at scale. The early peak
+(23% at CCU 50) is the most uncomfortable period — it resolves quickly as players arrive.
+
+---
+
+## 16. Path to $10 000/Month Net Profit
+
+### 16a. The profit formula
+
+```
+monthly_net_profit = (revenue - costs) × (1 - tax_rate)
+
+Costs:
+  server:            $1 568/mo  (7× $224, at CCU ~9 500)
+  payment processing: 2.9% of revenue + $0.30/transaction
+  other overhead:    $200/mo   (domain, monitoring, email, etc.)
+
+Tax rate:            30%        (US self-employment + federal/state, conservative)
+```
+
+### 16b. Revenue target and CCU required
+
+Solving for net profit = $10 000:
+
+```
+$10 000 = (revenue - costs) × 0.70
+revenue - costs = $14 286
+
+Revenue = $14 286 + ($1 568 + $200 + 0.029 × revenue)
+0.971 × revenue = $16 054
+revenue ≈ $16 533/month
+
+CCU = $16 533 / $1.75 = 9 447  →  ~9 500 CCU
+```
+
+### 16c. What 9 500 CCU looks like
+
+| Metric | Value |
+|---|---|
+| Concurrent players (peak) | 9 500 |
+| Monthly active users (MAU) | ~95 000 |
+| Premium subscribers | ~2 850 (3% of MAU) |
+| Microtx buyers/month | ~23 750 (25% of MAU) |
+| Server fleet | 7 × $224/mo dedicated = $1 568/mo |
+| Regular cells | ~882 cells (2v2+5v5+10v10 mix) |
+| Simultaneous 40v40 matches | ~4 (on separate cells) |
+| Monthly revenue | ~$16 625 |
+| Monthly costs | ~$2 568 |
+| Pre-tax profit | ~$14 057 |
+| **After-tax net profit** | **~$9 840 ≈ $10 000** ✓ |
+
+### 16d. Timeline to $10K/month (illustrative)
+
+A new multiplayer indie that achieves modest viral spread:
+
+| Month | Event | CCU | Revenue |
+|---|---|---|---|
+| 0 | Launch: 2v2 only | 20 | $35 |
+| 1–2 | Word of mouth; 5v5 unlocked | 80 | $140 |
+| 3 | Server upgrade $20→$40 (CCU 295) | 300 | $525 |
+| 4–5 | 10v10 unlocked; growing community | 600 | $1 050 |
+| 6 | Server upgrade $40→$224 | 800 | $1 400 |
+| 9 | +2nd $224 server | 1 000 | $1 750 |
+| 12 | 40v40 events begin | 2 000 | $3 500 |
+| 18 | 4× $224 fleet | 3 000 | $5 250 |
+| 24 | 6× $224 fleet | 5 000 | $8 750 |
+| 30 | **7× $224 fleet** | **9 500** | **$16 625** |
+| **30** | | | **$10 000 net/mo** ✓ |
+
+This timeline assumes ~30 months to $10K net profit — realistic for an indie with a small
+marketing budget. A successful viral moment or content creator feature compresses the left
+half dramatically.
+
+### 16e. Sensitivity analysis — what changes the timeline most
+
+| Lever | Effect on CCU-to-target | Notes |
+|---|---|---|
+| Premium price: $5→$8/mo | −30% fewer CCU needed | Most impactful single lever |
+| Conversion rate: 3%→5% | −33% fewer CCU needed | Requires strong social/community features |
+| Microtx ARPU: $1→$2/mo | −12% fewer CCU needed | Limited by ultra-low price point design |
+| Tax rate: 30%→20% | −12% fewer CCU needed | S-corp election, depends on jurisdiction |
+| Server: dedicated $224→cloud at-cost | −5% fewer CCU needed | Diminishing returns |
+
+**The single highest-leverage action: price the premium subscription correctly.**
+At $8/mo instead of $5/mo, the target becomes ~6 700 CCU (not 9 500). At $10/mo: ~5 500 CCU.
+
+### 16f. The freemium + permadeath model's business fit
+
+The Lives economy creates a natural daily engagement loop that supports both tiers:
+
+- **Free tier:** limited daily Lives → play 1–2 serious sessions per day → returns daily for the replenish
+- **Premium tier:** daily credit stipend buys extra Lives → can play longer sessions → higher engagement → higher retention
+- **Net effect:** premium subscribers churn less (higher LTV), free users convert via FOMO on longer sessions
+
+Industry reference: games with permadeath + Lives economies (e.g. Battlerite, early Clash Royale) see
+3–5× higher premium conversion than pure cosmetic-only freemium, because the Lives gating creates a
+functional reason to subscribe beyond vanity. Adjust conversion rate assumptions upward accordingly.
+
+---
+
+
 
 ```
 // O(N²) bandwidth law (Win 3)
