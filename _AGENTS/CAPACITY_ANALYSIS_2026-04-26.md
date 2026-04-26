@@ -21,8 +21,15 @@
 13. [The 4-Tier Match Architecture — Per-Tier Resource Costs](#13-the-4-tier-match-architecture--per-tier-resource-costs)
 14. [The Mixed Fleet — Server Capacity Across All Four Tiers](#14-the-mixed-fleet--server-capacity-across-all-four-tiers)
 15. [Revenue Model and Scaling Plan](#15-revenue-model-and-scaling-plan)
+    - §15e: The Dual-Currency Economy (Gold + Crystals + player market)
+    - §15f: Rewarded Ads
+    - §15g: Guest Slots + Daily Crystal Stipend
 16. [Path to $10 000/Month Net Profit](#16-path-to-10-000month-net-profit)
-17. [Appendix: Scaling Formulas](#appendix-scaling-formulas)
+17. [DLC Campaigns as a Revenue Accelerator](#17-dlc-campaigns-as-a-revenue-accelerator)
+    - §17a: Self-managed platform advantage (no 30% cut)
+    - §17d: Full picture at 250 subs, 2 DLC/year at $15
+    - §17e: CCU target to reach $10K (~378 subs at ~1 262 CCU)
+18. [Appendix: Scaling Formulas](#18-appendix-scaling-formulas)
 
 ---
 
@@ -508,9 +515,10 @@ one CPU core**. Naia client-side networking is essentially free. Client CPU budg
    tear them down after the match. At 4% of match volume this costs ~$25–50/month extra, not
    a whole new server tier.
 
-4. **Target ~9 500 CCU for $10 000/month net profit after taxes.** See §16 for the full
-   revenue-to-profit model. That milestone requires ~95 000 MAU — a realistic 2-3 year target
-   for a successful indie title.
+4. **Target ~1 262 CCU (~378 premium subs) for $10 000/month net profit after taxes.**
+   This accounts for subscription + microtx ($7.60/CCU), self-managed DLC (2 campaigns/year
+   at $15, no platform cut), and rewarded ads ($0.45/CCU). See §16 for the pure-subscription
+   model and §17 for the full combined model including DLC and ads.
 
 5. **Map size sweet spot:** 2K tiles for 2v2 (1.0 s load, 2.5 MB/cell); 4K tiles for 5v5
    (2.1 s, 4.5 MB); 8K tiles for 10v10 (4.2 s, 7.5 MB). Larger campaign maps (32K tiles)
@@ -667,7 +675,7 @@ At 4% of match count on the $20/mo main server (38 cells, ~99 matches/hour):
 | 5 | 18 700 GB | 2 × $448/mo |
 
 At 2 000 CCU with ~4% in 40v40 = ~80 concurrent 40v40 players = 1 match. One dedicated
-$224/mo cell. Cost: $224 absorbed into main fleet budget (at 2 000 CCU revenue is ~$3 500/mo).
+$224/mo cell. Cost: $224 absorbed into main fleet budget (at 2 000 CCU revenue is ~$15 200/mo).
 
 ---
 
@@ -675,20 +683,37 @@ $224/mo cell. Cost: $224 absorbed into main fleet budget (at 2 000 CCU revenue i
 
 ### 15a. Revenue model assumptions
 
+**Currency:** 100 Crystals = $1 (always, no volume bonus). Crystal packs come in 500C ($5),
+1 000C ($10), and 2 000C ($20). Cosmetics cost **20–100 Crystals** individually; cosmetic
+bundles (full outfit sets) cost **100–500 Crystals**. Items never scale in power vertically —
+horizontal utility, aesthetics, and flexibility only. No pay-to-win.
+
+The self-managed platform (PWA + web portal) means **zero platform cut** on all transactions.
+All microtx and subscription revenue flows through Stripe (2.9% + $0.30/transaction).
+
 | Parameter | Value | Basis |
 |---|---|---|
 | CCU → MAU multiplier | ×10 | Industry rule of thumb (peak CCU ≈ 10% of MAU) |
-| Premium conversion (MAU) | 3% | Conservative freemium benchmark |
-| Premium subscription price | $5/mo | Per Connor's model |
-| Microtransaction buyer rate | 25% of MAU | Cosmetics-only, very low price point |
-| Avg microtx spend per buyer | $1.00/mo | 2× below industry (prices 100× lower = more volume) |
-| Monthly revenue per CCU | **$1.75** | $1.50 sub + $0.25 microtx |
+| Premium conversion (MAU) | 3% | Conservative; guest-slots model (§15g) may improve this |
+| Premium subscription price | $7/mo | Month-to-month, single tier; includes daily Crystal stipend |
+| Microtransaction buyer rate | 27.5% of MAU | Low-friction cosmetics at 20–100C drive impulse buys |
+| Avg Crystal spend per buyer/month | $2.00 | ~3 cosmetics at ~65C avg = ~200C = $2.00 |
+| Monthly revenue per CCU | **$7.60** | $2.10 sub + $5.50 microtx |
 
 ```
-monthly_revenue ≈ CCU × 10 × (0.03 × $5 + 0.25 × $1.00)
-                = CCU × ($1.50 + $0.25)
-                = CCU × $1.75
+monthly_revenue ≈ CCU × 10 × (0.03 × $7   +   0.275 × $2.00)
+                = CCU × ($2.10 + $5.50)
+                = CCU × $7.60
+
+// sensitivity range:
+//   conservative (15% buyers, ~$1/mo):  CCU × $3.60
+//   base case    (27.5% buyers, $2/mo): CCU × $7.60   ← used throughout
+//   optimistic   (35% buyers, $3/mo):   CCU × $12.60
 ```
+
+At 20–100C per cosmetic, a $5 Crystal pack (500C) buys 5–25 cosmetics. The low floor creates
+near-zero purchase friction. Bundle packs (100–500C) provide concentrated spending opportunities
+for enthusiasts. No whale-cliff — every item has the same Crystal cost for everyone.
 
 ### 15b. Upgrade triggers and financial health at each transition
 
@@ -696,23 +721,24 @@ Upgrade when **both** conditions are met:
 1. CCU consistently ≥ 70% of current server capacity for 3+ consecutive peak days
 2. Monthly revenue (30-day trailing) ≥ 3× cost of next server tier
 
+*Revenue column uses base-case $7.60/CCU/month.*
+
 | Trigger event | CCU | Revenue/mo | Current cost | New cost | Revenue/cost ratio |
 |---|---|---|---|---|---|
-| Add 2v2 queue | **~50** | ~$88 | $20 | $20 | 4.4× |
-| Unlock 5v5 | **~150** | ~$263 | $20 | $20 | 13.1× |
-| **Upgrade $20→$40** | **~295** | ~$516 | $20 | $40 | 12.9× |
-| Unlock 10v10 | **~400** | ~$700 | $40 | $40 | 17.5× |
-| **Upgrade $40→$224** | **~389** | ~$681 | $40 | $224 | 3.0× |
-| Unlock 40v40 events | **~2 000** | ~$3 500 | $224 | $224+$224 | 7.8× |
-| **Add 2nd $224** | **~979** | ~$1 713 | $224 | $448 | 3.8× |
-| **Add 3rd $224** | **~1 958** | ~$3 427 | $448 | $672 | 5.1× |
-| **Add 4th $224** | **~2 937** | ~$5 140 | $672 | $896 | 5.7× |
-| **5× $224** | **~3 916** | ~$6 853 | $896 | $1 120 | 6.1× |
-| **6× $224** | **~4 895** | ~$8 566 | $1 120 | $1 344 | 6.4× |
-| **7× $224** | **~5 874** | ~$10 280 | $1 344 | $1 568 | 6.6× |
+| Add 2v2 queue | **~50** | ~$380 | $20 | $20 | 19× |
+| Unlock 5v5 | **~150** | ~$1 140 | $20 | $20 | 57× |
+| **Upgrade $20→$40** | **~295** | ~$2 242 | $20 | $40 | 56× |
+| Unlock 10v10 | **~400** | ~$3 040 | $40 | $40 | 76× |
+| **Upgrade $40→$224** | **~389** | ~$2 957 | $40 | $224 | **13.2×** |
+| **Add 2nd $224** | **~979** | ~$7 440 | $224 | $448 | **16.6×** |
+| Unlock 40v40 events | **~2 000** | ~$15 200 | $448 | $448+$224 | **22.6×** |
+| **Add 3rd $224** | **~1 958** | ~$14 881 | $448 | $672 | **22.1×** |
+| **$10 000 net/mo target** | **~2 025** | ~$15 400 | $448–$672 | — | — |
 
-The revenue-to-cost ratio stays above 3× at every transition. After the $40→$224 jump
-(the tightest at exactly 3.0×), the ratio only grows — scale is self-funding.
+The revenue-to-cost ratio is never below 13× at any transition (vs the 3× minimum rule).
+At $7.60/CCU, the business is strongly cash-positive long before the server costs matter.
+The $40→$224 jump — the only plausibly uncomfortable one — happens at $2,957/mo revenue,
+making $224/mo feel trivial.
 
 ### 15c. Leading indicators to watch (better than raw CCU)
 
@@ -731,16 +757,173 @@ players will churn over before they complain on forums.
 
 | CCU | Revenue/mo | Server cost | Server % of revenue |
 |---|---|---|---|
-| 50 | $88 | $20 | 22.7% |
-| 200 | $350 | $20 | 5.7% |
-| 422 | $739 | $40 | 5.4% |
-| 979 | $1 713 | $224 | 13.1% |
-| 2 000 | $3 500 | $448 | 12.8% |
-| 5 000 | $8 750 | $1 120 | 12.8% |
-| 9 500 | $16 625 | $1 568 | 9.4% |
+| 50 | $380 | $20 | 5.3% |
+| 200 | $1 520 | $20 | 1.3% |
+| 422 | $3 207 | $40 | 1.2% |
+| 979 | $7 440 | $224 | 3.0% |
+| 2 000 | $15 200 | $448 | 2.9% |
+| 2 400 | $18 240 | $448 | 2.5% |
 
-Server cost trends from 23% at the very start down to under 10% at scale. The early peak
-(23% at CCU 50) is the most uncomfortable period — it resolves quickly as players arrive.
+At $7.60/CCU the server cost is never more than ~6% of revenue, even at launch. The server
+bill is noise compared to revenue — scaling is purely about acquiring players.
+
+### 15e. The dual-currency economy
+
+Cyberlith uses two in-game currencies:
+
+**Currency 1: Gold** (earned in-game, never purchased directly)
+- Earned by: completing matches, winning, challenge completions, daily login bonus
+- Spent on: standard cosmetic tier (skins, decals, emotes, player cards), Lives replenishment,
+  community resource contributions (crafting, guild upgrades, trading in the player market)
+- Cannot be purchased directly with real money
+
+**Currency 2: Crystal** (purchased with real money, never earned from gameplay)
+- 100 Crystals = $1, always — no volume discount, no bonus on larger packs (flat rate)
+- Crystal packs: **500C ($5) · 1 000C ($10) · 2 000C ($20)**
+- Spent on: cosmetics (20–100C each), cosmetic bundles (100–500C), Lives, Gold conversion,
+  player-market purchases, and Premium Sub Tokens (700C = 1 month, same as $7 cash sub)
+- Can never be converted back into real money — Crystals only flow in, never out
+
+**Crystal pack economics (Stripe fees, no platform cut):**
+
+| Pack | Price | Crystals | Stripe fee | Dev net | Effective rate |
+|---|---|---|---|---|---|
+| Small | $5 | 500C | $0.445 | $4.555 | 8.9% |
+| Medium | $10 | 1 000C | $0.590 | $9.410 | 5.9% |
+| Large | $20 | 2 000C | $0.880 | $19.120 | 4.4% |
+
+*No $1 pack — minimum purchase is $5. The 100C = $1 rate is maintained without volume bonuses
+because the packs are purely convenience bundles, not discount tiers.*
+
+**The player-driven market:**
+
+Players can freely buy and sell the following for Crystals between each other:
+- Cosmetics (individual items, sets, limited drops)
+- Lives (players with surplus sell; players who died buy)
+- Gold (players convert Gold to tradeable quantities)
+- Premium Sub Tokens (700C = 1 month; market price may differ from face value)
+- Other in-game resources (crafting materials, guild contributions)
+
+Crystals spent in the player market are **not destroyed** — they transfer from buyer to seller.
+Crystals are destroyed only when spent in the dev store (buying new cosmetics, Premium Sub Tokens
+at face value, etc.). This creates a closed-loop economy with natural deflation over time,
+sustaining ongoing demand for new Crystal purchases.
+
+**Economic characteristics:**
+1. **No cash-out**: Crystals can never be redeemed for money — they stay in the system forever
+2. **Zero-sum P2P**: Player-to-player trades don't change total Crystal revenue; the money
+   was already captured when the Crystals were purchased
+3. **Crystal sinks**: Dev-store purchases destroy Crystals, requiring the economy to be
+   continuously refueled by real-money pack purchases
+4. **No pay-to-win**: Crystals buy cosmetics and horizontal utilities (Lives, Gold, convenience)
+   — never stats, combat power, or vertical advantages
+
+**Why this model increases revenue vs. a pure cosmetics store:**
+- Players who earn Crystals via the market are motivated to buy packs to spend (new demand)
+- Premium Sub Tokens at 700C give price-sensitive players a Crystal path to subscribing
+  without reducing total sub revenue (700C was bought with $7 of real money by someone)
+- Lives market creates ongoing Crystal demand tied to gameplay intensity — not just cosmetics
+
+### 15f. Rewarded ads
+
+The PWA + self-managed platform means rewarded video ads are possible without Apple's in-app
+purchase restrictions. A "watch an ad for 25 Gold" mechanic monetizes non-paying players who
+would otherwise generate zero revenue.
+
+**Ad revenue model (web eCPM, not native-mobile eCPM):**
+
+| Parameter | Value | Notes |
+|---|---|---|
+| Rewarded ad eCPM (web) | $3–$8 | vs. $10–$25 native mobile; $5 used as baseline |
+| Ad-engaging player rate | 30% of MAU | Players who opt in to "watch for Gold" |
+| Ads per engaged player/month | 30 | 1–2/session, ~20 active days/month |
+| Revenue per engaged MAU/month | $0.045–$0.12 | 30 ads × $5 eCPM / 1 000 |
+
+```
+monthly_ad_revenue ≈ MAU × 0.30 × 30 × ($5 / 1 000)
+                   = MAU × $0.045
+                   = CCU × 10 × $0.045
+                   = CCU × $0.45
+```
+
+| CCU | Monthly ad revenue |
+|---|---|
+| 833 (250 subs) | ~$375 |
+| 1 262 (target) | ~$568 |
+| 2 025 | ~$911 |
+
+Ads effectively pay for the server cost at modest scale, and add $600–$900/month at the $10K
+target — not life-changing, but meaningful and entirely passive after integration.
+
+### 15g. Guest slots and daily Crystal stipend
+
+Two subscription perks that reshape acquisition and retention without changing the core revenue math:
+
+**Daily Crystal stipend:**
+Each $7/mo subscriber receives a daily Crystal allowance (e.g., 10C/day = 300C/month = $3 of
+Crystal equivalent). This is a retention mechanic, not a cost: the dev credits Crystals at zero
+marginal cost. The stipend gives subscribers a steady flow of spending power for the player market
+and cosmetics without requiring additional cash, creating a daily login habit.
+
+*Revenue impact:* Subscribers who receive 300C/month spend it on cosmetics and market purchases
+— creating Crystal sinks that drive non-subscriber players to buy Crystal packs to replenish the
+economy. The stipend increases Crystal velocity (higher total transaction volume) without reducing
+pack purchase demand. Net effect: neutral-to-positive on Crystal revenue.
+
+**Guest slots (replacing the free tier):**
+Each subscriber gets **4 guest slots** — friends who can play for free as long as they occupy
+one of the subscriber's slots, even while the subscriber is offline.
+
+*No anonymous free tier.* Every player is either a paying subscriber or a named guest of one.
+
+**How the math changes:**
+
+In the standard model, revenue per CCU = $7.60 (3% of CCU are subscribers).
+With guest slots, say the average subscriber fills 2 of 4 guest slots:
+
+```
+// Players per subscriber: 1 sub + 2 guests = 3 players
+// → subscriber fraction of CCU = 1/3 = 33.3%
+// → sub revenue per CCU = 0.333 × $7 × 10 (MAU mult) = $2.33
+
+// Microtx: guests can still buy Crystal packs → same 27.5% rate applies to all players
+// → microtx per CCU = 0.275 × $2 × 10 = $5.50
+
+full_revenue_per_ccu (guest model, 2 guests/sub) = $2.33 + $5.50 = $7.83
+
+// vs. base model: $7.60/CCU
+// Difference: +3.0% — slightly better because a larger fraction of CCU are paying subs
+```
+
+| Avg active guests per sub | Sub fraction of CCU | Revenue/CCU | vs base |
+|---|---|---|---|
+| 1 (half slots filled) | 50% | $8.50 | +12% |
+| **2 (half slots filled)** | **33%** | **$7.83** | **+3%** |
+| 3 (75% slots filled) | 25% | $7.25 | −5% |
+| 4 (all slots filled) | 20% | $6.90 | −9% |
+
+The model is revenue-neutral vs. the base when subscribers fill ~3 of 4 guest slots on average.
+At 1–2 active guests per subscriber (realistic), revenue per CCU is 3–12% **higher** than the
+free-tier base model.
+
+**Acquisition dynamics (the key upside):**
+Guest slots turn every subscriber into an active recruiter. A subscriber who fills all 4 slots
+has personally onboarded 4 new players at zero acquisition cost. Some fraction of those guests
+will eventually subscribe themselves (to get their own guest slots and Crystal stipend).
+
+*If just 25% of guests convert to subscribers within 6 months:*
+Each subscriber generates 0.5 new subscribers over 6 months → ~1 subscriber-generation/year
+→ organic subscriber base doubles roughly annually from word-of-mouth alone.
+
+This is structurally similar to Costco's membership model: members recruit family/friends,
+who become members, who recruit more family/friends. The product IS the access ticket.
+
+**Bootstrap consideration:**
+With no free tier, the game needs a mechanism to acquire the first subscribers. Options:
+- **Founding subscriber** early access at launch (players who subscribe before launch get 6
+  months at $7 and immediately have 4 slots to fill)
+- **Creator program**: content creators get complimentary subscriber accounts with 4 guest
+  slots each → their audience becomes guest players → visible funnel to subscription
 
 ---
 
@@ -752,14 +935,18 @@ Server cost trends from 23% at the very start down to under 10% at scale. The ea
 monthly_net_profit = (revenue - costs) × (1 - tax_rate)
 
 Costs:
-  server:            $1 568/mo  (7× $224, at CCU ~9 500)
+  server:            $448/mo   (2× $224, at CCU ~2 025)
   payment processing: 2.9% of revenue + $0.30/transaction
   other overhead:    $200/mo   (domain, monitoring, email, etc.)
 
 Tax rate:            30%        (US self-employment + federal/state, conservative)
 ```
 
-### 16b. Revenue target and CCU required
+### 16b. Revenue target and CCU required (subscription + microtx only baseline)
+
+*This section shows the subscription + microtx baseline without DLC or ad revenue.
+The full model including self-managed DLC and rewarded ads is in §17e — it reaches $10K
+at only ~1 262 CCU (~378 subs) rather than the ~2 025 CCU shown here.*
 
 Solving for net profit = $10 000:
 
@@ -767,63 +954,74 @@ Solving for net profit = $10 000:
 $10 000 = (revenue - costs) × 0.70
 revenue - costs = $14 286
 
-Revenue = $14 286 + ($1 568 + $200 + 0.029 × revenue)
-0.971 × revenue = $16 054
-revenue ≈ $16 533/month
+At ~2 025 CCU:
+  server: 2 × $224 = $448/mo
+  other:  $200/mo
+  payment processing: 2.9% of revenue
 
-CCU = $16 533 / $1.75 = 9 447  →  ~9 500 CCU
+Revenue = $14 286 + ($448 + $200 + 0.029 × revenue)
+0.971 × revenue = $14 934
+revenue ≈ $15 380/month
+
+CCU = $15 380 / $7.60 = 2 024  →  ~2 025 CCU
 ```
 
-### 16c. What 9 500 CCU looks like
+### 16c. What ~2 025 CCU looks like
 
 | Metric | Value |
 |---|---|
-| Concurrent players (peak) | 9 500 |
-| Monthly active users (MAU) | ~95 000 |
-| Premium subscribers | ~2 850 (3% of MAU) |
-| Microtx buyers/month | ~23 750 (25% of MAU) |
-| Server fleet | 7 × $224/mo dedicated = $1 568/mo |
-| Regular cells | ~882 cells (2v2+5v5+10v10 mix) |
-| Simultaneous 40v40 matches | ~4 (on separate cells) |
-| Monthly revenue | ~$16 625 |
-| Monthly costs | ~$2 568 |
-| Pre-tax profit | ~$14 057 |
-| **After-tax net profit** | **~$9 840 ≈ $10 000** ✓ |
+| Concurrent players (peak) | 2 025 |
+| Monthly active users (MAU) | ~20 250 |
+| Premium subscribers | ~608 (3% of MAU) |
+| Microtx buyers/month | ~5 569 (27.5% of MAU) |
+| Cosmetics sold/month | ~11 138 (avg 2 per buyer) |
+| Server fleet | 2 × $224/mo dedicated = $448/mo |
+| Regular cells | ~182 cells (2v2+5v5+10v10 mix) |
+| Simultaneous 40v40 matches | ~1 (first dedicated on-demand cell) |
+| Monthly revenue | ~$15 390 |
+| Monthly costs | ~$1 094 |
+| Pre-tax profit | ~$14 296 |
+| **After-tax net profit** | **~$10 007 ≈ $10 000** ✓ |
+
+22 000 MAU is a **very reachable milestone** for an indie with a distinctive identity. That's
+roughly the scale of Spelunky 2 or Noita — beloved niche titles, not mass-market hits.
 
 ### 16d. Timeline to $10K/month (illustrative)
 
-A new multiplayer indie that achieves modest viral spread:
+A new multiplayer indie that achieves modest organic spread:
 
-| Month | Event | CCU | Revenue |
+| Month | Event | CCU | Revenue/mo |
 |---|---|---|---|
-| 0 | Launch: 2v2 only | 20 | $35 |
-| 1–2 | Word of mouth; 5v5 unlocked | 80 | $140 |
-| 3 | Server upgrade $20→$40 (CCU 295) | 300 | $525 |
-| 4–5 | 10v10 unlocked; growing community | 600 | $1 050 |
-| 6 | Server upgrade $40→$224 | 800 | $1 400 |
-| 9 | +2nd $224 server | 1 000 | $1 750 |
-| 12 | 40v40 events begin | 2 000 | $3 500 |
-| 18 | 4× $224 fleet | 3 000 | $5 250 |
-| 24 | 6× $224 fleet | 5 000 | $8 750 |
-| 30 | **7× $224 fleet** | **9 500** | **$16 625** |
-| **30** | | | **$10 000 net/mo** ✓ |
+| 0 | Launch: 2v2 only, $20/mo server | 20 | $152 |
+| 2 | Word of mouth; 5v5 unlocked (~150 CCU trigger) | 150 | $1 140 |
+| 3 | **Upgrade $20→$40** (CCU 295 trigger) | 300 | $2 280 |
+| 4 | 10v10 unlocked (~400 CCU trigger) | 420 | $3 192 |
+| 5 | **Upgrade $40→$224** (CCU 389 trigger, hit at 420) | 500 | $3 800 |
+| 7 | **Add 2nd $224** (CCU 979 trigger) | 1 000 | $7 600 |
+| 9 | 40v40 events begin (~2 000 CCU) | 2 000 | $15 200 |
+| 10 | **$10 000/month net profit reached** | **~2 025** | **~$15 400** |
+| **10** | | | **~$10 000 net/mo** ✓ |
 
-This timeline assumes ~30 months to $10K net profit — realistic for an indie with a small
-marketing budget. A successful viral moment or content creator feature compresses the left
-half dramatically.
+This timeline assumes ~10 months of steady organic growth after launch — aggressive but
+achievable for a game with strong word-of-mouth. 24 months is more realistic without marketing.
+A single viral moment (streamer, Reddit front page) compresses the left half by 50-70%.
 
 ### 16e. Sensitivity analysis — what changes the timeline most
 
-| Lever | Effect on CCU-to-target | Notes |
-|---|---|---|
-| Premium price: $5→$8/mo | −30% fewer CCU needed | Most impactful single lever |
-| Conversion rate: 3%→5% | −33% fewer CCU needed | Requires strong social/community features |
-| Microtx ARPU: $1→$2/mo | −12% fewer CCU needed | Limited by ultra-low price point design |
-| Tax rate: 30%→20% | −12% fewer CCU needed | S-corp election, depends on jurisdiction |
-| Server: dedicated $224→cloud at-cost | −5% fewer CCU needed | Diminishing returns |
+*All deltas are vs. the base case of 2 025 CCU needed ($7/mo sub, 27.5% microtx rate, 2 cosmetics/mo, 30% tax).*
 
-**The single highest-leverage action: price the premium subscription correctly.**
-At $8/mo instead of $5/mo, the target becomes ~6 700 CCU (not 9 500). At $10/mo: ~5 500 CCU.
+| Lever | Effect | CCU target | Notes |
+|---|---|---|---|
+| Sub price: $7→$10/mo | −11% fewer CCU needed | ~1 810 | Sub effect is muted — microtx dominates revenue |
+| Conversion rate: 3%→5% | −16% fewer CCU needed | ~1 710 | Requires strong community + social features |
+| Microtx rate: 27.5%→40% | **−25% fewer CCU needed** | **~1 520** | Best cosmetic cadence lever |
+| Microtx frequency: 2→3/mo | **−27% fewer CCU needed** | **~1 490** | More releases, larger cosmetic catalog |
+| Tax rate: 30%→20% | −12% fewer CCU needed | ~1 780 | S-corp election, jurisdiction-dependent |
+| Conservative ($3.60/CCU base) | **+111% more CCU needed** | ~4 270 | Only if microtx barely converts at all |
+
+**The single highest-leverage action: grow microtransaction purchase frequency**, not sub price.
+At 40% microtx buyers (vs 27.5%) the target drops by 25%. Raising sub price from $7→$10 saves only 11%
+because at $1/cosmetic pricing, microtx revenue ($5.50/CCU) dwarfs subscription revenue ($2.10/CCU).
 
 ### 16f. The freemium + permadeath model's business fit
 
@@ -839,7 +1037,174 @@ functional reason to subscribe beyond vanity. Adjust conversion rate assumptions
 
 ---
 
+## 17. DLC Campaigns as a Revenue Accelerator
 
+### 17a. Platform economics — the self-managed advantage
+
+Cyberlith is distributed as a PWA (Web + Wasm), not through Steam, App Store, or Google Play.
+All payments go through the Cyberlith web portal directly. This changes DLC economics drastically:
+
+| Platform | DLC price | Platform cut | Dev net per $15 sale |
+|---|---|---|---|
+| Steam | $15 | 30% | **$10.50** |
+| App Store (iOS) | $15 | 30% | $10.50 |
+| Google Play | $15 | 15% | $12.75 |
+| **Self-managed (Stripe)** | **$15** | **0%** | **$14.27** (2.9% + $0.30 only) |
+
+**Net: 36% more revenue per DLC sale than Steam, with no algorithmic gatekeeping.**
+
+The trade-off: without Steam's browse/recommendation engine, there is no passive discovery.
+Every new player must be acquired via social media, influencers, SEO, word of mouth, or direct
+marketing. DLC launch visibility spikes are smaller without a platform storefront — estimated
+5–8% new-player acquisition per campaign (vs 15%+ on Steam).
+
+The subscription and microtransaction revenue (§15a) is also self-managed:
+no platform cut on recurring billing, no IAP restriction on iOS (Safari PWA pays
+Stripe directly, bypassing Apple entirely).
+
+### 17b. Co-op campaigns are architecturally cheap
+
+A single-player or co-op (max 5-player) campaign uses the same Naia networking stack at a
+fraction of the bandwidth cost of PvP:
+
+| Mode | Players | Active BW | Monthly BW/cell |
+|---|---|---|---|
+| 5v5 PvP | 10 | 45 KB/s | ~55 GB |
+| **5-player co-op** | **5** | **~11 KB/s** | **~14 GB** |
+| Solo campaign | 1 | ~0.5 KB/s | ~1.3 GB |
+
+A co-op campaign cell costs **4× less bandwidth** than a 5v5 PvP cell. The server capacity
+for DLC content is essentially free relative to the PvP fleet.
+
+The maximum 5-player co-op design is a natural fit for Cyberlith's mechanics: squad-based
+asymmetric challenges, emergent encounters with Lives stakes, boss encounters requiring
+coordination — the Halo campaign model in Cyberlith's universe.
+
+### 17c. DLC economics (self-managed, $15 price, 2 campaigns/year)
+
+**Fixed constraints:** $15 DLC, 2 releases/year, self-managed platform.
+
+| Variable | Conservative | Moderate | Optimistic |
+|---|---|---|---|
+| Stripe fee per sale | $0.74 | $0.74 | $0.74 |
+| Dev net per sale | $14.27 | $14.27 | $14.27 |
+| Existing MAU conversion per campaign | 6% | 10% | 15% |
+| New-player acquisitions per launch | +5% of MAU | +7% | +10% |
+| Net sales per campaign (at 8 333 MAU) | ~920 | ~1 415 | ~2 085 |
+| Revenue per campaign | **~$13 129** | **~$20 193** | **~$29 753** |
+| Monthly DLC revenue (2/year amortized) | **~$2 188** | **~$3 366** | **~$4 959** |
+
+*New-player estimate is lower than a Steam model because there is no storefront algorithm.
+Growth comes from newsletter, social media, and direct community marketing.*
+
+### 17d. Full revenue picture at 250 premium subs, 2 DLC/year at $15
+
+**Base case at 8 333 MAU (250 subs, 833 CCU):**
+
+```
+Revenue streams (monthly gross):
+  Subscription:  250 × $7                        = $1 750
+  Microtx:       8 333 × 27.5% × $2/mo           = $4 583
+  Rewarded ads:  8 333 × 0.30 × 30 × $5/1000     = $  375
+  DLC (moderate, 2/year): $20 193 × 2 / 12        = $3 366
+  ─────────────────────────────────────────────────────────
+  Total gross:                                     $10 074
+
+Costs (monthly):
+  Server:         1 × $224                        = $  224
+  Overhead:                                        = $  200
+  Processing (subs + microtx): 2.9% × $6 333      = $  184
+  Processing (DLC): 1 415 × 2 / 12 × $0.74        = $  175
+  ─────────────────────────────────────────────────────────
+  Total costs:                                     $  783
+
+Pre-tax profit:   $10 074 − $783                   = $9 291
+After-tax (30%):                                   = $6 504/month
+```
+
+**Result: ~$6 500/month net at 250 subs, 2 DLC/year at $15 — healthy indie income,
+but $3 500/month short of the $10 000 target.**
+
+### 17e. What closes the gap to $10K?
+
+The $10 000/month net target requires pre-tax profit of $14 286/month.
+At fixed DLC cadence (2/year at $15, moderate assumptions), the only lever is growing CCU:
+
+```
+// Revenue per CCU:
+//   sub+microtx: $7.60
+//   ads:         $0.45
+//   DLC (2/yr, moderate 17% of MAU per campaign): 0.17 × 10 × $14.27 × 2/12 = $4.04
+full_revenue_per_ccu = $7.60 + $0.45 + $4.04 = $12.09
+
+// Variable costs per CCU:
+//   processing on sub+microtx: 2.9% × $7.60 = $0.22
+//   processing on DLC:         (0.17 × 10 × 2/12) × $0.735 = 0.283 × $0.735 = $0.21
+variable_costs_per_ccu = $0.22 + $0.21 = $0.43
+
+// Fixed costs: server $224 + overhead $200 = $424
+// (server stays at 1 × $224 until ~1 260 CCU → 113 cells; upgrade to $448 shortly after)
+
+net_per_ccu = $12.09 − $0.43 = $11.66
+
+// Solve: 0.70 × (CCU × $11.66 − $424) = $10 000
+// CCU × $11.66 = $14 286 + $424 = $14 710
+CCU = $14 710 / $11.66 ≈ 1 262
+```
+
+**CCU target with self-platform + ads + 2 DLC/year at $15: ~1 262 CCU → ~378 premium subs**
+
+Verification at 1 262 CCU:
+- Revenue: 1 262 × $12.09 = $15 258
+- Costs: $424 + 1 262 × $0.43 = $424 + $543 = $967
+- Pre-tax: $15 258 − $967 = $14 291
+- After-tax (30%): $14 291 × 0.70 = **$10 004** ✓
+
+| CCU | Subs (~3% of MAU) | After-tax net |
+|---|---|---|
+| 833 (250 subs) | 250 | **~$6 500** |
+| 1 000 | 300 | **~$7 870** |
+| 1 262 | ~378 | **~$10 000** ✓ |
+| 1 500 | 450 | **~$11 700** |
+| 2 025 | 608 | **~$15 800** |
+
+*At ~1 500 CCU the server upgrades to 2 × $224 = $448 (135 cells); after-tax reflects the
+higher server cost stepping in.*
+
+Growing from 250 to ~378 premium subscribers — an additional ~128 subscribers — closes the
+gap entirely. That is a realistic target for a game with active community and content updates.
+
+### 17f. How each DLC launch compounds growth
+
+Each campaign launch is a marketing event that adds MAU permanently:
+- 7% new-player acquisition rate (moderate) = 8 333 × 0.07 = 583 new players per campaign
+- If 3% of those subscribe: 17–18 new subscribers per campaign
+- After 4 campaigns (2 years at 2/year): +70 subscribers from DLC launches alone
+
+DLC releases do not just add one-time revenue — they permanently lift the subscription
+and microtx baseline. This is the compounding effect that makes DLC a growth engine, not
+just a revenue supplement.
+
+### 17g. The two-path strategy (recommended)
+
+**Path A: Organic growth (primary)**
+Each PvP player retained grows the subscription + microtx base. 250→378 subs is achievable
+within 12–18 months of strong retention. At 378 subs (~1 262 CCU), the $10K target is met with
+2 DLC/year at $15 — no further change to DLC cadence or price needed.
+
+**Path B: DLC revenue acceleration**
+2 campaigns/year at $15 contributes ~$3 366/month (moderate) plus 35 new subscribers/year
+compounding into the base. Each DLC is both a revenue event and a marketing moment that
+pushes the organic CCU ceiling higher.
+
+**The target in plain terms:** ~378 premium subscribers (~1 262 CCU) on a self-managed platform,
+releasing 2 co-op campaign DLCs per year at $15, with rewarded ads enabled →
+**$10 000/month net profit** as a solo indie developer. The server bill is $224–448/month —
+less than 5% of revenue.
+
+---
+
+## 18. Appendix: Scaling Formulas
 
 ```
 // O(N²) bandwidth law (Win 3)
