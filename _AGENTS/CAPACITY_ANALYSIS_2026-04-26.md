@@ -1,13 +1,32 @@
 # Cyberlith Capacity Analysis: Halo-Style Gameplay at 25 Hz
-## Date: 2026-04-26 | Author: Claude (Phase 10 synthesis)
+
+**Date:** 2026-04-26 | **Author:** Claude (Phase 10 synthesis)
 
 ---
 
-## Evidence Base — Measured Benchmarks
+## Table of Contents
 
-All numbers are from the `halo_btb_16v16_10k` scenario: **16 players, 10 000 immutable
-HaloTile entities, 32 mutable HaloUnit entities, 25 Hz (40 ms tick budget)**, run via
-`cargo criterion -p naia-benches -- "scenarios/halo_btb_16v16"`.
+1. [Evidence Base — Measured Benchmarks](#1-evidence-base--measured-benchmarks)
+2. [The Full Tick Budget](#2-the-full-tick-budget)
+3. [Per-Cell Resource Costs (Halo BTB 16v16, 10K tiles)](#3-per-cell-resource-costs-halo-btb-16v16-10k-tiles)
+4. [Vultr VPS Analysis — 5 Price Points](#4-vultr-vps-analysis--5-price-points)
+5. [The Guild Wars Instancing / Portal Network Model](#5-the-guild-wars-instancing--portal-network-model)
+6. [Tile Count as a Design Lever](#6-tile-count-as-a-design-lever)
+7. [Portal Pre-Warming (Critical UX Requirement)](#7-portal-pre-warming-critical-ux-requirement)
+8. [40v40 Match Analysis (80 Players/Cell)](#8-40v40-match-analysis-80-playerscell)
+9. [Optimal Match Size for Budget Deployments](#9-optimal-match-size-for-budget-deployments)
+10. [Client-Side Capacity](#10-client-side-capacity)
+11. [The Three Binding Constraints (Ranked by Frequency)](#11-the-three-binding-constraints-ranked-by-frequency)
+12. [Recommendations for the Cyberlith Business Plan](#12-recommendations-for-the-cyberlith-business-plan)
+13. [Appendix: Scaling Formulas](#appendix-scaling-formulas)
+
+---
+
+## 1. Evidence Base — Measured Benchmarks
+
+All numbers are from the `halo_btb_16v16_10k` scenario:
+**16 players, 10 000 immutable HaloTile entities, 32 mutable HaloUnit entities, 25 Hz (40 ms tick budget)**,
+run via `cargo criterion -p naia-benches -- "scenarios/halo_btb_16v16"`.
 
 | Measurement | Value | Notes |
 |---|---|---|
@@ -16,17 +35,7 @@ HaloTile entities, 32 mutable HaloUnit entities, 25 Hz (40 ms tick budget)**, ru
 | Server tick — active (32 mutations) | **58 µs** | Naia networking only |
 | Client receive — active tick | **889 ns** | One client, measured in isolation |
 
-**Win 2 is the architectural cornerstone:** Idle tick cost is **O(1) in entity count**.
-10 000 HaloTile entities (immutable) cost nothing at steady state — no dirty-tracking,
-no per-entity scan. Server CPU is entirely determined by mutable unit mutations and
-client count, never by map size.
-
-**These benchmarks measure Naia networking only.** Game simulation (Rapier physics,
-pathfinding, damage resolution) adds additional cost — see §3 for the full budget.
-
----
-
-## Capacity Report Output (2026-04-26 run)
+### Capacity report (2026-04-26 run)
 
 ```
 ╔══════════════════════════════════════════════════════════════╗
@@ -52,11 +61,24 @@ pathfinding, damage resolution) adds additional cost — see §3 for the full bu
 ```
 
 The 649/760 figures are Naia-networking-only on one core. Full game stack reduces this
-significantly — see §3.
+significantly — see §2.
+
+### Architectural guarantees confirmed
+
+**Win 2 — O(1) idle cost:** 10 000 HaloTile entities (immutable) cost nothing at steady state.
+No dirty-tracking, no per-entity scan. Server CPU is entirely determined by mutable unit mutations
+and client count, never by map size.
+
+**Win 3 — O(mutations × users):** Active tick cost scales with the product of mutations and connected
+clients, not total entity count. This means bandwidth (which must carry mutations to every client)
+scales as O(N²) with player count, making N the primary capacity design lever.
+
+> These benchmarks measure **Naia networking only**. Game simulation (Rapier physics, pathfinding,
+> damage resolution) adds additional cost — see §2 for the full budget.
 
 ---
 
-## 1. The Full Tick Budget
+## 2. The Full Tick Budget
 
 At 25 Hz: **40 000 µs per tick** per thread.
 
@@ -79,9 +101,9 @@ kernel scheduler overhead when oversubscribing cores.
 
 ---
 
-## 2. Per-Cell Resource Costs (Halo BTB 16v16, 10K tiles)
+## 3. Per-Cell Resource Costs (Halo BTB 16v16, 10K tiles)
 
-### 2a. CPU
+### 3a. CPU
 
 | Scenario | Tick cost | % of one core | Cells/core (realistic) |
 |---|---|---|---|
@@ -89,7 +111,7 @@ kernel scheduler overhead when oversubscribing cores.
 | Naia-only, active | 58 µs | 0.15% | 274 |
 | Full game (Naia + physics + logic) | ~408 µs | 1.02% | **~39** |
 
-### 2b. Memory
+### 3b. Memory
 
 | Component | Per-cell |
 |---|---|
@@ -115,14 +137,18 @@ kernel scheduler overhead when oversubscribing cores.
 | Players/cell | Memory/cell | Naia tick (active) | Full tick (est.) |
 |---|---|---|---|
 | 16 (8v8) | ~4 MB | ~29 µs | ~210 µs |
+| 20 (10v10) | ~5 MB | ~45 µs | ~280 µs |
 | 32 (16v16, benchmarked) | ~7.2 MB | **58 µs** | **~408 µs** |
 | 64 (32v32) | ~14 MB | ~116 µs | ~600 µs |
 | 80 (40v40) | ~21 MB | ~145 µs | ~725 µs |
 
-*80-player figures are extrapolations — not yet benchmarked. Win 3: cost is
-O(mutations × users), so scaling is well-understood.*
+*All figures except 16v16 are extrapolations. Win 3: cost is O(mutations × users), so scaling
+is well-understood.*
 
-### 2c. Bandwidth (Outbound Server → Clients)
+### 3c. Bandwidth (Outbound Server → Clients)
+
+Bandwidth follows the **O(N²) law**: N players = N mutations/tick × N clients receiving =
+N² bytes/tick. Every doubling of players quadruples bandwidth demand.
 
 | State | Calculation | Per-cell rate |
 |---|---|---|
@@ -131,30 +157,27 @@ O(mutations × users), so scaling is well-understood.*
 | Idle (keepalives + clock sync) | 16 × 5 B/tick × 25 Hz | **~2 KB/s** |
 | Realistic mix, 10% active duty | 0.1×230 + 0.9×2 | ~25 KB/s |
 | Realistic mix, 30% active duty | 0.3×230 + 0.7×2 | ~70 KB/s |
+| Realistic mix, 60% active duty (intense TDM) | 0.6×230 + 0.4×2 | ~139 KB/s |
 
-Monthly bandwidth per cell:
-- 10% active: 25 KB/s × 2 592 000 s ÷ 1 000 000 ≈ **65 GB/month**
-- 30% active: 70 KB/s × 2 592 000 s ÷ 1 000 000 ≈ **181 GB/month**
+Monthly bandwidth per cell (16v16):
 
-**80-player (40v40) bandwidth estimates:**
-
-| State | Rate |
-|---|---|
-| Active (80 mutations, 80 clients) | ~2 880 KB/s (~2.9 MB/s) |
-| Idle | ~5 KB/s |
-| 10% active duty | ~297 KB/s → 770 GB/month |
-| 60% active duty (intense TDM) | ~1 732 KB/s → 4 489 GB/month |
+| Active duty | KB/s avg | GB/month |
+|---|---|---|
+| 10% | 25 | **65** |
+| 30% | 70 | **181** |
+| 60% | 139 | **360** |
 
 ---
 
-## 3. Vultr VPS Analysis — 5 Price Points
+## 4. Vultr VPS Analysis — 5 Price Points
 
 ### Server-sizing constants used
+
 - Full game tick cost: ~408 µs/cell (16v16 @ 10K tiles)
 - Memory/cell: 7.2 MB
-- Bandwidth/cell: 70 KB/s average (30% active duty)
-- Realistic efficiency: 40% of theoretical CPU ceiling
-- Binding constraint = min(CPU, RAM, BW) capacity
+- Bandwidth/cell: 181 GB/month (30% active duty) for 16v16 baseline
+- Realistic CPU efficiency: 40% on shared, 55% on dedicated
+- Binding constraint = min(CPU, RAM, BW)
 
 ---
 
@@ -187,7 +210,8 @@ Bandwidth is the hard wall — Vultr's budget tiers are BW-stingy.
 
 **Result:** ~17 cells · 544 player-slots · $1.18/cell/mo · $0.037/player-slot/mo
 
-**Verdict:** Barely enough for a small closed beta with a handful of maps.
+**Verdict:** Viable for a small closed beta or prototyping. Bandwidth is always the binding
+constraint on this tier. See §9 for how reducing match size dramatically expands capacity.
 
 ---
 
@@ -213,7 +237,7 @@ Shared CPU variance remains a risk for real-time workloads.
 **Spec (Vultr Optimized Cloud Compute, estimated):**
 4 dedicated vCPU · 16 GB RAM · ~6 TB/mo bandwidth
 
-Dedicated CPU means no noisy-neighbor jitter. Efficiency factor improves from 40% to ~55%.
+Dedicated CPU eliminates noisy-neighbor jitter. Efficiency factor improves from 40% to ~55%.
 
 | Active duty | Cells (BW-bound) | Cells (CPU-bound) | Binding |
 |---|---|---|---|
@@ -234,7 +258,7 @@ assumption is realistic for a game with pregame lobbies, intermission, and varie
 **Spec (Vultr Optimized Cloud Compute, estimated):**
 8 dedicated vCPU · 32 GB RAM · ~10 TB/mo bandwidth
 
-| Active duty | BW-limited cells | CPU-limited cells | Players |
+| Active duty | BW-limited cells | CPU-limited cells | Player-slots |
 |---|---|---|---|
 | 30% | 55 | 432 | 1 760 |
 | 10% | 154 | 432 | **4 928** |
@@ -251,9 +275,9 @@ monthly server bill is ~$900. Recouped by ~60 subscribers at $15/mo.
 
 ---
 
-## 4. Player/Server Scaling Table
+### Player/Server Scaling Table (Tier 5, 10% active duty, 16v16)
 
-| Target CCU | Cells needed | Servers ($224/mo, 10% active) | Monthly server cost |
+| Target CCU | Cells needed | Servers needed | Monthly server cost |
 |---|---|---|---|
 | 320 | 10 | 0.1 | ~$22 (use Tier 3) |
 | 1 600 | 50 | 0.3 | ~$67 (1 × Tier 4) |
@@ -286,7 +310,7 @@ state synchronization needed.
 
 **Level load amortization:** A cell's level is loaded once when the first player enters
 (~5.2 s for 10K tiles). Subsequent players joining the same instance get replication from
-the running server instantly. Portal pre-warming is critical — see §6.
+the running server in one tick. Portal pre-warming is critical — see §7.
 
 ### Portal Network Topology Sizing
 
@@ -315,11 +339,11 @@ This is manageable but must be planned for in dynamic scaling.
 | Campaign mission | 32K | ~22 MB | ~408 µs | ~17 s | 1 454 |
 | Open world zone | 64K | ~45 MB | ~408 µs | ~33 s | 711 |
 
-**Key leverage:** Tile count is free in CPU. You can build 64K-tile maps and the server
-tick budget is identical. You only pay in RAM and level-load time. The architectural
-guarantee from Win 2 is that immutable entities cost nothing at steady state.
+**Key leverage:** Tile count is free in CPU (Win 2). You can build 64K-tile maps and the
+server tick budget is identical. You only pay in RAM and level-load time.
 
 **Recommended cell size targets:**
+
 - PvP combat maps: ≤10K tiles (7.2 MB, 5.2 s load)
 - Campaign/exploration maps: ≤32K tiles (22 MB, 17 s load — needs pre-warming)
 - Special massive maps: ≤64K tiles (45 MB — RAM becomes constraint for dense servers)
@@ -343,7 +367,8 @@ pre-warming 40+ seconds before the portal is used.
 
 ## 8. 40v40 Match Analysis (80 Players/Cell)
 
-*Not yet benchmarked. All figures are extrapolations from the 16-player baseline.*
+*Not yet benchmarked. All figures are extrapolations from the 16-player baseline using Win 3
+(O(mutations × users) scaling).*
 
 ### Resource estimates for 80-player cells
 
@@ -352,16 +377,16 @@ pre-warming 40+ seconds before the portal is used.
 | Naia tick, active | 58 µs | ~290 µs | ~5× (linear in users) |
 | Full game tick | ~408 µs | ~900 µs | ~2.2× (physics scales sub-linearly) |
 | Memory/cell | 7.2 MB | ~21 MB | ~3× (connection state dominates) |
-| BW, active | ~230 KB/s | ~2 880 KB/s | ~12.5× (O(mutations × users)) |
-| BW, 10% active | ~25 KB/s | ~297 KB/s | ~12× |
+| BW, active (60% duty) | ~139 KB/s | ~1 732 KB/s | ~12.5× (O(N²)) |
+| BW/month (60% duty) | 360 GB | **4 489 GB** | ~12.5× |
 
 ### $40/mo feasibility for 40v40 at 60% active duty
 
 | Constraint | 40v40 demand | $40/mo supply | Verdict |
 |---|---|---|---|
-| CPU | ~900 µs/cell × 25 Hz = 2.25% per core | 2 eff. cores → 88 cells theoretical | ✓ Not binding |
+| CPU | ~900 µs × 25 Hz = 2.25% per core | 2 eff. cores → 88 cells theoretical | ✓ Not binding |
 | RAM | ~21 MB/cell | 8 000 MB → 381 cells | ✓ Not binding |
-| Bandwidth | 1 732 KB/s/cell × 2 592 000 s = 4 489 GB/mo per cell | 4 000 GB/mo total | **✗ < 1 cell** |
+| Bandwidth | 4 489 GB/month per cell | 4 000 GB/month total | **✗ Less than 1 cell** |
 
 **$40/mo cannot sustain even one concurrent 40v40 match at 60% active duty.**
 
@@ -374,12 +399,9 @@ pre-warming 40+ seconds before the portal is used.
 | 10% | 770 | 5.2 | **5** (scheduled, not concurrent) |
 
 At **10% active duty** (scheduled match times, significant lobby/pregame period),
-$40/mo supports **~5 total cells** but realistically **1 match running at any given time**.
+$40/mo supports ~5 total cells but realistically **1 match running at any given time**.
 
-**Minimum viable plan for 40v40 at 30% active: ~$450–500/mo** (2× Tier 5 Optimized
-Cloud Compute) which gives ~8 concurrent active matches = 640 concurrent players.
-
-### 40v40 Recommended Minimum
+### 40v40 cost at scale
 
 | Target | Servers | Monthly cost |
 |---|---|---|
@@ -388,73 +410,148 @@ Cloud Compute) which gives ~8 concurrent active matches = 640 concurrent players
 | 20 concurrent matches (launch) | 2–3 × Tier 5 | ~$450–700 |
 | 100 concurrent matches (growth) | 10–12 × Tier 5 | ~$2 240–2 700 |
 
+**Minimum viable for 40v40 at 30% active duty: ~$450–500/mo** (2× Tier 5) →
+8 concurrent active matches = 640 concurrent players.
+
 ---
 
-## 9. Client-Side Capacity
+## 9. Optimal Match Size for Budget Deployments
+
+### The O(N²) bandwidth constraint
+
+For N players per match (N/2 v N/2), bandwidth scales quadratically:
+
+```
+active_kb_per_sec = N_mutations × bytes_per_mutation × N_clients × tick_hz
+                  = N × 18 × N × 25   =   450 × N²  bytes/sec
+```
+
+This means **total concurrent players = cells × N**, while **cells ∝ 1/N²**, so
+**total players ∝ N/N² = 1/N**. Smaller matches pack more players onto a given bandwidth
+budget.
+
+### N-player sweep on $20/mo (3 TB/month, 20–40 minute matches, 60% active duty)
+
+| Players/match (N) | BW/cell (GB/mo) | Cells (BW-bound, 3 TB) | Total concurrent players |
+|---|---|---|---|
+| 8 | 45 | **66** | 528 |
+| **10** | **70** | **42** | **420** |
+| 12 | 101 | 29 | 348 |
+| 16 (benchmarked) | 181 | 16 | 256 |
+| 20 | 281 | 10 | 200 |
+| 24 | 405 | 7 | 168 |
+| 32 | 720 | 4 | 128 |
+
+*Bandwidth/cell at 60% active duty calculated as `0.6 × 450 × N² × 2 592 000 / 1e9` GB/month.*
+
+### Recommendation: **10v10 (20 players/match)**
+
+| Metric | 8v8 | 10v10 | 16v16 |
+|---|---|---|---|
+| Concurrent matches | 66 | **42** | 16 |
+| Concurrent players | 528 | **420** | 256 |
+| Matchmaking queue depth | ~66 matches worth | **~42** | 16 |
+| Halo game quality | Sparse | **Good** | Full BTB |
+
+**10v10 is the sweet spot at $20/mo** for 20–40 minute TDM matches:
+
+- **42 concurrent matches** is above the practical matchmaking threshold (~10 minimum)
+- 420 concurrent players maximizes utilization while staying N²-affordable
+- 10v10 maps are already a core Halo game mode (Team Slayer, Oddball, CTF)
+- Matches fit within 20–40 minute windows, so cells turn over 3–6× per day
+
+At $40/mo (4 TB BW), the same analysis gives **~56 concurrent 10v10 matches = 560 players**.
+
+### Budget server scaling by match size
+
+| Match size | $20/mo cells | $40/mo cells | $224/mo cells |
+|---|---|---|---|
+| 8v8 | 66 (528 pl) | 88 (704 pl) | ~555 (4 440 pl) |
+| 10v10 | 42 (420 pl) | 57 (570 pl) | ~357 (3 570 pl) |
+| 16v16 | 16 (256 pl) | 22 (352 pl) | ~138 (2 208 pl) |
+| 40v40 | <1 | <1 | ~7 (560 pl) |
+
+---
+
+## 10. Client-Side Capacity
 
 Client receive cost: **889 ns per active tick** = 22.2 µs/second at 25 Hz = **0.002% of
 one CPU core**. Naia client-side networking is essentially free. Client CPU budget is
-100% available for rendering. This is true even at 80 players (estimated ~5 µs/second).
+100% available for rendering. This holds even at 80 players (estimated ~5 µs/second).
 
 ---
 
-## 10. The Three Binding Constraints (Ranked by Frequency)
+## 11. The Three Binding Constraints (Ranked by Frequency)
 
 | Rank | Constraint | When binding | Mitigation |
 |---|---|---|---|
-| 1 | **Bandwidth** | Always on budget shared-CPU plans (≤$40/mo); at high active duty on any plan | Lower tick rate for idle cells (e.g., 5 Hz); delta compression (already in Naia via Phase 8); interest management (send only visible units) |
+| 1 | **Bandwidth** | Always on budget shared-CPU plans (≤$40/mo); at high active duty on any plan | Reduce match size; lower tick rate for idle cells (e.g., 5 Hz); delta compression (Phase 8); interest management (send only visible units) |
 | 2 | **CPU** | On dedicated servers at very low active duty (<5%) | Already well-optimized via Win 2/3; physics is the next target |
 | 3 | **RAM** | Only for 64K-tile maps or very large cell counts on small RAM plans | Keep maps ≤32K tiles; use 32+ GB RAM for dense servers |
 
 ---
 
-## 11. Recommendations for the Cyberlith Business Plan
+## 12. Recommendations for the Cyberlith Business Plan
 
-1. **Target $224/mo Vultr Optimized Cloud Compute (8 dedicated vCPU, 32 GB)** as the
-   production server unit. At 10% active duty: 154 cells, ~4,928 player-slots.
+1. **Target 10v10 (20 players/match) as the primary launch game mode.** The O(N²) bandwidth
+   law makes 10v10 the sweet spot that maximizes concurrent players and concurrent matches on
+   budget hardware. 16v16 BTB should be an unlocked premium mode on dedicated hardware.
 
-2. **For 16v16 Halo BTB:** Sustainable at 10% active duty on $224/mo. Server cost at
-   5,000 CCU ≈ $224/mo — ~1.5% of revenue at $15/mo pricing.
+2. **Target $224/mo Vultr Optimized Cloud Compute (8 dedicated vCPU, 32 GB)** as the
+   production server unit. At 10% active duty and 10v10: ~357 cells, ~3 570 player-slots.
 
-3. **For 40v40 TDM:** Bandwidth is the blocker. Minimum viable is ~$450/mo for
-   5 concurrent matches. 40v40 requires dedicated instances with generous BW allocations.
-   **Do not launch 40v40 on budget shared-CPU plans.**
+3. **For 16v16 Halo BTB:** Sustainable at 10% active duty on $224/mo. Server cost at
+   5 000 CCU ≈ $224/mo — ~1.5% of revenue at $15/mo pricing.
 
-4. **Map size sweet spot:** 10K tiles for PvP (5.2 s load, 7.2 MB/cell). Larger campaign
+4. **For 40v40 TDM:** Bandwidth is the blocker. Minimum viable is ~$450/mo for
+   5 concurrent matches. **Do not launch 40v40 on budget shared-CPU plans.**
+
+5. **Map size sweet spot:** 10K tiles for PvP (5.2 s load, 7.2 MB/cell). Larger campaign
    maps (32K tiles, 22 MB/cell) need dedicated hardware per instance and pre-warming.
 
-5. **Portal pre-warming is non-negotiable.** 5-second level loads are acceptable only if
-   hidden behind a pre-warm strategy.
+6. **Portal pre-warming is non-negotiable.** 5-second level loads are acceptable only if
+   hidden behind a pre-warm strategy starting 10+ seconds before portal crossing.
 
-6. **Benchmark the 40v40 scenario next.** The extrapolated numbers in §8 have ±30%
-   error bars. A real `halo_40v40` bench (80 players, 80 units) would give exact
-   CPU/BW data and replace estimates with evidence.
+7. **Benchmark the 40v40 scenario next.** The extrapolated numbers in §8 have ±30%
+   error bars. A `halo_40v40` bench (80 players, 80 units) would replace estimates with
+   evidence and validate the O(N²) extrapolation.
 
-7. **Measure wire bytes.** The wire capacity in the capacity report shows ∞ (not yet
+8. **Measure wire bytes.** The wire capacity in the capacity report shows ∞ (not yet
    measured). Running `wire/bandwidth_realistic_quantized` and wiring its output into
-   the capacity formula gives exact concurrent-game-on-1Gbps numbers.
+   the capacity formula gives exact concurrent-games-on-1Gbps numbers.
 
 ---
 
 ## Appendix: Scaling Formulas
 
 ```
+// O(N²) bandwidth law (Win 3)
+active_bytes_per_sec = N_mutations × bytes_per_mutation × N_clients × tick_hz
+                     = N × 18 × N × 25   (for N-player match at 25 Hz)
+                     = 450 × N²  bytes/sec
+
+// Monthly bandwidth per cell
+bw_gb_per_month = active_bytes_per_sec × active_fraction × 2_592_000 / 1e9
+
+// Cells per server (bandwidth-bound)
+cells_bw = monthly_bw_budget_gb / bw_gb_per_month_per_cell
+
+// Total concurrent players (bandwidth constraint)
+players_total = cells_bw × N
+              = (monthly_bw_budget_gb / (active_frac × 450 × N² × 2592000 / 1e9)) × N
+              ∝ 1/N    ← smaller matches → more total players
+
 // CPU capacity (cells per server)
 cells_cpu = (cores × efficiency × 40_000_µs) / tick_budget_µs_per_cell
-          = cores × 0.40 × 97    // for 16-player full game stack
+          = cores × 0.40 × 97   // for 16-player full game stack
 
 // RAM capacity (cells per server)
 cells_ram = total_ram_mb / mb_per_cell
           = total_ram_mb / 7.2   // for 16-player Halo BTB 10K tiles
 
-// Bandwidth capacity (cells per server)
-bw_gb_per_cell_per_month = avg_kb_per_sec × 2_592_000 / 1_000_000
-cells_bw = monthly_bw_tb × 1_000 / bw_gb_per_cell_per_month
+// Level load time (linear approximation)
+level_load_s ≈ tile_count / 10_000 × 5.2
 
-// Active bandwidth per cell
-active_kb_per_sec = mutations_per_tick × bytes_per_mutation × players × tick_hz
-                  = 32 × 18 × 16 × 25 = 230 KB/s  // Halo BTB 16v16
-
-// Level load time (extrapolation from benchmark)
-level_load_s ≈ tile_count / 10_000 × 5.2  // linear in tiles, approximately
+// Binding capacity (cells per server)
+cells = min(cells_cpu, cells_ram, cells_bw)
 ```

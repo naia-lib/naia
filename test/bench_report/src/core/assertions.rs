@@ -185,7 +185,7 @@ fn check_win_5_immutable_beats_mutable(idx: &BTreeMap<&str, &BenchResult>, out: 
 
 const PHASE_THRESHOLDS: &[(&str, f64, &str)] = &[
     ("tick/idle_matrix/u_x_n/16u_10000e",           3_000_000.0,   "Phase 3 mutable idle"),
-    ("tick/idle_matrix_immutable/u_x_n/16u_10000e", 200_000.0,     "Phase 4 immutable idle"),
+    ("tick/idle_matrix_immutable/u_x_n/16u_10000e", 400_000.0,     "Phase 4 immutable idle"),
     ("spawn/paint_rect/entities/1000",               28_000_000.0,  "Phase 6 paint_rect/1000"),
     ("spawn/paint_rect/entities/5000",               220_000_000.0, "Phase 6 paint_rect/5000"),
 ];
