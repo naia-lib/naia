@@ -188,17 +188,14 @@ impl App {
         }
 
         if has_ticked {
-            // Check whether Entities are in/out of all possible Scopes
-            for (_, user_key, entity) in self.server.scope_checks() {
-                // You'd normally do whatever checks you need to in here..
-                // to determine whether each Entity should be in scope or not.
-
-                // This indicates the Entity should be in this scope.
+            // Add any newly-spawned or newly-joined entities to scope.
+            // This demo unconditionally includes everything — use
+            // scope_checks_all() instead if you need to exclude based on
+            // game-state conditions (e.g. distance or visibility).
+            for (_, user_key, entity) in self.server.scope_checks_pending() {
                 self.server.user_scope_mut(&user_key).include(&entity);
-
-                // And call this if Entity should NOT be in this scope.
-                // self.server.user_scope(..).exclude(..);
             }
+            self.server.mark_scope_checks_pending_handled();
 
             // VERY IMPORTANT! Calling this actually sends all update data
             // packets to all Clients that require it. If you don't call this

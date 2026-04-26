@@ -271,10 +271,10 @@ impl<'w> Server<'w> {
 
     //// Updates ////
 
-    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, Entity)> {
+    pub fn scope_checks_all(&self) -> Vec<(RoomKey, UserKey, Entity)> {
         match &*self.server_impl {
-            ServerImpl::WorldOnly(server) => server.scope_checks(),
-            ServerImpl::Full(server) => server.scope_checks(),
+            ServerImpl::WorldOnly(server) => server.scope_checks_all(),
+            ServerImpl::Full(server) => server.scope_checks_all(),
         }
     }
 

@@ -152,7 +152,7 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     // when the user disconnects.
     user_priorities: HashMap<UserKey, UserPriorityState<E>>,
     // Push-based mirror of the (room, user, entity) tuples returned by
-    // `scope_checks()`. Maintained on room/user/entity churn; reads are
+    // `scope_checks_all()`. Maintained on room/user/entity churn; reads are
     // O(1) and zero-allocation.
     scope_checks_cache: ScopeChecksCache<E>,
 }
@@ -622,16 +622,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     // Updates
 
-    /// Used to evaluate whether, given a User & Entity that are in the
-    /// same Room, said Entity should be in scope for the given User.
+    /// Returns every `(room, user, entity)` tuple that currently exists —
+    /// i.e. every entity in a room, crossed with every user in that room.
     ///
-    /// While Rooms allow for a very simple scope to which an Entity can belong,
-    /// this provides complete customization for advanced scopes.
+    /// Use this when your scope policy evaluates game-state conditions each
+    /// tick and may **exclude** entities (e.g. distance or visibility checks).
+    /// The returned Vec is O(rooms × users × entities) in size and is cloned
+    /// from the push-based cache on every call — appropriate for dynamic scope,
+    /// expensive if called on a world where nothing ever leaves scope.
     ///
-    /// Return a collection of Entity Scope Sets, being a unique combination of
-    /// a related Room, User, and Entity, used to determine which Entities to
-    /// replicate to which Users
-    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, E)> {
+    /// If your policy is "add every new entity to scope once and never remove
+    /// it," use `scope_checks_pending()` instead — it returns only newly-added
+    /// tuples and is effectively free after initial load.
+    pub fn scope_checks_all(&self) -> Vec<(RoomKey, UserKey, E)> {
         // Every Nth call (default 1024) in debug builds, recompute from scratch
         // and assert set-equality with the cache. Production reads pay only
         // the counter increment.
@@ -651,9 +654,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.scope_checks_cache.as_slice().to_vec()
     }
 
-    /// Returns only (room, user, entity) tuples added since the last call to
+    /// Returns only `(room, user, entity)` tuples added since the last call to
     /// `mark_scope_checks_pending_handled()`. After initial entity/user load
-    /// the returned Vec is empty every tick — zero per-tick allocation.
+    /// the returned Vec is empty every tick — zero allocation, zero iteration.
+    ///
+    /// Use this when your scope policy is "add every new entity to scope once
+    /// and never remove it." Call `mark_scope_checks_pending_handled()` after
+    /// processing each batch to clear the queue.
+    ///
+    /// For dynamic scope policies that may exclude entities based on game state,
+    /// use `scope_checks_all()` instead.
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
         self.scope_checks_cache.pending_slice().to_vec()
     }
@@ -663,8 +673,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.scope_checks_cache.mark_pending_handled();
     }
 
-    /// Slow-path equivalent of `scope_checks()` — used by tests and the
-    /// debug-build assertion in `scope_checks()` to verify the cache stays
+    /// Slow-path equivalent of `scope_checks_all()` — used by tests and the
+    /// debug-build assertion in `scope_checks_all()` to verify the cache stays
     /// in sync with `(rooms × users × entities)` truth.
     pub(crate) fn scope_checks_recompute_slow(&self) -> Vec<(RoomKey, UserKey, E)> {
         let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
