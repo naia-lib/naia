@@ -1,6 +1,6 @@
 # Phase 9 — Elegance & Correctness Floor
 
-**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 🔄 Stage E shipped (commit `a21e9387`); B-strict landed (lock-free DirtyQueue, AtomicU64 bits + parking_lot, bench cells, pre-push wasm32 hook); wins gate in progress; 9.5 pending.
+**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅, 9.5 ✅ COMPLETE; 9.4 🔄 Stage E shipped (commit `a21e9387`); B-strict landed (lock-free DirtyQueue, AtomicU64 bits + parking_lot, bench cells, pre-push wasm32 hook); wins gate in progress. 9.5: `naia-bevy-npa` smoke gate green (9/9) commit `ab9df334`.
 **Theme:** Subtraction. Five moves, each removing more than it adds: broken tests, latent off-by-ones, eager caches with panics, half-built dead code, untested adapter surfaces.
 
 ---
