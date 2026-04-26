@@ -1,6 +1,6 @@
 # Phase 9 — Elegance & Correctness Floor
 
-**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 🔄 (Stage E architecture landed, gates green, pursuing further mutate-path optimization); 9.5 pending.
+**Status:** 🔄 IN PROGRESS 2026-04-25 — 9.1 ✅, 9.2 ✅, 9.3 ✅ COMPLETE; 9.4 🔄 Stage E shipped (commit `a21e9387`); B-strict in progress (bench redesign + lock-free notify_dirty); 9.5 pending.
 **Theme:** Subtraction. Five moves, each removing more than it adds: broken tests, latent off-by-ones, eager caches with panics, half-built dead code, untested adapter surfaces.
 
 ---
@@ -474,6 +474,55 @@ This is **Phase 8.1 Stage A revived**, but this time with a consumer (Stage E be
 | `mutate_path/drain_dirty/16u_1000_dirty_entities` | 105 ms | ≤ 30 ms |
 
 **Strict acceptance:** if any of the three cells is *worse* than pre, do not merge — diagnose and iterate. The aspirational ≤ 25 ns / ≤ 250 ns / ≤ 200 µs may not be reachable in this stage; the realistic-but-still-headline numbers above are the gate.
+
+### 9.4 B-strict — bench redesign + lock-free notify_dirty (post Stage E checkpoint)
+
+After Stage E landed (commit `a21e9387`, gates green, ~10–30% macro wins) the plan's ≤ 200 ns target was *not* met. Investigation showed two compounding issues:
+
+1. **Bench harness floor (~350 ns).** The existing `update/mutate_path/single_user/single_property` cell does `world.entity_mut(...).component::<BenchComponent>()` *inside* the timed loop — a HashMap probe + downcast + criterion `iter_batched_ref` overhead that cannot drop below ~350 ns regardless of how fast `notify_dirty` becomes. The ~85 ns mutation hot path is invisible behind the harness floor.
+2. **Mutex contention on `notify_dirty`.** The Stage E `DirtySet` is a `Mutex<DirtyQueue>` — every clean→dirty transition takes the per-user lock. Lock-free `Vec<AtomicU64>` for the bits (with `Mutex<Vec<EntityIndex>>` only on cold-path push) saves ~20–25 ns per transition and eliminates contention under multi-threaded mutation.
+
+**B-strict pursues both.** Bench redesign alone makes the hot path measurable; lock-free notify alone is invisible behind the harness floor. Both together close the gap to the ≤ 200 ns target.
+
+**Step B1 — Bench redesign.**
+- Add `BenchWorldBuilder::cached_mutator(entity)` returning a held `MutSender` / component handle.
+- Add cells `mutate_path/single_user/single_property_cached` and `mutate_path/16_users_in_scope/single_property_cached` using `iter_custom` with explicit batch sizes to amortize criterion overhead.
+- Capture `phase_94_b_pre` baseline before any lock-free work.
+
+**Step B2 — Lock-free `notify_dirty`.**
+- Rewrite `DirtySet`:
+  ```rust
+  pub struct DirtySet {
+      dirty_bits: Vec<AtomicU64>,             // hot path: fetch_or, was_zero from prev
+      dirty_indices: Mutex<Vec<EntityIndex>>, // cold: push only on first-bit-set per entity
+      capacity: AtomicUsize,                  // grown via cold-path mutex when EntityIndex exceeds vec length
+  }
+  ```
+- `notify_dirty(entity_idx, kind_bit)`:
+  - `let mask = 1u64 << kind_bit;`
+  - `let prev = dirty_bits[idx].fetch_or(mask, Ordering::AcqRel);`
+  - `if prev == 0 { lock dirty_indices, push idx, drop }`  // first-set-on-entity → cold path
+- `drain(...)`:
+  - Lock `dirty_indices`, take ownership via `mem::replace(..., Vec::new())`.
+  - For each `idx`, `swap(0, Ordering::AcqRel)` on the corresponding `AtomicU64`, decode bits via `kinds_by_bit`.
+- `cancel(entity_idx, kind_bit)` for deregister: atomic `fetch_and(!mask, Ordering::AcqRel)`.
+- Vec growth: `allocate_entity_index` extends `dirty_bits` under a build-time lock (or `RwLock`). Hot path never resizes.
+
+**Step B3 — Wire-format check.** This remains a CPU-only refactor. Bandwidth cells must stay byte-identical.
+
+**Step B4 — Bench gate.** Both *cached* and *uncached* cells must improve vs `phase_94_b_pre`. Targets:
+
+| Cell | Pre (post Stage E) | B-strict goal |
+|---|---:|---:|
+| `mutate_path/single_user/single_property_cached` (NEW) | TBD (≈ 85 ns expected) | ≤ 60 ns |
+| `mutate_path/single_user/single_property` (legacy) | ~683 ns | ≤ 425 ns (harness floor) |
+| `mutate_path/16_users_in_scope/single_property_cached` (NEW) | TBD | ≤ 0.7 µs |
+| `mutate_path/16_users_in_scope/single_property` (legacy) | 3.67 µs | ≤ 2.0 µs |
+| `mutate_path/drain_dirty/16u_1000_dirty_entities` | 98.49 ms | ≤ 70 ms |
+
+**Step B5 — 29/0/0 wins gate** (must persist).
+
+**Step B6 — Doc + commit.** Append B-strict section to `phase-09.4.md` with redesigned-bench numbers + harness-floor explanation. Commit + push.
 
 **Step 7 — 29/0/0 wins gate.** No regressions in any other cell.
 
