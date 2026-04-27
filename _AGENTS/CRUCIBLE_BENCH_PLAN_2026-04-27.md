@@ -391,7 +391,7 @@ crucible baseline save --name perf_v0   # promote latest to baseline
 4. ✅ **naia: migrate `test/bench_report/` → `test/bench/`** — renamed, swapped internal types to bench_core, dropped criterion parsing and baseline regression (now owned by crucible), kept all win checks. Also fixed `slag_session_server` scope_checks → scope_checks_pending.
 5. ⏳ **naia CI validation** — `crucible baseline save --from-criterion` migrated perf_v0 (31 entries). Structural validation: `naia-bench --assert-wins --input <results.json>` pipeline verified. Full `crucible run --assert` (39/0/0) requires 45-min criterion run — pending.
 6. ✅ **slag: `crucible compare` + `report` + `baseline`** — all subcommands implemented in step 2.
-7. ✅ **cyberlith: `test/bench/` skeleton** — BM-001 implemented (P50=83µs, P95=1.58ms, 500-tick run). Stubs bm002–bm007 in place.
+7. ✅ **cyberlith: `test/bench/` skeleton** — BM-001 implemented (P50=83µs, P95=1.58ms, 500-tick run). Stubs bm002–bm007 in place. harness.rs (BenchHarness) + collector.rs (TickCollector) extracted; bm001.rs refactored to ~30 lines.
 8. ✅ **cyberlith: `crucible.toml`** — added to repo root.
 9. ✅ **cyberlith CI validation** — `crucible run --scenario bm001 --assert` green. baseline perf_v0 saved. 1/0/0 regression gate.
 10. ⏳ **cyberlith: BM-002–BM-006** — implement iteratively as game features stabilise.
