@@ -32,7 +32,7 @@ naia has criterion microbenchmarks (`naia-benches`) and a bespoke report/assert 
                │                      │
 ┌──────────────▼──────────┐  ┌────────▼───────────────┐
 │     naia/test/bench/    │  │  cyberlith/test/bench/  │
-│     package: naia-bench │  │  package: cyberlith-bench│
+│     package: naia-bench │  │  package: cyberlith_bench│
 │  naia domain win checks │  │  BM-001–BM-007 scenarios│
 │  called by crucible as  │  │  game server + clients  │
 │  post_assert handler    │  │  outputs bench_core JSON│
@@ -181,7 +181,7 @@ post_assert   = "cargo run -p naia-bench -- --assert-wins"
 ```toml
 # cyberlith/crucible.toml
 driver        = "cargo_bin"       # runs a cargo binary directly
-package       = "cyberlith-bench"
+package       = "cyberlith_bench"
 args          = ["--scenario", "all"]
 results_dir   = "target/bench"
 baseline_name = "perf_v0"
@@ -297,11 +297,11 @@ naia/test/bench/
 
 ---
 
-## cyberlith-bench — full-stack game benchmark driver
+## cyberlith_bench — full-stack game benchmark driver
 
 ### What it is
 
-New crate at `cyberlith/test/bench/`. Package name: `cyberlith-bench`. Deps: `bench_core`, naia, Rapier, game logic.
+New crate at `cyberlith/test/bench/`. Package name: `cyberlith_bench`. Deps: `bench_core`, naia, Rapier, game logic.
 
 ### What it does
 
@@ -311,7 +311,7 @@ Implements BM-001–BM-007 benchmark scenarios. Each scenario:
 3. Collects metrics into `BenchResult.metadata`
 4. Outputs bench_core JSON to stdout
 
-### Metadata keys used by cyberlith-bench
+### Metadata keys used by cyberlith_bench
 
 ```
 p50_tick_ns, p95_tick_ns, p99_tick_ns, max_tick_ns
@@ -338,7 +338,7 @@ browser_fps (null until BM-004)
 
 ```
 cyberlith/test/bench/
-├── Cargo.toml        package = "cyberlith-bench"
+├── Cargo.toml        package = "cyberlith_bench"
 └── src/
     ├── main.rs       clap: --scenario <id>, --duration <secs>, --out <path>
     ├── harness.rs    server + client spawner using local transport
@@ -372,7 +372,7 @@ crucible run --assert
 # cyberlith — full gate per scenario
 crucible run --scenario bm001 --assert
 # expands to:
-#   1. cargo run -p cyberlith-bench -- --scenario bm001 > target/bench/latest.json
+#   1. cargo run -p cyberlith_bench -- --scenario bm001 > target/bench/latest.json
 #   2. crucible assert target/bench/latest.json
 
 # one-off reporting
@@ -410,9 +410,9 @@ crucible baseline save --name perf_v0   # promote latest to baseline
 | Auto-install cargo-criterion | crucible | tool management is an orchestrator concern |
 | crucible.toml parsing | crucible | config is orchestrator-level |
 | Win-2–5, phase thresholds, halo checks | naia-bench | encode naia domain knowledge; must never move to slag |
-| BM-001–BM-007 scenario implementations | cyberlith-bench | require real game code; can't live in slag or naia |
-| Metadata key definitions for game metrics | cyberlith-bench | game-specific; bench_core treats metadata as opaque Value |
-| Browser FPS measurement | cyberlith-bench / manual | requires real browser; BM-004 starts as manual |
+| BM-001–BM-007 scenario implementations | cyberlith_bench | require real game code; can't live in slag or naia |
+| Metadata key definitions for game metrics | cyberlith_bench | game-specific; bench_core treats metadata as opaque Value |
+| Browser FPS measurement | cyberlith_bench / manual | requires real browser; BM-004 starts as manual |
 
 ---
 
