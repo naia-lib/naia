@@ -666,6 +666,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Slow-path equivalent of `scope_checks()` — used by tests and the
     /// debug-build assertion in `scope_checks()` to verify the cache stays
     /// in sync with `(rooms × users × entities)` truth.
+    #[cfg(debug_assertions)]
     pub(crate) fn scope_checks_recompute_slow(&self) -> Vec<(RoomKey, UserKey, E)> {
         let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
         for (room_key, room) in self.rooms.iter() {

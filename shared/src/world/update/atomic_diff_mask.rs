@@ -85,11 +85,6 @@ impl AtomicDiffMask {
         self.bits.load(Ordering::Relaxed) == 0
     }
 
-    #[inline]
-    pub fn byte_number(&self) -> u8 {
-        self.byte_len
-    }
-
     /// Read one byte of the mask. Equivalent to `snapshot().byte(i)` but
     /// avoids the `DiffMask` allocation when callers only need one byte.
     #[inline]

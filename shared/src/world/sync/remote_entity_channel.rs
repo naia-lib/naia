@@ -207,10 +207,6 @@ impl RemoteEntityChannel {
         self.component_channels.contains_key(component_kind)
     }
 
-    pub(crate) fn component_kinds(&self) -> HashSet<ComponentKind> {
-        self.component_channels.keys().cloned().collect()
-    }
-
     fn process_messages(&mut self) {
         loop {
             let Some((id, msg)) = self.buffered_messages.peek_front() else {
