@@ -161,7 +161,7 @@ impl App {
                 {
                     let server = &mut self.server;
                     let world = &self.world;
-                    for (_, user_key, entity) in server.scope_checks() {
+                    for (_, user_key, entity) in server.scope_checks_all() {
                         if let Some(character) = world.proxy().component::<Character>(&entity) {
                             let x = *character.x;
                             let should_be_in_scope = (5..=15).contains(&x);

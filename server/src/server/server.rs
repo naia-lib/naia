@@ -203,8 +203,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Return a collection of Entity Scope Sets, being a unique combination of
     /// a related Room, User, and Entity, used to determine which Entities to
     /// replicate to which Users
-    pub fn scope_checks(&self) -> Vec<(RoomKey, UserKey, E)> {
-        self.world_server.scope_checks()
+    pub fn scope_checks_all(&self) -> Vec<(RoomKey, UserKey, E)> {
+        self.world_server.scope_checks_all()
     }
 
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {

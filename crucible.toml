@@ -1,0 +1,6 @@
+driver        = "criterion"
+package       = "naia-benches"
+bench         = "naia"
+results_dir   = "target/bench"
+baseline_name = "perf_v0"
+post_assert   = "cargo run -p naia-bench -- --assert-wins"

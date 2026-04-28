@@ -1,45 +1,20 @@
-//! Assert the Naia 0.25 Win invariants against a cargo-criterion run.
-//!
-//! The Wins are:
-//!   2. idle tick is O(1) in world size.
-//!   3. dirty-receiver push model: mutation cost is O(mutations × users).
-//!   4. SpawnWithComponents coalesces spawn+inserts into one command.
-//!   5. immutable components skip diff-tracking allocation.
-//!
-//! Phase 7 hardening adds absolute phase thresholds and baseline regression checks.
-//!
-//! Phase 10 adds halo capacity checks: idle tick budget and client keep-up.
-//!
-//! Call `run(&results)` — prints a pass/fail line per check and returns an
-//! `AssertOutcome` whose `failed()` tells the caller whether to exit non-zero.
-
 use std::collections::BTreeMap;
-use std::path::PathBuf;
 
-use crate::core::model::BenchResult;
+use bench_core::{AssertOutcome, BenchResult};
 
-pub struct AssertOutcome {
-    pub pass: usize,
-    pub fail: usize,
-    pub skip: usize,
-}
+const STEADY_STATE_IDLE: &str = "scenarios/halo_btb_16v16/steady_state_idle";
+const CLIENT_RECEIVE_ACTIVE: &str = "scenarios/halo_btb_16v16/client_receive_active";
 
-impl AssertOutcome {
-    pub fn failed(&self) -> bool {
-        self.fail > 0
-    }
-    pub fn summary(&self) -> String {
-        format!("{} passed, {} failed, {} skipped", self.pass, self.fail, self.skip)
-    }
-}
-
-fn index(results: &[BenchResult]) -> BTreeMap<&str, &BenchResult> {
-    results.iter().map(|r| (r.id.as_str(), r)).collect()
-}
+const PHASE_THRESHOLDS: &[(&str, f64, &str)] = &[
+    ("tick/idle_matrix/u_x_n/16u_10000e",           3_000_000.0,   "Phase 3 mutable idle"),
+    ("tick/idle_matrix_immutable/u_x_n/16u_10000e", 400_000.0,     "Phase 4 immutable idle"),
+    ("spawn/paint_rect/entities/1000",               28_000_000.0,  "Phase 6 paint_rect/1000"),
+    ("spawn/paint_rect/entities/5000",               220_000_000.0, "Phase 6 paint_rect/5000"),
+];
 
 pub fn run(results: &[BenchResult]) -> AssertOutcome {
     let idx = index(results);
-    let mut out = AssertOutcome { pass: 0, fail: 0, skip: 0 };
+    let mut out = AssertOutcome::default();
 
     check_win_2_idle_flat(&idx, &mut out);
     check_win_3_dirty_receiver(&idx, &mut out);
@@ -48,39 +23,15 @@ pub fn run(results: &[BenchResult]) -> AssertOutcome {
     check_phase_thresholds(&idx, &mut out);
     check_halo_idle_budget(&idx, &mut out);
     check_halo_client_keepup(&idx, &mut out);
-    check_baseline_regression(results, &mut out);
 
     println!("---");
     println!("win-assert summary: {}", out.summary());
     out
 }
 
-// ─── Phase 10 — halo capacity checks ─────────────────────────────────────────
-
-/// Halo idle budget: steady_state_idle must be ≤ 5 ms.
-/// Ensures the measured per-game tick cost leaves meaningful capacity headroom.
-fn check_halo_idle_budget(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
-    check_threshold(
-        idx,
-        crate::core::capacity::ids::STEADY_STATE_IDLE,
-        5_000_000.0, // 5 ms ceiling
-        "Halo.idle_budget",
-        out,
-    );
+fn index(results: &[BenchResult]) -> BTreeMap<&str, &BenchResult> {
+    results.iter().map(|r| (r.id.as_str(), r)).collect()
 }
-
-/// Halo client keep-up: client_receive_active must be ≤ 4 ms (10% of 40 ms budget).
-fn check_halo_client_keepup(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
-    check_threshold(
-        idx,
-        crate::core::capacity::ids::CLIENT_RECEIVE_ACTIVE,
-        4_000_000.0, // 4 ms ceiling
-        "Halo.client_keepup",
-        out,
-    );
-}
-
-// ─── Wins 2–5 ────────────────────────────────────────────────────────────────
 
 fn check_win_2_idle_flat(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
     let small = match lookup(idx, "tick/idle/entities/100", out, "Win-2") {
@@ -181,15 +132,6 @@ fn check_win_5_immutable_beats_mutable(idx: &BTreeMap<&str, &BenchResult>, out: 
     }
 }
 
-// ─── Phase thresholds ─────────────────────────────────────────────────────────
-
-const PHASE_THRESHOLDS: &[(&str, f64, &str)] = &[
-    ("tick/idle_matrix/u_x_n/16u_10000e",           3_000_000.0,   "Phase 3 mutable idle"),
-    ("tick/idle_matrix_immutable/u_x_n/16u_10000e", 400_000.0,     "Phase 4 immutable idle"),
-    ("spawn/paint_rect/entities/1000",               28_000_000.0,  "Phase 6 paint_rect/1000"),
-    ("spawn/paint_rect/entities/5000",               220_000_000.0, "Phase 6 paint_rect/5000"),
-];
-
 fn check_phase_thresholds(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
     for &(bench_id, threshold_ns, label) in PHASE_THRESHOLDS {
         let r = match lookup(idx, bench_id, out, label) {
@@ -206,60 +148,13 @@ fn check_phase_thresholds(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOu
     }
 }
 
-// ─── Baseline regression ──────────────────────────────────────────────────────
-
-const BASELINE_REGRESSION_RATIO: f64 = 1.20;
-
-fn check_baseline_regression(results: &[BenchResult], out: &mut AssertOutcome) {
-    for r in results {
-        let baseline_ns = match read_perf_v0_median_ns(&r.id) {
-            Some(b) if b > 0.0 => b,
-            _ => continue,
-        };
-        let ratio = r.median_ns / baseline_ns;
-        let pass = ratio <= BASELINE_REGRESSION_RATIO;
-        if pass {
-            out.pass += 1;
-        } else {
-            out.fail += 1;
-            println!(
-                "[FAIL] Baseline regression: {} ratio {:.2}× (≤ {:.2}×)  [perf_v0 {:.0}ns → current {:.0}ns]",
-                r.id, ratio, BASELINE_REGRESSION_RATIO, baseline_ns, r.median_ns,
-            );
-        }
-    }
-    println!(
-        "[INFO] Baseline regression sweep: scanned {} cells against perf_v0 (ratio ≤ {:.2}×)",
-        results.len(),
-        BASELINE_REGRESSION_RATIO,
-    );
+fn check_halo_idle_budget(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
+    check_threshold(idx, STEADY_STATE_IDLE, 5_000_000.0, "Halo.idle_budget", out);
 }
 
-fn criterion_dir(bench_id: &str) -> String {
-    let parts: Vec<&str> = bench_id.split('/').collect();
-    if parts.len() < 2 {
-        return bench_id.to_string();
-    }
-    let mut out = format!("{}_{}", parts[0], parts[1]);
-    for p in &parts[2..] {
-        out.push('/');
-        out.push_str(p);
-    }
-    out
+fn check_halo_client_keepup(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
+    check_threshold(idx, CLIENT_RECEIVE_ACTIVE, 4_000_000.0, "Halo.client_keepup", out);
 }
-
-fn read_perf_v0_median_ns(bench_id: &str) -> Option<f64> {
-    let dir = criterion_dir(bench_id);
-    let path = PathBuf::from("target/criterion")
-        .join(&dir)
-        .join("perf_v0")
-        .join("estimates.json");
-    let body = std::fs::read_to_string(&path).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&body).ok()?;
-    v.get("median")?.get("point_estimate")?.as_f64()
-}
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 fn check_threshold(
     idx: &BTreeMap<&str, &BenchResult>,

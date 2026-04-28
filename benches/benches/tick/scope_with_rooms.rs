@@ -16,19 +16,17 @@ const CELLS: &[(usize, usize, &str)] = &[
     (16, 10_000, "16u_10000e"),
 ];
 
-/// Steady-state tick cost when N entities are in scope for U users in a single
-/// room and game code invokes `server.scope_checks()` once per tick (the
-/// canonical pattern from `demos/basic`, `demos/macroquad`). The rebuild is
-/// `O(rooms × users × entities)` HashMap lookups today
-/// (`world_server.rs:628-647`, with a literal `// TODO: precache this` comment).
+/// Clone cost of `scope_checks_all()` — the full-list path used by game code
+/// that implements dynamic scope (e.g. distance or visibility checks that may
+/// exclude entities each tick). Bench shape: one `tick()` + one
+/// `scope_checks_all()` clone per iteration; dominant signal is the Vec clone
+/// of all (room, user, entity) tuples.
 ///
-/// At Cyberlith canonical (1 room × 16 users × 65,536 tiles) the rebuild runs
-/// >1M HashMap lookups per tick. Phase 8.2 replaces this with a push-based
-/// cache invalidated only on room/user/entity churn — `scope_checks()` then
-/// returns a borrowed slice with zero per-tick allocation.
-///
-/// Bench shape: every iteration is one `tick()` followed by `scope_checks()`,
-/// so the dominant signal is the rebuild plus the surrounding tick scaffolding.
+/// The push-based `ScopeChecksCache` (Phase 8.2) eliminated the prior O(rooms
+/// × users × entities) HashMap rebuild — `scope_checks_all()` now pays only
+/// the O(N tuples) clone cost. For game servers that use add-all-on-first-sight
+/// scope, `scope_checks_pending()` is free after initial load; see
+/// `scope_checks_pending_tuple_count()` in `lib.rs`.
 pub fn scope_with_rooms(c: &mut Criterion) {
     let mut group = c.benchmark_group("tick/scope_with_rooms/u_x_n");
     group.warm_up_time(Duration::from_millis(500));
@@ -43,7 +41,7 @@ pub fn scope_with_rooms(c: &mut Criterion) {
                     || BenchWorldBuilder::new().users(u).entities(n).build(),
                     |mut world| {
                         world.tick();
-                        let _ = world.scope_checks_tuple_count();
+                        let _ = world.scope_checks_all_tuple_count();
                     },
                     BatchSize::LargeInput,
                 )

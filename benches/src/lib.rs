@@ -357,13 +357,21 @@ impl BenchWorld {
         drain_all_events(&mut self.server, &mut self.clients);
     }
 
-    /// Invokes `server.scope_checks()` and discards the result. The realistic
-    /// per-tick game-code pattern (see demos/basic, demos/macroquad) is to
-    /// iterate the returned tuples once per tick to make scope decisions.
-    /// Exposed here so the `tick/scope_with_rooms` bench measures the rebuild
-    /// cost that game code actually pays.
-    pub fn scope_checks_tuple_count(&self) -> usize {
-        self.server.scope_checks().len()
+    /// Returns the number of established (room, user, entity) tuples via
+    /// `scope_checks_all()`. Used by the `tick/scope_with_rooms` bench to
+    /// measure the clone cost of the full-list path — relevant for callers
+    /// that implement dynamic scope (e.g. distance-based include/exclude).
+    /// After initial load this Vec is stable; its clone cost is O(N tuples).
+    pub fn scope_checks_all_tuple_count(&self) -> usize {
+        self.server.scope_checks_all().len()
+    }
+
+    /// Returns the number of pending (room, user, entity) tuples. Zero in
+    /// steady state — used to verify the fast-path is actually free.
+    pub fn scope_checks_pending_tuple_count(&mut self) -> usize {
+        let n = self.server.scope_checks_pending().len();
+        self.server.mark_scope_checks_pending_handled();
+        n
     }
 
     /// Diagnostic-only variant of `tick()` that reports per-phase wall time.

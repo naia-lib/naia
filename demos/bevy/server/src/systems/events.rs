@@ -161,19 +161,14 @@ pub fn tick_events(
     }
 
     if has_ticked {
-        // Update scopes of entities
-        for (_, user_key, entity) in server.scope_checks() {
-            // You'd normally do whatever checks you need to in here..
-            // to determine whether each Entity should be in scope or not.
-
-            if !server.user_scope(&user_key).has(&entity) {
-                // This indicates the Entity should be in this scope.
-                server.user_scope_mut(&user_key).include(&entity);
-            }
-
-            // And call this if Entity should NOT be in this scope.
-            // server.user_scope_mut(..).exclude(..);
+        // Add any newly-spawned or newly-joined entities to scope.
+        // This demo unconditionally includes everything — use
+        // scope_checks_all() instead if you need to exclude based on
+        // game-state conditions (e.g. distance or visibility).
+        for (_, user_key, entity) in server.scope_checks_pending() {
+            server.user_scope_mut(&user_key).include(&entity);
         }
+        server.mark_scope_checks_pending_handled();
     }
 }
 

@@ -1,16 +1,16 @@
 [package]
-name = "naia-bench-report"
+name = "naia-bench"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 edition = "2021"
 publish = false
-description = "Reads cargo-criterion JSON output and emits a self-contained HTML benchmark report"
+description = "Naia domain win-checks: Win-2–5, phase thresholds, halo capacity budgets"
 
 [[bin]]
-name = "naia_bench_report"
+name = "naia_bench"
 path = "src/main.rs"
 
 [dependencies]
-serde = { version = "1", features = ["derive"] }
+bench_core = { path = "../../../slag/crates/bench_core" }
 serde_json = "1"

@@ -19,7 +19,7 @@ members = [
     "test/bevy_npa",
     "test/spec_tool",
     "test/tests",
-    "test/bench_report",
+    "test/bench",
     "adapters/bevy/client",
     "adapters/bevy/server",
     "adapters/bevy/shared",
