@@ -402,6 +402,11 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         };
         return record.is_replicating();
     }
+
+    fn entity_is_static(&self, _global_entity: &GlobalEntity) -> bool {
+        // Client entities are never static in the static-entity sense
+        false
+    }
 }
 
 impl InScopeEntities<GlobalEntity> for GlobalWorldManager {

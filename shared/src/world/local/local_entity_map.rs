@@ -119,6 +119,29 @@ impl LocalEntityMap {
         self.host_to_global.insert(host_entity, global_entity);
     }
 
+    pub fn insert_with_static_host_entity(
+        &mut self,
+        global_entity: GlobalEntity,
+        host_entity: HostEntity,
+    ) {
+        if self.global_to_local.contains_key(&global_entity) {
+            panic!(
+                "Cannot overwrite inserted global entity: {:?}",
+                global_entity
+            );
+        }
+        if self.host_to_global.contains_key(&host_entity) {
+            panic!("Cannot overwrite inserted host entity {:?}", host_entity);
+        }
+
+        self.global_to_local.insert(
+            global_entity,
+            LocalEntityRecord::new_static_host_owned_entity(host_entity),
+        );
+
+        self.host_to_global.insert(host_entity, global_entity);
+    }
+
     pub fn insert_with_remote_entity(
         &mut self,
         global_entity: GlobalEntity,

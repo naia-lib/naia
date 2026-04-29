@@ -728,6 +728,6 @@ fn register_client_spawns(
 fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
     let owned: OwnedLocalEntity = (*local_entity).into();
     match owned {
-        OwnedLocalEntity::Host(v) | OwnedLocalEntity::Remote(v) => v,
+        OwnedLocalEntity::Host { id: v, .. } | OwnedLocalEntity::Remote(v) => v,
     }
 }

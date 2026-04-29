@@ -589,7 +589,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         connection
             .base
             .world_manager
-            .host_init_entity(&global_entity, component_kinds, &self.protocol.component_kinds);
+            .host_init_entity(&global_entity, component_kinds, &self.protocol.component_kinds, false);
     }
 
     /// Retrieves an EntityRef that exposes read-only operations for the
@@ -2035,7 +2035,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         );
 
                         // Install entity redirect for old references
-                        let old_entity = OwnedLocalEntity::Host(old_host_entity.value());
+                        let old_entity = OwnedLocalEntity::Host { id: old_host_entity.value(), is_static: false };
                         let new_entity = OwnedLocalEntity::Remote(new_remote_entity.value());
                         connection
                             .base

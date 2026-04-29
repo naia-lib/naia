@@ -5,7 +5,7 @@ pub use naia_bevy_shared::{
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},
-    transport, ClientConfig, CommandHistory, NaiaClientError, ReplicationConfig,
+    transport, ClientConfig, CommandHistory, JitterBufferType, NaiaClientError, ReplicationConfig,
 };
 
 pub mod events;
@@ -20,7 +20,7 @@ mod plugin;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
-pub use client::Client;
+pub use client::{Client, ClientWrapper};
 pub use commands::CommandsExt;
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;

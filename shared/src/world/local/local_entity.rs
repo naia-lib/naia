@@ -4,13 +4,21 @@ use crate::{EntityDoesNotExistError, GlobalEntity, LocalEntityAndGlobalEntityCon
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum OwnedLocalEntity {
-    Host(u16),
+    Host { id: u16, is_static: bool },
     Remote(u16),
 }
 
 impl OwnedLocalEntity {
     pub fn new_host(id: HostEntity) -> Self {
-        Self::Host(id.value())
+        Self::Host { id: id.value(), is_static: false }
+    }
+
+    pub fn new_host_dynamic(id: u16) -> Self {
+        Self::Host { id, is_static: false }
+    }
+
+    pub fn new_host_static(id: u16) -> Self {
+        Self::Host { id, is_static: true }
     }
 
     pub fn new_remote(id: RemoteEntity) -> Self {
@@ -19,7 +27,7 @@ impl OwnedLocalEntity {
 
     pub fn is_host(&self) -> bool {
         match self {
-            Self::Host(_) => true,
+            Self::Host { .. } => true,
             Self::Remote(_) => false,
         }
     }
@@ -28,29 +36,58 @@ impl OwnedLocalEntity {
         !self.is_host()
     }
 
+    pub fn is_static(&self) -> bool {
+        match self {
+            Self::Host { is_static, .. } => *is_static,
+            Self::Remote(_) => false,
+        }
+    }
+
     pub(crate) fn value(&self) -> u16 {
         match self {
-            Self::Host(value) => *value,
+            Self::Host { id, .. } => *id,
             Self::Remote(value) => *value,
         }
     }
 
     pub fn ser(&self, writer: &mut dyn BitWrite) {
-        self.is_host().ser(writer);
-        UnsignedVariableInteger::<7>::new(self.value()).ser(writer);
+        match self {
+            Self::Host { id, is_static } => {
+                true.ser(writer);
+                is_static.ser(writer);
+                UnsignedVariableInteger::<7>::new(*id).ser(writer);
+            }
+            Self::Remote(id) => {
+                false.ser(writer);
+                UnsignedVariableInteger::<7>::new(*id).ser(writer);
+            }
+        }
     }
 
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let is_host = bool::de(reader)?;
-        let value = UnsignedVariableInteger::<7>::de(reader)?.get();
-        match is_host {
-            true => Ok(Self::Host(value as u16)),
-            false => Ok(Self::Remote(value as u16)),
+        if is_host {
+            let is_static = bool::de(reader)?;
+            let id = UnsignedVariableInteger::<7>::de(reader)?.get() as u16;
+            Ok(Self::Host { id, is_static })
+        } else {
+            let id = UnsignedVariableInteger::<7>::de(reader)?.get() as u16;
+            Ok(Self::Remote(id))
         }
     }
 
     pub fn bit_length(&self) -> u32 {
-        bool::const_bit_length() + UnsignedVariableInteger::<7>::new(self.value()).bit_length()
+        match self {
+            Self::Host { id, .. } => {
+                bool::const_bit_length()   // is_host
+                + bool::const_bit_length() // is_static
+                + UnsignedVariableInteger::<7>::new(*id).bit_length()
+            }
+            Self::Remote(id) => {
+                bool::const_bit_length()   // is_host
+                + UnsignedVariableInteger::<7>::new(*id).bit_length()
+            }
+        }
     }
 
     pub(crate) fn convert_to_global(
@@ -58,8 +95,8 @@ impl OwnedLocalEntity {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match self {
-            OwnedLocalEntity::Host(host_entity) => {
-                converter.host_entity_to_global_entity(&HostEntity::new(*host_entity))
+            OwnedLocalEntity::Host { id, .. } => {
+                converter.host_entity_to_global_entity(&HostEntity::new(*id))
             }
             OwnedLocalEntity::Remote(remote_entity) => {
                 converter.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity))
@@ -76,8 +113,8 @@ impl OwnedLocalEntity {
 
     pub(crate) fn to_reversed(&self) -> OwnedLocalEntity {
         match self {
-            OwnedLocalEntity::Host(host_entity) => OwnedLocalEntity::Remote(*host_entity),
-            OwnedLocalEntity::Remote(remote_entity) => OwnedLocalEntity::Host(*remote_entity),
+            OwnedLocalEntity::Host { id, .. } => OwnedLocalEntity::Remote(*id),
+            OwnedLocalEntity::Remote(remote_entity) => OwnedLocalEntity::Host { id: *remote_entity, is_static: false },
         }
     }
 
@@ -126,7 +163,15 @@ impl HostEntity {
     }
 
     pub fn copy_to_owned(&self) -> OwnedLocalEntity {
-        OwnedLocalEntity::Host(self.value())
+        OwnedLocalEntity::Host { id: self.value(), is_static: false }
+    }
+
+    pub fn copy_to_owned_dynamic(&self) -> OwnedLocalEntity {
+        OwnedLocalEntity::Host { id: self.value(), is_static: false }
+    }
+
+    pub fn copy_to_owned_static(&self) -> OwnedLocalEntity {
+        OwnedLocalEntity::Host { id: self.value(), is_static: true }
     }
 }
 

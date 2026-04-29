@@ -12,6 +12,7 @@ use crate::{GlobalEntity, KeyGenerator};
 pub struct HostEntityGenerator {
     user_key: u64,
     generator: KeyGenerator<u16>,
+    static_generator: KeyGenerator<u16>,
     reserved_host_entities: HashMap<GlobalEntity, HostEntity>,
     reserved_host_entity_ttl: Duration,
     reserved_host_entities_ttls: VecDeque<(Instant, GlobalEntity)>,
@@ -22,6 +23,7 @@ impl HostEntityGenerator {
         Self {
             user_key,
             generator: KeyGenerator::new(Duration::from_secs(60)),
+            static_generator: KeyGenerator::new(Duration::from_secs(u64::MAX / 2)),
             reserved_host_entities: HashMap::new(),
             reserved_host_entity_ttl: Duration::from_secs(60),
             reserved_host_entities_ttls: VecDeque::new(),
@@ -75,6 +77,10 @@ impl HostEntityGenerator {
         HostEntity::new(self.generator.generate())
     }
 
+    pub(crate) fn generate_static_host_entity(&mut self) -> HostEntity {
+        HostEntity::new(self.static_generator.generate())
+    }
+
     pub(crate) fn remove_by_global_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
@@ -85,7 +91,12 @@ impl HostEntityGenerator {
             .expect("Attempting to despawn entity which does not exist!");
         if record.is_host_owned() {
             let host_entity = record.host_entity();
-            self.recycle_host_entity(host_entity);
+            let is_static = record.is_static();
+            if is_static {
+                self.static_generator.recycle_key(&host_entity.value());
+            } else {
+                self.generator.recycle_key(&host_entity.value());
+            }
         }
     }
 
@@ -113,7 +124,12 @@ impl HostEntityGenerator {
             .expect("Attempting to despawn entity which does not exist!");
         if record.is_host_owned() {
             let host_entity = record.host_entity();
-            self.recycle_host_entity(host_entity);
+            let is_static = record.is_static();
+            if is_static {
+                self.static_generator.recycle_key(&host_entity.value());
+            } else {
+                self.generator.recycle_key(&host_entity.value());
+            }
         }
         global_entity
     }

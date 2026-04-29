@@ -204,7 +204,7 @@ impl LocalWorldManager {
 
     pub fn has_local_entity(&self, local_entity: &OwnedLocalEntity) -> bool {
         match local_entity {
-            OwnedLocalEntity::Host(host_entity) => {
+            OwnedLocalEntity::Host { id: host_entity, .. } => {
                 self.host.has_entity(&HostEntity::new(*host_entity))
             }
             OwnedLocalEntity::Remote(remote_entity) => {
@@ -240,6 +240,7 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_kinds: Vec<ComponentKind>,
         component_kinds_map: &ComponentKinds,
+        is_static: bool,
     ) {
         if self
             .entity_map
@@ -247,17 +248,32 @@ impl LocalWorldManager {
             .is_err()
         {
             // this is done because `host_reserve_entity()` may have been called previously!
-            let host_entity = self.host.host_generate_entity();
-            self.entity_map
-                .insert_with_host_entity(*global_entity, host_entity);
+            if is_static {
+                let host_entity = self.host.host_generate_static_entity();
+                self.entity_map
+                    .insert_with_static_host_entity(*global_entity, host_entity);
+            } else {
+                let host_entity = self.host.host_generate_entity();
+                self.entity_map
+                    .insert_with_host_entity(*global_entity, host_entity);
+            }
         }
-        self.host.init_entity_send_host_commands(
-            &self.entity_map,
-            global_entity,
-            component_kinds,
-            &mut self.updater,
-            component_kinds_map,
-        );
+
+        if is_static {
+            self.host.init_static_entity_send_host_commands(
+                &self.entity_map,
+                global_entity,
+                component_kinds,
+            );
+        } else {
+            self.host.init_entity_send_host_commands(
+                &self.entity_map,
+                global_entity,
+                component_kinds,
+                &mut self.updater,
+                component_kinds_map,
+            );
+        }
     }
 
     /// BULLETPROOF: Migrate entity from remote (client) control to host (server) control
@@ -350,7 +366,7 @@ impl LocalWorldManager {
         // BULLETPROOF: Step 6: Install entity redirect in LocalEntityMap
         // This allows old entity references to be automatically updated
         let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
-        let new_entity = OwnedLocalEntity::Host(new_host_entity.value());
+        let new_entity = OwnedLocalEntity::Host { id: new_host_entity.value(), is_static: false };
         self.entity_map
             .install_entity_redirect(old_entity, new_entity);
 
@@ -645,7 +661,7 @@ impl LocalWorldManager {
                 );
             };
             match local_entity {
-                OwnedLocalEntity::Host(host_entity) => {
+                OwnedLocalEntity::Host { id: host_entity, .. } => {
                     // Host entity message
                     let host_entity = HostEntity::new(host_entity);
                     incoming_host_messages.push((id, incoming_message.with_entity(host_entity)));
@@ -1173,7 +1189,7 @@ impl LocalWorldManager {
             panic!("Delivered message without an entity! Message: {:?}", msg);
         };
         match local_entity {
-            OwnedLocalEntity::Host(host_entity) => {
+            OwnedLocalEntity::Host { id: host_entity, .. } => {
                 // Host entity message
                 let host_entity = HostEntity::new(host_entity);
                 self.host.deliver_message(id, msg.with_entity(host_entity));

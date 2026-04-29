@@ -136,7 +136,7 @@ fn local_entity_map_install_and_apply_redirect() {
         crate::world::local::local_entity_map::LocalEntityMap::new(HostType::Server);
 
     let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote(42);
-    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host(100);
+    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Install redirect
     entity_map.install_entity_redirect(old_entity, new_entity);
@@ -213,7 +213,7 @@ fn entity_message_apply_redirects() {
     use crate::world::entity::entity_message::EntityMessage;
 
     let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote(42);
-    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host(100);
+    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Create a message with the old entity
     let message = EntityMessage::<()>::Spawn(());
@@ -275,7 +275,7 @@ fn install_and_apply_redirect() {
     let mut entity_map = LocalEntityMap::new(HostType::Server);
 
     let old_entity = OwnedLocalEntity::Remote(42);
-    let new_entity = OwnedLocalEntity::Host(100);
+    let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Install redirect
     entity_map.install_entity_redirect(old_entity, new_entity);

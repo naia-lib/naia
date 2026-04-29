@@ -67,7 +67,7 @@ impl Connection {
             connection
                 .base
                 .world_manager
-                .host_init_entity(&entity, component_kinds, component_kinds_map);
+                .host_init_entity(&entity, component_kinds, component_kinds_map, false);
         }
 
         connection

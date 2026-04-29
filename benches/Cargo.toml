@@ -16,6 +16,10 @@ name = "naia"
 path = "benches/main.rs"
 harness = false
 
+[[test]]
+name = "local_entity_wire"
+path = "tests/local_entity_wire.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 

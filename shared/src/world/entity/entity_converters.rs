@@ -31,6 +31,7 @@ pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor;
     fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool;
     fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool;
+    fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool;
 }
 
 pub trait EntityAndGlobalEntityConverter<E: Copy + Eq + Hash + Sync + Send> {
@@ -67,7 +68,7 @@ pub trait LocalEntityAndGlobalEntityConverter {
         owned_entity: &OwnedLocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match owned_entity {
-            OwnedLocalEntity::Host(host_entity) => {
+            OwnedLocalEntity::Host { id: host_entity, .. } => {
                 self.host_entity_to_global_entity(&HostEntity::new(*host_entity))
             }
             OwnedLocalEntity::Remote(remote_entity) => {
@@ -99,7 +100,7 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
         &self,
         _global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        Ok(OwnedLocalEntity::Host(0))
+        Ok(OwnedLocalEntity::Host { id: 0, is_static: false })
     }
 
     fn host_entity_to_global_entity(
@@ -126,7 +127,7 @@ impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
         &mut self,
         _global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        Ok(OwnedLocalEntity::Host(0))
+        Ok(OwnedLocalEntity::Host { id: 0, is_static: false })
     }
 }
 

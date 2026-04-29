@@ -14,6 +14,12 @@ impl LocalEntityRecord {
         }
     }
 
+    pub fn new_static_host_owned_entity(entity: HostEntity) -> Self {
+        Self {
+            entity: OwnedLocalEntity::new_host_static(entity.value()),
+        }
+    }
+
     pub fn new_remote_owned_entity(entity: RemoteEntity) -> Self {
         Self {
             entity: OwnedLocalEntity::new_remote(entity),
@@ -23,6 +29,10 @@ impl LocalEntityRecord {
 
     pub fn is_host_owned(&self) -> bool {
         self.entity.is_host()
+    }
+
+    pub fn is_static(&self) -> bool {
+        self.entity.is_static()
     }
 
     pub fn is_remote_owned(&self) -> bool {

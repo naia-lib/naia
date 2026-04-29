@@ -63,6 +63,18 @@ impl GlobalWorldManager {
             .insert(*global_entity, GlobalEntityRecord::new(entity_owner));
     }
 
+    pub fn insert_static_entity_record(
+        &mut self,
+        global_entity: &GlobalEntity,
+        entity_owner: EntityOwner,
+    ) {
+        if self.entity_records.contains_key(global_entity) {
+            panic!("entity already initialized!");
+        }
+        self.entity_records
+            .insert(*global_entity, GlobalEntityRecord::new_static(entity_owner));
+    }
+
     // Despawn
     pub fn remove_entity_diff_handlers(&mut self, global_entity: &GlobalEntity) {
         // Clean up associated components
@@ -458,6 +470,13 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             panic!("entity record does not exist!");
         };
         return record.is_replicating;
+    }
+
+    fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {
+        self.entity_records
+            .get(global_entity)
+            .map(|r| r.is_static)
+            .unwrap_or(false)
     }
 }
 

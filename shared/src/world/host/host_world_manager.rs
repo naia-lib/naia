@@ -90,6 +90,28 @@ impl HostWorldManager {
         self.entity_generator.generate_host_entity()
     }
 
+    pub(crate) fn host_generate_static_entity(&mut self) -> HostEntity {
+        self.entity_generator.generate_static_host_entity()
+    }
+
+    pub fn init_static_entity_send_host_commands(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        global_entity: &GlobalEntity,
+        component_kinds: Vec<ComponentKind>,
+    ) {
+        // Static entities: NEVER register for diff-tracking — they don't change after spawn.
+        if !component_kinds.is_empty() {
+            self.host_engine.send_command(
+                converter,
+                EntityCommand::SpawnWithComponents(*global_entity, component_kinds),
+            );
+            return;
+        }
+        self.host_engine
+            .send_command(converter, EntityCommand::Spawn(*global_entity));
+    }
+
     pub(crate) fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
@@ -417,7 +439,7 @@ impl HostWorldManager {
 
         // Step 8: Install entity redirect in LocalEntityMap
         let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
-        let new_entity = OwnedLocalEntity::Host(new_host_entity.value());
+        let new_entity = OwnedLocalEntity::Host { id: new_host_entity.value(), is_static: false };
         local_entity_map.install_entity_redirect(old_entity, new_entity);
 
         // Step 9: Clean up old remote entity

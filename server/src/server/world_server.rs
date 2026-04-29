@@ -796,6 +796,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .insert_entity_record(&global_entity, EntityOwner::Server);
     }
 
+    /// Creates a new static Entity (frozen after spawn, no diff-tracking).
+    pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> E {
+        let world_entity = world.spawn_entity();
+        self.spawn_static_entity_inner(&world_entity);
+        world_entity
+    }
+
+    fn spawn_static_entity_inner(&mut self, world_entity: &E) {
+        let global_entity = self.global_entity_map.spawn(*world_entity, None);
+        self.global_world_manager
+            .insert_static_entity_record(&global_entity, EntityOwner::Server);
+    }
+
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.spawn_entity_inner(&entity);
@@ -1702,6 +1715,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
+
+        if self.global_world_manager.entity_is_static(&global_entity) {
+            panic!("Cannot insert_component on a static entity (global: {:?})", global_entity);
+        }
 
         if self
             .global_world_manager
@@ -3118,7 +3135,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             connection
                 .base
                 .world_manager
-                .host_init_entity(global_entity, component_kinds, &self.component_kinds);
+                .host_init_entity(global_entity, component_kinds, &self.component_kinds, self.global_world_manager.entity_is_static(global_entity));
             #[cfg(feature = "e2e_debug")]
             {
                 SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);

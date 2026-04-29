@@ -119,7 +119,7 @@ fn migration_handles_entity_redirects() {
     let mut entity_map = LocalEntityMap::new(HostType::Server);
 
     let old_entity = OwnedLocalEntity::Remote(42);
-    let new_entity = OwnedLocalEntity::Host(100);
+    let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Install redirect
     entity_map.install_entity_redirect(old_entity, new_entity);

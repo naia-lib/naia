@@ -96,7 +96,7 @@ fn server_side_migration_complete_flow() {
 
     // MIGRATION: Install entity redirect
     let old_entity = OwnedLocalEntity::Remote(remote_entity.value());
-    let new_entity = OwnedLocalEntity::Host(host_entity.value());
+    let new_entity = OwnedLocalEntity::Host { id: host_entity.value(), is_static: false };
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // VERIFICATION: Test entity redirect works
@@ -199,7 +199,7 @@ fn high_frequency_migration_operations() {
     // Create many entity redirects
     for i in 0..1000 {
         let old_entity = OwnedLocalEntity::Remote(i);
-        let new_entity = OwnedLocalEntity::Host(i + 1000);
+        let new_entity = OwnedLocalEntity::Host { id: i + 1000, is_static: false };
         entity_map.install_entity_redirect(old_entity, new_entity);
         redirects.push((old_entity, new_entity));
     }

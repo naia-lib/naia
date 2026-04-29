@@ -92,7 +92,7 @@ fn local_entity_map_perfect_operations() {
 
     // Test redirect installation
     let old_entity = OwnedLocalEntity::Remote(42);
-    let new_entity = OwnedLocalEntity::Host(100);
+    let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // Test redirect application
@@ -193,14 +193,14 @@ fn high_frequency_operations_perfect() {
     // Create many redirects
     for i in 0..100 {
         let old_entity = OwnedLocalEntity::Remote(i);
-        let new_entity = OwnedLocalEntity::Host(i + 1000);
+        let new_entity = OwnedLocalEntity::Host { id: i + 1000, is_static: false };
         entity_map.install_entity_redirect(old_entity, new_entity);
     }
 
     // Test all redirects work
     for i in 0..100 {
         let old_entity = OwnedLocalEntity::Remote(i);
-        let expected_new_entity = OwnedLocalEntity::Host(i + 1000);
+        let expected_new_entity = OwnedLocalEntity::Host { id: i + 1000, is_static: false };
         let redirected = entity_map.apply_entity_redirect(&old_entity);
         assert_eq!(redirected, expected_new_entity);
     }
@@ -286,14 +286,14 @@ fn performance_perfect() {
     // Test many redirects
     for i in 0..1000 {
         let old_entity = OwnedLocalEntity::Remote(i as u16);
-        let new_entity = OwnedLocalEntity::Host((i as u16).wrapping_add(10000));
+        let new_entity = OwnedLocalEntity::Host { id: (i as u16).wrapping_add(10000), is_static: false };
         entity_map.install_entity_redirect(old_entity, new_entity);
     }
 
     // Test redirect performance
     for i in 0..1000 {
         let old_entity = OwnedLocalEntity::Remote(i as u16);
-        let expected_new_entity = OwnedLocalEntity::Host((i as u16).wrapping_add(10000));
+        let expected_new_entity = OwnedLocalEntity::Host { id: (i as u16).wrapping_add(10000), is_static: false };
         let redirected = entity_map.apply_entity_redirect(&old_entity);
         assert_eq!(redirected, expected_new_entity);
     }
