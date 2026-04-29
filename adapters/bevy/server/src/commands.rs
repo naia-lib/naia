@@ -12,6 +12,10 @@ use crate::{plugin::Singleton, server::ServerImpl, Server};
 // Bevy Commands Extension
 pub trait CommandsExt<'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+    /// Like `enable_replication` but marks the entity as static — IDs from the
+    /// static pool, no diff-tracking after initial replication, post-spawn
+    /// mutation panics. Use for tile entities and other frozen scenery.
+    fn enable_static_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
     fn configure_replication(&'a mut self, config: ReplicationConfig)
         -> &'a mut EntityCommands<'a>;
@@ -30,6 +34,12 @@ pub trait CommandsExt<'a> {
 impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.enable_replication(&self.id());
+        self.insert(HostOwned::new::<Singleton>());
+        self
+    }
+
+    fn enable_static_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
+        server.enable_static_replication(&self.id());
         self.insert(HostOwned::new::<Singleton>());
         self
     }

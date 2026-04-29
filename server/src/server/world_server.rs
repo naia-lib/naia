@@ -818,6 +818,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.spawn_entity_inner(&entity);
     }
 
+    /// Bevy adapter crates only: register an already-spawned Bevy entity as a
+    /// static (immutable) naia entity. Static entities are never diff-tracked
+    /// after initial replication. Post-spawn mutation panics via EntityMut.
+    pub fn enable_static_entity_replication(&mut self, entity: &E) {
+        self.spawn_static_entity_inner(entity);
+    }
+
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn disable_entity_replication(&mut self, world_entity: &E) {
         // Despawn from connections and inner tracking

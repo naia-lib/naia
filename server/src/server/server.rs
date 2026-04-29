@@ -246,6 +246,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.enable_entity_replication(entity);
     }
 
+    /// Bevy adapter crates only: register entity as static (immutable) naia entity.
+    pub fn enable_static_entity_replication(&mut self, entity: &E) {
+        self.world_server.enable_static_entity_replication(entity);
+    }
+
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn disable_entity_replication(&mut self, world_entity: &E) {
         self.world_server.disable_entity_replication(world_entity);
