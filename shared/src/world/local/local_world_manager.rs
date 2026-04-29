@@ -204,8 +204,11 @@ impl LocalWorldManager {
 
     pub fn has_local_entity(&self, local_entity: &OwnedLocalEntity) -> bool {
         match local_entity {
-            OwnedLocalEntity::Host { id: host_entity, .. } => {
-                self.host.has_entity(&HostEntity::new(*host_entity))
+            OwnedLocalEntity::Host { id, is_static: true } => {
+                self.host.has_entity(&HostEntity::new_static(*id))
+            }
+            OwnedLocalEntity::Host { id, is_static: false } => {
+                self.host.has_entity(&HostEntity::new(*id))
             }
             OwnedLocalEntity::Remote(remote_entity) => {
                 self.remote.has_entity(&RemoteEntity::new(*remote_entity))
@@ -661,9 +664,9 @@ impl LocalWorldManager {
                 );
             };
             match local_entity {
-                OwnedLocalEntity::Host { id: host_entity, .. } => {
+                OwnedLocalEntity::Host { id: host_entity, is_static } => {
                     // Host entity message
-                    let host_entity = HostEntity::new(host_entity);
+                    let host_entity = if is_static { HostEntity::new_static(host_entity) } else { HostEntity::new(host_entity) };
                     incoming_host_messages.push((id, incoming_message.with_entity(host_entity)));
                 }
                 OwnedLocalEntity::Remote(remote_entity) => {
@@ -1189,9 +1192,9 @@ impl LocalWorldManager {
             panic!("Delivered message without an entity! Message: {:?}", msg);
         };
         match local_entity {
-            OwnedLocalEntity::Host { id: host_entity, .. } => {
+            OwnedLocalEntity::Host { id: host_entity, is_static } => {
                 // Host entity message
-                let host_entity = HostEntity::new(host_entity);
+                let host_entity = if is_static { HostEntity::new_static(host_entity) } else { HostEntity::new(host_entity) };
                 self.host.deliver_message(id, msg.with_entity(host_entity));
             }
             OwnedLocalEntity::Remote(remote_entity) => {

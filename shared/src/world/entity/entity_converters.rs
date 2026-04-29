@@ -59,6 +59,10 @@ pub trait LocalEntityAndGlobalEntityConverter {
         &self,
         host_entity: &HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError>;
+    fn static_host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError>;
     fn remote_entity_to_global_entity(
         &self,
         remote_entity: &RemoteEntity,
@@ -68,8 +72,11 @@ pub trait LocalEntityAndGlobalEntityConverter {
         owned_entity: &OwnedLocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match owned_entity {
-            OwnedLocalEntity::Host { id: host_entity, .. } => {
-                self.host_entity_to_global_entity(&HostEntity::new(*host_entity))
+            OwnedLocalEntity::Host { id, is_static: true } => {
+                self.static_host_entity_to_global_entity(&HostEntity::new(*id))
+            }
+            OwnedLocalEntity::Host { id, is_static: false } => {
+                self.host_entity_to_global_entity(&HostEntity::new(*id))
             }
             OwnedLocalEntity::Remote(remote_entity) => {
                 self.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity))
@@ -104,6 +111,13 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
     }
 
     fn host_entity_to_global_entity(
+        &self,
+        _: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        Ok(GlobalEntity::from_u64(0))
+    }
+
+    fn static_host_entity_to_global_entity(
         &self,
         _: &HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
@@ -194,6 +208,15 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverter for EntityConverterMut<'a, 'b> 
         self.local_entity_map
             .entity_converter()
             .host_entity_to_global_entity(host_entity)
+    }
+
+    fn static_host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.local_entity_map
+            .entity_converter()
+            .static_host_entity_to_global_entity(host_entity)
     }
 
     fn remote_entity_to_global_entity(

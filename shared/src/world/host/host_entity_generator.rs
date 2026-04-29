@@ -78,7 +78,7 @@ impl HostEntityGenerator {
     }
 
     pub(crate) fn generate_static_host_entity(&mut self) -> HostEntity {
-        HostEntity::new(self.static_generator.generate())
+        HostEntity::new_static(self.static_generator.generate())
     }
 
     pub(crate) fn remove_by_global_entity(

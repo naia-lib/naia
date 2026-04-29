@@ -804,7 +804,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> EntityMut<'_, E, W> {
         let world_entity = world.spawn_entity();
         self.spawn_static_entity_inner(&world_entity);
-        EntityMut::new(self, world, &world_entity)
+        EntityMut::new_static_construction(self, world, &world_entity)
     }
 
     fn spawn_static_entity_inner(&mut self, world_entity: &E) {

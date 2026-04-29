@@ -11,6 +11,8 @@ use crate::{
 pub struct LocalEntityMap {
     host_type: HostType,
     global_to_local: HashMap<GlobalEntity, LocalEntityRecord>,
+    /// Keyed by `HostEntity { id, is_static }` — static and dynamic pools both
+    /// start from 0, but `HostEntity` carries `is_static` so they hash distinctly.
     host_to_global: HashMap<HostEntity, GlobalEntity>,
     remote_to_global: HashMap<RemoteEntity, GlobalEntity>,
     entity_redirects: HashMap<OwnedLocalEntity, (OwnedLocalEntity, Instant)>,
@@ -53,6 +55,16 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
     }
 
     fn host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        if let Some(global_entity) = self.host_to_global.get(host_entity) {
+            return Ok(*global_entity);
+        }
+        Err(EntityDoesNotExistError)
+    }
+
+    fn static_host_entity_to_global_entity(
         &self,
         host_entity: &HostEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
@@ -131,7 +143,7 @@ impl LocalEntityMap {
             );
         }
         if self.host_to_global.contains_key(&host_entity) {
-            panic!("Cannot overwrite inserted host entity {:?}", host_entity);
+            panic!("Cannot overwrite inserted static host entity {:?}", host_entity);
         }
 
         self.global_to_local.insert(
@@ -175,7 +187,7 @@ impl LocalEntityMap {
         self.host_to_global.get(host_entity)
     }
 
-    pub fn remove_by_global_entity(
+pub fn remove_by_global_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<LocalEntityRecord> {

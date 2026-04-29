@@ -11,6 +11,10 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
     server: &'s mut WorldServer<E>,
     world: W,
     entity: E,
+    /// True only when this EntityMut was returned by `spawn_static_entity` —
+    /// allows component insertion during construction. False for all other
+    /// sources (entity_mut, etc.) where mutation of a static entity is illegal.
+    allow_static_insert: bool,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
@@ -19,6 +23,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
             server,
             world,
             entity: *entity,
+            allow_static_insert: false,
+        }
+    }
+
+    pub(crate) fn new_static_construction(server: &'s mut WorldServer<E>, world: W, entity: &E) -> Self {
+        Self {
+            server,
+            world,
+            entity: *entity,
+            allow_static_insert: true,
         }
     }
 
@@ -41,7 +55,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn insert_component<R: ReplicatedComponent>(&mut self, component_ref: R) -> &mut Self {
-        if self.server.entity_is_static(&self.entity) {
+        if !self.allow_static_insert && self.server.entity_is_static(&self.entity) {
             panic!("Cannot insert_component on a static entity: call spawn_static_entity and insert all components during construction");
         }
         self.server
@@ -63,7 +77,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
     pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
         if self.server.entity_is_static(&self.entity) {
-            panic!("Cannot remove_component on a static entity");
+            panic!("Cannot remove_component on a static entity"); // no allow_static_insert exception — removal is never valid
         }
         self.server
             .remove_component::<R, W>(&mut self.world, &self.entity)
