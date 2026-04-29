@@ -84,6 +84,7 @@ pub struct BenchWorldBuilder {
     user_count: usize,
     entity_count: usize,
     entity_kind: EntityKind,
+    static_entity_count: usize,
     scoped: bool,
     uncapped_bandwidth: bool,
     tick_ms: u64,
@@ -101,6 +102,7 @@ impl BenchWorldBuilder {
             user_count: 1,
             entity_count: 0,
             entity_kind: EntityKind::Mutable,
+            static_entity_count: 0,
             scoped: true,
             uncapped_bandwidth: false,
             tick_ms: TICK_MS,
@@ -149,12 +151,21 @@ impl BenchWorldBuilder {
         self
     }
 
+    /// Spawn N static [`HaloTile`] entities during setup (IDs from static pool;
+    /// no diff-tracking after initial replication). Used to simulate the
+    /// cyberlith tile layer and verify the split-pool bandwidth savings.
+    pub fn static_entities(mut self, n: usize) -> Self {
+        self.static_entity_count = n;
+        self
+    }
+
     /// Build to steady-state. Not measured — call from `iter_batched` setup.
     pub fn build(self) -> BenchWorld {
         BenchWorld::new(
             self.user_count,
             self.entity_count,
             self.entity_kind,
+            self.static_entity_count,
             self.scoped,
             self.uncapped_bandwidth,
             self.tick_ms,
@@ -195,6 +206,7 @@ impl BenchWorld {
         user_count: usize,
         entity_count: usize,
         entity_kind: EntityKind,
+        static_entity_count: usize,
         scoped: bool,
         uncapped_bandwidth: bool,
         tick_ms: u64,
@@ -293,8 +305,22 @@ impl BenchWorld {
 
         let room_key = room_key.expect("no room created — connection failed");
 
-        // Spawn entities and add to room
+        // Spawn static entities (IDs from static pool — no diff-tracking after initial replication)
         let mut server_entities: Vec<BenchEntity> = Vec::new();
+        for _ in 0..static_entity_count {
+            let entity = {
+                let mut em = server.spawn_static_entity(server_world.proxy_mut());
+                let entity = em.id();
+                em.insert_component(HaloTile);
+                entity
+            };
+            if scoped {
+                server.room_mut(&room_key).add_entity(&entity);
+            }
+            server_entities.push(entity);
+        }
+
+        // Spawn dynamic entities (IDs from dynamic pool — diff-tracked each tick)
         for i in 0..entity_count {
             let entity = {
                 let mut entity_mut = server.spawn_entity(server_world.proxy_mut());
@@ -315,14 +341,16 @@ impl BenchWorld {
             server_entities.push(entity);
         }
 
+        let total_entity_count = static_entity_count + entity_count;
+
         // Run until all entities replicated to all clients
-        if scoped && entity_count > 0 && user_count > 0 {
+        if scoped && total_entity_count > 0 && user_count > 0 {
             for _ in 0..REPLICATE_TIMEOUT {
                 advance_tick(&hub, &mut server, &mut server_world, &mut clients, tick_ms);
                 drain_all_events(&mut server, &mut clients);
 
                 let all_visible = clients.iter().all(|(client, world)| {
-                    client.entities(&world.proxy()).len() >= entity_count
+                    client.entities(&world.proxy()).len() >= total_entity_count
                 });
                 if all_visible {
                     break;
@@ -418,6 +446,26 @@ impl BenchWorld {
         }
     }
 
+    /// Mutate entities in `range` (by index in `server_entities`). Skips
+    /// entries that don't have a `BenchComponent`. Used by benches that place
+    /// tiles at the start of the entity list and units at the tail.
+    #[inline]
+    pub fn mutate_entity_range(&mut self, range: std::ops::Range<usize>) {
+        for idx in range {
+            if idx >= self.server_entities.len() {
+                continue;
+            }
+            let entity = self.server_entities[idx];
+            if let Some(mut comp) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<BenchComponent>()
+            {
+                *comp.value = (*comp.value).wrapping_add(1);
+            }
+        }
+    }
+
     /// Mutate the first `count` entities' mutable component values.
     /// Call before `tick()` to benchmark active workload.
     #[inline]
@@ -441,9 +489,10 @@ impl BenchWorld {
     ///
     /// **Not measured** — call from `iter_custom` setup or `iter_batched` setup.
     pub fn spawn_halo_scene(&mut self, tile_count: usize, unit_count: usize) {
+        // Tiles are static entities: IDs from the static pool, no diff-tracking after scope-entry.
         for _ in 0..tile_count {
             let entity = {
-                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                let mut em = self.server.spawn_static_entity(self.server_world.proxy_mut());
                 let id = em.id();
                 em.insert_component(HaloTile);
                 id

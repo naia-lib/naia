@@ -41,6 +41,9 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn insert_component<R: ReplicatedComponent>(&mut self, component_ref: R) -> &mut Self {
+        if self.server.entity_is_static(&self.entity) {
+            panic!("Cannot insert_component on a static entity: call spawn_static_entity and insert all components during construction");
+        }
         self.server
             .insert_component(&mut self.world, &self.entity, component_ref);
 
@@ -59,6 +62,9 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     }
 
     pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
+        if self.server.entity_is_static(&self.entity) {
+            panic!("Cannot remove_component on a static entity");
+        }
         self.server
             .remove_component::<R, W>(&mut self.world, &self.entity)
     }

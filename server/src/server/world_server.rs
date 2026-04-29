@@ -796,11 +796,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .insert_entity_record(&global_entity, EntityOwner::Server);
     }
 
-    /// Creates a new static Entity (frozen after spawn, no diff-tracking).
-    pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> E {
+    /// Creates a new static Entity (frozen after spawn; no diff-tracking after initial replication).
+    ///
+    /// Returns an `EntityMut` so components can be inserted during construction.
+    /// After the `EntityMut` is dropped the entity is immutable by convention —
+    /// do not call `insert_component`/`remove_component` on it again.
+    pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> EntityMut<'_, E, W> {
         let world_entity = world.spawn_entity();
         self.spawn_static_entity_inner(&world_entity);
-        world_entity
+        EntityMut::new(self, world, &world_entity)
     }
 
     fn spawn_static_entity_inner(&mut self, world_entity: &E) {
@@ -842,6 +846,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
         self.global_entity_map
             .set_global_entity_counter_for_test(value);
+    }
+
+    pub fn entity_is_static(&self, world_entity: &E) -> bool {
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            return false;
+        };
+        self.global_world_manager.entity_is_static(&global_entity)
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
@@ -1715,10 +1726,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .global_entity_map
             .entity_to_global_entity(world_entity)
             .unwrap();
-
-        if self.global_world_manager.entity_is_static(&global_entity) {
-            panic!("Cannot insert_component on a static entity (global: {:?})", global_entity);
-        }
 
         if self
             .global_world_manager

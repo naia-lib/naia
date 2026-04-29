@@ -230,6 +230,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.spawn_entity(world)
     }
 
+    /// Spawn a static entity — IDs come from the static pool; no diff-tracking
+    /// after initial replication to clients. Insert all components via the
+    /// returned `EntityMut` during construction; the entity is immutable thereafter.
+    pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, world: W) -> EntityMut<'_, E, W> {
+        self.world_server.spawn_static_entity(world)
+    }
+
+    pub fn entity_is_static(&self, world_entity: &E) -> bool {
+        self.world_server.entity_is_static(world_entity)
+    }
+
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.world_server.enable_entity_replication(entity);
