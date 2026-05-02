@@ -3095,6 +3095,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return;
         };
         if !world.has_entity(&world_entity) {
+            // Entity not yet spawned in Bevy (deferred commands still pending).
+            // Re-queue so we retry next frame instead of permanently losing the scope change.
+            self.scope_change_queue
+                .push_back(ScopeChange::ScopeToggled(*user_key, *global_entity, true));
             return;
         }
         if self
