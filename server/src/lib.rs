@@ -51,9 +51,9 @@ pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
     EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Event, Events, InsertComponentEvent,
-    MainEvents, MessageEvent, PublishEntityEvent, RemoveComponentEvent, RequestEvent,
-    SpawnEntityEvent, TickEvent, TickEvents, UnpublishEntityEvent, UpdateComponentEvent,
-    WorldEvents, WorldPacketEvent,
+    MainEvents, MessageEvent, PublishEntityEvent, QueuedDisconnectEvent, RemoveComponentEvent,
+    RequestEvent, SpawnEntityEvent, TickEvent, TickEvents, UnpublishEntityEvent,
+    UpdateComponentEvent, WorldEvents, WorldPacketEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
 pub use server::{MainServer, Server, ServerConfig, WorldServer};
