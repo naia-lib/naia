@@ -231,6 +231,82 @@ fn remove_resource_propagates_to_client() {
 }
 
 #[test]
+fn server_mutation_replicates_to_client() {
+    let mut scenario = Scenario::new();
+    let client_key = server_with_one_client(&mut scenario);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            assert!(server.insert_resource(TestScore::new(0, 0)));
+        });
+    });
+    settle(&mut scenario, 20);
+
+    // Initial state visible to client
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            c.resource::<TestScore, _, _>(|s| (*s.home, *s.away))
+                .filter(|&v| v == (0, 0))
+                .map(|_| ())
+        })
+    });
+
+    // Mutate via the diff-tracked path.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.mutate_resource::<TestScore, _, _>(|s| {
+                *s.home = 42;
+            });
+        });
+    });
+    settle(&mut scenario, 20);
+
+    // Client observes the update
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            c.resource::<TestScore, _, _>(|s| (*s.home, *s.away))
+                .filter(|&v| v == (42, 0))
+                .map(|_| ())
+        })
+    });
+
+    // Multi-field mutation
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.mutate_resource::<TestScore, _, _>(|s| {
+                *s.home = 1;
+                *s.away = 2;
+            });
+        });
+    });
+    settle(&mut scenario, 20);
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            c.resource::<TestScore, _, _>(|s| (*s.home, *s.away))
+                .filter(|&v| v == (1, 2))
+                .map(|_| ())
+        })
+    });
+}
+
+#[test]
+fn resource_priority_gain_is_settable() {
+    let mut scenario = Scenario::new();
+    let _client_key = server_with_one_client(&mut scenario);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            assert!(server.insert_resource(TestScore::new(0, 0)));
+            // Gain knob applies to a present resource.
+            assert!(server.set_resource_priority_gain::<TestScore>(7.5));
+            // Returns false for a not-inserted resource type.
+            assert!(!server.set_resource_priority_gain::<TestMatchState>(2.0));
+        });
+    });
+    settle(&mut scenario, 5);
+}
+
+#[test]
 fn late_joining_client_observes_pre_existing_resource() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();

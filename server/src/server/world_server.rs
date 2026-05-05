@@ -1044,6 +1044,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.resource_registry.len()
     }
 
+    /// Read-only handle to the per-resource priority state.
+    /// Returns `None` if the resource is not currently inserted.
+    /// Per D9 / §4.4 of RESOURCES_PLAN: per-resource priority is just
+    /// per-entity priority on the hidden resource entity. Default gain
+    /// is 1.0 (same as any entity); no special "Resource" priority tier.
+    pub fn resource_priority<R: ReplicatedComponent>(&self) -> Option<EntityPriorityRef<'_, E>> {
+        let entity = self.resource_entity::<R>()?;
+        Some(self.global_entity_priority(entity))
+    }
+
+    /// Mutable handle to the per-resource priority state.
+    /// Returns `None` if the resource is not currently inserted.
+    /// User can call `.set_gain(f32)` to tune priority or `.boost_once(f32)`
+    /// for a one-shot bump.
+    pub fn resource_priority_mut<R: ReplicatedComponent>(
+        &mut self,
+    ) -> Option<EntityPriorityMut<'_, E>> {
+        let entity = self.resource_entity::<R>()?;
+        Some(self.global_entity_priority_mut(entity))
+    }
+
     /// Iterate over the hidden entities of all currently-inserted resources.
     /// Used by the connect-flow to auto-include all resources in a new
     /// user's scope.

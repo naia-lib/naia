@@ -317,6 +317,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         world.component::<R>(&entity)
     }
 
+    /// Read-only handle to the per-resource priority state, or `None`
+    /// if `R` is not currently inserted.
+    pub fn resource_priority<R: ReplicatedComponent>(&self) -> Option<EntityPriorityRef<'_, E>> {
+        self.world_server.resource_priority::<R>()
+    }
+
+    /// Mutable handle to the per-resource priority state. Returns `None`
+    /// if `R` is not currently inserted. Set the per-tick gain via
+    /// `.set_gain(f32)` or apply a one-shot bump via `.boost_once(f32)`.
+    /// Default gain (no override) is 1.0.
+    pub fn resource_priority_mut<R: ReplicatedComponent>(
+        &mut self,
+    ) -> Option<EntityPriorityMut<'_, E>> {
+        self.world_server.resource_priority_mut::<R>()
+    }
+
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.world_server.enable_entity_replication(entity);

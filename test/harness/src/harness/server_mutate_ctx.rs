@@ -246,6 +246,42 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         Some(f(&*comp))
     }
 
+    /// Mutate the value of a server-side resource. Closure receives
+    /// `&mut R`; mutations to `Property<T>` fields trigger normal
+    /// per-field replication exactly like component mutations would.
+    /// Returns `Some(T)` from the closure, or `None` if `R` is not
+    /// currently inserted.
+    pub fn mutate_resource<R, F, T>(&mut self, f: F) -> Option<T>
+    where
+        R: naia_shared::ReplicatedComponent,
+        F: FnOnce(&mut R) -> T,
+    {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, _, _) = scenario.split_for_server_mut();
+        let entity = server.resource_entity::<R>()?;
+        use naia_shared::WorldMutType;
+        let mut world_mut = world.proxy_mut();
+        let mut comp_mut = world_mut.component_mut::<R>(&entity)?;
+        Some(f(&mut *comp_mut))
+    }
+
+    /// Set the per-tick priority gain override for resource `R`.
+    /// Returns true if `R` is currently inserted, false otherwise.
+    pub fn set_resource_priority_gain<R>(&mut self, gain: f32) -> bool
+    where
+        R: naia_shared::ReplicatedComponent,
+    {
+        let scenario = self.ctx.scenario_mut();
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        match server.resource_priority_mut::<R>() {
+            Some(mut p) => {
+                p.set_gain(gain);
+                true
+            }
+            None => false,
+        }
+    }
+
 
     /// Accept connection for a client
     ///
