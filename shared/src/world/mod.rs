@@ -4,6 +4,7 @@ pub mod entity;
 pub mod entity_index;
 pub mod host;
 pub mod remote;
+pub mod resource;
 pub mod shared_global_world_manager;
 pub mod sync;
 pub mod update;

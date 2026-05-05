@@ -15,7 +15,10 @@ use crate::{
         message_kinds::MessageKinds,
     },
     protocol_id::ProtocolId,
-    world::component::{component_kinds::ComponentKinds, replicate::Replicate},
+    world::{
+        component::{component_kinds::ComponentKinds, replicate::Replicate},
+        resource::ResourceKinds,
+    },
     Request, RequestOrResponse,
 };
 
@@ -30,6 +33,10 @@ pub struct Protocol {
     pub channel_kinds: ChannelKinds,
     pub message_kinds: MessageKinds,
     pub component_kinds: ComponentKinds,
+    /// Marker table — which `ComponentKind`s are Replicated Resources.
+    /// Receiver side checks this on `SpawnWithComponents` to populate
+    /// its `ResourceRegistry`. See `_AGENTS/RESOURCES_PLAN.md`.
+    pub resource_kinds: ResourceKinds,
     /// Used to configure the underlying socket
     pub socket: SocketConfig,
     /// The duration between each tick
@@ -55,6 +62,7 @@ impl Default for Protocol {
             channel_kinds,
             message_kinds,
             component_kinds: ComponentKinds::new(),
+            resource_kinds: ResourceKinds::new(),
             socket: SocketConfig::new(None, None),
             tick_interval: Duration::from_millis(50),
             compression: None,
@@ -157,6 +165,30 @@ impl Protocol {
         self
     }
 
+    /// Register `R` as a Replicated Resource.
+    ///
+    /// A Resource is internally a hidden 1-component entity carrying `R`
+    /// as its sole replicated component. This call:
+    ///
+    /// 1. Calls `add_component::<R>()` to allocate a normal `ComponentKind`
+    ///    + NetId for `R` (Resources reuse the component wire encoding).
+    /// 2. Records the `ComponentKind` in `resource_kinds` so the receiver
+    ///    side can recognize incoming SpawnWithComponents messages whose
+    ///    components are resources, and populate its `ResourceRegistry`.
+    ///
+    /// Idempotent — registering the same type twice is a no-op (matches
+    /// `add_component` re-registration semantics; the underlying tables
+    /// dedupe on `TypeId`).
+    pub fn add_resource<R: Replicate>(&mut self) -> &mut Self {
+        self.check_lock();
+        // Allocate a ComponentKind for R if not already present.
+        self.component_kinds.add_component::<R>();
+        // Mark the kind as a resource.
+        let kind = crate::ComponentKind::of::<R>();
+        self.resource_kinds.register::<R>(kind);
+        self
+    }
+
     pub fn lock(&mut self) {
         self.check_lock();
         self.cached_protocol_id = Some(self.compute_protocol_id());
@@ -195,6 +227,17 @@ impl Protocol {
         for name in self.component_kinds.all_names() {
             hasher.update(name.as_bytes());
         }
+        // Resources — fold in a side-channel marker per resource kind so
+        // that two protocols differing only in which kinds are tagged
+        // resource hash differently. Without this, downgrading a resource
+        // to a plain component (or vice-versa) would collide on the wire
+        // mismatch detector.
+        hasher.update(b"naia:resources:");
+        let mut resource_count = 0u32;
+        for _ in self.resource_kinds.iter() {
+            resource_count += 1;
+        }
+        hasher.update(&resource_count.to_le_bytes());
 
         let hash = hasher.finalize();
         let mut bytes = [0u8; 8];

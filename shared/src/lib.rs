@@ -155,6 +155,7 @@ pub use world::{
     },
     host::host_world_manager::HostWorldManager,
     remote::remote_world_manager::RemoteWorldManager,
+    resource::{ResourceKinds, ResourceRegistry, resource_registry::ResourceAlreadyExists},
     shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
 };
