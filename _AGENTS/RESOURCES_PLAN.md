@@ -1,10 +1,60 @@
 # Replicated Resources — Spec & Implementation Plan
 
-**Status:** DRAFT v2.1 — ALL OPEN QUESTIONS RESOLVED, READY FOR PHASE R1 (2026-05-05)
+**Status:** **R1–R9 LANDED on `release-0.25.0-e`** (2026-05-05). Mode B mirror system + per-component-event filtering deferred to a dedicated follow-up phase (see "Implementation status" below). Mode A (Query-based access) is the V1 user-facing pattern; Commands API is forward-compatible.
 **Owner:** Connor + Claude (twin)
 **Branch target:** `release-0.25.0-e`
 **Prereqs landed:** `is_static` Remote tagging (5ac5b51b), static-entity ID pool, priority accumulator (Fiedler pacing), entity authority/delegation/migration
 **Revision note:** v2.1 promotes the v2 §9 trio (soft-rejection, manual auth-check, late-join InsertResourceEvent) to locked decisions D18/D19/D20 after ground-truth investigation of existing component behavior; adds two corresponding Gherkin scenarios. v2 (vs v1) introduced dynamic-by-default with per-insertion static/dynamic choice; no new App ext trait (extends `AppRegisterComponentEvents`); single comprehensive `.feature` file; per-resource priority via existing entity-priority API; user-facing `Insert/Update/RemoveResourceEvent` mirroring component-event story.
+
+---
+
+## Implementation status (2026-05-05)
+
+| Phase | Status | Commits |
+|---|---|---|
+| R1 — Spec freeze | ✅ Landed | `6b69a1bc` |
+| R2 — Core registry + protocol wiring | ✅ Landed | `6b69a1bc` |
+| R3 — Insert/remove + auto-scope | ✅ Landed | `3c1979e7` |
+| R4 — Updates + per-resource priority | ✅ Landed | `fb151927` |
+| R5 — Authority & delegation | ✅ Landed | `96cabc86` |
+| R6 — Multi-world | ✅ Landed (per-WorldServer = per-World by construction) | — |
+| R7 — Bevy server adapter (Commands + events) | ✅ Landed | `e976fc31`, `3d191a51` |
+| R8 — Bevy client adapter (Commands + events) | ✅ Landed | `c182c7a3` |
+| R9 — Polish + docs | ⏳ This commit |
+| Mode B mirror system + InsertComponentEvent→InsertResourceEvent translation | ⏳ Follow-up phase | See `adapters/bevy/server/src/resource_sync.rs` |
+
+**What's live now (Mode A):**
+
+- Server-side: `server.insert_resource(value)`, `server.insert_static_resource(value)`, `server.remove_resource::<R>()`, `server.has_resource::<R>()`, `server.resource_entity::<R>()`, `server.resource(world)`, `server.resource_priority_mut::<R>()`, `server.configure_resource::<R>(world, cfg)`, `server.resource_authority_status::<R>()`, `server.resource_take_authority::<R>()`, `server.resource_release_authority::<R>()`.
+- Client-side: scan-based resource lookup in the harness; `client.entity_request_authority` / `_release_authority` / `_authority_status` work directly on the resource entity (located by component type).
+- Bevy server adapter: `commands.replicate_resource(value)`, `commands.replicate_resource_static(value)`, `commands.remove_replicated_resource::<R>()`, `commands.configure_replicated_resource::<R>(cfg)` via `CommandsExtServer`. `Server::has_resource::<R>()`, `resource_entity::<R>()`, `is_resource_entity`, `resource_count`, `resource_authority_status::<R>()`.
+- Bevy client adapter: `commands.request_resource_authority::<T, R>()`, `commands.release_resource_authority::<T, R>()` via `CommandsExtClient`.
+- Event types: `InsertResourceEvent<R>` / `UpdateResourceEvent<R>` / `RemoveResourceEvent<R>` (server) and the `<T, R>` variants on the client. Registered via `app.add_resource_events::<R>()` (server) / `app.add_resource_events::<T, R>()` (client) on the existing `AppRegisterComponentEvents` trait.
+- D13 partial: `SpawnEntityEvent` and `DespawnEntityEvent` skip resource entities.
+- Resource entities auto-include in every connected user's scope (bypassing the room gate at `apply_scope_for_user`).
+- Authority delegation: `configure_resource(ReplicationConfig::delegated())` + client `request_resource_authority` flow verified end-to-end (1 integration test settles 100 ticks for EnableDelegation propagation).
+
+**What's deferred (explicitly tracked in `adapters/bevy/server/src/resource_sync.rs`):**
+
+- **Mode B mirror system** — exposing replicated state as standard `Res<R>` / `ResMut<R>`. Requires either (a) extending the `Replicate` trait with `mirror_field(idx, other)` to enable per-field selective sync, or (b) over-replicating on `Changed<R>` (regresses per-field diff). V1 ships Mode A: users access via `Query<&R>` over the resource entity. Commands API does not change between Mode A and Mode B — forward-compatible.
+- **Per-component-event filter + InsertResourceEvent emission** — currently `InsertComponentEvent<R>` still fires for resource entities. Translation to `InsertResourceEvent<R>` is part of the Mode B work because it needs the same per-resource-type plumbing in the event registry.
+- **Schema-evolution test scaffolding** for resources across protocol versions.
+- **Disconnect-with-authority full-flow integration test** — the underlying entity machinery already handles this (`server_auth_handler.rs:155` reverts to Available); a dedicated resource-flavored test landing alongside Mode B work.
+
+**Test coverage delivered:**
+
+- 9/9 resource integration tests in `test/harness/tests/replicated_resources.rs`:
+  - `registration_sets_resource_kind_in_protocol`
+  - `insert_dynamic_resource_replicates_to_connected_client`
+  - `insert_static_resource_replicates_to_connected_client`
+  - `re_inserting_same_resource_returns_false`
+  - `remove_resource_propagates_to_client`
+  - `late_joining_client_observes_pre_existing_resource`
+  - `server_mutation_replicates_to_client`
+  - `resource_priority_gain_is_settable`
+  - `delegated_resource_supports_client_authority_request` (full insert → configure-delegated → request → grant → mutate → server observes → release)
+- 7/7 unit tests in `shared/src/world/resource/` covering `ResourceKinds` + `ResourceRegistry` mechanics.
+- Full workspace `cargo test` green; `cargo check -p naia-bevy-client --target wasm32-unknown-unknown` clean.
 
 ---
 
