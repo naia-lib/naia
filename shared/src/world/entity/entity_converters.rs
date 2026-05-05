@@ -78,8 +78,9 @@ pub trait LocalEntityAndGlobalEntityConverter {
             OwnedLocalEntity::Host { id, is_static: false } => {
                 self.host_entity_to_global_entity(&HostEntity::new(*id))
             }
-            OwnedLocalEntity::Remote(remote_entity) => {
-                self.remote_entity_to_global_entity(&RemoteEntity::new(*remote_entity))
+            OwnedLocalEntity::Remote { id, is_static } => {
+                let remote = if *is_static { RemoteEntity::new_static(*id) } else { RemoteEntity::new(*id) };
+                self.remote_entity_to_global_entity(&remote)
             }
         }
     }

@@ -23,7 +23,7 @@ impl HostEntityGenerator {
         Self {
             user_key,
             generator: KeyGenerator::new(Duration::from_secs(60)),
-            static_generator: KeyGenerator::new(Duration::from_secs(u64::MAX / 2)),
+            static_generator: KeyGenerator::new(Duration::from_secs(60)),
             reserved_host_entities: HashMap::new(),
             reserved_host_entity_ttl: Duration::from_secs(60),
             reserved_host_entities_ttls: VecDeque::new(),
@@ -77,6 +77,9 @@ impl HostEntityGenerator {
         HostEntity::new(self.generator.generate())
     }
 
+    // Static entities use a separate counter so their wire IDs (0, 1, 2 …)
+    // never collide with dynamic entity wire IDs (also 0, 1, 2 …).
+    // The is_static bit in the wire format keeps them distinguishable.
     pub(crate) fn generate_static_host_entity(&mut self) -> HostEntity {
         HostEntity::new_static(self.static_generator.generate())
     }
@@ -91,8 +94,7 @@ impl HostEntityGenerator {
             .expect("Attempting to despawn entity which does not exist!");
         if record.is_host_owned() {
             let host_entity = record.host_entity();
-            let is_static = record.is_static();
-            if is_static {
+            if host_entity.is_static() {
                 self.static_generator.recycle_key(&host_entity.value());
             } else {
                 self.generator.recycle_key(&host_entity.value());
@@ -124,8 +126,7 @@ impl HostEntityGenerator {
             .expect("Attempting to despawn entity which does not exist!");
         if record.is_host_owned() {
             let host_entity = record.host_entity();
-            let is_static = record.is_static();
-            if is_static {
+            if host_entity.is_static() {
                 self.static_generator.recycle_key(&host_entity.value());
             } else {
                 self.generator.recycle_key(&host_entity.value());
@@ -135,7 +136,11 @@ impl HostEntityGenerator {
     }
 
     pub(crate) fn recycle_host_entity(&mut self, host_entity: HostEntity) {
-        self.generator.recycle_key(&host_entity.value());
+        if host_entity.is_static() {
+            self.static_generator.recycle_key(&host_entity.value());
+        } else {
+            self.generator.recycle_key(&host_entity.value());
+        }
     }
 
     // Misc

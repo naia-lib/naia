@@ -118,7 +118,7 @@ fn migration_handles_entity_redirects() {
     // Setup: Create entity map with redirects
     let mut entity_map = LocalEntityMap::new(HostType::Server);
 
-    let old_entity = OwnedLocalEntity::Remote(42);
+    let old_entity = OwnedLocalEntity::Remote { id: 42, is_static: false };
     let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Install redirect
@@ -129,7 +129,7 @@ fn migration_handles_entity_redirects() {
     assert_eq!(redirected, new_entity);
 
     // Test non-redirected entity
-    let other_entity = OwnedLocalEntity::Remote(99);
+    let other_entity = OwnedLocalEntity::Remote { id: 99, is_static: false };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 }
@@ -244,7 +244,7 @@ fn migration_handles_network_failures() {
     let _fake_entity = GlobalEntity::from_u64(999);
 
     // Test that non-existent entity redirects return the original entity
-    let fake_owned = OwnedLocalEntity::Remote(999);
+    let fake_owned = OwnedLocalEntity::Remote { id: 999, is_static: false };
     let result = entity_map.apply_entity_redirect(&fake_owned);
     assert_eq!(result, fake_owned);
 }

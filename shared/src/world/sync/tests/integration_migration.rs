@@ -95,7 +95,7 @@ fn server_side_migration_complete_flow() {
     entity_map.insert_with_host_entity(global_entity, host_entity);
 
     // MIGRATION: Install entity redirect
-    let old_entity = OwnedLocalEntity::Remote(remote_entity.value());
+    let old_entity = OwnedLocalEntity::Remote { id: remote_entity.value(), is_static: false };
     let new_entity = OwnedLocalEntity::Host { id: host_entity.value(), is_static: false };
     entity_map.install_entity_redirect(old_entity, new_entity);
 
@@ -104,7 +104,7 @@ fn server_side_migration_complete_flow() {
     assert_eq!(redirected, new_entity);
 
     // VERIFICATION: Test non-redirected entity
-    let other_entity = OwnedLocalEntity::Remote(99);
+    let other_entity = OwnedLocalEntity::Remote { id: 99, is_static: false };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 
@@ -198,7 +198,7 @@ fn high_frequency_migration_operations() {
 
     // Create many entity redirects
     for i in 0..1000 {
-        let old_entity = OwnedLocalEntity::Remote(i);
+        let old_entity = OwnedLocalEntity::Remote { id: i, is_static: false };
         let new_entity = OwnedLocalEntity::Host { id: i + 1000, is_static: false };
         entity_map.install_entity_redirect(old_entity, new_entity);
         redirects.push((old_entity, new_entity));
@@ -211,7 +211,7 @@ fn high_frequency_migration_operations() {
     }
 
     // Test non-existent redirect returns original entity
-    let non_existent = OwnedLocalEntity::Remote(9999);
+    let non_existent = OwnedLocalEntity::Remote { id: 9999, is_static: false };
     let result = entity_map.apply_entity_redirect(&non_existent);
     assert_eq!(result, non_existent);
 }

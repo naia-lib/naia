@@ -2,7 +2,7 @@ use parking_lot::Mutex;
 use std::{ops::DerefMut};
 
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{entity::Entity, schedule::IntoScheduleConfigs};
+use bevy_ecs::{entity::Entity, prelude::ApplyDeferred, schedule::IntoScheduleConfigs};
 
 use naia_bevy_shared::{
     HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
@@ -111,6 +111,9 @@ impl PluginType for Plugin {
                 Update,
                 HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),
             )
+            // Flush deferred Bevy commands (e.g. component inserts from HandleWorldEvents)
+            // before naia's change-detection systems run so they see the new components.
+            .add_systems(Update, ApplyDeferred.in_set(HostSyncOwnedAddedTracking))
             .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
             .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //

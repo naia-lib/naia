@@ -407,11 +407,6 @@ impl RemoteWorldManager {
         component_kind: &ComponentKind,
     ) {
         if let Some(remote_entity_set) = component.relations_waiting() {
-            // let name = component.name();
-            // warn!(
-            //     "Remote World Manager: waitlisting entity {:?}'s component {:?} for insertion. Waiting on Entities: {:?}",
-            //     global_entity, &name, remote_entity_set,
-            // );
 
             self.waitlist.waitlist_queue_entity(
                 &self.remote_engine,

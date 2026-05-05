@@ -94,7 +94,7 @@ fn local_entity_map_redirect_operations() {
     entity_map.insert_with_remote_entity(global_entity, remote_entity);
 
     // Test redirect installation
-    let old_entity = OwnedLocalEntity::Remote(42);
+    let old_entity = OwnedLocalEntity::Remote { id: 42, is_static: false };
     let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
     entity_map.install_entity_redirect(old_entity, new_entity);
 
@@ -103,7 +103,7 @@ fn local_entity_map_redirect_operations() {
     assert_eq!(redirected, new_entity);
 
     // Test non-redirected entity
-    let other_entity = OwnedLocalEntity::Remote(99);
+    let other_entity = OwnedLocalEntity::Remote { id: 99, is_static: false };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 }
@@ -196,14 +196,14 @@ fn high_frequency_operations() {
 
     // Create many redirects
     for i in 0..100 {
-        let old_entity = OwnedLocalEntity::Remote(i);
+        let old_entity = OwnedLocalEntity::Remote { id: i, is_static: false };
         let new_entity = OwnedLocalEntity::Host { id: i + 1000, is_static: false };
         entity_map.install_entity_redirect(old_entity, new_entity);
     }
 
     // Test all redirects work
     for i in 0..100 {
-        let old_entity = OwnedLocalEntity::Remote(i);
+        let old_entity = OwnedLocalEntity::Remote { id: i, is_static: false };
         let expected_new_entity = OwnedLocalEntity::Host { id: i + 1000, is_static: false };
         let redirected = entity_map.apply_entity_redirect(&old_entity);
         assert_eq!(redirected, expected_new_entity);

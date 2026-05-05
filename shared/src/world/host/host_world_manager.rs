@@ -438,7 +438,7 @@ impl HostWorldManager {
         local_entity_map.insert_with_host_entity(global_entity, new_host_entity);
 
         // Step 8: Install entity redirect in LocalEntityMap
-        let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
+        let old_entity = old_remote_entity.copy_to_owned();
         let new_entity = OwnedLocalEntity::Host { id: new_host_entity.value(), is_static: false };
         local_entity_map.install_entity_redirect(old_entity, new_entity);
 

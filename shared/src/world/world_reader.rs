@@ -97,9 +97,8 @@ impl WorldReader {
                 );
             }
             EntityMessageType::SpawnWithComponents => {
-                // read remote entity
-                let remote_entity = RemoteEntity::de(reader)?;
-                let local_entity = remote_entity.copy_to_owned();
+                // read entity as full OwnedLocalEntity (carries is_static) then reverse to Remote
+                let local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
 
                 // read component count
                 let count = u8::de(reader)?;

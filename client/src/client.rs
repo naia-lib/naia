@@ -2036,7 +2036,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
                         // Install entity redirect for old references
                         let old_entity = OwnedLocalEntity::Host { id: old_host_entity.value(), is_static: false };
-                        let new_entity = OwnedLocalEntity::Remote(new_remote_entity.value());
+                        let new_entity = new_remote_entity.copy_to_owned();
                         connection
                             .base
                             .world_manager

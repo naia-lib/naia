@@ -347,8 +347,8 @@ impl EntityProperty {
 
                 Ok(new_self)
             } else {
-                if let OwnedLocalEntity::Remote(remote_entity_id) = redirected_entity {
-                    let new_impl = RemoteWaitingRelation::new(RemoteEntity::new(remote_entity_id));
+                if let OwnedLocalEntity::Remote { .. } = redirected_entity {
+                    let new_impl = RemoteWaitingRelation::new(redirected_entity.take_remote());
 
                     let new_self = Self {
                         inner: EntityRelation::RemoteWaiting(new_impl),
@@ -467,7 +467,7 @@ impl EntityProperty {
                 let new_global_entity = {
                     // CRITICAL: Apply entity redirects for migrated entities
                     // The RemoteEntity stored here might reference an old entity ID before migration
-                    let owned_entity = OwnedLocalEntity::Remote(inner.remote_entity.value());
+                    let owned_entity = inner.remote_entity.copy_to_owned();
                     let redirected_entity = converter.apply_entity_redirect(&owned_entity);
 
                     if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {

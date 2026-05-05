@@ -169,10 +169,10 @@ impl RemoteWorldWaitlist {
             // if it exists, queue the waiting part of the component update
             if let Some(waiting_updates) = waiting_updates_opt {
                 // Convert OwnedLocalEntity to RemoteEntity
-                let OwnedLocalEntity::Remote(remote_entity) = local_entity else {
+                let OwnedLocalEntity::Remote { .. } = local_entity else {
                     panic!("Expected RemoteEntity");
                 };
-                let remote_entity = RemoteEntity::new(remote_entity);
+                let remote_entity = local_entity.take_remote();
 
                 for (waiting_remote_entity, waiting_field_update) in waiting_updates {
                     let field_id = waiting_field_update.field_id();

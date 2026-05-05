@@ -213,7 +213,8 @@ impl WorldWriter {
                     .iter()
                     .all(|k| world.has_component_of_kind(&world_entity, k));
 
-                if !world_manager.has_global_entity(global_entity) || !all_present {
+                let has_global = world_manager.has_global_entity(global_entity);
+                if !has_global || !all_present {
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
                         world_manager.record_command_written(
@@ -231,7 +232,7 @@ impl WorldWriter {
                     .entity_converter()
                     .global_entity_to_host_entity(global_entity)
                     .unwrap();
-                host_entity.ser(writer);
+                host_entity.copy_to_owned().ser(writer);
 
                 let count = comp_kind_list.len() as u8;
                 count.ser(writer);

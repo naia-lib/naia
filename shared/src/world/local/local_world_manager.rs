@@ -210,8 +210,9 @@ impl LocalWorldManager {
             OwnedLocalEntity::Host { id, is_static: false } => {
                 self.host.has_entity(&HostEntity::new(*id))
             }
-            OwnedLocalEntity::Remote(remote_entity) => {
-                self.remote.has_entity(&RemoteEntity::new(*remote_entity))
+            OwnedLocalEntity::Remote { id, is_static } => {
+                let remote = if *is_static { RemoteEntity::new_static(*id) } else { RemoteEntity::new(*id) };
+                self.remote.has_entity(&remote)
             }
         }
     }
@@ -368,7 +369,7 @@ impl LocalWorldManager {
 
         // BULLETPROOF: Step 6: Install entity redirect in LocalEntityMap
         // This allows old entity references to be automatically updated
-        let old_entity = OwnedLocalEntity::Remote(old_remote_entity.value());
+        let old_entity = old_remote_entity.copy_to_owned();
         let new_entity = OwnedLocalEntity::Host { id: new_host_entity.value(), is_static: false };
         self.entity_map
             .install_entity_redirect(old_entity, new_entity);
@@ -582,13 +583,14 @@ impl LocalWorldManager {
         &self,
         global_entity: &GlobalEntity,
     ) -> Option<EntityAuthStatus> {
-        let Ok(OwnedLocalEntity::Remote(remote_entity_value)) =
-            self.entity_map.global_entity_to_owned_entity(global_entity)
-        else {
+        let Ok(owned) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            return None;
+        };
+        let OwnedLocalEntity::Remote { .. } = owned else {
             return None;
         };
         self.remote
-            .get_entity_auth_status(&RemoteEntity::new(remote_entity_value))
+            .get_entity_auth_status(&owned.take_remote())
     }
 
     pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
@@ -669,9 +671,9 @@ impl LocalWorldManager {
                     let host_entity = if is_static { HostEntity::new_static(host_entity) } else { HostEntity::new(host_entity) };
                     incoming_host_messages.push((id, incoming_message.with_entity(host_entity)));
                 }
-                OwnedLocalEntity::Remote(remote_entity) => {
+                OwnedLocalEntity::Remote { .. } => {
                     // Remote entity message
-                    let remote_entity = RemoteEntity::new(remote_entity);
+                    let remote_entity = local_entity.take_remote();
                     // Count when Spawn is routed to incoming_remote_messages
                     #[cfg(feature = "e2e_debug")]
                     if incoming_message.get_type() == EntityMessageType::Spawn {
@@ -1197,9 +1199,9 @@ impl LocalWorldManager {
                 let host_entity = if is_static { HostEntity::new_static(host_entity) } else { HostEntity::new(host_entity) };
                 self.host.deliver_message(id, msg.with_entity(host_entity));
             }
-            OwnedLocalEntity::Remote(remote_entity) => {
+            OwnedLocalEntity::Remote { .. } => {
                 // Remote entity message
-                let remote_entity = RemoteEntity::new(remote_entity);
+                let remote_entity = local_entity.take_remote();
                 self.remote
                     .deliver_message(id, msg.with_entity(remote_entity));
             }

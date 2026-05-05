@@ -135,7 +135,7 @@ fn local_entity_map_install_and_apply_redirect() {
     let mut entity_map =
         crate::world::local::local_entity_map::LocalEntityMap::new(HostType::Server);
 
-    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote(42);
+    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote { id: 42, is_static: false };
     let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Install redirect
@@ -146,7 +146,7 @@ fn local_entity_map_install_and_apply_redirect() {
     assert_eq!(redirected, new_entity);
 
     // Non-redirected entity returns itself
-    let other_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote(99);
+    let other_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote { id: 99, is_static: false };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 }
@@ -212,7 +212,7 @@ fn entity_message_apply_redirects() {
     // Test that we can apply entity redirects to EntityMessage
     use crate::world::entity::entity_message::EntityMessage;
 
-    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote(42);
+    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote { id: 42, is_static: false };
     let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Create a message with the old entity
@@ -274,7 +274,7 @@ fn force_drain_preserves_component_state() {
 fn install_and_apply_redirect() {
     let mut entity_map = LocalEntityMap::new(HostType::Server);
 
-    let old_entity = OwnedLocalEntity::Remote(42);
+    let old_entity = OwnedLocalEntity::Remote { id: 42, is_static: false };
     let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
 
     // Install redirect
@@ -285,7 +285,7 @@ fn install_and_apply_redirect() {
     assert_eq!(redirected, new_entity);
 
     // Non-redirected entity returns itself
-    let other_entity = OwnedLocalEntity::Remote(99);
+    let other_entity = OwnedLocalEntity::Remote { id: 99, is_static: false };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 }
