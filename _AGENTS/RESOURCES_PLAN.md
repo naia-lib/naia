@@ -1,10 +1,10 @@
 # Replicated Resources — Spec & Implementation Plan
 
-**Status:** DRAFT v2 for review (2026-05-05)
+**Status:** DRAFT v2.1 — ALL OPEN QUESTIONS RESOLVED, READY FOR PHASE R1 (2026-05-05)
 **Owner:** Connor + Claude (twin)
 **Branch target:** `release-0.25.0-e`
 **Prereqs landed:** `is_static` Remote tagging (5ac5b51b), static-entity ID pool, priority accumulator (Fiedler pacing), entity authority/delegation/migration
-**Revision note:** v2 supersedes v1. Major changes per Connor feedback: dynamic-by-default with per-insertion static/dynamic choice; no new App ext trait (extends `AppRegisterComponentEvents`); single comprehensive `.feature` file (no 10-file proliferation); per-resource priority via existing entity-priority API (no new tier); user-facing `InsertResourceEvent` / `UpdateResourceEvent` / `RemoveResourceEvent` mirroring the component-event story so users see zero entity/component semantics; explicit treatment of the bevy-resource ↔ entity-component mirror challenge.
+**Revision note:** v2.1 promotes the v2 §9 trio (soft-rejection, manual auth-check, late-join InsertResourceEvent) to locked decisions D18/D19/D20 after ground-truth investigation of existing component behavior; adds two corresponding Gherkin scenarios. v2 (vs v1) introduced dynamic-by-default with per-insertion static/dynamic choice; no new App ext trait (extends `AppRegisterComponentEvents`); single comprehensive `.feature` file; per-resource priority via existing entity-priority API; user-facing `Insert/Update/RemoveResourceEvent` mirroring component-event story.
 
 ---
 
@@ -151,6 +151,9 @@ The sync mutator on the bevy-resource side is **a different `PropertyMutator` im
 | D15 | **Disconnect-with-authority** → revert to `EntityAuthStatus::Available` (next requester or server take_authority); resource persists with last-committed value | Mirrors entity behavior exactly (`server_auth_handler.rs:155-158`, `world_server.rs:2195-2220`). |
 | D16 | **Server-attempt-to-mutate-delegated-resource-it-doesn't-own** → returns `AuthorityError::ClientHoldsAuthority`; value unchanged | Mirrors entity behavior. |
 | D17 | **`replicate_resource()` on `App` does not exist as a separate trait method**. Resource event registration uses `add_resource_events::<R>()` added to the existing `AppRegisterComponentEvents` trait. Protocol-level registration of `R` as a resource happens via `protocol.add_resource::<R>()` inside a user `ProtocolPlugin` (mirroring how `protocol.add_component::<C>()` works). | Per Connor: don't proliferate trait imports. |
+| D18 | **Server-authoritative client write = soft rejection, identical to components.** Client-side mutation of a `ResMut<R>` for a server-authoritative resource updates the local bevy mirror but does NOT propagate; the next incoming server update overwrites the local change. No error, no panic, no SystemParam refusal. | Mirrors `RemoteOwnedProperty::DerefMut` (`shared/src/world/component/property.rs:342`) which returns `&mut inner.inner` without calling `mutate()`. Same drop-on-floor semantics as today's components — users already understand it. Hardening to a stricter SystemParam-level refusal is deferred until soft rejection is shown to bite real users. |
+| D19 | **Authority status is checked manually via the existing `entity.authority()`-style API**, surfaced as `commands.resource_authority::<R>(&client)` on the Bevy adapter and `client.resource_authority_status::<R>()` in core. `ResMut<R>` does NOT auto-gate. | Mirrors the existing entity-delegation usage pattern (`test/harness/legacy_tests/10_entity_delegation.rs:389` requests authority, `:399` checks status, then mutates). Consistency with components beats type-state cleverness in V1. |
+| D20 | **`InsertResourceEvent<R>` fires on a client whenever the resource first becomes visible to that client**, including late-join (resource was inserted before the client connected, then arrives in the first replication packet). | Mirrors `InsertComponentEvent<C>` which fires unconditionally from `RemoteEntityChannel::process_messages` (`shared/src/world/sync/remote_entity_channel.rs:288`) on every `SpawnWithComponents` arrival — late-join entity is indistinguishable from fresh-spawn entity at the event level. Verified in `test/harness/legacy_tests/07_entity_replication.rs:1499` (`late_joining_client_receives_full_current_snapshot`). |
 
 ---
 
@@ -618,15 +621,17 @@ Land in order; each phase has its own RED → GREEN gate.
 
 ---
 
-## 9. Open Questions for Connor (post-v2)
+## 9. Open Questions — RESOLVED
 
-Most v1 questions were resolved by Connor's feedback. Remaining items:
+All three v2 open questions resolved by ground-truth investigation of the existing component/authority pipeline. Decisions promoted to D18/D19/D20 in §3.
 
-1. **Stronger client-side write gating for server-authoritative resources.** The "soft rejection" in the risk table is the simplest implementation. A stricter alternative: client-side `ResMut<R>` returns `None` (or compile-time-rejects) for server-authoritative resources. Stricter is safer but requires per-resource type-state plumbing in the SystemParam impl. Recommendation: ship soft rejection in V1, harden if it bites.
+| Question | Resolution | Evidence |
+|---|---|---|
+| Soft vs hard rejection of client-side server-authoritative writes | **Soft (D18)** — mirror existing component behavior exactly. | `shared/src/world/component/property.rs:342` — `RemoteOwnedProperty::DerefMut` returns `&mut inner.inner` without calling `mutate()`. Today's component story uses silent local mutation + server-overwrite; resources match. |
+| `ResMut<R>` auto-checks authority, or manual? | **Manual (D19)** — user calls `commands.resource_authority::<R>(&client)` before mutating. | `test/harness/legacy_tests/10_entity_delegation.rs:389-405` — real entity-delegation usage is `request_authority()` then check `entity.authority()` then mutate. Match. |
+| Does `InsertResourceEvent` fire on late-join? | **Yes (D20)** — fires on first delivery, late-join indistinguishable from fresh-spawn. | `shared/src/world/sync/remote_entity_channel.rs:288` — `SpawnWithComponents` unconditionally emits `EntityMessage::InsertComponent` for each component kind in the coalesced list. Late-join verified by `test/harness/legacy_tests/07_entity_replication.rs:1499` (`late_joining_client_receives_full_current_snapshot`). |
 
-2. **Auth status SystemParam.** Should `ResMut<R>` itself check authority and behave differently, or is it a separate `client.resource_authority::<R>()` API that the user must call manually before mutating? Component story uses the latter (manual `entity.authority()` check). Recommendation: match Component story (manual check).
-
-3. **`InsertResourceEvent<R>` semantics for client connecting to a pre-existing resource.** Should it fire on the client even though the resource was inserted long before the client's connection? I argue YES — from the client's perspective, this is the first time they see the resource, which is "insert from their POV." Mirror how `InsertComponentEvent<C>` fires on a client when an already-existing entity comes into scope. Recommendation: fire.
+No remaining open questions. Plan is ready for Phase R1 execution upon Connor approval.
 
 ---
 
@@ -829,6 +834,35 @@ Feature: Replicated Resources
     And one replication round trip elapses
     Then alice's `commands.resource_authority::<PlayerSelection>(&client)` returns Some(Granted)
     And alice can mutate `ResMut<PlayerSelection>` and the change replicates to the server
+
+  # ---------------------------------------------------------------------------
+  # Soft rejection of client writes to server-authoritative resources (D18)
+  # ---------------------------------------------------------------------------
+
+  Scenario: client mutation of server-authoritative resource is silently dropped locally and overwritten by next server update
+    Given a server with Score { home: 0, away: 0 } and connected client "alice"
+    And the initial replication round trip has elapsed
+    When alice mutates Score.home to 99 via ResMut<Score>
+    Then no replication packet is sent from alice carrying the Score.home change
+    And alice's local Score.home immediately reads as 99 (local mirror was modified)
+    When the server later mutates Score.home to 1
+    And one replication round trip elapses
+    Then alice's local Score.home equals 1 (server overwrote the local change)
+    And no AuthorityError was returned at any step
+
+  # ---------------------------------------------------------------------------
+  # Late-join InsertResourceEvent firing (D20)
+  # ---------------------------------------------------------------------------
+
+  Scenario: late-joining client receives InsertResourceEvent for pre-existing resource
+    Given a server with Score { home: 7, away: 3 } already inserted at startup
+    And client "alice" already connected
+    When client "bob" connects after the resource was inserted
+    And the connection handshake completes
+    And bob's first replication packet arrives
+    Then bob receives exactly one InsertResourceEvent<Main, Score>
+    And bob's Res<Score>.home equals 7
+    And alice did NOT receive a duplicate InsertResourceEvent for Score on bob's connection
 ```
 
 ---
@@ -836,6 +870,7 @@ Feature: Replicated Resources
 ## 11. Provenance & Open Edits
 
 - v1 drafted 2026-05-05.
-- v2 (this revision) 2026-05-05 after Connor feedback: dynamic-by-default with per-insertion choice; single trait extension (no proliferation); single comprehensive `.feature` file; sane priority defaults via existing entity-priority API; user-facing `Insert/Update/RemoveResourceEvent` so users see zero entity/component semantics; explicit treatment of mirror challenge.
-- Pending Connor review on §9 remaining open questions.
+- v2 2026-05-05 after Connor feedback: dynamic-by-default with per-insertion choice; single trait extension (no proliferation); single comprehensive `.feature` file; sane priority defaults via existing entity-priority API; user-facing `Insert/Update/RemoveResourceEvent` so users see zero entity/component semantics; explicit treatment of mirror challenge.
+- v2.1 2026-05-05: §9 trio resolved by ground-truth investigation; D18 (soft rejection), D19 (manual auth check), D20 (late-join event firing) locked; two corresponding spec scenarios added.
+- READY for Phase R1 execution.
 - After review, this doc moves to `_AGENTS/ARCHIVE/` as phases complete (per the "don't re-audit completed plans" doctrine), with a per-phase COMPLETE marker added to the top.
