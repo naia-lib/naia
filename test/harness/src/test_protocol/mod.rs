@@ -148,11 +148,58 @@ impl Velocity {
 #[replicate(immutable)]
 pub struct ImmutableLabel;
 
+// ========================================================================
+// Replicated Resource test types — server↔client singletons.
+// ========================================================================
+
+/// Server-authoritative scoreboard resource. Used by integration tests
+/// to assert end-to-end resource replication and per-field diff updates.
+#[derive(Replicate)]
+pub struct TestScore {
+    pub home: Property<u32>,
+    pub away: Property<u32>,
+}
+
+impl TestScore {
+    pub fn new(home: u32, away: u32) -> Self {
+        Self::new_complete(home, away)
+    }
+}
+
+/// Server-authoritative match-state resource (used by static-pool tests).
+#[derive(Replicate)]
+pub struct TestMatchState {
+    pub phase: Property<u8>,
+}
+
+impl TestMatchState {
+    pub fn new(phase: u8) -> Self {
+        Self::new_complete(phase)
+    }
+}
+
+/// Delegable resource — registered as a normal resource; the
+/// authority-delegation tests configure delegation at insert time via
+/// `configure_replicated_resource`.
+#[derive(Replicate)]
+pub struct TestPlayerSelection {
+    pub selected_id: Property<u16>,
+}
+
+impl TestPlayerSelection {
+    pub fn new(selected_id: u16) -> Self {
+        Self::new_complete(selected_id)
+    }
+}
+
 pub fn protocol() -> Protocol {
     Protocol::builder()
         .add_component::<Position>()
         .add_component::<Velocity>()
         .add_component::<ImmutableLabel>()
+        .add_resource::<TestScore>()
+        .add_resource::<TestMatchState>()
+        .add_resource::<TestPlayerSelection>()
         .add_message::<Auth>()
         .add_message::<TestMessage>()
         .add_message::<LargeTestMessage>()

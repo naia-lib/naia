@@ -16,9 +16,9 @@ use naia_shared::{
     GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
     OutgoingPriorityHook, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
-    Protocol, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer,
-    WorldMutType, WorldRefType,
+    Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceKinds,
+    ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr,
+    SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -114,6 +114,14 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     channel_kinds: ChannelKinds,
     message_kinds: MessageKinds,
     component_kinds: ComponentKinds,
+    /// Marker table — which `ComponentKind`s are Replicated Resources.
+    /// Used by the receiver side (in delegated client → server flows)
+    /// to recognize incoming resource components. Currently unused for
+    /// server-authoritative-only resource flow but retained for R5
+    /// (delegation) where the server must identify incoming resource
+    /// updates from clients.
+    #[allow(dead_code)]
+    resource_kinds: ResourceKinds,
     client_authoritative_entities: bool,
     io: Io,
     // cont
@@ -155,6 +163,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     // `scope_checks_all()`. Maintained on room/user/entity churn; reads are
     // O(1) and zero-allocation.
     scope_checks_cache: ScopeChecksCache<E>,
+    // Replicated Resources — per-World TypeId<R> ↔ GlobalEntity registry.
+    // Resources are 1-component entities that auto-include into every
+    // user's scope. See `_AGENTS/RESOURCES_PLAN.md`.
+    resource_registry: ResourceRegistry,
 }
 
 /// Events that drive scope re-evaluation.
@@ -179,6 +191,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             channel_kinds,
             message_kinds,
             component_kinds,
+            resource_kinds,
             tick_interval,
             compression,
             client_authoritative_entities,
@@ -204,6 +217,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             channel_kinds,
             message_kinds,
             component_kinds,
+            resource_kinds,
             client_authoritative_entities,
             io,
             heartbeat_timer,
@@ -235,6 +249,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             global_priority: GlobalPriorityState::new(),
             user_priorities: HashMap::new(),
             scope_checks_cache: ScopeChecksCache::new(),
+            resource_registry: ResourceRegistry::new(),
+            // resource_kinds folded into the field — keep alongside other protocol tables
         }
     }
 
@@ -255,6 +271,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
         self.users.insert(user_key, WorldUser::new(user_addr));
         self.disconnected_users.insert(user_addr, user_key);
+        // Auto-include of Replicated Resources happens in
+        // `finalize_connection` — that's the point at which a Connection
+        // exists in `user_connections` (required by `apply_scope_for_user`
+        // to actually push spawn messages).
     }
 
     fn finalize_connection(&mut self, user_key: &UserKey, user_address: &SocketAddr) {
@@ -284,6 +304,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         if self.io.bandwidth_monitor_enabled() {
             self.io.register_client(user_address);
+        }
+
+        // Replicated Resources auto-scope: now that the connection
+        // exists in `user_connections`, scope-include every currently-
+        // existing resource entity for this user. Without this step,
+        // late-joining clients never receive resources (the room gate
+        // bypass in `apply_scope_for_user` requires a Connection to
+        // exist; resource entities themselves never enter rooms).
+        let resource_entities = self.resource_entities();
+        for world_entity in resource_entities {
+            self.user_scope_set_entity(&user_key, &world_entity, true);
         }
 
         self.incoming_world_events.push_connection(&user_key);
@@ -860,6 +891,173 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return false;
         };
         self.global_world_manager.entity_is_static(&global_entity)
+    }
+
+    // ========================================================================
+    // Replicated Resources
+    // ========================================================================
+    //
+    // A Replicated Resource is internally a hidden 1-component entity that:
+    //   - Is registered in the per-world `ResourceRegistry` keyed by `R`'s
+    //     TypeId, allowing O(1) `resource_entity::<R>()` lookups.
+    //   - Is auto-included in every connected user's scope (so resources
+    //     reach every client without explicit room/scope work).
+    //   - Otherwise reuses the existing entity replication pipeline 100%
+    //     (spawn/update/despawn, per-field diff tracking, authority).
+    //
+    // See `_AGENTS/RESOURCES_PLAN.md`.
+
+    /// Insert a Replicated Resource using a dynamic entity ID.
+    ///
+    /// Spawns the hidden entity, attaches `value` as its sole replicated
+    /// component, registers it in the per-world `ResourceRegistry`, and
+    /// auto-includes it in every currently-connected user's scope.
+    ///
+    /// Returns the underlying world-entity handle for tests / advanced use.
+    /// Bevy adapter callers will not usually surface this entity to user
+    /// code (resources are entity-less from the user's POV).
+    ///
+    /// Errors with `ResourceAlreadyExists` if `R` was already inserted
+    /// in this world. The world remains unchanged on error.
+    pub fn insert_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        mut world: W,
+        value: R,
+    ) -> Result<E, ResourceAlreadyExists> {
+        let world_entity = world.spawn_entity();
+        self.spawn_entity_inner(&world_entity);
+        let global_entity = self
+            .global_entity_map
+            .entity_to_global_entity(&world_entity)
+            .expect("entity just spawned must be in global map");
+
+        if let Err(e) = self.resource_registry.insert::<R>(global_entity) {
+            // Roll back: remove from inner tracking + despawn from world.
+            self.despawn_entity_worldless(&world_entity);
+            world.despawn_entity(&world_entity);
+            return Err(e);
+        }
+
+        // Attach R as a component via the proper hook path
+        // (registers component with the diff handler + change-detection).
+        // Mirrors `EntityMut::insert_component` plumbing.
+        self.insert_component(&mut world, &world_entity, value);
+
+        // Auto-include in every connected user's scope.
+        let user_keys: Vec<UserKey> = self.users.keys().copied().collect();
+        for user_key in user_keys {
+            self.user_scope_set_entity(&user_key, &world_entity, true);
+        }
+
+        Ok(world_entity)
+    }
+
+    /// Insert a Replicated Resource using a static entity ID (`is_static`
+    /// on the wire). Mirror of `insert_resource` but uses the static
+    /// entity ID pool, which is appropriate for long-lived singletons
+    /// whose ID we want kept small + recycled separately from gameplay
+    /// entities.
+    pub fn insert_static_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        mut world: W,
+        value: R,
+    ) -> Result<E, ResourceAlreadyExists> {
+        let world_entity = world.spawn_entity();
+        self.spawn_static_entity_inner(&world_entity);
+        let global_entity = self
+            .global_entity_map
+            .entity_to_global_entity(&world_entity)
+            .expect("entity just spawned must be in global map");
+
+        if let Err(e) = self.resource_registry.insert::<R>(global_entity) {
+            self.despawn_entity_worldless(&world_entity);
+            world.despawn_entity(&world_entity);
+            return Err(e);
+        }
+
+        // Static entities get their components registered through the
+        // static-init path; insert via the normal pipeline (which routes
+        // to static_init_components for is_static entities).
+        self.insert_component(&mut world, &world_entity, value);
+
+        let user_keys: Vec<UserKey> = self.users.keys().copied().collect();
+        for user_key in user_keys {
+            self.user_scope_set_entity(&user_key, &world_entity, true);
+        }
+
+        Ok(world_entity)
+    }
+
+    /// Remove the resource of type `R` if present. Despawns the hidden
+    /// entity (which propagates a despawn to every client where it was
+    /// in scope) and clears the registry entries on both sides.
+    ///
+    /// Returns `true` if a resource was removed, `false` if `R` was not
+    /// present.
+    pub fn remove_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        mut world: W,
+    ) -> bool {
+        let Some(global_entity) = self.resource_registry.remove::<R>() else {
+            return false;
+        };
+        let world_entity = match self
+            .global_entity_map
+            .global_entity_to_entity(&global_entity)
+        {
+            Ok(e) => e,
+            Err(_) => return true, // registry stale; nothing more to do
+        };
+        // Despawn from inner tracking (scope, priority, replication state)
+        self.despawn_entity_worldless(&world_entity);
+        // Then despawn from the world itself.
+        world.despawn_entity(&world_entity);
+        true
+    }
+
+    /// O(1): the hidden entity carrying resource `R`, or `None` if
+    /// `R` is not currently inserted.
+    pub fn resource_entity<R: ReplicatedComponent>(&self) -> Option<E> {
+        let global_entity = self.resource_registry.entity_for::<R>()?;
+        self.global_entity_map
+            .global_entity_to_entity(&global_entity)
+            .ok()
+    }
+
+    /// O(1): is `world_entity` a hidden resource entity?
+    /// Used by Bevy adapter event-emission filter (D13) to suppress
+    /// SpawnEntityEvent / component events for resource entities.
+    pub fn is_resource_entity(&self, world_entity: &E) -> bool {
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            return false;
+        };
+        self.resource_registry.is_resource_entity(&global_entity)
+    }
+
+    /// True iff a resource of type `R` is currently inserted.
+    pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
+        self.resource_registry.entity_for::<R>().is_some()
+    }
+
+    /// Number of currently-inserted resources.
+    pub fn resource_count(&self) -> usize {
+        self.resource_registry.len()
+    }
+
+    /// Iterate over the hidden entities of all currently-inserted resources.
+    /// Used by the connect-flow to auto-include all resources in a new
+    /// user's scope.
+    pub fn resource_entities(&self) -> Vec<E> {
+        let mut out = Vec::with_capacity(self.resource_registry.len());
+        for global_entity in self.resource_registry.entities() {
+            if let Ok(e) = self
+                .global_entity_map
+                .global_entity_to_entity(global_entity)
+            {
+                out.push(e);
+            }
+        }
+        out
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
@@ -3136,7 +3334,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .get(user_key, global_entity)
             .copied()
             .unwrap_or(true);
-        let should_be_in_scope = in_common_room && scope_flag;
+        // Replicated Resources (D14 / §4.3 of RESOURCES_PLAN): resource
+        // entities are global per-World — they bypass the room gate and
+        // are unconditionally in-scope for every connected user. The
+        // `scope_flag` still applies for explicit exclude (defensive),
+        // though the public API should not allow excluding a resource.
+        let is_resource = self.resource_registry.is_resource_entity(global_entity);
+        let should_be_in_scope = (is_resource || in_common_room) && scope_flag;
 
         if should_be_in_scope {
             if currently_in_scope {

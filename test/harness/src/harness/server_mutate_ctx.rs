@@ -188,6 +188,65 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         server.users_count()
     }
 
+    // ========================================================================
+    // Replicated Resources (test harness wrappers)
+    // ========================================================================
+
+    /// Insert a Replicated Resource using the dynamic entity ID pool.
+    ///
+    /// Returns `true` if a new resource was inserted, `false` if a
+    /// resource of type `R` was already present.
+    pub fn insert_resource<R: naia_shared::ReplicatedComponent>(&mut self, value: R) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, _, _) = scenario.split_for_server_mut();
+        server.insert_resource(world.proxy_mut(), value).is_ok()
+    }
+
+    /// Insert a Replicated Resource using the static entity ID pool
+    /// (long-lived singletons; smaller wire IDs; recycled separately).
+    pub fn insert_static_resource<R: naia_shared::ReplicatedComponent>(
+        &mut self,
+        value: R,
+    ) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, _, _) = scenario.split_for_server_mut();
+        server
+            .insert_static_resource(world.proxy_mut(), value)
+            .is_ok()
+    }
+
+    /// Remove the resource of type `R`. Returns `true` if a resource
+    /// was removed, `false` if not present.
+    pub fn remove_resource<R: naia_shared::ReplicatedComponent>(&mut self) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, _, _) = scenario.split_for_server_mut();
+        server.remove_resource::<_, R>(world.proxy_mut())
+    }
+
+    /// True iff a resource of type `R` is currently inserted.
+    pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
+        let scenario = self.ctx.scenario();
+        let (server, _) = scenario.server_and_registry().unwrap();
+        server.has_resource::<R>()
+    }
+
+    /// Read-only access to the value of a server-side resource (during a
+    /// mutate closure, where read-back can be useful for assertions).
+    pub fn resource<R, F, T>(&self, f: F) -> Option<T>
+    where
+        R: naia_shared::ReplicatedComponent,
+        F: FnOnce(&R) -> T,
+    {
+        let scenario = self.ctx.scenario();
+        let (server, _) = scenario.server_and_registry()?;
+        let entity = server.resource_entity::<R>()?;
+        let world_ref = scenario.server_world_ref();
+        use naia_shared::WorldRefType;
+        let comp = world_ref.component::<R>(&entity)?;
+        Some(f(&*comp))
+    }
+
+
     /// Accept connection for a client
     ///
     /// Requires that the ClientKey has been mapped to a UserKey (via reading AuthEvent).

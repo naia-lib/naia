@@ -55,6 +55,48 @@ impl<'a> ClientExpectCtx<'a> {
         registry.client_entity_keys(&self.client_key)
     }
 
+    /// True iff the client's world contains a Replicated Resource of
+    /// type `R`.
+    ///
+    /// V1 implementation scans the client's entities for one carrying
+    /// `R` as a component. A proper client-side `ResourceRegistry`
+    /// (mirroring the server's, populated at SpawnWithComponents apply
+    /// time) lands with the bevy adapter in R7.
+    pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
+        let state = self.scenario.client_state(&self.client_key);
+        let world_ref = state.world().proxy();
+        use naia_shared::WorldRefType;
+        let entities = world_ref.entities();
+        for e in entities {
+            if world_ref.has_component::<R>(&e) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Read the value of a client-side Replicated Resource. The closure
+    /// receives `&R`. Returns `None` if not present in this client's
+    /// world.
+    ///
+    /// V1: scans entities (see `has_resource` rationale).
+    pub fn resource<R, F, T>(&self, f: F) -> Option<T>
+    where
+        R: naia_shared::ReplicatedComponent,
+        F: FnOnce(&R) -> T,
+    {
+        let state = self.scenario.client_state(&self.client_key);
+        let world_ref = state.world().proxy();
+        use naia_shared::WorldRefType;
+        let entities = world_ref.entities();
+        for e in entities {
+            if let Some(comp) = world_ref.component::<R>(&e) {
+                return Some(f(&*comp));
+            }
+        }
+        None
+    }
+
     /// Get server address
     pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
         let state = self.scenario.client_state(&self.client_key);

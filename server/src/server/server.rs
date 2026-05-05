@@ -3,8 +3,8 @@ use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 use naia_shared::{
     AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef, GlobalEntity, Instant, Message,
-    Protocol, ProtocolId, Replicate, Request, Response, ResponseReceiveKey, ResponseSendKey,
-    SocketConfig, Tick, WorldMutType, WorldRefType,
+    Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
+    ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -239,6 +239,82 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
         self.world_server.entity_is_static(world_entity)
+    }
+
+    // Replicated Resources -----------------------------------------------
+    //
+    // A Replicated Resource is a per-`World` singleton whose value is
+    // server-replicated to all connected clients with diff-tracked,
+    // per-field updates. Internally, a hidden 1-component entity carries
+    // the resource value as its sole replicated component.
+    //
+    // The convenience surface mirrors the entity-spawn split between
+    // `spawn_entity` (dynamic ID pool) and `spawn_static_entity` (static
+    // pool); user picks per-call.
+    //
+    // See `_AGENTS/RESOURCES_PLAN.md`.
+
+    /// Insert a Replicated Resource using the dynamic entity ID pool.
+    pub fn insert_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        world: W,
+        value: R,
+    ) -> Result<E, naia_shared::ResourceAlreadyExists> {
+        self.world_server.insert_resource(world, value)
+    }
+
+    /// Insert a Replicated Resource using the static entity ID pool.
+    /// Use this for long-lived singletons whose IDs you want kept small
+    /// and recycled separately from gameplay entities.
+    pub fn insert_static_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        world: W,
+        value: R,
+    ) -> Result<E, naia_shared::ResourceAlreadyExists> {
+        self.world_server.insert_static_resource(world, value)
+    }
+
+    /// Remove the resource of type `R`. Returns `true` if a resource
+    /// was removed; `false` if `R` was not present.
+    pub fn remove_resource<W: WorldMutType<E>, R: ReplicatedComponent>(&mut self, world: W) -> bool {
+        self.world_server.remove_resource::<W, R>(world)
+    }
+
+    /// True iff a resource of type `R` is currently inserted.
+    pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
+        self.world_server.has_resource::<R>()
+    }
+
+    /// O(1): the hidden world-entity carrying resource `R`, or `None`
+    /// if `R` is not currently inserted. Mostly used by tests and the
+    /// Bevy adapter; user code should normally read via `Res<R>` (in
+    /// Bevy) or `server.resource::<R>(world)` (in core).
+    pub fn resource_entity<R: ReplicatedComponent>(&self) -> Option<E> {
+        self.world_server.resource_entity::<R>()
+    }
+
+    /// True iff `world_entity` is the hidden entity for any Replicated
+    /// Resource. Used by Bevy adapter event-emission filter (D13).
+    pub fn is_resource_entity(&self, world_entity: &E) -> bool {
+        self.world_server.is_resource_entity(world_entity)
+    }
+
+    /// Number of currently-inserted resources.
+    pub fn resource_count(&self) -> usize {
+        self.world_server.resource_count()
+    }
+
+    /// Read-only access to the current value of resource `R`.
+    /// Returns `None` if `R` is not currently inserted.
+    ///
+    /// This goes through the world's component storage; the result
+    /// borrows from `world` for the lifetime of the call.
+    pub fn resource<'w, R: ReplicatedComponent, W: WorldRefType<E> + 'w>(
+        &self,
+        world: &'w W,
+    ) -> Option<naia_shared::ReplicaRefWrapper<'w, R>> {
+        let entity = self.world_server.resource_entity::<R>()?;
+        world.component::<R>(&entity)
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!

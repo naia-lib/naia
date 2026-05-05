@@ -96,6 +96,31 @@ impl<'a> ServerExpectCtx<'a> {
             .collect()
     }
 
+    /// True iff a Replicated Resource of type `R` is currently inserted
+    /// on the server.
+    pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
+        let Some((server, _)) = self.scenario.server_and_registry() else {
+            return false;
+        };
+        server.has_resource::<R>()
+    }
+
+    /// Read-only access to the value of a server-side Replicated Resource.
+    /// The closure receives `Option<&R>`; `None` if `R` is not currently
+    /// inserted.
+    pub fn resource<R, F, T>(&self, f: F) -> Option<T>
+    where
+        R: naia_shared::ReplicatedComponent,
+        F: FnOnce(&R) -> T,
+    {
+        let (server, _) = self.scenario.server_and_registry()?;
+        let world_ref = self.scenario.server_world_ref();
+        let entity = server.resource_entity::<R>()?;
+        let comp_wrapper = world_ref.component::<R>(&entity)?;
+        // ReplicaRefWrapper derefs to &R for read access
+        Some(f(&*comp_wrapper))
+    }
+
     /// Check if user exists for a ClientKey
     pub fn user_exists(&self, client_key: &ClientKey) -> bool {
         let Some(user_key) = self.scenario.client_to_user_key(client_key) else {
