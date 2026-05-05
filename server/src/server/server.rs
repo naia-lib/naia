@@ -333,6 +333,62 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.resource_priority_mut::<R>()
     }
 
+    /// Configure the replication mode of an inserted resource (e.g.
+    /// `ReplicationConfig::delegated()` to make `R` client-delegable).
+    /// Returns `true` if the resource is present and was reconfigured;
+    /// `false` if `R` is not currently inserted.
+    ///
+    /// Per D2 / D3 of RESOURCES_PLAN: server-authoritative is the
+    /// default; opt into delegation via this method (typically called
+    /// immediately after `insert_resource`).
+    pub fn configure_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        world: &mut W,
+        config: ReplicationConfig,
+    ) -> bool {
+        let Some(entity) = self.world_server.resource_entity::<R>() else {
+            return false;
+        };
+        self.world_server
+            .configure_entity_replication(world, &entity, config);
+        true
+    }
+
+    /// Read the current authority status of resource `R` from the
+    /// server's POV. `None` if `R` is not inserted, or if it is not a
+    /// delegable resource.
+    pub fn resource_authority_status<R: ReplicatedComponent>(
+        &self,
+    ) -> Option<EntityAuthStatus> {
+        let entity = self.world_server.resource_entity::<R>()?;
+        self.world_server.entity_authority_status(&entity)
+    }
+
+    /// Server takes authority back from whichever client (if any)
+    /// currently holds it. Mirror of `entity_take_authority`.
+    pub fn resource_take_authority<R: ReplicatedComponent>(
+        &mut self,
+    ) -> Result<(), AuthorityError> {
+        let entity = self
+            .world_server
+            .resource_entity::<R>()
+            .ok_or(AuthorityError::NotInScope)?;
+        self.world_server.entity_take_authority(&entity)
+    }
+
+    /// Server releases its authority on resource `R` (sets status back
+    /// to Available). Mirror of `entity_release_authority`. Returns
+    /// `Err` if `R` is not inserted or not delegable.
+    pub fn resource_release_authority<R: ReplicatedComponent>(
+        &mut self,
+    ) -> Result<(), AuthorityError> {
+        let entity = self
+            .world_server
+            .resource_entity::<R>()
+            .ok_or(AuthorityError::NotInScope)?;
+        self.world_server.entity_release_authority(None, &entity)
+    }
+
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.world_server.enable_entity_replication(entity);

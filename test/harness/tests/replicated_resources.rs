@@ -9,9 +9,11 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::ServerConfig;
+use naia_server::ReplicationConfig;
+use naia_shared::EntityAuthStatus;
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientKey, ServerAuthEvent, ServerConnectEvent, Scenario,
-    TestMatchState, TestScore, ToTicks,
+    TestMatchState, TestScore,
 };
 
 fn test_client_config() -> ClientConfig {
@@ -287,6 +289,96 @@ fn server_mutation_replicates_to_client() {
                 .map(|_| ())
         })
     });
+}
+
+#[test]
+fn delegated_resource_supports_client_authority_request() {
+    let mut scenario = Scenario::new();
+    let client_key = server_with_one_client(&mut scenario);
+
+    // Insert resource (use TestScore which we've verified replicates).
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            assert!(server.insert_resource(TestScore::new(0, 0)));
+        });
+    });
+    settle(&mut scenario, 30);
+
+    // Sanity: client should observe the resource before delegation kicks in.
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| c.has_resource::<TestScore>().then_some(()))
+    });
+
+    // Configure for delegation.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            assert!(
+                server.configure_resource::<TestScore>(ReplicationConfig::delegated()),
+                "configure_resource should succeed for inserted R"
+            );
+        });
+    });
+    settle(&mut scenario, 100);
+
+    // Wait for the client's auth-status view to reach Available
+    // (post-EnableDelegation propagation).
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            (c.resource_authority_status::<TestScore>() == Some(EntityAuthStatus::Available))
+                .then_some(())
+        })
+    });
+
+    // Initial state: server-authoritative (no client holds yet)
+    let server_status = scenario.mutate(|ctx| {
+        ctx.server(|server| server.has_resource::<TestScore>())
+    });
+    assert!(server_status);
+
+    // Client requests authority.
+    scenario.mutate(|ctx| {
+        ctx.client(client_key, |c| {
+            let res = c.request_resource_authority::<TestScore>();
+            assert!(res.is_ok(), "request_resource_authority should succeed: {:?}", res);
+        });
+    });
+    settle(&mut scenario, 30);
+
+    // Eventually client status becomes Granted.
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |c| {
+            (c.resource_authority_status::<TestScore>() == Some(EntityAuthStatus::Granted))
+                .then_some(())
+        })
+    });
+
+    // Client mutation propagates to server (authority-held write).
+    scenario.mutate(|ctx| {
+        ctx.client(client_key, |c| {
+            c.mutate_resource::<TestScore, _, _>(|s| {
+                *s.home = 7;
+            });
+        });
+    });
+    settle(&mut scenario, 30);
+
+    // Server-side value reflects the client's write.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            server
+                .resource::<TestScore, _, _>(|s| *s.home)
+                .filter(|v| *v == 7)
+                .map(|_| ())
+        })
+    });
+
+    // Client releases authority; status reverts to Available on the server.
+    scenario.mutate(|ctx| {
+        ctx.client(client_key, |c| {
+            let _ = c.release_resource_authority::<TestScore>();
+        });
+    });
+    settle(&mut scenario, 30);
 }
 
 #[test]

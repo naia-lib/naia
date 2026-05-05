@@ -122,6 +122,112 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         registry.client_entity_keys(&self.client_key)
     }
 
+    // ========================================================================
+    // Replicated Resources (test harness wrappers)
+    // ========================================================================
+    //
+    // V1: client-side resource lookup is by world-scan since the proper
+    // client-side `ResourceRegistry` lands with the bevy adapter (R7/R8).
+    // For tests, scan-on-demand is acceptable; correctness is the same.
+
+    /// Read-only access to a client-side resource value.
+    pub fn resource<R, F, T>(&self, f: F) -> Option<T>
+    where
+        R: naia_shared::ReplicatedComponent,
+        F: FnOnce(&R) -> T,
+    {
+        let state = self.ctx.scenario().client_state(&self.client_key);
+        let world_ref = state.world().proxy();
+        use naia_shared::WorldRefType;
+        for e in world_ref.entities() {
+            if let Some(comp) = world_ref.component::<R>(&e) {
+                return Some(f(&*comp));
+            }
+        }
+        None
+    }
+
+    /// True iff the client's world contains a resource of type `R`.
+    pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
+        let state = self.ctx.scenario().client_state(&self.client_key);
+        let world_ref = state.world().proxy();
+        use naia_shared::WorldRefType;
+        for e in world_ref.entities() {
+            if world_ref.has_component::<R>(&e) {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Find the world entity carrying resource `R`, if any.
+    fn resource_entity_scan<R: naia_shared::ReplicatedComponent>(
+        &self,
+    ) -> Option<crate::TestEntity> {
+        let state = self.ctx.scenario().client_state(&self.client_key);
+        let world_ref = state.world().proxy();
+        use naia_shared::WorldRefType;
+        for e in world_ref.entities() {
+            if world_ref.has_component::<R>(&e) {
+                return Some(e);
+            }
+        }
+        None
+    }
+
+    /// Client requests authority on a delegable resource. Returns the
+    /// underlying `entity_request_authority` result; `Err` variants
+    /// surface for not-delegated, not-available, etc. mirroring the
+    /// entity story.
+    pub fn request_resource_authority<R: naia_shared::ReplicatedComponent>(
+        &mut self,
+    ) -> Result<(), naia_shared::AuthorityError> {
+        let entity = self
+            .resource_entity_scan::<R>()
+            .ok_or(naia_shared::AuthorityError::NotInScope)?;
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        state.client_mut().entity_request_authority(&entity)
+    }
+
+    /// Client releases authority on a held resource.
+    pub fn release_resource_authority<R: naia_shared::ReplicatedComponent>(
+        &mut self,
+    ) -> Result<(), naia_shared::AuthorityError> {
+        let entity = self
+            .resource_entity_scan::<R>()
+            .ok_or(naia_shared::AuthorityError::NotInScope)?;
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        state.client_mut().entity_release_authority(&entity)
+    }
+
+    /// Read the client's view of a resource's authority status.
+    pub fn resource_authority_status<R: naia_shared::ReplicatedComponent>(
+        &self,
+    ) -> Option<naia_shared::EntityAuthStatus> {
+        let entity = self.resource_entity_scan::<R>()?;
+        let state = self.ctx.scenario().client_state(&self.client_key);
+        state.client().entity_authority_status(&entity)
+    }
+
+    /// Mutate a client-side resource. The closure receives `&mut R`.
+    /// Note: per D18 (soft rejection), mutations to a server-authoritative
+    /// resource update the local mirror but do NOT propagate. After a
+    /// client requests + receives authority on a delegable resource,
+    /// mutations DO propagate.
+    pub fn mutate_resource<R, F, T>(&mut self, f: F) -> Option<T>
+    where
+        R: naia_shared::ReplicatedComponent,
+        F: FnOnce(&mut R) -> T,
+    {
+        let entity = self.resource_entity_scan::<R>()?;
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        let (_client, world) = state.client_and_world_mut();
+        let mut world_mut = world.proxy_mut();
+        use naia_shared::WorldMutType;
+        let mut comp_mut = world_mut.component_mut::<R>(&entity)?;
+        Some(f(&mut *comp_mut))
+    }
+
     // Message Operations
 
     /// Send message to server

@@ -97,6 +97,23 @@ impl<'a> ClientExpectCtx<'a> {
         None
     }
 
+    /// Read this client's view of a resource's authority status.
+    /// Returns `None` if the resource is not present in this client's
+    /// world or if it isn't delegable.
+    pub fn resource_authority_status<R: naia_shared::ReplicatedComponent>(
+        &self,
+    ) -> Option<naia_shared::EntityAuthStatus> {
+        let state = self.scenario.client_state(&self.client_key);
+        let world_ref = state.world().proxy();
+        use naia_shared::WorldRefType;
+        for e in world_ref.entities() {
+            if world_ref.has_component::<R>(&e) {
+                return state.client().entity_authority_status(&e);
+            }
+        }
+        None
+    }
+
     /// Get server address
     pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
         let state = self.scenario.client_state(&self.client_key);

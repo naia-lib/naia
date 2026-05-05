@@ -282,6 +282,27 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         }
     }
 
+    /// Configure replication mode for an inserted resource (e.g.
+    /// `ReplicationConfig::delegated()`).
+    pub fn configure_resource<R: naia_shared::ReplicatedComponent>(
+        &mut self,
+        config: naia_server::ReplicationConfig,
+    ) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, _, _) = scenario.split_for_server_mut();
+        let mut world_mut = world.proxy_mut();
+        server.configure_resource::<_, R>(&mut world_mut, config)
+    }
+
+    /// Read the server-side authority status of resource `R`.
+    pub fn resource_authority_status<R: naia_shared::ReplicatedComponent>(
+        &self,
+    ) -> Option<naia_shared::EntityAuthStatus> {
+        let scenario = self.ctx.scenario();
+        let (server, _) = scenario.server_and_registry()?;
+        server.resource_authority_status::<R>()
+    }
+
 
     /// Accept connection for a client
     ///
