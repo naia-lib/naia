@@ -75,6 +75,18 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// Sets the current Component to the state of another Component of the
     /// same type
     fn mirror(&mut self, other: &dyn Replicate);
+    /// Mirror a SINGLE Property field from `other` into `self`, identified
+    /// by its 0-based property index (the same index used by the diff-mask
+    /// bit positions). Calls `Property::mirror` on exactly one field —
+    /// fires that field's PropertyMutator without touching any others.
+    ///
+    /// Used by the Replicated Resources Mode B mirror system to propagate
+    /// per-field changes from the user-facing bevy `Resource` storage to
+    /// the entity-component without over-replicating untouched fields.
+    /// Out-of-range indices are silently no-op'd (the dirty tracker can in
+    /// principle record stale indices if a Property field is removed
+    /// across protocol versions; we tolerate that).
+    fn mirror_single_field(&mut self, field_index: u8, other: &dyn Replicate);
     /// Set the Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the
     /// Properties that have changed with the client

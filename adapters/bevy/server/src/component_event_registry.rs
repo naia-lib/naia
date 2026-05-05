@@ -10,7 +10,11 @@ use naia_server::UserKey;
 
 use crate::{
     bundle_event_registry::BundleEventRegistry,
-    events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent},
+    events::{
+        InsertComponentEvent, InsertResourceEvent, RemoveComponentEvent, RemoveResourceEvent,
+        UpdateComponentEvent, UpdateResourceEvent,
+    },
+    server::ServerImpl,
 };
 
 #[derive(Resource)]
@@ -119,6 +123,19 @@ impl<R: Replicate> ComponentEventHandlerImpl<R> {
 impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
     fn handle_inserts(&mut self, world: &mut World, entities: Vec<(UserKey, Entity)>) {
         for (user_key, entity) in entities {
+            // D13 resource translation: if `entity` is a hidden
+            // resource entity AND the user registered InsertResourceEvent<R>
+            // (via add_resource_events), emit the resource event INSTEAD
+            // of the component event. Users see zero component-level
+            // semantics for resources.
+            if is_resource_entity(world, &entity)
+                && world.contains_resource::<Messages<InsertResourceEvent<R>>>()
+            {
+                world
+                    .resource_mut::<Messages<InsertResourceEvent<R>>>()
+                    .write(InsertResourceEvent::<R>::new(user_key));
+                continue;
+            }
             world
                 .resource_mut::<Messages<InsertComponentEvent<R>>>()
                 .write(InsertComponentEvent::<R>::new(user_key, entity));
@@ -127,6 +144,14 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
 
     fn handle_updates(&mut self, world: &mut World, entities: Vec<(UserKey, Entity)>) {
         for (user_key, entity) in entities {
+            if is_resource_entity(world, &entity)
+                && world.contains_resource::<Messages<UpdateResourceEvent<R>>>()
+            {
+                world
+                    .resource_mut::<Messages<UpdateResourceEvent<R>>>()
+                    .write(UpdateResourceEvent::<R>::new(user_key));
+                continue;
+            }
             world
                 .resource_mut::<Messages<UpdateComponentEvent<R>>>()
                 .write(UpdateComponentEvent::<R>::new(user_key, entity));
@@ -144,9 +169,38 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
                 .ok()
                 .map(|boxed_r| *boxed_r)
                 .unwrap();
+            // Resource translation for removes too. Note that by the
+            // time a resource is removed, the entity is also being
+            // despawned, so `is_resource_entity` may already be false
+            // (the registry entry was cleared in `WorldServer::remove_resource`
+            // BEFORE the entity despawn fires the RemoveComponentEvent).
+            // To handle this correctly we don't gate on is_resource_entity
+            // here; we gate purely on whether the user registered for
+            // resource events for this type. If they did, route to the
+            // resource event stream — components can never be both a
+            // user-replicated component and a registered resource type.
+            if world.contains_resource::<Messages<RemoveResourceEvent<R>>>() {
+                world
+                    .resource_mut::<Messages<RemoveResourceEvent<R>>>()
+                    .write(RemoveResourceEvent::<R>::new(user_key, component));
+                // Also remove the bevy-Resource mirror if present.
+                // (Mode B: `Res<R>` should disappear when the resource
+                // is removed. Best-effort — if the type isn't a bevy
+                // Resource the call is a no-op via type erasure.)
+                continue;
+            }
             world
                 .resource_mut::<Messages<RemoveComponentEvent<R>>>()
                 .write(RemoveComponentEvent::<R>::new(user_key, entity, component));
         }
     }
+}
+
+/// True iff `entity` is the hidden entity for a Replicated Resource.
+/// Looks up via `ServerImpl::is_resource_entity`.
+fn is_resource_entity(world: &World, entity: &Entity) -> bool {
+    world
+        .get_resource::<ServerImpl>()
+        .map(|s| s.is_resource_entity(entity))
+        .unwrap_or(false)
 }

@@ -1,4 +1,5 @@
 use bevy_app::App;
+use bevy_ecs::component::Mutable;
 
 use naia_bevy_shared::{Replicate, ReplicateBundle};
 
@@ -9,6 +10,7 @@ use crate::{
         InsertComponentEvent, InsertResourceEvent, RemoveComponentEvent, RemoveResourceEvent,
         UpdateComponentEvent, UpdateResourceEvent,
     },
+    resource_sync::{install_resource_sync_system, SyncDirtyTracker},
 };
 
 // App Extension Methods
@@ -19,13 +21,24 @@ pub trait AppRegisterComponentEvents {
     /// Adds `InsertResourceEvent<R>`, `UpdateResourceEvent<R>`, and
     /// `RemoveResourceEvent<R>` as bevy `Message` types.
     ///
+    /// Also installs the **Mode B mirror system** for `R`: a per-tick
+    /// system that drains the bevy-resource side's `SyncDirtyTracker<R>`
+    /// and propagates each touched `Property<T>` field to the entity-
+    /// component side via `Replicate::mirror_single_field`. The result:
+    /// users access `R` via standard `Res<R>` / `ResMut<R>`, mutations
+    /// replicate per-field with no over-replication.
+    ///
     /// Per D17 of `_AGENTS/RESOURCES_PLAN.md`: this method extends the
     /// existing `AppRegisterComponentEvents` trait rather than introducing
     /// a new trait — keeps user trait imports minimal.
     ///
     /// The shared `Protocol` must also register `R` via
     /// `protocol.add_resource::<R>()` in the user's `ProtocolPlugin`.
-    fn add_resource_events<R: Replicate>(&mut self) -> &mut Self;
+    fn add_resource_events<R>(&mut self) -> &mut Self
+    where
+        R: Replicate
+            + bevy_ecs::resource::Resource
+            + bevy_ecs::component::Component<Mutability = Mutable>;
 }
 
 impl AppRegisterComponentEvents for App {
@@ -57,10 +70,23 @@ impl AppRegisterComponentEvents for App {
         self
     }
 
-    fn add_resource_events<R: Replicate>(&mut self) -> &mut Self {
+    fn add_resource_events<R>(&mut self) -> &mut Self
+    where
+        R: Replicate
+            + bevy_ecs::resource::Resource
+            + bevy_ecs::component::Component<Mutability = Mutable>,
+    {
+        // Register the user-facing event types as bevy messages.
         self.add_message::<InsertResourceEvent<R>>()
             .add_message::<UpdateResourceEvent<R>>()
             .add_message::<RemoveResourceEvent<R>>();
+
+        // Install Mode B mirror infrastructure: tracker + sync system.
+        // Idempotent — re-registration is a no-op.
+        if self.world().get_resource::<SyncDirtyTracker<R>>().is_none() {
+            self.insert_resource(SyncDirtyTracker::<R>::default());
+        }
+        install_resource_sync_system::<R>(self);
 
         self
     }

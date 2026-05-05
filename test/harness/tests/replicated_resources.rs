@@ -94,6 +94,34 @@ fn settle(scenario: &mut Scenario, ticks: usize) {
     }
 }
 
+/// Verify the derive macro's `mirror_single_field` codegen: copying
+/// field index N from `src` to `dst` should leave all other fields
+/// untouched. This is the foundation of Mode B's per-field diff
+/// preservation.
+#[test]
+fn mirror_single_field_copies_only_indexed_field() {
+    use naia_shared::Replicate;
+
+    // Property index 0 = home, index 1 = away (declaration order).
+    let src = TestScore::new(99, 88);
+    let mut dst = TestScore::new(0, 0);
+
+    // Mirror index 0 (home) only.
+    dst.mirror_single_field(0, &src as &dyn Replicate);
+    assert_eq!(*dst.home, 99, "home (index 0) should be mirrored");
+    assert_eq!(*dst.away, 0, "away (index 1) should NOT be touched");
+
+    // Now mirror index 1 (away).
+    dst.mirror_single_field(1, &src as &dyn Replicate);
+    assert_eq!(*dst.home, 99);
+    assert_eq!(*dst.away, 88);
+
+    // Out-of-range index: silently ignored.
+    let mut dst2 = TestScore::new(7, 7);
+    dst2.mirror_single_field(99, &src as &dyn Replicate);
+    assert_eq!((*dst2.home, *dst2.away), (7, 7), "OOB index must no-op");
+}
+
 #[test]
 fn registration_sets_resource_kind_in_protocol() {
     let p = protocol();

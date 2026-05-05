@@ -8,7 +8,10 @@ use naia_bevy_shared::{ComponentKind, Replicate, Tick};
 
 use crate::{
     bundle_event_registry::BundleEventRegistry,
-    events::{InsertComponentEvent, RemoveComponentEvent, UpdateComponentEvent},
+    events::{
+        InsertComponentEvent, InsertResourceEvent, RemoveComponentEvent, RemoveResourceEvent,
+        UpdateComponentEvent, UpdateResourceEvent,
+    },
 };
 
 #[derive(Resource)]
@@ -121,6 +124,16 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
 {
     fn handle_inserts(&mut self, world: &mut World, entities: Vec<Entity>) {
         for entity in entities {
+            // D13 resource translation: if user registered
+            // InsertResourceEvent<T, R> via add_resource_events, route
+            // to that stream instead of the component-event stream.
+            // Users see ZERO component-level semantics for resources.
+            if world.contains_resource::<Messages<InsertResourceEvent<T, R>>>() {
+                world
+                    .resource_mut::<Messages<InsertResourceEvent<T, R>>>()
+                    .write(InsertResourceEvent::<T, R>::new());
+                continue;
+            }
             world
                 .resource_mut::<Messages<InsertComponentEvent<T, R>>>()
                 .write(InsertComponentEvent::<T, R>::new(entity));
@@ -129,6 +142,12 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
 
     fn handle_updates(&mut self, world: &mut World, entities: Vec<(Tick, Entity)>) {
         for (tick, entity) in entities {
+            if world.contains_resource::<Messages<UpdateResourceEvent<T, R>>>() {
+                world
+                    .resource_mut::<Messages<UpdateResourceEvent<T, R>>>()
+                    .write(UpdateResourceEvent::<T, R>::new(tick));
+                continue;
+            }
             world
                 .resource_mut::<Messages<UpdateComponentEvent<T, R>>>()
                 .write(UpdateComponentEvent::<T, R>::new(tick, entity));
@@ -142,6 +161,12 @@ impl<T: Send + Sync + 'static, R: Replicate> ComponentEventHandler
                 .ok()
                 .map(|boxed_r| *boxed_r)
                 .unwrap();
+            if world.contains_resource::<Messages<RemoveResourceEvent<T, R>>>() {
+                world
+                    .resource_mut::<Messages<RemoveResourceEvent<T, R>>>()
+                    .write(RemoveResourceEvent::<T, R>::new(component));
+                continue;
+            }
             world
                 .resource_mut::<Messages<RemoveComponentEvent<T, R>>>()
                 .write(RemoveComponentEvent::<T, R>::new(entity, component));

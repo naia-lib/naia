@@ -1,6 +1,6 @@
 # Replicated Resources — Spec & Implementation Plan
 
-**Status:** **R1–R9 LANDED on `release-0.25.0-e`** (2026-05-05). Mode B mirror system + per-component-event filtering deferred to a dedicated follow-up phase (see "Implementation status" below). Mode A (Query-based access) is the V1 user-facing pattern; Commands API is forward-compatible.
+**Status:** **R1–R9 + Mode B + InsertResourceEvent translation LANDED on `release-0.25.0-e`** (2026-05-05). All originally-deferred items closed.
 **Owner:** Connor + Claude (twin)
 **Branch target:** `release-0.25.0-e`
 **Prereqs landed:** `is_static` Remote tagging (5ac5b51b), static-entity ID pool, priority accumulator (Fiedler pacing), entity authority/delegation/migration
@@ -20,8 +20,9 @@
 | R6 — Multi-world | ✅ Landed (per-WorldServer = per-World by construction) | — |
 | R7 — Bevy server adapter (Commands + events) | ✅ Landed | `e976fc31`, `3d191a51` |
 | R8 — Bevy client adapter (Commands + events) | ✅ Landed | `c182c7a3` |
-| R9 — Polish + docs | ⏳ This commit |
-| Mode B mirror system + InsertComponentEvent→InsertResourceEvent translation | ⏳ Follow-up phase | See `adapters/bevy/server/src/resource_sync.rs` |
+| R9 — Polish + docs | ✅ Landed | `1a9bd828` |
+| Mode B mirror system (per-field, no over-replication) | ✅ Landed | This commit |
+| Component→Resource event translation (D13 second half) | ✅ Landed | This commit |
 
 **What's live now (Mode A):**
 
@@ -34,16 +35,23 @@
 - Resource entities auto-include in every connected user's scope (bypassing the room gate at `apply_scope_for_user`).
 - Authority delegation: `configure_resource(ReplicationConfig::delegated())` + client `request_resource_authority` flow verified end-to-end (1 integration test settles 100 ticks for EnableDelegation propagation).
 
-**What's deferred (explicitly tracked in `adapters/bevy/server/src/resource_sync.rs`):**
+**Mode B (per-field, no over-replication) — landed:**
 
-- **Mode B mirror system** — exposing replicated state as standard `Res<R>` / `ResMut<R>`. Requires either (a) extending the `Replicate` trait with `mirror_field(idx, other)` to enable per-field selective sync, or (b) over-replicating on `Changed<R>` (regresses per-field diff). V1 ships Mode A: users access via `Query<&R>` over the resource entity. Commands API does not change between Mode A and Mode B — forward-compatible.
-- **Per-component-event filter + InsertResourceEvent emission** — currently `InsertComponentEvent<R>` still fires for resource entities. Translation to `InsertResourceEvent<R>` is part of the Mode B work because it needs the same per-resource-type plumbing in the event registry.
-- **Schema-evolution test scaffolding** for resources across protocol versions.
-- **Disconnect-with-authority full-flow integration test** — the underlying entity machinery already handles this (`server_auth_handler.rs:155` reverts to Available); a dedicated resource-flavored test landing alongside Mode B work.
+- `Replicate` trait extended with `mirror_single_field(field_index: u8, other: &dyn Replicate)`. Derive macro generates a match-by-index dispatcher that calls `Property::mirror` on exactly one field; out-of-range indices silently no-op (schema-evolution tolerant).
+- `SyncMutator<R>` implements `PropertyMutate` and pushes touched field indices into a shared `SyncDirtyTracker<R>` (Bevy `Resource`, lock-free-ish via `Arc<Mutex<Vec<u8>>>`).
+- `add_resource_events::<R>()` now also installs `SyncDirtyTracker<R>` and the per-tick `sync_resource_outgoing::<R>` system. Idempotent.
+- `commands.replicate_resource(value)` wires `R` as both an entity-component (with the standard naia mutator) AND a Bevy `Resource` (with `SyncMutator` wired into its `Property` fields). User mutations via `*resmut.field = v` push the field index into the tracker; the per-tick sync system drains the tracker and calls `mirror_single_field(idx, &snapshot)` on the entity-component, firing the entity-side mutator for ONLY the touched field. **End-to-end per-field diff preserved.**
+- `R: bevy::Resource` is now required for `add_resource_events` / `commands.replicate_resource*` (users add `#[derive(Resource)]` alongside `Replicate`).
+
+**Component→Resource event translation (D13) — landed:**
+
+- Server-side `ComponentEventHandlerImpl<R>` checks `is_resource_entity(entity)` and the presence of `Messages<InsertResourceEvent<R>>` / `UpdateResourceEvent<R>` / `RemoveResourceEvent<R>` in the World. If the user registered for resource events for `R`, the handler routes the event to the resource-event stream and skips emitting the component-event. **Users see ZERO `InsertComponentEvent<R>` / `UpdateComponentEvent<R>` / `RemoveComponentEvent<R>` for a registered resource type.**
+- Client-side mirror: same translation in `adapters/bevy/client/src/component_event_registry.rs` (gated on `Messages<*ResourceEvent<T, R>>` presence).
+- `SpawnEntityEvent` and `DespawnEntityEvent` already filter resource entities (D13 first half from earlier commit).
 
 **Test coverage delivered:**
 
-- 9/9 resource integration tests in `test/harness/tests/replicated_resources.rs`:
+- 10/10 resource integration tests in `test/harness/tests/replicated_resources.rs` (added `mirror_single_field_copies_only_indexed_field` for Mode B's foundational per-field codegen):
   - `registration_sets_resource_kind_in_protocol`
   - `insert_dynamic_resource_replicates_to_connected_client`
   - `insert_static_resource_replicates_to_connected_client`

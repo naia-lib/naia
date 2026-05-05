@@ -140,40 +140,40 @@ pub trait CommandsExtServer {
     /// Insert a Replicated Resource using the dynamic entity ID pool.
     /// Equivalent to a server `commands.spawn(...).enable_replication(...)`
     /// on a hidden 1-component entity.
-    fn replicate_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(&mut self, value: R);
+    fn replicate_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource + bevy_ecs::resource::Resource>(&mut self, value: R);
 
     /// Insert a Replicated Resource using the static entity ID pool —
     /// long-lived singletons; smaller wire IDs; recycled separately
     /// from gameplay entities.
-    fn replicate_resource_static<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(&mut self, value: R);
+    fn replicate_resource_static<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource + bevy_ecs::resource::Resource>(&mut self, value: R);
 
     /// Remove the resource of type `R`. Despawns the hidden entity,
     /// propagating the removal to every client where it was in scope.
-    fn remove_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(&mut self);
+    fn remove_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource + bevy_ecs::resource::Resource>(&mut self);
 
     /// Configure the replication mode of resource `R` (e.g.
     /// `ReplicationConfig::delegated()` to enable client-authority
     /// requests).
-    fn configure_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(
+    fn configure_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource + bevy_ecs::resource::Resource>(
         &mut self,
         config: ReplicationConfig,
     );
 }
 
 impl<'w, 's> CommandsExtServer for Commands<'w, 's> {
-    fn replicate_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(&mut self, value: R) {
+    fn replicate_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource>(&mut self, value: R) {
         self.queue(ReplicateResourceCommand::<R>::new_dynamic(value));
     }
 
-    fn replicate_resource_static<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(&mut self, value: R) {
+    fn replicate_resource_static<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource>(&mut self, value: R) {
         self.queue(ReplicateResourceCommand::<R>::new_static(value));
     }
 
-    fn remove_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(&mut self) {
+    fn remove_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource>(&mut self) {
         self.queue(RemoveReplicatedResourceCommand::<R>::new());
     }
 
-    fn configure_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(
+    fn configure_replicated_resource<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource>(
         &mut self,
         config: ReplicationConfig,
     ) {
@@ -182,12 +182,12 @@ impl<'w, 's> CommandsExtServer for Commands<'w, 's> {
 }
 
 //// ReplicateResourceCommand ////
-pub(crate) struct ReplicateResourceCommand<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> {
+pub(crate) struct ReplicateResourceCommand<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> {
     value: Option<R>,
     is_static: bool,
 }
 
-impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> ReplicateResourceCommand<R> {
+impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> ReplicateResourceCommand<R> {
     pub fn new_dynamic(value: R) -> Self {
         Self { value: Some(value), is_static: false }
     }
@@ -196,10 +196,37 @@ impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> Replic
     }
 }
 
-impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> Command for ReplicateResourceCommand<R> {
+impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> Command for ReplicateResourceCommand<R> {
     fn apply(mut self, world: &mut World) {
         let value = self.value.take().expect("value present at command construction");
         let is_static = self.is_static;
+
+        // Mode B: also store R as a bevy Resource so `Res<R>`/`ResMut<R>`
+        // works in user systems. The bevy-resource side gets a SyncMutator
+        // wired in, the entity-component side gets the standard naia
+        // mutator (set up by WorldServer::insert_resource). The per-tick
+        // sync system mirrors dirty fields from bevy-resource → entity-
+        // component using `Replicate::mirror_single_field`. See
+        // `resource_sync.rs` for the full architecture.
+        //
+        // We only install the bevy-Resource side if R: bevy::Resource —
+        // detected by attempting to insert the SyncDirtyTracker. The R
+        // bound on this Command requires Replicate + Component; the
+        // additional bevy::Resource bound is enforced at registration
+        // time via `add_resource_events::<R>()` (Mode B path) but we
+        // don't require it here so users who want Mode A only (no bevy
+        // Resource, just Query<&R>) are still supported.
+
+        // First, do the entity-component insert (always).
+        // We clone `value` for the bevy-Resource side IF the type has
+        // the Resource bound — but without specialization, we can't
+        // detect that here. So: always clone (cheap for typical
+        // resources), insert the entity-component first, then if a
+        // SyncDirtyTracker<R> is present (= add_resource_events ran),
+        // also insert the bevy Resource with a SyncMutator wired in.
+        // If no tracker, skip the bevy-Resource side — Mode A only.
+        let snapshot_for_bevy = clone_via_replicate::<R>(&value);
+
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             let result = if is_static {
                 server.insert_static_resource::<_, R>(world.proxy_mut(), value)
@@ -207,31 +234,43 @@ impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> Comman
                 server.insert_resource::<_, R>(world.proxy_mut(), value)
             };
             if let Err(_e) = result {
-                // Mirrors the entity story: re-spawning the same singleton
-                // is a programming error. Log and skip (matching the
-                // existing "ignore duplicate insert" behavior of the
-                // component pipeline) rather than panic — keeps the
-                // server alive in face of accidental dup calls.
                 log::warn!(
                     "naia replicate_resource: type already inserted; skipping duplicate insert"
                 );
             }
         });
+
+        // Mode B install: if the user registered R via add_resource_events
+        // (which inserts a SyncDirtyTracker<R> Resource and the sync
+        // system), wire the bevy-resource side now. Done as a separate
+        // step so Mode A users (no add_resource_events Mode B install)
+        // skip it cleanly.
+        crate::resource_sync::install_bevy_resource_mirror_if_present::<R>(
+            world,
+            snapshot_for_bevy,
+        );
     }
 }
 
+/// Clone a Replicate via the trait's own clone path. Avoids requiring
+/// `R: Clone` on the Command bound while still allowing Mode B to keep
+/// a bevy-side mirror.
+fn clone_via_replicate<R: Replicate>(value: &R) -> Box<dyn Replicate> {
+    value.copy_to_box()
+}
+
 //// RemoveReplicatedResourceCommand ////
-pub(crate) struct RemoveReplicatedResourceCommand<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> {
+pub(crate) struct RemoveReplicatedResourceCommand<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> {
     _phantom: PhantomData<R>,
 }
 
-impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> RemoveReplicatedResourceCommand<R> {
+impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> RemoveReplicatedResourceCommand<R> {
     pub fn new() -> Self {
         Self { _phantom: PhantomData }
     }
 }
 
-impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> Command for RemoveReplicatedResourceCommand<R> {
+impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> Command for RemoveReplicatedResourceCommand<R> {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             let _ = server.remove_resource::<_, R>(world.proxy_mut());
@@ -240,18 +279,18 @@ impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> Comman
 }
 
 //// ConfigureReplicatedResourceCommand ////
-pub(crate) struct ConfigureReplicatedResourceCommand<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> {
+pub(crate) struct ConfigureReplicatedResourceCommand<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> {
     config: ReplicationConfig,
     _phantom: PhantomData<R>,
 }
 
-impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> ConfigureReplicatedResourceCommand<R> {
+impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> ConfigureReplicatedResourceCommand<R> {
     pub fn new(config: ReplicationConfig) -> Self {
         Self { config, _phantom: PhantomData }
     }
 }
 
-impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>> Command for ConfigureReplicatedResourceCommand<R> {
+impl<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable> + bevy_ecs::resource::Resource> Command for ConfigureReplicatedResourceCommand<R> {
     fn apply(self, world: &mut World) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             let _ = server.configure_resource::<_, R>(&mut world.proxy_mut(), self.config);

@@ -141,6 +141,8 @@ pub fn replicate_impl(
     let clone_method = get_clone_method(&properties, &struct_type);
     let mirror_method =
         get_mirror_method(&replica_name, &properties, &struct_type, &untyped_generics);
+    let mirror_single_field_method =
+        get_mirror_single_field_method(&replica_name, &properties, &struct_type, &untyped_generics);
     let set_mutator_method = get_set_mutator_method(&properties, &struct_type);
     let publish_method = get_publish_method(&enum_name, &properties, &struct_type);
     let unpublish_method = get_unpublish_method(&properties, &struct_type);
@@ -242,6 +244,7 @@ pub fn replicate_impl(
                 #dyn_ref_method
                 #dyn_mut_method
                 #mirror_method
+                #mirror_single_field_method
                 #publish_method
                 #unpublish_method
                 #enable_delegation_method
@@ -595,6 +598,52 @@ fn get_mirror_method(
                 #output
             } else {
                 panic!("cannot mirror: other Component is of another type!");
+            }
+        }
+    }
+}
+
+/// Per-field mirror dispatcher. Generates a match on the field index
+/// (matching the `{Replica}Property` enum's discriminants) that routes
+/// to a single `Property::mirror(other.#field)` call. Used by the
+/// Replicated Resources Mode B mirror system — see
+/// `_AGENTS/RESOURCES_PLAN.md` §4.5.
+fn get_mirror_single_field_method(
+    replica_name: &Ident,
+    properties: &[Property],
+    struct_type: &StructType,
+    untyped_generics: &TokenStream,
+) -> TokenStream {
+    let mut arms = quote! {};
+
+    for property in properties.iter().filter(|p| p.is_replicated()) {
+        let field_name = get_field_name(property, struct_type);
+        let index = syn::Index::from(property.index());
+        let arm = quote! {
+            #index => {
+                self.#field_name.mirror(&replica.#field_name);
+            }
+        };
+        arms = quote! {
+            #arms
+            #arm
+        };
+    }
+
+    quote! {
+        fn mirror_single_field(&mut self, field_index: u8, other: &dyn Replicate) {
+            if let Some(replica) = other.to_any().downcast_ref::<#replica_name #untyped_generics>() {
+                match field_index as usize {
+                    #arms
+                    _ => {
+                        // Out-of-range index — silently ignore. Protocol
+                        // schema evolution may produce stale dirty
+                        // indices; tolerating them keeps the mirror
+                        // robust at zero correctness cost.
+                    }
+                }
+            } else {
+                panic!("cannot mirror_single_field: other Component is of another type!");
             }
         }
     }
