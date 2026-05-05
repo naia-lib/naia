@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashSet};
 
-use crate::{ComponentKind, Replicate};
+use crate::ComponentKind;
 
 /// Protocol-wide table marking which `ComponentKind`s are Replicated
 /// Resources (vs ordinary components).
@@ -37,7 +37,11 @@ impl ResourceKinds {
     /// Register `R` as a resource kind. Idempotent: re-registering the
     /// same type is a no-op (matches the `add_component` re-registration
     /// semantics — the component table dedupes on `TypeId`).
-    pub fn register<R: Replicate>(&mut self, kind: ComponentKind) {
+    ///
+    /// `R: 'static` is the only bound — internal callers always have
+    /// the full `Replicate` bound, but this method only uses
+    /// `TypeId::of::<R>()` so we don't impose more.
+    pub fn register<R: 'static>(&mut self, kind: ComponentKind) {
         self.kinds.insert(kind);
         self.type_ids.insert(TypeId::of::<R>());
     }
@@ -53,8 +57,8 @@ impl ResourceKinds {
     /// Implementation note: `ComponentKind` is `TypeId`-keyed
     /// (`shared/src/world/component/component_kinds.rs:53`), so we
     /// construct the kind from `R`'s `TypeId` and check membership.
-    pub fn kind_for<R: Replicate>(&self) -> Option<ComponentKind> {
-        let kind = ComponentKind::of::<R>();
+    pub fn kind_for<R: 'static>(&self) -> Option<ComponentKind> {
+        let kind = ComponentKind::from(TypeId::of::<R>());
         if self.kinds.contains(&kind) {
             Some(kind)
         } else {

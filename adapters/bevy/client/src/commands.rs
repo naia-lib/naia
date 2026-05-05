@@ -8,9 +8,9 @@ use bevy_ecs::{
     world::{Mut, World},
 };
 use naia_bevy_shared::{
-    EntityAuthStatus, HostOwned, Replicate, WorldMutType, WorldProxy, WorldProxyMut, WorldRefType,
+    AuthorityError, EntityAuthStatus, HostOwned, Replicate, ReplicatedResource, WorldMutType,
+    WorldProxy, WorldProxyMut, WorldRefType,
 };
-use naia_bevy_shared::AuthorityError;
 use naia_client::ReplicationConfig;
 
 use crate::{client::ClientWrapper, Client};
@@ -176,7 +176,7 @@ impl<T: Send + Sync + 'static> Command for ConfigureReplicationCommand<T> {
 // Replicated Resources — Commands extension (client side, R8)
 // =====================================================================
 //
-// Mirror of the server's CommandsExtServer (R7). The user-visible client
+// Mirror of the server's ServerCommandsExt (R7). The user-visible client
 // API for delegated resources is:
 //
 //   commands.request_resource_authority::<MyClient, MyResource>();
@@ -194,7 +194,7 @@ impl<T: Send + Sync + 'static> Command for ConfigureReplicationCommand<T> {
 // The Commands queue dispatch pattern matches `ConfigureReplicationCommand`
 // above — runs with `&mut World`, dispatches via `world.resource_scope`.
 
-pub trait CommandsExtClient {
+pub trait ClientCommandsExt {
     /// Request authority on a delegable resource of type `R`. The
     /// request is sent to the server; the response (Granted/Denied)
     /// arrives later as part of the normal authority-channel flow.
@@ -203,20 +203,20 @@ pub trait CommandsExtClient {
     fn request_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,
-        R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>;
+        R: ReplicatedResource;
 
     /// Release authority on a previously-granted resource.
     fn release_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,
-        R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>;
+        R: ReplicatedResource;
 }
 
-impl<'w, 's> CommandsExtClient for Commands<'w, 's> {
+impl<'w, 's> ClientCommandsExt for Commands<'w, 's> {
     fn request_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,
-        R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+        R: ReplicatedResource,
     {
         self.queue(RequestResourceAuthorityCommand::<T, R>::new());
     }
@@ -224,7 +224,7 @@ impl<'w, 's> CommandsExtClient for Commands<'w, 's> {
     fn release_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,
-        R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+        R: ReplicatedResource,
     {
         self.queue(ReleaseResourceAuthorityCommand::<T, R>::new());
     }
@@ -233,7 +233,7 @@ impl<'w, 's> CommandsExtClient for Commands<'w, 's> {
 /// Walk the world's entities and return the first one carrying `R` as
 /// a component. V1 lookup; superseded by the client-side
 /// `ResourceRegistry` once Mode B lands.
-fn find_resource_entity<R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>>(
+fn find_resource_entity<R: ReplicatedResource>(
     world: &World,
 ) -> Option<Entity> {
     let world_ref = world.proxy();
@@ -249,7 +249,7 @@ fn find_resource_entity<R: Replicate + bevy_ecs::component::Component<Mutability
 pub(crate) struct RequestResourceAuthorityCommand<T, R>
 where
     T: Send + Sync + 'static,
-    R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+    R: ReplicatedResource,
 {
     _phantom_t: PhantomData<T>,
     _phantom_r: PhantomData<R>,
@@ -258,7 +258,7 @@ where
 impl<T, R> RequestResourceAuthorityCommand<T, R>
 where
     T: Send + Sync + 'static,
-    R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+    R: ReplicatedResource,
 {
     pub fn new() -> Self {
         Self {
@@ -271,7 +271,7 @@ where
 impl<T, R> Command for RequestResourceAuthorityCommand<T, R>
 where
     T: Send + Sync + 'static,
-    R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+    R: ReplicatedResource,
 {
     fn apply(self, world: &mut World) {
         let Some(entity) = find_resource_entity::<R>(world) else {
@@ -300,7 +300,7 @@ where
 pub(crate) struct ReleaseResourceAuthorityCommand<T, R>
 where
     T: Send + Sync + 'static,
-    R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+    R: ReplicatedResource,
 {
     _phantom_t: PhantomData<T>,
     _phantom_r: PhantomData<R>,
@@ -309,7 +309,7 @@ where
 impl<T, R> ReleaseResourceAuthorityCommand<T, R>
 where
     T: Send + Sync + 'static,
-    R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+    R: ReplicatedResource,
 {
     pub fn new() -> Self {
         Self {
@@ -322,7 +322,7 @@ where
 impl<T, R> Command for ReleaseResourceAuthorityCommand<T, R>
 where
     T: Send + Sync + 'static,
-    R: Replicate + bevy_ecs::component::Component<Mutability = Mutable>,
+    R: ReplicatedResource,
 {
     fn apply(self, world: &mut World) {
         let Some(entity) = find_resource_entity::<R>(world) else {

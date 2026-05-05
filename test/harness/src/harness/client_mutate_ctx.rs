@@ -138,26 +138,14 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     {
         let state = self.ctx.scenario().client_state(&self.client_key);
         let world_ref = state.world().proxy();
-        use naia_shared::WorldRefType;
-        for e in world_ref.entities() {
-            if let Some(comp) = world_ref.component::<R>(&e) {
-                return Some(f(&*comp));
-            }
-        }
-        None
+        crate::harness::resource_lookup::read_resource_in_world::<R, _, _, _>(&world_ref, f)
     }
 
     /// True iff the client's world contains a resource of type `R`.
     pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
         let state = self.ctx.scenario().client_state(&self.client_key);
         let world_ref = state.world().proxy();
-        use naia_shared::WorldRefType;
-        for e in world_ref.entities() {
-            if world_ref.has_component::<R>(&e) {
-                return true;
-            }
-        }
-        false
+        crate::harness::resource_lookup::has_resource_in_world::<R, _>(&world_ref)
     }
 
     /// Find the world entity carrying resource `R`, if any.
@@ -166,13 +154,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     ) -> Option<crate::TestEntity> {
         let state = self.ctx.scenario().client_state(&self.client_key);
         let world_ref = state.world().proxy();
-        use naia_shared::WorldRefType;
-        for e in world_ref.entities() {
-            if world_ref.has_component::<R>(&e) {
-                return Some(e);
-            }
-        }
-        None
+        crate::harness::resource_lookup::find_resource_entity_in_world::<R, _>(&world_ref)
     }
 
     /// Client requests authority on a delegable resource. Returns the
@@ -184,7 +166,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     ) -> Result<(), naia_shared::AuthorityError> {
         let entity = self
             .resource_entity_scan::<R>()
-            .ok_or(naia_shared::AuthorityError::NotInScope)?;
+            .ok_or(naia_shared::AuthorityError::ResourceNotPresent)?;
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
         state.client_mut().entity_request_authority(&entity)
     }
@@ -195,7 +177,7 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
     ) -> Result<(), naia_shared::AuthorityError> {
         let entity = self
             .resource_entity_scan::<R>()
-            .ok_or(naia_shared::AuthorityError::NotInScope)?;
+            .ok_or(naia_shared::AuthorityError::ResourceNotPresent)?;
         let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
         state.client_mut().entity_release_authority(&entity)
     }

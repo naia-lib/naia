@@ -27,11 +27,13 @@ mod components;
 mod plugin;
 mod protocol;
 mod protocol_plugin;
+mod replicated_resource;
 mod system_set;
 mod world_data;
 mod world_proxy;
 
 pub use bundle::ReplicateBundle;
+pub use replicated_resource::ReplicatedResource;
 pub use change_detection::HostSyncEvent;
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};

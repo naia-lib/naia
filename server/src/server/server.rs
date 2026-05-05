@@ -372,7 +372,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let entity = self
             .world_server
             .resource_entity::<R>()
-            .ok_or(AuthorityError::NotInScope)?;
+            .ok_or(AuthorityError::ResourceNotPresent)?;
         self.world_server.entity_take_authority(&entity)
     }
 
@@ -385,7 +385,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         let entity = self
             .world_server
             .resource_entity::<R>()
-            .ok_or(AuthorityError::NotInScope)?;
+            .ok_or(AuthorityError::ResourceNotPresent)?;
         self.world_server.entity_release_authority(None, &entity)
     }
 

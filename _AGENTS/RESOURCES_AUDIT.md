@@ -9,6 +9,71 @@ This doc is honest about gaps in my own work. The Resources feature ships and wo
 
 ---
 
+## Connor's verdict (recorded 2026-05-05)
+
+| Item | Verdict | Notes |
+|---|---|---|
+| A1 client-side mirror | **FIX** | Implement |
+| A2 mirror_single_field panic | **FIX** | debug_assert + safer release |
+| A3 dead `resource_kinds` field | **FIX — delete entirely** | Don't preserve for hypothetical R5-receive flow |
+| B1 sealed trait alias | **FIX** | Promote `ReplicatedResource` |
+| B2 trait rename | **FIX — both options A AND B** | `CommandsExt` → `EntityCommandsExt`; `CommandsExtServer` → `ServerCommandsExt`; same on client |
+| B3 `AuthorityError::ResourceNotPresent` | **FIX** | Add variant |
+| B4 event-constructor asymmetry | **INVALID** | "There will always be a user_key context" — my asymmetry concern was wrong; the server-side constructor's `user_key` requirement is correct |
+| B5 4× duplicated `resource(closure)` | **FIX** | Shared helper |
+| B6 `Option<&UserKey>` wart | **LEAVE** | Fine as-is |
+| **B7 over-clone in Mode A path** | **DECISION REQUIRED — see "Mode A vs Mode B" below; we picked Mode B exclusively** | Removes the conditional entirely |
+| B8 `app.replicate_resource_at_startup` | **REJECTED** | API design follows Bevy standards; users use `Startup` system + `commands.replicate_resource(...)` |
+| C1–C9 cleanup | **FIX ALL** | C8 = option A (remove unnecessary `mut`) |
+| D1 mutex | **FIX — option a (parking_lot)** | Drop poisoning + lock-fairness overhead |
+| D2 per-tick dispatcher | **FIX** | Single dispatcher system |
+| D3 Commands deferral | **DOCUMENT ONLY** | Behavior is fine |
+| F1–F5 test gaps | **FIX ALL** | Comprehensive coverage including Bevy-app integration tests |
+| **Namako SDD** | **MUST HAVE** | Comprehensive `.feature` + step bindings + passing tests in the SDD pipeline |
+| G1–G4 broader naia | Out of scope for this audit cycle | Tracked for future sprints |
+
+---
+
+## Mode A vs Mode B — clarified, and the chosen mode
+
+I conflated these two terms during implementation in a way that isn't crisp. Here's the disambiguation Connor asked for:
+
+### What I was calling "Mode A"
+
+> User accesses `R` via `Query<&R>` over the hidden resource entity. The bevy-resource side is not used. `Res<R>` would not work (or would panic — no resource of that type registered).
+
+This was effectively a **fallback for users who didn't call `add_resource_events::<R>()`** — a vestigial branch in `commands.rs` that early-returned from `install_bevy_resource_mirror_if_present` when the `SyncDirtyTracker<R>` wasn't present.
+
+It's not really a mode — it's "what happens when the user partially registered a resource."
+
+### What I was calling "Mode B"
+
+> User accesses `R` via standard `Res<R>` / `ResMut<R>`. The bevy adapter maintains a bevy-side mirror that's kept in sync with the entity-component via the `SyncMutator<R>` + `mirror_single_field` machinery. Per-field diff preserved.
+
+This is the **real spec contract** — the design doc has always said `Res<R>`/`ResMut<R>` is the user surface (D8 of the plan). Mode B IS Replicated Resources.
+
+### Decision: Mode B exclusively
+
+Per Connor: "we likely need to pick ONE mode and keep it that way."
+
+**We pick Mode B.** Concretely:
+
+1. `R: ReplicatedResource` (the new sealed trait alias from B1) requires **all three** bounds: `Replicate + Component<Mutability=Mutable> + bevy::Resource`. This is a hard requirement — no escape hatch.
+2. `add_resource_events::<R>()` becomes the canonical registration entry point. Calling `commands.replicate_resource(value)` without first calling `add_resource_events::<R>()` is a **user error** — we panic with a clear message rather than silently fall back to a non-functional Mode A.
+3. The bevy-resource side is ALWAYS inserted on `commands.replicate_resource(value)`. No conditional clone, no `install_bevy_resource_mirror_if_present` early-return.
+4. The "Mode A" term is removed from all docs and code comments. There's just **the mode**: Replicated Resources surface as `Res<R>`/`ResMut<R>` with full per-field diff via the mirror system.
+5. Users who want a Component-only singleton (the use case Mode A was nominally serving) can just `commands.spawn(R::new(...)).enable_replication(server)` directly — that's what entities already do. Resources are explicitly the `Res<R>`/`ResMut<R>` story.
+
+This resolves B7 by making it irrelevant: the conditional clone path goes away entirely.
+
+### Effect on the audit items
+
+- **B7 → resolved by Mode B exclusivity.** No conditional clone, no Mode A path.
+- **C5 (stale comment)** → resolved as part of removing all "Mode A" language.
+- **C9 (box-and-downcast vestige)** → resolved by passing `R` typed (no need to type-erase since we always do the bevy-Resource insert).
+
+---
+
 ## Severity legend
 
 | Mark | Meaning |

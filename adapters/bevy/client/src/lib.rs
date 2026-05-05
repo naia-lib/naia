@@ -21,6 +21,6 @@ mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
 pub use client::{Client, ClientWrapper};
-pub use commands::{CommandsExt, CommandsExtClient};
+pub use commands::{CommandsExt, ClientCommandsExt};
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;

@@ -106,19 +106,15 @@ impl<'a> ServerExpectCtx<'a> {
     }
 
     /// Read-only access to the value of a server-side Replicated Resource.
-    /// The closure receives `Option<&R>`; `None` if `R` is not currently
+    /// The closure receives `&R`; returns `None` if `R` is not currently
     /// inserted.
     pub fn resource<R, F, T>(&self, f: F) -> Option<T>
     where
         R: naia_shared::ReplicatedComponent,
         F: FnOnce(&R) -> T,
     {
-        let (server, _) = self.scenario.server_and_registry()?;
         let world_ref = self.scenario.server_world_ref();
-        let entity = server.resource_entity::<R>()?;
-        let comp_wrapper = world_ref.component::<R>(&entity)?;
-        // ReplicaRefWrapper derefs to &R for read access
-        Some(f(&*comp_wrapper))
+        crate::harness::resource_lookup::read_resource_in_world::<R, _, _, _>(&world_ref, f)
     }
 
     /// Check if user exists for a ClientKey

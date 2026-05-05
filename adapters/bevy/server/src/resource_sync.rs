@@ -48,18 +48,14 @@
 //! no-op for server-authoritative resources because the server IS the
 //! authority; it kicks in for delegated resources held by clients.)
 
-use std::{
-    marker::PhantomData,
-    sync::{Arc, Mutex},
-};
+use std::{marker::PhantomData, sync::Arc};
 
 use bevy_app::App;
-use bevy_ecs::{
-    component::Mutable,
-    world::{Mut, World},
-};
+use bevy_ecs::world::{Mut, World};
+use parking_lot::Mutex;
+
 use naia_bevy_shared::{
-    PropertyMutate, PropertyMutator, Replicate, WorldMutType, WorldProxyMut,
+    PropertyMutate, PropertyMutator, Replicate, ReplicatedResource, WorldMutType, WorldProxyMut,
 };
 
 use crate::server::ServerImpl;
@@ -92,7 +88,7 @@ impl<R: Replicate> SyncDirtyTracker<R> {
     /// performs at most one mirror per Property field per tick even if
     /// the user touched it multiple times.
     pub(crate) fn drain_unique(&self) -> Vec<u8> {
-        let mut g = self.inner.lock().expect("SyncDirtyTracker mutex poisoned");
+        let mut g = self.inner.lock();
         if g.is_empty() {
             return Vec::new();
         }
@@ -135,47 +131,79 @@ impl<R: Replicate> SyncMutator<R> {
 
 impl<R: Replicate> PropertyMutate for SyncMutator<R> {
     fn mutate(&mut self, property_index: u8) -> bool {
-        // Best-effort push. If the lock is somehow poisoned, we lose
-        // this dirty bit — acceptable because lock poisoning indicates
-        // a panic in another thread and the world is already in an
-        // unrecoverable state.
-        if let Ok(mut g) = self.inner.lock() {
-            g.push(property_index);
-        }
+        // parking_lot's Mutex doesn't poison, so this can't fail.
+        self.inner.lock().push(property_index);
         true
     }
 }
 
-/// Install the per-tick outgoing sync system for resource type `R`.
-/// Called from `add_resource_events::<R>()` so users get the mirror
-/// installed automatically when they register the events.
-///
-/// Idempotent — Bevy de-dupes systems by function pointer + type
-/// parameters, so re-registering the same `R` is a no-op.
-///
-/// `R` must additionally implement `bevy_ecs::resource::Resource`
-/// for Mode B. If `R` is registered for events but not as a Resource,
-/// the system is a no-op (it just doesn't find the bevy-resource and
-/// returns early); users can still access `R` via `Query<&R>` over
-/// the resource entity (Mode A).
-pub(crate) fn install_resource_sync_system<R>(app: &mut App)
-where
-    R: Replicate
-        + bevy_ecs::resource::Resource
-        + bevy_ecs::component::Component<Mutability = Mutable>,
-{
+/// Per-resource sync hook: a type-erased closure that knows how to
+/// drain the `SyncDirtyTracker<R>` for a specific R and mirror dirty
+/// fields into the entity-component. Stored in
+/// `ResourceSyncDispatcher` and invoked by the single dispatcher
+/// system.
+type SyncHook = Box<dyn Fn(&mut World) + Send + Sync + 'static>;
+
+/// Single dispatcher Bevy `Resource` holding the per-resource sync
+/// hooks. One Bevy system runs all hooks each tick (D2 of
+/// RESOURCES_AUDIT.md), avoiding `add_systems` proliferation across
+/// many registered resource types.
+#[derive(bevy_ecs::resource::Resource, Default)]
+pub(crate) struct ResourceSyncDispatcher {
+    hooks: Vec<SyncHook>,
+}
+
+impl ResourceSyncDispatcher {
+    fn run_all(world: &mut World) {
+        // Take ownership of the hooks vec briefly so we can call each
+        // with &mut World without holding the dispatcher Resource borrow.
+        let hooks: Vec<SyncHook> = world
+            .resource_mut::<ResourceSyncDispatcher>()
+            .hooks
+            .drain(..)
+            .collect();
+        for hook in &hooks {
+            hook(world);
+        }
+        // Restore. Hooks are static (registered once), so this is
+        // semantically a no-op — we just put them back where they live.
+        world.resource_mut::<ResourceSyncDispatcher>().hooks = hooks;
+    }
+}
+
+/// Install the dispatcher system once on first call. Idempotent.
+fn ensure_dispatcher_system_installed(app: &mut App) {
+    if app
+        .world()
+        .get_resource::<ResourceSyncDispatcher>()
+        .is_none()
+    {
+        app.insert_resource(ResourceSyncDispatcher::default());
+        app.add_systems(bevy_app::Update, ResourceSyncDispatcher::run_all);
+    }
+}
+
+/// Register the per-tick outgoing sync hook for resource type `R`.
+/// Called from `add_resource_events::<R>()`. Idempotent — guarded by
+/// a `ResourceSyncInstalled<R>` marker so re-registering the same `R`
+/// doesn't double-install the hook.
+pub(crate) fn install_resource_sync_system<R: ReplicatedResource>(app: &mut App) {
+    ensure_dispatcher_system_installed(app);
     if app
         .world()
         .get_resource::<ResourceSyncInstalled<R>>()
-        .is_none()
+        .is_some()
     {
-        app.insert_resource(ResourceSyncInstalled::<R> {
-            _phantom: PhantomData,
-        });
-        // SyncDirtyTracker<R> is inserted lazily on first
-        // replicate_resource call; the sync system tolerates absence.
-        app.add_systems(bevy_app::Update, sync_resource_outgoing::<R>);
+        return;
     }
+    app.insert_resource(ResourceSyncInstalled::<R> {
+        _phantom: PhantomData,
+    });
+    let hook: SyncHook = Box::new(sync_resource_outgoing::<R>);
+    app.world_mut()
+        .resource_mut::<ResourceSyncDispatcher>()
+        .hooks
+        .push(hook);
 }
 
 #[derive(bevy_ecs::resource::Resource)]
@@ -183,18 +211,12 @@ struct ResourceSyncInstalled<R: Replicate> {
     _phantom: PhantomData<R>,
 }
 
-/// Per-tick outgoing sync: drain the `SyncDirtyTracker<R>` and
-/// mirror each dirty Property field from bevy-resource → entity-
-/// component using `Replicate::mirror_single_field`.
-///
-/// O(dirty fields) per tick. No reflection of unchanged fields.
-fn sync_resource_outgoing<R>(world: &mut World)
-where
-    R: Replicate
-        + bevy_ecs::resource::Resource
-        + bevy_ecs::component::Component<Mutability = Mutable>,
-{
-    // Cheap pre-check — drain only happens if there's anything to do.
+/// Per-tick outgoing sync for a specific `R`: drain its
+/// `SyncDirtyTracker` and mirror each dirty Property field from
+/// bevy-resource → entity-component via
+/// `Replicate::mirror_single_field`. O(dirty fields). No reflection
+/// of unchanged fields. Called by the single dispatcher system.
+fn sync_resource_outgoing<R: ReplicatedResource>(world: &mut World) {
     let dirty: Vec<u8> = match world.get_resource::<SyncDirtyTracker<R>>() {
         Some(t) => t.drain_unique(),
         None => return,
@@ -202,28 +224,19 @@ where
     if dirty.is_empty() {
         return;
     }
-    world.resource_scope::<ServerImpl, _>(|world, mut server: Mut<ServerImpl>| {
+    world.resource_scope::<ServerImpl, _>(|world, server: Mut<ServerImpl>| {
         let Some(entity) = server.resource_entity::<R>() else {
             return;
         };
-        // Snapshot the bevy-resource value via the Replicate trait's
-        // own copy path (no `R: Clone` bound required). The result is
-        // a Box<dyn Replicate> that we pass to `mirror_single_field`.
         let snapshot: Box<dyn Replicate> = match world.get_resource::<R>() {
             Some(r) => r.copy_to_box(),
             None => return,
         };
         let mut world_mut = world.proxy_mut();
-        let _ = &mut world_mut; // borrow-checker scaffold
         let Some(mut entity_comp) = world_mut.component_mut::<R>(&entity) else {
             return;
         };
         for &idx in &dirty {
-            // mirror_single_field copies just the one field from
-            // snapshot → entity_comp and fires the entity-component's
-            // PropertyMutator for that one index. The DirtyQueue picks
-            // it up; only that field gets serialized in the next
-            // outgoing packet.
             entity_comp.mirror_single_field(idx, snapshot.as_ref());
         }
     });
@@ -252,58 +265,27 @@ pub(crate) fn wire_sync_mutator<R: Replicate>(
     value.set_mutator(&mutator);
 }
 
-/// Mode-B install hook called from `ReplicateResourceCommand::apply`
-/// AFTER the entity-component side is in place.
+/// Insert `R` as a Bevy `Resource` mirror with the `SyncMutator<R>`
+/// wired into its Property fields. Called from
+/// `ReplicateResourceCommand::apply` AFTER the entity-component side
+/// is in place.
 ///
-/// Behaviour:
-/// - If a `SyncDirtyTracker<R>` is present in the World (= the user
-///   called `add_resource_events::<R>()`), wire the snapshot's
-///   `PropertyMutator`s to the tracker and insert the snapshot as a
-///   bevy `Resource`. The user can now read/write via `Res<R>` /
-///   `ResMut<R>`, and the per-tick sync system will mirror touched
-///   fields to the entity-component.
-/// - If no tracker is present (Mode A only — user didn't register
-///   for event/Mode B support), the snapshot is dropped and the
-///   user accesses R via `Query<&R>` over the resource entity.
-///
-/// Takes the snapshot as a `Box<dyn Replicate>` so the call site
-/// doesn't need to know whether `R: bevy::Resource` (this function
-/// downcasts and applies the bevy-Resource insert only for the right
-/// type — Mode A users skip the cast).
-pub(crate) fn install_bevy_resource_mirror_if_present<R>(
+/// Mode B is the only mode (per RESOURCES_AUDIT.md decisions). This
+/// function panics if `add_resource_events::<R>()` wasn't called first
+/// — the missing `SyncDirtyTracker<R>` indicates the user forgot to
+/// register, and we'd silently fail otherwise.
+pub(crate) fn install_bevy_resource_mirror<R: ReplicatedResource>(
     world: &mut World,
-    snapshot: Box<dyn Replicate>,
-) where
-    R: Replicate
-        + bevy_ecs::resource::Resource
-        + bevy_ecs::component::Component<Mutability = Mutable>,
-{
-    // Only proceed if Mode B was registered for this type.
-    let tracker_present = world.get_resource::<SyncDirtyTracker<R>>().is_some();
-    if !tracker_present {
-        return;
-    }
-    // Downcast the boxed Replicate back to R. The Box was created
-    // via `value.copy_to_box()` on a value of type R, so this is
-    // infallible by construction; we still tolerate failure gracefully.
-    let any_box = snapshot.to_boxed_any();
-    let mut value: Box<R> = match any_box.downcast::<R>() {
-        Ok(v) => v,
-        Err(_) => {
-            log::warn!(
-                "naia install_bevy_resource_mirror: downcast failed; skipping bevy-Resource insert"
-            );
-            return;
-        }
-    };
-    // Wire the SyncMutator into the snapshot value's Property fields,
-    // then insert as bevy Resource. The mutator handle clones from the
-    // tracker we just verified exists.
-    {
-        let tracker = world
-            .get_resource::<SyncDirtyTracker<R>>()
-            .expect("checked above");
-        wire_sync_mutator::<R>(&mut *value, tracker);
-    }
-    world.insert_resource(*value);
+    mut value: R,
+) {
+    let tracker = world.get_resource::<SyncDirtyTracker<R>>().unwrap_or_else(|| {
+        panic!(
+            "naia replicate_resource: missing SyncDirtyTracker<{0}>. \
+             You must call `app.add_resource_events::<{0}>()` before \
+             `commands.replicate_resource(...)`.",
+            std::any::type_name::<R>()
+        )
+    });
+    wire_sync_mutator::<R>(&mut value, tracker);
+    world.insert_resource(value);
 }

@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{ComponentKind, GlobalEntity, Replicate};
+use crate::GlobalEntity;
 
 /// Per-`World` bidirectional map between Resource `TypeId` and the hidden
 /// `GlobalEntity` carrying that resource as a single component.
@@ -46,7 +46,7 @@ impl ResourceRegistry {
     /// `ResourceAlreadyExists` if the TypeId is already registered (the
     /// `commands.replicate_resource` API surface treats this as an error
     /// per D14/risk-register).
-    pub fn insert<R: Replicate>(
+    pub fn insert<R: 'static>(
         &mut self,
         entity: GlobalEntity,
     ) -> Result<(), ResourceAlreadyExists> {
@@ -81,7 +81,7 @@ impl ResourceRegistry {
     }
 
     /// Remove a resource by type. Returns the removed entity if present.
-    pub fn remove<R: Replicate>(&mut self) -> Option<GlobalEntity> {
+    pub fn remove<R: 'static>(&mut self) -> Option<GlobalEntity> {
         let type_id = TypeId::of::<R>();
         let entity = self.by_type.remove(&type_id)?;
         self.by_entity.remove(&entity);
@@ -97,7 +97,7 @@ impl ResourceRegistry {
     }
 
     /// O(1): "where is the hidden entity for resource `R`?"
-    pub fn entity_for<R: Replicate>(&self) -> Option<GlobalEntity> {
+    pub fn entity_for<R: 'static>(&self) -> Option<GlobalEntity> {
         self.by_type.get(&TypeId::of::<R>()).copied()
     }
 
@@ -134,36 +134,6 @@ impl ResourceRegistry {
     /// Iterate over just the resource entities (for scope auto-inclusion).
     pub fn entities(&self) -> impl Iterator<Item = &GlobalEntity> {
         self.by_type.values()
-    }
-
-    /// Receiver-side bridge: given an iterator of `ComponentKind`s from
-    /// an incoming `SpawnWithComponents`, return the kind that's a
-    /// resource if present (we expect at most one resource kind per
-    /// entity by construction; if multiple are present, the first wins
-    /// — which is degenerate user input and asserted in debug).
-    pub fn pick_resource_kind<'a, I>(
-        kinds: I,
-        is_resource: impl Fn(&ComponentKind) -> bool,
-    ) -> Option<ComponentKind>
-    where
-        I: IntoIterator<Item = &'a ComponentKind>,
-    {
-        let mut found: Option<ComponentKind> = None;
-        for k in kinds {
-            if is_resource(k) {
-                if cfg!(debug_assertions) {
-                    debug_assert!(
-                        found.is_none(),
-                        "resource entity carries more than one resource component kind — \
-                         each resource entity must carry exactly one resource component"
-                    );
-                }
-                if found.is_none() {
-                    found = Some(*k);
-                }
-            }
-        }
-        found
     }
 }
 

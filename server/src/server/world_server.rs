@@ -16,9 +16,9 @@ use naia_shared::{
     GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
     OutgoingPriorityHook, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
-    Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceKinds,
-    ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr,
-    SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
+    Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
+    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -114,14 +114,6 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     channel_kinds: ChannelKinds,
     message_kinds: MessageKinds,
     component_kinds: ComponentKinds,
-    /// Marker table — which `ComponentKind`s are Replicated Resources.
-    /// Used by the receiver side (in delegated client → server flows)
-    /// to recognize incoming resource components. Currently unused for
-    /// server-authoritative-only resource flow but retained for R5
-    /// (delegation) where the server must identify incoming resource
-    /// updates from clients.
-    #[allow(dead_code)]
-    resource_kinds: ResourceKinds,
     client_authoritative_entities: bool,
     io: Io,
     // cont
@@ -191,7 +183,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             channel_kinds,
             message_kinds,
             component_kinds,
-            resource_kinds,
             tick_interval,
             compression,
             client_authoritative_entities,
@@ -217,7 +208,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             channel_kinds,
             message_kinds,
             component_kinds,
-            resource_kinds,
             client_authoritative_entities,
             io,
             heartbeat_timer,
@@ -250,7 +240,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             user_priorities: HashMap::new(),
             scope_checks_cache: ScopeChecksCache::new(),
             resource_registry: ResourceRegistry::new(),
-            // resource_kinds folded into the field — keep alongside other protocol tables
         }
     }
 

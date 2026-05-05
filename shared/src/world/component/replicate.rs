@@ -83,9 +83,16 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// Used by the Replicated Resources Mode B mirror system to propagate
     /// per-field changes from the user-facing bevy `Resource` storage to
     /// the entity-component without over-replicating untouched fields.
-    /// Out-of-range indices are silently no-op'd (the dirty tracker can in
-    /// principle record stale indices if a Property field is removed
-    /// across protocol versions; we tolerate that).
+    ///
+    /// **Out-of-range indices are silently no-op'd** (schema evolution
+    /// across protocol versions may produce stale dirty indices; we
+    /// tolerate that without panicking).
+    ///
+    /// **Type mismatch** (`other` is not the same concrete type as
+    /// `self`) is a programming error: the derive-macro impl
+    /// `debug_assert!`s in debug builds and silently no-ops in release.
+    /// This is hostile to ignore but a hot per-tick sync system shouldn't
+    /// panic in production.
     fn mirror_single_field(&mut self, field_index: u8, other: &dyn Replicate);
     /// Set the Component's PropertyMutator, which keeps track
     /// of which Properties have been mutated, necessary to sync only the

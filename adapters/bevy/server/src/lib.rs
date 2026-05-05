@@ -25,7 +25,7 @@ mod server;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
-pub use commands::{CommandsExt, CommandsExtServer};
+pub use commands::{CommandsExt, ServerCommandsExt};
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
 pub use server::Server;

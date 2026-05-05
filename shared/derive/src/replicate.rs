@@ -643,7 +643,14 @@ fn get_mirror_single_field_method(
                     }
                 }
             } else {
-                panic!("cannot mirror_single_field: other Component is of another type!");
+                // Debug builds: surface the type-mismatch loudly so
+                // developers catch the bug. Release builds: silently
+                // no-op so a misuse in a hot per-tick sync system
+                // doesn't take down the server.
+                debug_assert!(
+                    false,
+                    "cannot mirror_single_field: other Component is of another type!"
+                );
             }
         }
     }

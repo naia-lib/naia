@@ -57,29 +57,15 @@ impl<'a> ClientExpectCtx<'a> {
 
     /// True iff the client's world contains a Replicated Resource of
     /// type `R`.
-    ///
-    /// V1 implementation scans the client's entities for one carrying
-    /// `R` as a component. A proper client-side `ResourceRegistry`
-    /// (mirroring the server's, populated at SpawnWithComponents apply
-    /// time) lands with the bevy adapter in R7.
     pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
         let state = self.scenario.client_state(&self.client_key);
         let world_ref = state.world().proxy();
-        use naia_shared::WorldRefType;
-        let entities = world_ref.entities();
-        for e in entities {
-            if world_ref.has_component::<R>(&e) {
-                return true;
-            }
-        }
-        false
+        crate::harness::resource_lookup::has_resource_in_world::<R, _>(&world_ref)
     }
 
     /// Read the value of a client-side Replicated Resource. The closure
     /// receives `&R`. Returns `None` if not present in this client's
     /// world.
-    ///
-    /// V1: scans entities (see `has_resource` rationale).
     pub fn resource<R, F, T>(&self, f: F) -> Option<T>
     where
         R: naia_shared::ReplicatedComponent,
@@ -87,14 +73,7 @@ impl<'a> ClientExpectCtx<'a> {
     {
         let state = self.scenario.client_state(&self.client_key);
         let world_ref = state.world().proxy();
-        use naia_shared::WorldRefType;
-        let entities = world_ref.entities();
-        for e in entities {
-            if let Some(comp) = world_ref.component::<R>(&e) {
-                return Some(f(&*comp));
-            }
-        }
-        None
+        crate::harness::resource_lookup::read_resource_in_world::<R, _, _, _>(&world_ref, f)
     }
 
     /// Read this client's view of a resource's authority status.

@@ -237,13 +237,8 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         R: naia_shared::ReplicatedComponent,
         F: FnOnce(&R) -> T,
     {
-        let scenario = self.ctx.scenario();
-        let (server, _) = scenario.server_and_registry()?;
-        let entity = server.resource_entity::<R>()?;
-        let world_ref = scenario.server_world_ref();
-        use naia_shared::WorldRefType;
-        let comp = world_ref.component::<R>(&entity)?;
-        Some(f(&*comp))
+        let world_ref = self.ctx.scenario().server_world_ref();
+        crate::harness::resource_lookup::read_resource_in_world::<R, _, _, _>(&world_ref, f)
     }
 
     /// Mutate the value of a server-side resource. Closure receives

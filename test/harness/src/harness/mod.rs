@@ -9,6 +9,7 @@ mod expect_ctx;
 mod expect_result;
 mod keys;
 mod mutate_ctx;
+mod resource_lookup;
 mod room;
 mod scenario;
 mod server_entity;
