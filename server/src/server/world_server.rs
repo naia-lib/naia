@@ -1065,6 +1065,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         Some(self.global_entity_priority_mut(entity))
     }
 
+    /// Server-side authority status for resource `R`. Returns `None`
+    /// if `R` is not currently inserted or if the resource is not
+    /// configured for delegation.
+    pub fn resource_authority_status<R: ReplicatedComponent>(
+        &self,
+    ) -> Option<EntityAuthStatus> {
+        let entity = self.resource_entity::<R>()?;
+        self.entity_authority_status(&entity)
+    }
+
     /// Iterate over the hidden entities of all currently-inserted resources.
     /// Used by the connect-flow to auto-include all resources in a new
     /// user's scope.

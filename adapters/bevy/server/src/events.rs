@@ -238,3 +238,65 @@ impl<C: Replicate> RemoveComponentEvent<C> {
         }
     }
 }
+
+// =====================================================================
+// Replicated Resource Events (D13 — user-facing, no entity field)
+// =====================================================================
+//
+// These mirror the Component event types but strip the `entity` field:
+// users see ZERO entity-level semantics for resources (D13). The bevy
+// adapter event-emission filter routes resource entities out of
+// SpawnEntityEvent / DespawnEntityEvent / component events; the
+// equivalent resource events fire instead.
+
+/// Fires when a Replicated Resource of type `R` becomes available on
+/// the server (newly inserted, OR a connecting client first observes
+/// it — see D20 for late-join semantics applied to the client side).
+#[derive(bevy_ecs::message::Message)]
+pub struct InsertResourceEvent<R: Replicate> {
+    pub user_key: UserKey,
+    phantom_r: PhantomData<R>,
+}
+
+impl<R: Replicate> InsertResourceEvent<R> {
+    pub fn new(user_key: UserKey) -> Self {
+        Self {
+            user_key,
+            phantom_r: PhantomData,
+        }
+    }
+}
+
+/// Fires whenever a Replicated Resource of type `R` is updated by the
+/// authority holder (server-authoritative, or client when client holds
+/// authority on a delegated resource).
+#[derive(bevy_ecs::message::Message)]
+pub struct UpdateResourceEvent<R: Replicate> {
+    pub user_key: UserKey,
+    phantom_r: PhantomData<R>,
+}
+
+impl<R: Replicate> UpdateResourceEvent<R> {
+    pub fn new(user_key: UserKey) -> Self {
+        Self {
+            user_key,
+            phantom_r: PhantomData,
+        }
+    }
+}
+
+/// Fires when a Replicated Resource of type `R` is removed.
+#[derive(bevy_ecs::message::Message)]
+pub struct RemoveResourceEvent<R: Replicate> {
+    pub user_key: UserKey,
+    pub resource: R,
+}
+
+impl<R: Replicate> RemoveResourceEvent<R> {
+    pub fn new(user_key: UserKey, resource: R) -> Self {
+        Self {
+            user_key,
+            resource,
+        }
+    }
+}

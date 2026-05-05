@@ -163,6 +163,94 @@ impl ServerImpl {
             Self::WorldOnly(server) => server.despawn_entity_worldless(entity),
         }
     }
+
+    // Replicated Resources -----------------------------------------------
+
+    pub(crate) fn has_resource<R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(&self) -> bool {
+        match self {
+            Self::Full(server) => server.has_resource::<R>(),
+            Self::WorldOnly(server) => server.has_resource::<R>(),
+        }
+    }
+
+    pub(crate) fn resource_entity<R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(&self) -> Option<Entity> {
+        match self {
+            Self::Full(server) => server.resource_entity::<R>(),
+            Self::WorldOnly(server) => server.resource_entity::<R>(),
+        }
+    }
+
+    pub(crate) fn is_resource_entity(&self, entity: &Entity) -> bool {
+        match self {
+            Self::Full(server) => server.is_resource_entity(entity),
+            Self::WorldOnly(server) => server.is_resource_entity(entity),
+        }
+    }
+
+    pub(crate) fn resource_count(&self) -> usize {
+        match self {
+            Self::Full(server) => server.resource_count(),
+            Self::WorldOnly(server) => server.resource_count(),
+        }
+    }
+
+    pub(crate) fn insert_resource<W: WorldMutType<Entity>, R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(
+        &mut self,
+        world: W,
+        value: R,
+    ) -> Result<Entity, naia_bevy_shared::ResourceAlreadyExists> {
+        match self {
+            Self::Full(server) => server.insert_resource(world, value),
+            Self::WorldOnly(server) => server.insert_resource(world, value),
+        }
+    }
+
+    pub(crate) fn insert_static_resource<W: WorldMutType<Entity>, R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(
+        &mut self,
+        world: W,
+        value: R,
+    ) -> Result<Entity, naia_bevy_shared::ResourceAlreadyExists> {
+        match self {
+            Self::Full(server) => server.insert_static_resource(world, value),
+            Self::WorldOnly(server) => server.insert_static_resource(world, value),
+        }
+    }
+
+    pub(crate) fn remove_resource<W: WorldMutType<Entity>, R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(
+        &mut self,
+        world: W,
+    ) -> bool {
+        match self {
+            Self::Full(server) => server.remove_resource::<W, R>(world),
+            Self::WorldOnly(server) => server.remove_resource::<W, R>(world),
+        }
+    }
+
+    pub(crate) fn configure_resource<W: WorldMutType<Entity>, R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(
+        &mut self,
+        world: &mut W,
+        config: ReplicationConfig,
+    ) -> bool {
+        match self {
+            Self::Full(server) => server.configure_resource::<W, R>(world, config),
+            Self::WorldOnly(server) => {
+                let Some(entity) = server.resource_entity::<R>() else {
+                    return false;
+                };
+                server.configure_entity_replication(world, &entity, config);
+                true
+            }
+        }
+    }
+
+    pub(crate) fn resource_authority_status<R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(
+        &self,
+    ) -> Option<EntityAuthStatus> {
+        match self {
+            Self::Full(server) => server.resource_authority_status::<R>(),
+            Self::WorldOnly(server) => server.resource_authority_status::<R>(),
+        }
+    }
 }
 
 // Server
@@ -517,6 +605,51 @@ impl<'w> Server<'w> {
 
     pub(crate) fn entity_authority_status(&self, _entity: &Entity) -> Option<EntityAuthStatus> {
         todo!("entity_authority_status requires world access; use ServerImpl directly in exclusive systems")
+    }
+
+    // ====================================================================
+    // Replicated Resources — read-only / status surface on the
+    // Server SystemParam.
+    //
+    // World-mutating ops (insert/remove/configure) live on the
+    // `CommandsExt` trait (see `commands.rs`) and follow the standard
+    // Bevy `Command` queue pattern — `commands.replicate_resource(v)`
+    // queues a `ReplicateResourceCommand<R>` that runs with `&mut World`
+    // and dispatches into `ServerImpl` via `world.resource_scope`.
+    // ====================================================================
+
+    /// True iff a Replicated Resource of type `R` is currently inserted
+    /// on this server.
+    pub fn has_resource<R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(&self) -> bool {
+        self.server_impl.has_resource::<R>()
+    }
+
+    /// Returns the hidden Bevy `Entity` carrying resource `R`, or
+    /// `None` if `R` is not currently inserted. Mostly useful for
+    /// advanced introspection / diagnostics; user code should typically
+    /// access resource state through `Query<&R>` over the resource
+    /// entity (Mode A) or, once landed, `Res<R>` via the mirror system
+    /// (Mode B).
+    pub fn resource_entity<R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(&self) -> Option<Entity> {
+        self.server_impl.resource_entity::<R>()
+    }
+
+    /// True iff `entity` is the hidden entity for any Replicated
+    /// Resource. Used by the event-emission filter (D13) to suppress
+    /// SpawnEntityEvent / component events for resource entities.
+    pub fn is_resource_entity(&self, entity: &Entity) -> bool {
+        self.server_impl.is_resource_entity(entity)
+    }
+
+    /// Number of currently-inserted resources.
+    pub fn resource_count(&self) -> usize {
+        self.server_impl.resource_count()
+    }
+
+    /// Server-side authority status for resource `R`. `None` if not
+    /// inserted or not delegable.
+    pub fn resource_authority_status<R: Replicate + bevy_ecs::component::Component<Mutability = bevy_ecs::component::Mutable>>(&self) -> Option<EntityAuthStatus> {
+        self.server_impl.resource_authority_status::<R>()
     }
 
     pub fn world_only_resource_scope(
