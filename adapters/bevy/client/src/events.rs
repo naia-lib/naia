@@ -298,6 +298,77 @@ impl<T: Send + Sync + 'static, C: Replicate> RemoveComponentEvent<T, C> {
     }
 }
 
+// =====================================================================
+// Replicated Resource Events (D13 — user-facing, no entity field)
+// =====================================================================
+//
+// Mirror of the server-side resource events. Per D13/D17, these are
+// the user-visible event surface for Replicated Resources on the
+// client; users never see SpawnEntityEvent / InsertComponentEvent for
+// resource entities.
+
+/// Fires when a Replicated Resource of type `R` first becomes visible
+/// to this client. Per D20, late-join is indistinguishable from
+/// fresh-spawn at the event level — this fires whether `R` was just
+/// inserted on the server OR was inserted long ago and the client just
+/// connected.
+#[derive(bevy_ecs::message::Message)]
+pub struct InsertResourceEvent<T: Send + Sync + 'static, R: Replicate> {
+    phantom_t: PhantomData<T>,
+    phantom_r: PhantomData<R>,
+}
+
+impl<T: Send + Sync + 'static, R: Replicate> InsertResourceEvent<T, R> {
+    pub fn new() -> Self {
+        Self {
+            phantom_t: PhantomData,
+            phantom_r: PhantomData,
+        }
+    }
+}
+
+impl<T: Send + Sync + 'static, R: Replicate> Default for InsertResourceEvent<T, R> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Fires whenever a Replicated Resource of type `R` is updated by the
+/// authority holder.
+#[derive(bevy_ecs::message::Message)]
+pub struct UpdateResourceEvent<T: Send + Sync + 'static, R: Replicate> {
+    pub tick: Tick,
+    phantom_t: PhantomData<T>,
+    phantom_r: PhantomData<R>,
+}
+
+impl<T: Send + Sync + 'static, R: Replicate> UpdateResourceEvent<T, R> {
+    pub fn new(tick: Tick) -> Self {
+        Self {
+            tick,
+            phantom_t: PhantomData,
+            phantom_r: PhantomData,
+        }
+    }
+}
+
+/// Fires when a Replicated Resource of type `R` is removed (server-
+/// authoritative removal, OR despawn from this client's scope).
+#[derive(bevy_ecs::message::Message)]
+pub struct RemoveResourceEvent<T: Send + Sync + 'static, R: Replicate> {
+    phantom_t: PhantomData<T>,
+    pub resource: R,
+}
+
+impl<T: Send + Sync + 'static, R: Replicate> RemoveResourceEvent<T, R> {
+    pub fn new(resource: R) -> Self {
+        Self {
+            phantom_t: PhantomData,
+            resource,
+        }
+    }
+}
+
 // PublishEntityEvent
 #[derive(bevy_ecs::message::Message)]
 pub struct PublishEntityEvent<T> {

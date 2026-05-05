@@ -1,7 +1,8 @@
 pub use bevy_ecs;
 
 pub use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, BitReader, BitWrite, BitWriter,
+    sequence_greater_than, sequence_less_than, wrapping_diff, AuthorityError, BitReader, BitWrite,
+    BitWriter,
     Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate, ComponentKind,
     ComponentKinds, ComponentUpdate, ConstBitLength, DiffMask, EntityAndGlobalEntityConverter,
     EntityAuthAccessor, EntityAuthStatus, EntityDoesNotExistError, EntityProperty,
