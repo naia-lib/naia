@@ -195,9 +195,16 @@ pub fn translate_world_events(world: &mut World) {
             }
 
             // Spawn Entity Event
+            // D13 of RESOURCES_PLAN: suppress for resource entities.
+            // Replicated Resources are user-facing as `Res<R>` (or via
+            // their own `InsertResourceEvent<R>`); the hidden resource
+            // entity must NOT leak into `SpawnEntityEvent`.
             if events.has::<naia_events::SpawnEntityEvent>() {
                 let mut client_spawned_entities = Vec::new();
                 for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
+                    if server.is_resource_entity(&entity) {
+                        continue;
+                    }
                     if let EntityOwner::Client(user_key) =
                         server.entity_owner(world.proxy(), &entity)
                     {
@@ -217,12 +224,15 @@ pub fn translate_world_events(world: &mut World) {
                 }
             }
 
-            // Despawn Entity Event
+            // Despawn Entity Event — D13 filter (same rationale as Spawn)
             if events.has::<naia_events::DespawnEntityEvent>() {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent>>()
                     .unwrap();
                 for (user_key, entity) in events.read::<naia_events::DespawnEntityEvent>() {
+                    if server.is_resource_entity(&entity) {
+                        continue;
+                    }
                     event_writer.write(bevy_events::DespawnEntityEvent(user_key, entity));
                 }
             }

@@ -19,6 +19,8 @@ mod commands;
 mod component_event_registry;
 mod components;
 mod plugin;
+#[doc(hidden)]
+mod resource_sync;
 mod server;
 mod systems;
 
