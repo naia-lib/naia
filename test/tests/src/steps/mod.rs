@@ -1,7 +1,33 @@
-//! Step definition modules organized by contract area.
+//! Step definition modules.
 //!
-//! Each submodule corresponds to a contract specification and contains
-//! step bindings for scenarios testing that contract's obligations.
+//! ## Phase A architecture (in progress — see `_AGENTS/SDD_MIGRATION_PLAN.md`)
+//!
+//! The catalog is being reorganized from contract-aligned modules
+//! (one .rs file per `.feature` file) to **purpose-aligned modules**:
+//!
+//! - `vocab` — parameter vocabulary (typed wrappers + parser convention)
+//! - `world_helpers` — reusable mutate/expect/tick helpers
+//! - `given/` — preconditions (split: setup, state)
+//! - `when/`  — actions (split: server_actions, client_actions, network_events)
+//! - `then/`  — assertions (split: state_assertions, event_assertions, ordering)
+//!
+//! Phase A.1 lands the new module skeleton (this commit). Phase A.3
+//! moves the contract-aligned bindings into the purpose-aligned modules.
+//! Until A.3 lands, BOTH structures coexist; only the contract-aligned
+//! modules contain real bindings. The `vocab`/`world_helpers`/given/when/then
+//! modules are stubs.
+
+pub mod vocab;
+pub mod world_helpers;
+
+pub mod given;
+pub mod when;
+pub mod then;
+
+// ──────────────────────────────────────────────────────────────────────
+// Contract-aligned modules (phase A pre-refactor — being migrated to
+// purpose-aligned modules in A.3, then deleted)
+// ──────────────────────────────────────────────────────────────────────
 
 pub mod client_events;
 pub mod common;
