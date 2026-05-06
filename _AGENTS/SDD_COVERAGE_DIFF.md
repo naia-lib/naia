@@ -8,9 +8,9 @@
 > empties, the parity gate for Phase F (delete legacy_tests) is met.
 
 - Legacy (215 contract IDs in legacy_tests/)
-- Namako: 85 contract IDs in features/
-- Both: **83**
-- Legacy-only (PENDING migration): **132**
+- Namako: 112 contract IDs in features/
+- Both: **110**
+- Legacy-only (PENDING migration): **105**
 - Namako-only (new in SDD): 2
 
 ## Pending migration
@@ -106,33 +106,6 @@
 | `entity-scopes-13` | test/harness/legacy_tests/06_entity_scopes.rs |
 | `entity-scopes-14` | test/harness/legacy_tests/06_entity_scopes.rs |
 | `entity-scopes-15` | test/harness/legacy_tests/06_entity_scopes.rs |
-| `messaging-01` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-02` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-03` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-04` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-05` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-06` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-07` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-08` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-09` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-10` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-11` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-12` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-13` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-14` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-15` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-16` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-17` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-18` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-19` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-20` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-21` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-22` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-23` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-24` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-25` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-26` | test/harness/legacy_tests/03_messaging.rs |
-| `messaging-27` | test/harness/legacy_tests/03_messaging.rs |
 | `server-events-00` | test/harness/legacy_tests/12_server_events_api.rs |
 | `server-events-01` | test/harness/legacy_tests/12_server_events_api.rs |
 | `server-events-02` | test/harness/legacy_tests/12_server_events_api.rs |
