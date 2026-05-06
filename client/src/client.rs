@@ -1425,8 +1425,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
             (EntityAuthStatus::Available, EntityAuthStatus::Available)
-            | (EntityAuthStatus::Denied, EntityAuthStatus::Denied) => {
-                // Idempotent - no action needed
+            | (EntityAuthStatus::Denied, EntityAuthStatus::Denied)
+            | (EntityAuthStatus::Granted, EntityAuthStatus::Granted)
+            | (EntityAuthStatus::Requested, EntityAuthStatus::Requested)
+            | (EntityAuthStatus::Releasing, EntityAuthStatus::Releasing) => {
+                // Idempotent — same-state transitions are no-ops. The grant/take/release
+                // side effects (register, deregister, push_auth_grant, push_auth_reset)
+                // already fired on the original transition into this state; receiving a
+                // duplicate "you are still in state X" message must not double-fire them.
+                // Granted→Granted in particular happens on the publication migration path
+                // where MigrateResponse sets Granted (client.rs:2167) and an explicit
+                // EntityUpdateAuth(Granted) follows.
             }
             (_, _) => {
                 panic!(
