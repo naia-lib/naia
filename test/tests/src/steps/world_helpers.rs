@@ -38,6 +38,29 @@ pub const LAST_COMPONENT_VALUE_KEY: &str = "last_component_value";
 pub const WRITE_REJECTED_KEY: &str = "write_rejected";
 pub const LAST_REQUEST_ERROR_KEY: &str = "last_request_error";
 
+// Multi-entity tests: A/B labels (priority_accumulator B-BDD-8).
+pub const ENTITY_A_KEY: &str = "priority_acc_entity_a";
+pub const ENTITY_B_KEY: &str = "priority_acc_entity_b";
+pub const SPAWN_BURST_KEYS: &str = "priority_acc_burst_keys";
+
+// Entity-replication tests.
+pub const INITIAL_ENTITY_KEY: &str = "initial_entity_key";
+pub const CLIENT_LOCAL_VALUE_KEY: &str = "client_local_value";
+
+// Messaging RPC tests.
+pub const RESPONSE_RECEIVE_KEY: &str = "response_receive_key";
+
+/// Look up the BDD-stored entity key for a label like "A" or "B".
+/// Used by multi-entity tests (priority accumulator B-BDD-8 and
+/// future scenarios that work with named entity pairs).
+pub fn entity_label_to_key_storage(label: &str) -> &'static str {
+    match label {
+        "A" => ENTITY_A_KEY,
+        "B" => ENTITY_B_KEY,
+        other => panic!("unknown entity label '{}' — expected 'A' or 'B'", other),
+    }
+}
+
 /// BDD-store key for a named client.
 ///
 /// Step bindings that operate on multiple named clients ("client A",

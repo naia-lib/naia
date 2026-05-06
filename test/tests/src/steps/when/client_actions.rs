@@ -121,3 +121,75 @@ fn when_client_updates_replicated_component(ctx: &mut TestWorldMut) {
         scenario.mutate(|_| {});
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Messaging — channel direction + RPC
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the client sends on a server-to-client channel.
+///
+/// Channel-direction violation. Captures any panic + records an error
+/// result so the matching Then can assert. Covers contract that
+/// channel direction is enforced.
+#[when("the client sends on a server-to-client channel")]
+fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{ServerToClientChannel, TestMessage};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| {
+            ctx.client(client_key, |client| {
+                let _ = client.send_message::<ServerToClientChannel, _>(&TestMessage::new(42));
+            });
+        });
+    }));
+    match result {
+        Ok(()) => {
+            scenario.record_err(
+                "Channel direction violation: client cannot send on server-to-client channel",
+            );
+        }
+        Err(panic_payload) => {
+            let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            scenario.record_panic(msg);
+        }
+    }
+}
+
+/// When the client sends a request.
+///
+/// Sends an RPC request on `RequestResponseChannel`. Stores the
+/// response receive key under `RESPONSE_RECEIVE_KEY` for the matching
+/// Then assertion.
+#[when("the client sends a request")]
+fn when_client_sends_request(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{RequestResponseChannel, TestRequest};
+    use crate::steps::world_helpers::RESPONSE_RECEIVE_KEY;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let response_key = scenario.mutate(|ctx| {
+        ctx.client(client_key, |client| {
+            client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new(
+                "test_query",
+            ))
+        })
+    });
+    match response_key {
+        Ok(key) => {
+            scenario.bdd_store(RESPONSE_RECEIVE_KEY, key);
+            scenario.record_ok();
+        }
+        Err(e) => {
+            scenario.record_err(format!("Failed to send request: {:?}", e));
+        }
+    }
+}

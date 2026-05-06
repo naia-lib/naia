@@ -409,6 +409,365 @@ fn then_server_observes_component_update(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Messaging — channel direction
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the send returns an error.
+///
+/// Reads the recorded operation result from the matching When
+/// (e.g. `client sends on a server-to-client channel`) and asserts
+/// it is an error (not panic, not Ok).
+#[then("the send returns an error")]
+fn then_send_returns_error(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(
+        !result.is_ok,
+        "Expected send to return error, but it succeeded"
+    );
+    assert!(
+        result.panic_msg.is_none(),
+        "Send caused a panic instead of returning an error: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then the client receives messages A B C in order.
+#[then("the client receives messages A B C in order")]
+fn then_client_receives_messages_abc_in_order(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::test_protocol::{OrderedChannel, TestMessage};
+    let client_key = ctx.last_client();
+    let mut received: Vec<u32> = Vec::new();
+    ctx.client(client_key, |client| {
+        for msg in client.read_message::<OrderedChannel, TestMessage>() {
+            received.push(msg.value);
+        }
+    });
+    if received.len() < 3 {
+        return namako_engine::codegen::AssertOutcome::Pending;
+    }
+    if received == [1, 2, 3] {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Failed(format!(
+            "Messages received out of order. Expected [1, 2, 3] (A, B, C), got {:?}",
+            received
+        ))
+    }
+}
+
+/// Then the client receives message A exactly once.
+#[then("the client receives message A exactly once")]
+fn then_client_receives_message_a_exactly_once(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::test_protocol::{OrderedChannel, TestMessage};
+    let client_key = ctx.last_client();
+    let mut received: Vec<u32> = Vec::new();
+    ctx.client(client_key, |client| {
+        for msg in client.read_message::<OrderedChannel, TestMessage>() {
+            received.push(msg.value);
+        }
+    });
+    if received.is_empty() {
+        return namako_engine::codegen::AssertOutcome::Pending;
+    }
+    if received == [1] {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else if received.len() > 1 {
+        namako_engine::codegen::AssertOutcome::Failed(format!(
+            "Message A received multiple times. Expected [1], got {:?}",
+            received
+        ))
+    } else {
+        namako_engine::codegen::AssertOutcome::Failed(format!(
+            "Wrong message received. Expected [1] (A), got {:?}",
+            received
+        ))
+    }
+}
+
+/// Then the client receives the response for that request.
+#[then("the client receives the response for that request")]
+fn then_client_receives_response(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_shared::ResponseReceiveKey;
+    use naia_test_harness::test_protocol::TestResponse;
+    use crate::steps::world_helpers::RESPONSE_RECEIVE_KEY;
+    let client_key = ctx.last_client();
+    let scenario = ctx.scenario();
+    let response_key: Option<ResponseReceiveKey<TestResponse>> = scenario.bdd_get(RESPONSE_RECEIVE_KEY);
+    let Some(response_key) = response_key else {
+        return namako_engine::codegen::AssertOutcome::Failed(
+            "No response receive key was stored - did the client send a request?".to_string(),
+        );
+    };
+    ctx.client(client_key, |client| {
+        if client.has_response(&response_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Entity replication assertions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the entity spawns on the client with the replicated component.
+#[then("the entity spawns on the client with the replicated component")]
+fn then_entity_spawns_on_client_with_replicated_component(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        if let Some(entity) = client.entity(&entity_key) {
+            if entity.has_component::<Position>() {
+                namako_engine::codegen::AssertOutcome::Passed(())
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the client observes the component update.
+#[then("the client observes the component update")]
+fn then_client_observes_component_update(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let expected: (f32, f32) = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_COMPONENT_VALUE_KEY)
+        .expect("No component value stored");
+    ctx.client(client_key, |client| {
+        if let Some(entity) = client.entity(&entity_key) {
+            if let Some(pos) = entity.component::<Position>() {
+                if (*pos.x - expected.0).abs() < f32::EPSILON
+                    && (*pos.y - expected.1).abs() < f32::EPSILON
+                {
+                    namako_engine::codegen::AssertOutcome::Passed(())
+                } else {
+                    namako_engine::codegen::AssertOutcome::Pending
+                }
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the client observes the server value.
+///
+/// Used after `Given the client modifies the component locally` —
+/// asserts that the server-authoritative value overrides the
+/// client-local modification.
+#[then("the client observes the server value")]
+fn then_client_observes_server_value(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let server_value: (f32, f32) = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_COMPONENT_VALUE_KEY)
+        .expect("No server component value stored");
+    ctx.client(client_key, |client| {
+        if let Some(entity) = client.entity(&entity_key) {
+            if let Some(pos) = entity.component::<Position>() {
+                if (*pos.x - server_value.0).abs() < f32::EPSILON
+                    && (*pos.y - server_value.1).abs() < f32::EPSILON
+                {
+                    namako_engine::codegen::AssertOutcome::Passed(())
+                } else {
+                    namako_engine::codegen::AssertOutcome::Pending
+                }
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the entity GlobalEntity remains unchanged.
+///
+/// EntityKey is the harness abstraction over Naia's GlobalEntity.
+/// Stable identity throughout an entity's lifetime is the contract.
+#[then("the entity GlobalEntity remains unchanged")]
+fn then_entity_global_entity_remains_unchanged(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let initial: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::INITIAL_ENTITY_KEY)
+        .expect("No initial entity key stored");
+    let current: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No current entity key stored");
+    if initial == current {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Failed(format!(
+            "GlobalEntity changed: initial={:?}, current={:?}",
+            initial, current
+        ))
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Priority accumulator assertions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the client eventually observes all N spawned entities.
+#[then("the client eventually observes all {int} spawned entities")]
+fn then_client_eventually_observes_all_spawned(
+    ctx: &TestWorldRef,
+    expected: usize,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    use crate::steps::world_helpers::SPAWN_BURST_KEYS;
+    let client_key = ctx.last_client();
+    let keys: Vec<EntityKey> = ctx
+        .scenario()
+        .bdd_get(SPAWN_BURST_KEYS)
+        .expect("spawn-burst keys missing");
+    if keys.len() != expected {
+        return namako_engine::codegen::AssertOutcome::Failed(format!(
+            "stored {} burst keys but scenario expected {}",
+            keys.len(),
+            expected
+        ));
+    }
+    ctx.client(client_key, |client| {
+        if keys.iter().all(|k| client.has_entity(k)) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the global priority gain on the last entity is {float}.
+#[then("the global priority gain on the last entity is {float}")]
+fn then_global_gain_on_last_entity_is(
+    ctx: &TestWorldRef,
+    expected: f32,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.server(|server| match server.global_entity_gain(&entity_key) {
+        Some(g) if (g - expected).abs() < f32::EPSILON => {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        }
+        Some(g) => namako_engine::codegen::AssertOutcome::Failed(format!(
+            "global gain is {} but expected {}",
+            g, expected
+        )),
+        None => namako_engine::codegen::AssertOutcome::Failed(format!(
+            "no gain override is set (expected {})",
+            expected
+        )),
+    })
+}
+
+/// Then the client eventually sees the last entity.
+#[then("the client eventually sees the last entity")]
+fn then_client_eventually_sees_last_entity(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        if client.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the global priority gain on the last entity is still {float}.
+///
+/// Same predicate as `is {float}`, distinct phrase to read naturally
+/// after a follow-up tick step.
+#[then("the global priority gain on the last entity is still {float}")]
+fn then_global_gain_on_last_entity_is_still(
+    ctx: &TestWorldRef,
+    expected: f32,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    then_global_gain_on_last_entity_is(ctx, expected)
+}
+
+/// Then the client eventually observes entity {label} at x={int} y={int}.
+///
+/// `label` is "A" or "B"; resolves via `entity_label_to_key_storage`.
+#[then("the client eventually observes entity {word} at x={int} y={int}")]
+fn then_client_eventually_observes_entity_at(
+    ctx: &TestWorldRef,
+    label: String,
+    x: i32,
+    y: i32,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    use crate::steps::world_helpers::entity_label_to_key_storage;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(entity_label_to_key_storage(&label))
+        .unwrap_or_else(|| panic!("entity '{}' not stored", label));
+    let (ex, ey) = (x as f32, y as f32);
+    ctx.client(client_key, |client| {
+        let Some(entity) = client.entity(&entity_key) else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        let Some(pos) = entity.component::<Position>() else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        if (*pos.x - ex).abs() < f32::EPSILON && (*pos.y - ey).abs() < f32::EPSILON {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(

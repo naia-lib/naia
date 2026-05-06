@@ -234,6 +234,132 @@ fn given_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut T
     scenario.bdd_store(crate::steps::world_helpers::LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity replication preconditions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a server-owned entity exists with a replicated component.
+///
+/// Spawns a server-owned entity with Position(0, 0). Stores both
+/// LAST_ENTITY_KEY and INITIAL_ENTITY_KEY (the latter for
+/// GlobalEntity-stability tests).
+#[given("a server-owned entity exists with a replicated component")]
+fn given_server_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    use crate::steps::world_helpers::{INITIAL_ENTITY_KEY, LAST_COMPONENT_VALUE_KEY};
+    let scenario = ctx.scenario_mut();
+    let entity_key = scenario.mutate(|mctx| {
+        let (entity_key, _) = mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity.insert_component(Position::new(0.0, 0.0));
+            })
+        });
+        entity_key
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.bdd_store(INITIAL_ENTITY_KEY, entity_key);
+    scenario.bdd_store(LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
+}
+
+/// Given a server-owned entity exists without a replicated component.
+///
+/// Spawns a bare server-owned entity. Used to test component-insert
+/// events where the component is added after spawn.
+#[given("a server-owned entity exists without a replicated component")]
+fn given_server_owned_entity_without_replicated_component(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::INITIAL_ENTITY_KEY;
+    let scenario = ctx.scenario_mut();
+    let entity_key = scenario.mutate(|mctx| {
+        let (entity_key, _) = mctx.server(|server| server.spawn(|_| {}));
+        entity_key
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.bdd_store(INITIAL_ENTITY_KEY, entity_key);
+}
+
+/// Given the client modifies the component locally.
+///
+/// Mutates Position to (999, 888) on the client side. Stores the
+/// local value under `CLIENT_LOCAL_VALUE_KEY`. Used to confirm the
+/// server-authoritative value overrides the client-local one.
+#[given("the client modifies the component locally")]
+fn given_client_modifies_component_locally(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    use crate::steps::world_helpers::CLIENT_LOCAL_VALUE_KEY;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: naia_test_harness::EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let local_value = (999.0_f32, 888.0_f32);
+    scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                if let Some(mut pos) = entity.component::<Position>() {
+                    *pos.x = local_value.0;
+                    *pos.y = local_value.1;
+                }
+            }
+        });
+    });
+    scenario.bdd_store(CLIENT_LOCAL_VALUE_KEY, local_value);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Multi-entity preconditions (priority accumulator)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given two server-owned entities A and B exist each with a replicated component in-scope for the client.
+///
+/// Used by B-BDD-8 (per-entity convergence). Stores both keys under
+/// `ENTITY_A_KEY` / `ENTITY_B_KEY` and waits for the client to
+/// observe both.
+#[given(
+    "two server-owned entities A and B exist each with a replicated component in-scope for the client"
+)]
+fn given_two_entities_a_b_in_scope(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    use crate::steps::world_helpers::{ENTITY_A_KEY, ENTITY_B_KEY};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let room_key = scenario.last_room();
+    let (entity_a, entity_b) = scenario.mutate(|mctx| {
+        let (a, _) = mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity.insert_component(Position::new(0.0, 0.0));
+            })
+        });
+        let (b, _) = mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity.insert_component(Position::new(0.0, 0.0));
+            })
+        });
+        mctx.server(|server| {
+            for ek in [&a, &b] {
+                if let Some(mut e) = server.entity_mut(ek) {
+                    e.enter_room(&room_key);
+                }
+            }
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&a);
+                scope.include(&b);
+            }
+        });
+        (a, b)
+    });
+    scenario.bdd_store(ENTITY_A_KEY, entity_a);
+    scenario.bdd_store(ENTITY_B_KEY, entity_b);
+    scenario.expect(|ectx| {
+        ectx.client(client_key, |client| {
+            if client.has_entity(&entity_a) && client.has_entity(&entity_b) {
+                Some(())
+            } else {
+                None
+            }
+        })
+    });
+}
+
 /// Given the entity is not in the client's room.
 ///
 /// Spawns the stored entity into a separate room so it has no shared
