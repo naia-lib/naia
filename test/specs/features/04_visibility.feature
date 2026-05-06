@@ -27,7 +27,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   Rule: Rooms gating
 
     @Scenario(01)
-    Scenario: Entity in shared room is in-scope for user
+    Scenario: [entity-scopes-01] Entity in shared room is in-scope for user
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -38,7 +38,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # SharesRoom(U,E) MUST be necessary for InScope(U,E); an entity with no
     # shared room MUST remain out-of-scope.
     @Scenario(02)
-    Scenario: entity-scopes-02 — Entity not in shared room is out-of-scope for user
+    Scenario: [entity-scopes-02] Entity not in shared room is out-of-scope for user
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -54,7 +54,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   Rule: Include/Exclude filter
 
     @Scenario(01)
-    Scenario: Exclude removes entity from user's scope
+    Scenario: [entity-scopes-03] Exclude removes entity from user's scope
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -64,7 +64,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       Then the entity is out-of-scope for the client
 
     @Scenario(02)
-    Scenario: Include restores entity to user's scope after Exclude
+    Scenario: [entity-scopes-04] Include restores entity to user's scope after Exclude
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -78,7 +78,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # The most recently applied include/exclude call for (U,E) determines the
     # effective scope state. Include after Exclude → entity is back in scope.
     @Scenario(03)
-    Scenario: entity-scopes-05 — Last call wins between Include and Exclude
+    Scenario: [entity-scopes-05] Last call wins between Include and Exclude
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -97,7 +97,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   Rule: Owner scope invariant
 
     @Scenario(01)
-    Scenario: Owning client always sees own entity
+    Scenario: [entity-scopes-06] Owning client always sees own entity
       Given a server is running
       And a client connects
       And the client owns an entity
@@ -107,7 +107,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # The owning client MUST always remain in-scope for their entity.
     # server.exclude() on an owner's entity MUST be ignored.
     @Scenario(02)
-    Scenario: entity-scopes-owner-02 — Exclude on owner's own entity has no effect
+    Scenario: [entity-scopes-07] Exclude on owner's own entity has no effect
       Given a server is running
       And a client connects
       And the client owns an entity
@@ -123,7 +123,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   Rule: Roomless entities
 
     @Scenario(01)
-    Scenario: Roomless entity is out-of-scope for non-owners
+    Scenario: [entity-scopes-08] Roomless entity is out-of-scope for non-owners
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -136,7 +136,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # DEFERRED: naia currently allows scope.include() to bypass the room gate.
     @Deferred
     @Scenario(02)
-    Scenario: entity-scopes-roomless-02 — Include cannot bypass room gate for roomless entity
+    Scenario: [entity-scopes-09] Include cannot bypass room gate for roomless entity
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -153,7 +153,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   Rule: Scope state effects
 
     @Scenario(01)
-    Scenario: Entity despawns on client when leaving scope
+    Scenario: [entity-scopes-10] Entity despawns on client when leaving scope
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -163,7 +163,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       Then the entity despawns on the client
 
     @Scenario(02)
-    Scenario: Entity spawns on client when entering scope
+    Scenario: [entity-scopes-11] Entity spawns on client when entering scope
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -174,7 +174,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # After leaving scope for ≥1 tick, re-entry MUST produce a fresh spawn with
     # the current server snapshot; the client MUST NOT rely on prior state.
     @Scenario(03)
-    Scenario: entity-scopes-lifetime-03 — Re-entering scope creates fresh entity lifetime
+    Scenario: [entity-scopes-12] Re-entering scope creates fresh entity lifetime
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -194,7 +194,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   Rule: Disconnect handling
 
     @Scenario(01)
-    Scenario: Disconnect implies out-of-scope for all entities
+    Scenario: [entity-scopes-13] Disconnect implies out-of-scope for all entities
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -204,7 +204,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       Then the server stops replicating entities to that client
 
     @Scenario(02)
-    Scenario: Operations on unknown user are ignored
+    Scenario: [entity-scopes-14] Operations on unknown user are ignored
       Given a server is running
       And a server-owned entity exists
       When the server includes the entity for an unknown client
@@ -213,7 +213,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # [entity-scopes-error-03] — Operations on unknown entity are ignored
     # scope.include() on a non-existent entity MUST be a silent no-op (no panic).
     @Scenario(03)
-    Scenario: entity-scopes-error-03 — Operations on unknown entity are ignored
+    Scenario: [entity-scopes-15] Operations on unknown entity are ignored
       Given a server is running
       And a client connects
       When the server includes an unknown entity for the client
