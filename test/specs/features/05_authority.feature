@@ -250,6 +250,22 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And the server configures the entity as Delegated
       Then client B observes Available authority status for the entity
 
+    # [entity-delegation-15] — Re-entering scope yields current authority status
+    # When a client leaves and re-enters scope on a delegated entity that has a
+    # current holder, the server MUST surface the existing holder's state on
+    # re-entry (Denied for non-holders) instead of letting the EnableDelegation
+    # default of Available silently override the real status.
+    @Scenario(08)
+    Scenario: [entity-delegation-15] Re-entering scope yields current authority status
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When the server gives authority to client A for the delegated entity
+      And the server excludes the entity for client B
+      And the server includes the entity for client B
+      Then client B is denied authority for the delegated entity
+
   # ==========================================================================
   # === Source: 11_entity_authority.feature ===
   # ==========================================================================
@@ -482,10 +498,6 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-delegation-12] Holder release returns to Available for all
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
-    @Scenario(26)
-    Scenario: [entity-delegation-15] Re-entering scope yields current authority status
-      Then the system intentionally fails
 
     @Deferred @PolicyOnly
     @Scenario(28)

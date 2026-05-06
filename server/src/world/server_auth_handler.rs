@@ -61,6 +61,16 @@ impl ServerAuthHandler {
             .map(|host_status| host_status.status())
     }
 
+    /// True iff some user (or the server) currently holds authority on `entity`.
+    /// Returns false for entities with no current holder (Available) and
+    /// for non-delegated entities (which have no auth_owner record at all).
+    pub(crate) fn entity_has_holder(&self, entity: &GlobalEntity) -> bool {
+        match self.entity_auth_map.get(entity) {
+            Some(AuthOwner::None) | None => false,
+            Some(AuthOwner::Server) | Some(AuthOwner::Client(_)) => true,
+        }
+    }
+
     pub(crate) fn client_request_authority(
         &mut self,
         entity: &GlobalEntity,

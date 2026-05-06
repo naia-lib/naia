@@ -406,6 +406,14 @@ impl GlobalWorldManager {
             .user_is_authority_holder(user_key, global_entity)
     }
 
+    /// True iff some user (or the server) currently holds authority on
+    /// `global_entity`. Used by scope-re-entry fan-out to decide whether
+    /// the freshly-included client should observe Denied (holder exists)
+    /// or stay at the default Available emitted by EnableDelegation.
+    pub(crate) fn entity_has_holder(&self, global_entity: &GlobalEntity) -> bool {
+        self.auth_handler.entity_has_holder(global_entity)
+    }
+
     pub(crate) fn pause_entity_replication(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");

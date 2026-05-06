@@ -3488,6 +3488,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 false,
                 global_entity,
             );
+            // Re-entering scope on a delegated entity that already has a
+            // holder must surface the current holder's state to the
+            // freshly-included user — otherwise the EnableDelegation
+            // default of Available silently overrides the real Denied
+            // status. Per contract [entity-delegation-15] / scope-re-entry:
+            // "re-entering scope yields current authority status".
+            if self.global_world_manager.entity_has_holder(global_entity) {
+                let new_status = if self
+                    .global_world_manager
+                    .user_is_authority_holder(user_key, global_entity)
+                {
+                    EntityAuthStatus::Granted
+                } else {
+                    EntityAuthStatus::Denied
+                };
+                connection
+                    .base
+                    .world_manager
+                    .host_send_set_auth(global_entity, new_status);
+            }
         } else if currently_in_scope {
             // Entity leaving scope — check ScopeExit policy
             let scope_exit = self
