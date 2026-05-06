@@ -140,24 +140,25 @@ User-facing surface unchanged — code still says `R: Replicate`. Internal sites
 
 ---
 
-### T1.3 ⚠️ `ComponentKinds` 64-kind hard limit will bite
+### T1.3 ✅ `ComponentKinds` 64-kind hard limit — RESOLVED 2026-05-05
 
-`shared/src/world/component/component_kinds.rs:137-141`:
+The hard limit is gone — fully unbounded (capped only by the `u16` NetId at 65,535, which is well past any plausible protocol).
 
-```rust
-assert!(
-    net_id < 64,
-    "DirtySet bitset supports max 64 component kinds; protocol has {}. \
-     Extend `DirtyQueue::dirty_bits` to two u64s per entity if you need more.",
-    net_id + 1,
-);
-```
+**What landed:**
+- New `shared/src/world/update/atomic_bit_set.rs` — variable-width lock-free bitset (`Box<[AtomicU64]>`) with race-tolerant "was clear" semantics.
+- `AtomicDiffMask` rewritten to wrap `AtomicBitSet`. The old `debug_assert!(byte_len ≤ 8)` cap is dropped; `over_64_bits_supported_no_more_8_byte_limit` test pins the new behavior up to 256 properties.
+- `DirtyQueue` refactored from a single `AtomicU64` per entity to a flat-strided `Vec<AtomicU64>` of `stride = ceil(kind_count / 64)` words per entity. `kind_bit` widened from `u8` to `u16`. Stride is `1` for ≤64 kinds, so the legacy hot path is unchanged.
+- `ComponentKinds::add_component` no longer panics at 64. Added `ComponentKinds::kind_count()` accessor.
+- `GlobalDiffHandler` widened `kind_bits: HashMap<_, u16>` and tracks `max_kind_count`. `UserDiffHandler::new` sizes the per-user `DirtyQueue` from this on construction.
+- `dirty_receiver_candidates` rewritten to consume the multi-word drain output (`Vec<u64>` per entity, `kind_bit = word_idx * 64 + bit`).
 
-A protocol with 50 components + 30 resources blows it. cyberlith already has a substantial component count and a planned tile-as-entity model that pushes more.
+**Tests pinning the new invariant:**
+- `shared/src/world/update/atomic_bit_set.rs` — 13 unit tests including `over_64_bits_supported`.
+- `shared/src/world/update/atomic_diff_mask.rs` — `over_64_bits_supported_no_more_8_byte_limit` (256 properties).
+- `shared/src/world/update/mut_channel.rs::dirty_queue_unlimited_kinds_tests` — stride growth, kind_bit > 64 round-trip, cancel, multi-word `was_clear` dedup.
+- `benches/tests/many_kinds_no_64_cap.rs` — end-to-end registration of 70 distinct `Replicate` types, `kind_count() == 70`, 7-bit wire tag, full ser/de round-trip.
 
-**Fix:** widen `DirtyQueue::dirty_bits` to two `u64`s (128-kind ceiling, matches realistic protocol size limits). Mostly mechanical change in `shared/src/world/update/mut_channel.rs`. Hot path — needs careful benchmark to verify no perf regression.
-
-**Effort:** 4-6 hours including bench verification.
+**Hot-path cost:** zero for protocols at ≤64 kinds (stride==1, single fetch_or). For >64 kinds: one extra `Relaxed` load per `was_clear` check word. Verified by `crucible run --assert` (29/0/0 bench wins preserved).
 
 ---
 

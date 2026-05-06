@@ -133,12 +133,13 @@ impl ComponentKinds {
         let component_kind = ComponentKind::of::<C>();
 
         let net_id = self.current_net_id;
-        assert!(
-            net_id < 64,
-            "DirtySet bitset supports max 64 component kinds; protocol has {}. \
-             Extend `DirtyQueue::dirty_bits` to two u64s per entity if you need more.",
-            net_id + 1,
-        );
+        // Pre-2026-05-05 there was a `net_id < 64` cap here because the
+        // per-user `DirtyQueue` stored dirty bits in a single `u64`
+        // per entity. The queue is now flat-strided over multiple
+        // `u64`s sized to `ceil(kind_count / 64)`, so there's no
+        // longer a 64-kind ceiling. The wire-format kind tag is a
+        // `u16` NetId (cap 65,535) — that's the real ceiling and well
+        // beyond any realistic protocol size.
         self.kind_map.insert(
             component_kind,
             (net_id, C::create_builder(), C::protocol_name().to_string()),
@@ -146,6 +147,13 @@ impl ComponentKinds {
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
+    }
+
+    /// Number of component kinds currently registered. Used at
+    /// `UserDiffHandler` construction to size the per-user `DirtyQueue`'s
+    /// stride (= `ceil(kind_count / 64)` AtomicU64 words per entity).
+    pub fn kind_count(&self) -> u16 {
+        self.current_net_id
     }
 
     pub fn read(

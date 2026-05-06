@@ -7,10 +7,18 @@ use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuil
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
     /// `ComponentKind` → NetId (== bit position in the per-user
-    /// `DirtyQueue` u64 mask). Populated lazily as `register_component`
-    /// fires; `UserDiffHandler` reads this to wire `DirtyNotifier`s with
-    /// a precomputed `kind_bit`. Phase 9.4 / Stage E.
-    kind_bits: HashMap<ComponentKind, u8>,
+    /// `DirtyQueue`'s flat-strided bitset). Populated lazily as
+    /// `register_component` fires; `UserDiffHandler` reads this to
+    /// wire `DirtyNotifier`s with a precomputed `kind_bit`.
+    /// Phase 9.4 / Stage E. Widened to `u16` 2026-05-05 with the
+    /// unlimited-kind-count refactor (was `u8`, capped at 256 by the
+    /// type even though the assertion was 64).
+    kind_bits: HashMap<ComponentKind, u16>,
+    /// Maximum NetId observed at registration. Used to derive the
+    /// `DirtyQueue` stride at `UserDiffHandler::new` (one stride for
+    /// the lifetime of the handler — protocol locks before any
+    /// handler is created).
+    max_kind_count: u16,
 }
 
 #[cfg(feature = "test_utils")]
@@ -33,14 +41,22 @@ impl GlobalDiffHandler {
         Self {
             mut_receiver_builders: HashMap::new(),
             kind_bits: HashMap::new(),
+            max_kind_count: 0,
         }
     }
 
     /// NetId of a registered kind, used as bit position in the per-user
-    /// `DirtyQueue` u64 mask. Returns `None` if the kind has never gone
-    /// through `register_component` here.
-    pub fn kind_bit(&self, component_kind: &ComponentKind) -> Option<u8> {
+    /// `DirtyQueue`'s flat-strided bitset. Returns `None` if the kind
+    /// has never gone through `register_component` here.
+    pub fn kind_bit(&self, component_kind: &ComponentKind) -> Option<u16> {
         self.kind_bits.get(component_kind).copied()
+    }
+
+    /// Highest `kind_bit + 1` ever registered with this handler. The
+    /// per-user `DirtyQueue` uses this to size its stride
+    /// (`ceil(kind_count / 64)` `AtomicU64` words per entity).
+    pub fn kind_count(&self) -> u16 {
+        self.max_kind_count
     }
 
     pub fn register_component(
@@ -72,7 +88,10 @@ impl GlobalDiffHandler {
             self.kind_bits.entry(*component_kind)
         {
             if let Some(net_id) = component_kinds.net_id_of(component_kind) {
-                entry.insert(net_id as u8);
+                entry.insert(net_id);
+                if net_id + 1 > self.max_kind_count {
+                    self.max_kind_count = net_id + 1;
+                }
             }
         }
 

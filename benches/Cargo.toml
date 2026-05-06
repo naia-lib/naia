@@ -24,6 +24,10 @@ path = "tests/local_entity_wire.rs"
 name = "static_split_bytes"
 path = "tests/static_split_bytes.rs"
 
+[[test]]
+name = "many_kinds_no_64_cap"
+path = "tests/many_kinds_no_64_cap.rs"
+
 [dev-dependencies]
 criterion = { version = "0.5", features = ["html_reports"] }
 

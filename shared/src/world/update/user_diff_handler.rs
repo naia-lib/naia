@@ -66,10 +66,13 @@ pub struct UserDiffHandler {
     components_per_entity: HashMap<EntityIndex, u32>,
     /// EntityIndex allocator (recycling, u32 keyspace).
     key_gen: KeyGenerator32<EntityIndex>,
-    /// Reverse table for rebuilding `ComponentKind` from a kind_bit at
-    /// snapshot time. Bit position == NetId per
-    /// `ComponentKinds::add_component`. None at indices not yet registered.
-    kinds_by_bit: [Option<ComponentKind>; 64],
+    /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
+    /// at snapshot time. Bit position == NetId per
+    /// `ComponentKinds::add_component`. `None` at indices not yet
+    /// registered. `Vec` (was fixed-size `[_; 64]`) since the
+    /// 2026-05-05 unlimited-kind-count refactor — sized to the
+    /// protocol's kind count at construction.
+    kinds_by_bit: Vec<Option<ComponentKind>>,
     // Dirty-set bitset: per-user pure-CPU bookkeeping.
     // `MutReceiver::mutate` fires `notify_dirty` on clean→dirty
     // transitions; the resulting push is a Vec OR + (cold) push.
@@ -78,15 +81,26 @@ pub struct UserDiffHandler {
 
 impl UserDiffHandler {
     pub fn new(global_world_manager: &dyn GlobalWorldManagerType) -> Self {
+        // Read the protocol's component-kind count under a brief read
+        // guard. Used to size the per-user `DirtyQueue`'s stride and
+        // the `kinds_by_bit` reverse-lookup table. The protocol is
+        // already locked by the time any `UserDiffHandler` is
+        // constructed (lock happens at server/client startup, before
+        // the first connection), so `kind_count` is stable.
+        let global_diff_handler = global_world_manager.diff_handler();
+        let kind_count = global_diff_handler
+            .read()
+            .map(|h| h.kind_count())
+            .unwrap_or(0);
         Self {
             receivers: HashMap::new(),
-            global_diff_handler: global_world_manager.diff_handler(),
+            global_diff_handler,
             entity_to_index: HashMap::new(),
             index_to_entity: Vec::new(),
             components_per_entity: HashMap::new(),
             key_gen: KeyGenerator32::new(ENTITY_INDEX_RECYCLE_TIMEOUT),
-            kinds_by_bit: [None; 64],
-            dirty_set: Arc::new(DirtySet::new()),
+            kinds_by_bit: vec![None; kind_count as usize],
+            dirty_set: Arc::new(DirtySet::new(kind_count)),
         }
     }
 
@@ -146,8 +160,16 @@ impl UserDiffHandler {
         let entity_idx = self.allocate_entity_index(entity);
 
         // Cache kind_bit → ComponentKind once for snapshot decode.
-        if self.kinds_by_bit[kind_bit as usize].is_none() {
-            self.kinds_by_bit[kind_bit as usize] = Some(*component_kind);
+        // Defensive grow: if a kind was registered with the
+        // GlobalDiffHandler AFTER this UserDiffHandler was constructed
+        // (shouldn't happen post-protocol-lock, but tolerate it), the
+        // Vec needs to grow.
+        let bit_idx = kind_bit as usize;
+        if bit_idx >= self.kinds_by_bit.len() {
+            self.kinds_by_bit.resize(bit_idx + 1, None);
+        }
+        if self.kinds_by_bit[bit_idx].is_none() {
+            self.kinds_by_bit[bit_idx] = Some(*component_kind);
         }
 
         receiver.attach_notifier(DirtyNotifier::new(
@@ -248,38 +270,48 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        // B-strict: lock-free drain. `drain()` atomically swap-zeroes each
-        // slot and returns owned `(EntityIndex, kind_bits)` pairs.
-        let drained: Vec<(EntityIndex, u64)> = self.dirty_set.drain();
+        // Lock-free drain. `drain()` atomically swap-zeroes every word
+        // of each indexed entity and returns owned
+        // `(EntityIndex, dirty_words)` pairs where `dirty_words` is
+        // `Vec<u64>` of length `stride` (= `ceil(kind_count / 64)`).
+        // Each set bit at word `w`, position `b` corresponds to
+        // `kind_bit = w * 64 + b`.
+        let drained: Vec<(EntityIndex, Vec<u64>)> = self.dirty_set.drain();
 
         // Re-mark the drained entries: this method is read-only by contract,
         // so the bits must persist for downstream callers / next call.
-        // Each `push` is now lock-free (atomic fetch_or under a read guard);
+        // Each `push` is lock-free (atomic fetch_or under a read guard);
         // the cold-path indices mutex is acquired once per first-bit-set
         // per entity, which is the same number of pushes as before.
-        for (idx, bits) in &drained {
-            let mut remaining = *bits;
-            while remaining != 0 {
-                let bit = remaining.trailing_zeros() as u8;
-                self.dirty_set.push(*idx, bit);
-                remaining &= remaining - 1;
+        for (idx, words) in &drained {
+            for (word_idx, &word) in words.iter().enumerate() {
+                let mut remaining = word;
+                while remaining != 0 {
+                    let bit = remaining.trailing_zeros() as u16;
+                    let kind_bit = (word_idx as u16) * 64 + bit;
+                    self.dirty_set.push(*idx, kind_bit);
+                    remaining &= remaining - 1;
+                }
             }
         }
 
         let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> =
             HashMap::with_capacity(drained.len());
-        for (idx, bits) in drained {
+        for (idx, words) in drained {
             let Some(Some(entity)) = self.index_to_entity.get(idx.0 as usize) else {
                 continue;
             };
             let mut set = HashSet::new();
-            let mut remaining = bits;
-            while remaining != 0 {
-                let bit = remaining.trailing_zeros() as usize;
-                if let Some(kind) = self.kinds_by_bit[bit] {
-                    set.insert(kind);
+            for (word_idx, word) in words.into_iter().enumerate() {
+                let mut remaining = word;
+                while remaining != 0 {
+                    let bit = remaining.trailing_zeros() as usize;
+                    let absolute_bit = word_idx * 64 + bit;
+                    if let Some(Some(kind)) = self.kinds_by_bit.get(absolute_bit) {
+                        set.insert(*kind);
+                    }
+                    remaining &= remaining - 1;
                 }
-                remaining &= remaining - 1;
             }
             if !set.is_empty() {
                 result.insert(*entity, set);

@@ -1,3 +1,4 @@
+pub mod atomic_bit_set;
 pub mod atomic_diff_mask;
 pub mod component_update;
 pub mod diff_mask;

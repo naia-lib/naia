@@ -1,123 +1,76 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+//! Lock-free atomic dirty-bit mask for [`crate::MutReceiver`].
+//!
+//! One bit per `Property<T>` field on a component. Replaces the old
+//! `RwLock<DiffMask>` mutation hot path with a `fetch_or` on the
+//! underlying [`AtomicBitSet`].
+//!
+//! ## Width
+//!
+//! Variable-width via `AtomicBitSet`'s `Box<[AtomicU64]>` storage —
+//! no upper limit on the number of properties per component. The
+//! historical "≤8 bytes / ≤64 properties" cap (which previously panicked
+//! with a `debug_assert!`) is gone.
 
+use crate::world::update::atomic_bit_set::AtomicBitSet;
 use crate::DiffMask;
 
-/// Lock-free DiffMask cell used by [`MutReceiver`].
-///
-/// Replaces `RwLock<DiffMask>` on the per-receiver mutation hot path. A
-/// component update is one bit; the variable-length wire encoding
-/// addresses these bits as a little-endian byte array. We pack the whole
-/// mask into a single `AtomicU64` (8 bytes / 64 bits), which covers every
-/// production component shape — the wire-format `byte_number` is a `u8`
-/// but components in cyberlith / common netgame uses sit at ≤ 8 props
-/// each. Anything wider would need a `Box<[AtomicU64]>` fallback; we'll
-/// add that when the first such component appears, not before.
-///
-/// Wire layout: bit `i` lives at `(byte_index = i / 8, bit_in_byte = i % 8)`,
-/// so byte `b` of the mask is `((mask.load() >> (b * 8)) & 0xFF) as u8`.
-/// This matches `DiffMask`'s `Vec<u8>`-LE layout byte-for-byte.
+/// Lock-free dirty-bit mask, one bit per `Property<T>` field.
 pub struct AtomicDiffMask {
-    /// Packed bits. Bit position = `byte_index * 8 + bit_in_byte`.
-    /// Stored as `u64` for one-shot atomic mutation.
-    bits: AtomicU64,
-    /// Number of mask bytes the wire format expects. Constant for the
-    /// lifetime of the receiver — `≤ 8`. Stored so `byte_number()` can
-    /// return the wire-correct value rather than always 8.
-    byte_len: u8,
+    bits: AtomicBitSet,
 }
 
 impl AtomicDiffMask {
+    /// Construct with capacity for `byte_len` bytes (= `byte_len * 8`
+    /// bit positions). The wire format encodes the mask as a
+    /// little-endian byte array of this length.
     pub fn new(byte_len: u8) -> Self {
-        debug_assert!(
-            byte_len <= 8,
-            "AtomicDiffMask supports up to 8 bytes (64 bits); component has too many properties — \
-             add a Box<[AtomicU64]> fallback to support >64 props"
-        );
         Self {
-            bits: AtomicU64::new(0),
-            byte_len,
+            bits: AtomicBitSet::new((byte_len as usize) * 8),
         }
     }
 
-    /// Set the bit at `index`. Returns `true` iff the entire mask was clear
-    /// before this call — the signal `MutReceiver` uses to fire `notify_dirty`
-    /// exactly once per clean → dirty transition.
+    /// Set the bit at `index`. Returns `true` iff the entire mask was
+    /// clear before this call (the signal `MutReceiver` uses to fire
+    /// `notify_dirty` exactly once per clean→dirty transition).
     #[inline]
     pub fn set_bit(&self, index: u8) -> bool {
-        let bit = 1u64 << (index as u32);
-        let prev = self.bits.fetch_or(bit, Ordering::Relaxed);
-        prev == 0
+        self.bits.set_bit(index as u32)
     }
 
-    /// Clear all bits. Returns `true` iff the mask had any bit set, the
-    /// signal `MutReceiver` uses to fire `notify_clean` exactly once per
-    /// dirty → clean transition.
+    /// Clear all bits. Returns `true` iff the mask had any bit set,
+    /// the signal `MutReceiver` uses to fire `notify_clean` exactly
+    /// once per dirty→clean transition.
     #[inline]
     pub fn clear(&self) -> bool {
-        let prev = self.bits.swap(0, Ordering::Relaxed);
-        prev != 0
+        self.bits.clear()
     }
 
-    /// OR-merge another mask into this one (used by retransmit on packet
-    /// drop in `EntityUpdateManager::dropped_update_cleanup`). Returns
-    /// `true` iff this mask was clear AND the merge introduced new bits —
-    /// the same `notify_dirty`-once contract as `set_bit`.
+    /// OR-merge another mask into this one (used by retransmit on
+    /// packet drop in `EntityUpdateManager::dropped_update_cleanup`).
+    /// Returns `true` iff this mask was clear AND the merge introduced
+    /// new bits.
     pub fn or_with(&self, other: &DiffMask) -> bool {
-        let other_bits = pack_diff_mask(other);
-        if other_bits == 0 {
-            return false;
-        }
-        let prev = self.bits.fetch_or(other_bits, Ordering::Relaxed);
-        prev == 0
+        self.bits.or_with(other)
     }
 
     /// Snapshot the current mask into an owned `DiffMask`. Used by
     /// `world_writer` when copying the mask into `sent_updates` before
-    /// clearing — the recorded copy survives subsequent mutations and is
-    /// what `dropped_update_cleanup` ORs back on retransmit.
+    /// clearing.
     pub fn snapshot(&self) -> DiffMask {
-        let bits = self.bits.load(Ordering::Relaxed);
-        unpack_diff_mask(bits, self.byte_len)
+        self.bits.snapshot()
     }
 
     #[inline]
     pub fn is_clear(&self) -> bool {
-        self.bits.load(Ordering::Relaxed) == 0
+        self.bits.is_clear()
     }
 
-    /// Read one byte of the mask. Equivalent to `snapshot().byte(i)` but
-    /// avoids the `DiffMask` allocation when callers only need one byte.
+    /// Read one byte of the mask. Cheaper than `snapshot()` when the
+    /// caller only needs a single byte.
     #[inline]
     pub fn byte(&self, index: usize) -> u8 {
-        let bits = self.bits.load(Ordering::Relaxed);
-        ((bits >> (index * 8)) & 0xFF) as u8
+        self.bits.byte(index)
     }
-}
-
-fn pack_diff_mask(mask: &DiffMask) -> u64 {
-    let bytes = mask.byte_number();
-    let n = bytes.min(8) as usize;
-    let mut out = 0u64;
-    for i in 0..n {
-        out |= (mask.byte(i) as u64) << (i * 8);
-    }
-    out
-}
-
-fn unpack_diff_mask(bits: u64, byte_len: u8) -> DiffMask {
-    let mut mask = DiffMask::new(byte_len);
-    for byte_idx in 0..byte_len as usize {
-        let byte = ((bits >> (byte_idx * 8)) & 0xFF) as u8;
-        if byte == 0 {
-            continue;
-        }
-        for bit in 0..8u8 {
-            if byte & (1 << bit) != 0 {
-                mask.set_bit((byte_idx as u8) * 8 + bit, true);
-            }
-        }
-    }
-    mask
 }
 
 #[cfg(test)]
@@ -162,7 +115,6 @@ mod tests {
         assert!(m.or_with(&other));
         assert_eq!(m.byte(0), 0b0000_0010);
         assert_eq!(m.byte(1), 0b0000_0010);
-        // OR-with on already-dirty mask returns false even when more bits land.
         let mut other2 = DiffMask::new(2);
         other2.set_bit(2, true);
         assert!(!m.or_with(&other2));
@@ -179,8 +131,6 @@ mod tests {
 
     #[test]
     fn byte_layout_matches_diff_mask_byte_for_byte() {
-        // Wire-format contract: AtomicDiffMask.byte(i) must equal
-        // DiffMask.byte(i) for every i, given the same logical bit set.
         let mut reference = DiffMask::new(2);
         let atomic = AtomicDiffMask::new(2);
         for &bit in &[0u8, 3, 7, 8, 11, 15] {
@@ -202,5 +152,22 @@ mod tests {
         for i in 0..8 {
             assert_eq!(m.byte(i), 0xFF);
         }
+    }
+
+    /// >64-bit mask used to panic with `debug_assert!`. Now supported
+    /// via the multi-word AtomicBitSet backing.
+    #[test]
+    fn over_64_bits_supported_no_more_8_byte_limit() {
+        let m = AtomicDiffMask::new(32); // 256 bits / 256 properties
+        for i in 0..255u8 {
+            m.set_bit(i);
+        }
+        // Set bit 255 (last addressable in u8) — the property index API
+        // is u8 so this is the practical max for a single component.
+        m.set_bit(255);
+        for i in 0..32 {
+            assert_eq!(m.byte(i), 0xFF, "byte {} should be 0xFF", i);
+        }
+        assert_eq!(m.snapshot().byte_number(), 32);
     }
 }

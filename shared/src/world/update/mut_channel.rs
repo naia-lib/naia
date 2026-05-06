@@ -12,84 +12,155 @@ use crate::world::entity_index::EntityIndex;
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
 
-/// Per-user dirty queue (Phase 9.4 / Stage E + B-strict).
+/// Per-user dirty queue (Phase 9.4 / Stage E + B-strict + 2026-05-05
+/// unlimited-kind-count refactor).
 ///
-/// **B-strict (2026-04-25):** the hot-path `notify_dirty` chain no longer
-/// takes a `Mutex<DirtyQueue>` write lock. The bits side is a
-/// `Vec<AtomicU64>` (one slot per `EntityIndex`, one bit per
-/// `ComponentKind`); `push` and `cancel` are pure `fetch_or` /
-/// `fetch_and` calls under a parking_lot `RwLock` *read* guard, so a
-/// resize (cold path) is the only operation that excludes the hot path.
-/// `dirty_indices` is locked only on the first-bit-set transition per
-/// entity (the cold-path push) and at drain.
+/// Tracks, per `EntityIndex`, which `ComponentKind`s are currently
+/// dirty. Lock-free hot path; cold-path resize on entity allocation.
 ///
-/// The bits Vec grows only via `ensure_capacity`, called from
-/// `UserDiffHandler::allocate_entity_index` before any mutation can
-/// reference the new slot. `cancel` is fire-and-forget — it clears the
-/// bit but leaves any stale index in `dirty_indices`; drain dedupes via
-/// the bitset.
+/// ## Variable-width kind bitset (no more 64-kind limit)
+///
+/// Each entity gets `stride` `AtomicU64` words of dirty bits, where
+/// `stride = ceil(kind_count / 64)`. `kind_bit` of value `K` lives in
+/// word `K / 64` at bit position `K % 64`. The flat layout is
+/// `bits[entity_idx * stride + word_idx]` — one contiguous `Vec` for
+/// all entities, each entity occupying `stride` consecutive words.
+/// `stride` is set at construction from the protocol's locked
+/// component-kind count and never changes.
+///
+/// Pre-2026-05-05 the bits were a single `Vec<AtomicU64>` (one word
+/// per entity = ≤64 kinds). The cap was a `debug_assert!` in
+/// `ComponentKinds::add_component`. cyberlith and other large
+/// protocols were going to hit it.
+///
+/// ## Lock + atomic discipline
+///
+/// - `bits` is wrapped in `PlRwLock<Vec<AtomicU64>>`: write-guard for
+///   `ensure_capacity` (cold path), read-guard for hot-path `fetch_or`
+///   / `fetch_and` / `swap`. Resize is the only writer.
+/// - `indices` is a cold-path `PlMutex<Vec<EntityIndex>>` — locked
+///   only on first-bit-set-per-entity push and at drain. Tolerates
+///   duplicate entries (drain dedupes via the bitset's per-word swap).
+///
+/// ## "Was clear" semantics under multi-word
+///
+/// `push` returns `was_clear == true` (and locks `indices` to push)
+/// when the kind_bit's word was zero before our `fetch_or` AND the
+/// other words for this entity are also zero (relaxed loads — race-
+/// tolerant). Concurrent pushes to different words of the same entity
+/// might both report was_clear and double-push the index; the
+/// `indices` Vec accepts duplicates and drain swap-zeroes the bits
+/// once, so the duplicate entry contributes nothing on the second
+/// drain pass. Net contract: at-least-once index entry per
+/// clean→dirty transition, with rare benign duplicates.
 ///
 /// Wire-format invariant unchanged — this is CPU-only bookkeeping.
 pub struct DirtyQueue {
-    /// `bits[entity_idx]` is a u64 with bit `kind_bit` set for every
-    /// component kind currently dirty on that entity. Resized only by
+    /// Flat `Vec<AtomicU64>`, length = `entity_count * stride`. Word
+    /// for `(entity_idx, word_idx)` is at index
+    /// `entity_idx * stride + word_idx`. Resized only by
     /// `ensure_capacity` under the `RwLock` write guard; hot-path
-    /// `fetch_or`/`fetch_and`/`swap` access individual slots under the
-    /// read guard.
+    /// `fetch_or` / `fetch_and` / `swap` access individual slots
+    /// under the read guard.
     bits: PlRwLock<Vec<AtomicU64>>,
-    /// Cold-path-only mutex: locked at first-bit-set-per-entity push and
-    /// at drain. Tolerates duplicate entries — drain dedupes via `bits`.
+    /// Words per entity = `ceil(kind_count / 64).max(1)`. Set at
+    /// construction; never changes (protocol is locked before any
+    /// `DirtyQueue` is created).
+    stride: usize,
+    /// Cold-path-only mutex: locked at first-bit-set-per-entity push
+    /// and at drain. Tolerates duplicate entries — drain dedupes via
+    /// `bits`.
     indices: PlMutex<Vec<EntityIndex>>,
 }
 
 impl DirtyQueue {
-    pub fn new() -> Self {
+    /// Construct with capacity for `kind_count` distinct
+    /// `ComponentKind`s (= `kind_count` distinct `kind_bit` values).
+    /// `stride` is derived as `ceil(kind_count / 64).max(1)`. Common
+    /// case: `kind_count ≤ 64` → `stride == 1` (zero-overhead vs the
+    /// old single-`AtomicU64` layout).
+    pub fn new(kind_count: u16) -> Self {
+        let stride = ((kind_count as usize).div_ceil(64)).max(1);
         Self {
             bits: PlRwLock::new(Vec::new()),
+            stride,
             indices: PlMutex::new(Vec::new()),
         }
     }
 
-    /// Pre-grow `bits` to cover at least `slot + 1` entries. Cold path —
-    /// called from `UserDiffHandler::allocate_entity_index` synchronously
-    /// before the issued `EntityIndex` is exposed to any mutation. Takes
-    /// the write guard, which excludes hot-path readers; safe because
-    /// allocation runs on the same thread that issues mutations.
+    /// Words per entity in this queue. Public for tests + bench
+    /// instrumentation; production code shouldn't need it.
+    pub fn stride(&self) -> usize {
+        self.stride
+    }
+
+    /// Pre-grow `bits` to cover at least `slot + 1` entities. Cold
+    /// path — called from `UserDiffHandler::allocate_entity_index`
+    /// synchronously before the issued `EntityIndex` is exposed to
+    /// any mutation. Takes the write guard, which excludes hot-path
+    /// readers; safe because allocation runs on the same thread that
+    /// issues mutations.
     pub fn ensure_capacity(&self, slot: usize) {
-        // Fast path: capacity already covers slot.
-        if self.bits.read().len() > slot {
+        let needed = (slot + 1) * self.stride;
+        if self.bits.read().len() >= needed {
             return;
         }
         let mut w = self.bits.write();
-        while w.len() <= slot {
+        while w.len() < needed {
             w.push(AtomicU64::new(0));
         }
     }
 
-    /// Mark `(entity_idx, kind_bit)` dirty. Lock-free atomic on the bits
-    /// side; cold-path mutex push only when this entity was previously
-    /// clean (`prev == 0`). Holds the bits read guard for the duration
-    /// of the `fetch_or`; never under the indices mutex.
+    /// Mark `(entity_idx, kind_bit)` dirty. Lock-free atomic on the
+    /// bits side; cold-path mutex push only on clean→dirty transition
+    /// for this entity. `kind_bit` widened to `u16` (was `u8`) to
+    /// support arbitrary protocol kind counts.
     #[inline]
-    pub fn push(&self, entity_idx: EntityIndex, kind_bit: u8) {
-        let kind_mask = 1u64 << kind_bit;
-        let i = entity_idx.0 as usize;
+    pub fn push(&self, entity_idx: EntityIndex, kind_bit: u16) {
+        let word_idx = (kind_bit as usize) / 64;
+        let bit_in_word = (kind_bit as u32) % 64;
+        let kind_mask = 1u64 << bit_in_word;
+        let entity_base = (entity_idx.0 as usize) * self.stride;
+        let slot_idx = entity_base + word_idx;
+
         let prev = {
             let bits = self.bits.read();
-            if let Some(slot) = bits.get(i) {
+            if let Some(slot) = bits.get(slot_idx) {
                 slot.fetch_or(kind_mask, Ordering::Relaxed)
             } else {
                 drop(bits);
-                // Defensive: ensure capacity then retry. Should not happen
-                // in production — UserDiffHandler::allocate_entity_index
-                // pre-grows. Cost: one extra read + write lock pair, only
-                // on misconfigured callers.
-                self.ensure_capacity(i);
+                // Defensive: ensure capacity then retry. Should not
+                // happen in production — `allocate_entity_index`
+                // pre-grows. Cost: one extra read + write lock pair,
+                // only on misconfigured callers.
+                self.ensure_capacity(entity_idx.0 as usize);
                 let bits = self.bits.read();
-                bits[i].fetch_or(kind_mask, Ordering::Relaxed)
+                bits[slot_idx].fetch_or(kind_mask, Ordering::Relaxed)
             }
         };
-        if prev == 0 {
+
+        if prev != 0 {
+            return;
+        }
+        // Word was zero before our fetch_or. Check whether the other
+        // words for this entity are also zero. Race-tolerant: if a
+        // concurrent push to another word happens between our load
+        // and theirs, both might report was_clear and both push to
+        // `indices` — drain dedupes via the per-word swap.
+        let was_clear = if self.stride == 1 {
+            true
+        } else {
+            let bits = self.bits.read();
+            (0..self.stride).all(|w| {
+                if w == word_idx {
+                    return true;
+                }
+                bits.get(entity_base + w)
+                    .map(|word| word.load(Ordering::Relaxed) == 0)
+                    .unwrap_or(true)
+            })
+        };
+        if was_clear {
             self.indices.lock().push(entity_idx);
         }
     }
@@ -98,29 +169,43 @@ impl DirtyQueue {
     /// side; never touches the indices mutex (drain dedupes stale
     /// entries). Tolerates out-of-range slots (returns silently).
     #[inline]
-    pub fn cancel(&self, entity_idx: EntityIndex, kind_bit: u8) {
-        let kind_mask = 1u64 << kind_bit;
-        let i = entity_idx.0 as usize;
+    pub fn cancel(&self, entity_idx: EntityIndex, kind_bit: u16) {
+        let word_idx = (kind_bit as usize) / 64;
+        let bit_in_word = (kind_bit as u32) % 64;
+        let kind_mask = 1u64 << bit_in_word;
+        let slot_idx = (entity_idx.0 as usize) * self.stride + word_idx;
         let bits = self.bits.read();
-        if let Some(slot) = bits.get(i) {
+        if let Some(slot) = bits.get(slot_idx) {
             slot.fetch_and(!kind_mask, Ordering::Relaxed);
         }
     }
 
-    /// Drain: take ownership of the indices list, then atomically swap-zero
-    /// each slot's bits. Returns owned `(EntityIndex, kind_bits)` pairs.
-    /// Slots that ended up zero (cancelled or already drained earlier) are
-    /// skipped, so drain naturally dedupes stale `dirty_indices` entries.
-    pub fn drain(&self) -> Vec<(EntityIndex, u64)> {
+    /// Drain: take ownership of the indices list, then atomically
+    /// swap-zero every word of each indexed entity. Returns owned
+    /// `(EntityIndex, dirty_words)` pairs where `dirty_words` is a
+    /// `Vec<u64>` of length `stride` (one word per kind-word). Entries
+    /// that ended up zero across all words (cancelled or already
+    /// drained) are skipped.
+    pub fn drain(&self) -> Vec<(EntityIndex, Vec<u64>)> {
         let indices: Vec<EntityIndex> = std::mem::take(&mut *self.indices.lock());
-        let mut out: Vec<(EntityIndex, u64)> = Vec::with_capacity(indices.len());
+        let mut out: Vec<(EntityIndex, Vec<u64>)> = Vec::with_capacity(indices.len());
         let bits = self.bits.read();
         for idx in indices {
-            if let Some(slot) = bits.get(idx.0 as usize) {
-                let v = slot.swap(0, Ordering::Relaxed);
+            let entity_base = (idx.0 as usize) * self.stride;
+            let mut words: Vec<u64> = Vec::with_capacity(self.stride);
+            let mut any = false;
+            for w in 0..self.stride {
+                let v = bits
+                    .get(entity_base + w)
+                    .map(|slot| slot.swap(0, Ordering::Relaxed))
+                    .unwrap_or(0);
                 if v != 0 {
-                    out.push((idx, v));
+                    any = true;
                 }
+                words.push(v);
+            }
+            if any {
+                out.push((idx, words));
             }
         }
         out
@@ -128,12 +213,6 @@ impl DirtyQueue {
 
     pub fn is_empty(&self) -> bool {
         self.indices.lock().is_empty()
-    }
-}
-
-impl Default for DirtyQueue {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -152,14 +231,14 @@ pub type DirtySet = DirtyQueue;
 /// hash.
 pub struct DirtyNotifier {
     entity_idx: EntityIndex,
-    kind_bit: u8,
+    kind_bit: u16,
     set: Weak<DirtySet>,
 }
 
 impl DirtyNotifier {
     pub fn new(
         entity_idx: EntityIndex,
-        kind_bit: u8,
+        kind_bit: u16,
         set: Weak<DirtySet>,
     ) -> Self {
         Self { entity_idx, kind_bit, set }
@@ -341,5 +420,81 @@ impl MutReceiverBuilder {
 
     pub fn build(&self, address: &Option<SocketAddr>) -> Option<MutReceiver> {
         self.channel.new_receiver(address)
+    }
+}
+
+#[cfg(test)]
+mod dirty_queue_unlimited_kinds_tests {
+    //! Pins the post-T1.3 invariant: the per-user `DirtyQueue` is no
+    //! longer capped at 64 component kinds. The flat-strided
+    //! `Vec<AtomicU64>` storage scales with `kind_count`, and
+    //! `kind_bit` values ≥ 64 round-trip through `push` → `drain`.
+    use super::*;
+    use crate::EntityIndex;
+    use std::sync::Arc;
+
+    #[test]
+    fn stride_grows_with_kind_count() {
+        assert_eq!(DirtyQueue::new(1).stride(), 1);
+        assert_eq!(DirtyQueue::new(64).stride(), 1);
+        assert_eq!(DirtyQueue::new(65).stride(), 2);
+        assert_eq!(DirtyQueue::new(128).stride(), 2);
+        assert_eq!(DirtyQueue::new(129).stride(), 3);
+        assert_eq!(DirtyQueue::new(1024).stride(), 16);
+    }
+
+    #[test]
+    fn kind_bit_above_64_round_trips() {
+        let q = Arc::new(DirtyQueue::new(200));
+        q.ensure_capacity(0);
+        // Pre-T1.3 these kind_bits were unrepresentable (the assertion
+        // in ComponentKinds::add_component capped registration at 64).
+        for &kb in &[0u16, 63, 64, 65, 127, 128, 199] {
+            q.push(EntityIndex(0), kb);
+        }
+        let drained = q.drain();
+        assert_eq!(drained.len(), 1);
+        let (idx, words) = &drained[0];
+        assert_eq!(*idx, EntityIndex(0));
+        assert_eq!(words.len(), q.stride());
+        // Reconstruct the absolute bit positions.
+        let mut bits: Vec<u16> = Vec::new();
+        for (w, &word) in words.iter().enumerate() {
+            let mut remaining = word;
+            while remaining != 0 {
+                let b = remaining.trailing_zeros() as u16;
+                bits.push((w as u16) * 64 + b);
+                remaining &= remaining - 1;
+            }
+        }
+        bits.sort();
+        assert_eq!(bits, vec![0, 63, 64, 65, 127, 128, 199]);
+    }
+
+    #[test]
+    fn cancel_clears_high_kind_bit() {
+        let q = DirtyQueue::new(200);
+        q.ensure_capacity(0);
+        q.push(EntityIndex(0), 130);
+        q.cancel(EntityIndex(0), 130);
+        let drained = q.drain();
+        // Cancel zeroes the bit; drain skips entries with all-zero words.
+        assert!(drained.is_empty());
+    }
+
+    #[test]
+    fn multi_word_was_clear_fires_index_push_once() {
+        let q = DirtyQueue::new(200);
+        q.ensure_capacity(0);
+        // Two pushes to different words for the same entity. Race-tolerant
+        // was_clear may push the index twice, but drain dedupes via
+        // swap-zero — only one drained entry should appear.
+        q.push(EntityIndex(0), 5);
+        q.push(EntityIndex(0), 130);
+        let drained = q.drain();
+        assert_eq!(drained.len(), 1, "expected dedup via drain swap-zero");
+        let (_, words) = &drained[0];
+        assert_eq!(words[0], 1u64 << 5);
+        assert_eq!(words[2], 1u64 << (130 - 128));
     }
 }

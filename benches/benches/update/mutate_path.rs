@@ -123,7 +123,7 @@ pub fn mutate_path(c: &mut Criterion) {
     // exercises on every replicated mutation. Lock-free `notify_dirty`
     // (B-strict step 2) shows here as a direct ns-level win.
     group.bench_function(bench!("single_user/notify_clean_to_dirty"), |b| {
-        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::default());
+        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::new(1));
         let receiver = MutReceiver::new(1);
         receiver.attach_notifier(DirtyNotifier::new(
             EntityIndex(0),
@@ -151,7 +151,7 @@ pub fn mutate_path(c: &mut Criterion) {
     // implementation. Used to confirm that the lock-free win in
     // `notify_clean_to_dirty` is not a measurement artifact.
     group.bench_function(bench!("single_user/notify_dirty_repeat"), |b| {
-        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::default());
+        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::new(1));
         let receiver = MutReceiver::new(1);
         receiver.attach_notifier(DirtyNotifier::new(
             EntityIndex(0),
@@ -170,7 +170,7 @@ pub fn mutate_path(c: &mut Criterion) {
     // production; lock-free `notify_dirty` removes the per-receiver
     // mutex acquire that today shows up 16× per fan-out.
     group.bench_function(bench!("16_users_in_scope/notify_clean_to_dirty"), |b| {
-        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::default());
+        let dirty_set: Arc<DirtySet> = Arc::new(DirtySet::new(1));
         let receivers: Vec<MutReceiver> = (0..16u8)
             .map(|i| {
                 let r = MutReceiver::new(1);
