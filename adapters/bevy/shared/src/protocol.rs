@@ -101,6 +101,20 @@ impl Protocol {
         self
     }
 
+    /// Register `R` as a Replicated Resource (see `_AGENTS/RESOURCES_PLAN.md`).
+    /// Calls `add_component::<R>()` (resources are 1-component entities)
+    /// and additionally marks the kind in `resource_kinds` so the
+    /// client/server mirror systems recognize incoming resource
+    /// components.
+    pub fn add_resource<R: crate::ReplicatedResource>(&mut self) -> &mut Self {
+        // Component-side registration (also populates world_data).
+        self.add_component::<R>();
+        // Mark in the resource registry — Replicate-only path on the
+        // inner Protocol, not Component-typed.
+        self.inner.resource_kinds.register::<R>(ComponentKind::of::<R>());
+        self
+    }
+
     pub fn lock(&mut self) {
         self.inner.lock();
     }

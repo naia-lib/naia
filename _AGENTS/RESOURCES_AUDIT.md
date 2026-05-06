@@ -9,6 +9,12 @@ This doc is honest about gaps in my own work. The Resources feature ships and wo
 
 ---
 
+## Implementation status (2026-05-05 — second audit cycle)
+
+ALL of Connor's verdict items A1, A2, A3, B1, B2, B3, B5, C1–C9, D1, D2, D3, plus the namako SDD task, **are LANDED on `release-0.25.0-e`**. The F1–F5 Bevy-app integration tests are **scaffolded but ignored**: the test file `adapters/bevy/server/tests/replicated_resources_bevy.rs` stands up a real Bevy server App + client App via `LocalTransportHub` and includes assertions for F1 (`Res<R>` end-to-end) and F4 (D13 component-event suppression), but the assertions hit a tick-timing blocker — naia's default 50ms tick interval doesn't elapse during back-to-back `app.update()` calls in `cargo test` timing. Resolving this requires `test_time` clock-injection plumbing into the bevy adapter (currently only available on the lower-level naia-server / naia-client crates). The tests are tagged `#[ignore]` with the failure mode documented inline, so they don't fail CI but are visible as remaining work. F2 (per-field-diff wire assertion), F3 (disconnect-with-resource-authority), F5 (echo prevention) are tracked as further extensions.
+
+The user-facing Mode B + D13 logic is exercised by the 10 harness integration tests in `test/harness/tests/replicated_resources.rs` and the namako-driven SDD scenarios in `test/specs/features/21_replicated_resources.feature` — both green.
+
 ## Connor's verdict (recorded 2026-05-05)
 
 | Item | Verdict | Notes |
