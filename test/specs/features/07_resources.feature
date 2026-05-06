@@ -1,170 +1,18 @@
 # ============================================================================
-# Replicated Resources — Canonical Contract
+# Replicated Resources — Grouped Contract Suite
 # ============================================================================
-# Source: _AGENTS/RESOURCES_PLAN.md (v2.1)
-# Last converted: 2026-05-05
-#
-# Summary:
-#   This specification defines the Replicated Resource primitive — Naia's
-#   server↔client-replicated singleton (per-`World`), modelled on Bevy's
-#   `Resource` concept and implemented internally as a hidden 1-component
-#   entity. Resources reuse the entity replication pipeline 100%; the only
-#   new code paths are a kind-marker registry, a TypeId↔Entity map per
-#   side, auto-scoping, and Bevy-side mirror systems.
-#
-# Terminology note:
-#   This file is normative; scenarios are executable assertions; comments
-#   labeled NORMATIVE are part of the contract.
+# This file is the post-A.4 grouping of multiple source feature files into
+# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
+# block below corresponds to one of the original 24 .feature files.
 # ============================================================================
 
-# ============================================================================
-# NORMATIVE CONTRACT MIRROR
-# ============================================================================
-#
-# PURPOSE:
-#   Define a per-`World` singleton "Resource" type with diff-tracked,
-#   per-field replication, supporting both server-authoritative and
-#   client-authoritative-after-delegation modes, exposed via Bevy's
-#   standard `Res<R>`/`ResMut<R>` ergonomics with zero entity/component
-#   semantics visible to the user.
-#
-# GLOSSARY:
-#   - Resource type R: A `#[derive(Replicate)]` struct registered as a
-#     resource via `protocol.add_resource::<R>()`.
-#   - Resource entity: The hidden naia entity that holds R as its sole
-#     replicated component. Never exposed to user code.
-#   - Resource registry: The per-`World` `TypeId<R>↔GlobalEntity` map
-#     maintained on both sender and receiver sides.
-#   - Mirror system: The bevy-adapter sync system that bridges the bevy
-#     `Resource` storage and the resource-entity component storage.
-#
-# ----------------------------------------------------------------------------
-# REGISTRATION
-# ----------------------------------------------------------------------------
-#
-# Resources are protocol-time-registered:
-#   - `protocol.add_resource::<R>()` registers R as both a ComponentKind
-#     (via add_component::<R>()) AND in the ResourceKinds marker table.
-#   - Idempotent — re-registering the same type is a no-op.
-#
-# Receiver-side discovery is implicit:
-#   - On `SpawnWithComponents` arrival, if any component kind is in
-#     `protocol.resource_kinds`, the receiver records the entity in its
-#     `ResourceRegistry` keyed by the corresponding TypeId.
-#   - Zero wire overhead — no marker component, no extra bits.
-#
-# ----------------------------------------------------------------------------
-# LIFECYCLE
-# ----------------------------------------------------------------------------
-#
-# Resources can be inserted/removed at runtime:
-#   - `commands.replicate_resource(value)` (Bevy: dynamic ID pool)
-#   - `commands.replicate_resource_static(value)` (Bevy: static ID pool)
-#   - `commands.remove_replicated_resource::<R>()`
-#   - Core API mirrors via `server.insert_resource`, `insert_static_resource`,
-#     `remove_resource`.
-#
-# Re-inserting an already-existing resource is rejected:
-#   - Returns `ResourceAlreadyExists` error.
-#   - Existing value unchanged.
-#
-# ----------------------------------------------------------------------------
-# REPLICATION
-# ----------------------------------------------------------------------------
-#
-# Per-field diff tracking:
-#   - Mutating a single `Property<T>` field on a resource transmits only
-#     that field, identical to component update semantics.
-#   - Multiple mutations to the same field within one tick coalesce.
-#
-# Initial sync on connect:
-#   - Resource entities are auto-scoped to every connected user. A new
-#     client receives all currently-existing resources in the first
-#     replication packet after handshake.
-#
-# Late-join InsertResourceEvent:
-#   - When a client first observes a resource (whether the resource was
-#     just inserted or has existed since startup), it fires exactly one
-#     `InsertResourceEvent<R>` from that client's perspective. Mirrors
-#     `InsertComponentEvent<C>` late-join semantics. (D20)
-#
-# ----------------------------------------------------------------------------
-# AUTHORITY (server-authoritative default; opt-in delegation)
-# ----------------------------------------------------------------------------
-#
-# Server-authoritative resources (default):
-#   - Server can mutate via `server.resource_mut::<R>()` /
-#     `ResMut<R>` in Bevy systems; mutations replicate to all clients.
-#   - Client mutations via `ResMut<R>` modify the local mirror but do
-#     NOT propagate. Next incoming server update overwrites the local
-#     change. No error returned. (D18 — soft rejection, mirrors
-#     `RemoteOwnedProperty::DerefMut`.)
-#
-# Delegable resources (opt-in via `ReplicationConfig::delegated()`):
-#   - Configured at insert time via
-#     `commands.configure_replicated_resource::<R>(config)`.
-#   - Client requests authority via
-#     `commands.request_resource_authority::<R>(&mut client)`.
-#   - On grant, client can mutate via `ResMut<R>`; mutations propagate
-#     to the server.
-#   - Server-side mutation while client holds authority returns
-#     `AuthorityError::ClientHoldsAuthority`. (D16)
-#   - Client releases via `commands.release_resource_authority::<R>()`.
-#
-# Disconnect-with-authority:
-#   - When a client holding resource authority disconnects (gracefully
-#     or not), authority reverts to `EntityAuthStatus::Available` (next
-#     requester or `server.resource_take_authority` reclaims).
-#   - Resource entity is NOT despawned; last-committed value persists.
-#     (D15, mirrors entity behavior at server_auth_handler.rs:155.)
-#
-# Authority status check:
-#   - User checks via `commands.resource_authority::<R>(&client)` before
-#     mutating, mirroring entity-delegation usage. (D19 — manual check,
-#     no SystemParam auto-gate.)
-#
-# ----------------------------------------------------------------------------
-# PRIORITY
-# ----------------------------------------------------------------------------
-#
-# Per-resource priority via existing entity-priority API:
-#   - Default gain: 1.0 (same as any entity).
-#   - Tunable via `server.resource_priority_mut::<R>().set_gain(f32)` /
-#     `boost_once(f32)`. (D9)
-#   - No new "Resource" priority tier; consistent with Component story.
-#
-# ----------------------------------------------------------------------------
-# MULTI-WORLD ISOLATION
-# ----------------------------------------------------------------------------
-#
-# Resources are per-`World`:
-#   - Inserting `R` in `world_a` does not affect `world_b`'s `R`.
-#   - Each World has its own `ResourceRegistry`.
-#   - Mirrors entity per-World scoping.
-#
-# ----------------------------------------------------------------------------
-# BEVY ADAPTER ERGONOMICS — ZERO ENTITY/COMPONENT SEMANTICS VISIBLE
-# ----------------------------------------------------------------------------
-#
-# User-facing event types (mirroring component events):
-#   - `InsertResourceEvent<R>` (server) / `InsertResourceEvent<T, R>` (client)
-#   - `UpdateResourceEvent<R>` / `UpdateResourceEvent<T, R>`
-#   - `RemoveResourceEvent<R>` / `RemoveResourceEvent<T, R>`
-#   - NO `entity` field on any resource event.
-#   - Registered via `app.add_resource_events::<R>()` (server) or
-#     `app.add_resource_events::<T, R>()` (client) on the existing
-#     `AppRegisterComponentEvents` trait. (D17)
-#
-# Event suppression for resource entities:
-#   - The bevy-adapter event filter routes resource entities out of
-#     `SpawnEntityEvent` / `DespawnEntityEvent` / component events; the
-#     equivalent resource events fire instead.
-#   - Users see ZERO entity-level events for resource entities. (D13)
-# ============================================================================
-
-
-@Feature(replicated_resources)
+@Feature(07_resources)
 Feature: Replicated Resources
+
+  # ==========================================================================
+  # === Source: 21_replicated_resources.feature ===
+  # ==========================================================================
+
 
   @Rule(01)
   Rule: Registration & basic insert/observe
@@ -432,3 +280,5 @@ Feature: Replicated Resources
       And one replication round trip elapses
       Then alice's commands.resource_authority for PlayerSelection returns Some Granted
       And alice can mutate ResMut PlayerSelection and the change replicates to the server
+
+

@@ -117,7 +117,7 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
     - [x] **transport.rs** (21 bindings) → given/setup, when/{server_actions,client_actions,network_events}, then/state_assertions. Helper `panic_payload_to_string` extracted. 2026-05-06.
     - [x] **common.rs** (33 bindings) → given/{setup,state}, when/{network_events,client_actions}, then/state_assertions, then/ordering. Last contract file. 2026-05-06.
   - [x] **A.3.d** — Verified: `cargo test -p naia-tests` passes same scenarios as before; `cargo run -p naia_npa -- manifest` emits 251 bindings (no count change — pure structural reorganization with no dedup yet). 2026-05-06.
-- [ ] **A.4** Collapse the 24 `.feature` files into the 8 grouped files. Preserve every Scenario verbatim; just regroup by feature. Update file paths in any tooling references (manifest emit, NPA run, etc.).
+- [x] **A.4** Collapsed the 24 `.feature` files into 8 grouped files (2026-05-06). All 185 Scenarios preserved verbatim. Each grouped file carries a top-level `Feature:` header for the grouping plus per-source separators (`# === Source: ... ===`) so the original boundaries remain greppable. Manifest still emits 251 bindings; namako tests + harness tests (220/8/13) unchanged.
 - [ ] **A.5** Verify: `cargo test -p naia-tests` passes the same 174 namako scenarios as before. Verify `cargo run -p naia_npa -- manifest` still emits 259+ bindings. Verify `cargo test -p naia-test-harness` still 220/8/13.
 - [ ] **A.6** Update this doc with completion notes; commit `phase A complete: catalog refactor`; push to main.
 
