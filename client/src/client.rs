@@ -54,6 +54,13 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     incoming_tick_events: TickEvents,
     // Per-connection priority layer (single connection; no global/per-user split).
     priority: UserPriorityState<E>,
+    // Replicated Resources — client-side mirror of the server's
+    // ResourceRegistry. Populated when an InsertComponent for a
+    // resource-marked component kind arrives; consulted by the bevy
+    // adapter's mirror system to translate component events into
+    // resource events and maintain the bevy-Resource side. See
+    // `_AGENTS/RESOURCES_PLAN.md` §A1 + `RESOURCES_AUDIT.md`.
+    resource_registry: naia_shared::ResourceRegistry,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
@@ -103,6 +110,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             incoming_world_events: WorldEvents::new(),
             incoming_tick_events: TickEvents::new(),
             priority: UserPriorityState::new(),
+            resource_registry: naia_shared::ResourceRegistry::new(),
         }
     }
 
@@ -595,6 +603,59 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Retrieves an EntityRef that exposes read-only operations for the
     /// given Entity.
     /// Panics if the Entity does not exist.
+    // ====================================================================
+    // Replicated Resources — client-side read API.
+    //
+    // The client maintains a `ResourceRegistry` populated when the
+    // remote-apply path delivers an InsertComponent for a resource kind.
+    // Clears on Despawn. The bevy adapter consumes this to drive the
+    // bevy-Resource mirror (see adapters/bevy/client/src/resource_sync).
+    // ====================================================================
+
+    /// True iff this client currently has a Replicated Resource of
+    /// type `R` mirrored from the server.
+    pub fn has_resource<R: 'static>(&self) -> bool {
+        self.resource_registry.entity_for::<R>().is_some()
+    }
+
+    /// O(1): the world-entity carrying resource `R` on this client,
+    /// or `None` if not currently in scope.
+    pub fn resource_entity<R: 'static>(&self) -> Option<E> {
+        let global_entity = self.resource_registry.entity_for::<R>()?;
+        self.global_entity_map
+            .global_entity_to_entity(&global_entity)
+            .ok()
+    }
+
+    /// True iff `world_entity` is the entity carrying any Replicated
+    /// Resource currently in scope on this client.
+    pub fn is_resource_entity(&self, world_entity: &E) -> bool {
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity)
+        else {
+            return false;
+        };
+        self.resource_registry.is_resource_entity(&global_entity)
+    }
+
+    /// Number of currently-mirrored Replicated Resources.
+    pub fn resource_count(&self) -> usize {
+        self.resource_registry.len()
+    }
+
+    /// Iterate over the world-entities of all currently-mirrored resources.
+    pub fn resource_entities(&self) -> Vec<E> {
+        let mut out = Vec::with_capacity(self.resource_registry.len());
+        for global_entity in self.resource_registry.entities() {
+            if let Ok(e) = self
+                .global_entity_map
+                .global_entity_to_entity(global_entity)
+            {
+                out.push(e);
+            }
+        }
+        out
+    }
+
     pub fn entity<W: WorldRefType<E>>(&'_ self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, entity);
@@ -1800,6 +1861,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    // Resource registry maintenance: if this entity was
+                    // a resource entity, clear the registry record so
+                    // future has_resource::<R>() calls return false.
+                    self.resource_registry.remove_by_entity(&global_entity);
                     self.incoming_world_events.push_despawn(world_entity);
                     if self
                         .global_world_manager
@@ -1833,6 +1898,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    // Resource registry maintenance: if the inserted
+                    // component is a Replicated Resource kind, record
+                    // the (TypeId, GlobalEntity) mapping so the bevy
+                    // adapter's mirror system + has_resource::<R>()
+                    // lookups work O(1).
+                    if self.protocol.resource_kinds.is_resource(&component_kind) {
+                        let type_id: std::any::TypeId = component_kind.into();
+                        let _ = self.resource_registry.insert_raw(type_id, global_entity);
+                    }
                     self.incoming_world_events
                         .push_insert(world_entity, component_kind);
 

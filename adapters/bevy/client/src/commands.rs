@@ -2,14 +2,12 @@ use std::marker::PhantomData;
 
 use bevy_ecs::system::Command;
 use bevy_ecs::{
-    component::Mutable,
     entity::Entity,
     system::{Commands, EntityCommands},
     world::{Mut, World},
 };
 use naia_bevy_shared::{
-    AuthorityError, EntityAuthStatus, HostOwned, Replicate, ReplicatedResource, WorldMutType,
-    WorldProxy, WorldProxyMut, WorldRefType,
+    AuthorityError, EntityAuthStatus, HostOwned, ReplicatedResource, WorldMutType, WorldProxyMut,
 };
 use naia_client::ReplicationConfig;
 
@@ -230,19 +228,17 @@ impl<'w, 's> ClientCommandsExt for Commands<'w, 's> {
     }
 }
 
-/// Walk the world's entities and return the first one carrying `R` as
-/// a component. V1 lookup; superseded by the client-side
-/// `ResourceRegistry` once Mode B lands.
-fn find_resource_entity<R: ReplicatedResource>(
-    world: &World,
-) -> Option<Entity> {
-    let world_ref = world.proxy();
-    for e in world_ref.entities() {
-        if world_ref.has_component::<R>(&e) {
-            return Some(e);
-        }
-    }
-    None
+/// O(1) lookup of the resource entity for `R` via the client's
+/// `ResourceRegistry`. Returns `None` if the resource isn't currently
+/// in scope. Replaces the V1 world-scan (A1 of RESOURCES_AUDIT.md).
+fn find_resource_entity<T, R>(world: &World) -> Option<Entity>
+where
+    T: Send + Sync + 'static,
+    R: ReplicatedResource,
+{
+    world
+        .get_resource::<ClientWrapper<T>>()
+        .and_then(|cw| cw.client.resource_entity::<R>())
 }
 
 //// RequestResourceAuthorityCommand ////
@@ -274,7 +270,7 @@ where
     R: ReplicatedResource,
 {
     fn apply(self, world: &mut World) {
-        let Some(entity) = find_resource_entity::<R>(world) else {
+        let Some(entity) = find_resource_entity::<T, R>(world) else {
             log::warn!(
                 "naia request_resource_authority: resource not present in client world; skipping"
             );
@@ -325,7 +321,7 @@ where
     R: ReplicatedResource,
 {
     fn apply(self, world: &mut World) {
-        let Some(entity) = find_resource_entity::<R>(world) else {
+        let Some(entity) = find_resource_entity::<T, R>(world) else {
             return;
         };
         world.resource_scope(|_world, mut client: Mut<ClientWrapper<T>>| {

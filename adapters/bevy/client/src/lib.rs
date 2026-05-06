@@ -17,6 +17,7 @@ mod commands;
 mod component_event_registry;
 mod components;
 mod plugin;
+mod resource_sync;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
