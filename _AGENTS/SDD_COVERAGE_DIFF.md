@@ -7,9 +7,9 @@
 > the **Pending migration** table is a Phase D target. When the table
 > empties, the parity gate for Phase F (delete legacy_tests) is met.
 
-- Legacy (215 contract IDs in legacy_tests/)
+- Legacy (legacy_tests/ deleted — Phase F complete)
 - Namako: 217 contract IDs in features/
-- Both: **215**
+- Both: **0**
 - Legacy-only (PENDING migration): **0**
-- Namako-only (new in SDD): 2
+- Namako-only (new in SDD): 217
 

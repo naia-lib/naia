@@ -1,6 +1,6 @@
 //! When-step bindings: server-initiated state changes.
 
-use naia_test_harness::EntityKey;
+use naia_test_harness::{ClientKey, EntityKey};
 
 use crate::steps::prelude::*;
 use crate::steps::world_helpers::last_entity_mut;
@@ -365,6 +365,28 @@ fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldM
         mctx.server(|server| {
             if let Some(mut scope) = server.user_scope_mut(&client_a) {
                 scope.exclude(&entity_key);
+            }
+        });
+    });
+}
+
+/// When the server gives authority to client {name} for the delegated entity.
+#[when("the server gives authority to client {word} for the delegated entity")]
+fn when_server_gives_authority(ctx: &mut TestWorldMut, name: String) {
+    use crate::steps::world_helpers::client_key_storage;
+    let scenario = ctx.scenario_mut();
+    let client_key: ClientKey = scenario
+        .bdd_get(&client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity
+                    .give_authority(&client_key)
+                    .expect("give_authority should succeed for server");
             }
         });
     });

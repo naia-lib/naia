@@ -43,7 +43,10 @@ the `contract_tests/` parent directory.
 | `01_connection_lifecycle.rs`   | 4 `#[ignore]` (capacity/heartbeat/token)|
 | `03_messaging.rs`              | 3 failing (protocol mismatch fast-fail, TickBuffered too-far-ahead, EntityProperty cap FIFO) |
 | `06_entity_scopes.rs`          | 3 failing + 1 `#[ignore]` (publish/unpublish vs spawn semantics, scope leave vs despawn distinguishability, re-entry auth status) |
-| `10_entity_delegation.rs`      | 2 failing (auth-denied transition once-per, migration with out-of-scope owner) |
+| `10_entity_delegation.rs`      | 1 failing (migration with out-of-scope owner) |
+
+### Closed since carve-out was created
+- `auth_denied_emitted_exactly_once_per_transition_into_denied` (2026-05-06): client missed an `Available → Denied` push for `EntityAuthDeniedEvent`. Fixed in `client/src/client.rs`. Behaviour now covered by namako Scenario `[entity-delegation-16] AuthDenied event fires on Available→Denied transition` in `test/specs/features/05_authority.feature`.
 
 `_helpers.rs` is shared scaffolding kept until the last carve-out file
 disappears.

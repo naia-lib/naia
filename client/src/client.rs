@@ -1416,9 +1416,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 self.global_world_manager
                     .entity_update_authority(global_entity, EntityAuthStatus::Available);
             }
-            // Other valid transitions (no side effects)
+            // Available → Denied. Fires when another client (or the server)
+            // takes authority for an entity that this client had been free to
+            // request. Per contract `entity-delegation-15`: every transition
+            // into Denied emits exactly one AuthDenied event so the
+            // application can react (e.g. close a request UI, mark the
+            // entity read-only).
             (EntityAuthStatus::Available, EntityAuthStatus::Denied) => {
-                // Enter scope while someone else holds - no event needed
+                self.incoming_world_events.push_auth_deny(*world_entity);
             }
             (EntityAuthStatus::Denied, EntityAuthStatus::Available) => {
                 // Release by someone else - emit reset

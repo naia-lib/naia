@@ -220,6 +220,20 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       Then client A observes Delegated replication config for the entity
       And client A observes Available authority status for the entity
 
+    # [entity-delegation-16] — AuthDenied event fires on every transition into Denied
+    # When the server (or another client) takes authority for a delegated entity that
+    # was Available on this client, the client MUST observe Denied AND emit exactly
+    # one AuthDenied event so the application can react (e.g. close a request UI).
+    @Scenario(06)
+    Scenario: [entity-delegation-16] AuthDenied event fires on Available→Denied transition
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When the server gives authority to client A for the delegated entity
+      Then client B is denied authority for the delegated entity
+      And client B receives an authority denied event for the entity
+
   # ==========================================================================
   # === Source: 11_entity_authority.feature ===
   # ==========================================================================
@@ -459,11 +473,6 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     @Deferred @PolicyOnly
     @Scenario(26)
     Scenario: [entity-delegation-15] Re-entering scope yields current authority status
-      Then the system intentionally fails
-
-    @Deferred @PolicyOnly
-    @Scenario(27)
-    Scenario: [entity-delegation-16] Server priority give overrides current holder
       Then the system intentionally fails
 
     @Deferred @PolicyOnly
