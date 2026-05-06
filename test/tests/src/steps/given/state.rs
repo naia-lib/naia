@@ -612,6 +612,155 @@ fn given_server_with_player_selection_and_alice(ctx: &mut TestWorldMut) {
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity-delegation preconditions (multi-client + named delegation)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given the server spawns a delegated entity in-scope for both clients.
+///
+/// Spawns a Delegated entity, includes it in both A and B's scopes,
+/// waits for both to observe replication.
+#[given("the server spawns a delegated entity in-scope for both clients")]
+fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut TestWorldMut) {
+    use naia_server::ReplicationConfig as ServerReplicationConfig;
+    use naia_test_harness::{ClientKey, Position};
+    let scenario = ctx.scenario_mut();
+    let client_a: ClientKey = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let client_b: ClientKey = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("B"))
+        .expect("client B not connected");
+    let room_key = scenario.last_room();
+    let (entity_key, ()) = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity
+                    .insert_component(Position::new(0.0, 0.0))
+                    .configure_replication(ServerReplicationConfig::delegated())
+                    .enter_room(&room_key);
+            })
+        })
+    });
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_a) {
+                scope.include(&entity_key);
+            }
+            if let Some(mut scope) = server.user_scope_mut(&client_b) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+    scenario.spec_expect(
+        "entity-delegation-06: delegated entity replicated to both clients",
+        |ectx| {
+            let a_has = ectx.client(client_a, |c| c.has_entity(&entity_key));
+            let b_has = ectx.client(client_b, |c| c.has_entity(&entity_key));
+            if a_has && b_has {
+                Some(())
+            } else {
+                None
+            }
+        },
+    );
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.allow_flexible_next();
+}
+
+/// Given the server spawns a delegated entity in-scope for client A.
+#[given("the server spawns a delegated entity in-scope for client A")]
+fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorldMut) {
+    use naia_server::ReplicationConfig as ServerReplicationConfig;
+    use naia_test_harness::{ClientKey, Position};
+    let scenario = ctx.scenario_mut();
+    let client_a: ClientKey = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let room_key = scenario.last_room();
+    let (entity_key, ()) = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity
+                    .insert_component(Position::new(0.0, 0.0))
+                    .configure_replication(ServerReplicationConfig::delegated())
+                    .enter_room(&room_key);
+            })
+        })
+    });
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_a) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+    scenario.spec_expect(
+        "entity-delegation-17: delegated entity replicated to client A",
+        |ectx| {
+            if ectx.client(client_a, |c| c.has_entity(&entity_key)) {
+                Some(())
+            } else {
+                None
+            }
+        },
+    );
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.allow_flexible_next();
+}
+
+/// Given the server takes authority for the delegated entity.
+///
+/// Server-side `take_authority()` precondition. All in-scope clients
+/// will observe Denied after this.
+#[given("the server takes authority for the delegated entity")]
+fn given_server_takes_authority_for_delegated_entity(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity
+                    .take_authority()
+                    .expect("take_authority should succeed for server");
+            }
+        });
+    });
+    scenario.allow_flexible_next();
+}
+
+/// Given client A is denied authority for the delegated entity.
+///
+/// Polls until client A observes Denied. Used as a precondition for
+/// scenarios that test transitions out of Denied.
+#[given("client A is denied authority for the delegated entity")]
+fn given_client_a_is_denied_authority(ctx: &mut TestWorldMut) {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let scenario = ctx.scenario_mut();
+    let client_a: ClientKey = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.spec_expect(
+        "entity-authority-10: client A observes Denied (precondition)",
+        |ectx| {
+            ectx.client(client_a, |c| {
+                match c.entity(&entity_key).and_then(|e| e.authority()) {
+                    Some(EntityAuthStatus::Denied) => Some(()),
+                    _ => None,
+                }
+            })
+        },
+    );
+    scenario.allow_flexible_next();
+}
+
 /// Given the entity is not in the client's room.
 ///
 /// Spawns the stored entity into a separate room so it has no shared

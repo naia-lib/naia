@@ -354,6 +354,69 @@ fn when_server_inserts_score_dynamic(ctx: &mut TestWorldMut) {
     });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity-delegation — server-side authority + scope ops
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server removes the delegated entity from client A's scope.
+///
+/// Excludes the entity from A's scope, triggering authority release
+/// per [entity-delegation-13].
+#[when("the server removes the delegated entity from client A's scope")]
+fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldMut) {
+    use naia_test_harness::ClientKey;
+    let scenario = ctx.scenario_mut();
+    let client_a: ClientKey = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_a) {
+                scope.exclude(&entity_key);
+            }
+        });
+    });
+}
+
+/// When the server takes authority for the delegated entity.
+#[when("the server takes authority for the delegated entity")]
+fn when_server_takes_authority(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity
+                    .take_authority()
+                    .expect("take_authority should succeed for server");
+            }
+        });
+    });
+}
+
+/// When the server releases authority for the delegated entity.
+#[when("the server releases authority for the delegated entity")]
+fn when_server_releases_authority(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity
+                    .release_authority()
+                    .expect("release_authority should succeed for server");
+            }
+        });
+    });
+}
+
 /// When the server mutates entity {label}'s component to x={int} y={int}.
 ///
 /// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].

@@ -227,6 +227,56 @@ fn when_alice_requests_authority(ctx: &mut TestWorldMut) {
     });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Authority requests/releases — multi-client
+// ──────────────────────────────────────────────────────────────────────
+
+/// When client {name} requests authority for the delegated entity.
+#[when("client {word} requests authority for the delegated entity")]
+fn when_client_requests_authority(ctx: &mut TestWorldMut, name: String) {
+    let scenario = ctx.scenario_mut();
+    let client_key: ClientKey = scenario
+        .bdd_get(&client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity
+                    .request_authority()
+                    .expect("request_authority should not error for in-scope delegated entity");
+            } else {
+                panic!("client {} cannot see delegated entity — not in scope", name);
+            }
+        });
+    });
+}
+
+/// When client {name} releases authority for the delegated entity.
+#[when("client {word} releases authority for the delegated entity")]
+fn when_client_releases_authority(ctx: &mut TestWorldMut, name: String) {
+    let scenario = ctx.scenario_mut();
+    let client_key: ClientKey = scenario
+        .bdd_get(&client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity
+                    .release_authority()
+                    .expect("release_authority should not error when Granted");
+            } else {
+                panic!("client {} cannot see delegated entity — not in scope", name);
+            }
+        });
+    });
+}
+
 /// When client A unpublishes the entity.
 ///
 /// Reconfigures the stored entity back to `Private`. Used by

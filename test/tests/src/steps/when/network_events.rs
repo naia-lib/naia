@@ -79,6 +79,23 @@ fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
     ctx.scenario_mut().bdd_store(SECOND_CLIENT_KEY, client_key);
 }
 
+/// When client A disconnects from the server.
+///
+/// Server-initiated disconnect for the named client. Used by
+/// [entity-delegation-14] (disconnect releases authority).
+#[when("client A disconnects from the server")]
+fn when_client_a_disconnects_from_server(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_a: crate::ClientKey = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            server.disconnect_user(&client_a);
+        });
+    });
+}
+
 /// When one full replication round trip elapses.
 ///
 /// Spins 30 server ticks. Used by replicated-resources scenarios as

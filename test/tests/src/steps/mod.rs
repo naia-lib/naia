@@ -34,7 +34,9 @@ pub mod common;
 pub mod connection;
 // `entity_authority` module migrated 2026-05-06: 1 given→state,
 // 1 when→client_actions, 3 then→event_assertions, 2 then→state_assertions.
-pub mod entity_delegation;
+// `entity_delegation` module migrated 2026-05-06: 4 given→state,
+// 2 when→client_actions, 3 when→server_actions, 1 when→network_events,
+// 6 then→state_assertions.
 // `entity_ownership` module migrated 2026-05-06: 1 given→state,
 // 2 when→client_actions, 5 then→state_assertions.
 // `entity_publication` module migrated 2026-05-06: 5 given→{setup,state},

@@ -1070,6 +1070,213 @@ fn then_alice_auth_granted(ctx: &TestWorldRef) -> namako_engine::codegen::Assert
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity-delegation — authority status assertions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then client {name} is granted authority for the delegated entity.
+///
+/// Polls until the named client observes EntityAuthStatus::Granted.
+/// Covers [entity-delegation-06.t1] (first in-scope request wins).
+#[then("client {word} is granted authority for the delegated entity")]
+fn then_client_is_granted_authority(
+    ctx: &TestWorldRef,
+    name: String,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_key: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.authority() {
+                Some(EntityAuthStatus::Granted) => namako_engine::codegen::AssertOutcome::Passed(()),
+                Some(EntityAuthStatus::Requested) | Some(EntityAuthStatus::Available) => {
+                    namako_engine::codegen::AssertOutcome::Pending
+                }
+                Some(other) => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "client {}: expected Granted, got {:?}",
+                    name, other
+                )),
+                None => namako_engine::codegen::AssertOutcome::Pending,
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then client {name} is denied authority for the delegated entity.
+///
+/// Allows Requested as a transient state while the server round-trip
+/// completes. Covers [entity-delegation-07.t1].
+#[then("client {word} is denied authority for the delegated entity")]
+fn then_client_is_denied_authority(
+    ctx: &TestWorldRef,
+    name: String,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_key: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.authority() {
+                Some(EntityAuthStatus::Denied) => namako_engine::codegen::AssertOutcome::Passed(()),
+                Some(EntityAuthStatus::Requested) | Some(EntityAuthStatus::Available) => {
+                    namako_engine::codegen::AssertOutcome::Pending
+                }
+                Some(other) => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "client {}: expected Denied, got {:?}",
+                    name, other
+                )),
+                None => namako_engine::codegen::AssertOutcome::Pending,
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then client {name} is available for the delegated entity.
+///
+/// Covers [entity-delegation-11.t1] (release returns Denied clients
+/// to Available). Tolerates transient Releasing/Granted/Denied/Requested
+/// while the convergence completes.
+#[then("client {word} is available for the delegated entity")]
+fn then_client_is_available_for_delegated_entity(
+    ctx: &TestWorldRef,
+    name: String,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_key: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.authority() {
+                Some(EntityAuthStatus::Available) => {
+                    namako_engine::codegen::AssertOutcome::Passed(())
+                }
+                _ => namako_engine::codegen::AssertOutcome::Pending,
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the delegated entity is no longer in client A's world.
+///
+/// Covers [entity-delegation-13.t1] (entity leaves scope on exclude).
+#[then("the delegated entity is no longer in client A's world")]
+fn then_delegated_entity_is_no_longer_in_client_a_world(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_a: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    ctx.client(client_a, |c| {
+        if c.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Pending
+        } else {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        }
+    })
+}
+
+/// Then client A observes Delegated replication config for the entity.
+///
+/// Covers [entity-delegation-17.t1] (delegation observable from client).
+#[then("client A observes Delegated replication config for the entity")]
+fn then_client_a_observes_delegated_replication_config(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_a: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    ctx.client(client_a, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.replication_config() {
+                Some(ClientReplicationConfig::Delegated) => {
+                    namako_engine::codegen::AssertOutcome::Passed(())
+                }
+                Some(other) => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "expected Delegated replication config, got {:?}",
+                    other
+                )),
+                None => namako_engine::codegen::AssertOutcome::Pending,
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then client A observes Available authority status for the entity.
+#[then("client A observes Available authority status for the entity")]
+fn then_client_a_observes_available_authority_status(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_a: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    ctx.client(client_a, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.authority() {
+                Some(EntityAuthStatus::Available) => {
+                    namako_engine::codegen::AssertOutcome::Passed(())
+                }
+                Some(other) => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "expected Available authority status, got {:?}",
+                    other
+                )),
+                None => namako_engine::codegen::AssertOutcome::Pending,
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(
