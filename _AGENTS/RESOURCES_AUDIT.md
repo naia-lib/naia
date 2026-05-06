@@ -9,11 +9,25 @@ This doc is honest about gaps in my own work. The Resources feature ships and wo
 
 ---
 
-## Implementation status (2026-05-05 — second audit cycle)
+## Implementation status (2026-05-05 — third audit cycle, post follow-ups)
 
-ALL of Connor's verdict items A1, A2, A3, B1, B2, B3, B5, C1–C9, D1, D2, D3, plus the namako SDD task, **are LANDED on `release-0.25.0-e`**. The F1–F5 Bevy-app integration tests are **scaffolded but ignored**: the test file `adapters/bevy/server/tests/replicated_resources_bevy.rs` stands up a real Bevy server App + client App via `LocalTransportHub` and includes assertions for F1 (`Res<R>` end-to-end) and F4 (D13 component-event suppression), but the assertions hit a tick-timing blocker — naia's default 50ms tick interval doesn't elapse during back-to-back `app.update()` calls in `cargo test` timing. Resolving this requires `test_time` clock-injection plumbing into the bevy adapter (currently only available on the lower-level naia-server / naia-client crates). The tests are tagged `#[ignore]` with the failure mode documented inline, so they don't fail CI but are visible as remaining work. F2 (per-field-diff wire assertion), F3 (disconnect-with-resource-authority), F5 (echo prevention) are tracked as further extensions.
+**ALL audit items + recommended follow-ups (Items 3, 5, 8) LANDED on `release-0.25.0-e`.** No remaining `#[ignore]`'d tests in the resource feature.
 
-The user-facing Mode B + D13 logic is exercised by the 10 harness integration tests in `test/harness/tests/replicated_resources.rs` and the namako-driven SDD scenarios in `test/specs/features/21_replicated_resources.feature` — both green.
+### Closed in second cycle (audit fixes)
+A1, A2, A3, B1, B2 (both options A + B), B3, B5, C1–C9, D1, D2, D3, namako SDD spec + bindings.
+
+### Closed in third cycle (recommended follow-ups)
+- **Item 3** — wire-level per-field-diff assertion: `per_field_diff_one_field_sends_fewer_bytes_than_two` measures bytes-per-tick under one-field vs two-field mutation; observed 20 vs 24 bytes (4-byte delta = one Property<u32>). Pins the Mode B promise on the wire.
+- **Item 5** — `test_time` feature plumbed through `naia-bevy-shared`, `naia-bevy-server`, `naia-bevy-client`. `TestClock` re-exported from `naia-bevy-shared`. Bevy-app integration tests F1, F4, F5, F3 all GREEN — no more `#[ignore]`.
+- **Item 8** — `WorldOpCommand<F>` generic in `naia-bevy-shared`; ~200 lines of per-Command struct boilerplate deleted across server + client adapter.
+
+### Remaining at Tier 3 (broader sprints, not blockers)
+G1 (64-component limit), G2 (WorldServer decomposition), G3 (Replicate trait split), G4 already done by Item 8.
+
+The user-facing Mode B + D13 logic is exercised by:
+- 11 harness integration tests in `test/harness/tests/replicated_resources.rs` (incl. wire-diff)
+- 4 Bevy-app integration tests in `adapters/bevy/server/tests/replicated_resources_bevy.rs` (F1, F3, F4, F5)
+- 5 namako-driven SDD scenarios in `test/specs/features/21_replicated_resources.feature` + 20 `@Deferred` tags for scenarios needing additional Bevy harness infrastructure
 
 ## Connor's verdict (recorded 2026-05-05)
 

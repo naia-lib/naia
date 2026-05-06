@@ -36,6 +36,13 @@ mod world_proxy;
 pub use bundle::ReplicateBundle;
 pub use replicated_resource::ReplicatedResource;
 pub use world_op_command::WorldOpCommand;
+
+/// Re-export of `naia_shared::TestClock` for bevy-app integration
+/// tests that need to drive naia ticks deterministically. Available
+/// only with the `test_time` feature on this crate (or transitively
+/// via `naia-bevy-server` / `naia-bevy-client`).
+#[cfg(all(feature = "test_time", not(target_arch = "wasm32")))]
+pub use naia_shared::TestClock;
 pub use change_detection::HostSyncEvent;
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};

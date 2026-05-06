@@ -16,7 +16,7 @@ maintenance = { status = "actively-developed" }
 transport_webrtc = [ "naia-server/transport_webrtc" ]
 transport_udp = [ "naia-server/transport_udp" ]
 transport_local = [ "naia-server/transport_local" ]
-test_time = [ "naia-server/test_time" ]
+test_time = [ "naia-server/test_time", "naia-bevy-shared/test_time" ]
 interior_visibility = [ "naia-server/interior_visibility" ]
 
 [dependencies]
@@ -28,9 +28,11 @@ bevy_ecs = { version = "0.18", default-features=false }
 log = { version = "0.4" }
 
 [dev-dependencies]
-naia-bevy-client = { path = "../client", features = ["transport_local"] }
-naia-server = { path = "../../../server", features = ["bevy_support", "transport_local"] }
-naia-client = { path = "../../../client", features = ["bevy_support", "transport_local"] }
-naia-shared = { path = "../../../shared", features = ["bevy_support", "transport_local"] }
+naia-bevy-server = { path = ".", features = ["transport_local", "test_time"] }
+naia-bevy-client = { path = "../client", features = ["transport_local", "test_time"] }
+naia-bevy-shared = { path = "../shared", features = ["test_time"] }
+naia-server = { path = "../../../server", features = ["bevy_support", "transport_local", "test_time"] }
+naia-client = { path = "../../../client", features = ["bevy_support", "transport_local", "test_time"] }
+naia-shared = { path = "../../../shared", features = ["bevy_support", "transport_local", "test_time"] }
 naia-test-harness = { path = "../../../test/harness" }
 parking_lot = "0.12"
