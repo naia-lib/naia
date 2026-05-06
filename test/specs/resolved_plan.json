@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "0b3ccbc2367639a92e01901feae4d386dcef767d56dbd7367111b6c08faff4d5",
-    "step_registry_hash": "52b1dc97d7e546c166448711ef159429b2108e0c910059c3e7f7ea62cd569199",
-    "resolved_plan_hash": "d7411a407ebb165c924e23feb1d824f520109bede62cb85ffa513648bc8b5ed6"
+    "feature_fingerprint_hash": "c728619252d7b150dc6da18ee4ebdf50d5c3bcc19db91993cc9ef556a53ce90d",
+    "step_registry_hash": "aac5e8f9fcee13cb7607a03bdca17c2193d9efcdeb3f006a89c6c3779496779c",
+    "resolved_plan_hash": "c65d1c1e765d4f06e25d74ba0332b83b9aede3928a185377cded50bdbd2ffe6b"
   },
   "scenarios": [
     {
@@ -6425,6 +6425,137 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "7b7c2f80e6c58155c856da57563e5700cf78cda1c68b7ccd31be4e1514106020"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replicated_resources:Rule(01):Scenario(01)",
+      "feature_path": "features/21_replicated_resources.feature",
+      "scenario_name": "server inserts a dynamic resource and a connected client observes it",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a Naia protocol with replicated resource type \"Score\"",
+          "binding_id": "4170550f029dbeb49008812537befb54b1e34bd8a2e96aebd03e5edc5cc26bd7",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "edbcd2b1b9ad80297310004c4201501bd7488e42c8b53f98f33839952fd512c7"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server and one connected client",
+          "binding_id": "a00961b27af9adf7de4506100dd60561fd62670789ed4f1c214efe470b243347",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f1bbbc972a3a2dc092ed4a5eaf978c6d4ef003c0bb7dfa71e33e23d45a755e10"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server inserts Score { home: 0, away: 0 } as a dynamic resource",
+          "binding_id": "d633a5c8258b495d7a13e25849abc4414384ee0f46f0617d87f326ef2397a1dd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a24c7e5ac843254415376bcfed00864e97e39f41134c0e0940f62df807e08d78"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "one full replication round trip elapses",
+          "binding_id": "9594431c065c7ca7e054f4c0091ee22f94502e8479c969dfb9eb3267305c021b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "04575bef1e9d2ea9a8e94d344de6cbf009f019164c4a24cc6af1fe3e9516c3fe"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client's Score is present",
+          "binding_id": "f1a9d9df96e82127393a1f1e0cddaefa9ce5f9ea3e74de88222da1eb74e0a921",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f3aee153df4acfc92a5736ee4b80192e81ef937f51fe93486953b4dfb7cbbed"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client's Score.home equals 0",
+          "binding_id": "0fd10c6cd76e5366e74f8edcf36706c26e67bdb299219b728b44fa38b5639152",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2dfe13c3981f0b5a0a271214eb250d46b4b5d78958e440398513fbcfc6353b7e"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client's Score.away equals 0",
+          "binding_id": "5b97484c310c8b9cce16a02f61410146e51a99e908ae946456a9c1e62e824b7d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "33dda8fac9fae84861d315c443283fd6a7156b0698511c4a8429c869b0798d30"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replicated_resources:Rule(04):Scenario(01)",
+      "feature_path": "features/21_replicated_resources.feature",
+      "scenario_name": "client requests authority on a delegable resource and receives it",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a Naia protocol with delegable replicated resource type \"PlayerSelection\"",
+          "binding_id": "b1efda678029d6e9f9d702c3b3b95ce8558672e457dc212a98ca28f6922c0e67",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f5a927fa8313339bab727e122835b0fd66a5fca204ff26bc1c99e78528d228c"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server with PlayerSelection { selected_id: 0 } and connected client \"alice\"",
+          "binding_id": "d0b7afbe09ca637ec8e239c480ede151f5dd9d57b045d8c80050515aa41631da",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0761ed47f6cc0e7319ae4bd14bb2fff3bc7c85f5f3c16684e4855f8a588546de"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the initial replication round trip has elapsed",
+          "binding_id": "e54a7e5f70f056e5fabe9c06b221f1ef6a7a39707f43a23799b0610301bf3280",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "da30dfd528349febfbbbdd9df5a561143427b865877d83a125418e1df1683502"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "alice requests authority on PlayerSelection",
+          "binding_id": "333c3875016105bec05f2acf446b9c35652e89628d556ae8bfdc7a8ea75a4fe3",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "492f58e8d4baaf4a91337c31de4c8fda3d08b4fa9173f63f90e028092fa5035c"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "one replication round trip elapses",
+          "binding_id": "6d230e39db2f0f33025a4135efda7666c38563b0ac2f810da1d07d6120ae0b38",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d1ca1238e8950b49cd84cb902ceea6ac8b9018697f1b95e380cc83781c96bdf1"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "alice's authority status for PlayerSelection is \"Granted\"",
+          "binding_id": "7eb5cede888b8ca273e5fc7f2f2d224de48e4c72e85152150d11a5b28c31b12e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9998649894a4a62f7e2b14a343dae75f56b73ea8f159e6c85d88ae96431c8538"
         }
       ]
     },

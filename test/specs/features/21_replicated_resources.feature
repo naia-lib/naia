@@ -179,6 +179,7 @@ Feature: Replicated Resources
       And the client's Score.home equals 0
       And the client's Score.away equals 0
 
+    @Deferred
     @Scenario(02)
     Scenario: server inserts a static resource and a connected client observes it
       Given a Naia protocol with replicated resource type "MatchState"
@@ -189,6 +190,7 @@ Feature: Replicated Resources
       And the client's MatchState.phase equals 1
       And the wire ID for the MatchState resource entity has is_static set to true
 
+    @Deferred
     @Scenario(03)
     Scenario: client connects after the resource was already inserted
       Given a Naia protocol with replicated resource type "Score"
@@ -198,6 +200,7 @@ Feature: Replicated Resources
       And the client's Score.home equals 5
       And the client's InsertResourceEvent for Score fired exactly once
 
+    @Deferred
     @Scenario(04)
     Scenario: re-inserting an already-existing resource is rejected
       Given a Naia protocol with replicated resource type "Score"
@@ -209,6 +212,7 @@ Feature: Replicated Resources
   @Rule(02)
   Rule: Per-field diff updates
 
+    @Deferred
     @Scenario(01)
     Scenario: single field update transmits only the dirty field
       Given a Naia protocol with replicated resource type "Score"
@@ -220,6 +224,7 @@ Feature: Replicated Resources
       And the client's Score.away equals 0
       And the most recent server-to-client packet contains exactly one Score field update bit set
 
+    @Deferred
     @Scenario(02)
     Scenario: multiple sequential field updates coalesce within a tick
       Given a Naia protocol with replicated resource type "Score"
@@ -233,6 +238,7 @@ Feature: Replicated Resources
   @Rule(03)
   Rule: Removal and re-insertion
 
+    @Deferred
     @Scenario(01)
     Scenario: server removes a resource and the client observes the removal
       Given a Naia protocol with replicated resource type "MatchState"
@@ -243,6 +249,7 @@ Feature: Replicated Resources
       Then the client's MatchState is absent
       And the client's RemoveResourceEvent for MatchState fired exactly once
 
+    @Deferred
     @Scenario(02)
     Scenario: insert remove re-insert with different value
       Given a Naia protocol with replicated resource type "MatchState"
@@ -269,6 +276,7 @@ Feature: Replicated Resources
       And one replication round trip elapses
       Then alice's authority status for PlayerSelection is "Granted"
 
+    @Deferred
     @Scenario(02)
     Scenario: client-held authority allows client mutation that propagates to server
       Given a Naia protocol with delegable replicated resource type "PlayerSelection"
@@ -278,6 +286,7 @@ Feature: Replicated Resources
       And one replication round trip elapses
       Then the server's PlayerSelection.selected_id equals 7
 
+    @Deferred
     @Scenario(03)
     Scenario: server-side mutation rejected while client holds authority
       Given a Naia protocol with delegable replicated resource type "PlayerSelection"
@@ -287,6 +296,7 @@ Feature: Replicated Resources
       Then the attempt returns AuthorityError ClientHoldsAuthority
       And the value remains 0
 
+    @Deferred
     @Scenario(04)
     Scenario: client releases authority and server reclaims
       Given a Naia protocol with delegable replicated resource type "PlayerSelection"
@@ -298,6 +308,7 @@ Feature: Replicated Resources
       Then the server-side authority status for PlayerSelection is "Available"
       And subsequent client mutations from alice are rejected with AuthorityError ServerHoldsAuthority
 
+    @Deferred
     @Scenario(05)
     Scenario: client disconnects while holding authority value persists
       Given a Naia protocol with delegable replicated resource type "PlayerSelection"
@@ -313,6 +324,7 @@ Feature: Replicated Resources
   @Rule(05)
   Rule: Soft rejection of client writes to server-authoritative resources
 
+    @Deferred
     @Scenario(01)
     Scenario: client mutation of server-authoritative resource is silently dropped locally
       Given a Naia protocol with replicated resource type "Score"
@@ -329,6 +341,7 @@ Feature: Replicated Resources
   @Rule(06)
   Rule: Per-resource priority
 
+    @Deferred
     @Scenario(01)
     Scenario: per-resource priority gain affects send ordering under bandwidth pressure
       Given a Naia protocol with replicated resource type "Score"
@@ -339,6 +352,7 @@ Feature: Replicated Resources
       When the server mutates Score.home and Position on every entity in the same tick
       Then the next outbound packet contains the Score update before any Position update
 
+    @Deferred
     @Scenario(02)
     Scenario: default priority gain is 1.0
       Given a Naia protocol with replicated resource type "Score"
@@ -348,6 +362,7 @@ Feature: Replicated Resources
   @Rule(07)
   Rule: Multi-world isolation
 
+    @Deferred
     @Scenario(01)
     Scenario: resources in different worlds do not bleed across
       Given a Naia protocol with replicated resource type "Score"
@@ -361,6 +376,7 @@ Feature: Replicated Resources
   @Rule(08)
   Rule: Late-join InsertResourceEvent firing
 
+    @Deferred
     @Scenario(01)
     Scenario: late-joining client receives InsertResourceEvent for pre-existing resource
       Given a Naia protocol with replicated resource type "Score"
@@ -376,6 +392,7 @@ Feature: Replicated Resources
   @Rule(09)
   Rule: Bevy adapter ergonomics
 
+    @Deferred
     @Scenario(01)
     Scenario: server-side standard Bevy ResMut mutation replicates
       Given a Bevy server App with add_resource_events for Score registered
@@ -386,6 +403,7 @@ Feature: Replicated Resources
       And one replication round trip elapses
       Then the client's Res Score home equals 10
 
+    @Deferred
     @Scenario(02)
     Scenario: client-side resource appears as a standard Bevy Res
       Given a Bevy client App with add_resource_events for Score registered
@@ -393,6 +411,7 @@ Feature: Replicated Resources
       When the client connects and the initial replication round trip elapses
       Then a client system reading Res Score sees home=5, away=2
 
+    @Deferred
     @Scenario(03)
     Scenario: user receives resource events never SpawnEntityEvent
       Given a Bevy server App and connected Bevy client with Score replicated
@@ -405,6 +424,7 @@ Feature: Replicated Resources
       And the client received zero DespawnEntityEvent attributable to Score
       And the client received zero InsertComponentEvent attributable to Score
 
+    @Deferred
     @Scenario(04)
     Scenario: client requests authority via Commands extension
       Given a Bevy server App with delegable PlayerSelection and connected Bevy client "alice"
