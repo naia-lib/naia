@@ -33,6 +33,19 @@
 pub const LAST_ENTITY_KEY: &str = "last_entity";
 pub const SPAWN_POSITION_VALUE_KEY: &str = "spawn_position_value";
 pub const SPAWN_VELOCITY_VALUE_KEY: &str = "spawn_velocity_value";
+pub const SECOND_CLIENT_KEY: &str = "second_client";
+pub const LAST_COMPONENT_VALUE_KEY: &str = "last_component_value";
+pub const WRITE_REJECTED_KEY: &str = "write_rejected";
+pub const LAST_REQUEST_ERROR_KEY: &str = "last_request_error";
+
+/// BDD-store key for a named client.
+///
+/// Step bindings that operate on multiple named clients ("client A",
+/// "client B") use this to look up the corresponding `ClientKey`.
+/// Avoids the per-file `format!("client_{}", name)` duplication.
+pub fn client_key_storage(name: &str) -> String {
+    format!("client_{}", name)
+}
 
 use std::time::Duration;
 
@@ -61,6 +74,30 @@ use crate::TestWorldMut;
 /// }
 /// ```
 pub fn connect_client(ctx: &mut TestWorldMut) {
+    connect_named_client(ctx, "TestClient", "test_user", None);
+}
+
+/// Connect a client with an explicit name + username. Optional
+/// `extra_setup` runs after the room-add but before the
+/// `ClientConnectEvent` wait — typically used by world-integration
+/// tests to also include a specific entity in the new client's scope.
+///
+/// # Example
+/// ```ignore
+/// connect_named_client(ctx, "SecondClient", "second_client", Some(Box::new(move |scenario, client_key| {
+///     scenario.mutate(|m| m.server(|s| {
+///         if let Some(mut scope) = s.user_scope_mut(&client_key) {
+///             scope.include(&entity_key);
+///         }
+///     }));
+/// })));
+/// ```
+pub fn connect_named_client(
+    ctx: &mut TestWorldMut,
+    client_name: &str,
+    username: &str,
+    extra_setup: Option<Box<dyn FnOnce(&mut crate::Scenario, crate::ClientKey)>>,
+) -> crate::ClientKey {
     let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
@@ -70,13 +107,12 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
     client_config.jitter_buffer = JitterBufferType::Bypass;
 
     let client_key = scenario.client_start(
-        "TestClient",
-        Auth::new("test_user", "password"),
+        client_name,
+        Auth::new(username, "password"),
         client_config,
         test_protocol,
     );
 
-    // Wait for server-side auth, then accept
     scenario.expect(|ctx| {
         ctx.server(|server| {
             if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
@@ -93,7 +129,6 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
         });
     });
 
-    // Wait for server connect event
     scenario.expect(|ctx| {
         ctx.server(|server| {
             if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
@@ -106,7 +141,6 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
     });
     scenario.track_server_event(TrackedServerEvent::Connect);
 
-    // Add client to room
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server
@@ -116,11 +150,15 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
         });
     });
 
-    // Wait for client connect event
+    if let Some(setup) = extra_setup {
+        setup(scenario, client_key);
+    }
+
     scenario.expect(|ctx| {
         ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Connect);
 
     scenario.allow_flexible_next();
+    client_key
 }

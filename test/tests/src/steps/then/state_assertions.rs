@@ -137,6 +137,278 @@ fn then_entity_spawns_with_position_and_velocity(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Component-presence assertions (world-integration tests)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the client world has the component on the entity.
+///
+/// Polls until the client's local entity has Position. Covers
+/// [world-integration-08.t1].
+#[then("the client world has the component on the entity")]
+fn then_client_world_has_component_on_entity(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            if entity.has_component::<Position>() {
+                namako_engine::codegen::AssertOutcome::Passed(())
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the client world no longer has the component on the entity.
+///
+/// Polls until the client's local entity no longer has Position.
+/// Covers [world-integration-09.t1].
+#[then("the client world no longer has the component on the entity")]
+fn then_client_world_no_longer_has_component(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            if entity.component::<Position>().is_none() {
+                namako_engine::codegen::AssertOutcome::Passed(())
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the second client has the entity in its world.
+///
+/// Covers [world-integration-05.t1] (late-joining client receives
+/// current snapshot).
+#[then("the second client has the entity in its world")]
+fn then_second_client_has_entity_in_world(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{ClientKey, EntityKey};
+    let scenario = ctx.scenario();
+    let second_client: ClientKey = scenario
+        .bdd_get(crate::steps::world_helpers::SECOND_CLIENT_KEY)
+        .expect("second client not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.client(second_client, |c| {
+        if c.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Authority status
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then client A observes no authority status for the entity.
+///
+/// Covers [entity-authority-01.t1] (authority None for non-delegated).
+#[then("client A observes no authority status for the entity")]
+fn then_client_a_observes_no_authority_status(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_a: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.client(client_a, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.authority() {
+                None => namako_engine::codegen::AssertOutcome::Passed(()),
+                Some(status) => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "expected None authority for non-delegated entity, got {:?}",
+                    status
+                )),
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the authority request fails with an error.
+///
+/// Reads the `LAST_REQUEST_ERROR_KEY` boolean stored by the matching
+/// When binding. Covers [entity-authority-07.t1].
+#[then("the authority request fails with an error")]
+fn then_authority_request_fails_with_error(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    match ctx
+        .scenario()
+        .bdd_get::<bool>(crate::steps::world_helpers::LAST_REQUEST_ERROR_KEY)
+    {
+        Some(true) => namako_engine::codegen::AssertOutcome::Passed(()),
+        Some(false) => namako_engine::codegen::AssertOutcome::Failed(
+            "expected request_authority to return Err for non-delegated entity, got Ok".to_string(),
+        ),
+        None => namako_engine::codegen::AssertOutcome::Failed("no request result stored".to_string()),
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Entity ownership
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the entity owner is the client.
+#[then("the entity owner is the client")]
+fn then_entity_owner_is_client(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, EntityOwner};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.owner() {
+                EntityOwner::Client(_) => namako_engine::codegen::AssertOutcome::Passed(()),
+                other => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "Expected EntityOwner::Client for owned entity, got {:?}",
+                    other
+                )),
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the entity owner is the server.
+#[then("the entity owner is the server")]
+fn then_entity_owner_is_server(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, EntityOwner};
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.server(|server| {
+        if let Some(entity) = server.entity(&entity_key) {
+            if entity.owner() == EntityOwner::Server {
+                namako_engine::codegen::AssertOutcome::Passed(())
+            } else {
+                namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "Expected entity owner to be Server, but was {:?}",
+                    entity.owner()
+                ))
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the server no longer has the entity.
+///
+/// Covers [entity-ownership-08.t1] (owner disconnect despawns).
+#[then("the server no longer has the entity")]
+fn then_server_no_longer_has_entity(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.server(|server| {
+        if server.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Pending
+        } else {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        }
+    })
+}
+
+/// Then the write is rejected.
+///
+/// Reads the `WRITE_REJECTED_KEY` boolean set by the matching When
+/// binding. Covers [entity-ownership-02].
+#[then("the write is rejected")]
+fn then_write_is_rejected(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let rejected: bool = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::WRITE_REJECTED_KEY)
+        .unwrap_or(false);
+    if rejected {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Failed(
+            "Expected write to be rejected, but server state was modified".to_string(),
+        )
+    }
+}
+
+/// Then the server observes the component update.
+///
+/// Polls until server-side Position equals the value stored under
+/// `LAST_COMPONENT_VALUE_KEY` by the matching When binding.
+#[then("the server observes the component update")]
+fn then_server_observes_component_update(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let expected: (f32, f32) = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_COMPONENT_VALUE_KEY)
+        .expect("No component value stored");
+    ctx.server(|server| {
+        if let Some(entity) = server.entity(&entity_key) {
+            if let Some(pos) = entity.component::<Position>() {
+                if (*pos.x - expected.0).abs() < f32::EPSILON
+                    && (*pos.y - expected.1).abs() < f32::EPSILON
+                {
+                    namako_engine::codegen::AssertOutcome::Passed(())
+                } else {
+                    namako_engine::codegen::AssertOutcome::Pending
+                }
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(

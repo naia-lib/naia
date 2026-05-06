@@ -4,10 +4,12 @@
 //! disconnects somebody, N ticks elapse. They drive the system into a
 //! new observable state without modeling a domain action.
 
-use naia_test_harness::{ClientDisconnectEvent, TrackedClientEvent, TrackedServerEvent};
+use naia_test_harness::{ClientDisconnectEvent, EntityKey, TrackedClientEvent, TrackedServerEvent};
 use namako_engine::when;
 
-use crate::steps::world_helpers::connect_client;
+use crate::steps::world_helpers::{
+    connect_client, connect_named_client, LAST_ENTITY_KEY, SECOND_CLIENT_KEY,
+};
 use crate::TestWorldMut;
 
 /// When a client connects.
@@ -44,4 +46,35 @@ fn when_server_disconnects(ctx: &mut TestWorldMut) {
     scenario.track_client_event(client_key, TrackedClientEvent::Disconnect);
 
     scenario.allow_flexible_next();
+}
+
+/// When a second client connects and the entity enters scope for it.
+///
+/// Used by world-integration late-join tests. Connects a second client
+/// via the standard handshake and includes the stored entity in its
+/// scope as part of the room-add step. Stores the new client key
+/// under `SECOND_CLIENT_KEY` for downstream Then steps.
+#[when("a second client connects and the entity enters scope for it")]
+fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned for world integration test");
+
+    let client_key = connect_named_client(
+        ctx,
+        "SecondClient",
+        "second_client",
+        Some(Box::new(move |scenario, ck| {
+            scenario.mutate(|mctx| {
+                mctx.server(|server| {
+                    if let Some(mut scope) = server.user_scope_mut(&ck) {
+                        scope.include(&entity_key);
+                    }
+                });
+            });
+        })),
+    );
+
+    ctx.scenario_mut().bdd_store(SECOND_CLIENT_KEY, client_key);
 }

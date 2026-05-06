@@ -29,12 +29,14 @@ pub mod then;
 // purpose-aligned modules in A.3, then deleted)
 // ──────────────────────────────────────────────────────────────────────
 
-pub mod client_events;
+// `client_events` module migrated 2026-05-06: 5 then → event_assertions.
 pub mod common;
 pub mod connection;
-pub mod entity_authority;
+// `entity_authority` module migrated 2026-05-06: 1 given→state,
+// 1 when→client_actions, 3 then→event_assertions, 2 then→state_assertions.
 pub mod entity_delegation;
-pub mod entity_ownership;
+// `entity_ownership` module migrated 2026-05-06: 1 given→state,
+// 2 when→client_actions, 5 then→state_assertions.
 pub mod entity_publication;
 pub mod entity_replication;
 pub mod entity_scopes;
@@ -44,13 +46,15 @@ pub mod priority_accumulator;
 pub mod replicated_resources;
 pub mod scope_exit;
 // `scope_propagation` module migrated 2026-05-06: 1 when, 1 then.
-pub mod server_events;
+// `server_events` module migrated 2026-05-06: 2 given→state,
+// 1 when→server_actions, 5 then→event_assertions.
 // `update_candidate_set` module migrated 2026-05-06: 1 given, 1 when, 1 then.
 // `spawn_with_components` module migrated 2026-05-06: 2 given, 2 then.
 // `immutable_components` module migrated 2026-05-06: 2 given, 2 then.
 // `smoke` module migrated 2026-05-06: 2 given, 2 when, 2 then.
 pub mod transport;
-pub mod world_integration;
+// `world_integration` module migrated 2026-05-06: 1 when→network_events,
+// 1 when→server_actions, 3 then→state_assertions.
 
 // ABI proof tests (compile_fail demonstrations - permanently disabled)
 #[cfg(any())]
