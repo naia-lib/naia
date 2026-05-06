@@ -107,7 +107,98 @@ use naia_test_harness::{
     TrackedServerEvent,
 };
 
-use crate::TestWorldMut;
+use crate::{TestWorldMut, TestWorldRef};
+
+// ──────────────────────────────────────────────────────────────────────
+// Lookup helpers — entity/client retrieval with descriptive panics
+// ──────────────────────────────────────────────────────────────────────
+//
+// These reduce the most-repeated boilerplate in step bindings. Before
+// (50+ call sites):
+//
+//     let entity_key: EntityKey = scenario
+//         .bdd_get(LAST_ENTITY_KEY)
+//         .expect("No entity has been created");
+//
+// After (one line):
+//
+//     let entity_key = last_entity_mut(ctx);
+//
+// The mut/ref split mirrors the harness's `Scenario` access pattern:
+// Given/When bindings receive `&mut TestWorldMut` (use `_mut`
+// variants) and Then bindings receive `&TestWorldRef` (use `_ref`
+// variants). The two are split rather than overloaded because
+// `TestWorldMut` exposes `scenario_mut()` while `TestWorldRef`
+// exposes `scenario()`.
+
+/// Look up the BDD-stored "last entity" from a Given/When context.
+///
+/// Panics with a descriptive message if no entity has been created
+/// (typically a missing precondition Given).
+///
+/// # Example
+/// ```ignore
+/// #[when("the server inserts the replicated component")]
+/// fn when_server_inserts(ctx: &mut TestWorldMut) {
+///     let entity_key = last_entity_mut(ctx);
+///     ctx.scenario_mut().mutate(|m| {
+///         m.server(|s| { /* mutate s.entity_mut(&entity_key) */ });
+///     });
+/// }
+/// ```
+pub fn last_entity_mut(ctx: &mut TestWorldMut) -> naia_test_harness::EntityKey {
+    ctx.scenario_mut()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created — missing precondition Given")
+}
+
+/// Look up the BDD-stored "last entity" from a Then context.
+pub fn last_entity_ref(ctx: &TestWorldRef) -> naia_test_harness::EntityKey {
+    ctx.scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created — missing precondition Given")
+}
+
+/// Look up a labeled client (e.g. `"A"`, `"B"`, `"alice"`) from a
+/// Given/When context. Panics if the client wasn't previously
+/// connected via `Given client {label} connects` or similar.
+pub fn named_client_mut(ctx: &mut TestWorldMut, label: &str) -> crate::ClientKey {
+    ctx.scenario_mut()
+        .bdd_get(&client_key_storage(label))
+        .unwrap_or_else(|| panic!("client {:?} has not been connected", label))
+}
+
+/// Look up a labeled client from a Then context.
+pub fn named_client_ref(ctx: &TestWorldRef, label: &str) -> crate::ClientKey {
+    ctx.scenario()
+        .bdd_get(&client_key_storage(label))
+        .unwrap_or_else(|| panic!("client {:?} has not been connected", label))
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Tick helpers
+// ──────────────────────────────────────────────────────────────────────
+
+/// Advance the scenario `n` ticks with no other mutation.
+///
+/// Replaces the 25× `for _ in 0..N { scenario.mutate(|_| {}); }`
+/// pattern. Names the intent (`tick_n`) instead of inlining the
+/// loop, which makes the Given/When bindings noticeably more
+/// readable.
+///
+/// # Example
+/// ```ignore
+/// #[when("{int} ticks elapse")]
+/// fn when_n_ticks_elapse(ctx: &mut TestWorldMut, n: u32) {
+///     tick_n(ctx, n);
+/// }
+/// ```
+pub fn tick_n(ctx: &mut TestWorldMut, n: u32) {
+    let scenario = ctx.scenario_mut();
+    for _ in 0..n {
+        scenario.mutate(|_| {});
+    }
+}
 
 /// Convert a panic payload into a string message. Used by
 /// transport/observability bindings that wrap operations in

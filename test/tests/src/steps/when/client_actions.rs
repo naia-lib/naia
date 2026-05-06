@@ -1,13 +1,9 @@
 //! When-step bindings: client-initiated state changes.
 
 use naia_test_harness::{ClientKey, EntityKey, Position};
-use namako_engine::when;
 
-use crate::steps::world_helpers::{
-    client_key_storage, LAST_COMPONENT_VALUE_KEY, LAST_ENTITY_KEY, LAST_REQUEST_ERROR_KEY,
-    WRITE_REJECTED_KEY,
-};
-use crate::TestWorldMut;
+use crate::steps::prelude::*;
+use crate::steps::world_helpers::{last_entity_mut, named_client_mut};
 
 /// When client A requests authority for the non-delegated entity.
 ///
@@ -17,13 +13,10 @@ use crate::TestWorldMut;
 /// [entity-authority-07]).
 #[when("client A requests authority for the non-delegated entity")]
 fn when_client_a_requests_authority_non_delegated(ctx: &mut TestWorldMut) {
+    let client_a = named_client_mut(ctx, "A");
+
+    let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no entity spawned");
     let returned_error = scenario.mutate(|mctx| {
         let mut returned_error = false;
         mctx.client(client_a, |client| {
@@ -174,13 +167,10 @@ fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
 #[when("client A publishes the entity")]
 fn when_client_a_publishes_entity(ctx: &mut TestWorldMut) {
     use naia_client::ReplicationConfig as ClientReplicationConfig;
+    let client_a = named_client_mut(ctx, "A");
+
+    let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no entity spawned");
     scenario.mutate(|mctx| {
         mctx.client(client_a, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
@@ -264,7 +254,6 @@ fn when_client_sends_packet_within_mtu(ctx: &mut TestWorldMut) {
 fn when_client_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     use naia_test_harness::test_protocol::{LargeTestMessage, UnreliableChannel};
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    use crate::steps::world_helpers::panic_payload_to_string;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -289,7 +278,6 @@ fn when_client_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
 #[when("the client attempts an invalid API operation")]
 fn when_client_invalid_api_operation(ctx: &mut TestWorldMut) {
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    use crate::steps::world_helpers::panic_payload_to_string;
     let scenario = ctx.scenario_mut();
     scenario.clear_operation_result();
     let result = catch_unwind(AssertUnwindSafe(|| {
@@ -396,13 +384,10 @@ fn when_client_releases_authority(ctx: &mut TestWorldMut, name: String) {
 #[when("client A unpublishes the entity")]
 fn when_client_a_unpublishes_entity(ctx: &mut TestWorldMut) {
     use naia_client::ReplicationConfig as ClientReplicationConfig;
+    let client_a = named_client_mut(ctx, "A");
+
+    let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no entity spawned");
     scenario.mutate(|mctx| {
         mctx.client(client_a, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
@@ -420,7 +405,6 @@ fn when_client_a_unpublishes_entity(ctx: &mut TestWorldMut) {
 #[when("the client sends a request")]
 fn when_client_sends_request(ctx: &mut TestWorldMut) {
     use naia_test_harness::test_protocol::{RequestResponseChannel, TestRequest};
-    use crate::steps::world_helpers::RESPONSE_RECEIVE_KEY;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();

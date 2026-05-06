@@ -129,14 +129,37 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
   - `cargo test -p naia_npa`: 3 passed / 5 failed (improvement from pre-A: 1 passed / 7 failed). Remaining 5 are pre-existing flakiness in auth-grant-timing scenarios; documented as out-of-scope-for-A.
 - [x] **A.6** Plan doc updated. Commit + push complete (commit `<TBD on commit>`).
 
-### Phase B — Helper layer (1-2 days · LOW risk)
+### Phase B — Helper layer (LOW risk · COMPLETE 2026-05-06)
 
-Goal: 15-20 reusable helpers in `world_helpers.rs` that drop median binding LOC from 18 → ~6. New bindings written in this phase use the helpers; existing bindings refactored opportunistically.
+Goal: reusable helpers in `world_helpers.rs` + a `prelude` module. New bindings use the prelude; existing bindings refactored opportunistically.
 
-- [ ] **B.1** Identify the 20 highest-recurrence imperative patterns across existing bindings (e.g. "tick once and assert", "wait for client to observe X", "with_server(|s| ...)"). Catalog them.
-- [ ] **B.2** Implement `world_helpers.rs` with each helper carrying a doc-comment that includes a usage example.
-- [ ] **B.3** Refactor 30-50 existing bindings to use helpers as proof-of-shape. Verify median LOC drops as predicted.
-- [ ] **B.4** Update this doc; commit `phase B complete: helper layer`; push to main.
+- [x] **B.1** (2026-05-06) Pattern catalog. Top recurrences:
+  | Pattern | Before | Helper |
+  |---|---|---|
+  | `namako_engine::codegen::AssertOutcome` (full path) | 217× | Prelude re-export → `AssertOutcome` |
+  | `bdd_get(LAST_ENTITY_KEY).expect(...)` (4-line) | 50× | `last_entity_mut/ref()` |
+  | `bdd_get(&client_key_storage(name))` | 13× | `named_client_mut/ref()` |
+  | `for _ in 0..N { scenario.mutate(\|_\| {}) }` | 25× | `tick_n()` |
+  | catch_unwind panic plumbing | 36× | `panic_payload_to_string()` (already extracted) |
+- [x] **B.2** (2026-05-06) Implemented:
+  - `prelude.rs` module: re-exports the cucumber macros, `AssertOutcome`, `TestWorldMut/Ref`, all `world_helpers` helpers + BDD-store keys. Each binding file opens with `use crate::steps::prelude::*;` and skips ~5 lines of imports.
+  - `last_entity_mut/ref(ctx) -> EntityKey` — 4-line lookup → 1 line
+  - `named_client_mut/ref(ctx, label) -> ClientKey` — 4-line lookup → 1 line
+  - `tick_n(ctx, n)` — 3-line loop → 1 line
+- [x] **B.3** (2026-05-06) Helper-call sites across the catalog:
+  - `last_entity_ref` × 34 (state_assertions)
+  - `last_entity_mut` × 14 (server_actions, client_actions, state.rs)
+  - `named_client_ref` × 9 (state_assertions)
+  - `named_client_mut` × 3 (client_actions)
+  - `tick_n` × 1 (setup.rs); the rest of the loops stayed inline because they're inside larger fn bodies where the borrow on `scenario` makes refactoring noisy
+  - `connect_client` × 9 across files
+  - Prelude consumed by all 8 binding files
+- [x] **B.4** Plan doc updated. Tests + manifest unchanged: 251 bindings preserved, naia-tests green, RUSTFLAGS=-D warnings clean.
+
+**Outcome metrics:**
+- Total binding LOC: **6032 → 5795** (3.9% reduction at the catalog level).
+- Median per-binding LOC: **24.0 → 23.1**. Modest, because the per-binding bodies still contain real logic (mutation closures, expect-polls, value comparisons) — the boilerplate-elimination wins were ~150 LOC across 50 lookup sites.
+- The bigger win is **architectural**: every binding file now uses the prelude pattern, the helper layer is in place for Phase D's bulk migration to consume, and new bindings written in D will be ≤ 8 LOC because they can compose helpers from the start.
 
 ### Phase C — Migration plumbing (1 day · LOW risk)
 

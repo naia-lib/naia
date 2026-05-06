@@ -6,10 +6,9 @@
 
 use naia_server::ServerConfig;
 use naia_test_harness::protocol;
-use namako_engine::given;
 
-use crate::steps::world_helpers::connect_client;
-use crate::TestWorldMut;
+use crate::steps::prelude::*;
+use crate::steps::world_helpers::tick_n;
 
 /// Given a server is running.
 ///
@@ -41,7 +40,6 @@ fn given_client_connects(ctx: &mut TestWorldMut) {
 /// multi-client tests where bindings reference specific clients.
 #[given("client {word} connects")]
 fn given_client_named_connects(ctx: &mut TestWorldMut, name: String) {
-    use crate::steps::world_helpers::connect_test_client;
     connect_test_client(ctx, &name);
 }
 
@@ -65,10 +63,7 @@ fn given_server_and_one_client(ctx: &mut TestWorldMut) {
 /// barrier between setup and action.
 #[given("the initial replication round trip has elapsed")]
 fn given_initial_round_trip_elapsed(ctx: &mut TestWorldMut) {
-    let scenario = ctx.scenario_mut();
-    for _ in 0..20 {
-        scenario.mutate(|_| {});
-    }
+    tick_n(ctx, 20);
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -197,7 +192,6 @@ fn given_client_connects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
 /// Given the client disconnects.
 #[given("the client disconnects")]
 fn given_client_disconnects(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::disconnect_last_client;
     disconnect_last_client(ctx);
 }
 
@@ -277,7 +271,6 @@ fn given_client_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
 /// initialized).
 #[given("a test scenario")]
 fn given_test_scenario(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::ensure_server_started;
     ensure_server_started(ctx);
 }
 
@@ -303,7 +296,6 @@ fn given_client_previously_connected(ctx: &mut TestWorldMut) {
 /// distinctly so determinism scenarios self-document.
 #[given("a test scenario with deterministic time")]
 fn given_test_scenario_deterministic_time(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::ensure_server_started;
     ensure_server_started(ctx);
 }
 

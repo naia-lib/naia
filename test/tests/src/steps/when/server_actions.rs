@@ -1,10 +1,9 @@
 //! When-step bindings: server-initiated state changes.
 
 use naia_test_harness::EntityKey;
-use namako_engine::when;
 
-use crate::steps::world_helpers::LAST_ENTITY_KEY;
-use crate::TestWorldMut;
+use crate::steps::prelude::*;
+use crate::steps::world_helpers::last_entity_mut;
 
 /// When the server adds the entity to the client's room.
 ///
@@ -44,7 +43,7 @@ fn when_server_removes_entity_from_client_a_scope(ctx: &mut TestWorldMut) {
     use naia_test_harness::ClientKey;
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let entity_key: EntityKey = scenario
         .bdd_get(LAST_ENTITY_KEY)
@@ -65,10 +64,9 @@ fn when_server_removes_entity_from_client_a_scope(ctx: &mut TestWorldMut) {
 #[when("the server removes the replicated component")]
 fn when_server_removes_replicated_component(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no entity spawned");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -155,10 +153,9 @@ fn when_server_responds_to_request(ctx: &mut TestWorldMut) {
 #[when("the server inserts the replicated component")]
 fn when_server_inserts_replicated_component(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -176,11 +173,9 @@ fn when_server_inserts_replicated_component(ctx: &mut TestWorldMut) {
 #[when("the server updates the replicated component")]
 fn when_server_updates_replicated_component(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
-    use crate::steps::world_helpers::LAST_COMPONENT_VALUE_KEY;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     let new_value = (100.0_f32, 200.0_f32);
     scenario.mutate(|mctx| {
         mctx.server(|server| {
@@ -207,7 +202,6 @@ fn when_server_updates_replicated_component(ctx: &mut TestWorldMut) {
 #[when("the server spawns {int} entities in one tick and scopes them for the client")]
 fn when_server_spawns_n_entities_one_tick(ctx: &mut TestWorldMut, count: usize) {
     use naia_test_harness::Position;
-    use crate::steps::world_helpers::SPAWN_BURST_KEYS;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let room_key = scenario.last_room();
@@ -239,10 +233,9 @@ fn when_server_spawns_n_entities_one_tick(ctx: &mut TestWorldMut, count: usize) 
 /// When the server sets the global priority gain on the last entity.
 #[when("the server sets the global priority gain on the last entity to {float}")]
 fn when_server_sets_global_gain_on_last_entity(ctx: &mut TestWorldMut, gain: f32) {
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             server.set_global_entity_gain(&entity_key, gain);
@@ -261,10 +254,9 @@ fn when_server_sets_global_gain_on_last_entity(ctx: &mut TestWorldMut, gain: f32
 #[when("the server updates the entity position to 100 100")]
 fn when_server_updates_entity_position(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -285,10 +277,9 @@ fn when_server_updates_entity_position(ctx: &mut TestWorldMut) {
 /// even while the entity was Paused on the client.
 #[when("the server globally despawns the entity")]
 fn when_server_globally_despawns_entity(ctx: &mut TestWorldMut) {
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -303,10 +294,9 @@ fn when_server_globally_despawns_entity(ctx: &mut TestWorldMut) {
 #[when("the server inserts ImmutableLabel on the entity")]
 fn when_server_inserts_label(ctx: &mut TestWorldMut) {
     use naia_test_harness::ImmutableLabel;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -321,10 +311,9 @@ fn when_server_inserts_label(ctx: &mut TestWorldMut) {
 #[when("the server removes ImmutableLabel from the entity")]
 fn when_server_removes_label(ctx: &mut TestWorldMut) {
     use naia_test_harness::ImmutableLabel;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -367,7 +356,7 @@ fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldM
     use naia_test_harness::ClientKey;
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let entity_key: EntityKey = scenario
         .bdd_get(LAST_ENTITY_KEY)
@@ -384,10 +373,9 @@ fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldM
 /// When the server takes authority for the delegated entity.
 #[when("the server takes authority for the delegated entity")]
 fn when_server_takes_authority(ctx: &mut TestWorldMut) {
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no delegated entity spawned");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -402,10 +390,9 @@ fn when_server_takes_authority(ctx: &mut TestWorldMut) {
 /// When the server releases authority for the delegated entity.
 #[when("the server releases authority for the delegated entity")]
 fn when_server_releases_authority(ctx: &mut TestWorldMut) {
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no delegated entity spawned");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -481,10 +468,9 @@ fn when_server_includes_unknown_entity_for_client(ctx: &mut TestWorldMut) {
 /// (`user_scope_mut` returns None for unknown clients).
 #[when("the server includes the entity for an unknown client")]
 fn when_server_includes_entity_for_unknown_client(ctx: &mut TestWorldMut) {
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     let unknown_client_key = naia_test_harness::ClientKey::invalid();
     scenario.mutate(|mctx| {
         mctx.server(|server| {
@@ -523,7 +509,6 @@ fn when_server_sends_packet_within_mtu(ctx: &mut TestWorldMut) {
 fn when_server_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     use naia_test_harness::test_protocol::{LargeTestMessage, UnreliableChannel};
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    use crate::steps::world_helpers::panic_payload_to_string;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -555,7 +540,6 @@ fn when_server_mutates_entity_component(
     y: i32,
 ) {
     use naia_test_harness::Position;
-    use crate::steps::world_helpers::entity_label_to_key_storage;
     let scenario = ctx.scenario_mut();
     let entity_key: EntityKey = scenario
         .bdd_get(entity_label_to_key_storage(&label))

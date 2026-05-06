@@ -5,13 +5,10 @@
 //! [`given/setup`](super::setup), which handles server/client/room
 //! initialization (the "blank canvas" steps).
 
-use naia_test_harness::{ImmutableLabel, Position, Velocity};
-use namako_engine::given;
+use naia_test_harness::{EntityKey, ImmutableLabel, Position, Velocity};
 
-use crate::steps::world_helpers::{
-    LAST_ENTITY_KEY, SPAWN_POSITION_VALUE_KEY, SPAWN_VELOCITY_VALUE_KEY,
-};
-use crate::TestWorldMut;
+use crate::steps::prelude::*;
+use crate::steps::world_helpers::last_entity_mut;
 
 /// Given a server-owned entity exists with only ImmutableLabel.
 #[given("a server-owned entity exists with only ImmutableLabel")]
@@ -92,7 +89,7 @@ fn given_server_spawns_non_delegated_entity_in_scope_for_client_a(ctx: &mut Test
     use naia_test_harness::{ClientKey, Position};
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let room_key = scenario.last_room();
 
@@ -137,7 +134,7 @@ fn given_server_owned_entity_enters_scope_for_client_a(ctx: &mut TestWorldMut) {
     use naia_test_harness::{ClientKey, Position};
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let room_key = scenario.last_room();
     let (entity_key, ()) = scenario.mutate(|mctx| {
@@ -166,10 +163,10 @@ fn given_server_owned_entity_enters_scope_for_client_a(ctx: &mut TestWorldMut) {
 /// for server-owned entities scope membership is the proxy.
 #[given("the server has observed a spawn event for client A")]
 fn given_server_has_observed_spawn_event_for_client_a(ctx: &mut TestWorldMut) {
-    use naia_test_harness::{ClientKey, EntityKey};
+    use naia_test_harness::{ClientKey};
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let entity_key: EntityKey = scenario
         .bdd_get(LAST_ENTITY_KEY)
@@ -231,7 +228,7 @@ fn given_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut T
         });
     });
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
-    scenario.bdd_store(crate::steps::world_helpers::LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
+    scenario.bdd_store(LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -267,7 +264,6 @@ fn given_server_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
 /// events where the component is added after spawn.
 #[given("a server-owned entity exists without a replicated component")]
 fn given_server_owned_entity_without_replicated_component(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::INITIAL_ENTITY_KEY;
     let scenario = ctx.scenario_mut();
     let entity_key = scenario.mutate(|mctx| {
         let (entity_key, _) = mctx.server(|server| server.spawn(|_| {}));
@@ -285,7 +281,6 @@ fn given_server_owned_entity_without_replicated_component(ctx: &mut TestWorldMut
 #[given("the client modifies the component locally")]
 fn given_client_modifies_component_locally(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
-    use crate::steps::world_helpers::CLIENT_LOCAL_VALUE_KEY;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let entity_key: naia_test_harness::EntityKey = scenario
@@ -436,7 +431,7 @@ fn given_client_spawns_entity_private(ctx: &mut TestWorldMut, name: String) {
     use naia_test_harness::{ClientKey, Position};
     let client_key: ClientKey = ctx
         .scenario_mut()
-        .bdd_get(&crate::steps::world_helpers::client_key_storage(&name))
+        .bdd_get(&client_key_storage(&name))
         .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
     let scenario = ctx.scenario_mut();
     let entity_key = scenario.mutate(|mctx| {
@@ -468,7 +463,7 @@ fn given_client_spawns_entity_public(ctx: &mut TestWorldMut, name: String) {
     use naia_test_harness::{ClientKey, Position};
     let client_key: ClientKey = ctx
         .scenario_mut()
-        .bdd_get(&crate::steps::world_helpers::client_key_storage(&name))
+        .bdd_get(&client_key_storage(&name))
         .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
     let scenario = ctx.scenario_mut();
     let entity_key = scenario.mutate(|mctx| {
@@ -499,10 +494,10 @@ fn given_client_spawns_entity_public(ctx: &mut TestWorldMut, name: String) {
 /// it in the named client's scope.
 #[given("client {word} and the entity share a room")]
 fn given_client_and_entity_share_room(ctx: &mut TestWorldMut, name: String) {
-    use naia_test_harness::{ClientKey, EntityKey};
+    use naia_test_harness::{ClientKey};
     let client_key: ClientKey = ctx
         .scenario_mut()
-        .bdd_get(&crate::steps::world_helpers::client_key_storage(&name))
+        .bdd_get(&client_key_storage(&name))
         .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
@@ -528,10 +523,10 @@ fn given_client_and_entity_share_room(ctx: &mut TestWorldMut, name: String) {
 /// as a precondition before a When step that depends on B's view.
 #[given("the entity is in-scope for client B")]
 fn given_entity_in_scope_for_client_b(ctx: &mut TestWorldMut) {
-    use naia_test_harness::{ClientKey, EntityKey};
+    use naia_test_harness::{ClientKey};
     let scenario = ctx.scenario_mut();
     let client_b: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("B"))
+        .bdd_get(&client_key_storage("B"))
         .expect("client B not connected");
     let entity_key: EntityKey = scenario
         .bdd_get(LAST_ENTITY_KEY)
@@ -626,10 +621,10 @@ fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut Test
     use naia_test_harness::{ClientKey, Position};
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let client_b: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("B"))
+        .bdd_get(&client_key_storage("B"))
         .expect("client B not connected");
     let room_key = scenario.last_room();
     let (entity_key, ()) = scenario.mutate(|mctx| {
@@ -675,7 +670,7 @@ fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorl
     use naia_test_harness::{ClientKey, Position};
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let room_key = scenario.last_room();
     let (entity_key, ()) = scenario.mutate(|mctx| {
@@ -715,11 +710,9 @@ fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorl
 /// will observe Denied after this.
 #[given("the server takes authority for the delegated entity")]
 fn given_server_takes_authority_for_delegated_entity(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no delegated entity spawned");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
@@ -739,10 +732,10 @@ fn given_server_takes_authority_for_delegated_entity(ctx: &mut TestWorldMut) {
 #[given("client A is denied authority for the delegated entity")]
 fn given_client_a_is_denied_authority(ctx: &mut TestWorldMut) {
     use naia_shared::EntityAuthStatus;
-    use naia_test_harness::{ClientKey, EntityKey};
+    use naia_test_harness::{ClientKey};
     let scenario = ctx.scenario_mut();
     let client_a: ClientKey = scenario
-        .bdd_get(&crate::steps::world_helpers::client_key_storage("A"))
+        .bdd_get(&client_key_storage("A"))
         .expect("client A not connected");
     let entity_key: EntityKey = scenario
         .bdd_get(LAST_ENTITY_KEY)
@@ -815,7 +808,6 @@ fn given_client_owns_entity(ctx: &mut TestWorldMut) {
 /// Given the client and entity share a room.
 #[given("the client and entity share a room")]
 fn given_client_and_entity_share_room_singleton(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
     let entity_key: EntityKey = scenario
@@ -833,7 +825,6 @@ fn given_client_and_entity_share_room_singleton(ctx: &mut TestWorldMut) {
 /// Given the client and entity do not share a room.
 #[given("the client and entity do not share a room")]
 fn given_client_and_entity_do_not_share_room(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
     let entity_key: EntityKey = scenario
@@ -856,7 +847,6 @@ fn given_client_and_entity_do_not_share_room(ctx: &mut TestWorldMut) {
 /// client observes the entity locally.
 #[given("the entity is in-scope for the client")]
 fn given_entity_in_scope_for_client(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let entity_key: EntityKey = scenario
@@ -884,7 +874,6 @@ fn given_entity_in_scope_for_client(ctx: &mut TestWorldMut) {
 /// Given the entity is out-of-scope for the client.
 #[given("the entity is out-of-scope for the client")]
 fn given_entity_out_of_scope_for_client(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let entity_key: EntityKey = scenario
@@ -906,7 +895,6 @@ fn given_entity_out_of_scope_for_client(ctx: &mut TestWorldMut) {
 /// after which other Givens may run.
 #[given("the server excludes the entity for the client")]
 fn given_server_excludes_entity_for_client(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let entity_key: EntityKey = scenario
@@ -925,11 +913,9 @@ fn given_server_excludes_entity_for_client(ctx: &mut TestWorldMut) {
 /// Given the entity is not in any room.
 #[given("the entity is not in any room")]
 fn given_entity_not_in_any_room(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             let room_keys = server.room_keys();
@@ -1000,7 +986,6 @@ fn given_link_high_jitter_loss(ctx: &mut TestWorldMut) {
 #[given("a connected client with replicated entities")]
 fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
-    use crate::steps::world_helpers::connect_client;
     connect_client(ctx);
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
@@ -1031,7 +1016,6 @@ fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
 /// Tracks both server- and client-side disconnect events.
 #[given("the client disconnected")]
 fn given_client_disconnected(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::disconnect_last_client;
     disconnect_last_client(ctx);
 }
 
@@ -1140,7 +1124,6 @@ fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
 /// block. Used by the receipt-order ordering predicate.
 #[given("a server receiving multiple commands for the same tick")]
 fn given_multiple_commands_same_tick(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::connect_client;
     connect_client(ctx);
     let scenario = ctx.scenario_mut();
     scenario.trace_clear();
@@ -1160,7 +1143,6 @@ fn given_multiple_commands_same_tick(ctx: &mut TestWorldMut) {
 /// must reorder by sequence number before applying.
 #[given("a server receiving commands arriving out of order for the same tick")]
 fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::connect_client;
     connect_client(ctx);
     let scenario = ctx.scenario_mut();
     scenario.trace_clear();
@@ -1183,11 +1165,9 @@ fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
 /// confirm that out-of-scope entities don't generate dirty candidates.
 #[given("the entity is not in the client's room")]
 fn given_entity_not_in_clients_room(ctx: &mut TestWorldMut) {
-    use naia_test_harness::EntityKey;
+    let entity_key = last_entity_mut(ctx);
+
     let scenario = ctx.scenario_mut();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             let separate_room = server.make_room().key();

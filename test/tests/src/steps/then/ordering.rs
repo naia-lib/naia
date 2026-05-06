@@ -1,9 +1,6 @@
 //! Then-step bindings: subsequence/order assertions across events.
 
-use namako_engine::codegen::AssertOutcome;
-use namako_engine::then;
-
-use crate::TestWorldRef;
+use crate::steps::prelude::*;
 
 // ──────────────────────────────────────────────────────────────────────
 // Connection lifecycle — server-side event ordering

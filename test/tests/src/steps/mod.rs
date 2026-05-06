@@ -17,6 +17,7 @@
 //! modules contain real bindings. The `vocab`/`world_helpers`/given/when/then
 //! modules are stubs.
 
+pub mod prelude;
 pub mod vocab;
 pub mod world_helpers;
 
