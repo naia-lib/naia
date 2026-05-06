@@ -48,7 +48,8 @@ pub mod server_events;
 pub mod update_candidate_set;
 pub mod spawn_with_components;
 pub mod immutable_components;
-pub mod smoke;
+// `smoke` module migrated to purpose-aligned modules in A.3.c (2026-05-06):
+//   given/setup, when/network_events, then/state_assertions.
 pub mod transport;
 pub mod world_integration;
 

@@ -92,7 +92,29 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
   - **A.3.a** — Inventory pass: for every binding in every contract file, classify by purpose (`given/setup`, `given/state`, `when/server_actions`, `when/client_actions`, `when/network_events`, `then/state_assertions`, `then/event_assertions`, `then/ordering`). Produce a CSV/JSON manifest. Don't move code yet.
   - **A.3.b** — Extract shared helpers (e.g. `connect_client_impl`, repeated mutate-and-track patterns) into `world_helpers.rs` so the per-binding moves don't need to drag along inlined helpers. (This is the Phase B helper layer building organically here; Phase B then refines + completes the catalog.)
   - **A.3.c** — Per-source-file migration: for each of the 22 contract-aligned files, move every binding to its classified purpose-aligned home. Build between every file move; resolve any cucumber ambiguity errors immediately. Source file may end empty (if so, delete it from `mod.rs`).
-  - **A.3.d** — Verify: `cargo test -p naia-tests` passes the same scenarios as before; `cargo run -p naia_npa -- manifest` shows 259 bindings (or whatever count after deduplication).
+    - [x] **smoke.rs** (6 bindings) → given/setup, when/network_events, then/state_assertions. Pattern proven; helpers extracted to world_helpers. 251 bindings still in manifest.
+    - [ ] scope_propagation.rs (2 bindings)
+    - [ ] update_candidate_set.rs (3 bindings)
+    - [ ] immutable_components.rs (4 bindings)
+    - [ ] spawn_with_components.rs (4 bindings)
+    - [ ] client_events.rs (5 bindings)
+    - [ ] world_integration.rs (5 bindings)
+    - [ ] entity_authority.rs (7 bindings)
+    - [ ] replicated_resources.rs (13 bindings)
+    - [ ] server_events.rs (8 bindings)
+    - [ ] priority_accumulator.rs (9 bindings)
+    - [ ] entity_replication.rs (9 bindings)
+    - [ ] entity_ownership.rs (8 bindings)
+    - [ ] messaging.rs (9 bindings)
+    - [ ] scope_exit.rs (13 bindings)
+    - [ ] entity_publication.rs (12 bindings)
+    - [ ] entity_scopes.rs (20 bindings)
+    - [ ] connection.rs (23 bindings)
+    - [ ] entity_delegation.rs (16 bindings)
+    - [ ] observability.rs (21 bindings)
+    - [ ] transport.rs (21 bindings)
+    - [ ] common.rs (33 bindings)
+  - **A.3.d** — Verify: `cargo test -p naia-tests` passes the same scenarios as before; `cargo run -p naia_npa -- manifest` shows 251 bindings (or whatever count after deduplication).
 - [ ] **A.4** Collapse the 24 `.feature` files into the 8 grouped files. Preserve every Scenario verbatim; just regroup by feature. Update file paths in any tooling references (manifest emit, NPA run, etc.).
 - [ ] **A.5** Verify: `cargo test -p naia-tests` passes the same 174 namako scenarios as before. Verify `cargo run -p naia_npa -- manifest` still emits 259+ bindings. Verify `cargo test -p naia-test-harness` still 220/8/13.
 - [ ] **A.6** Update this doc with completion notes; commit `phase A complete: catalog refactor`; push to main.
