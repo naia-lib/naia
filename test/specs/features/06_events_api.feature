@@ -30,7 +30,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # When E enters scope for user U, the server MUST fire exactly one SpawnEntityEvent for (U, E).
     # Out-of-scope users MUST NOT receive spawn events.
     @Scenario(01)
-    Scenario: server-events-07 — Server spawn event fires for in-scope user only
+    Scenario: [server-events-07] Server spawn event fires for in-scope user only
       Given a server is running
       And client A connects
       And a server-owned entity enters scope for client A
@@ -39,7 +39,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # [server-events-09] — Despawn events are exactly-once per user lifecycle
     # When E leaves scope for U, exactly one despawn/exit event MUST fire for (U, E).
     @Scenario(02)
-    Scenario: server-events-09 — Server despawn event fires when entity leaves scope
+    Scenario: [server-events-09] Server despawn event fires when entity leaves scope
       Given a server is running
       And client A connects
       And a server-owned entity enters scope for client A
@@ -92,7 +92,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # [client-events-04] — Spawn is the first event for an entity lifetime
     # The client MUST receive a SpawnEntityEvent when an entity enters scope.
     @Scenario(01)
-    Scenario: client-events-04 — Client receives spawn event when entity enters scope
+    Scenario: [client-events-04] Client receives spawn event when entity enters scope
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -102,7 +102,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # [client-events-09] — Scope transitions are reflected as spawn/despawn events
     # Leaving scope MUST emit Despawn; re-entering scope MUST emit a new Spawn.
     @Scenario(02)
-    Scenario: client-events-09 — Scope leave emits Despawn; re-enter emits Spawn
+    Scenario: [client-events-09] Scope leave emits Despawn; re-enter emits Spawn
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -117,7 +117,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # When the server updates a replicated component, the client Events API MUST
     # surface exactly one component update event for that applied change.
     @Scenario(03)
-    Scenario: client-events-07 — Client receives component update event via Events API
+    Scenario: [client-events-07] Client receives component update event via Events API
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -130,7 +130,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # When the server removes a replicated component from an in-scope entity, the
     # client Events API MUST surface exactly one component remove event for that change.
     @Scenario(04)
-    Scenario: client-events-08 — Client receives component remove event via Events API
+    Scenario: [client-events-08] Client receives component remove event via Events API
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -143,7 +143,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # When the server inserts a replicated component into an already-in-scope entity,
     # the client Events API MUST surface exactly one component insert event.
     @Scenario(05)
-    Scenario: client-events-06 — Client receives component insert event via Events API
+    Scenario: [client-events-06] Client receives component insert event via Events API
       Given a server is running
       And a client connects
       And a server-owned entity exists without a replicated component
@@ -162,7 +162,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # [world-integration-01/04] — Client world mirrors Naia view; scope drives presence
     # After scope changes, entity presence in the client world MUST match Naia's view.
     @Scenario(01)
-    Scenario: world-integration-04 — Entity presence in client world mirrors scope state
+    Scenario: [world-integration-04] Entity presence in client world mirrors scope state
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -176,7 +176,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # [world-integration-05] — Late-joining client world is built from current server state
     # A second client joining a running game MUST see current entities, not stale state.
     @Scenario(02)
-    Scenario: world-integration-05 — Late-joining client receives current server snapshot
+    Scenario: [world-integration-05] Late-joining client receives current server snapshot
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -188,7 +188,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # [world-integration-07] — Component type correctness: values match the server's authoritative state
     # The client's replicated component values MUST match what the server wrote.
     @Scenario(03)
-    Scenario: world-integration-07 — Component values in client world match server state
+    Scenario: [world-integration-07] Component values in client world match server state
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -201,7 +201,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # When the server removes a replicated component from an in-scope entity,
     # the client's world MUST no longer contain that component value.
     @Scenario(04)
-    Scenario: world-integration-09 — Component removal propagates to client world
+    Scenario: [world-integration-09] Component removal propagates to client world
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -214,7 +214,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # When the server inserts a replicated component into an already-in-scope entity,
     # the client's world MUST converge to include that component.
     @Scenario(05)
-    Scenario: world-integration-08 — Component insert propagates to client world
+    Scenario: [world-integration-08] Component insert propagates to client world
       Given a server is running
       And a client connects
       And a server-owned entity exists without a replicated component
@@ -227,7 +227,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     # Zero-leak lifecycle cleanup: after client disconnect, the client world
     # MUST NOT retain entities from the session.
     @Scenario(06)
-    Scenario: world-integration-06 — Disconnect cleans client world of all server entities
+    Scenario: [world-integration-06] Disconnect cleans client world of all server entities
       Given a server is running
       And a client connects
       And a server-owned entity exists
@@ -287,4 +287,127 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
       And the server mutates entity A's component to x=50 y=60
       Then the client eventually observes entity A at x=50 y=60
       And the client eventually observes entity B at x=30 y=40
+
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Phase D.7 — coverage stubs (deferred)
+  # ──────────────────────────────────────────────────────────────────────
+
+  @Rule(07)
+  Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
+
+    @Deferred @PolicyOnly
+    @Scenario(01)
+    Scenario: [server-events-00] Server events API surface contract
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(02)
+    Scenario: [server-events-01] ConnectEvent fires per accepted client
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(03)
+    Scenario: [server-events-02] DisconnectEvent fires on client drop
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(04)
+    Scenario: [server-events-03] AuthEvent surfaces on server-side request
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(05)
+    Scenario: [server-events-04] TickEvent fires per server tick
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(06)
+    Scenario: [server-events-05] MessageEvent fires per inbound message
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(07)
+    Scenario: [server-events-06] RequestEvent surfaces request payload
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(08)
+    Scenario: [server-events-08] Per-user event isolation (no cross-user leakage)
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(09)
+    Scenario: [server-events-10] Authority denied event observable on server
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(10)
+    Scenario: [server-events-11] Authority release event observable on server
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(11)
+    Scenario: [server-events-12] Publish event observable on server
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(12)
+    Scenario: [server-events-13] Unpublish event observable on server
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(13)
+    Scenario: [client-events-00] Client events API surface contract
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(14)
+    Scenario: [client-events-01] ConnectEvent fires on accepted handshake
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(15)
+    Scenario: [client-events-02] DisconnectEvent fires on link loss
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(16)
+    Scenario: [client-events-03] RejectEvent fires on protocol mismatch
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(17)
+    Scenario: [client-events-05] TickEvent fires per client tick
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(18)
+    Scenario: [client-events-10] Authority granted event surfaces
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(19)
+    Scenario: [client-events-11] Authority denied event surfaces
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(20)
+    Scenario: [client-events-12] Authority reset event surfaces
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(21)
+    Scenario: [world-integration-01] Entity insertion into ECS world via Events API
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(22)
+    Scenario: [world-integration-02] Component insertion mirrors server insert
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(23)
+    Scenario: [world-integration-03] Component removal mirrors server remove
+      Then the system intentionally fails
 
