@@ -49,10 +49,10 @@ impl<'a> ServerExpectCtx<'a> {
 
     /// Expect that the server has replicated/created a concrete entity
     pub fn has_entity(&self, entity: &EntityKey) -> bool {
-        self.scenario
-            .entity_registry()
-            .server_entity(entity)
-            .is_some()
+        let Some(server_entity) = self.scenario.entity_registry().server_entity(entity) else {
+            return false;
+        };
+        self.scenario.server_world_ref().has_entity(&server_entity)
     }
 
     /// Get read-only entity access by EntityKey

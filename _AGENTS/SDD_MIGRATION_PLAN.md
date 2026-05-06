@@ -222,8 +222,31 @@ The SDD migration mission landed in 6 phases over a single push. End state:
 
 - **Coverage parity:** 215 legacy contract IDs, 217 namako Scenarios, 215 covered both ways, 0 legacy-only. Two namako-only IDs (`time-ticks-03/04`) are net-new coverage that didn't exist in the legacy suite.
 - **Surface area:** 8 grouped `.feature` files (`00_foundations` through `07_resources`) drive the test pipeline; 251 step bindings organised by purpose under `test/tests/src/steps/{vocab,world_helpers,given,when,then}`.
-- **Carve-out:** 5 Rust files + helpers under `test/harness/contract_tests/integration_only/` retain regression coverage for 8 known product-gap failures and 5 infrastructure placeholders. Each is paired with a `@Deferred @PolicyOnly` namako stub on the same contract ID; the carve-out README spells out the deletion criteria.
-- **What's left:** the 8 product-gap failures (3 in `03_messaging`, 3 in `06_entity_scopes`, 2 in `10_entity_delegation`) document real bugs the SDD migration did not undertake. They are the next track. Each one closing reduces the carve-out by exactly one Rust test and upgrades the matching namako stub to a real `@Scenario`.
+- **Carve-out:** 5 Rust files + helpers under `test/harness/contract_tests/integration_only/` retain regression coverage for known product-gap failures and infrastructure placeholders. Each is paired with a `@Deferred @PolicyOnly` namako stub on the same contract ID; the carve-out README spells out the deletion criteria.
+- **What's left:** the product-gap failures in `03_messaging` and `10_entity_delegation` document real bugs the SDD migration did not undertake. Each one closing reduces the carve-out by exactly one Rust test and upgrades the matching namako stub to a real `@Scenario`.
+
+---
+
+## Track 2 — Carve-out closures (post-migration product fixes)
+
+### Closed
+
+- **`publish_unpublish_vs_spawn_despawn_semantics_distinct`** (`06_entity_scopes.rs`, `[entity-scopes-08]`) — closed 2026-05-06.
+  Root cause: harness bug. `ServerExpectCtx::has_entity` checked only the `EntityRegistry` (which never cleans up on despawn), so it returned `true` even after `entity_mut().despawn()`. Fix: also check `server_world_ref().has_entity()`. Product behaviour was already correct. Namako Scenario added: Rule(04) `@Scenario(03)` in `04_visibility.feature`. Rust test deleted.
+
+- **`leaving_scope_vs_despawn_distinguishable`** (`06_entity_scopes.rs`, `[entity-scopes-15]`) — closed 2026-05-06.
+  Same harness bug as above (`has_entity` registry-only check). Same fix. Namako Scenario added: Rule(05) `@Scenario(04)` in `04_visibility.feature`. Rust test deleted.
+
+### Deferred (no unpark plan yet)
+
+- **`protocol_type_order_mismatch_fails_fast_at_handshake`** (`03_messaging.rs`, `[connection-XX]`) — deferred 2026-05-06.
+  Tests fast-fail detection of mismatched component/channel type ordering during the auth wire handshake. Exercising this requires infrastructure not yet wired into the harness (distinct protocol variants exchanged during connection, not at send-time). Unpark when harness supports multi-protocol handshake scenarios.
+
+- **`tick_buffered_channel_discards_too_far_ahead_ticks`** (`03_messaging.rs`) — deferred 2026-05-06.
+  Test premise mismatches the current API: `TickBufferedChannel` exposes no way to send a message "for a future tick" beyond the discard window from the harness. The test exercises internal discard logic that the public API doesn't expose a lever for. Unpark when the harness gains a tick-injection primitive.
+
+- **`messaging_20_entity_property_buffer_caps`** (`03_messaging.rs`, `[messaging-20]`) — deferred 2026-05-06.
+  Tests 128-message FIFO eviction in `RemoteEntityWaitlist`. That cap does not exist: `RemoteEntityWaitlist` only enforces a 60-second TTL (`handle_ttl`). Test premise also incorrect: entity enters room during spawn with client already in same room, so it is immediately in scope — messages would never be buffered. Unpark requires: (a) implement per-entity FIFO cap in `RemoteEntityWaitlist`, (b) fix test scenario setup, (c) write namako Scenario for `[messaging-20]`, then delete this test.
 
 ---
 

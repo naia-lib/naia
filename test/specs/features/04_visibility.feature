@@ -144,6 +144,24 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       When the server includes the entity for the client
       Then the entity is out-of-scope for the client
 
+    # [entity-scopes-08] — Room entry and exit control client visibility lifecycle
+    # Entering a room (+ include) makes an entity visible; leaving scope (exclude)
+    # removes it from the client without destroying it on the server; true despawn
+    # removes it from the server entirely. These three events are distinct.
+    @Scenario(03)
+    Scenario: [entity-scopes-08] Room entry and exit control client visibility lifecycle
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      Then the entity is out-of-scope for the client
+      When the server includes the entity for the client
+      And the server adds the entity to the client's room
+      Then the entity spawns on the client
+      When the server excludes the entity for the client
+      Then the entity despawns on the client
+      When the server globally despawns the entity
+      Then the server no longer has the entity
+
   # --------------------------------------------------------------------------
   # Rule: Scope state effects
   # --------------------------------------------------------------------------
@@ -184,6 +202,24 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       And the entity despawns on the client
       And the server includes the entity for the client
       Then the entity spawns on the client as a new lifetime
+
+    # [entity-scopes-15] — Scope leave is reversible; despawn is permanent
+    # When an entity leaves a client's scope it is hidden but still alive on the
+    # server. Re-including the entity restores visibility. True despawn removes
+    # the entity from the server entirely and cannot be reversed.
+    @Scenario(04)
+    Scenario: [entity-scopes-15] Scope leave is reversible; true despawn is permanent
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for the client
+      Then the entity is out-of-scope for the client
+      When the server includes the entity for the client
+      Then the entity is in-scope for the client
+      When the server globally despawns the entity
+      Then the server no longer has the entity
 
   # --------------------------------------------------------------------------
   # Rule: Disconnect handling
