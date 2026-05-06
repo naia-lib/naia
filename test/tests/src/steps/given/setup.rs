@@ -4,9 +4,6 @@
 //! "ready to act on" state: a running server, one or more connected
 //! clients, joined rooms.
 
-use naia_server::ServerConfig;
-use naia_test_harness::protocol;
-
 use crate::steps::prelude::*;
 use crate::steps::world_helpers::tick_n;
 
@@ -15,12 +12,16 @@ use crate::steps::world_helpers::tick_n;
 /// Initializes the scenario, starts a server with default config, and
 /// creates a default room (stored as `last_room`). After this step
 /// the test world has exactly one server, zero clients, one room.
+///
+/// **Idempotent.** Safe to use as a feature-file `Background:` step
+/// AND as an explicit Given inside a Scenario — the second call
+/// no-ops via `ensure_server_started` rather than re-initializing.
+/// This matters in Phase C onward, where every grouped feature
+/// hoists this Given to a Background block.
 #[given("a server is running")]
 fn given_server_running(ctx: &mut TestWorldMut) {
-    let scenario = ctx.init();
-    scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-    scenario.set_last_room(room_key);
+    use crate::steps::world_helpers::ensure_server_started;
+    ensure_server_started(ctx);
 }
 
 /// Given a client connects.

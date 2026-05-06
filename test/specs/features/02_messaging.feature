@@ -13,6 +13,12 @@
 @Feature(messaging)
 Feature: Messaging Channel Semantics
 
+
+  # Auto-applied prelude — every Scenario in this file gets this
+  # Given run before its own Givens (idempotent).
+  Background:
+    Given a server is running
+
   # ==========================================================================
   # === Source: 03_messaging.feature ===
   # ==========================================================================

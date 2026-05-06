@@ -161,13 +161,15 @@ Goal: reusable helpers in `world_helpers.rs` + a `prelude` module. New bindings 
 - Median per-binding LOC: **24.0 → 23.1**. Modest, because the per-binding bodies still contain real logic (mutation closures, expect-polls, value comparisons) — the boilerplate-elimination wins were ~150 LOC across 50 lookup sites.
 - The bigger win is **architectural**: every binding file now uses the prelude pattern, the helper layer is in place for Phase D's bulk migration to consume, and new bindings written in D will be ≤ 8 LOC because they can compose helpers from the start.
 
-### Phase C — Migration plumbing (1 day · LOW risk)
+### Phase C — Migration plumbing (LOW risk · COMPLETE 2026-05-06)
 
-Goal: tooling that lets us see migration progress per-contract-ID, generate Background templates, and verify coverage parity at the end.
+Goal: tooling for per-contract-ID coverage tracking + Background templates that Phase D inherits.
 
-- [ ] **C.1** Coverage-diff tool: parse contract IDs from `legacy_tests/`, parse contract IDs from `features/`, output per-ID status (legacy-only / both / namako-only). Living artifact of migration progress.
-- [ ] **C.2** Per-feature `Background:` templates pre-filled (e.g. for `02_messaging.feature`, the standard "server + 2 clients connected" prelude).
-- [ ] **C.3** Update this doc; commit `phase C complete: migration plumbing`; push to main.
+- [x] **C.1** (2026-05-06) Coverage-diff tool at `_AGENTS/scripts/coverage_diff.py`. Outputs per-ID status (legacy-only / both / namako-only) in three modes: human-readable summary, `--markdown` for the living doc, `--json` for CI. Generated [`_AGENTS/SDD_COVERAGE_DIFF.md`](SDD_COVERAGE_DIFF.md) — current state: **198 legacy IDs / 31 namako IDs / 29 both / 169 pending migration / 2 namako-only**. Phase D's gate is "pending migration table empty"; Phase F can delete legacy_tests once that's true.
+- [x] **C.2** (2026-05-06) Background blocks added to 6 grouped feature files (`01_lifecycle`, `02_messaging`, `03_replication`, `04_visibility`, `05_authority`, `06_events_api`). Each Background contains `Given a server is running`, which is now **idempotent** (the binding calls `ensure_server_started`, no-op if already initialized) so it's safe in both Background AND inline Scenario. `00_foundations` and `07_resources` skipped because their preconditions vary too much for a single Background.
+  - Lint passes: `Lint passed. Resolved 163 scenario(s), 1076 step(s).` (step count grew from 936 → 1076 because Background steps run per-Scenario.)
+  - Tests + manifest unchanged: 251 bindings, 220/8/13 harness, naia-tests green.
+- [x] **C.3** Plan doc updated. Commit + push pending.
 
 ### Phase D — Bulk migration (8-12 days · MEDIUM risk)
 

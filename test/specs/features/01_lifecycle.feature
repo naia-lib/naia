@@ -13,6 +13,12 @@
 @Feature(lifecycle)
 Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
 
+
+  # Auto-applied prelude — every Scenario in this file gets this
+  # Given run before its own Givens (idempotent).
+  Background:
+    Given a server is running
+
   # ==========================================================================
   # === Source: 01_connection_lifecycle.feature ===
   # ==========================================================================

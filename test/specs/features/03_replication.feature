@@ -13,6 +13,12 @@
 @Feature(replication)
 Feature: Entity Replication, Spawn-with-Components, Immutable Components
 
+
+  # Auto-applied prelude — every Scenario in this file gets this
+  # Given run before its own Givens (idempotent).
+  Background:
+    Given a server is running
+
   # ==========================================================================
   # === Source: 07_entity_replication.feature ===
   # ==========================================================================

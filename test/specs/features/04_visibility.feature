@@ -13,6 +13,12 @@
 @Feature(visibility)
 Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate Set
 
+
+  # Auto-applied prelude — every Scenario in this file gets this
+  # Given run before its own Givens (idempotent).
+  Background:
+    Given a server is running
+
   # ==========================================================================
   # === Source: 06_entity_scopes.feature ===
   # ==========================================================================
