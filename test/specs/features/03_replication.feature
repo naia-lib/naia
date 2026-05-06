@@ -27,7 +27,7 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   Rule: Entity Replication
 
     @Scenario(01)
-    Scenario: Entity spawns on client when entering scope
+    Scenario: [entity-replication-01] Entity spawns on client when entering scope
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -35,7 +35,7 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       Then the entity spawns on the client with the replicated component
 
     @Scenario(02)
-    Scenario: Component updates are replicated to client
+    Scenario: [entity-replication-02] Component updates are replicated to client
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -45,7 +45,7 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       Then the client observes the component update
 
     @Scenario(03)
-    Scenario: Entity despawns on client when leaving scope
+    Scenario: [entity-replication-03] Entity despawns on client when leaving scope
       Given a server is running
       And a client connects
       And a server-owned entity exists with a replicated component
@@ -163,4 +163,46 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       And the client and entity share a room
       And the entity is in-scope for the client
       Then the global diff handler has 1 receiver
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Phase D.4 — coverage stubs (deferred)
+  # ──────────────────────────────────────────────────────────────────────
+
+  @Rule(07)
+  Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
+
+    @Deferred @PolicyOnly
+    @Scenario(01)
+    Scenario: [entity-replication-04] Component insert events fire for in-scope additions
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(02)
+    Scenario: [entity-replication-05] Component remove events fire for in-scope removals
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(03)
+    Scenario: [entity-replication-08] Replication preserves component-set parity
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(04)
+    Scenario: [entity-replication-09] Replication preserves component value parity
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(05)
+    Scenario: [entity-replication-10] No replication storms under steady-state
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(06)
+    Scenario: [entity-replication-11] Component remove on out-of-scope is safe
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(07)
+    Scenario: [entity-replication-12] Concurrent updates resolve to last-writer-wins
+      Then the system intentionally fails
 

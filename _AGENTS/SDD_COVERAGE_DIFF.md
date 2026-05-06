@@ -8,9 +8,9 @@
 > empties, the parity gate for Phase F (delete legacy_tests) is met.
 
 - Legacy (215 contract IDs in legacy_tests/)
-- Namako: 112 contract IDs in features/
-- Both: **110**
-- Legacy-only (PENDING migration): **105**
+- Namako: 122 contract IDs in features/
+- Both: **120**
+- Legacy-only (PENDING migration): **95**
 - Namako-only (new in SDD): 2
 
 ## Pending migration
@@ -83,16 +83,6 @@
 | `entity-publication-09` | test/harness/legacy_tests/09_entity_publication.rs |
 | `entity-publication-10` | test/harness/legacy_tests/09_entity_publication.rs |
 | `entity-publication-11` | test/harness/legacy_tests/09_entity_publication.rs |
-| `entity-replication-01` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-02` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-03` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-04` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-05` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-08` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-09` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-10` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-11` | test/harness/legacy_tests/07_entity_replication.rs |
-| `entity-replication-12` | test/harness/legacy_tests/07_entity_replication.rs |
 | `entity-scopes-01` | test/harness/legacy_tests/06_entity_scopes.rs |
 | `entity-scopes-03` | test/harness/legacy_tests/06_entity_scopes.rs |
 | `entity-scopes-04` | test/harness/legacy_tests/06_entity_scopes.rs |
