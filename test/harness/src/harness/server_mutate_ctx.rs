@@ -134,6 +134,13 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
             .collect()
     }
 
+    /// Server-side outgoing bytes sent during the last completed tick.
+    /// Used by wire-level tests (e.g. per-field-diff assertion).
+    pub fn server_outgoing_bytes_last_tick(&self) -> u64 {
+        let (server, _) = self.ctx.scenario().server_and_registry().unwrap();
+        server.outgoing_bytes_last_tick()
+    }
+
     // User Operations
 
     /// Check if user exists

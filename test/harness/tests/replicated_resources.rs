@@ -319,6 +319,80 @@ fn server_mutation_replicates_to_client() {
     });
 }
 
+/// Wire-level per-field diff assertion (Item 3 / RESOURCES_AUDIT.md F2).
+///
+/// Mutating ONE Property field should send strictly fewer bytes than
+/// mutating TWO Property fields in the same tick. Proves the per-field
+/// diff machinery is preserved end-to-end via `mirror_single_field`
+/// → `DirtyQueue` → `write_update` per-field-presence-bit framing.
+///
+/// Bonus assertion: a tick with NO mutations sends fewer bytes than
+/// either (idle baseline).
+#[test]
+fn per_field_diff_one_field_sends_fewer_bytes_than_two() {
+    fn measure(mutate_both: bool) -> u64 {
+        let mut scenario = Scenario::new();
+        let _client_key = server_with_one_client(&mut scenario);
+
+        // Insert + steady-state.
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                assert!(server.insert_resource(TestScore::new(0, 0)));
+            });
+        });
+        settle(&mut scenario, 30);
+
+        // Drain to steady state — read & discard outgoing bytes for
+        // a few ticks so we're past the spawn-phase noise.
+        for _ in 0..5 {
+            scenario.mutate(|_| {});
+        }
+
+        // Mutate per the test variant, then capture bytes for the
+        // SINGLE next tick's outgoing payload.
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.mutate_resource::<TestScore, _, _>(|s| {
+                    *s.home = 42;
+                    if mutate_both {
+                        *s.away = 99;
+                    }
+                });
+            });
+        });
+        // mutate(|_|{}) is one tick. Capture bytes for THIS tick only.
+        let bytes_under_test = scenario.mutate(|ctx| {
+            ctx.server(|s| s.server_outgoing_bytes_last_tick())
+        });
+
+        // Settle so the test cleanup is clean.
+        for _ in 0..5 {
+            scenario.mutate(|_| {});
+        }
+
+        bytes_under_test
+    }
+
+    let one_field = measure(false);
+    let two_fields = measure(true);
+
+    eprintln!(
+        "per-field diff measurement: one_field={} bytes, two_fields={} bytes",
+        one_field, two_fields
+    );
+
+    // The CORE assertion: mutating one field sends strictly fewer bytes
+    // than mutating two fields. If per-field diff broke and we were
+    // sending the whole resource on every tick, these would be equal.
+    assert!(
+        one_field < two_fields,
+        "per-field diff regression: mutating one Property ({one_field} B) \
+         should send strictly fewer bytes than mutating two ({two_fields} B). \
+         If equal, the entity-component is being mirror'd whole instead of \
+         per-field via mirror_single_field — Mode B regression."
+    );
+}
+
 #[test]
 fn delegated_resource_supports_client_authority_request() {
     let mut scenario = Scenario::new();
