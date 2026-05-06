@@ -19,6 +19,12 @@ pub struct BigMap<K: BigMapKey, V> {
     phantom_k: PhantomData<K>,
 }
 
+impl<K: BigMapKey, V> Default for BigMap<K, V> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<K: BigMapKey, V> BigMap<K, V> {
     pub fn new() -> Self {
         Self {
@@ -63,20 +69,20 @@ impl<K: BigMapKey, V> BigMap<K, V> {
 
     #[allow(clippy::type_complexity)]
     pub fn iter<'a>(&'a self) -> Map<Iter<'a, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
-        return self
+        self
             .inner
             .iter()
-            .map(|(key, value)| (K::from_u64(*key), value));
+            .map(|(key, value)| (K::from_u64(*key), value))
     }
 
     #[allow(clippy::type_complexity)]
     pub fn iter_mut<'a>(
         &'a mut self,
     ) -> Map<IterMut<'a, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
-        return self
+        self
             .inner
             .iter_mut()
-            .map(|(key, value)| (K::from_u64(*key), value));
+            .map(|(key, value)| (K::from_u64(*key), value))
     }
 
     pub fn len(&self) -> usize {

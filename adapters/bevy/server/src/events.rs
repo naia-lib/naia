@@ -151,7 +151,7 @@ impl RequestEvents {
             output_list.push((*user_key, response_send_key, message));
         }
 
-        return output_list;
+        output_list
     }
 }
 

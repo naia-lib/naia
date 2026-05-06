@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
 
 use std::time::Duration;
 
@@ -972,15 +972,34 @@ fn migration_yields_no_holder_if_owner_out_of_scope() {
 
     scenario.allow_flexible_next();
 
-    // Put entity in room but only include B in scope (A out of scope for entity)
+    // Put entity in room, include B in scope, EXPLICITLY exclude A.
+    //
+    // Test-setup nuance: `user_scope_mut(&B).include(...)` is a *union*,
+    // not a *replace* — it adds B to scope but does not remove anyone
+    // else. Both A and B share `room_key` with the entity, so A would
+    // be in-scope by default-room semantics unless explicitly excluded.
+    // The contract under test is "owner out-of-scope at migration ⇒
+    // no holder"; making A genuinely OOS requires the explicit
+    // `exclude` below. Note: while A still owns the entity, server-side
+    // `user_scope_has_entity` returns true regardless of explicit
+    // exclude (the owner is always in-scope) — but the
+    // `entity_scope_map` entry IS set to false, and that's what the
+    // post-migration `enable_delegation_client_owned_entity` consults
+    // (after the entity has been re-owned by Server).
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
                 entity_mut.enter_room(&room_key);
             }
-            // Only B is in scope, A is not
             server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity_e);
         });
+    });
+
+    // Wait for B to see entity AND for A's scope-exclude to have been
+    // queued through the scope machinery before we trigger delegation.
+    scenario.expect(|ctx| {
+        ctx.client(client_b_key, |c| c.has_entity(&entity_e)).then_some(())
     });
 
     scenario.expect(|ctx| {

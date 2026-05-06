@@ -138,7 +138,7 @@ impl BaseTimeManager {
             )));
         }
 
-        return Ok(None);
+        Ok(None)
     }
 
     pub fn game_time_now(&self) -> GameInstant {

@@ -61,7 +61,7 @@ fn server_with_one_client(scenario: &mut Scenario) -> ClientKey {
     // Wait for connect event + room membership
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            if let Some(_) = server.read_event::<ServerConnectEvent>() {
+            if server.read_event::<ServerConnectEvent>().is_some() {
                 Some(())
             } else {
                 None

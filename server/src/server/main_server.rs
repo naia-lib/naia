@@ -115,7 +115,7 @@ impl MainServer {
         self.maintain_socket();
 
         // return all received messages and reset the buffer
-        std::mem::replace(&mut self.incoming_events, MainEvents::default())
+        std::mem::take(&mut self.incoming_events)
     }
 
     // Connections
@@ -144,7 +144,6 @@ impl MainServer {
                 &auth_addr
             );
             // TODO: handle destroying any threads waiting on this response
-            return;
         }
     }
 
@@ -260,7 +259,7 @@ impl MainServer {
         self.handshake_manager
             .delete_user(user_key, user.address_opt());
 
-        return user;
+        user
     }
 
     // Private methods

@@ -24,7 +24,7 @@ impl<'a> Users<'a> {
     }
 
     pub fn client_to_user_key(&self, client_key: &ClientKey) -> Option<UserKey> {
-        self.client_to_user.get(&client_key)?.user_key()
+        self.client_to_user.get(client_key)?.user_key()
     }
 
     /// Reverse lookup: find ClientKey for a given UserKey

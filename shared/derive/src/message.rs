@@ -583,7 +583,7 @@ pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
     }
 }
 
-const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
+const UNNAMED_FIELD_PREFIX: &str = "unnamed_field_";
 fn get_variable_name_for_unnamed_field(index: usize, span: Span) -> Ident {
     Ident::new(&format!("{}{}", UNNAMED_FIELD_PREFIX, index), span)
 }

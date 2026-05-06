@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [[bin]]
-name = "app"
+name = "naia_basic_client_demo_mq"
 path = "src/main.rs"
 
 [features]

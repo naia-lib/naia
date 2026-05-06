@@ -248,8 +248,7 @@ fn when_server_responds_to_request(ctx: &mut TestWorldMut) {
     // Wait for the server to receive the request
     let (response_id, _request): (GlobalResponseId, TestRequest) = scenario.expect(|ctx| {
         ctx.server(|server| {
-            for (_client_key, response_id, request) in
-                server.read_request::<RequestResponseChannel, TestRequest>()
+            if let Some((_client_key, response_id, request)) = server.read_request::<RequestResponseChannel, TestRequest>().next()
             {
                 return Some((response_id, request));
             }

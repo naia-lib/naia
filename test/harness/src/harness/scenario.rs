@@ -211,6 +211,12 @@ pub struct OperationResult {
     pub panic_msg: Option<String>,
 }
 
+impl Default for Scenario {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Scenario {
     pub fn new() -> Self {
         // Initialize simulated clock for deterministic test time
@@ -697,7 +703,7 @@ impl Scenario {
     }
 
     pub(crate) fn client_to_user_key(&self, client_key: &ClientKey) -> Option<UserKey> {
-        self.clients.get(&client_key)?.user_key()
+        self.clients.get(client_key)?.user_key()
     }
 
     /// Get client_user_map for creating Users handle
@@ -789,7 +795,7 @@ impl Scenario {
     }
 
     pub(crate) fn client_state_mut(&mut self, client_key: &ClientKey) -> &mut ClientState {
-        self.clients.get_mut(&client_key).expect("client not found")
+        self.clients.get_mut(client_key).expect("client not found")
     }
 
     /// Pause all network traffic (drop all packets)
@@ -829,14 +835,8 @@ impl Scenario {
         key: &EntityKey,
     ) -> Option<ClientEntityRef<'_, WorldRef<'_>>> {
         let state = self.client_state(client_key);
-        let user_key = match state.user_key() {
-            Some(uk) => uk,
-            None => return None,
-        };
-        let local_entity = match self.local_entity_for(key, &user_key) {
-            Some(le) => le,
-            None => return None,
-        };
+        let user_key = state.user_key()?;
+        let local_entity = self.local_entity_for(key, &user_key)?;
         let world_ref = state.world().proxy();
         let entity_ref = state.client().local_entity(world_ref, &local_entity)?;
         let registry = self.entity_registry();
@@ -901,7 +901,7 @@ impl Scenario {
             return None;
         }
         let server_ref = server.entity(world_proxy, &server_entity);
-        server_ref.local_entity(&user_key)
+        server_ref.local_entity(user_key)
     }
 
     /// Tick the simulation once - updates all clients and server

@@ -215,7 +215,7 @@ impl EntityRegistry {
 
     /// Get the server host world entity for an EntityKey
     pub fn server_entity(&self, entity_key: &EntityKey) -> Option<TestEntity> {
-        self.entity_map.get(&entity_key)?.server_entity
+        self.entity_map.get(entity_key)?.server_entity
     }
 
     /// Get a client's TestEntity for an EntityKey
@@ -225,9 +225,9 @@ impl EntityRegistry {
         client_key: &ClientKey,
     ) -> Option<TestEntity> {
         self.entity_map
-            .get(&entity_key)?
+            .get(entity_key)?
             .client_entities
-            .get(&client_key)
+            .get(client_key)
             .copied()
     }
 
@@ -249,7 +249,7 @@ impl EntityRegistry {
     /// Returns None if the server entity isn't registered yet.
     pub fn entity_key_for_server_entity(&self, server_entity: &TestEntity) -> Option<EntityKey> {
         self.server_entity_to_entity_key
-            .get(&server_entity)
+            .get(server_entity)
             .copied()
     }
 

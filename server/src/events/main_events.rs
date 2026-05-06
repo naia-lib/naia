@@ -36,11 +36,11 @@ impl MainEvents {
     }
 
     pub fn read<V: MainEvent>(&mut self) -> V::Iter {
-        return V::iter(self);
+        V::iter(self)
     }
 
     pub fn has<V: MainEvent>(&self) -> bool {
-        return V::has(self);
+        V::has(self)
     }
 
     pub fn append(&mut self, other: Self) {
@@ -72,9 +72,7 @@ impl MainEvents {
 
     pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: MessageContainer) {
         let message_type_id = auth_message.kind();
-        if !self.auths.contains_key(&message_type_id) {
-            self.auths.insert(message_type_id, Vec::new());
-        }
+        self.auths.entry(message_type_id).or_insert_with(Vec::new);
         let list = self.auths.get_mut(&message_type_id).unwrap();
         list.push((*user_key, auth_message));
         self.empty = false;
@@ -117,7 +115,7 @@ impl MainEvent for ConnectEvent {
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &MainEvents) -> bool {
@@ -132,7 +130,7 @@ impl MainEvent for ErrorEvent {
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &MainEvents) -> bool {
@@ -149,16 +147,16 @@ impl<M: Message> MainEvent for AuthEvent<M> {
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let message_kind: MessageKind = MessageKind::of::<M>();
-        return if let Some(messages) = events.auths.remove(&message_kind) {
+        if let Some(messages) = events.auths.remove(&message_kind) {
             IntoIterator::into_iter(world_events::read_messages(messages))
         } else {
             IntoIterator::into_iter(Vec::new())
-        };
+        }
     }
 
     fn has(events: &MainEvents) -> bool {
         let message_kind: MessageKind = MessageKind::of::<M>();
-        return events.auths.contains_key(&message_kind);
+        events.auths.contains_key(&message_kind)
     }
 }
 
@@ -169,7 +167,7 @@ impl MainEvent for QueuedDisconnectEvent {
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.queued_disconnects);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &MainEvents) -> bool {
@@ -184,7 +182,7 @@ impl MainEvent for WorldPacketEvent {
 
     fn iter(events: &mut MainEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.world_packets);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &MainEvents) -> bool {

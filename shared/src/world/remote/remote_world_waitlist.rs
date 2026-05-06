@@ -189,10 +189,7 @@ impl RemoteWorldWaitlist {
                         (tick, remote_entity, component_kind, waiting_field_update),
                     );
                     let component_field_key = (remote_entity, component_kind);
-                    if !self.update_waitlist_map.contains_key(&component_field_key) {
-                        self.update_waitlist_map
-                            .insert(component_field_key, HashMap::new());
-                    }
+                    self.update_waitlist_map.entry(component_field_key).or_default();
                     let handle_map = self
                         .update_waitlist_map
                         .get_mut(&component_field_key)

@@ -53,7 +53,7 @@ impl PacketReceiver for ConditionedPacketReceiverImpl {
         if self.time_queue.has_item(&now) {
             let (address, payload) = self.time_queue.pop_item(&now).unwrap();
             self.last_payload = Some(payload);
-            return Ok(Some((address, self.last_payload.as_ref().unwrap())));
+            Ok(Some((address, self.last_payload.as_ref().unwrap())))
         } else {
             Ok(None)
         }

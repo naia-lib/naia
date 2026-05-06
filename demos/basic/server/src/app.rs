@@ -92,7 +92,6 @@ impl App {
         if world_events.is_empty() && tick_events.is_empty() {
             // If we don't sleep here, app will loop at 100% CPU until a new message comes in
             sleep(Duration::from_millis(3));
-            return;
         } else {
             for (user_key, auth) in world_events.read::<AuthEvent<Auth>>() {
                 if auth.username == "charlie" && auth.password == "12345" {
@@ -131,7 +130,7 @@ impl App {
                 // All game logic should happen here, on a tick event
 
                 // Message sending
-                if self.tick_count % 10 == 0 {
+                if self.tick_count.is_multiple_of(10) {
                     for user_key in self.server.user_keys() {
                         let new_message_contents = format!("Server Message ({})", self.tick_count);
                         info!(

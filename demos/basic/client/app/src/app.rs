@@ -151,9 +151,8 @@ impl App {
             // VERY IMPORTANT! send all packets
             self.client.send_all_packets(self.world.proxy());
         }
-        for error in world_events.read::<ErrorEvent>() {
+        if let Some(error) = world_events.read::<ErrorEvent>().next() {
             info!("Client Error: {}", error);
-            return;
         }
     }
 }

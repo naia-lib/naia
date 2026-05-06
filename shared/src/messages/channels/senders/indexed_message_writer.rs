@@ -123,7 +123,7 @@ mod tests {
     //! bundles), but within a single stream (per-channel FIFO, per-entity
     //! command sequence) the delta-encoded writer requires that each id be
     //! >= the previous. If this invariant ever breaks, `write_message_index`
-    //! panics immediately — pinning the sender's monotonicity contract.
+    //! > panics immediately — pinning the sender's monotonicity contract.
     use naia_serde::BitWriter;
 
     use super::IndexedMessageWriter;

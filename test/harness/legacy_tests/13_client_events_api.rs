@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
 
 use std::time::Duration;
 
@@ -124,13 +124,21 @@ fn client_never_sees_update_or_remove_events_for_entities_that_were_never_in_sco
         test_protocol,
     );
 
-    // Spawn entity but don't include it in A's scope
+    // Spawn entity, then explicitly exclude A from scope.
+    //
+    // Setup nuance: A is in `room_key` and so is the entity, so the
+    // default room-overlap rule would put the entity *in* A's scope —
+    // contradicting the test name. The contract under test is "events
+    // never observed for entities that were never in scope"; we make
+    // "never in scope" genuinely true with an explicit exclude.
     let (entity_e, _) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.spawn(|mut e| {
+            let entity = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
-            })
+            });
+            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity.0);
+            entity
         })
     });
 

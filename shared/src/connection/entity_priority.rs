@@ -97,7 +97,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     pub fn set_gain(&mut self, gain: f32) -> &mut Self {
         self.entries
             .entry(self.entity)
-            .or_insert_with(EntityPriorityData::default)
+            .or_default()
             .gain_override = Some(gain);
         self
     }
@@ -108,7 +108,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     pub fn boost_once(&mut self, amount: f32) -> &mut Self {
         self.entries
             .entry(self.entity)
-            .or_insert_with(EntityPriorityData::default)
+            .or_default()
             .accumulated += amount;
         self
     }

@@ -81,11 +81,8 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     /// *Non‑blocking*: may push zero or more *ordered* events into the
     /// engine’s outgoing buffer, but never touches the ECS directly.
     pub fn receive_message(&mut self, id: MessageIndex, msg: EntityMessage<E>) {
-        match msg.get_type() {
-            EntityMessageType::Noop => {
-                return;
-            }
-            _ => {}
+        if msg.get_type() == EntityMessageType::Noop {
+            return;
         }
 
         let entity = msg.entity().unwrap();

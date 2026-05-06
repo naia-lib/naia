@@ -55,9 +55,9 @@ impl From<TypeId> for ComponentKind {
         Self { type_id }
     }
 }
-impl Into<TypeId> for ComponentKind {
-    fn into(self) -> TypeId {
-        self.type_id
+impl From<ComponentKind> for TypeId {
+    fn from(val: ComponentKind) -> Self {
+        val.type_id
     }
 }
 
@@ -119,6 +119,12 @@ impl Clone for ComponentKinds {
     }
 }
 
+impl Default for ComponentKinds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ComponentKinds {
     pub fn new() -> Self {
         Self {
@@ -162,16 +168,16 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        return self
+        self
             .kind_to_builder(&component_kind)
-            .read(reader, converter);
+            .read(reader, converter)
     }
 
     pub fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        return self
+        self
             .kind_to_builder(&component_kind)
-            .read_create_update(reader);
+            .read_create_update(reader)
     }
 
     pub fn split_update(
@@ -186,36 +192,36 @@ impl ComponentKinds {
         ),
         SerdeErr,
     > {
-        return self
+        self
             .kind_to_builder(component_kind)
-            .split_update(converter, update);
+            .split_update(converter, update)
     }
 
     pub fn kind_to_name(&self, component_kind: &ComponentKind) -> String {
-        return self
+        self
             .kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
             .2
-            .clone();
+            .clone()
     }
 
     fn net_id_to_kind(&self, net_id: &NetId) -> ComponentKind {
-        return *self.net_id_map.get(net_id).expect(
+        *self.net_id_map.get(net_id).expect(
             "Must properly initialize Component with Protocol via `add_component()` function!",
-        );
+        )
     }
 
     fn kind_to_net_id(&self, component_kind: &ComponentKind) -> NetId {
-        return self
+        self
             .kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
-            .0;
+            .0
     }
 
     /// Public accessor for a kind's NetId (== bit position in the
@@ -226,13 +232,13 @@ impl ComponentKinds {
     }
 
     fn kind_to_builder(&self, component_kind: &ComponentKind) -> &Box<dyn ReplicateBuilder> {
-        return &self
+        &self
             .kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
-            .1;
+            .1
     }
 
     pub fn kind_is_immutable(&self, component_kind: &ComponentKind) -> bool {
@@ -244,7 +250,7 @@ impl ComponentKinds {
 
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
-        for (_, (_, _, name)) in &self.kind_map {
+        for (_, _, name) in self.kind_map.values() {
             output.push(name.clone());
         }
         output.sort();

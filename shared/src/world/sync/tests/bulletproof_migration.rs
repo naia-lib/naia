@@ -210,7 +210,7 @@ fn migration_handles_high_frequency_operations() {
     // Messages are processed immediately by receive_message
     let events = channel.take_incoming_events();
     // Verify that operations were processed (exact count may vary due to processing logic)
-    assert!(events.len() >= 1); // At least some operations were processed
+    assert!(!events.is_empty()); // At least some operations were processed
 }
 
 /// BULLETPROOF: Test that migration handles memory efficiently

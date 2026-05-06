@@ -47,7 +47,7 @@ impl TransportReceiver for PacketChannelReceiver {
         match self.receiver.try_recv() {
             Ok((address, payload)) => {
                 self.current_payload = Some(payload);
-                return Ok(Some((address, self.current_payload.as_ref().unwrap())));
+                Ok(Some((address, self.current_payload.as_ref().unwrap())))
             }
             Err(TryRecvError::Empty) => Ok(None),
             Err(_) => Err(RecvError),

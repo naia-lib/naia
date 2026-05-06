@@ -141,7 +141,7 @@ pub fn message_events(
                             }
                         };
                         commands.entity(cursor_entity).insert((
-                            Mesh2d(global.circle.clone().into()),
+                            Mesh2d(global.circle.clone()),
                             MeshMaterial2d(color_handle.clone()),
                             Transform::from_xyz(0.0, 0.0, 0.0),
                         ));
@@ -287,7 +287,7 @@ pub fn insert_component_events(
                     commands
                         .entity(entity)
                         .insert((
-                            Mesh2d(global.circle.clone().into()),
+                            Mesh2d(global.circle.clone()),
                             MeshMaterial2d(handle.clone()),
                             Transform::from_xyz(0.0, 0.0, 0.0),
                         ))

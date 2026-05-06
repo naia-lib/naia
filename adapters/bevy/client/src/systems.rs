@@ -307,11 +307,7 @@ pub fn send_packets_init<T: Send + Sync + 'static>(world: &mut World) {
 pub fn send_packets<T: Send + Sync + 'static>(world: &mut World) {
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
         // if disconnected, always send
-        let mut should_send = if client.client.connection_status().is_connected() {
-            false
-        } else {
-            true
-        };
+        let mut should_send = !client.client.connection_status().is_connected();
 
         // if connected, check if we have ticked before sending packets
         if !should_send {

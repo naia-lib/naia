@@ -26,6 +26,12 @@ pub struct App {
     server_addr_str: Option<String>,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> App {
         info!("Naia Client Socket Demo started");
@@ -72,8 +78,8 @@ impl App {
                 }
             }
             Ok(None) => {
-                if self.message_count < 10 {
-                    if self.timer.ringing() {
+                if self.message_count < 10
+                    && self.timer.ringing() {
                         self.timer.reset();
 
                         let message_to_server: String = PING_MSG.to_string();
@@ -91,7 +97,6 @@ impl App {
                             }
                         }
                     }
-                }
             }
             Err(err) => {
                 info!("Client Error: {}", err);

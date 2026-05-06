@@ -11,6 +11,7 @@ use naia_server::UserKey;
 
 use crate::events::InsertBundleEvent;
 
+#[derive(Default)]
 pub(crate) struct BundleEventRegistry {
     bundle_events_sent: HashMap<BundleId, HashSet<Entity>>,
     bundles: HashMap<BundleId, BundleInfo>,
@@ -21,16 +22,6 @@ pub(crate) struct BundleEventRegistry {
 unsafe impl Send for BundleEventRegistry {}
 unsafe impl Sync for BundleEventRegistry {}
 
-impl Default for BundleEventRegistry {
-    fn default() -> Self {
-        Self {
-            bundle_events_sent: HashMap::new(),
-            bundles: HashMap::new(),
-            components_to_bundle_ids: HashMap::new(),
-            current_bundle_id: 0,
-        }
-    }
-}
 
 impl BundleEventRegistry {
     pub(crate) fn register_bundle_handler<B: ReplicateBundle>(&mut self) {
@@ -49,10 +40,10 @@ impl BundleEventRegistry {
 
         // add components to map
         for kind in components.iter() {
-            if !self.components_to_bundle_ids.contains_key(&kind) {
+            if !self.components_to_bundle_ids.contains_key(kind) {
                 self.components_to_bundle_ids.insert(*kind, HashSet::new());
             }
-            let bundle_ids = self.components_to_bundle_ids.get_mut(&kind).unwrap();
+            let bundle_ids = self.components_to_bundle_ids.get_mut(kind).unwrap();
             bundle_ids.insert(bundle_id);
         }
 
@@ -77,7 +68,7 @@ impl BundleEventRegistry {
         component_kind: &ComponentKind,
         entities: &Vec<(UserKey, Entity)>,
     ) {
-        let Some(bundle_ids) = self.components_to_bundle_ids.get(&component_kind) else {
+        let Some(bundle_ids) = self.components_to_bundle_ids.get(component_kind) else {
             // component is not part of any bundle
             return;
         };

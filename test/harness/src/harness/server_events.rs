@@ -332,7 +332,7 @@ impl ServerEvents {
     ) -> Vec<(ClientKey, EntityKey)> {
         self.inserts
             .get_mut(component_kind)
-            .map(|v| std::mem::take(v))
+            .map(std::mem::take)
             .unwrap_or_default()
     }
 
@@ -343,7 +343,7 @@ impl ServerEvents {
     ) -> Vec<(ClientKey, EntityKey, Box<dyn Replicate>)> {
         self.removes
             .get_mut(component_kind)
-            .map(|v| std::mem::take(v))
+            .map(std::mem::take)
             .unwrap_or_default()
     }
 
@@ -354,7 +354,7 @@ impl ServerEvents {
     ) -> Vec<(ClientKey, EntityKey)> {
         self.updates
             .get_mut(component_kind)
-            .map(|v| std::mem::take(v))
+            .map(std::mem::take)
             .unwrap_or_default()
     }
 }

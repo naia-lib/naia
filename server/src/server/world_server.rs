@@ -277,7 +277,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &self.server_config.connection,
             &self.server_config.ping,
             user_address,
-            &user_key,
+            user_key,
             &self.channel_kinds,
             &self.global_world_manager,
         );
@@ -303,10 +303,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // exist; resource entities themselves never enter rooms).
         let resource_entities = self.resource_entities();
         for world_entity in resource_entities {
-            self.user_scope_set_entity(&user_key, &world_entity, true);
+            self.user_scope_set_entity(user_key, &world_entity, true);
         }
 
-        self.incoming_world_events.push_connection(&user_key);
+        self.incoming_world_events.push_connection(user_key);
     }
 
     /// Maintain connection with a client and read all incoming packet data
@@ -448,7 +448,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         // tick event
-        if self.time_manager.recv_server_tick(&now) {
+        if self.time_manager.recv_server_tick(now) {
             self.incoming_tick_events
                 .push_tick(self.time_manager.current_tick());
         }
@@ -532,7 +532,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         channel_kind: &ChannelKind,
         request_box: Box<dyn Message>,
     ) -> Result<GlobalRequestId, NaiaServerError> {
-        let channel_settings = self.channel_kinds.channel(&channel_kind);
+        let channel_settings = self.channel_kinds.channel(channel_kind);
 
         if !channel_settings.can_request_and_respond() {
             panic!("Requests can only be sent over Bidirectional, Reliable Channels");
@@ -564,7 +564,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             message,
         );
 
-        return Ok(request_id);
+        Ok(request_id)
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.
@@ -588,7 +588,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) -> bool {
         let Some((user_key, channel_kind, local_response_id)) = self
             .global_response_manager
-            .destroy_response_id(&response_id)
+            .destroy_response_id(response_id)
         else {
             return false;
         };
@@ -610,7 +610,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             local_response_id,
             response,
         );
-        return true;
+        true
     }
 
     pub fn receive_response<S: Response>(
@@ -627,7 +627,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .ok()
             .map(|boxed_s| *boxed_s)
             .unwrap();
-        return Some((user_key, response));
+        Some((user_key, response))
     }
     //
 
@@ -746,7 +746,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             let user_layer = self
                 .user_priorities
                 .entry(connection.user_key)
-                .or_insert_with(UserPriorityState::new);
+                .or_default();
             let mut hook = WorldServerPriorityHook {
                 global: &self.global_priority,
                 user: user_layer,
@@ -835,7 +835,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
-        self.spawn_entity_inner(&entity);
+        self.spawn_entity_inner(entity);
     }
 
     /// Bevy adapter crates only: register an already-spawned Bevy entity as a
@@ -1209,6 +1209,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .unwrap();
         let server_owned: bool = entity_owner.is_server();
         let client_owned: bool = entity_owner.is_client();
+        // When the server initiates delegation on a client-owned entity
+        // (per spec [entity-ownership-11]), `entity_enable_delegation` needs
+        // the owning client's key as `client_origin` so the migration flow
+        // runs (`enable_delegation_client_owned_entity`) AND so the owning
+        // client doesn't receive an EnableDelegation message it can't
+        // route — its `HostEntityChannel::process_messages` would panic
+        // with "unexpected message type: EnableDelegation".
+        let client_origin: Option<UserKey> = match entity_owner {
+            EntityOwner::Client(uk)
+            | EntityOwner::ClientPublic(uk)
+            | EntityOwner::ClientWaiting(uk) => Some(uk),
+            EntityOwner::Server | EntityOwner::Local => None,
+        };
         let prev_config = self
             .global_world_manager
             .entity_replication_config(&global_entity)
@@ -1242,7 +1255,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                                 world,
                                 &global_entity,
                                 world_entity,
-                                None,
+                                client_origin,
                             );
                         }
                     }
@@ -1267,7 +1280,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                                 world,
                                 &global_entity,
                                 world_entity,
-                                None,
+                                client_origin,
                             );
                         }
                     }
@@ -1313,12 +1326,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_to_global_entity(world_entity)
             .unwrap();
 
-        let requester = AuthOwner::Client(*origin_user);
-        let result = self
+        // Per contract [entity-authority-12] ("server give_authority
+        // requires scope"): the target user must be able to see the
+        // entity, otherwise return `NotInScope` and leave the holder
+        // unchanged. Without this gate the server could silently grant
+        // authority to an out-of-scope user, who would never receive the
+        // matching SetAuthority message and would diverge from server
+        // state.
+        if !self.user_scope_has_entity(origin_user, world_entity) {
+            return Err(AuthorityError::NotInScope);
+        }
+
+        // Use the server-priority give path so we override any current
+        // holder (per contract [entity-authority-10]). The previous
+        // `client_request_authority` path failed with NotAvailable
+        // whenever the entity was already held — including by the same
+        // user — which broke the "server give overrides current holder"
+        // contract.
+        let previous_owner = self
             .global_world_manager
-            .client_request_authority(&global_entity, &requester);
-        if result.is_err() {
-            return result;
+            .server_give_authority_to_client(&global_entity, origin_user)?;
+
+        // Idempotent re-give to the same user: the auth-handler already
+        // returned without state change (see
+        // `server_give_authority_to_client`); skip fan-out so we don't
+        // drive an illegal Granted→Granted transition through the
+        // per-client auth channel.
+        if previous_owner == AuthOwner::Client(*origin_user) {
+            return Ok(());
         }
 
         // entity authority was granted for origin user
@@ -1371,7 +1406,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Push to events for external systems (e.g., Bevy adapter, test harness)
         // Events are separate from network messages - they're notifications for external consumers
         self.incoming_world_events
-            .push_auth_grant(origin_user, &world_entity);
+            .push_auth_grant(origin_user, world_entity);
 
         Ok(())
     }
@@ -1481,7 +1516,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
             return owner;
         }
-        return EntityOwner::Local;
+        EntityOwner::Local
     }
 
     // Users
@@ -1593,7 +1628,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let layer = self
             .user_priorities
             .entry(*user_key)
-            .or_insert_with(UserPriorityState::new);
+            .or_default();
         layer.get_mut(entity)
     }
 
@@ -1601,7 +1636,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Gets the current tick of the Server
     pub fn current_tick(&self) -> Tick {
-        return self.time_manager.current_tick();
+        self.time_manager.current_tick()
     }
 
     /// Gets the current average tick duration of the Server
@@ -1715,14 +1750,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// This will also remove all of the Entity’s Components.
     /// Panics if the Entity does not exist.
     pub(crate) fn despawn_entity<W: WorldMutType<E>>(&mut self, world: &mut W, world_entity: &E) {
-        if !world.has_entity(&world_entity) {
+        if !world.has_entity(world_entity) {
             panic!("attempted to de-spawn nonexistent entity");
         }
 
         // Delete from world
-        world.despawn_entity(&world_entity);
+        world.despawn_entity(world_entity);
 
-        self.despawn_entity_worldless(&world_entity);
+        self.despawn_entity_worldless(world_entity);
     }
 
     // Used by adapter crates only!
@@ -1997,11 +2032,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) {
         let excluding_addr_opt: Option<SocketAddr> = {
             if let Some(user_key) = excluding_user_opt {
-                if let Some(user) = self.users.get(user_key) {
-                    Some(user.address())
-                } else {
-                    None
-                }
+                self.users.get(user_key).map(|user| user.address())
             } else {
                 None
             }
@@ -2027,7 +2058,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             connection
                 .base
                 .world_manager
-                .insert_component(global_entity, &component_kind);
+                .insert_component(global_entity, component_kind);
         }
     }
 
@@ -2053,9 +2084,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // cleanup all other loose ends
         self.global_world_manager
-            .remove_component_record(&global_entity, &component_kind);
+            .remove_component_record(&global_entity, component_kind);
         self.global_world_manager
-            .remove_component_diff_handler(&global_entity, &component_kind);
+            .remove_component_diff_handler(&global_entity, component_kind);
     }
 
     fn remove_component_from_all_connections(
@@ -2078,7 +2109,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             connection
                 .base
                 .world_manager
-                .remove_component(global_entity, &component_kind);
+                .remove_component(global_entity, component_kind);
         }
     }
 
@@ -2093,7 +2124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) -> bool {
         if server_origin {
             // send publish message to entity owner
-            let entity_owner = self.global_world_manager.entity_owner(&global_entity);
+            let entity_owner = self.global_world_manager.entity_owner(global_entity);
             let Some(EntityOwner::Client(user_key)) = entity_owner else {
                 panic!(
                     "Entity is not owned by a Client. Cannot publish entity. Owner is: {:?}",
@@ -2111,7 +2142,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        let result = self.global_world_manager.entity_publish(&global_entity);
+        let result = self.global_world_manager.entity_publish(global_entity);
         if result {
             world.entity_publish(
                 &self.component_kinds,
@@ -2120,7 +2151,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 world_entity,
             );
         }
-        return result;
+        result
     }
 
     pub(crate) fn unpublish_entity<W: WorldMutType<E>>(
@@ -2132,7 +2163,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) {
         if server_origin {
             // send publish message to entity owner
-            let entity_owner = self.global_world_manager.entity_owner(&global_entity);
+            let entity_owner = self.global_world_manager.entity_owner(global_entity);
             let Some(EntityOwner::ClientPublic(user_key)) = entity_owner else {
                 panic!("Entity is not owned by a Client or is Private. Cannot publish entity. Owner is: {:?}", entity_owner);
             };
@@ -2147,9 +2178,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        self.global_world_manager.entity_unpublish(&global_entity);
+        self.global_world_manager.entity_unpublish(global_entity);
         world.entity_unpublish(world_entity);
-        self.cleanup_entity_replication(&global_entity);
+        self.cleanup_entity_replication(global_entity);
     }
 
     pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(
@@ -2211,7 +2242,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             );
         } else {
             self.global_world_manager
-                .entity_enable_delegation(&global_entity);
+                .entity_enable_delegation(global_entity);
             world.entity_enable_delegation(
                 &self.component_kinds,
                 &self.global_entity_map,
@@ -2243,7 +2274,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // publishing here to ensure that the entity is in the correct state ..
                 // TODO: this is probably a bad idea somehow! this is hacky
                 // instead, should rely on client message coming through at the appropriate time to publish the entity before this..
-                let result = self.global_world_manager.entity_publish(&global_entity);
+                let result = self.global_world_manager.entity_publish(global_entity);
                 if result {
                     world.entity_publish(
                         &self.component_kinds,
@@ -2268,7 +2299,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         let user_key = owner_user_key;
         self.global_world_manager
-            .migrate_entity_to_server(&global_entity);
+            .migrate_entity_to_server(global_entity);
 
         // we set this to true immediately since it's already being replicated out to the remote
         self.entity_scope_map.insert(user_key, *global_entity, true);
@@ -2327,7 +2358,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         );
 
         self.global_world_manager
-            .entity_enable_delegation(&global_entity);
+            .entity_enable_delegation(global_entity);
         world.entity_enable_delegation(
             &self.component_kinds,
             &self.global_entity_map,
@@ -2335,14 +2366,67 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             world_entity,
         );
 
-        // grant authority to user
-        let requester = AuthOwner::from_user_key(Some(client_key));
-        let result = self
-            .global_world_manager
-            .client_request_authority(&global_entity, &requester);
-        if result.is_err() {
-            panic!("failed to grant authority of client-owned delegated entity to creating user");
+        // Per contracts [entity-delegation-06]/[07]/[08]/[09]: the
+        // previous owner gets initial Granted authority *iff* it's
+        // still in-scope for the entity at migration time. If the
+        // owner is out-of-scope, no holder is assigned and every
+        // in-scope client observes Available (the default emitted by
+        // EnableDelegation). We use `entity_scope_map` directly
+        // because `user_scope_has_entity` takes a world_entity (E),
+        // not a global_entity, and we only have the global here.
+        let owner_in_scope = self
+            .entity_scope_map
+            .get(client_key, global_entity)
+            .copied()
+            .unwrap_or(false);
+
+        if owner_in_scope {
+            let requester = AuthOwner::from_user_key(Some(client_key));
+            let result = self
+                .global_world_manager
+                .client_request_authority(global_entity, &requester);
+            if result.is_err() {
+                panic!("failed to grant authority of client-owned delegated entity to creating user");
+            }
+
+            // Fan out SetAuthority to every in-scope user so the holder
+            // observes Granted and everyone else observes Denied.
+            // Without this, the per-client auth status stays at the
+            // EnableDelegation default (Available) and contracts
+            // [entity-delegation-06]/[entity-delegation-07] (migration
+            // assigns initial authority to the previous owner) silently
+            // fail. Snapshot first so we can re-borrow user_connections
+            // mutably inside the loop.
+            let user_snapshot: Vec<(UserKey, std::net::SocketAddr)> = self
+                .users
+                .iter()
+                .map(|(k, u)| (*k, u.address()))
+                .collect();
+            for (user_key, addr) in user_snapshot {
+                let Some(connection) = self.user_connections.get_mut(&addr) else {
+                    continue;
+                };
+                if !connection
+                    .base
+                    .world_manager
+                    .has_global_entity(global_entity)
+                {
+                    continue;
+                }
+                let new_status = if user_key == *client_key {
+                    EntityAuthStatus::Granted
+                } else {
+                    EntityAuthStatus::Denied
+                };
+                connection
+                    .base
+                    .world_manager
+                    .host_send_set_auth(global_entity, new_status);
+            }
         }
+        // else: owner is out-of-scope — leave AuthOwner::None and don't
+        // emit any SetAuthority. Every in-scope client already sees
+        // Available from the EnableDelegation default.
     }
 
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
@@ -2380,7 +2464,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         self.global_world_manager
-            .entity_disable_delegation(&global_entity);
+            .entity_disable_delegation(global_entity);
         world.entity_disable_delegation(world_entity);
     }
 
@@ -2399,7 +2483,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if let Some(user) = self.users.get(user_key) {
             return Some(user.room_keys().iter());
         }
-        return None;
+        None
     }
 
     /// Get an count of how many Rooms the given User is inside
@@ -2407,7 +2491,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if let Some(user) = self.users.get(user_key) {
             return Some(user.room_count());
         }
-        return None;
+        None
     }
 
     pub(crate) fn user_disconnect<W: WorldMutType<E>>(
@@ -2490,7 +2574,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.io.deregister_client(&user.address());
         }
 
-        return user;
+        user
     }
 
     /// All necessary cleanup, when they're actually gone...
@@ -2621,20 +2705,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
     pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
-        let iter = if let Some(room) = self.rooms.get(room_key) {
-            Some(room.user_keys())
-        } else {
-            None
-        };
+        let iter = self.rooms.get(room_key).map(|room| room.user_keys());
         iter.into_iter().flatten()
     }
 
     pub(crate) fn room_entities(&self, room_key: &RoomKey) -> impl Iterator<Item = &GlobalEntity> {
-        let iter = if let Some(room) = self.rooms.get(room_key) {
-            Some(room.entities())
-        } else {
-            None
-        };
+        let iter = self.rooms.get(room_key).map(|room| room.entities());
         iter.into_iter().flatten()
     }
 
@@ -2661,7 +2737,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let Some(room) = self.rooms.get(room_key) else {
             return false;
         };
-        return room.has_entity(entity);
+        room.has_entity(entity)
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -2776,7 +2852,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Mark that we should send an ACK-only packet
         connection.base.mark_should_send_empty_ack();
 
-        return Ok(());
+        Ok(())
     }
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
@@ -3340,8 +3416,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .world_manager
             .has_global_entity(global_entity);
 
-        // Check whether the entity should be in scope for this user.
-        // Must be in a common room AND pass the explicit scope map (default: include).
+        // Decide scope membership. Per contract [entity-scopes-06] /
+        // [entity-scopes-12]: an explicit user-scope override wins
+        // over the room-default rule. Three cases:
+        //   - explicit override = Some(true)  → in scope (even if no
+        //     room overlap; "include overrides room absence")
+        //   - explicit override = Some(false) → out of scope (even with
+        //     room overlap; "exclude hides despite shared room")
+        //   - explicit override = None        → use the room default
+        //     (in scope iff user and entity share a room)
+        // Replicated Resources (D14 / §4.3 of RESOURCES_PLAN) bypass
+        // the room rule entirely and are unconditionally in-scope for
+        // every connected user, but the explicit-exclude override still
+        // applies defensively.
         let in_common_room = if let Some(entity_rooms) =
             self.entity_room_map.entity_get_rooms(global_entity)
         {
@@ -3349,18 +3436,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         } else {
             false
         };
-        let scope_flag = self
+        let explicit = self
             .entity_scope_map
             .get(user_key, global_entity)
-            .copied()
-            .unwrap_or(true);
-        // Replicated Resources (D14 / §4.3 of RESOURCES_PLAN): resource
-        // entities are global per-World — they bypass the room gate and
-        // are unconditionally in-scope for every connected user. The
-        // `scope_flag` still applies for explicit exclude (defensive),
-        // though the public API should not allow excluding a resource.
+            .copied();
         let is_resource = self.resource_registry.is_resource_entity(global_entity);
-        let should_be_in_scope = (is_resource || in_common_room) && scope_flag;
+        let should_be_in_scope = match explicit {
+            Some(in_scope) => in_scope,
+            None => is_resource || in_common_room,
+        };
 
         if should_be_in_scope {
             if currently_in_scope {

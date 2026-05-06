@@ -3,7 +3,7 @@ use bevy_ecs::{
     world::Mut,
 };
 use naia_bevy_shared::{
-    EntityAuthStatus, HostOwned, Replicate, ReplicatedResource, WorldOpCommand, WorldProxyMut,
+    EntityAuthStatus, HostOwned, ReplicatedResource, WorldOpCommand, WorldProxyMut,
 };
 use naia_server::{ReplicationConfig, UserKey};
 
@@ -80,7 +80,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 
     fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.entity_take_authority(&self.id());
-        return self;
+        self
     }
 
     fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus> {
@@ -89,12 +89,12 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 
     fn pause_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.pause_replication(&self.id());
-        return self;
+        self
     }
 
     fn resume_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.resume_replication(&self.id());
-        return self;
+        self
     }
 }
 

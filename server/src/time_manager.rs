@@ -57,7 +57,7 @@ impl TimeManager {
             self.current_tick = self.current_tick.wrapping_add(1);
             return true;
         }
-        return false;
+        false
     }
 
     /// Gets the current tick of the Server
@@ -66,7 +66,7 @@ impl TimeManager {
     }
 
     pub fn current_tick_instant(&self) -> GameInstant {
-        self.last_tick_game_instant.clone()
+        self.last_tick_game_instant
     }
 
     pub fn average_tick_duration(&self) -> Duration {

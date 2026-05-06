@@ -68,22 +68,22 @@ impl Handshaker for HandshakeManager {
             HandshakeState::AwaitingIdentifyResponse => {
                 if let Some(identity_token) = &self.identity_token {
                     let writer = self.write_identify_request(identity_token);
-                    return Some(writer.to_packet());
+                    Some(writer.to_packet())
                 } else {
                     log::warn!("HandshakeManager: Timer ringing but Identity Token not set");
-                    return None;
+                    None
                 }
             }
             HandshakeState::TimeSync(time_manager) => {
                 let writer = time_manager.write_ping();
-                return Some(writer.to_packet());
+                Some(writer.to_packet())
             }
             HandshakeState::AwaitingConnectResponse(_) => {
                 let writer = self.write_connect_request();
-                return Some(writer.to_packet());
+                Some(writer.to_packet())
             }
             HandshakeState::Connected => {
-                return None;
+                None
             }
         }
     }
@@ -105,19 +105,19 @@ impl Handshaker for HandshakeManager {
                     HandshakeHeader::ServerIdentifyResponse => {
                         // info!("Received ServerIdentifyResponse");
                         self.recv_identify_response(reader);
-                        return None;
+                        None
                     }
                     HandshakeHeader::ServerConnectResponse => {
                         // info!("Received ServerConnectResponse");
-                        return self.recv_connect_response();
+                        self.recv_connect_response()
                     }
                     HandshakeHeader::ServerRejectResponse(reason) => {
-                        return Some(HandshakeResult::Rejected(reason));
+                        Some(HandshakeResult::Rejected(reason))
                     }
                     HandshakeHeader::ClientIdentifyRequest(_)
                     | HandshakeHeader::ClientConnectRequest
                     | HandshakeHeader::Disconnect => {
-                        return None;
+                        None
                     }
                 }
             }
@@ -141,10 +141,10 @@ impl Handshaker for HandshakeManager {
                     self.connection_state =
                         HandshakeState::AwaitingConnectResponse(time_manager.finalize());
                 }
-                return None;
+                None
             }
             PacketType::Data | PacketType::Heartbeat | PacketType::Ping => {
-                return None;
+                None
             }
         }
     }
@@ -220,6 +220,6 @@ impl HandshakeManager {
             return None;
         };
 
-        return Some(HandshakeResult::Connected(time_manager));
+        Some(HandshakeResult::Connected(time_manager))
     }
 }

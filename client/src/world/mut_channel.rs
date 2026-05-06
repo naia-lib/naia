@@ -21,7 +21,7 @@ impl MutChannelType for MutChannelData {
                 "should not initialize client MutReceiver with an address (there is only 1 server)"
             );
         }
-        return Some(self.receiver.clone());
+        Some(self.receiver.clone())
     }
 
     fn send(&self, diff: u8) {

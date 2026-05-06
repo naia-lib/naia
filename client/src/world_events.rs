@@ -63,11 +63,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     pub fn read<V: WorldEvent<E>>(&mut self) -> V::Iter {
-        return V::iter(self);
+        V::iter(self)
     }
 
     pub fn has<V: WorldEvent<E>>(&self) -> bool {
-        return V::has(self);
+        V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
@@ -96,9 +96,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
     pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<E>>> {
         if self.inserts.is_empty() {
-            return None;
+            None
         } else {
-            return Some(mem::take(&mut self.inserts));
+            Some(mem::take(&mut self.inserts))
         }
     }
 
@@ -108,9 +108,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
     pub fn take_updates(&mut self) -> Option<HashMap<ComponentKind, Vec<(Tick, E)>>> {
         if self.updates.is_empty() {
-            return None;
+            None
         } else {
-            return Some(mem::take(&mut self.updates));
+            Some(mem::take(&mut self.updates))
         }
     }
 
@@ -120,9 +120,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
     pub fn take_removes(&mut self) -> Option<HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>> {
         if self.removes.is_empty() {
-            return None;
+            None
         } else {
-            return Some(mem::take(&mut self.removes));
+            Some(mem::take(&mut self.removes))
         }
     }
 
@@ -144,15 +144,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     pub(crate) fn push_message(&mut self, channel_kind: &ChannelKind, message: MessageContainer) {
-        if !self.messages.contains_key(&channel_kind) {
+        if !self.messages.contains_key(channel_kind) {
             self.messages.insert(*channel_kind, HashMap::new());
         }
-        let channel_map = self.messages.get_mut(&channel_kind).unwrap();
+        let channel_map = self.messages.get_mut(channel_kind).unwrap();
 
         let message_kind: MessageKind = message.kind();
-        if !channel_map.contains_key(&message_kind) {
-            channel_map.insert(message_kind, Vec::new());
-        }
+        channel_map.entry(message_kind).or_default();
         let list = channel_map.get_mut(&message_kind).unwrap();
         list.push(message);
         self.empty = false;
@@ -164,15 +162,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         global_response_id: GlobalResponseId,
         request: MessageContainer,
     ) {
-        if !self.requests.contains_key(&channel_kind) {
+        if !self.requests.contains_key(channel_kind) {
             self.requests.insert(*channel_kind, HashMap::new());
         }
-        let channel_map = self.requests.get_mut(&channel_kind).unwrap();
+        let channel_map = self.requests.get_mut(channel_kind).unwrap();
 
         let message_kind: MessageKind = request.kind();
-        if !channel_map.contains_key(&message_kind) {
-            channel_map.insert(message_kind, Vec::new());
-        }
+        channel_map.entry(message_kind).or_default();
         let list = channel_map.get_mut(&message_kind).unwrap();
         list.push((global_response_id, request));
 
@@ -220,9 +216,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     pub(crate) fn push_insert(&mut self, world_entity: E, component_kind: ComponentKind) {
-        if !self.inserts.contains_key(&component_kind) {
-            self.inserts.insert(component_kind, Vec::new());
-        }
+        self.inserts.entry(component_kind).or_insert_with(|| Vec::new());
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push(world_entity);
         self.empty = false;
@@ -234,9 +228,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         world_entity: E,
         component_kind: ComponentKind,
     ) {
-        if !self.updates.contains_key(&component_kind) {
-            self.updates.insert(component_kind, Vec::new());
-        }
+        self.updates.entry(component_kind).or_default();
         let list = self.updates.get_mut(&component_kind).unwrap();
         list.push((tick, world_entity));
         self.empty = false;
@@ -244,9 +236,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     pub(crate) fn push_remove(&mut self, world_entity: E, component: Box<dyn Replicate>) {
         let component_kind: ComponentKind = component.kind();
-        if !self.removes.contains_key(&component_kind) {
-            self.removes.insert(component_kind, Vec::new());
-        }
+        self.removes.entry(component_kind).or_default();
         let list = self.removes.get_mut(&component_kind).unwrap();
         list.push((world_entity, component));
         self.empty = false;
@@ -289,7 +279,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -304,7 +294,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -319,7 +309,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -334,7 +324,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ErrorEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -368,7 +358,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
                 return IntoIterator::into_iter(output_list);
             }
         }
-        return IntoIterator::into_iter(Vec::new());
+        IntoIterator::into_iter(Vec::new())
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -377,7 +367,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
             let message_kind: MessageKind = MessageKind::of::<M>();
             return channel_map.contains_key(&message_kind);
         }
-        return false;
+        false
     }
 }
 
@@ -409,7 +399,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
             output_list.push((response_send_key, *request));
         }
 
-        return IntoIterator::into_iter(output_list);
+        IntoIterator::into_iter(output_list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -418,7 +408,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
             let message_kind: MessageKind = MessageKind::of::<Q>();
             return channel_map.contains_key(&message_kind);
         }
-        return false;
+        false
     }
 }
 
@@ -429,7 +419,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for SpawnEntityEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.spawns);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -444,7 +434,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DespawnEntityEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.despawns);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -459,7 +449,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for PublishEntityEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.publishes);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -474,7 +464,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for UnpublishEntityEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.unpublishes);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -489,7 +479,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthGrantedEvent
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.auth_grants);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -504,7 +494,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthResetEvent {
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.auth_resets);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -519,7 +509,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthDeniedEvent 
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.auth_denies);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -540,7 +530,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for InsertCo
             return IntoIterator::into_iter(boxed_list);
         }
 
-        return IntoIterator::into_iter(Vec::new());
+        IntoIterator::into_iter(Vec::new())
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -562,7 +552,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for UpdateCo
             return IntoIterator::into_iter(boxed_list);
         }
 
-        return IntoIterator::into_iter(Vec::new());
+        IntoIterator::into_iter(Vec::new())
     }
 
     fn has(events: &WorldEvents<E>) -> bool {
@@ -592,7 +582,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveCo
             return IntoIterator::into_iter(output_list);
         }
 
-        return IntoIterator::into_iter(Vec::new());
+        IntoIterator::into_iter(Vec::new())
     }
 
     fn has(events: &WorldEvents<E>) -> bool {

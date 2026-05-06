@@ -403,7 +403,7 @@ impl SerdeNumberInner {
         }
 
         if self.variable {
-            let mut value = self.inner_value.abs() as u128;
+            let mut value = self.inner_value.unsigned_abs();
             loop {
                 let proceed = value >= 2_u128.pow(self.bits as u32);
                 output += 1; // proceed bit

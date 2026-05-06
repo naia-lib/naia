@@ -108,7 +108,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: W, now: &Instant) {
-        self.world_server.process_all_packets(world, &now);
+        self.world_server.process_all_packets(world, now);
     }
 
     pub fn take_world_events(&mut self) -> Events<E> {
@@ -133,7 +133,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
-        self.world_server.take_tick_events(&now)
+        self.world_server.take_tick_events(now)
     }
 
     // Connections

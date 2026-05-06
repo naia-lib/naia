@@ -46,11 +46,11 @@ impl TickBufferReceiver {
             }
 
             // read channel index
-            let channel_kind = ChannelKind::de(&channel_kinds, reader)?;
+            let channel_kind = ChannelKind::de(channel_kinds, reader)?;
 
             // continue read inside channel
             let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
-            channel.read_messages(converter, &message_kinds, host_tick, remote_tick, reader)?;
+            channel.read_messages(converter, message_kinds, host_tick, remote_tick, reader)?;
         }
 
         Ok(())

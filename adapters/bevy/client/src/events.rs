@@ -22,6 +22,12 @@ pub struct ConnectEvent<T> {
     phantom_t: PhantomData<T>,
 }
 
+impl<T> Default for ConnectEvent<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> ConnectEvent<T> {
     pub fn new() -> Self {
         Self {
@@ -36,6 +42,12 @@ pub struct DisconnectEvent<T> {
     phantom_t: PhantomData<T>,
 }
 
+impl<T> Default for DisconnectEvent<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> DisconnectEvent<T> {
     pub fn new() -> Self {
         Self {
@@ -48,6 +60,12 @@ impl<T> DisconnectEvent<T> {
 #[derive(bevy_ecs::message::Message)]
 pub struct RejectEvent<T> {
     phantom_t: PhantomData<T>,
+}
+
+impl<T> Default for RejectEvent<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T> RejectEvent<T> {

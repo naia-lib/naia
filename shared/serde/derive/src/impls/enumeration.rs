@@ -200,7 +200,7 @@ fn get_de_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
 
 fn get_bit_length_method(enum_: &DataEnum, bits_needed: u8) -> TokenStream {
     let mut bit_length = quote! {};
-    for (_, variant) in enum_.variants.iter().enumerate() {
+    for variant in enum_.variants.iter() {
         let variant_name = &variant.ident;
         let base = match &variant.fields {
             Fields::Unit => {

@@ -144,9 +144,9 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
             .entity_converter()
             .entity_to_global_entity(entity)
         {
-            return self.server.room_has_entity(&self.key, &global_entity);
+            self.server.room_has_entity(&self.key, &global_entity)
         } else {
-            return false;
+            false
         }
     }
 
@@ -225,9 +225,9 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
             .entity_converter()
             .entity_to_global_entity(entity)
         {
-            return self.server.room_has_entity(&self.key, &global_entity);
+            self.server.room_has_entity(&self.key, &global_entity)
         } else {
-            return false;
+            false
         }
     }
 

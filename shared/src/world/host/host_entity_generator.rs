@@ -135,14 +135,6 @@ impl HostEntityGenerator {
         global_entity
     }
 
-    pub(crate) fn recycle_host_entity(&mut self, host_entity: HostEntity) {
-        if host_entity.is_static() {
-            self.static_generator.recycle_key(&host_entity.value());
-        } else {
-            self.generator.recycle_key(&host_entity.value());
-        }
-    }
-
     // Misc
 
     pub fn get_user_key(&self) -> &u64 {

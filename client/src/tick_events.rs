@@ -28,11 +28,11 @@ impl TickEvents {
     }
 
     pub fn read<V: TickEvent>(&mut self) -> V::Iter {
-        return V::iter(self);
+        V::iter(self)
     }
 
     pub fn has<V: TickEvent>(&self) -> bool {
-        return V::has(self);
+        V::has(self)
     }
 
     pub(crate) fn push_client_tick(&mut self, tick: Tick) {
@@ -68,7 +68,7 @@ impl TickEvent for ClientTickEvent {
 
     fn iter(events: &mut TickEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.client_ticks);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &TickEvents) -> bool {
@@ -83,7 +83,7 @@ impl TickEvent for ServerTickEvent {
 
     fn iter(events: &mut TickEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.server_ticks);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &TickEvents) -> bool {

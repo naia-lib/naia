@@ -27,3 +27,66 @@ bevy_ecs = { version = "0.18", default-features = false }
 parking_lot = "0.12"
 
 log = "0.4"
+
+# ----------------------------------------------------------------------
+# Legacy contract tests reactivated 2026-05-06 (T2.1).
+# Files live under `legacy_tests/` for historical reasons; each file's
+# scenarios map 1:1 to a numbered contract spec in `_AGENTS/contracts/`.
+# Cargo doesn't auto-discover from `legacy_tests/` (only from `tests/`),
+# so each file is wired in explicitly here.
+# ----------------------------------------------------------------------
+[[test]]
+name = "contract_01_connection_lifecycle"
+path = "legacy_tests/01_connection_lifecycle.rs"
+
+[[test]]
+name = "contract_02_transport"
+path = "legacy_tests/02_transport.rs"
+
+[[test]]
+name = "contract_03_messaging"
+path = "legacy_tests/03_messaging.rs"
+
+[[test]]
+name = "contract_04_time_ticks_commands"
+path = "legacy_tests/04_time_ticks_commands.rs"
+
+[[test]]
+name = "contract_05_observability_metrics"
+path = "legacy_tests/05_observability_metrics.rs"
+
+[[test]]
+name = "contract_06_entity_scopes"
+path = "legacy_tests/06_entity_scopes.rs"
+
+[[test]]
+name = "contract_07_entity_replication"
+path = "legacy_tests/07_entity_replication.rs"
+
+[[test]]
+name = "contract_08_entity_ownership"
+path = "legacy_tests/08_entity_ownership.rs"
+
+[[test]]
+name = "contract_09_entity_publication"
+path = "legacy_tests/09_entity_publication.rs"
+
+[[test]]
+name = "contract_10_entity_delegation"
+path = "legacy_tests/10_entity_delegation.rs"
+
+[[test]]
+name = "contract_11_entity_authority"
+path = "legacy_tests/11_entity_authority.rs"
+
+[[test]]
+name = "contract_12_server_events_api"
+path = "legacy_tests/12_server_events_api.rs"
+
+[[test]]
+name = "contract_13_client_events_api"
+path = "legacy_tests/13_client_events_api.rs"
+
+[[test]]
+name = "contract_14_world_integration"
+path = "legacy_tests/14_world_integration.rs"

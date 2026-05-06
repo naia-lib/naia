@@ -64,6 +64,12 @@ pub struct ChannelKinds {
     net_id_map: HashMap<NetId, ChannelKind>,
 }
 
+impl Default for ChannelKinds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ChannelKinds {
     pub fn new() -> Self {
         Self {
@@ -104,24 +110,24 @@ impl ChannelKinds {
     }
 
     fn net_id_to_kind(&self, net_id: &NetId) -> ChannelKind {
-        return *self.net_id_map.get(net_id).expect(
+        *self.net_id_map.get(net_id).expect(
             "Must properly initialize Channel with Protocol via `add_channel()` function!",
-        );
+        )
     }
 
     fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
-        return self
+        self
             .kind_map
             .get(channel_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_channel()` function!",
             )
-            .0;
+            .0
     }
 
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
-        for (_, (_, _, name)) in &self.kind_map {
+        for (_, _, name) in self.kind_map.values() {
             output.push(name.clone());
         }
         output.sort();

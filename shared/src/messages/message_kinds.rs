@@ -83,6 +83,12 @@ impl Clone for MessageKinds {
     }
 }
 
+impl Default for MessageKinds {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MessageKinds {
     pub fn new() -> Self {
         Self {
@@ -119,34 +125,34 @@ impl MessageKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<MessageContainer, SerdeErr> {
         let message_kind: MessageKind = MessageKind::de(self, reader)?;
-        return self.kind_to_builder(&message_kind).read(reader, converter);
+        self.kind_to_builder(&message_kind).read(reader, converter)
     }
 
     fn net_id_to_kind(&self, net_id: &NetId) -> MessageKind {
-        return *self.net_id_map.get(net_id).expect(
+        *self.net_id_map.get(net_id).expect(
             "Must properly initialize Message with Protocol via `add_message()` function!",
-        );
+        )
     }
 
     fn kind_to_net_id(&self, message_kind: &MessageKind) -> NetId {
-        return self
+        self
             .kind_map
             .get(message_kind)
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
-            .0;
+            .0
     }
 
     fn kind_to_builder(&self, message_kind: &MessageKind) -> &Box<dyn MessageBuilder> {
-        return &self
+        &self
             .kind_map
-            .get(&message_kind)
+            .get(message_kind)
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
-            .1;
+            .1
     }
 
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
-        for (_, (_, _, name)) in &self.kind_map {
+        for (_, _, name) in self.kind_map.values() {
             output.push(name.clone());
         }
         output.sort();

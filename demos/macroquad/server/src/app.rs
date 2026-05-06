@@ -179,7 +179,7 @@ impl App {
                 };
                 if let Some(mut position) = self
                     .server
-                    .entity_mut(self.world.proxy_mut(), &entity)
+                    .entity_mut(self.world.proxy_mut(), entity)
                     .component::<Position>()
                 {
                     shared_behavior::process_command(&key_command, &mut position);

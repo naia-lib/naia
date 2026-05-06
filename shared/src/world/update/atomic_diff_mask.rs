@@ -155,7 +155,7 @@ mod tests {
     }
 
     /// >64-bit mask used to panic with `debug_assert!`. Now supported
-    /// via the multi-word AtomicBitSet backing.
+    /// > via the multi-word AtomicBitSet backing.
     #[test]
     fn over_64_bits_supported_no_more_8_byte_limit() {
         let m = AtomicDiffMask::new(32); // 256 bits / 256 properties

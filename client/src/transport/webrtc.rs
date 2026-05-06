@@ -18,10 +18,10 @@ pub struct Socket {
 
 impl Socket {
     pub fn new(server_session_url: &str, config: &SocketConfig) -> Self {
-        return Self {
+        Self {
             server_session_url: server_session_url.to_string(),
             config: config.clone(),
-        };
+        }
     }
 }
 
@@ -66,9 +66,9 @@ impl TransportIdentityReceiver for Box<dyn IdentityReceiver> {
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for Socket {
-    fn into(self) -> Box<dyn TransportSocket> {
-        Box::new(self)
+impl From<Socket> for Box<dyn TransportSocket> {
+    fn from(val: Socket) -> Self {
+        Box::new(val)
     }
 }
 
@@ -82,11 +82,11 @@ impl TransportSocket for Socket {
     ) {
         let (id_receiver, inner_sender, inner_receiver) =
             ClientSocket::connect(&self.server_session_url, &self.config);
-        return (
+        (
             Box::new(id_receiver),
             Box::new(inner_sender),
             Box::new(inner_receiver),
-        );
+        )
     }
     fn connect_with_auth(
         self: Box<Self>,
@@ -98,11 +98,11 @@ impl TransportSocket for Socket {
     ) {
         let (id_receiver, inner_sender, inner_receiver) =
             ClientSocket::connect_with_auth(&self.server_session_url, &self.config, auth_bytes);
-        return (
+        (
             Box::new(id_receiver),
             Box::new(inner_sender),
             Box::new(inner_receiver),
-        );
+        )
     }
     fn connect_with_auth_headers(
         self: Box<Self>,
@@ -117,11 +117,11 @@ impl TransportSocket for Socket {
             &self.config,
             auth_headers,
         );
-        return (
+        (
             Box::new(id_receiver),
             Box::new(inner_sender),
             Box::new(inner_receiver),
-        );
+        )
     }
     fn connect_with_auth_and_headers(
         self: Box<Self>,
@@ -139,10 +139,10 @@ impl TransportSocket for Socket {
                 auth_bytes,
                 auth_headers,
             );
-        return (
+        (
             Box::new(id_receiver),
             Box::new(inner_sender),
             Box::new(inner_receiver),
-        );
+        )
     }
 }

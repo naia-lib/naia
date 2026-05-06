@@ -62,18 +62,34 @@ impl AtomicBitSet {
         }
     }
 
-    /// Number of bits the set can hold.
-    #[inline]
-    #[allow(dead_code)] // Symmetry with byte_number; used in tests + future callers.
-    pub fn bit_capacity(&self) -> usize {
-        self.bit_capacity
-    }
-
     /// Number of bytes needed to encode the bit_capacity (rounded up
     /// to whole bytes — matches `DiffMask::byte_number()`).
     #[inline]
     pub fn byte_number(&self) -> usize {
         self.bit_capacity.div_ceil(8)
+    }
+
+    /// Number of bits the set can hold. Test-only — production callers
+    /// don't care about the precise capacity vs the byte-rounded
+    /// `byte_number()`. Gated to `cfg(test)` to keep the public surface
+    /// minimal and avoid the dead-code warning under non-test builds.
+    #[cfg(test)]
+    #[inline]
+    pub fn bit_capacity(&self) -> usize {
+        self.bit_capacity
+    }
+
+    /// Drain — atomically swap-zero every word and return the values
+    /// (one `u64` per word, length = `words.len()`). Test-only mirror
+    /// of `DirtyQueue::drain`'s per-entity swap-zero loop. Production
+    /// callers use the inlined version in `mut_channel.rs` because they
+    /// need the dedupe-via-indices contract.
+    #[cfg(test)]
+    pub fn drain_words(&self) -> Vec<u64> {
+        self.words
+            .iter()
+            .map(|w| w.swap(0, Ordering::Relaxed))
+            .collect()
     }
 
     /// Set the bit at `index`. Returns `true` iff the entire bitset
@@ -206,17 +222,6 @@ impl AtomicBitSet {
         ((bits >> (byte_in_word * 8)) & 0xFF) as u8
     }
 
-    /// Drain — atomically swap-zero every word and return the values
-    /// (one `u64` per word, length = `words.len()`). Parallels
-    /// `DirtyQueue::drain`, which inlines the same swap-zero loop for
-    /// per-entity contiguous storage.
-    #[allow(dead_code)] // Public API; no in-tree caller today.
-    pub fn drain_words(&self) -> Vec<u64> {
-        self.words
-            .iter()
-            .map(|w| w.swap(0, Ordering::Relaxed))
-            .collect()
-    }
 }
 
 #[cfg(test)]

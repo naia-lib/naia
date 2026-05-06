@@ -29,9 +29,9 @@ impl Socket {
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for Socket {
-    fn into(self) -> Box<dyn TransportSocket> {
-        Box::new(self)
+impl From<Socket> for Box<dyn TransportSocket> {
+    fn from(val: Socket) -> Self {
+        Box::new(val)
     }
 }
 

@@ -38,7 +38,7 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
         }
 
         // Check whether we can return a recycled key
-        if self.recycled_keys.len() > 0 {
+        if !self.recycled_keys.is_empty() {
             let key = self.recycled_keys.pop_front().unwrap();
             return K::from(key);
         }

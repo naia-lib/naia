@@ -199,7 +199,7 @@ impl LocalWorldManager {
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             return false;
         };
-        return self.has_local_entity(&local_entity);
+        self.has_local_entity(&local_entity)
     }
 
     pub fn has_local_entity(&self, local_entity: &OwnedLocalEntity) -> bool {
@@ -236,7 +236,7 @@ impl LocalWorldManager {
     // Host-focused
 
     pub fn has_host_entity(&self, host_entity: &HostEntity) -> bool {
-        self.host.has_entity(&host_entity)
+        self.host.has_entity(host_entity)
     }
 
     pub fn host_init_entity(

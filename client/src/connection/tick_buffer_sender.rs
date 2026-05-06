@@ -110,7 +110,7 @@ impl TickBufferSender {
             ) {
                 self.packet_to_channel_map
                     .entry(packet_index)
-                    .or_insert_with(Vec::new);
+                    .or_default();
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
                 channel_list.push((*channel_kind, message_indices));
             }

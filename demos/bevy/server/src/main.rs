@@ -29,7 +29,7 @@ fn main() {
     App::default()
         // Plugins
         .add_plugins(TaskPoolPlugin::default())
-        .add_plugins(FrameCountPlugin::default())
+        .add_plugins(FrameCountPlugin)
         // this is needed to avoid running the server at uncapped FPS
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(3)))
         .add_plugins(LogPlugin::default())

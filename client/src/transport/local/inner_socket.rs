@@ -81,7 +81,10 @@ impl LocalClientSocket {
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
-        if self.auth_requests_tx.send(request_bytes).is_ok() {}
+        // Channel send is best-effort: a closed receiver means the
+        // server side already shut down, which the connect() flow
+        // surfaces separately via PendingRequest. Drop the Result.
+        let _ = self.auth_requests_tx.send(request_bytes);
 
         // Create PendingRequest immediately (not lazily!)
         self.auth_io.lock().connect();
@@ -104,7 +107,10 @@ impl LocalClientSocket {
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
-        if self.auth_requests_tx.send(request_bytes).is_ok() {}
+        // Channel send is best-effort: a closed receiver means the
+        // server side already shut down, which the connect() flow
+        // surfaces separately via PendingRequest. Drop the Result.
+        let _ = self.auth_requests_tx.send(request_bytes);
 
         // Create PendingRequest immediately
         self.auth_io.lock().connect();
@@ -132,7 +138,10 @@ impl LocalClientSocket {
         let request_bytes = naia_shared::transport::request_to_bytes(request);
 
         // Send to async channel (non-blocking)
-        if self.auth_requests_tx.send(request_bytes).is_ok() {}
+        // Channel send is best-effort: a closed receiver means the
+        // server side already shut down, which the connect() flow
+        // surfaces separately via PendingRequest. Drop the Result.
+        let _ = self.auth_requests_tx.send(request_bytes);
 
         // Create PendingRequest immediately
         self.auth_io.lock().connect();

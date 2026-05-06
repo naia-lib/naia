@@ -56,7 +56,7 @@ impl HandshakeTimeManager {
             }
         }
 
-        return Ok(false);
+        Ok(false)
     }
 
     fn buffer_stats(&mut self, time_offset_millis: i32, rtt_millis: u32) {
@@ -135,7 +135,7 @@ impl HandshakeTimeManager {
 
         // Set internal time to match offset
         if pruned_offset_mean < 0.0 {
-            let offset_ms = (pruned_offset_mean * -1.0) as u32;
+            let offset_ms = -pruned_offset_mean as u32;
             self.base.start_instant.subtract_millis(offset_ms);
         } else {
             let offset_ms = pruned_offset_mean as u32;

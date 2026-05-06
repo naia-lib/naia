@@ -8,11 +8,11 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [[bin]]
-name = "app"
+name = "naia_basic_client_demo_wb"
 path = "src/main.rs"
 
 [lib]
-name = "app"
+name = "naia_basic_client_demo_wb"
 path = "src/lib.rs"
 crate-type = ["cdylib", "rlib"]
 

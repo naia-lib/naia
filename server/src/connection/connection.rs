@@ -136,7 +136,7 @@ impl Connection {
             reader,
         )?;
 
-        return Ok(());
+        Ok(())
     }
 
     /// Receive & process stored packet data
@@ -193,15 +193,15 @@ impl Connection {
 
         // Receive World Events
         if client_authoritative_entities {
-            return self.base.world_manager.take_incoming_events(
+            self.base.world_manager.take_incoming_events(
                 global_entity_map,
                 global_world_manager,
                 component_kinds,
                 world,
                 now,
-            );
+            )
         } else {
-            return Vec::new();
+            Vec::new()
         }
     }
 

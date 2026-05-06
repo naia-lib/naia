@@ -41,7 +41,7 @@ impl ServerAuthHandler {
     }
 
     pub fn get_accessor(&self, entity: &GlobalEntity) -> EntityAuthAccessor {
-        return self.host_auth_handler.get_accessor(entity);
+        self.host_auth_handler.get_accessor(entity)
     }
 
     pub fn register_entity(&mut self, entity: &GlobalEntity) {
@@ -52,7 +52,7 @@ impl ServerAuthHandler {
 
     pub fn deregister_entity(&mut self, entity: &GlobalEntity) {
         self.host_auth_handler.deregister_entity(entity);
-        self.entity_auth_map.remove(&entity);
+        self.entity_auth_map.remove(entity);
     }
 
     pub(crate) fn authority_status(&self, entity: &GlobalEntity) -> Option<EntityAuthStatus> {
@@ -81,7 +81,7 @@ impl ServerAuthHandler {
                     *owner = AuthOwner::Client(*user_key);
                     self.user_to_entity_map
                         .entry(*user_key)
-                        .or_insert(HashSet::new())
+                        .or_default()
                         .insert(*entity);
                     // If a Client is requesting Authority, restrict the Server's local Authority
                     self.host_auth_handler
@@ -90,9 +90,9 @@ impl ServerAuthHandler {
                 AuthOwner::None => {}
             }
 
-            return Ok(());
+            Ok(())
         } else {
-            return Err(AuthorityError::NotAvailable);
+            Err(AuthorityError::NotAvailable)
         }
     }
 
@@ -105,15 +105,64 @@ impl ServerAuthHandler {
             return Err(AuthorityError::NotDelegated);
         };
 
-        if owner == releaser {
+        // Server-initiated release is sovereign: it can clear ANY current
+        // holder back to Available. This implements the contract
+        // [entity-authority-09]: "server release_authority clears holder,
+        // all clients observe Available". Clients can only release their
+        // own hold (the original `owner == releaser` check).
+        let server_initiated = matches!(releaser, AuthOwner::Server);
+        if owner == releaser || server_initiated {
             let previous_owner = *owner;
             *owner = AuthOwner::None;
             self.release_all_authority(entity, previous_owner);
 
-            return Ok(());
+            Ok(())
         } else {
-            return Err(AuthorityError::NotHolder);
+            Err(AuthorityError::NotHolder)
         }
+    }
+
+    /// Server-priority give_authority: assign `target_user` as the
+    /// authority holder regardless of who currently holds it.
+    /// Implements contract [entity-authority-10] ("server priority:
+    /// give_authority overrides current holder"). Unlike
+    /// `client_request_authority` (which fails with `NotAvailable`
+    /// when the slot is held), this is sovereign and never fails on
+    /// the holder check.
+    ///
+    /// Returns the previous owner so callers can fan out the
+    /// appropriate auth-status changes (e.g. emit `AuthLost` to the
+    /// previous holder).
+    pub(crate) fn server_give_authority_to_client(
+        &mut self,
+        entity: &GlobalEntity,
+        target_user: &UserKey,
+    ) -> Result<AuthOwner, AuthorityError> {
+        let Some(owner) = self.entity_auth_map.get_mut(entity) else {
+            return Err(AuthorityError::NotDelegated);
+        };
+        let previous_owner = *owner;
+        // Idempotent: if the target user already holds, return without
+        // touching state. Re-issuing SetAuthority would otherwise drive
+        // an illegal Granted→Granted transition through the auth channel.
+        if previous_owner == AuthOwner::Client(*target_user) {
+            return Ok(previous_owner);
+        }
+        *owner = AuthOwner::Client(*target_user);
+        // Clear bookkeeping for the previous holder. release_all_authority
+        // sets host_auth_status to Available as a side effect; the per-user
+        // SetAuthority messages in the caller will overwrite that with
+        // Granted (for target_user) and Denied (for everyone else).
+        self.release_all_authority(entity, previous_owner);
+        // Track the new client holder.
+        self.user_to_entity_map
+            .entry(*target_user)
+            .or_default()
+            .insert(*entity);
+        // Restrict the server's local Authority — a client now holds it.
+        self.host_auth_handler
+            .set_auth_status(entity, EntityAuthStatus::Denied);
+        Ok(previous_owner)
     }
 
     pub(crate) fn server_take_authority(
@@ -158,7 +207,7 @@ impl ServerAuthHandler {
         self.host_auth_handler
             .set_auth_status(entity, EntityAuthStatus::Available);
 
-        return true;
+        true
     }
 
     pub(crate) fn user_all_owned_entities(
@@ -168,7 +217,7 @@ impl ServerAuthHandler {
         if let Some(entities) = self.user_to_entity_map.get(user_key) {
             return Some(entities);
         }
-        return None;
+        None
     }
 
     /// Check if a user is the authority holder for a specific entity

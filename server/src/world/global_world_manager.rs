@@ -46,7 +46,7 @@ impl GlobalWorldManager {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.owner);
         }
-        return None;
+        None
     }
 
     // Spawn
@@ -101,7 +101,7 @@ impl GlobalWorldManager {
             .get(global_entity)
             .unwrap()
             .component_kinds;
-        return Some(component_kind_set.iter().copied().collect());
+        Some(component_kind_set.iter().copied().collect())
     }
 
     // Insert Component
@@ -136,7 +136,7 @@ impl GlobalWorldManager {
             .get(global_entity)
             .unwrap()
             .component_kinds;
-        return component_kind_set.contains(component_kind);
+        component_kind_set.contains(component_kind)
     }
 
     pub fn insert_component_diff_handler(
@@ -205,7 +205,7 @@ impl GlobalWorldManager {
                     "Can only publish an Entity that is owned by a Client! Current owner: {:?}",
                     record.owner
                 );
-                return false;
+                false
             }
             EntityOwner::ClientWaiting(_user_key) => {
                 panic!("Attempting to publish an Entity that is waiting for a Client to take ownership");
@@ -214,13 +214,13 @@ impl GlobalWorldManager {
                 // info!("Publishing Entity owned by User: {:?}", user_key);
                 record.owner = EntityOwner::ClientPublic(user_key);
                 record.replication_config.publicity = Publicity::Public;
-                return true;
+                true
             }
             EntityOwner::ClientPublic(user_key) => {
                 warn!("Published Entity is being published again!");
                 record.owner = EntityOwner::ClientPublic(user_key);
                 record.replication_config.publicity = Publicity::Public;
-                return true;
+                true
             }
         }
     }
@@ -268,7 +268,7 @@ impl GlobalWorldManager {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.replication_config);
         }
-        return None;
+        None
     }
 
     pub(crate) fn entity_set_scope_exit(
@@ -285,7 +285,7 @@ impl GlobalWorldManager {
         if let Some(record) = self.entity_records.get(global_entity) {
             return record.replication_config.publicity == Publicity::Delegated;
         }
-        return false;
+        false
     }
 
     pub(crate) fn entity_enable_delegation(&mut self, global_entity: &GlobalEntity) {
@@ -361,6 +361,22 @@ impl GlobalWorldManager {
             .client_request_authority(global_entity, requester)
     }
 
+    /// Server-priority give_authority — sovereign assignment that
+    /// overrides any current holder. See
+    /// `ServerAuthHandler::server_give_authority_to_client` for the
+    /// contract reference.
+    pub(crate) fn server_give_authority_to_client(
+        &mut self,
+        global_entity: &GlobalEntity,
+        target_user: &UserKey,
+    ) -> Result<AuthOwner, AuthorityError> {
+        if !self.entity_is_delegated(global_entity) {
+            return Err(AuthorityError::NotDelegated);
+        }
+        self.auth_handler
+            .server_give_authority_to_client(global_entity, target_user)
+    }
+
     pub(crate) fn client_release_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -422,12 +438,12 @@ impl GlobalWorldManagerType for GlobalWorldManager {
                 EntityOwner::Local => false,
             };
         }
-        return false;
+        false
     }
 
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
         let mut_channel = MutChannelData::new(diff_mask_length);
-        return Arc::new(RwLock::new(mut_channel));
+        Arc::new(RwLock::new(mut_channel))
     }
 
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>> {
@@ -462,14 +478,14 @@ impl GlobalWorldManagerType for GlobalWorldManager {
     }
 
     fn entity_needs_mutator_for_delegation(&self, _global_entity: &GlobalEntity) -> bool {
-        return false;
+        false
     }
 
     fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool {
         let Some(record) = self.entity_records.get(global_entity) else {
             panic!("entity record does not exist!");
         };
-        return record.is_replicating;
+        record.is_replicating
     }
 
     fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {

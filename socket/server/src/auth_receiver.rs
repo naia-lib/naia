@@ -37,7 +37,7 @@ impl AuthReceiver for AuthReceiverImpl {
             Ok(result) => match result {
                 Ok((address, payload)) => {
                     self.last_payload = Some(payload);
-                    return Ok(Some((address, self.last_payload.as_ref().unwrap())));
+                    Ok(Some((address, self.last_payload.as_ref().unwrap())))
                 }
                 Err(_) => Ok(None),
             },

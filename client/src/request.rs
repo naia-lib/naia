@@ -46,7 +46,7 @@ impl GlobalRequestManager {
             let response_opt = self.map.remove(request_id).unwrap();
             return Some(response_opt.unwrap());
         }
-        return None;
+        None
     }
 
     pub(crate) fn receive_response(
@@ -82,7 +82,7 @@ impl GlobalResponseManager {
         self.next_id = self.next_id.wrapping_add(1);
 
         self.map
-            .insert(id, (channel_kind.clone(), local_response_id.clone()));
+            .insert(id, (*channel_kind, *local_response_id));
 
         id
     }

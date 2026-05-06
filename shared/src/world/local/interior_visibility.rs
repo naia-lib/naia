@@ -47,8 +47,8 @@ impl From<OwnedLocalEntity> for LocalEntity {
     }
 }
 
-impl Into<OwnedLocalEntity> for LocalEntity {
-    fn into(self) -> OwnedLocalEntity {
-        self.inner
+impl From<LocalEntity> for OwnedLocalEntity {
+    fn from(val: LocalEntity) -> Self {
+        val.inner
     }
 }

@@ -136,7 +136,7 @@ impl SocketTrait for Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect(server_session_url, config);
+        Self::connect(server_session_url, config)
     }
     /// Connects to the given server address with authentication
     fn connect_with_auth(
@@ -148,6 +148,6 @@ impl SocketTrait for Socket {
         Box<dyn PacketSender>,
         Box<dyn PacketReceiver>,
     ) {
-        return Self::connect_with_auth(server_session_url, config, auth_bytes);
+        Self::connect_with_auth(server_session_url, config, auth_bytes)
     }
 }

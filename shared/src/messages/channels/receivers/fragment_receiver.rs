@@ -39,10 +39,7 @@ impl FragmentReceiver {
         let fragment_index = fragment.index();
         let fragment_total = fragment.total().as_usize();
 
-        if !self.map.contains_key(&fragment_id) {
-            self.map
-                .insert(fragment_id, (0, None, vec![Box::new([]); fragment_total]));
-        }
+        self.map.entry(fragment_id).or_insert_with(|| (0, None, vec![Box::new([]); fragment_total]));
         let (fragments_received, first_message_id_opt, fragment_list) =
             self.map.get_mut(&fragment_id).unwrap();
 

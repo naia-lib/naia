@@ -20,6 +20,7 @@ impl OwnedEntity {
 }
 
 #[derive(Resource)]
+#[derive(Default)]
 pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
     pub cursor_entity: Option<Entity>,
@@ -38,24 +39,3 @@ pub struct Global {
     pub request_index: u8,
 }
 
-impl Default for Global {
-    fn default() -> Self {
-        Self {
-            owned_entity: None,
-            cursor_entity: None,
-            queued_command: None,
-            command_history: CommandHistory::default(),
-            circle: Handle::default(),
-            red: Handle::default(),
-            blue: Handle::default(),
-            yellow: Handle::default(),
-            green: Handle::default(),
-            white: Handle::default(),
-            purple: Handle::default(),
-            orange: Handle::default(),
-            aqua: Handle::default(),
-            response_keys: HashSet::new(),
-            request_index: 0,
-        }
-    }
-}

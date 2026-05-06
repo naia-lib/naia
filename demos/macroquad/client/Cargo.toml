@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 publish = false
 
 [[bin]]
-name = "app"
+name = "naia_macroquad_client_demo"
 path = "src/main.rs"
 
 [dependencies]

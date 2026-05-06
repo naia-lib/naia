@@ -10,7 +10,7 @@ use crate::{
     shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType},
 };
 
-const UNNAMED_FIELD_PREFIX: &'static str = "unnamed_field_";
+const UNNAMED_FIELD_PREFIX: &str = "unnamed_field_";
 
 pub struct NormalProperty {
     pub variable_name: Ident,
@@ -485,7 +485,7 @@ fn get_property_enum_definition(enum_name: &Ident, properties: &[Property]) -> T
 
     let mut variant_list = quote! {};
 
-    for (_, property) in properties.iter().filter(|p| p.is_replicated()).enumerate() {
+    for property in properties.iter().filter(|p| p.is_replicated()) {
         let index = syn::Index::from(property.index());
         let uppercase_variant_name = property.uppercase_variable_name();
 

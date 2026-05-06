@@ -341,7 +341,7 @@ impl Connection {
 
         // write tick buffered messages
         self.tick_buffer.write_messages(
-            &protocol,
+            protocol,
             global_world_manager,
             &mut self.base,
             &mut writer,

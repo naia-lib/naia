@@ -34,9 +34,9 @@ impl GameInstant {
         }
 
         if previous_millis < current_millis {
-            return GameDuration::from_millis(current_millis - previous_millis);
+            GameDuration::from_millis(current_millis - previous_millis)
         } else {
-            return GameDuration::from_millis(GAME_TIME_MAX - previous_millis + current_millis);
+            GameDuration::from_millis(GAME_TIME_MAX - previous_millis + current_millis)
         }
     }
 
@@ -72,7 +72,7 @@ impl GameInstant {
     }
 
     pub fn is_more_than(&self, other: &GameInstant) -> bool {
-        return self.offset_from(other) < 0;
+        self.offset_from(other) < 0
     }
 
     pub fn as_millis(&self) -> u32 {
@@ -102,9 +102,9 @@ impl GameInstant {
 
     pub fn add_signed_millis(&self, millis: i32) -> Self {
         if millis >= 0 {
-            return self.add_millis(millis as u32);
+            self.add_millis(millis as u32)
         } else {
-            return self.sub_millis((millis * -1) as u32);
+            self.sub_millis(-millis as u32)
         }
     }
 }
@@ -144,7 +144,7 @@ impl GameDuration {
     }
 
     pub fn as_millis(&self) -> u32 {
-        return self.millis;
+        self.millis
     }
 
     pub fn add_millis(&self, millis: u32) -> Self {

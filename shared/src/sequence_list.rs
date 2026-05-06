@@ -10,7 +10,7 @@ impl<T> SequenceList<T> {
     }
 
     pub fn front(&self) -> Option<&(u16, T)> {
-        self.list.get(0)
+        self.list.first()
     }
 
     pub fn pop_front(&mut self) -> (u16, T) {

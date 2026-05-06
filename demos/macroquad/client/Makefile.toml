@@ -12,12 +12,12 @@ dependencies = ["install-target-wasm32-unknown-unknown"]
 
 [tasks.delete-old-wasm]
 command = "rm"
-args = ["-f", "target/app.wasm"]
+args = ["-f", "target/naia_macroquad_client_demo.wasm"]
 dependencies = ["cargo-build-wasm"]
 
 [tasks.move-wasm]
 command = "mv"
-args = ["target/wasm32-unknown-unknown/debug/app.wasm", "target/app.wasm"]
+args = ["target/wasm32-unknown-unknown/debug/naia_macroquad_client_demo.wasm", "target/naia_macroquad_client_demo.wasm"]
 dependencies = ["delete-old-wasm"]
 
 [tasks.serve]

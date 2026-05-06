@@ -13,6 +13,12 @@ pub struct PingStore {
     buffer: VecDeque<(PingIndex, GameInstant)>,
 }
 
+impl Default for PingStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PingStore {
     pub fn new() -> Self {
         PingStore {

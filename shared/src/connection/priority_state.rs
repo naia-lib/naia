@@ -139,6 +139,12 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
     }
 }
 
+impl<E: Copy + Eq + Hash> Default for UserPriorityState<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -169,11 +175,5 @@ mod tests {
         s.on_despawn(&7);
         assert_eq!(s.get_ref(7).gain(), None);
         assert_eq!(s.get_ref(9).gain(), Some(2.0));
-    }
-}
-
-impl<E: Copy + Eq + Hash> Default for UserPriorityState<E> {
-    fn default() -> Self {
-        Self::new()
     }
 }

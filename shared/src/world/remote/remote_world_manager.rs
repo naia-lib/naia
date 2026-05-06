@@ -410,7 +410,7 @@ impl RemoteWorldManager {
 
             self.waitlist.waitlist_queue_entity(
                 &self.remote_engine,
-                &entity,
+                entity,
                 component,
                 component_kind,
                 &remote_entity_set,
@@ -420,7 +420,7 @@ impl RemoteWorldManager {
                 world,
                 converter,
                 entity,
-                &world_entity,
+                world_entity,
                 component,
                 component_kind,
             );
@@ -442,9 +442,9 @@ impl RemoteWorldManager {
         //     &name, global_entity
         // );
 
-        world.insert_boxed_component(&world_entity, component);
+        world.insert_boxed_component(world_entity, component);
 
-        let global_entity = converter.remote_entity_to_global_entity(&entity).unwrap();
+        let global_entity = converter.remote_entity_to_global_entity(entity).unwrap();
 
         self.incoming_events
             .push(EntityEvent::InsertComponent(global_entity, *component_kind));
@@ -458,13 +458,13 @@ impl RemoteWorldManager {
         world_entity: &E,
         component_kind: &ComponentKind,
     ) {
-        if self.waitlist.process_remove(&entity, &component_kind) {
+        if self.waitlist.process_remove(entity, component_kind) {
             return;
         }
         // Remove from world
-        if let Some(component) = world.remove_component_of_kind(&world_entity, &component_kind) {
+        if let Some(component) = world.remove_component_of_kind(world_entity, component_kind) {
             // Send out event
-            if let Ok(global_entity) = converter.remote_entity_to_global_entity(&entity) {
+            if let Ok(global_entity) = converter.remote_entity_to_global_entity(entity) {
                 self.incoming_events
                     .push(EntityEvent::RemoveComponent(global_entity, component));
             }

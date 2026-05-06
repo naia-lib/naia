@@ -44,23 +44,23 @@ impl MessageContainer {
     }
 
     pub fn is_fragment(&self) -> bool {
-        return self.inner.is_fragment();
+        self.inner.is_fragment()
     }
 
     pub fn is_request_or_response(&self) -> bool {
-        return self.inner.is_request();
+        self.inner.is_request()
     }
 
     pub fn to_boxed_any(self) -> Box<dyn Any> {
-        return self.inner.to_boxed_any();
+        self.inner.to_boxed_any()
     }
 
     pub fn kind(&self) -> MessageKind {
-        return self.inner.kind();
+        self.inner.kind()
     }
 
     pub fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
-        return self.inner.relations_waiting();
+        self.inner.relations_waiting()
     }
 
     pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {

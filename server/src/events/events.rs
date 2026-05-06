@@ -56,11 +56,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     pub fn read<V: Event<E>>(&mut self) -> V::Iter {
-        return V::iter(self);
+        V::iter(self)
     }
 
     pub fn has<V: Event<E>>(&self) -> bool {
-        return V::has(self);
+        V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.

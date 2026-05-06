@@ -34,13 +34,13 @@ impl IndexedMessageReader {
         reader: &mut BitReader,
         last_read_id: &Option<MessageIndex>,
     ) -> Result<MessageIndex, SerdeErr> {
-        return if let Some(last_id) = last_read_id {
+        if let Some(last_id) = last_read_id {
             let id_diff = UnsignedVariableInteger::<3>::de(reader)?.get() as MessageIndex;
             Ok(last_id.wrapping_add(id_diff))
         } else {
             // read message id
             MessageIndex::de(reader)
-        };
+        }
     }
 
     fn read_message(

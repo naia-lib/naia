@@ -45,9 +45,12 @@ mod unit_tests {
         //Read
         let mut reader = BitReader::new(&buffer);
 
-        let out_unit = Serde::de(&mut reader).unwrap();
-
-        assert_eq!(in_unit, out_unit);
+        // Type annotation enforces that `Serde::de` returns the unit
+        // type — that's the meaningful assertion. Comparing two `()`
+        // values is trivially true (and clippy used to flag the
+        // assert_eq); cargo clippy --fix removed the comparison.
+        let out_unit: () = Serde::de(&mut reader).unwrap();
+        let _ = (in_unit, out_unit);
     }
 }
 

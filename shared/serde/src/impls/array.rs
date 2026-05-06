@@ -54,7 +54,7 @@ impl<T: Serde, const N: usize> Serde for [T; N] {
 
 impl<T: ConstBitLength, const N: usize> ConstBitLength for [T; N] {
     fn const_bit_length() -> u32 {
-        return T::const_bit_length() * (N as u32);
+        T::const_bit_length() * (N as u32)
     }
 }
 

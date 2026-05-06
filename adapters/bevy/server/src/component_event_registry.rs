@@ -18,6 +18,7 @@ use crate::{
 };
 
 #[derive(Resource)]
+#[derive(Default)]
 pub(crate) struct ComponentEventRegistry {
     bundle_registry: BundleEventRegistry,
     component_handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,
@@ -26,14 +27,6 @@ pub(crate) struct ComponentEventRegistry {
 unsafe impl Send for ComponentEventRegistry {}
 unsafe impl Sync for ComponentEventRegistry {}
 
-impl Default for ComponentEventRegistry {
-    fn default() -> Self {
-        Self {
-            component_handlers: HashMap::new(),
-            bundle_registry: BundleEventRegistry::default(),
-        }
-    }
-}
 
 impl ComponentEventRegistry {
     pub(crate) fn bundle_registry_mut(&mut self) -> &mut BundleEventRegistry {

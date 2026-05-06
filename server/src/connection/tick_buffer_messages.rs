@@ -9,6 +9,12 @@ pub struct TickBufferMessages {
     empty: bool,
 }
 
+impl Default for TickBufferMessages {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TickBufferMessages {
     pub fn new() -> Self {
         Self {
@@ -28,6 +34,6 @@ impl TickBufferMessages {
     }
 
     pub fn read<C: Channel, M: Message>(&mut self) -> Vec<(UserKey, M)> {
-        return world_events::read_channel_messages::<C, M>(&mut self.messages);
+        world_events::read_channel_messages::<C, M>(&mut self.messages)
     }
 }

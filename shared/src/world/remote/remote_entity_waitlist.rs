@@ -42,7 +42,7 @@ impl RemoteEntityWaitlist {
                 return false;
             }
         }
-        return true;
+        true
     }
 
     pub fn queue<T>(
@@ -142,16 +142,16 @@ impl RemoteEntityWaitlist {
         }
 
         // remove handle from required entities map
-        let entities = self.handle_to_required_entities.remove(&handle).unwrap();
+        let entities = self.handle_to_required_entities.remove(handle).unwrap();
 
         // recycle message handle
-        self.handle_store.recycle_key(&handle);
+        self.handle_store.recycle_key(handle);
 
         // for all associated entities, remove from waitlist
         for entity in entities {
             let mut remove = false;
             if let Some(message_set) = self.waiting_entity_to_handles.get_mut(&entity) {
-                message_set.remove(&handle);
+                message_set.remove(handle);
                 if message_set.is_empty() {
                     remove = true;
                 }
@@ -201,11 +201,11 @@ impl<T> WaitlistStore<T> {
     ) -> Option<Vec<T>> {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
-            .intersection(&ready_handles)
+            .intersection(ready_handles)
             .cloned()
             .collect();
 
-        if intersection.len() == 0 {
+        if intersection.is_empty() {
             // Handles in ready_handles must refer to items in another WaitlistStore
             return None;
         }
@@ -224,7 +224,7 @@ impl<T> WaitlistStore<T> {
     pub fn remove_expired_items(&mut self, expired_handles: &mut HashSet<WaitlistHandle>) {
         let intersection: HashSet<WaitlistHandle> = self
             .item_handles
-            .intersection(&expired_handles)
+            .intersection(expired_handles)
             .cloned()
             .collect();
 

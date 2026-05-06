@@ -60,7 +60,7 @@ impl Handshaker for HandshakeManager {
                 }
                 if has_connection {
                     let identify_response = Self::write_identity_response().to_packet();
-                    return Ok(HandshakeAction::SendPacket(identify_response));
+                    Ok(HandshakeAction::SendPacket(identify_response))
                 } else {
                     let Ok(id_token) = self.recv_identify_request(reader) else {
                         return Ok(HandshakeAction::None);
@@ -80,25 +80,25 @@ impl Handshaker for HandshakeManager {
 
                     // send identify response
                     let identify_response = Self::write_identity_response().to_packet();
-                    return Ok(HandshakeAction::FinalizeConnection(
+                    Ok(HandshakeAction::FinalizeConnection(
                         user_key,
                         identify_response,
-                    ));
+                    ))
                 }
             }
             HandshakeHeader::ClientConnectRequest => {
-                return Ok(HandshakeAction::ForwardPacket);
+                Ok(HandshakeAction::ForwardPacket)
             }
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
                     // Get the user_key for this address to disconnect
                     if let Some(user_key) = self.authenticated_and_identified_users.get(address) {
-                        return Ok(HandshakeAction::DisconnectUser(*user_key));
+                        Ok(HandshakeAction::DisconnectUser(*user_key))
                     } else {
-                        return Ok(HandshakeAction::None);
+                        Ok(HandshakeAction::None)
                     }
                 } else {
-                    return Ok(HandshakeAction::None);
+                    Ok(HandshakeAction::None)
                 }
             }
             _ => {
@@ -106,7 +106,7 @@ impl Handshaker for HandshakeManager {
                     "Server Error: Unexpected handshake header: {:?} from {}",
                     handshake_header, address
                 );
-                return Ok(HandshakeAction::None);
+                Ok(HandshakeAction::None)
             }
         }
     }

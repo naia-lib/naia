@@ -46,7 +46,6 @@ impl HostEntityChannel {
                 }
                 self.component_channels.insert(component_kind);
                 self.outgoing_commands.push(command);
-                return;
             }
             EntityMessageType::RemoveComponent => {
                 let component_kind = command.component_kind().unwrap();
@@ -55,7 +54,6 @@ impl HostEntityChannel {
                 }
                 self.component_channels.remove(&component_kind);
                 self.outgoing_commands.push(command);
-                return;
             }
             EntityMessageType::Publish
             | EntityMessageType::Unpublish
@@ -70,7 +68,6 @@ impl HostEntityChannel {
                 self.auth_channel.send_command(command);
                 self.auth_channel
                     .sender_drain_messages_into(&mut self.outgoing_commands);
-                return;
             }
         }
     }

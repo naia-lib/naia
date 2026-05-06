@@ -91,7 +91,7 @@ impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
             }
         }
 
-        Vec::from(mem::take(&mut self.incoming_messages))
+        mem::take(&mut self.incoming_messages)
     }
 }
 

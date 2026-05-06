@@ -49,10 +49,10 @@ impl<T: Send + Sync + 'static> BundleEventRegistry<T> {
 
         // add components to map
         for kind in components.iter() {
-            if !self.components_to_bundle_ids.contains_key(&kind) {
+            if !self.components_to_bundle_ids.contains_key(kind) {
                 self.components_to_bundle_ids.insert(*kind, HashSet::new());
             }
-            let bundle_ids = self.components_to_bundle_ids.get_mut(&kind).unwrap();
+            let bundle_ids = self.components_to_bundle_ids.get_mut(kind).unwrap();
             bundle_ids.insert(bundle_id);
         }
 
@@ -77,7 +77,7 @@ impl<T: Send + Sync + 'static> BundleEventRegistry<T> {
         component_kind: &ComponentKind,
         entities: &Vec<Entity>,
     ) {
-        let Some(bundle_ids) = self.components_to_bundle_ids.get(&component_kind) else {
+        let Some(bundle_ids) = self.components_to_bundle_ids.get(component_kind) else {
             // component is not part of any bundle
             return;
         };

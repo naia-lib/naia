@@ -13,6 +13,7 @@ use crate::{
     Scenario, TestEntity,
 };
 
+#[derive(Default)]
 pub struct ClientEvents {
     connections: Vec<()>,
     rejections: Vec<RejectReason>,
@@ -34,30 +35,6 @@ pub struct ClientEvents {
     server_ticks: Vec<Tick>,
 }
 
-impl Default for ClientEvents {
-    fn default() -> Self {
-        Self {
-            connections: Vec::new(),
-            rejections: Vec::new(),
-            disconnections: Vec::new(),
-            errors: Vec::new(),
-            messages: HashMap::new(),
-            requests: HashMap::new(),
-            spawns: Vec::new(),
-            despawns: Vec::new(),
-            publishes: Vec::new(),
-            unpublishes: Vec::new(),
-            auth_grants: Vec::new(),
-            auth_denies: Vec::new(),
-            auth_resets: Vec::new(),
-            inserts: HashMap::new(),
-            removes: HashMap::new(),
-            updates: HashMap::new(),
-            client_ticks: Vec::new(),
-            server_ticks: Vec::new(),
-        }
-    }
-}
 
 impl ClientEvents {
     pub fn new(
@@ -220,7 +197,7 @@ impl ClientEvents {
     pub fn has_insert_for_entity(&self, entity_key: &EntityKey) -> bool {
         self.inserts
             .values()
-            .any(|v| v.iter().any(|ek| *ek == *entity_key))
+            .any(|v| v.contains(entity_key))
     }
 
     pub fn has_remove_for_entity(&self, entity_key: &EntityKey) -> bool {
@@ -255,7 +232,7 @@ impl ClientEvents {
     pub fn take_inserts_for_component(&mut self, component_kind: &ComponentKind) -> Vec<EntityKey> {
         self.inserts
             .get_mut(component_kind)
-            .map(|v| std::mem::take(v))
+            .map(std::mem::take)
             .unwrap_or_default()
     }
 
@@ -266,7 +243,7 @@ impl ClientEvents {
     ) -> Vec<(EntityKey, Box<dyn Replicate>)> {
         self.removes
             .get_mut(component_kind)
-            .map(|v| std::mem::take(v))
+            .map(std::mem::take)
             .unwrap_or_default()
     }
 
@@ -277,7 +254,7 @@ impl ClientEvents {
     ) -> Vec<(Tick, EntityKey)> {
         self.updates
             .get_mut(component_kind)
-            .map(|v| std::mem::take(v))
+            .map(std::mem::take)
             .unwrap_or_default()
     }
 }

@@ -66,7 +66,7 @@ impl BitWriter {
 
     fn finalize(&mut self) {
         if self.scratch_bits > 0 {
-            let remaining_bytes = (self.scratch_bits as usize + 7) / 8;
+            let remaining_bytes = (self.scratch_bits as usize).div_ceil(8);
             let word = self.scratch.to_le_bytes();
             self.buffer[self.byte_count..self.byte_count + remaining_bytes]
                 .copy_from_slice(&word[..remaining_bytes]);

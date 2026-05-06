@@ -165,19 +165,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     boxed_socket.connect_with_auth(auth_bytes.clone());
                 self.io.load(id_receiver, packet_sender, packet_receiver);
             }
+        } else if let Some(auth_headers) = &self.auth_headers {
+            // connect with auth headers
+            let boxed_socket: Box<dyn Socket> = socket.into();
+            let (id_receiver, packet_sender, packet_receiver) =
+                boxed_socket.connect_with_auth_headers(auth_headers.clone());
+            self.io.load(id_receiver, packet_sender, packet_receiver);
         } else {
-            if let Some(auth_headers) = &self.auth_headers {
-                // connect with auth headers
-                let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) =
-                    boxed_socket.connect_with_auth_headers(auth_headers.clone());
-                self.io.load(id_receiver, packet_sender, packet_receiver);
-            } else {
-                // connect without auth
-                let boxed_socket: Box<dyn Socket> = socket.into();
-                let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
-                self.io.load(id_receiver, packet_sender, packet_receiver);
-            }
+            // connect without auth
+            let boxed_socket: Box<dyn Socket> = socket.into();
+            let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
+            self.io.load(id_receiver, packet_sender, packet_receiver);
         }
     }
 
@@ -185,9 +183,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn connection_status(&self) -> ConnectionStatus {
         if self.is_connected() {
             if self.is_disconnecting() {
-                return ConnectionStatus::Disconnecting;
+                ConnectionStatus::Disconnecting
             } else {
-                return ConnectionStatus::Connected;
+                ConnectionStatus::Connected
             }
         } else {
             if self.is_disconnected() {
@@ -271,7 +269,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut self.global_world_manager,
             &self.protocol,
             &mut world,
-            &now,
+            now,
             &mut self.incoming_world_events,
         );
 
@@ -288,7 +286,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         };
 
         let (receiving_tick_happened, sending_tick_happened) =
-            connection.time_manager.collect_ticks(&now);
+            connection.time_manager.collect_ticks(now);
 
         // If jitter buffer is in bypass mode, process packets immediately regardless of tick
         // Otherwise, only process on tick boundaries
@@ -350,13 +348,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 &self.global_entity_map,
                 &self.global_world_manager,
             );
-        } else {
-            if self.io.is_loaded() {
-                if let Some(outgoing_packet) = self.handshake_manager.send() {
-                    if self.io.send_packet(outgoing_packet).is_err() {
-                        // TODO: pass this on and handle above
-                        warn!("Client Error: Cannot send handshake packet to Server");
-                    }
+        } else if self.io.is_loaded() {
+            if let Some(outgoing_packet) = self.handshake_manager.send() {
+                if self.io.send_packet(outgoing_packet).is_err() {
+                    // TODO: pass this on and handle above
+                    warn!("Client Error: Cannot send handshake packet to Server");
                 }
             }
         }
@@ -403,7 +399,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             );
         } else {
             self.waitlist_messages
-                .push_back((channel_kind.clone(), message_box));
+                .push_back((*channel_kind, message_box));
         }
         Ok(())
     }
@@ -425,7 +421,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // response_type_id: TypeId,
         request_box: Box<dyn Message>,
     ) -> Result<GlobalRequestId, NaiaClientError> {
-        let channel_settings = self.protocol.channel_kinds.channel(&channel_kind);
+        let channel_settings = self.protocol.channel_kinds.channel(channel_kind);
 
         if !channel_settings.can_request_and_respond() {
             std::panic!("Requests can only be sent over Bidirectional, Reliable Channels");
@@ -452,7 +448,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             message,
         );
 
-        return Ok(request_id);
+        Ok(request_id)
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.
@@ -496,7 +492,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             local_response_id,
             response,
         );
-        return true;
+        true
     }
 
     /// Check if a response is available for the given request (non-destructive)
@@ -526,7 +522,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .ok()
             .map(|boxed_s| *boxed_s)
             .unwrap();
-        return Some(response);
+        Some(response)
     }
     //
 
@@ -689,7 +685,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 return owner;
             }
         }
-        return EntityOwner::Local;
+        EntityOwner::Local
     }
 
     // Replicate options & authority management
@@ -697,7 +693,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
-        self.spawn_entity_inner(&entity);
+        self.spawn_entity_inner(entity);
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
@@ -890,39 +886,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// Gets the current tick of the Client
     pub fn client_tick(&self) -> Option<Tick> {
         let connection = self.server_connection.as_ref()?;
-        return Some(connection.time_manager.client_sending_tick);
+        Some(connection.time_manager.client_sending_tick)
     }
 
     /// Gets the current instant of the Client
     pub fn client_instant(&self) -> Option<GameInstant> {
         let connection = self.server_connection.as_ref()?;
-        return Some(connection.time_manager.client_sending_instant);
+        Some(connection.time_manager.client_sending_instant)
     }
 
     /// Gets the current tick of the Server
     pub fn server_tick(&self) -> Option<Tick> {
         let connection = self.server_connection.as_ref()?;
-        return Some(connection.time_manager.client_receiving_tick);
+        Some(connection.time_manager.client_receiving_tick)
     }
 
     /// Gets the current instant of the Server
     pub fn server_instant(&self) -> Option<GameInstant> {
         let connection = self.server_connection.as_ref()?;
-        return Some(connection.time_manager.client_receiving_instant);
+        Some(connection.time_manager.client_receiving_instant)
     }
 
     pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_to_instant(tick));
         }
-        return None;
+        None
     }
 
     pub fn tick_duration(&self) -> Option<Duration> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_duration());
         }
-        return None;
+        None
     }
 
     // Interpolation
@@ -932,7 +928,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.client_interpolation());
         }
-        return None;
+        None
     }
 
     /// Gets the interpolation tween amount for the current frame, for use by entities on the Server Tick (i.e. authoritative)
@@ -940,7 +936,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.server_interpolation());
         }
-        return None;
+        None
     }
 
     // Bandwidth monitoring
@@ -1151,12 +1147,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             connection
                 .base
                 .world_manager
-                .remove_component(&global_entity, &component_kind);
+                .remove_component(&global_entity, component_kind);
         }
 
         // cleanup all other loose ends
         self.global_world_manager
-            .host_remove_component(&global_entity, &component_kind);
+            .host_remove_component(&global_entity, component_kind);
     }
 
     pub(crate) fn publish_entity(&mut self, global_entity: &GlobalEntity, client_is_origin: bool) {
@@ -1169,14 +1165,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .world_manager
                 .send_publish(HostType::Client, global_entity);
-        } else {
-            if self
-                .global_world_manager
-                .entity_replication_config(global_entity)
-                != Some(ReplicationConfig::Private)
-            {
-                panic!("Server can only publish Private entities");
-            }
+        } else if self
+            .global_world_manager
+            .entity_replication_config(global_entity)
+            != Some(ReplicationConfig::Private)
+        {
+            panic!("Server can only publish Private entities");
         }
         self.global_world_manager.entity_publish(global_entity);
         // don't need to publish the Entity/Component via the World here, because Remote entities work the same whether they are published or not
@@ -1196,14 +1190,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .base
                 .world_manager
                 .send_unpublish(HostType::Client, global_entity);
-        } else {
-            if self
-                .global_world_manager
-                .entity_replication_config(global_entity)
-                != Some(ReplicationConfig::Public)
-            {
-                panic!("Server can only unpublish Public entities");
-            }
+        } else if self
+            .global_world_manager
+            .entity_replication_config(global_entity)
+            != Some(ReplicationConfig::Public)
+        {
+            panic!("Server can only unpublish Public entities");
         }
         self.global_world_manager.entity_unpublish(global_entity);
         // don't need to publish the Entity/Component via the World here, because Remote entities work the same whether they are published or not
@@ -1562,8 +1554,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 }
             }
         }
-
-        return;
     }
 
     fn maintain_connection(&mut self) {
@@ -2142,6 +2132,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             .base
                             .world_manager
                             .remote_receive_set_auth(&global_entity, EntityAuthStatus::Granted);
+                    }
+
+                    // Register the entity with the client's auth handler
+                    // before completing delegation. Without this, the
+                    // `entity_complete_delegation` → `world.entity_enable_delegation`
+                    // → `component_enable_delegation` chain panics in
+                    // `host_auth_handler::get_accessor` because the
+                    // owning-client (A's) MigrateResponse path skips the
+                    // `entity_register_auth_for_delegation` call that the
+                    // EnableDelegation event path uses for non-owners.
+                    // Both paths must produce the same registered state
+                    // before components are flipped to delegated mode.
+                    //
+                    // Idempotent guard: some flows (e.g. the publication
+                    // migration path tested by [entity-publication-08])
+                    // register the entity earlier via the EnableDelegation
+                    // event before MigrateResponse arrives — calling
+                    // `register_entity` again would panic.
+                    if self
+                        .global_world_manager
+                        .entity_authority_status(&global_entity)
+                        .is_none()
+                    {
+                        self.global_world_manager
+                            .entity_register_auth_for_delegation(&global_entity);
                     }
 
                     // Complete delegation in global world manager

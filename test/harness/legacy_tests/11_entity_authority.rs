@@ -1,4 +1,4 @@
-#![allow(unused_imports)]
+#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
 
 use std::time::Duration;
 
@@ -1301,15 +1301,22 @@ fn server_give_authority_requires_scope() {
     let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
         Auth::new("client_b", "pass"), test_client_config(), test_protocol);
 
-    // Spawn entity only in B's scope, not A's
+    // Spawn entity in B's scope and explicitly exclude from A's.
+    //
+    // Test-setup nuance: `user_scope_mut(&B).include(...)` is a
+    // *union*, not a *replace* — it adds B to scope but does not remove
+    // anyone else. Both A and B share `room_key` with the entity, so
+    // A is in-scope by default-room semantics unless explicitly
+    // excluded. The contract under test is "give to OOS user fails";
+    // making A genuinely OOS requires the explicit `exclude` below.
     let entity_e = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let (entity, _) = server.spawn(|mut e| {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
             });
-            // Only include in B's scope, not A's
             server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity);
             entity
         })
     });

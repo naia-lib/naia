@@ -109,8 +109,8 @@ impl ChannelTickBufferSender {
                 converter,
                 writer,
                 &last_written_tick,
-                &message_tick,
-                &messages,
+                message_tick,
+                messages,
             );
             last_written_tick = *message_tick;
             for message_index in message_indices {

@@ -28,10 +28,10 @@ impl EntityScopeMap {
     pub fn insert(&mut self, user_key: UserKey, entity: GlobalEntity, in_scope: bool) {
         self.entities_of_user
             .entry(user_key)
-            .or_insert_with(|| HashSet::new());
+            .or_default();
         self.users_of_entity
             .entry(entity)
-            .or_insert_with(HashSet::new);
+            .or_default();
 
         self.entities_of_user
             .get_mut(&user_key)

@@ -27,6 +27,12 @@ pub struct AckManager {
     should_send_empty_ack: bool,
 }
 
+impl Default for AckManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AckManager {
     pub fn new() -> Self {
         Self {

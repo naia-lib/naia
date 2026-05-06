@@ -22,7 +22,7 @@ impl<T: Serde> Serde for Box<T> {
 
 impl<T: ConstBitLength> ConstBitLength for Box<T> {
     fn const_bit_length() -> u32 {
-        return T::const_bit_length();
+        T::const_bit_length()
     }
 }
 

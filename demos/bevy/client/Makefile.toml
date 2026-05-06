@@ -15,7 +15,7 @@ dependencies = ["install-target-wasm32-unknown-unknown"]
 
 [tasks.wasm-bindgen]
 command = "wasm-bindgen"
-args = ["--out-dir", "target", "--out-name", "app", "--target", "web", "--no-typescript", "target/wasm32-unknown-unknown/debug/app.wasm"]
+args = ["--out-dir", "target", "--out-name", "app", "--target", "web", "--no-typescript", "target/wasm32-unknown-unknown/debug/naia_bevy_client_demo.wasm"]
 dependencies = ["cargo-build-wasm", "install-wasm-bindgen-cli"]
 
 [tasks.serve]

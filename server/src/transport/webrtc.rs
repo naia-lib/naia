@@ -21,10 +21,10 @@ pub struct Socket {
 
 impl Socket {
     pub fn new(server_addrs: &ServerAddrs, config: &SocketConfig) -> Self {
-        return Self {
+        Self {
             server_addrs: server_addrs.clone(),
             config: config.clone(),
-        };
+        }
     }
 }
 
@@ -65,22 +65,22 @@ impl TransportAuthReceiver for Box<dyn AuthReceiver> {
         match self.as_mut().receive() {
             Ok(auth_opt) => match auth_opt {
                 Some((addr, payload)) => {
-                    return Ok(Some((addr, payload)));
+                    Ok(Some((addr, payload)))
                 }
                 None => {
-                    return Ok(None);
+                    Ok(None)
                 }
             },
             Err(_err) => {
-                return Err(RecvError);
+                Err(RecvError)
             }
         }
     }
 }
 
-impl Into<Box<dyn TransportSocket>> for Socket {
-    fn into(self) -> Box<dyn TransportSocket> {
-        Box::new(self)
+impl From<Socket> for Box<dyn TransportSocket> {
+    fn from(val: Socket) -> Self {
+        Box::new(val)
     }
 }
 
@@ -95,11 +95,11 @@ impl TransportSocket for Socket {
     ) {
         let (inner_auth_sender, inner_auth_receiver, inner_packet_sender, inner_packet_receiver) =
             ServerSocket::listen_with_auth(&self.server_addrs, &self.config);
-        return (
+        (
             Box::new(inner_auth_sender),
             Box::new(inner_auth_receiver),
             Box::new(inner_packet_sender),
             Box::new(inner_packet_receiver),
-        );
+        )
     }
 }

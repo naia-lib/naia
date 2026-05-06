@@ -68,7 +68,7 @@ impl RemoteComponentChannel {
         // Drain the component channel and append the messages to the outgoing events
         let mut received_messages = Vec::new();
         for msg_type in std::mem::take(&mut self.incoming_messages) {
-            received_messages.push(msg_type.with_component_kind(&component_kind));
+            received_messages.push(msg_type.with_component_kind(component_kind));
         }
         outgoing_messages.append(&mut received_messages);
     }

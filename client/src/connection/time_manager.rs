@@ -121,7 +121,7 @@ impl TimeManager {
             return true;
         }
 
-        return false;
+        false
     }
 
     pub fn read_pong(&mut self, reader: &mut BitReader) -> Result<(), SerdeErr> {
@@ -179,10 +179,10 @@ impl TimeManager {
         }
 
         let prev_server_tick_instant = self.tick_to_instant(*server_tick);
-        let offset = prev_server_tick_instant.offset_from(&server_tick_instant);
+        let offset = prev_server_tick_instant.offset_from(server_tick_instant);
 
         self.server_tick = *server_tick;
-        self.server_tick_instant = server_tick_instant.clone();
+        self.server_tick_instant = *server_tick_instant;
 
         // Adjust tick instants to new incoming instant
         self.client_receiving_instant = self.client_receiving_instant.add_signed_millis(offset);
@@ -304,7 +304,7 @@ impl TimeManager {
             false => None,
         };
 
-        return (output_receiving, output_sending);
+        (output_receiving, output_sending)
     }
 
     // Stats
@@ -350,9 +350,9 @@ impl TimeManager {
         let tick_diff = wrapping_diff(self.server_tick, tick);
         let tick_diff_duration =
             ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;
-        return self
+        self
             .server_tick_instant
-            .add_signed_millis(tick_diff_duration);
+            .add_signed_millis(tick_diff_duration)
     }
 
     pub fn tick_duration(&self) -> Duration {
@@ -360,16 +360,16 @@ impl TimeManager {
     }
 
     pub(crate) fn get_interp(&self, tick: Tick, instant: &GameInstant) -> f32 {
-        let output = (self.tick_to_instant(tick).offset_from(&instant) as f32)
-            / self.server_tick_duration_avg;
-        output
+        
+        (self.tick_to_instant(tick).offset_from(instant) as f32)
+            / self.server_tick_duration_avg
     }
 
     pub(crate) fn instant_from_interp(&self, tick: Tick, interp: f32) -> GameInstant {
         let tick_length_interped = (interp * self.server_tick_duration_avg).round() as i32;
-        return self
+        self
             .tick_to_instant(tick)
-            .add_signed_millis(tick_length_interped);
+            .add_signed_millis(tick_length_interped)
     }
 }
 
@@ -386,7 +386,7 @@ fn adjust_time(
     let speed = offset_to_speed(default_next_instant.offset_from(target_instant));
     *tick_instant = tick_instant.add_millis(((millis_elapsed as f32) * speed).round() as u32);
     if tick_instant.is_more_than(target_instant) {
-        *tick_instant = target_instant.clone();
+        *tick_instant = *target_instant;
     }
     let new_tick = instant_to_tick(
         server_tick,
@@ -409,9 +409,8 @@ fn instant_to_tick(
 ) -> Tick {
     let offset_ms = server_tick_instant.offset_from(instant);
     let offset_ticks_f32 = (offset_ms as f32) / server_tick_duration_avg;
-    return server_tick
-        .clone()
-        .wrapping_add_signed(offset_ticks_f32 as i16);
+    (*server_tick)
+        .wrapping_add_signed(offset_ticks_f32 as i16)
 }
 
 fn get_client_receiving_target(
@@ -456,7 +455,7 @@ fn offset_to_speed(offset: i32) -> f32 {
         return (1.0 + (over / RANGE_MAX)).min(SPEED_MAX);
     }
 
-    return SAFE_SPEED;
+    SAFE_SPEED
 }
 
 const OFFSET_MIN: i32 = -50;

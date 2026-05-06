@@ -868,7 +868,7 @@ impl BenchWorld {
     pub fn give_authority_on_entity(&mut self, entity_idx: usize) {
         if let (Some(&entity), Some(&user_key)) = (
             self.server_entities.get(entity_idx),
-            self.connected_user_keys.get(0),
+            self.connected_user_keys.first(),
         ) {
             let _ = self
                 .server

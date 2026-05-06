@@ -112,31 +112,31 @@ impl MessageManager {
             match &channel_settings.mode {
                 ChannelMode::UnorderedUnreliable => {
                     channel_receivers.insert(
-                        channel_kind.clone(),
+                        channel_kind,
                         Box::new(UnorderedUnreliableReceiver::new()),
                     );
                 }
                 ChannelMode::SequencedUnreliable => {
                     channel_receivers.insert(
-                        channel_kind.clone(),
+                        channel_kind,
                         Box::new(SequencedUnreliableReceiver::new()),
                     );
                 }
                 ChannelMode::UnorderedReliable(_) => {
                     channel_receivers.insert(
-                        channel_kind.clone(),
+                        channel_kind,
                         Box::new(UnorderedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::SequencedReliable(_) => {
                     channel_receivers.insert(
-                        channel_kind.clone(),
+                        channel_kind,
                         Box::new(SequencedReliableReceiver::new()),
                     );
                 }
                 ChannelMode::OrderedReliable(_) => {
                     channel_receivers.insert(
-                        channel_kind.clone(),
+                        channel_kind,
                         Box::new(OrderedReliableReceiver::new()),
                     );
                 }
@@ -149,7 +149,7 @@ impl MessageManager {
         // initialize settings
         let mut channel_settings_map = HashMap::new();
         for (channel_kind, channel_settings) in channel_kinds.channels() {
-            channel_settings_map.insert(channel_kind.clone(), channel_settings);
+            channel_settings_map.insert(channel_kind, channel_settings);
         }
 
         Self {
@@ -265,7 +265,7 @@ impl MessageManager {
                     .get(k)
                     .map(|s| s.criticality.base_gain())
                     .unwrap_or(1.0);
-                (k.clone(), gain)
+                (*k, gain)
             })
             .collect();
         ordered.sort_by(|a, b| {
@@ -303,9 +303,9 @@ impl MessageManager {
             {
                 self.packet_to_message_map
                     .entry(packet_index)
-                    .or_insert_with(Vec::new);
+                    .or_default();
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
-                channel_list.push((channel_kind.clone(), message_indices));
+                channel_list.push((*channel_kind, message_indices));
             }
 
             // write MessageContinue finish bit, release
@@ -357,7 +357,7 @@ impl MessageManager {
         for (channel_kind, channel) in &mut self.channel_receivers {
             let messages =
                 channel.receive_messages(message_kinds, now, entity_waitlist, entity_converter);
-            output.push((channel_kind.clone(), messages));
+            output.push((*channel_kind, messages));
         }
         output
     }
@@ -383,7 +383,7 @@ impl MessageManager {
 
             let (requests, responses) = channel.receive_requests_and_responses();
             if !requests.is_empty() {
-                request_output.push((channel_kind.clone(), requests));
+                request_output.push((*channel_kind, requests));
             }
 
             if !responses.is_empty() {

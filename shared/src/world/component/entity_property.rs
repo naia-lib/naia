@@ -124,7 +124,7 @@ impl EntityRelation {
             }
         }
         warn!("Could not get EntityRelation value, because EntityRelation has no GlobalEntity!");
-        return None;
+        None
     }
 
     fn set<E: Copy + Eq + Hash + Sync + Send>(
@@ -346,20 +346,18 @@ impl EntityProperty {
                 };
 
                 Ok(new_self)
+            } else if let OwnedLocalEntity::Remote { .. } = redirected_entity {
+                let new_impl = RemoteWaitingRelation::new(redirected_entity.take_remote());
+
+                let new_self = Self {
+                    inner: EntityRelation::RemoteWaiting(new_impl),
+                };
+
+                Ok(new_self)
             } else {
-                if let OwnedLocalEntity::Remote { .. } = redirected_entity {
-                    let new_impl = RemoteWaitingRelation::new(redirected_entity.take_remote());
-
-                    let new_self = Self {
-                        inner: EntityRelation::RemoteWaiting(new_impl),
-                    };
-
-                    Ok(new_self)
-                } else {
-                    Ok(Self {
-                        inner: EntityRelation::Invalid,
-                    })
-                }
+                Ok(Self {
+                    inner: EntityRelation::Invalid,
+                })
             }
         } else {
             let mut new_impl = RemoteCreatedRelation::new_empty();
@@ -511,7 +509,7 @@ impl EntityProperty {
     pub fn remote_publish(&mut self, mutator_index: u8, mutator: &PropertyMutator) {
         match &mut self.inner {
             EntityRelation::RemoteCreated(inner) => {
-                let inner_value = inner.global_entity.clone();
+                let inner_value = inner.global_entity;
                 self.inner = EntityRelation::RemotePublic(RemotePublicRelation::new(
                     inner_value,
                     mutator_index,
@@ -538,7 +536,7 @@ impl EntityProperty {
     pub fn remote_unpublish(&mut self) {
         match &mut self.inner {
             EntityRelation::RemotePublic(inner) => {
-                let inner_value = inner.global_entity.clone();
+                let inner_value = inner.global_entity;
                 self.inner = EntityRelation::RemoteCreated(RemoteCreatedRelation {
                     global_entity: inner_value,
                 });
@@ -624,7 +622,7 @@ impl EntityProperty {
     pub fn disable_delegation(&mut self) {
         match &mut self.inner {
             EntityRelation::Delegated(inner) => {
-                let inner_value = inner.global_entity.clone();
+                let inner_value = inner.global_entity;
                 let mut new_inner = HostCreatedRelation::with_mutator(inner.index);
                 new_inner.set_mutator(&inner.mutator);
                 new_inner.global_entity = inner_value;
@@ -650,11 +648,11 @@ impl EntityProperty {
     pub fn localize(&mut self) {
         match &mut self.inner {
             EntityRelation::HostCreated(inner) => {
-                let inner_value = inner.global_entity.clone();
+                let inner_value = inner.global_entity;
                 self.inner = EntityRelation::Local(LocalRelation::new(inner_value));
             }
             EntityRelation::Delegated(inner) => {
-                let inner_value = inner.global_entity.clone();
+                let inner_value = inner.global_entity;
                 self.inner = EntityRelation::Local(LocalRelation::new(inner_value));
             }
             EntityRelation::RemoteCreated(_)
@@ -790,7 +788,7 @@ impl HostCreatedRelation {
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
-        return bit_counter.bits_needed();
+        bit_counter.bits_needed()
     }
 
     pub fn set<E: Copy + Eq + Hash + Sync + Send>(
@@ -803,7 +801,6 @@ impl HostCreatedRelation {
             self.mutate();
         } else {
             warn!("Could not find Global Entity from World Entity, in order to set the EntityRelation value!");
-            return;
         }
     }
 
@@ -818,7 +815,7 @@ impl HostCreatedRelation {
     }
 
     pub fn set_global_entity(&mut self, other_global_entity: &Option<GlobalEntity>) {
-        self.global_entity = other_global_entity.clone();
+        self.global_entity = *other_global_entity;
         self.mutate();
     }
 
@@ -857,7 +854,7 @@ impl RemoteCreatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(owned_entity) = converter.global_entity_to_owned_entity(&global_entity) else {
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -936,7 +933,7 @@ impl RemotePublicRelation {
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
-        return bit_counter.bits_needed();
+        bit_counter.bits_needed()
     }
 
     pub fn write(
@@ -970,7 +967,7 @@ impl RemotePublicRelation {
             false.ser(writer);
             return;
         };
-        let Ok(owned_entity) = converter.global_entity_to_owned_entity(&global_entity) else {
+        let Ok(owned_entity) = converter.global_entity_to_owned_entity(global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -1015,7 +1012,6 @@ impl DelegatedRelation {
             self.mutate();
         } else {
             warn!("Could not find Global Entity from World Entity, in order to set the EntityRelation value!");
-            return;
         }
     }
 
@@ -1025,7 +1021,7 @@ impl DelegatedRelation {
     }
 
     pub fn set_global_entity(&mut self, other_global_entity: &Option<GlobalEntity>) {
-        self.global_entity = other_global_entity.clone();
+        self.global_entity = *other_global_entity;
         self.mutate();
     }
 
@@ -1058,7 +1054,7 @@ impl DelegatedRelation {
         }
         let mut bit_counter = BitCounter::new(0, 0, u32::MAX);
         self.write(&mut bit_counter, converter);
-        return bit_counter.bits_needed();
+        bit_counter.bits_needed()
     }
 
     pub fn write(
@@ -1096,7 +1092,7 @@ impl DelegatedRelation {
             false.ser(writer);
             return;
         };
-        let Ok(host_entity) = converter.global_entity_to_owned_entity(&global_entity) else {
+        let Ok(host_entity) = converter.global_entity_to_owned_entity(global_entity) else {
             warn!("Could not find Local Entity from Global Entity, in order to write the EntityRelation value! This should not happen.");
             false.ser(writer);
             return;
@@ -1145,7 +1141,6 @@ impl LocalRelation {
             self.global_entity = Some(new_global_entity);
         } else {
             warn!("Could not find Global Entity from World Entity, in order to set the EntityRelation value!");
-            return;
         }
     }
 
@@ -1158,6 +1153,6 @@ impl LocalRelation {
     }
 
     pub fn set_global_entity(&mut self, other_global_entity: &Option<GlobalEntity>) {
-        self.global_entity = other_global_entity.clone();
+        self.global_entity = *other_global_entity;
     }
 }

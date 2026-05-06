@@ -192,7 +192,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         component_kind: &ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'a>> {
         if let Some(component_map) = self.world.entities.get_mut(entity) {
-            if let Some(boxed_component) = component_map.get_mut(&component_kind) {
+            if let Some(boxed_component) = component_map.get_mut(component_kind) {
                 return Some(ReplicaDynMutWrapper::new(boxed_component.dyn_mut()));
             }
         }
@@ -335,7 +335,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
                 let mutator = global_world_manager.register_component(
                     component_kinds,
                     &global_entity,
-                    &component_kind,
+                    component_kind,
                     diff_mask_size,
                 );
                 component.publish(&mutator);

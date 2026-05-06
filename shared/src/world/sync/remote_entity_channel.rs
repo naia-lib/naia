@@ -410,10 +410,7 @@ impl RemoteEntityChannel {
     }
 
     pub(crate) fn insert_component(&mut self, component_kind: ComponentKind) {
-        if !self.component_channels.contains_key(&component_kind) {
-            self.component_channels
-                .insert(component_kind, RemoteComponentChannel::new());
-        }
+        self.component_channels.entry(component_kind).or_insert_with(RemoteComponentChannel::new);
     }
 
     pub(crate) fn remove_component(&mut self, component_kind: ComponentKind) {

@@ -34,7 +34,7 @@ impl<T: Serde> Serde for Option<T> {
 
 impl<T: ConstBitLength> ConstBitLength for Option<T> {
     fn const_bit_length() -> u32 {
-        return 1 + T::const_bit_length();
+        1 + T::const_bit_length()
     }
 }
 

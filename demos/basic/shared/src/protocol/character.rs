@@ -33,7 +33,7 @@ impl Character {
         if *self.x > 20 {
             *self.x = 0;
         }
-        if *self.x % 3 == 0 {
+        if (*self.x).is_multiple_of(3) {
             *self.y = self.y.wrapping_add(1);
         }
     }

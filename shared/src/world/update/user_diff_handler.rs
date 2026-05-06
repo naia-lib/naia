@@ -237,7 +237,7 @@ impl UserDiffHandler {
             );
             return true;
         };
-        return receiver.diff_mask_is_clear();
+        receiver.diff_mask_is_clear()
     }
 
     pub fn or_diff_mask(

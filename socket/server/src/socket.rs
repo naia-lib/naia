@@ -159,7 +159,7 @@ impl Socket {
             None => Box::new(PacketReceiverImpl::new(from_client_receiver)),
         };
 
-        return (packet_sender, packet_receiver);
+        (packet_sender, packet_receiver)
     }
 }
 
@@ -168,6 +168,6 @@ impl SocketTrait for Socket {
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
-        return Socket::listen(server_addrs, config);
+        Socket::listen(server_addrs, config)
     }
 }

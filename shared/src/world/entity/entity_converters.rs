@@ -261,6 +261,6 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, '
 
         // warn!("get_or_reserve_entity() `global_entity` {:?} is not owned by user, attempting to reserve. `host_entity`: {:?}", global_entity, host_entity);
 
-        return Ok(host_entity.copy_to_owned());
+        Ok(host_entity.copy_to_owned())
     }
 }

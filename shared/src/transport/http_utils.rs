@@ -29,7 +29,7 @@ pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     let mut request_bytes = request_string.into_bytes();
 
     // Add the body
-    if request.body().len() > 0 {
+    if !request.body().is_empty() {
         request_bytes.extend_from_slice(request.body());
     }
 

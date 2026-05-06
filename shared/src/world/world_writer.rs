@@ -46,7 +46,7 @@ impl WorldWriter {
             component_kinds,
             now,
             writer,
-            &packet_index,
+            packet_index,
             world,
             entity_converter,
             global_world_manager,
@@ -61,7 +61,7 @@ impl WorldWriter {
             component_kinds,
             now,
             writer,
-            &packet_index,
+            packet_index,
             world,
             entity_converter,
             global_world_manager,
@@ -863,7 +863,7 @@ impl WorldWriter {
             component_kind.ser(component_kinds, &mut counter);
             // write data
             world
-                .component_of_kind(&world_entity, component_kind)
+                .component_of_kind(world_entity, component_kind)
                 .expect("Component does not exist in World")
                 .write_update(&diff_mask, &mut counter, &mut converter);
             if counter.overflowed() {

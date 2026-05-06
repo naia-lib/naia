@@ -29,7 +29,7 @@ impl EntityAuthChannel {
             .as_ref()
             .read()
             .expect("Lock on AuthStatus is held by current thread.");
-        return data.auth_status();
+        data.auth_status()
     }
 
     fn set_auth_status(&self, auth_status: EntityAuthStatus) {

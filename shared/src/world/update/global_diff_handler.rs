@@ -36,6 +36,12 @@ impl GlobalDiffHandler {
     }
 }
 
+impl Default for GlobalDiffHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl GlobalDiffHandler {
     pub fn new() -> Self {
         Self {

@@ -145,9 +145,9 @@ impl From<u16> for LocalRequestId {
     }
 }
 
-impl Into<u16> for LocalRequestId {
-    fn into(self) -> u16 {
-        self.id as u16
+impl From<LocalRequestId> for u16 {
+    fn from(val: LocalRequestId) -> Self {
+        val.id as u16
     }
 }
 

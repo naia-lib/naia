@@ -98,7 +98,7 @@ impl MessageChannelSender for UnorderedUnreliableSender {
             // write MessageContinue bit
             true.ser(writer);
             // write data
-            self.write_message(message_kinds, converter, writer, &message);
+            self.write_message(message_kinds, converter, writer, message);
 
             // pop message we've written
             self.outgoing_messages.pop_front();

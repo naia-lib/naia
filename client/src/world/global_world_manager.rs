@@ -39,7 +39,7 @@ impl GlobalWorldManager {
     pub fn entities(&self) -> Vec<GlobalEntity> {
         let mut output = Vec::new();
 
-        for (global_entity, _) in &self.entity_records {
+        for global_entity in self.entity_records.keys() {
             output.push(*global_entity);
         }
 
@@ -54,7 +54,7 @@ impl GlobalWorldManager {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.owner());
         }
-        return None;
+        None
     }
 
     // Spawn
@@ -96,7 +96,7 @@ impl GlobalWorldManager {
             .get(global_entity)
             .unwrap()
             .component_kinds();
-        return Some(component_kind_set.iter().copied().collect());
+        Some(component_kind_set.iter().copied().collect())
     }
 
     // Insert Component
@@ -200,7 +200,7 @@ impl GlobalWorldManager {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.replication_config());
         }
-        return None;
+        None
     }
 
     pub(crate) fn entity_publish(&mut self, global_entity: &GlobalEntity) {
@@ -225,14 +225,14 @@ impl GlobalWorldManager {
         if let Some(record) = self.entity_records.get(global_entity) {
             return record.has_component(component_kind);
         }
-        return false;
+        false
     }
 
     pub(crate) fn entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
             return record.replication_config() == ReplicationConfig::Delegated;
         }
-        return false;
+        false
     }
 
     pub(crate) fn entity_register_auth_for_delegation(&mut self, global_entity: &GlobalEntity) {
@@ -346,12 +346,12 @@ impl GlobalWorldManagerType for GlobalWorldManager {
                 EntityOwner::Local => false,
             };
         }
-        return false;
+        false
     }
 
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
         let mut_channel = MutChannelData::new(diff_mask_length);
-        return Arc::new(RwLock::new(mut_channel));
+        Arc::new(RwLock::new(mut_channel))
     }
 
     fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>> {
@@ -374,7 +374,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
                 component_kinds,
                 self,
                 global_entity,
-                &component_kind,
+                component_kind,
                 diff_mask_length,
             );
 
@@ -393,14 +393,14 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             return server_owned && is_public;
         }
         info!("entity_needs_mutator_for_delegation: entity does not have record");
-        return false;
+        false
     }
 
     fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool {
         let Some(record) = self.entity_records.get(global_entity) else {
             panic!("entity does not have record");
         };
-        return record.is_replicating();
+        record.is_replicating()
     }
 
     fn entity_is_static(&self, _global_entity: &GlobalEntity) -> bool {

@@ -24,7 +24,7 @@ impl GlobalRequestManager {
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
-        self.map.insert(id, (user_key.clone(), None));
+        self.map.insert(id, (*user_key, None));
 
         id
     }
@@ -40,7 +40,7 @@ impl GlobalRequestManager {
             let (user_key, response_opt) = self.map.remove(request_id).unwrap();
             return Some((user_key, response_opt.unwrap()));
         }
-        return None;
+        None
     }
 
     pub(crate) fn receive_response(
@@ -79,9 +79,9 @@ impl GlobalResponseManager {
         self.map.insert(
             id,
             (
-                user_key.clone(),
-                channel_kind.clone(),
-                local_response_id.clone(),
+                *user_key,
+                *channel_kind,
+                *local_response_id,
             ),
         );
 

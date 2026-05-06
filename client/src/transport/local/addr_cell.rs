@@ -14,6 +14,12 @@ pub struct LocalAddrCell {
     cell: Arc<RwLock<MaybeAddr>>,
 }
 
+impl Default for LocalAddrCell {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl LocalAddrCell {
     pub fn new() -> Self {
         Self {

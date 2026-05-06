@@ -10,6 +10,12 @@ pub struct GlobalEntityMap<E: Copy + Eq + Hash + Send + Sync> {
     reserved_global_entities: HashMap<RemoteEntity, GlobalEntity>,
 }
 
+impl<E: Copy + Eq + Hash + Send + Sync> Default for GlobalEntityMap<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
     pub fn new() -> Self {
         Self {
@@ -39,7 +45,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Gl
                 //     "Global entity {:?} exists but does not map to a world entity yet, it is reserved.",
                 //     global_entity
                 // );
-                return Err(EntityDoesNotExistError);
+                Err(EntityDoesNotExistError)
             }
             None => Err(EntityDoesNotExistError),
         }
@@ -123,7 +129,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
     }
 
     fn despawn_by_global(&mut self, global_entity: &GlobalEntity) {
-        let Some(Some(world_entity)) = self.global_to_entity_map.remove(&global_entity) else {
+        let Some(Some(world_entity)) = self.global_to_entity_map.remove(global_entity) else {
             panic!(
                 "Global entity {:?} does not exist in the global to entity map",
                 global_entity
@@ -133,7 +139,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
     }
 
     fn despawn_by_world(&mut self, world_entity: &E) {
-        let global_entity = self.entity_to_global_map.remove(&world_entity).unwrap();
+        let global_entity = self.entity_to_global_map.remove(world_entity).unwrap();
         self.global_to_entity_map.remove(&global_entity);
     }
 

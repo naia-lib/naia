@@ -22,11 +22,11 @@ impl TickEvents {
     }
 
     pub fn read<V: TickEventType>(&mut self) -> V::Iter {
-        return V::iter(self);
+        V::iter(self)
     }
 
     pub fn has<V: TickEventType>(&self) -> bool {
-        return V::has(self);
+        V::has(self)
     }
 
     // Crate-public
@@ -53,7 +53,7 @@ impl TickEventType for TickEvent {
 
     fn iter(events: &mut TickEvents) -> Self::Iter {
         let list = std::mem::take(&mut events.ticks);
-        return IntoIterator::into_iter(list);
+        IntoIterator::into_iter(list)
     }
 
     fn has(events: &TickEvents) -> bool {
