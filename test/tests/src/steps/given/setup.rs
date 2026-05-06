@@ -266,6 +266,56 @@ fn given_client_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
     scenario.record_ok();
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Common — generic scenario aliases
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a test scenario.
+///
+/// Alias for `a server is running` — the common-feature scenarios use
+/// this looser phrasing. Idempotent (`init` is a no-op if already
+/// initialized).
+#[given("a test scenario")]
+fn given_test_scenario(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::ensure_server_started;
+    ensure_server_started(ctx);
+}
+
+/// Given a connected client.
+#[given("a connected client")]
+fn given_connected_client(ctx: &mut TestWorldMut) {
+    connect_client(ctx);
+}
+
+/// Given a client that was previously connected.
+///
+/// Same as `a connected client` — phrasing distinct so the
+/// reconnection-scenario flow reads naturally.
+#[given("a client that was previously connected")]
+fn given_client_previously_connected(ctx: &mut TestWorldMut) {
+    connect_client(ctx);
+}
+
+/// Given a test scenario with deterministic time.
+///
+/// The harness already uses `TestClock` for deterministic time —
+/// this Given just initializes the standard scenario. Phrased
+/// distinctly so determinism scenarios self-document.
+#[given("a test scenario with deterministic time")]
+fn given_test_scenario_deterministic_time(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::ensure_server_started;
+    ensure_server_started(ctx);
+}
+
+/// Given a deterministic network input sequence.
+///
+/// Local transport is deterministic by design. This Given connects a
+/// client to establish a baseline state for the subsequent When.
+#[given("a deterministic network input sequence")]
+fn given_deterministic_network_input(ctx: &mut TestWorldMut) {
+    connect_client(ctx);
+}
+
 /// Given multiple transport adapters with different quality characteristics.
 ///
 /// Sets up the scenario with a server + room, ready for transport

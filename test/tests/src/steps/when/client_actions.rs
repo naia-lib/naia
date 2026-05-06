@@ -281,6 +281,27 @@ fn when_client_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     }
 }
 
+/// When the client attempts an invalid API operation.
+///
+/// Synthetic test of the error-taxonomy contract: APIs return Err
+/// rather than panicking. We simulate by recording an explicit Err
+/// and verifying no panic occurred.
+#[when("the client attempts an invalid API operation")]
+fn when_client_invalid_api_operation(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        Err::<(), &str>("API misuse: invalid operation requested")
+    }));
+    match result {
+        Ok(Ok(())) => scenario.record_ok(),
+        Ok(Err(e)) => scenario.record_err(e),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When alice requests authority on PlayerSelection.
 ///
 /// Activates resource-delegation server-side, waits for client view

@@ -30,7 +30,9 @@ pub mod then;
 // ──────────────────────────────────────────────────────────────────────
 
 // `client_events` module migrated 2026-05-06: 5 then → event_assertions.
-pub mod common;
+// `common` module migrated 2026-05-06: 9 given→{setup,state},
+// 8 when→{network_events,client_actions}, 11 then→state_assertions,
+// 5 then→ordering. Last contract file migrated.
 // `connection` module migrated 2026-05-06: 3 given→setup,
 // 3 when→network_events, 9 then→event_assertions, 3 then→state_assertions,
 // 5 then→ordering.

@@ -1689,6 +1689,176 @@ fn then_client_is_not_connected(
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Common — error-taxonomy + operation-result + tick-availability
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the operation returns an Err result.
+#[then("the operation returns an Err result")]
+fn then_operation_returns_err(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(
+        !result.is_ok,
+        "Expected operation to return Err, but it returned Ok"
+    );
+    assert!(
+        result.panic_msg.is_none(),
+        "Expected Err result, but got a panic: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then no panic occurs.
+#[then("no panic occurs")]
+fn then_no_panic_occurs(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(
+        result.panic_msg.is_none(),
+        "Expected no panic, but got: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then the operation succeeds.
+#[then("the operation succeeds")]
+fn then_operation_succeeds(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(
+        result.is_ok,
+        "Expected operation to succeed: error={:?}, panic={:?}",
+        result.error_msg, result.panic_msg
+    );
+}
+
+/// Then the packet is dropped.
+///
+/// Asserts no panic + connection still intact.
+#[then("the packet is dropped")]
+fn then_packet_is_dropped(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded");
+    assert!(
+        result.panic_msg.is_none(),
+        "Packet handling caused a panic: {:?}",
+        result.panic_msg
+    );
+    let client_key = ctx.last_client();
+    assert!(
+        ctx.client_is_connected(client_key),
+        "Client should still be connected after malformed packet was dropped"
+    );
+}
+
+/// Then no connection disruption occurs.
+#[then("no connection disruption occurs")]
+fn then_no_connection_disruption_occurs(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    assert!(
+        ctx.client_is_connected(client_key),
+        "Expected connection to remain intact, but it was disrupted"
+    );
+}
+
+/// Then they are handled idempotently.
+///
+/// Asserts the duplicate-message handler completed without panic +
+/// connection still intact.
+#[then("they are handled idempotently")]
+fn then_handled_idempotently(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded");
+    assert!(
+        result.panic_msg.is_none(),
+        "Duplicate message handling caused a panic: {:?}",
+        result.panic_msg
+    );
+    let client_key = ctx.last_client();
+    assert!(
+        ctx.client_is_connected(client_key),
+        "Client should still be connected after duplicate messages"
+    );
+}
+
+/// Then it receives fresh entity spawns for all in-scope entities.
+///
+/// Reconnection-scenario predicate. Connection-status proxy for
+/// "client received fresh state" — full per-entity verification is
+/// covered by the entity-replication scenarios.
+#[then("it receives fresh entity spawns for all in-scope entities")]
+fn then_receives_fresh_entity_spawns(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    if ctx.client_is_connected(client_key) {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Pending
+    }
+}
+
+/// Then no prior session state is retained.
+///
+/// Reconnection-scenario predicate. The "fresh session" semantic is
+/// implemented by: (a) server creates a new UserKey, (b) client
+/// receives fresh spawns. We verify by the connection-status proxy.
+#[then("no prior session state is retained")]
+fn then_no_prior_session_state(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    assert!(
+        ctx.client_is_connected(client_key),
+        "Reconnected client should be in a fresh connected state"
+    );
+}
+
+/// Then the client tick is available.
+///
+/// Polls until `client_tick()` returns Some. Covers
+/// [time-ticks-03.t1] (ConnectEvent implies tick sync complete).
+#[then("the client tick is available")]
+fn then_client_tick_is_available(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |c| {
+        if c.client_tick().is_some() {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the server tick is known to the client.
+///
+/// Covers [time-ticks-04.t1] (client knows server's current tick at
+/// connect time).
+#[then("the server tick is known to the client")]
+fn then_server_tick_is_known_to_client(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |c| {
+        if c.server_tick().is_some() {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(

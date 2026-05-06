@@ -640,6 +640,186 @@ fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
     scenario.allow_flexible_next();
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Common — generic When phrasings + reconnect/malformed/duplicate flows
+// ──────────────────────────────────────────────────────────────────────
+
+/// When a connected client.
+///
+/// Mirror of the Given variant — usable as When/And after a Given.
+#[when("a connected client")]
+fn when_connected_client(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::connect_client;
+    connect_client(ctx);
+}
+
+/// When the client reconnects.
+///
+/// Starts a brand-new client session after a prior disconnect. Adds
+/// to the same room so prior-session entities should be re-spawned.
+#[when("the client reconnects")]
+fn when_client_reconnects(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, Auth, ClientConnectEvent, ServerAuthEvent, ServerConnectEvent,
+        TrackedClientEvent, TrackedServerEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        "ReconnectedClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        test_protocol,
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
+    scenario.allow_flexible_next();
+}
+
+/// When the server receives a malformed packet.
+#[when("the server receives a malformed packet")]
+fn when_server_receives_malformed_packet(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let client_key = scenario.last_client();
+    let malformed = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
+    let _ = scenario.inject_client_packet(&client_key, malformed);
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..3 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the client receives a malformed packet.
+#[when("the client receives a malformed packet")]
+fn when_client_receives_malformed_packet(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let client_key = scenario.last_client();
+    let malformed = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
+    let _ = scenario.inject_server_packet(&client_key, malformed);
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..3 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When duplicate replication messages arrive.
+///
+/// Ticks 5 times — protocol-level dedup should keep state stable.
+#[when("duplicate replication messages arrive")]
+fn when_duplicate_replication_messages_arrive(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..5 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the same API call sequence is executed twice.
+///
+/// Determinism check — 10 ticks. The local transport + TestClock
+/// guarantee identical behavior.
+#[when("the same API call sequence is executed twice")]
+fn when_same_api_sequence_twice(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..10 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the tick is processed.
+///
+/// Single explicit tick — used to make the scenario flow read more
+/// naturally when the scenario has queued state in a Given.
+#[when("the tick is processed")]
+fn when_tick_is_processed(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|_| {});
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When client A disconnects from the server.
 ///
 /// Server-initiated disconnect for the named client. Used by

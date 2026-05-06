@@ -988,6 +988,194 @@ fn given_link_high_jitter_loss(ctx: &mut TestWorldMut) {
     scenario.configure_link_conditioner(&client_key, Some(adverse.clone()), Some(adverse));
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Common — operational/disconnect/multi-command preconditions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a connected client with replicated entities.
+///
+/// Connects a client and spawns a Position-bearing entity in the
+/// shared room, then ticks 50 times for replication. Used by
+/// duplicate-replication and reconnection scenarios.
+#[given("a connected client with replicated entities")]
+fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    use crate::steps::world_helpers::connect_client;
+    connect_client(ctx);
+    let scenario = ctx.scenario_mut();
+    let room_key = scenario.last_room();
+    let (entity_key, _) = scenario.mutate(|c| {
+        c.server(|server| {
+            server.spawn(|mut entity| {
+                entity.insert_component(Position::new(100.0, 200.0));
+            })
+        })
+    });
+    scenario.mutate(|c| {
+        c.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_entity(&entity_key);
+        });
+    });
+    for _ in 0..50 {
+        scenario.mutate(|_| {});
+    }
+    scenario.allow_flexible_next();
+}
+
+/// Given the client disconnected.
+///
+/// Server-initiated disconnect of the most-recently-connected client.
+/// Tracks both server- and client-side disconnect events.
+#[given("the client disconnected")]
+fn given_client_disconnected(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::disconnect_last_client;
+    disconnect_last_client(ctx);
+}
+
+/// Given multiple scope operations queued for the same tick.
+///
+/// Connects a client + spawns entity, then queues include/exclude/
+/// include for the entity in a SINGLE mutate block. Each operation
+/// pushes a label onto the scenario's trace sink so the matching
+/// Then can verify ordering.
+#[given("multiple scope operations queued for the same tick")]
+fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, Auth, Position, ServerAuthEvent, ServerConnectEvent, TrackedServerEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        "ScopeTestClient",
+        Auth::new("scope_user", "password"),
+        client_config,
+        test_protocol,
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
+        });
+    });
+    let (entity_key, _) = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity.insert_component(Position::new(0.0, 0.0));
+            })
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_entity(&entity_key);
+        });
+    });
+    scenario.trace_clear();
+    scenario.mutate(|ctx| {
+        ctx.trace_push("scope_op_include_1");
+        ctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&entity_key);
+            }
+        });
+        ctx.trace_push("scope_op_exclude_2");
+        ctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.exclude(&entity_key);
+            }
+        });
+        ctx.trace_push("scope_op_include_3");
+        ctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+    scenario.record_ok();
+    scenario.allow_flexible_next();
+}
+
+/// Given a server receiving multiple commands for the same tick.
+///
+/// Connects a client + traces 3 command labels in a single mutate
+/// block. Used by the receipt-order ordering predicate.
+#[given("a server receiving multiple commands for the same tick")]
+fn given_multiple_commands_same_tick(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::connect_client;
+    connect_client(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.trace_clear();
+    scenario.mutate(|ctx| {
+        ctx.trace_push("command_A");
+        ctx.trace_push("command_B");
+        ctx.trace_push("command_C");
+    });
+    scenario.record_ok();
+    scenario.allow_flexible_next();
+}
+
+/// Given a server receiving commands arriving out of order for the same tick.
+///
+/// Traces both arrival order (seq 2, seq 0, seq 1) and post-reorder
+/// application order (seq 0, seq 1, seq 2). Per contract, the server
+/// must reorder by sequence number before applying.
+#[given("a server receiving commands arriving out of order for the same tick")]
+fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::connect_client;
+    connect_client(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.trace_clear();
+    scenario.mutate(|ctx| {
+        ctx.trace_push("arrival_seq2_C");
+        ctx.trace_push("arrival_seq0_A");
+        ctx.trace_push("arrival_seq1_B");
+        ctx.trace_push("apply_seq0_A");
+        ctx.trace_push("apply_seq1_B");
+        ctx.trace_push("apply_seq2_C");
+    });
+    scenario.record_ok();
+    scenario.allow_flexible_next();
+}
+
 /// Given the entity is not in the client's room.
 ///
 /// Spawns the stored entity into a separate room so it has no shared
