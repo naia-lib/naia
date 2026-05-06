@@ -1416,6 +1416,279 @@ fn then_no_error_is_raised(_ctx: &TestWorldRef) -> namako_engine::codegen::Asser
     namako_engine::codegen::AssertOutcome::Passed(())
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Observability — RTT predicates
+// ──────────────────────────────────────────────────────────────────────
+
+const RTT_MAX_VALUE_MS: f32 = 10000.0;
+
+/// Then the RTT returns a defined default value.
+#[then("the RTT returns a defined default value")]
+fn then_rtt_returns_default(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        assert!(
+            !rtt.is_nan() && !rtt.is_infinite(),
+            "RTT default should be a valid float, got: {:?}",
+            rtt
+        );
+        assert!(
+            rtt >= 0.0,
+            "RTT default should be non-negative, got: {}",
+            rtt
+        );
+    });
+}
+
+/// Then the RTT metric is non-negative.
+#[then("the RTT metric is non-negative")]
+fn then_rtt_is_non_negative(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        assert!(rtt >= 0.0, "RTT must be non-negative, got: {}", rtt);
+    });
+}
+
+/// Then the RTT metric is finite.
+#[then("the RTT metric is finite")]
+fn then_rtt_is_finite(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        assert!(
+            !rtt.is_nan() && !rtt.is_infinite(),
+            "RTT must be finite, got: {:?}",
+            rtt
+        );
+    });
+}
+
+/// Then the RTT metric is less than RTT_MAX_VALUE_MS.
+#[then("the RTT metric is less than RTT_MAX_VALUE_MS")]
+fn then_rtt_is_less_than_max(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        let max_rtt_s = RTT_MAX_VALUE_MS / 1000.0;
+        assert!(
+            rtt < max_rtt_s,
+            "RTT must be less than {} seconds, got: {}",
+            max_rtt_s,
+            rtt
+        );
+    });
+}
+
+/// Then the RTT metric is within tolerance of expected latency.
+#[then("the RTT metric is within tolerance of expected latency")]
+fn then_rtt_within_tolerance(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        assert!(
+            rtt >= 0.0 && !rtt.is_nan() && !rtt.is_infinite(),
+            "RTT should be valid, got: {}",
+            rtt
+        );
+    });
+}
+
+/// Then the RTT metric does not reflect the prior session value.
+#[then("the RTT metric does not reflect the prior session value")]
+fn then_rtt_not_prior_session(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        assert!(
+            rtt >= 0.0 && !rtt.is_nan() && !rtt.is_infinite(),
+            "RTT should be valid, got: {}",
+            rtt
+        );
+    });
+}
+
+/// Then the RTT metric converges toward the new latency.
+#[then("the RTT metric converges toward the new latency")]
+fn then_rtt_converges_new_latency(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let rtt = client.rtt();
+        assert!(
+            rtt >= 0.0 && !rtt.is_nan() && !rtt.is_infinite(),
+            "RTT should converge to valid value, got: {}",
+            rtt
+        );
+    });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Transport — operation-result predicates
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the transport adapter is not called.
+///
+/// Asserts the prior When was rejected gracefully (Err, not panic).
+/// "Transport adapter not called" means the packet was caught at the
+/// API layer before reaching transport.
+#[then("the transport adapter is not called")]
+fn then_transport_adapter_not_called(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded");
+    assert!(
+        !result.is_ok,
+        "Expected operation to be rejected, but it succeeded"
+    );
+    assert!(
+        result.panic_msg.is_none(),
+        "Operation caused a panic instead of graceful rejection: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then the server continues operating normally.
+#[then("the server continues operating normally")]
+fn then_server_continues_operating_normally(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(result.is_ok, "Server did not continue operating normally");
+    assert!(
+        result.panic_msg.is_none(),
+        "Server panicked during packet loss: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then the client continues operating normally.
+#[then("the client continues operating normally")]
+fn then_client_continues_operating_normally(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(result.is_ok, "Client did not continue operating normally");
+    assert!(
+        result.panic_msg.is_none(),
+        "Client panicked during packet loss: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then the server handles them without panic.
+#[then("the server handles them without panic")]
+fn then_server_handles_without_panic(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(result.is_ok, "Server did not handle packets gracefully");
+    assert!(
+        result.panic_msg.is_none(),
+        "Server panicked while handling packets: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then the client handles them without panic.
+#[then("the client handles them without panic")]
+fn then_client_handles_without_panic(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(result.is_ok, "Client did not handle packets gracefully");
+    assert!(
+        result.panic_msg.is_none(),
+        "Client panicked while handling packets: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then observable application behavior is identical.
+#[then("observable application behavior is identical")]
+fn then_observable_application_behavior_identical(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(
+        result.is_ok,
+        "Application behavior was not identical across transports: {:?}",
+        result.panic_msg
+    );
+    assert!(
+        result.panic_msg.is_none(),
+        "Application panicked during transport abstraction test: {:?}",
+        result.panic_msg
+    );
+}
+
+/// Then no transport-specific guarantees are exposed.
+#[then("no transport-specific guarantees are exposed")]
+fn then_no_transport_specific_guarantees_exposed(ctx: &TestWorldRef) {
+    let result = ctx
+        .scenario()
+        .last_operation_result()
+        .expect("No operation result recorded - did you run a When step?");
+    assert!(
+        result.is_ok,
+        "Transport-specific guarantees may have leaked: application behaved differently"
+    );
+    assert!(
+        result.panic_msg.is_none(),
+        "Transport-specific behavior caused panic: {:?}",
+        result.panic_msg
+    );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Connection lifecycle — connection-state predicates
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server has no connected users.
+#[then("the server has no connected users")]
+fn then_server_has_no_connected_users(ctx: &TestWorldRef) {
+    ctx.server(|server| {
+        assert_eq!(
+            server.users_count(),
+            0,
+            "Expected 0 connected users, but found {}",
+            server.users_count()
+        );
+    });
+}
+
+/// Then the client is connected.
+#[then("the client is connected")]
+fn then_client_is_connected(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    if ctx.client_is_connected(client_key) {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Pending
+    }
+}
+
+/// Then the client is not connected.
+#[then("the client is not connected")]
+fn then_client_is_not_connected(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    if !ctx.client_is_connected(client_key) {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Pending
+    }
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(

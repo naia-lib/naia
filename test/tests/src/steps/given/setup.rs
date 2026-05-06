@@ -70,3 +70,215 @@ fn given_initial_round_trip_elapsed(ctx: &mut TestWorldMut) {
         scenario.mutate(|_| {});
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Observability — alternative connection lifecycle states
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a client is created but not connected.
+///
+/// Initiates handshake but does not complete it. Used to test RTT
+/// query semantics in the "before fully connected" state.
+#[given("a client is created but not connected")]
+fn given_client_created_not_connected(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{protocol, Auth};
+    let scenario = ctx.scenario_mut();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let _ = scenario.client_start(
+        "UnconnectedClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        protocol(),
+    );
+    scenario.clear_operation_result();
+    scenario.record_ok();
+}
+
+/// Given a client begins connecting.
+///
+/// Initiates handshake and ticks once but doesn't complete connection.
+/// Used to test RTT during handshake phase.
+#[given("a client begins connecting")]
+fn given_client_begins_connecting(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{protocol, Auth};
+    let scenario = ctx.scenario_mut();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let _ = scenario.client_start(
+        "ConnectingClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        protocol(),
+    );
+    scenario.mutate(|_| {});
+    scenario.clear_operation_result();
+    scenario.record_ok();
+}
+
+/// Given a client connects with latency {n}ms.
+///
+/// Standard handshake + a `LinkConditionerConfig` of `(latency_ms, 0,
+/// 0.0)` applied symmetrically. Used to test RTT convergence under
+/// known link characteristics.
+#[given("a client connects with latency {int}ms")]
+fn given_client_connects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, Auth, ClientConnectEvent, LinkConditionerConfig, ServerAuthEvent,
+        ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        "LatencyClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        test_protocol,
+    );
+    let latency_config = LinkConditionerConfig::new(latency_ms, 0, 0.0);
+    scenario.configure_link_conditioner(
+        &client_key,
+        Some(latency_config.clone()),
+        Some(latency_config),
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
+    scenario.allow_flexible_next();
+}
+
+/// Given the client disconnects.
+#[given("the client disconnects")]
+fn given_client_disconnects(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::disconnect_last_client;
+    disconnect_last_client(ctx);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Connection lifecycle — auth + protocol-version setup
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a server is running with auth required.
+///
+/// Same as `a server is running` but explicitly clears event history
+/// so connection-lifecycle scenarios start with a clean slate.
+#[given("a server is running with auth required")]
+fn given_server_running_with_auth(ctx: &mut TestWorldMut) {
+    use naia_server::ServerConfig;
+    use naia_test_harness::protocol;
+    let scenario = ctx.init();
+    scenario.server_start(ServerConfig::default(), protocol());
+    let room_key = scenario.mutate(|c| c.server(|server| server.make_room().key()));
+    scenario.set_last_room(room_key);
+    scenario.clear_event_history();
+}
+
+/// Given a server with protocol version {word}.
+///
+/// Maps version "A"→1 and "B"→2 to a `ProtocolId`. Used by the
+/// protocol-mismatch rejection tests.
+#[given("a server with protocol version {word}")]
+fn given_server_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
+    use naia_server::ServerConfig;
+    use naia_test_harness::{protocol, ProtocolId};
+    let scenario = ctx.init();
+    let protocol_id = match version.as_str() {
+        "A" => ProtocolId::new(1),
+        "B" => ProtocolId::new(2),
+        _ => panic!("Unknown protocol version: {}", version),
+    };
+    scenario.server_start_with_protocol_id(ServerConfig::default(), protocol(), protocol_id);
+    scenario.record_ok();
+}
+
+/// Given a client with protocol version {word}.
+///
+/// Same version mapping as the server variant; used to set up
+/// matching/mismatching protocol-id pairs.
+#[given("a client with protocol version {word}")]
+fn given_client_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{protocol, Auth, ProtocolId};
+    let scenario = ctx.scenario_mut();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let protocol_id = match version.as_str() {
+        "A" => ProtocolId::new(1),
+        "B" => ProtocolId::new(2),
+        _ => panic!("Unknown protocol version: {}", version),
+    };
+    scenario.client_start_with_protocol_id(
+        "TestClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        protocol(),
+        protocol_id,
+    );
+    scenario.record_ok();
+}
+
+/// Given multiple transport adapters with different quality characteristics.
+///
+/// Sets up the scenario with a server + room, ready for transport
+/// abstraction-independence testing. Different transport qualities
+/// are simulated via `LinkConditionerConfig` in the matching When step.
+#[given("multiple transport adapters with different quality characteristics")]
+fn given_multiple_transport_adapters(ctx: &mut TestWorldMut) {
+    use naia_server::ServerConfig;
+    use naia_test_harness::protocol;
+    let scenario = ctx.init();
+    scenario.server_start(ServerConfig::default(), protocol());
+    let room_key = scenario.mutate(|c| c.server(|server| server.make_room().key()));
+    scenario.set_last_room(room_key);
+    scenario.clear_operation_result();
+    scenario.record_ok();
+}

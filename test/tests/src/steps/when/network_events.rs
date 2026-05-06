@@ -79,6 +79,400 @@ fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
     ctx.scenario_mut().bdd_store(SECOND_CLIENT_KEY, client_key);
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Observability — connection lifecycle + sample collection
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the client disconnects.
+#[when("the client disconnects")]
+fn when_client_disconnects(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::disconnect_last_client;
+    disconnect_last_client(ctx);
+}
+
+/// When sufficient samples have been collected.
+///
+/// Advances 50 ticks to collect enough RTT samples for convergence.
+#[when("sufficient samples have been collected")]
+fn when_sufficient_samples_collected(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    for _ in 0..50 {
+        scenario.mutate(|_| {});
+    }
+    scenario.allow_flexible_next();
+}
+
+/// When traffic is exchanged for multiple metric windows.
+///
+/// 1000ms window / 16ms tick × 3 windows ≈ 187 ticks.
+#[when("traffic is exchanged for multiple metric windows")]
+fn when_traffic_exchanged_multiple_windows(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let ticks_per_window = 1000 / 16;
+    for _ in 0..(ticks_per_window * 3) {
+        scenario.mutate(|_| {});
+    }
+    scenario.allow_flexible_next();
+}
+
+/// When the client reconnects with latency {n}ms.
+///
+/// Starts a new client session with the specified link latency.
+/// Used to test that RTT does not carry stale values from prior
+/// sessions.
+#[when("the client reconnects with latency {int}ms")]
+fn when_client_reconnects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, Auth, ClientConnectEvent, LinkConditionerConfig, ServerAuthEvent,
+        ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        "ReconnectedClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        test_protocol,
+    );
+    let latency_config = LinkConditionerConfig::new(latency_ms, 0, 0.0);
+    scenario.configure_link_conditioner(
+        &client_key,
+        Some(latency_config.clone()),
+        Some(latency_config),
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
+    scenario.allow_flexible_next();
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Transport — inbound packet handling, conditioning, abstraction
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server receives a packet exceeding MTU.
+///
+/// Injects a 1000-byte oversized packet from client to server, ticks
+/// 3 times, captures any panic. The contract is that the server
+/// drops the packet gracefully.
+#[when("the server receives a packet exceeding MTU")]
+fn when_server_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let oversized: Vec<u8> = (0u16..1000).map(|i| (i % 256) as u8).collect();
+    let _ = scenario.inject_client_packet(&client_key, oversized);
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..3 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the client receives a packet exceeding MTU.
+#[when("the client receives a packet exceeding MTU")]
+fn when_client_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let oversized: Vec<u8> = (0u16..1000).map(|i| (i % 256) as u8).collect();
+    let _ = scenario.inject_server_packet(&client_key, oversized);
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..3 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When packets from the client are dropped by the transport.
+///
+/// Configures 100% loss client→server, ticks 10 times. Server should
+/// remain operational (graceful packet loss handling).
+#[when("packets from the client are dropped by the transport")]
+fn when_packets_from_client_dropped(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use naia_test_harness::LinkConditionerConfig;
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    scenario.configure_link_conditioner(
+        &client_key,
+        Some(LinkConditionerConfig::new(0, 0, 1.0)),
+        None,
+    );
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..10 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When packets from the server are dropped by the transport.
+#[when("packets from the server are dropped by the transport")]
+fn when_packets_from_server_dropped(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use naia_test_harness::LinkConditionerConfig;
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    scenario.configure_link_conditioner(
+        &client_key,
+        None,
+        Some(LinkConditionerConfig::new(0, 0, 1.0)),
+    );
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..10 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the server receives duplicate packets.
+///
+/// Injects the same valid-looking packet 3 times, ticks 5 times.
+/// Server should dedupe + handle gracefully.
+#[when("the server receives duplicate packets")]
+fn when_server_receives_duplicate_packets(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let packet: Vec<u8> = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..3 {
+            let _ = scenario.inject_client_packet(&client_key, packet.clone());
+        }
+        for _ in 0..5 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the client receives duplicate packets.
+#[when("the client receives duplicate packets")]
+fn when_client_receives_duplicate_packets(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let packet: Vec<u8> = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..3 {
+            let _ = scenario.inject_server_packet(&client_key, packet.clone());
+        }
+        for _ in 0..5 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the server receives packets in a different order than sent.
+///
+/// Configures jitter (50ms latency, 40ms jitter) on client→server to
+/// induce reordering. Ticks 10 times.
+#[when("the server receives packets in a different order than sent")]
+fn when_server_receives_packets_reordered(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use naia_test_harness::LinkConditionerConfig;
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    scenario.configure_link_conditioner(
+        &client_key,
+        Some(LinkConditionerConfig::new(50, 40, 0.0)),
+        None,
+    );
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..10 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the client receives packets in a different order than sent.
+#[when("the client receives packets in a different order than sent")]
+fn when_client_receives_packets_reordered(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use naia_test_harness::LinkConditionerConfig;
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    scenario.configure_link_conditioner(
+        &client_key,
+        None,
+        Some(LinkConditionerConfig::new(50, 40, 0.0)),
+    );
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        for _ in 0..10 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the same application logic runs on each transport.
+///
+/// Runs a connect → send-message flow under default (no
+/// conditioning) transport conditions. The matching Then asserts the
+/// flow completed without panic. Used for transport-abstraction
+/// independence proof.
+#[when("the same application logic runs on each transport")]
+fn when_same_application_logic_runs(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, test_protocol::{TestMessage, UnreliableChannel}, Auth, ClientConnectEvent,
+        ServerAuthEvent, ServerConnectEvent,
+    };
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        let test_protocol = protocol();
+        let room_key = scenario.last_room();
+        let mut client_config = ClientConfig::default();
+        client_config.send_handshake_interval = Duration::from_millis(0);
+        client_config.jitter_buffer = JitterBufferType::Bypass;
+        let client_key = scenario.client_start(
+            "IdealClient",
+            Auth::new("test_user", "password"),
+            client_config,
+            test_protocol,
+        );
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                    if incoming_key == client_key {
+                        return Some(incoming_key);
+                    }
+                }
+                None
+            })
+        });
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.accept_connection(&client_key);
+            });
+        });
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                    if incoming_key == client_key {
+                        return Some(());
+                    }
+                }
+                None
+            })
+        });
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server
+                    .room_mut(&room_key)
+                    .expect("room exists")
+                    .add_user(&client_key);
+            });
+        });
+        scenario.expect(|ctx| {
+            ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+        });
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.send_message::<UnreliableChannel, _>(&client_key, &TestMessage::new(100));
+            });
+        });
+        for _ in 0..5 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When the entity despawns on the client.
 ///
 /// Polls until the client no longer has the entity locally. Used as
@@ -100,6 +494,150 @@ fn when_entity_despawns_on_client(ctx: &mut TestWorldMut) {
             }
         })
     });
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Connection lifecycle — handshake outcomes
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the client attempts to connect.
+///
+/// Drives the auth event + accept-connection step but stops short of
+/// the full connect handshake — used by protocol-mismatch tests
+/// where the connect-event never fires.
+#[when("the client attempts to connect")]
+fn when_client_attempts_to_connect(ctx: &mut TestWorldMut) {
+    use naia_test_harness::{Auth, ServerAuthEvent};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.record_ok();
+}
+
+/// When a client authenticates and connects.
+///
+/// Full happy-path handshake with both server- and client-side
+/// event tracking. Tracks AuthEvent → ConnectEvent (server) and
+/// ConnectEvent (client).
+#[when("a client authenticates and connects")]
+fn when_client_authenticates_and_connects(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, Auth, ClientConnectEvent, ServerAuthEvent, ServerConnectEvent,
+        TrackedClientEvent, TrackedServerEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        "TestClient",
+        Auth::new("test_user", "password"),
+        client_config,
+        test_protocol,
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Auth);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+    scenario.mutate(|_| {});
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
+        });
+    });
+    scenario.allow_flexible_next();
+}
+
+/// When a client attempts to connect but is rejected.
+///
+/// Drives the auth flow + server-side reject. Tracks the client's
+/// `RejectEvent` so downstream Then steps can assert it.
+#[when("a client attempts to connect but is rejected")]
+fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        protocol, Auth, ClientRejectEvent, ServerAuthEvent, TrackedClientEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        "RejectedClient",
+        Auth::new("bad_user", "bad_password"),
+        client_config,
+        test_protocol,
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.reject_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientRejectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Reject);
+    scenario.allow_flexible_next();
 }
 
 /// When client A disconnects from the server.

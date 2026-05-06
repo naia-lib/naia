@@ -308,6 +308,119 @@ fn then_server_observes_publish_event_for_client_a(ctx: &TestWorldRef) -> Assert
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Connection lifecycle — connect / disconnect / reject events
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the connection is rejected with ProtocolMismatch.
+#[then("the connection is rejected with ProtocolMismatch")]
+fn then_connection_rejected_protocol_mismatch(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::{ClientRejectEvent, RejectReason};
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        if let Some(reason) = client.read_event::<ClientRejectEvent>() {
+            if reason == RejectReason::ProtocolMismatch {
+                return AssertOutcome::Passed(());
+            }
+        }
+        AssertOutcome::Pending
+    })
+}
+
+/// Then the client observes ConnectEvent.
+#[then("the client observes ConnectEvent")]
+fn then_client_observes_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TrackedClientEvent;
+    let client_key = ctx.last_client();
+    if ctx.client_observed(client_key, TrackedClientEvent::Connect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the client observes RejectEvent.
+#[then("the client observes RejectEvent")]
+fn then_client_observes_reject(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TrackedClientEvent;
+    let client_key = ctx.last_client();
+    if ctx.client_observed(client_key, TrackedClientEvent::Reject) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the client does not observe ConnectEvent.
+#[then("the client does not observe ConnectEvent")]
+fn then_client_no_connect(ctx: &TestWorldRef) {
+    use naia_test_harness::TrackedClientEvent;
+    let client_key = ctx.last_client();
+    assert!(
+        !ctx.client_observed(client_key, TrackedClientEvent::Connect),
+        "Client should NOT have observed ConnectEvent but did. History: {:?}",
+        ctx.client_event_history(client_key)
+    );
+}
+
+/// Then the client does not observe DisconnectEvent.
+#[then("the client does not observe DisconnectEvent")]
+fn then_client_no_disconnect(ctx: &TestWorldRef) {
+    use naia_test_harness::TrackedClientEvent;
+    let client_key = ctx.last_client();
+    assert!(
+        !ctx.client_observed(client_key, TrackedClientEvent::Disconnect),
+        "Client should NOT have observed DisconnectEvent but did. History: {:?}",
+        ctx.client_event_history(client_key)
+    );
+}
+
+/// Then the server has observed ConnectEvent.
+#[then("the server has observed ConnectEvent")]
+fn then_server_has_observed_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TrackedServerEvent;
+    if ctx.server_observed(TrackedServerEvent::Connect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the client has observed ConnectEvent.
+#[then("the client has observed ConnectEvent")]
+fn then_client_has_observed_connect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TrackedClientEvent;
+    let client_key = ctx.last_client();
+    if ctx.client_observed(client_key, TrackedClientEvent::Connect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the server has observed DisconnectEvent.
+#[then("the server has observed DisconnectEvent")]
+fn then_server_has_observed_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TrackedServerEvent;
+    if ctx.server_observed(TrackedServerEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the client has observed DisconnectEvent.
+#[then("the client has observed DisconnectEvent")]
+fn then_client_has_observed_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TrackedClientEvent;
+    let client_key = ctx.last_client();
+    if ctx.client_observed(client_key, TrackedClientEvent::Disconnect) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
 /// Then the server observes a despawn event for client A.
 ///
 /// Scope-absence proxy (mirrors spawn-event proxy above). Covers

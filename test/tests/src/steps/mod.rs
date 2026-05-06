@@ -31,7 +31,9 @@ pub mod then;
 
 // `client_events` module migrated 2026-05-06: 5 then → event_assertions.
 pub mod common;
-pub mod connection;
+// `connection` module migrated 2026-05-06: 3 given→setup,
+// 3 when→network_events, 9 then→event_assertions, 3 then→state_assertions,
+// 5 then→ordering.
 // `entity_authority` module migrated 2026-05-06: 1 given→state,
 // 1 when→client_actions, 3 then→event_assertions, 2 then→state_assertions.
 // `entity_delegation` module migrated 2026-05-06: 4 given→state,
@@ -47,7 +49,9 @@ pub mod connection;
 // 4 when→server_actions, 1 when→network_events, 7 then→state_assertions.
 // `messaging` module migrated 2026-05-06: 2 when→client_actions,
 // 3 when→server_actions, 4 then→state_assertions.
-pub mod observability;
+// `observability` module migrated 2026-05-06: 6 given→{setup,state},
+// 8 when→{network_events,client_actions}, 7 then→state_assertions.
+// Helper `disconnect_last_client` extracted.
 // `priority_accumulator` module migrated 2026-05-06: 1 given→state,
 // 3 when→server_actions, 5 then→state_assertions.
 // `replicated_resources` module migrated 2026-05-06: 5 given→{setup,state},
@@ -62,7 +66,9 @@ pub mod observability;
 // `spawn_with_components` module migrated 2026-05-06: 2 given, 2 then.
 // `immutable_components` module migrated 2026-05-06: 2 given, 2 then.
 // `smoke` module migrated 2026-05-06: 2 given, 2 when, 2 then.
-pub mod transport;
+// `transport` module migrated 2026-05-06: 1 given→setup,
+// 2 when→server_actions, 2 when→client_actions, 9 when→network_events,
+// 7 then→state_assertions. Helper `panic_payload_to_string` extracted.
 // `world_integration` module migrated 2026-05-06: 1 when→network_events,
 // 1 when→server_actions, 3 then→state_assertions.
 

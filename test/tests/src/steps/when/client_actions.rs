@@ -190,6 +190,97 @@ fn when_client_a_publishes_entity(ctx: &mut TestWorldMut) {
     });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Observability — RTT queries (panic-catching)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Helper: query the last client's RTT, capturing any panic that
+/// arises from doing so in an unusual lifecycle state. Records the
+/// outcome (ok / panic message) for downstream Then assertions.
+fn query_rtt_capturing_panic(ctx: &mut TestWorldMut) {
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.expect(|ctx| {
+            ctx.client(client_key, |client| Some(client.rtt()))
+        });
+    }));
+    match result {
+        Ok(_) => scenario.record_ok(),
+        Err(panic_payload) => {
+            let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
+                s.to_string()
+            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
+                s.clone()
+            } else {
+                "Unknown panic".to_string()
+            };
+            scenario.record_panic(msg);
+        }
+    }
+}
+
+/// When the client queries RTT metric.
+#[when("the client queries RTT metric")]
+fn when_client_queries_rtt(ctx: &mut TestWorldMut) {
+    query_rtt_capturing_panic(ctx);
+}
+
+/// When the client queries RTT metric during handshake.
+#[when("the client queries RTT metric during handshake")]
+fn when_client_queries_rtt_during_handshake(ctx: &mut TestWorldMut) {
+    query_rtt_capturing_panic(ctx);
+}
+
+/// When the client queries RTT metric after disconnect.
+#[when("the client queries RTT metric after disconnect")]
+fn when_client_queries_rtt_after_disconnect(ctx: &mut TestWorldMut) {
+    query_rtt_capturing_panic(ctx);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Transport — client outbound packet sends
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the client sends a packet within the MTU limit.
+#[when("the client sends a packet within the MTU limit")]
+fn when_client_sends_packet_within_mtu(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{TestMessage, UnreliableChannel};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    scenario.mutate(|ctx| {
+        ctx.client(client_key, |client| {
+            let _ = client.send_message::<UnreliableChannel, _>(&TestMessage::new(42));
+        });
+    });
+    scenario.record_ok();
+}
+
+/// When the client attempts to send a packet exceeding MTU.
+#[when("the client attempts to send a packet exceeding MTU")]
+fn when_client_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{LargeTestMessage, UnreliableChannel};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| {
+            ctx.client(client_key, |client| {
+                let _ = client.send_message::<UnreliableChannel, _>(&LargeTestMessage::new(1000));
+            });
+        });
+    }));
+    match result {
+        Ok(()) => scenario.record_err("Oversized packet rejected"),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When alice requests authority on PlayerSelection.
 ///
 /// Activates resource-delegation server-side, waits for client view

@@ -111,10 +111,10 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
     - [ ] scope_exit.rs (13 bindings)
     - [ ] entity_publication.rs (12 bindings)
     - [x] **entity_scopes.rs** (20 bindings) → given/state, when/server_actions, when/network_events, then/state_assertions. 2026-05-06.
-    - [ ] connection.rs (23 bindings)
+    - [x] **connection.rs** (23 bindings) → given/setup, when/network_events, then/{event_assertions,state_assertions,ordering}. 2026-05-06.
     - [x] **entity_delegation.rs** (16 bindings) → given/state, when/client_actions, when/server_actions, when/network_events, then/state_assertions. 2026-05-06.
-    - [ ] observability.rs (21 bindings)
-    - [ ] transport.rs (21 bindings)
+    - [x] **observability.rs** (21 bindings) → given/{setup,state}, when/{network_events,client_actions}, then/state_assertions. Helper `disconnect_last_client` extracted. 2026-05-06.
+    - [x] **transport.rs** (21 bindings) → given/setup, when/{server_actions,client_actions,network_events}, then/state_assertions. Helper `panic_payload_to_string` extracted. 2026-05-06.
     - [ ] common.rs (33 bindings)
   - **A.3.d** — Verify: `cargo test -p naia-tests` passes the same scenarios as before; `cargo run -p naia_npa -- manifest` shows 251 bindings (or whatever count after deduplication).
 - [ ] **A.4** Collapse the 24 `.feature` files into the 8 grouped files. Preserve every Scenario verbatim; just regroup by feature. Update file paths in any tooling references (manifest emit, NPA run, etc.).

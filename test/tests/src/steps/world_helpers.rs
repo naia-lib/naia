@@ -109,6 +109,41 @@ use naia_test_harness::{
 
 use crate::TestWorldMut;
 
+/// Convert a panic payload into a string message. Used by
+/// transport/observability bindings that wrap operations in
+/// `catch_unwind`. The `scenario.record_panic(...)` API takes a
+/// `String`, but `catch_unwind` returns `Box<dyn Any + Send>` — this
+/// helper bridges the two.
+pub fn panic_payload_to_string(payload: Box<dyn std::any::Any + Send>) -> String {
+    if let Some(s) = payload.downcast_ref::<&str>() {
+        s.to_string()
+    } else if let Some(s) = payload.downcast_ref::<String>() {
+        s.clone()
+    } else {
+        "Unknown panic".to_string()
+    }
+}
+
+/// Server-initiated disconnect of the most-recently-connected client.
+/// Tracks both the server-side and client-side disconnect events so
+/// downstream Then steps can assert on them.
+pub fn disconnect_last_client(ctx: &mut TestWorldMut) {
+    use naia_test_harness::ClientDisconnectEvent;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.disconnect_user(&client_key);
+        });
+    });
+    scenario.track_server_event(TrackedServerEvent::Disconnect);
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientDisconnectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Disconnect);
+    scenario.allow_flexible_next();
+}
+
 /// Idempotently start the server. If the scenario isn't initialized
 /// yet, init it, start the server with default config, create a
 /// default room, and store it as `last_room`. If it's already

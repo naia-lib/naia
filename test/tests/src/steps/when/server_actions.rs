@@ -496,6 +496,53 @@ fn when_server_includes_entity_for_unknown_client(ctx: &mut TestWorldMut) {
     scenario.mutate(|_| {});
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Transport — server outbound packet sends
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server sends a packet within the MTU limit.
+#[when("the server sends a packet within the MTU limit")]
+fn when_server_sends_packet_within_mtu(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{TestMessage, UnreliableChannel};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.send_message::<UnreliableChannel, _>(&client_key, &TestMessage::new(42));
+        });
+    });
+    scenario.record_ok();
+}
+
+/// When the server attempts to send a packet exceeding MTU.
+///
+/// Catches any panic and records the outcome — the contract is that
+/// oversized packets are rejected gracefully, not by panicking.
+#[when("the server attempts to send a packet exceeding MTU")]
+fn when_server_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{LargeTestMessage, UnreliableChannel};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.send_message::<UnreliableChannel, _>(
+                    &client_key,
+                    &LargeTestMessage::new(1000),
+                );
+            });
+        });
+    }));
+    match result {
+        Ok(()) => scenario.record_err("Oversized packet rejected"),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When the server mutates entity {label}'s component to x={int} y={int}.
 ///
 /// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].
