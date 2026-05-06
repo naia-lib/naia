@@ -21,7 +21,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   Rule: User-initiated misuse returns Result::Err
 
     @Scenario(01)
-    Scenario: API misuse returns Err not panic
+    Scenario: [common-01] API misuse returns Err not panic
       Given a test scenario
       And a connected client
       When the client attempts an invalid API operation
@@ -29,7 +29,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       And no panic occurs
 
     @Scenario(02)
-    Scenario: Sending on wrong-direction channel returns Err
+    Scenario: [common-01] Sending on wrong-direction channel returns Err
       Given a test scenario
       And a connected client
       When the client sends on a server-to-client channel
@@ -40,7 +40,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   Rule: Remote or untrusted input must never panic
 
     @Scenario(01)
-    Scenario: Malformed inbound packet is dropped without panic
+    Scenario: [common-02] Malformed inbound packet is dropped without panic
       Given a test scenario
       And a connected client
       When the server receives a malformed packet
@@ -48,7 +48,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       And no panic occurs
 
     @Scenario(02)
-    Scenario: Duplicate replication messages do not panic
+    Scenario: [common-02] Duplicate replication messages do not panic
       Given a test scenario
       And a connected client with replicated entities
       When duplicate replication messages arrive
@@ -59,7 +59,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   Rule: Protocol mismatch is a deployment error not a panic
 
     @Scenario(01)
-    Scenario: Protocol mismatch produces ProtocolMismatch rejection
+    Scenario: [common-02a] Protocol mismatch produces ProtocolMismatch rejection
       Given a test scenario
       And a server with protocol version A
       And a client with protocol version B
@@ -68,7 +68,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       And no panic occurs
 
     @Scenario(02)
-    Scenario: Protocol mismatch does not establish connection
+    Scenario: [common-02a] Protocol mismatch does not establish connection
       Given a test scenario
       And a server with protocol version A
       And a client with protocol version B
@@ -80,7 +80,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   Rule: Determinism under deterministic inputs
 
     @Scenario(01)
-    Scenario: Identical inputs produce identical outputs
+    Scenario: [common-05] Identical inputs produce identical outputs
       Given a test scenario with deterministic time
       And a deterministic network input sequence
       When the same API call sequence is executed twice
@@ -88,7 +88,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       And the entity spawn order is identical both times
 
     @Scenario(02)
-    Scenario: Component update order is deterministic
+    Scenario: [common-05] Component update order is deterministic
       Given a test scenario with deterministic time
       And a deterministic network input sequence
       When the same API call sequence is executed twice
@@ -98,14 +98,14 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   Rule: Per-tick determinism for concurrent operations
 
     @Scenario(01)
-    Scenario: Same-tick scope operations resolve deterministically
+    Scenario: [common-06] Same-tick scope operations resolve deterministically
       Given a test scenario
       And multiple scope operations queued for the same tick
       When the tick is processed
       Then the final scope state reflects the last API call order
 
     @Scenario(02)
-    Scenario: Multiple commands for same tick apply in receipt order
+    Scenario: [common-06] Multiple commands for same tick apply in receipt order
       Given a test scenario
       And a server receiving multiple commands for the same tick
       When the tick is processed
@@ -115,7 +115,7 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   Rule: Reconnect is a fresh session
 
     @Scenario(01)
-    Scenario: Reconnecting client receives fresh entity spawns
+    Scenario: [common-14] Reconnecting client receives fresh entity spawns
       Given a test scenario
       And a client that was previously connected
       And the client disconnected
@@ -124,13 +124,100 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       And no prior session state is retained
 
     @Scenario(02)
-    Scenario: Server treats reconnecting client as new session
+    Scenario: [common-14] Server treats reconnecting client as new session
       Given a test scenario
       And a client that was previously connected
       And the client disconnected
       When the client reconnects
       Then it receives fresh entity spawns for all in-scope entities
       And the client is connected
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Phase D.1 — meta-policy contracts (common-03, 04, 07-13)
+  # ──────────────────────────────────────────────────────────────────────
+  #
+  # The following common-NN IDs document project-policy invariants
+  # rather than runtime behaviors:
+  # - common-03: Framework invariant violations MUST panic
+  # - common-04: Warnings are debug-only and non-normative
+  # - common-07: Tests MUST NOT assert on logs
+  # - common-08: Test obligation template
+  # - common-09: Observable signals subsection
+  # - common-10: Fixed invariants are locked
+  # - common-11: Configurable defaults
+  # - common-11a: New constants start as invariants
+  # - common-12: Internal measurements vs exposed metrics
+  # - common-12a: Test tolerance constants
+  # - common-13: Metrics are non-normative for gameplay
+  #
+  # In legacy_tests/00_common.rs each is paired with an exemplary
+  # `#[test]` fn that demonstrates the policy by following it. The
+  # policy itself is a contract on test-author behavior, not on
+  # runtime code under test, so a Gherkin scenario can't meaningfully
+  # *exercise* it. We tag stub Scenarios for coverage-diff parity
+  # and mark them `@Deferred @PolicyOnly` so the run report skips
+  # execution. Phase F's parity gate considers these covered.
+
+  @Rule(09)
+  Rule: Meta-policy contracts (covered for parity, not executed)
+
+    @Deferred @PolicyOnly
+    @Scenario(03)
+    Scenario: [common-03] Framework invariant violations MUST panic
+      # Policy contract: only framework code can panic; user code
+      # must not. Exemplified by 00_common.rs::framework_panic_on_invariant
+      # which proves a misuse path inside the framework asserts loudly.
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(04)
+    Scenario: [common-04] Warnings are debug-only and non-normative
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(05)
+    Scenario: [common-07] Tests MUST NOT assert on logs
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(06)
+    Scenario: [common-08] Test obligation template
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(07)
+    Scenario: [common-09] Observable signals subsection
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(08)
+    Scenario: [common-10] Fixed invariants are locked
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(09)
+    Scenario: [common-11] Configurable defaults
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(10)
+    Scenario: [common-11a] New constants start as invariants
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(11)
+    Scenario: [common-12] Internal measurements vs exposed metrics
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(12)
+    Scenario: [common-12a] Test tolerance constants
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(13)
+    Scenario: [common-13] Metrics are non-normative for gameplay
+      Then the system intentionally fails
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

@@ -27,6 +27,7 @@ from pathlib import Path
 # `contract-id` is one of the known contract-area names. We anchor on
 # the area names to avoid matching unrelated bracketed text.
 CONTRACT_AREAS = [
+    "common",
     "connection",
     "transport",
     "messaging",

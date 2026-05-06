@@ -177,7 +177,7 @@ Goal: all 167 missing contract IDs covered as namako Scenarios. Estimated +285 n
 
 Per-feature checklist (each is an independently-verifiable subgoal):
 
-- [ ] **D.1** `00_foundations.feature` — migrate from 00_common.rs (~30 tests). Includes the error-taxonomy + determinism scenarios.
+- [x] **D.1** (2026-05-06) `00_foundations.feature` — all 17 `common-*` contract IDs covered. The 6 testable contracts (`common-01`, `02`, `02a`, `05`, `06`, `14`) tagged on existing Scenarios; the 11 meta-policy contracts (`common-03`, `04`, `07-13`) added as `@Deferred @PolicyOnly` Scenarios under a new `Rule(09)` for parity. Coverage: pending 186 → 169.
 - [ ] **D.2** `01_lifecycle.feature` — migrate from 01_connection_lifecycle, 02_transport, 04_time_ticks_commands, 05_observability_metrics (~130 tests). Use Scenario Outlines for the connection-state matrix.
 - [ ] **D.3** `02_messaging.feature` — migrate from 03_messaging (~78 tests). **Heaviest file**; expect Scenario Outlines for the channel-type × behavior matrix.
 - [ ] **D.4** `03_replication.feature` — migrate from 07_entity_replication, 18_spawn_with_components, 19_immutable_components (~38 tests).
