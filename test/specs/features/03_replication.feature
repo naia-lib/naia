@@ -1,24 +1,22 @@
 # ============================================================================
 # Entity Replication, Spawn-with-Components, Immutable Components — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(03_replication)
+@Feature(replication)
 Feature: Entity Replication, Spawn-with-Components, Immutable Components
 
   # ==========================================================================
   # === Source: 07_entity_replication.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Entity Replication
-  # --------------------------------------------------------------------------
-  # Core replication semantics: spawn, component sync, identity stability
-  # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Entity Replication
 
@@ -77,18 +75,11 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       When the server updates the replicated component
       Then the client observes the server value
 
-
-
-
   # ==========================================================================
   # === Source: 18_spawn_with_components.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Multi-component entity has all components available after spawn
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(02)
   Rule: Multi-component entity has all components after spawn
 
     @Scenario(01)
@@ -110,7 +101,7 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   # --------------------------------------------------------------------------
   # Rule: Zero-component entity uses legacy Spawn path
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(03)
   Rule: Zero-component entity spawns via legacy path
 
     @Scenario(01)
@@ -121,16 +112,11 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       And the client and entity share a room
       Then the entity spawns on the client
 
-
   # ==========================================================================
   # === Source: 19_immutable_components.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Immutable component replicates to client
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(04)
   Rule: Immutable component replicates to client
 
     @Scenario(01)
@@ -145,7 +131,7 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   # --------------------------------------------------------------------------
   # Rule: No diff-handler receivers for immutable components
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(05)
   Rule: No diff-handler receivers for immutable components
 
     @Scenario(01)
@@ -160,7 +146,7 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   # --------------------------------------------------------------------------
   # Rule: Mixed entity has exactly one receiver for the mutable component
   # --------------------------------------------------------------------------
-  @Rule(03)
+  @Rule(06)
   Rule: Mixed entity has exactly one receiver for the mutable component
 
     @Scenario(01)
@@ -171,5 +157,4 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       And the client and entity share a room
       And the entity is in-scope for the client
       Then the global diff handler has 1 receiver
-
 

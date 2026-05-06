@@ -1,23 +1,21 @@
 # ============================================================================
 # Foundations — Common Definitions, Determinism, Smoke — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(00_foundations)
+@Feature(foundations)
 Feature: Foundations — Common Definitions, Determinism, Smoke
 
   # ==========================================================================
   # === Source: 00_common.feature ===
   # ==========================================================================
-
-
-  # --------------------------------------------------------------------------
-  # Deferred scenarios tagged with @Deferred are excluded from the executable
-  # plan but are tracked as promotion candidates by `namako review`.
-  # --------------------------------------------------------------------------
 
   @Rule(01)
   Rule: User-initiated misuse returns Result::Err
@@ -140,15 +138,11 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
 # None identified.
 # ============================================================================
 
-
-
   # ==========================================================================
   # === Source: smoke.feature ===
   # ==========================================================================
 
-  Verifies the core Namako v1 pipeline works end-to-end.
-
-  @Rule(01)
+  @Rule(07)
   Rule: Namako Smoke Test
 
     @Scenario(01)
@@ -215,15 +209,11 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       Then the server observed ConnectEvent before DisconnectEvent
       And the client observed ConnectEvent before DisconnectEvent
 
-
-
   # ==========================================================================
   # === Source: _orphan_stubs.feature ===
   # ==========================================================================
 
-  Placeholder scenarios for bindings not yet used by real specifications.
-
-  @Rule(01)
+  @Rule(08)
   Rule: Orphan Binding Stubs
 
     @Deferred @Stub
@@ -231,5 +221,4 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
     Scenario: Stub for orphan binding 785e108353195a37...
       # Expression: "the system intentionally fails"
       Then the system intentionally fails
-
 

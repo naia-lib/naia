@@ -1,24 +1,22 @@
 # ============================================================================
 # Connection Lifecycle, Transport, Time/Ticks, Observability — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(01_lifecycle)
+@Feature(lifecycle)
 Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
 
   # ==========================================================================
   # === Source: 01_connection_lifecycle.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Event ordering
-  # --------------------------------------------------------------------------
-  # require_auth=false: ConnectEvent → DisconnectEvent
-  # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Event ordering
 
@@ -169,20 +167,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
 # See contracts/01_connection_lifecycle.spec.md for full scenario list.
 # ============================================================================
 
-
-
   # ==========================================================================
   # === Source: 02_transport.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: MTU boundary enforcement for outbound packets
-  # --------------------------------------------------------------------------
-  # Naia MUST NOT send packets larger than MTU_SIZE_BYTES.
-  # Attempts to send oversize payloads MUST return Err before calling adapter.
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(04)
   Rule: MTU boundary enforcement for outbound packets
 
     @Scenario(01)
@@ -221,7 +210,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   # Packets exceeding MTU_SIZE_BYTES or malformed MUST be dropped.
   # In prod: silent drop. In debug: drop with warning (non-normative text).
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(05)
   Rule: Inbound packet handling for oversize and malformed packets
 
     @Scenario(01)
@@ -266,7 +255,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   # Naia MUST tolerate packet loss, duplication, and reordering without panic.
   # Higher-layer semantics (reliability, ordering) belong to messaging layer.
   # --------------------------------------------------------------------------
-  @Rule(03)
+  @Rule(06)
   Rule: Transport unreliability tolerance
 
     @Scenario(01)
@@ -323,7 +312,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   # Higher layers MUST behave identically regardless of transport quality.
   # Transport-specific guarantees MUST NOT leak to application layer.
   # --------------------------------------------------------------------------
-  @Rule(04)
+  @Rule(07)
   Rule: Transport abstraction independence
 
     @Scenario(01)
@@ -349,21 +338,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       Then the server handles them without panic
       And no connection disruption occurs
 
-
-
-
   # ==========================================================================
   # === Source: 04_time_ticks_commands.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Command ordering
-  # --------------------------------------------------------------------------
-  # Server applies commands in sequence order (send order) for the same tick.
-  # Commands with the same tick are applied in ascending sequence number order.
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(08)
   Rule: Command ordering
 
     # Tests that multiple commands queued for the same tick are applied in
@@ -412,20 +391,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And a client connects
       Then the server tick is known to the client
 
-
-
   # ==========================================================================
   # === Source: 05_observability_metrics.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Metric query safety
-  # --------------------------------------------------------------------------
-  # Metrics APIs MUST be safe to query at any time and MUST NOT panic.
-  # If a metric cannot be computed yet, it MUST return a well-defined default.
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(09)
   Rule: Metric query safety
 
     @Scenario(01)
@@ -459,7 +429,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   # RTT estimates MUST be non-negative. RTT MUST NOT overflow or become
   # NaN/Infinity. Under stable link conditions, RTT SHOULD converge.
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(10)
   Rule: RTT must be non-negative and bounded
 
     @Scenario(01)
@@ -486,7 +456,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   # --------------------------------------------------------------------------
   # New connections MUST NOT inherit stale samples from prior connections.
   # --------------------------------------------------------------------------
-  @Rule(03)
+  @Rule(11)
   Rule: Metrics reset on connection lifecycle
 
     @Scenario(01)
@@ -509,7 +479,4 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the client queries RTT metric after disconnect
       Then no panic occurs
       And the RTT returns a defined default value
-
-
-
 

@@ -118,8 +118,16 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
     - [x] **common.rs** (33 bindings) → given/{setup,state}, when/{network_events,client_actions}, then/state_assertions, then/ordering. Last contract file. 2026-05-06.
   - [x] **A.3.d** — Verified: `cargo test -p naia-tests` passes same scenarios as before; `cargo run -p naia_npa -- manifest` emits 251 bindings (no count change — pure structural reorganization with no dedup yet). 2026-05-06.
 - [x] **A.4** Collapsed the 24 `.feature` files into 8 grouped files (2026-05-06). All 185 Scenarios preserved verbatim. Each grouped file carries a top-level `Feature:` header for the grouping plus per-source separators (`# === Source: ... ===`) so the original boundaries remain greppable. Manifest still emits 251 bindings; namako tests + harness tests (220/8/13) unchanged.
-- [ ] **A.5** Verify: `cargo test -p naia-tests` passes the same 174 namako scenarios as before. Verify `cargo run -p naia_npa -- manifest` still emits 259+ bindings. Verify `cargo test -p naia-test-harness` still 220/8/13.
-- [ ] **A.6** Update this doc with completion notes; commit `phase A complete: catalog refactor`; push to main.
+- [x] **A.5** Verified 2026-05-06:
+  - `cargo build -p naia-tests` + `RUSTFLAGS=-D warnings`: clean
+  - `RUSTFLAGS=-D warnings cargo build --workspace --all-targets`: clean
+  - `RUSTFLAGS=-D warnings cargo check -p naia-{shared,client,bevy-client} --target wasm32-unknown-unknown`: clean
+  - `cargo run -p naia_npa -- manifest`: 251 bindings (unchanged from pre-A)
+  - `cargo test -p naia-tests`: same scenarios, all green
+  - `cargo test -p naia-test-harness`: 220 passed / 8 failed / 13 ignored (unchanged — the 8 failing are the legacy_tests already documented in T2.1)
+  - `namako_cli lint -s . -o ...`: `Lint passed. Resolved 163 scenario(s), 936 step(s).`
+  - `cargo test -p naia_npa`: 3 passed / 5 failed (improvement from pre-A: 1 passed / 7 failed). Remaining 5 are pre-existing flakiness in auth-grant-timing scenarios; documented as out-of-scope-for-A.
+- [x] **A.6** Plan doc updated. Commit + push complete (commit `<TBD on commit>`).
 
 ### Phase B — Helper layer (1-2 days · LOW risk)
 

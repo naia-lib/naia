@@ -1,18 +1,21 @@
 # ============================================================================
 # Entity Ownership, Publication, Delegation, Authority — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(05_authority)
+@Feature(authority)
 Feature: Entity Ownership, Publication, Delegation, Authority
 
   # ==========================================================================
   # === Source: 08_entity_ownership.feature ===
   # ==========================================================================
-
 
   @Rule(01)
   Rule: Entity Ownership
@@ -64,19 +67,11 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And the client spawns a client-owned entity with a replicated component
       Then the entity owner is the client
 
-
-
   # ==========================================================================
   # === Source: 09_entity_publication.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Publication gating
-  # --------------------------------------------------------------------------
-  # Publication gates non-owner visibility for client-owned entities
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(02)
   Rule: Entity Publication
 
     @Scenario(01)
@@ -139,14 +134,11 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And client A spawns a client-owned entity with Private replication config
       Then client A observes replication config as Private for the entity
 
-
-
   # ==========================================================================
   # === Source: 10_entity_delegation.feature ===
   # ==========================================================================
 
-
-  @Rule(01)
+  @Rule(03)
   Rule: Entity Delegation
 
     # [entity-delegation-06] — First request wins
@@ -222,13 +214,11 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       Then client A observes Delegated replication config for the entity
       And client A observes Available authority status for the entity
 
-
   # ==========================================================================
   # === Source: 11_entity_authority.feature ===
   # ==========================================================================
 
-
-  @Rule(01)
+  @Rule(04)
   Rule: Entity Authority
 
     # [entity-authority-01] — Authority is None for non-delegated entities
@@ -326,5 +316,4 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And the server spawns a non-delegated entity in-scope for client A
       When client A requests authority for the non-delegated entity
       Then the authority request fails with an error
-
 

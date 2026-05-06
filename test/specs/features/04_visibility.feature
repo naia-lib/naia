@@ -1,24 +1,22 @@
 # ============================================================================
 # Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate Set — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(04_visibility)
+@Feature(visibility)
 Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate Set
 
   # ==========================================================================
   # === Source: 06_entity_scopes.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Rooms gating
-  # --------------------------------------------------------------------------
-  # SharesRoom(U,E) is a required precondition for InScope(U,E)
-  # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Rooms gating
 
@@ -215,19 +213,11 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       When the server includes an unknown entity for the client
       Then no error is raised
 
-
   # ==========================================================================
   # === Source: 15_scope_exit_policy.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Backward compatibility — default is Despawn
-  # --------------------------------------------------------------------------
-  # [scope-exit-01.t1]: ReplicationConfig::public() with no ScopeExit specified
-  # MUST despawn entity on scope exit, preserving prior behavior.
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(07)
   Rule: Default ScopeExit is Despawn
 
     @Scenario(01)
@@ -248,7 +238,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # [scope-exit-04.t1]: accumulated deltas delivered on re-entry
   # [scope-exit-04.t2]: no-mutation re-entry — entity present, no new spawn
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(08)
   Rule: Persist keeps entity on client when scope is lost
 
     @Scenario(01)
@@ -292,7 +282,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # --------------------------------------------------------------------------
   # [scope-exit-05.t1]: global server despawn while Paused must reach client
   # --------------------------------------------------------------------------
-  @Rule(03)
+  @Rule(09)
   Rule: Global despawn while Paused propagates to client
 
     @Scenario(01)
@@ -313,7 +303,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # [scope-exit-06.t1]: insert during absence visible on re-entry
   # [scope-exit-07.t1]: remove during absence absent on re-entry
   # --------------------------------------------------------------------------
-  @Rule(04)
+  @Rule(10)
   Rule: Component lifecycle during absence is applied on re-entry
 
     @Scenario(01)
@@ -345,7 +335,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # --------------------------------------------------------------------------
   # [scope-exit-08.t1]: disconnect while Paused must not panic; state cleaned up
   # --------------------------------------------------------------------------
-  @Rule(05)
+  @Rule(11)
   Rule: Disconnect while Paused cleans up without error
 
     @Scenario(01)
@@ -360,19 +350,11 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       And the client disconnects
       Then the server stops replicating entities to that client
 
-
   # ==========================================================================
   # === Source: 16_scope_propagation_model.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Scope-change outcomes are identical to the eager-scan path
-  # --------------------------------------------------------------------------
-  # [scope-propagation-01.t1]: include/exclude/room-add produce identical
-  # outcomes under both the legacy scan path and the push-based queue.
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(12)
   Rule: Scope changes produce correct outcomes
 
     @Scenario(01)
@@ -408,7 +390,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # --------------------------------------------------------------------------
   # [scope-propagation-02.t2]: scope_change_queue is empty after an idle tick.
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(13)
   Rule: Idle tick leaves scope change queue empty
 
     @Scenario(01)
@@ -427,7 +409,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # [scope-propagation-03.t3]: scope_change_queue is empty after a tick that
   # contained scope-change API calls.
   # --------------------------------------------------------------------------
-  @Rule(03)
+  @Rule(14)
   Rule: Scope changes drain within the same tick
 
     @Scenario(01)
@@ -444,7 +426,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # --------------------------------------------------------------------------
   # [scope-propagation-04.t4]: include for non-existent entity is a safe no-op.
   # --------------------------------------------------------------------------
-  @Rule(04)
+  @Rule(15)
   Rule: Scope API calls for unknown entities are silent no-ops
 
     @Scenario(01)
@@ -454,17 +436,11 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       When the server includes an unknown entity for the client
       Then no error is raised
 
-
   # ==========================================================================
   # === Source: 17_update_candidate_set.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Idle entity produces no dirty update candidates
-  # After a tick with no mutations, the dirty-candidate set is empty.
-  # --------------------------------------------------------------------------
-  @Rule(01)
+  @Rule(16)
   Rule: Idle entity produces no dirty update candidates
 
     @Scenario(01)
@@ -481,7 +457,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # Rule: Mutation candidate drains in tick
   # After a mutation + tick, the dirty set is back at 0 and the update landed.
   # --------------------------------------------------------------------------
-  @Rule(02)
+  @Rule(17)
   Rule: Mutation candidate drains in tick
 
     @Scenario(01)
@@ -498,7 +474,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # --------------------------------------------------------------------------
   # Rule: Out-of-scope mutation produces no dirty candidate
   # --------------------------------------------------------------------------
-  @Rule(03)
+  @Rule(18)
   Rule: Out-of-scope mutation produces no dirty candidate
 
     @Scenario(01)
@@ -509,5 +485,4 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       And the entity is not in the client's room
       When the server updates the replicated component
       Then the total dirty update candidate count is 0
-
 

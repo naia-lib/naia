@@ -1,24 +1,22 @@
 # ============================================================================
 # Messaging Channel Semantics — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(02_messaging)
+@Feature(messaging)
 Feature: Messaging Channel Semantics
 
   # ==========================================================================
   # === Source: 03_messaging.feature ===
   # ==========================================================================
 
-
-  # --------------------------------------------------------------------------
-  # Rule: Channel direction enforcement
-  # --------------------------------------------------------------------------
-  # ChannelDirection is enforced at send-time.
-  # --------------------------------------------------------------------------
   @Rule(01)
   Rule: Channel direction enforcement
 
@@ -110,5 +108,4 @@ Feature: Messaging Channel Semantics
       And the server responds to the request
       Then the client receives the response for that request
       And no connection disruption occurs
-
 

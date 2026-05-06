@@ -1,18 +1,21 @@
 # ============================================================================
 # Replicated Resources — Grouped Contract Suite
 # ============================================================================
-# This file is the post-A.4 grouping of multiple source feature files into
-# a single grouped suite per the SDD migration plan. Each `# === Source: ... ===`
-# block below corresponds to one of the original 24 .feature files.
+# Post-A.4 grouping of multiple source feature files. Each source's content
+# is preserved verbatim from the @Rule line onward; per-source separators
+# (`# === Source: ... ===`) keep the original boundaries greppable. Free-text
+# feature-description blocks from sources are stripped (gherkin only allows
+# them under the top-level Feature:). @Rule/@Scenario tag numbers are
+# renumbered globally within this file (each source's local 01, 02, ...
+# becomes a continuous sequence) so namako sees no duplicate-tag collisions.
 # ============================================================================
 
-@Feature(07_resources)
+@Feature(resources)
 Feature: Replicated Resources
 
   # ==========================================================================
   # === Source: 21_replicated_resources.feature ===
   # ==========================================================================
-
 
   @Rule(01)
   Rule: Registration & basic insert/observe
@@ -280,5 +283,4 @@ Feature: Replicated Resources
       And one replication round trip elapses
       Then alice's commands.resource_authority for PlayerSelection returns Some Granted
       And alice can mutate ResMut PlayerSelection and the change replicates to the server
-
 
