@@ -190,6 +190,43 @@ fn when_client_a_publishes_entity(ctx: &mut TestWorldMut) {
     });
 }
 
+/// When alice requests authority on PlayerSelection.
+///
+/// Activates resource-delegation server-side, waits for client view
+/// to reach Available, then issues a client-side
+/// `request_resource_authority`. Used by the Resource auth-handoff
+/// scenarios.
+#[when("alice requests authority on PlayerSelection")]
+fn when_alice_requests_authority(ctx: &mut TestWorldMut) {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::TestPlayerSelection;
+    let client_key: ClientKey = ctx
+        .scenario_mut()
+        .bdd_get(&client_key_storage("alice"))
+        .unwrap_or_else(|| ctx.scenario_mut().last_client());
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            assert!(server.configure_resource::<TestPlayerSelection>(
+                naia_server::ReplicationConfig::delegated()
+            ));
+        });
+    });
+    scenario.expect(|c| {
+        c.client(client_key, |cl| {
+            (cl.resource_authority_status::<TestPlayerSelection>()
+                == Some(EntityAuthStatus::Available))
+            .then_some(())
+        })
+    });
+    scenario.mutate(|c| {
+        c.client(client_key, |cl| {
+            let res = cl.request_resource_authority::<TestPlayerSelection>();
+            assert!(res.is_ok(), "request_resource_authority: {:?}", res);
+        });
+    });
+}
+
 /// When client A unpublishes the entity.
 ///
 /// Reconfigures the stored entity back to `Private`. Used by

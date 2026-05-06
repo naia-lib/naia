@@ -109,6 +109,25 @@ use naia_test_harness::{
 
 use crate::TestWorldMut;
 
+/// Idempotently start the server. If the scenario isn't initialized
+/// yet, init it, start the server with default config, create a
+/// default room, and store it as `last_room`. If it's already
+/// initialized, no-op.
+///
+/// Used by feature files that may be authored either with or without
+/// an explicit `Given a server is running` precondition (the
+/// replicated-resources scenarios use the implicit form).
+pub fn ensure_server_started(ctx: &mut TestWorldMut) {
+    use naia_server::ServerConfig;
+    if ctx.is_initialized() {
+        return;
+    }
+    let scenario = ctx.init();
+    scenario.server_start(ServerConfig::default(), protocol());
+    let room_key = scenario.mutate(|c| c.server(|server| server.make_room().key()));
+    scenario.set_last_room(room_key);
+}
+
 /// Run the standard client-connect handshake for the next test client.
 ///
 /// The handshake is identical for every test that needs a connected

@@ -79,6 +79,31 @@ fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
     ctx.scenario_mut().bdd_store(SECOND_CLIENT_KEY, client_key);
 }
 
+/// When one full replication round trip elapses.
+///
+/// Spins 30 server ticks. Used by replicated-resources scenarios as
+/// an explicit barrier between the When (mutate) and the Then
+/// (assert).
+#[when("one full replication round trip elapses")]
+fn when_one_full_round_trip(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    for _ in 0..30 {
+        scenario.mutate(|_| {});
+    }
+}
+
+/// When one replication round trip elapses.
+///
+/// Alias of `one full replication round trip elapses` — the
+/// replicated-resources spec uses both phrasings.
+#[when("one replication round trip elapses")]
+fn when_one_round_trip(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    for _ in 0..30 {
+        scenario.mutate(|_| {});
+    }
+}
+
 /// When the server advances {n} ticks.
 ///
 /// Runs N server ticks with no other mutation. Used to bound a "no

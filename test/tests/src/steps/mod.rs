@@ -47,7 +47,9 @@ pub mod entity_scopes;
 pub mod observability;
 // `priority_accumulator` module migrated 2026-05-06: 1 given→state,
 // 3 when→server_actions, 5 then→state_assertions.
-pub mod replicated_resources;
+// `replicated_resources` module migrated 2026-05-06: 5 given→{setup,state},
+// 1 when→server_actions, 2 when→network_events, 1 when→client_actions, 4 then→state_assertions.
+// Helper `ensure_server_started` extracted.
 // `scope_exit` module migrated 2026-05-06: 3 given→state,
 // 4 when→server_actions, 1 when→network_events, 5 then→state_assertions.
 // `scope_propagation` module migrated 2026-05-06: 1 when, 1 then.

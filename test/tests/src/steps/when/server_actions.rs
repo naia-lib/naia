@@ -335,6 +335,25 @@ fn when_server_removes_label(ctx: &mut TestWorldMut) {
     scenario.mutate(|_| {});
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Replicated resources — server-side resource ops
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server inserts `Score { home: 0, away: 0 }` as a dynamic resource.
+#[when(r#"the server inserts Score \{ home: 0, away: 0 \} as a dynamic resource"#)]
+fn when_server_inserts_score_dynamic(ctx: &mut TestWorldMut) {
+    use naia_test_harness::TestScore;
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            assert!(
+                server.insert_resource(TestScore::new(0, 0)),
+                "insert Score should succeed"
+            );
+        });
+    });
+}
+
 /// When the server mutates entity {label}'s component to x={int} y={int}.
 ///
 /// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].

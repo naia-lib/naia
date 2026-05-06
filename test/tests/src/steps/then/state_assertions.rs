@@ -1020,6 +1020,56 @@ fn then_client_observes_replication_config(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Replicated resources — client-side observability
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the client's Score is present.
+#[then("the client's Score is present")]
+fn then_client_has_score(ctx: &TestWorldRef) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::TestScore;
+    let key = ctx.last_client();
+    if ctx.client(key, |c| c.has_resource::<TestScore>()) {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Pending
+    }
+}
+
+/// Then the client's Score.home equals 0.
+#[then("the client's Score.home equals 0")]
+fn then_client_score_home_0(ctx: &TestWorldRef) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::TestScore;
+    let key = ctx.last_client();
+    match ctx.client(key, |c| c.resource::<TestScore, _, _>(|s| *s.home)) {
+        Some(0) => namako_engine::codegen::AssertOutcome::Passed(()),
+        _ => namako_engine::codegen::AssertOutcome::Pending,
+    }
+}
+
+/// Then the client's Score.away equals 0.
+#[then("the client's Score.away equals 0")]
+fn then_client_score_away_0(ctx: &TestWorldRef) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::TestScore;
+    let key = ctx.last_client();
+    match ctx.client(key, |c| c.resource::<TestScore, _, _>(|s| *s.away)) {
+        Some(0) => namako_engine::codegen::AssertOutcome::Passed(()),
+        _ => namako_engine::codegen::AssertOutcome::Pending,
+    }
+}
+
+/// Then alice's authority status for PlayerSelection is "Granted".
+#[then(r#"alice's authority status for PlayerSelection is "Granted""#)]
+fn then_alice_auth_granted(ctx: &TestWorldRef) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::TestPlayerSelection;
+    let key = ctx.last_client();
+    match ctx.client(key, |c| c.resource_authority_status::<TestPlayerSelection>()) {
+        Some(EntityAuthStatus::Granted) => namako_engine::codegen::AssertOutcome::Passed(()),
+        _ => namako_engine::codegen::AssertOutcome::Pending,
+    }
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(
