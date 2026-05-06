@@ -176,22 +176,11 @@ The shared abstraction is `HostType::Server` vs `HostType::Client` — both side
 
 ## Tier 2 — Code organization / dead code
 
-### T2.1 🧹 `test/harness/legacy_tests/` is dead — 16 files, ~14K LOC NOT being run
+### T2.1 ✅ `test/harness/legacy_tests/` retired — DONE 2026-05-06
 
-`test/harness/legacy_tests/` contains 16 integration-test files (1011-2587 lines each, totaling ~14K LOC). `cargo test -p naia-test-harness` does NOT pick them up — Rust's convention requires `tests/` (we now have one with `replicated_resources.rs`). The `legacy_tests/` directory has no `[[test]]` declarations in `Cargo.toml`.
+Closed via the SDD migration mission (see `_AGENTS/SDD_MIGRATION_PLAN.md`). All 215 legacy contract IDs are covered by namako Scenarios in `test/specs/features/` (Phase D); the 13 tests that documented active product gaps or infrastructure placeholders were carved out into `test/harness/contract_tests/integration_only/` with a clear migration-deletion path (Phase E); and the `legacy_tests/` directory itself is gone (Phase F).
 
-These tests presumably WORKED at some point — they have names like `01_connection_lifecycle.rs`, `11_entity_authority.rs`, `10_entity_delegation.rs`. They're being treated as reference reading but aren't part of the test suite.
-
-**Three options:**
-1. **Migrate to `tests/`** — rename the directory, ensure they compile, fix any bit-rot. Restores 14K LOC of integration coverage.
-2. **Delete entirely** — content is captured by the namako-driven specs in `test/specs/features/` + the harness `tests/` directory.
-3. **Move to `_AGENTS/REFERENCE/`** with a `README.md` flagging them as historical reference, NOT live tests.
-
-Option 1 is the highest-value but unknown risk (likely bit-rot since they haven't been compiled). Option 2 is safest but loses the intent. Option 3 is a stopgap.
-
-**Recommendation:** option 1 with a triage day — try to compile, cull what doesn't build, fix what mostly does. If compile-fix is >2 days of work, fall back to option 2 or 3.
-
-**Effort:** 1-3 days depending on bit-rot severity.
+Final state: 5 carve-out Rust files + helpers (8 known-failing + 5 ignored) — these are explicitly excluded from the workspace green-gate. All other contract behaviour now flows through namako.
 
 ---
 
