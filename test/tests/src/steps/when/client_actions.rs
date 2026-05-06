@@ -164,6 +164,55 @@ fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
     }
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity publication — client-initiated publish/unpublish
+// ──────────────────────────────────────────────────────────────────────
+
+/// When client A publishes the entity.
+///
+/// Reconfigures the stored entity to `Public` from the client side.
+#[when("client A publishes the entity")]
+fn when_client_a_publishes_entity(ctx: &mut TestWorldMut) {
+    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    let scenario = ctx.scenario_mut();
+    let client_a: ClientKey = scenario
+        .bdd_get(&client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.client(client_a, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity.configure_replication(ClientReplicationConfig::Public);
+            }
+        });
+    });
+}
+
+/// When client A unpublishes the entity.
+///
+/// Reconfigures the stored entity back to `Private`. Used by
+/// publication-rollback tests.
+#[when("client A unpublishes the entity")]
+fn when_client_a_unpublishes_entity(ctx: &mut TestWorldMut) {
+    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    let scenario = ctx.scenario_mut();
+    let client_a: ClientKey = scenario
+        .bdd_get(&client_key_storage("A"))
+        .expect("client A not connected");
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    scenario.mutate(|mctx| {
+        mctx.client(client_a, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity.configure_replication(ClientReplicationConfig::Private);
+            }
+        });
+    });
+}
+
 /// When the client sends a request.
 ///
 /// Sends an RPC request on `RequestResponseChannel`. Stores the

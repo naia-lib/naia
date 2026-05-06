@@ -33,3 +33,14 @@ fn given_server_running(ctx: &mut TestWorldMut) {
 fn given_client_connects(ctx: &mut TestWorldMut) {
     connect_client(ctx);
 }
+
+/// Given client {name} connects.
+///
+/// Connects a labeled client ("A", "B", ...) and stores the
+/// resulting ClientKey under `client_key_storage(name)`. Used by
+/// multi-client tests where bindings reference specific clients.
+#[given("client {word} connects")]
+fn given_client_named_connects(ctx: &mut TestWorldMut, name: String) {
+    use crate::steps::world_helpers::connect_test_client;
+    connect_test_client(ctx, &name);
+}

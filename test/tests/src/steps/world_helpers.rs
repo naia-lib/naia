@@ -50,6 +50,35 @@ pub const CLIENT_LOCAL_VALUE_KEY: &str = "client_local_value";
 // Messaging RPC tests.
 pub const RESPONSE_RECEIVE_KEY: &str = "response_receive_key";
 
+/// Connect a test client by short label ("A", "B", ...).
+///
+/// Creates a client with name `"Client {label}"`, auth username
+/// `"client_{label_lowercase}"`, and stores the resulting `ClientKey`
+/// under `client_key_storage(label)` for downstream lookup.
+///
+/// Used by multi-client tests (entity-publication, entity-authority,
+/// scope-propagation, etc.) where bindings reference clients by
+/// label rather than the singleton "last client".
+///
+/// # Example
+/// ```ignore
+/// #[given("client {word} connects")]
+/// fn given_client_named_connects(ctx: &mut TestWorldMut, name: String) {
+///     connect_test_client(ctx, &name);
+/// }
+/// ```
+pub fn connect_test_client(ctx: &mut TestWorldMut, label: &str) -> crate::ClientKey {
+    let client_key = connect_named_client(
+        ctx,
+        &format!("Client {}", label),
+        &format!("client_{}", label.to_lowercase()),
+        None,
+    );
+    ctx.scenario_mut()
+        .bdd_store(&client_key_storage(label), client_key);
+    client_key
+}
+
 /// Look up the BDD-stored entity key for a label like "A" or "B".
 /// Used by multi-entity tests (priority accumulator B-BDD-8 and
 /// future scenarios that work with named entity pairs).

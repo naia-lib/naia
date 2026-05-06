@@ -78,3 +78,16 @@ fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
 
     ctx.scenario_mut().bdd_store(SECOND_CLIENT_KEY, client_key);
 }
+
+/// When the server advances {n} ticks.
+///
+/// Runs N server ticks with no other mutation. Used to bound a "no
+/// update should arrive in N ticks" window for stale-value
+/// assertions (ScopeExit::Persist tests).
+#[when("the server advances {int} ticks")]
+fn when_server_advances_n_ticks(ctx: &mut TestWorldMut, n: u32) {
+    let scenario = ctx.scenario_mut();
+    for _ in 0..n {
+        scenario.mutate(|_| {});
+    }
+}

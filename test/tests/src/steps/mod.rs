@@ -37,7 +37,8 @@ pub mod connection;
 pub mod entity_delegation;
 // `entity_ownership` module migrated 2026-05-06: 1 given→state,
 // 2 when→client_actions, 5 then→state_assertions.
-pub mod entity_publication;
+// `entity_publication` module migrated 2026-05-06: 5 given→{setup,state},
+// 2 when→client_actions, 5 then→state_assertions.
 // `entity_replication` module migrated 2026-05-06: 3 given→state,
 // 2 when→server_actions, 4 then→state_assertions.
 pub mod entity_scopes;
@@ -47,7 +48,8 @@ pub mod observability;
 // `priority_accumulator` module migrated 2026-05-06: 1 given→state,
 // 3 when→server_actions, 5 then→state_assertions.
 pub mod replicated_resources;
-pub mod scope_exit;
+// `scope_exit` module migrated 2026-05-06: 3 given→state,
+// 4 when→server_actions, 1 when→network_events, 5 then→state_assertions.
 // `scope_propagation` module migrated 2026-05-06: 1 when, 1 then.
 // `server_events` module migrated 2026-05-06: 2 given→state,
 // 1 when→server_actions, 5 then→event_assertions.

@@ -101,6 +101,8 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
     - [x] **world_integration.rs** (5 bindings) → when/network_events, when/server_actions, then/state_assertions. Helper `connect_named_client` extracted. 2026-05-06.
     - [x] **entity_authority.rs** (7 bindings) → given/state, when/client_actions, then/event_assertions, then/state_assertions. 2026-05-06.
     - [ ] replicated_resources.rs (13 bindings)
+    - [x] **scope_exit.rs** (13 bindings) → given/state, when/server_actions, when/network_events, then/state_assertions. 2026-05-06.
+    - [x] **entity_publication.rs** (12 bindings) → given/setup, given/state, when/client_actions, then/state_assertions. Helper `connect_test_client(label)` extracted; `client_key_storage` reused. 2026-05-06.
     - [x] **server_events.rs** (8 bindings) → given/state, when/server_actions, then/event_assertions. Helper `client_key_storage` extracted. 2026-05-06.
     - [x] **priority_accumulator.rs** (9 bindings) → given/state, when/server_actions, then/state_assertions. Helper `entity_label_to_key_storage` extracted. 2026-05-06.
     - [x] **entity_replication.rs** (9 bindings) → given/state, when/server_actions, then/state_assertions. 2026-05-06.

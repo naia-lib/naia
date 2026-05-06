@@ -768,6 +768,258 @@ fn then_client_eventually_observes_entity_at(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Scope-exit (Persist) assertions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the client still has the entity.
+///
+/// Confirms ScopeExit::Persist prevented the Despawn when the entity
+/// went out-of-scope.
+#[then("the client still has the entity")]
+fn then_client_still_has_entity(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        if client.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Failed(
+                "Entity was despawned on client despite ScopeExit::Persist".into(),
+            )
+        }
+    })
+}
+
+/// Then the client entity position is still 0.0.
+///
+/// Confirms no update leaked through while the entity was Paused.
+#[then("the client entity position is still 0.0")]
+fn then_client_entity_position_still_zero(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        let Some(entity) = client.entity(&entity_key) else {
+            return namako_engine::codegen::AssertOutcome::Failed(
+                "Entity absent on client despite ScopeExit::Persist".into(),
+            );
+        };
+        let Some(pos) = entity.component::<Position>() else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        if (*pos.x - 0.0).abs() < f32::EPSILON {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Failed(format!(
+                "Position updated while entity was out-of-scope: expected x=0, got x={}",
+                *pos.x,
+            ))
+        }
+    })
+}
+
+/// Then the client entity position becomes 100.0.
+///
+/// Polling — confirms accumulated updates from the Paused period
+/// arrive after re-entry.
+#[then("the client entity position becomes 100.0")]
+fn then_client_entity_position_becomes_hundred(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, Position};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        let Some(entity) = client.entity(&entity_key) else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        let Some(pos) = entity.component::<Position>() else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        if (*pos.x - 100.0).abs() < f32::EPSILON {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the client entity has ImmutableLabel.
+#[then("the client entity has ImmutableLabel")]
+fn then_client_entity_has_label(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, ImmutableLabel};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        let Some(entity) = client.entity(&entity_key) else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        if entity.has_component::<ImmutableLabel>() {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the client entity does not have ImmutableLabel.
+#[then("the client entity does not have ImmutableLabel")]
+fn then_client_entity_no_label(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::{EntityKey, ImmutableLabel};
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        let Some(entity) = client.entity(&entity_key) else {
+            return namako_engine::codegen::AssertOutcome::Pending;
+        };
+        if !entity.has_component::<ImmutableLabel>() {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Entity publication — scope-membership for named clients
+// ──────────────────────────────────────────────────────────────────────
+
+/// Internal helper: server-side scope-membership check for a labeled
+/// client. Used by all four "the entity is{,n't,becomes} in/out-of-scope
+/// for client X" assertions below.
+fn check_entity_in_scope(ctx: &TestWorldRef, label: &str) -> bool {
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_key: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage(label))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", label));
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.server(|server| {
+        if let Some(scope) = server.user_scope(&client_key) {
+            scope.has(&entity_key)
+        } else {
+            false
+        }
+    })
+}
+
+/// Then the entity is in-scope for client A.
+#[then("the entity is in-scope for client A")]
+fn then_entity_in_scope_for_client_a(ctx: &TestWorldRef) {
+    assert!(
+        check_entity_in_scope(ctx, "A"),
+        "Expected entity to be in-scope for client A, but it was not"
+    );
+}
+
+/// Then the entity is in-scope for client B.
+#[then("the entity is in-scope for client B")]
+fn then_entity_in_scope_for_client_b(ctx: &TestWorldRef) {
+    assert!(
+        check_entity_in_scope(ctx, "B"),
+        "Expected entity to be in-scope for client B, but it was not"
+    );
+}
+
+/// Then the entity is out-of-scope for client B.
+#[then("the entity is out-of-scope for client B")]
+fn then_entity_out_of_scope_for_client_b(ctx: &TestWorldRef) {
+    assert!(
+        !check_entity_in_scope(ctx, "B"),
+        "Expected entity to be out-of-scope for client B, but it was in-scope"
+    );
+}
+
+/// Then the entity becomes out-of-scope for client B.
+///
+/// Polling variant of the above — used after an unpublish where the
+/// scope removal propagates asynchronously.
+#[then("the entity becomes out-of-scope for client B")]
+fn then_entity_becomes_out_of_scope_for_client_b(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    if !check_entity_in_scope(ctx, "B") {
+        namako_engine::codegen::AssertOutcome::Passed(())
+    } else {
+        namako_engine::codegen::AssertOutcome::Pending
+    }
+}
+
+/// Then client {label} observes replication config as {config} for the entity.
+///
+/// Polls until the named client's entity reports the expected
+/// `ReplicationConfig`. Covers [entity-publication-observability].
+#[then("client {word} observes replication config as {word} for the entity")]
+fn then_client_observes_replication_config(
+    ctx: &TestWorldRef,
+    label: String,
+    config_name: String,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_test_harness::{ClientKey, EntityKey};
+    let client_key: ClientKey = ctx
+        .scenario()
+        .bdd_get(&crate::steps::world_helpers::client_key_storage(&label))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", label));
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let expected = match config_name.as_str() {
+        "Public" => ClientReplicationConfig::Public,
+        "Private" => ClientReplicationConfig::Private,
+        "Delegated" => ClientReplicationConfig::Delegated,
+        other => {
+            return namako_engine::codegen::AssertOutcome::Failed(format!(
+                "Unknown replication config: '{}'",
+                other
+            ))
+        }
+    };
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.replication_config() {
+                Some(config) if config == expected => namako_engine::codegen::AssertOutcome::Passed(()),
+                Some(other) => namako_engine::codegen::AssertOutcome::Failed(format!(
+                    "Expected replication_config {:?}, got {:?}",
+                    expected, other
+                )),
+                None => namako_engine::codegen::AssertOutcome::Pending,
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(

@@ -250,6 +250,91 @@ fn when_server_sets_global_gain_on_last_entity(ctx: &mut TestWorldMut, gain: f32
     });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Scope-exit (Persist) — server actions
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server updates the entity position to 100 100.
+///
+/// Used by ScopeExit::Persist tests to verify that updates issued
+/// while the client is excluded ARE delivered on re-entry.
+#[when("the server updates the entity position to 100 100")]
+fn when_server_updates_entity_position(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                if let Some(mut pos) = entity.component::<Position>() {
+                    *pos.x = 100.0;
+                    *pos.y = 100.0;
+                }
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// When the server globally despawns the entity.
+///
+/// Despawns the entity from the server world entirely. Used by the
+/// ScopeExit::Persist test that asserts global despawn propagates
+/// even while the entity was Paused on the client.
+#[when("the server globally despawns the entity")]
+fn when_server_globally_despawns_entity(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.despawn();
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// When the server inserts ImmutableLabel on the entity.
+#[when("the server inserts ImmutableLabel on the entity")]
+fn when_server_inserts_label(ctx: &mut TestWorldMut) {
+    use naia_test_harness::ImmutableLabel;
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.insert_component(ImmutableLabel);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// When the server removes ImmutableLabel from the entity.
+#[when("the server removes ImmutableLabel from the entity")]
+fn when_server_removes_label(ctx: &mut TestWorldMut) {
+    use naia_test_harness::ImmutableLabel;
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.remove_component::<ImmutableLabel>();
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
 /// When the server mutates entity {label}'s component to x={int} y={int}.
 ///
 /// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].
