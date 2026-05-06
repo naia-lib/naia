@@ -1121,23 +1121,24 @@ fn then_client_a_observes_delegated_replication_config(
     })
 }
 
-/// Then client A observes Available authority status for the entity.
-#[then("client A observes Available authority status for the entity")]
-fn then_client_a_observes_available_authority_status(
+/// Then client {name} observes Available authority status for the entity.
+#[then("client {word} observes Available authority status for the entity")]
+fn then_client_observes_available_authority_status(
     ctx: &TestWorldRef,
+    name: String,
 ) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
-    let client_a = named_client_ref(ctx, "A");
+    let client_key = named_client_ref(ctx, &name);
     let entity_key = last_entity_ref(ctx);
-    ctx.client(client_a, |c| {
+    ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
             match entity.authority() {
                 Some(EntityAuthStatus::Available) => {
                     AssertOutcome::Passed(())
                 }
                 Some(other) => AssertOutcome::Failed(format!(
-                    "expected Available authority status, got {:?}",
-                    other
+                    "client {}: expected Available authority status, got {:?}",
+                    name, other
                 )),
                 None => AssertOutcome::Pending,
             }

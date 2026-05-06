@@ -2301,8 +2301,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.global_world_manager
             .migrate_entity_to_server(global_entity);
 
-        // we set this to true immediately since it's already being replicated out to the remote
-        self.entity_scope_map.insert(user_key, *global_entity, true);
+        // Initialize the former-owner's scope entry to "in scope" only if it
+        // wasn't already set. The check at the end of this method consults
+        // `entity_scope_map` directly to decide whether to grant initial
+        // authority to the former owner — overwriting an explicit exclude
+        // would silently grant authority to a user who had been put
+        // out-of-scope by the application (contract
+        // [entity-delegation-09]: "migration yields no holder if owner is
+        // out of scope at migration time").
+        if self
+            .entity_scope_map
+            .get(&user_key, global_entity)
+            .is_none()
+        {
+            self.entity_scope_map.insert(user_key, *global_entity, true);
+        }
 
         // Migrate Entity from Remote -> Host connection
         let Some(user) = self.users.get(&user_key) else {

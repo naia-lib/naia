@@ -43,10 +43,11 @@ the `contract_tests/` parent directory.
 | `01_connection_lifecycle.rs`   | 4 `#[ignore]` (capacity/heartbeat/token)|
 | `03_messaging.rs`              | 3 failing (protocol mismatch fast-fail, TickBuffered too-far-ahead, EntityProperty cap FIFO) |
 | `06_entity_scopes.rs`          | 3 failing + 1 `#[ignore]` (publish/unpublish vs spawn semantics, scope leave vs despawn distinguishability, re-entry auth status) |
-| `10_entity_delegation.rs`      | 1 failing (migration with out-of-scope owner) |
+| `10_entity_delegation.rs`      | (no failures — see closed entries below) |
 
 ### Closed since carve-out was created
 - `auth_denied_emitted_exactly_once_per_transition_into_denied` (2026-05-06): client missed an `Available → Denied` push for `EntityAuthDeniedEvent`. Fixed in `client/src/client.rs`. Behaviour now covered by namako Scenario `[entity-delegation-16] AuthDenied event fires on Available→Denied transition` in `test/specs/features/05_authority.feature`.
+- `migration_yields_no_holder_if_owner_out_of_scope` (2026-05-06): `enable_delegation_client_owned_entity` was overwriting the former owner's explicit scope-exclude with `true` immediately before the holder-assignment check, silently granting authority to a user who had been excluded. Fixed in `server/src/server/world_server.rs` (only initialize the entry when not already explicit). Behaviour now covered by namako Scenario `[entity-delegation-09] Migration yields no holder if owner out of scope`.
 
 `_helpers.rs` is shared scaffolding kept until the last carve-out file
 disappears.

@@ -234,6 +234,22 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       Then client B is denied authority for the delegated entity
       And client B receives an authority denied event for the entity
 
+    # [entity-delegation-09] — Migration with out-of-scope owner yields no holder
+    # When a client-owned Public entity is migrated to Delegated and the former
+    # owner has been explicitly excluded from the entity's scope at migration
+    # time, no client receives initial authority — every in-scope client
+    # observes Available.
+    @Scenario(07)
+    Scenario: [entity-delegation-09] Migration yields no holder if owner out of scope
+      Given a server is running
+      And client A connects
+      And client B connects
+      And client A spawns a client-owned entity with Public replication config
+      When the server includes the entity for client B
+      And the server excludes the entity for client A
+      And the server configures the entity as Delegated
+      Then client B observes Available authority status for the entity
+
   # ==========================================================================
   # === Source: 11_entity_authority.feature ===
   # ==========================================================================
@@ -455,10 +471,6 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-delegation-08] Migration assigns initial authority to in-scope owner
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
-    @Scenario(23)
-    Scenario: [entity-delegation-09] Migration yields no holder if owner out of scope
-      Then the system intentionally fails
 
     @Deferred @PolicyOnly
     @Scenario(24)

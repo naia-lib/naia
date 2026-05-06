@@ -430,6 +430,69 @@ fn when_server_releases_authority(ctx: &mut TestWorldMut) {
 // Entity-scope — server scope-mut operations
 // ──────────────────────────────────────────────────────────────────────
 
+/// When the server includes the entity for client {name}.
+///
+/// Named-client variant of `the server includes the entity for the client`.
+/// Used by multi-client delegation tests where the act-on client is
+/// distinct from the most-recently-connected one.
+#[when("the server includes the entity for client {word}")]
+fn when_server_includes_entity_for_named_client(ctx: &mut TestWorldMut, name: String) {
+    use crate::steps::world_helpers::client_key_storage;
+    let scenario = ctx.scenario_mut();
+    let client_key: ClientKey = scenario
+        .bdd_get(&client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+}
+
+/// When the server excludes the entity for client {name}.
+#[when("the server excludes the entity for client {word}")]
+fn when_server_excludes_entity_for_named_client(ctx: &mut TestWorldMut, name: String) {
+    use crate::steps::world_helpers::client_key_storage;
+    let scenario = ctx.scenario_mut();
+    let client_key: ClientKey = scenario
+        .bdd_get(&client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.exclude(&entity_key);
+            }
+        });
+    });
+}
+
+/// When the server configures the entity as Delegated.
+///
+/// Triggers `configure_replication(Delegated)` on the stored entity.
+/// For client-owned entities this also runs the migration flow that
+/// transfers ownership to the server (per [entity-ownership-11]).
+#[when("the server configures the entity as Delegated")]
+fn when_server_configures_entity_delegated(ctx: &mut TestWorldMut) {
+    use naia_server::ReplicationConfig as ServerReplicationConfig;
+    let entity_key = last_entity_mut(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_key) {
+                entity_mut.configure_replication(ServerReplicationConfig::delegated());
+            }
+        });
+    });
+}
+
 /// When the server includes the entity for the client.
 #[when("the server includes the entity for the client")]
 fn when_server_includes_entity_for_client(ctx: &mut TestWorldMut) {
