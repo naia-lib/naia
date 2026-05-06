@@ -39,6 +39,16 @@ impl<T: Send + Sync + 'static> PluginType for SharedPlugin<T> {
                 Update,
                 on_host_owned_added.in_set(HostSyncOwnedAddedTracking),
             )
-            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking));
+            .add_systems(Update, on_despawn.in_set(HostSyncChangeTracking))
+            // Force-order: `on_host_owned_added` populates HostOwnedMap
+            // for newly-replicated entities; `on_despawn` panics if it
+            // runs first on a same-frame spawn-and-despawn (the entity's
+            // HostOwned was added then removed before the map was
+            // written). Constraint matches the data dependency: the map
+            // must be written before any read.
+            .configure_sets(
+                Update,
+                HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),
+            );
     }
 }

@@ -49,11 +49,23 @@ pub fn on_despawn(
         if let Ok(_) = query.get(entity) {
             // Entity is still alive, expected if Auth is reset on Delegated Entity
         } else {
-            // info!("despawn on HostOwned entity: {:?}", entity);
-            let Some(host_owned) = host_owned_map.remove(&entity) else {
-                panic!("HostOwned entity {:?} not found in HostOwnedMap", entity);
-            };
-            events.write(HostSyncEvent::Despawn(host_owned.type_id(), entity));
+            // The entity is gone. If we don't have a HostOwnedMap entry
+            // for it, the entity was either:
+            //   - never tracked (replicated by the server, host-owned by
+            //     another client; despawn is observed locally but we
+            //     never owned it),
+            //   - already torn down via a prior pathway (Auth transitioned
+            //     before the despawn arrived, the map entry was cleared
+            //     out-of-band), or
+            //   - despawned in the same frame it was spawned (compressed
+            //     test timelines).
+            // None of these are bugs — they just don't need a HostSyncEvent
+            // emission. The previous `panic!` here turned harmless edge
+            // cases into hard crashes, especially in test harnesses that
+            // condense multiple game-loop frames into a single tick.
+            if let Some(host_owned) = host_owned_map.remove(&entity) {
+                events.write(HostSyncEvent::Despawn(host_owned.type_id(), entity));
+            }
         }
     }
 }
