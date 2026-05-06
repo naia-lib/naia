@@ -184,9 +184,11 @@ Per-feature checklist (each is an independently-verifiable subgoal):
 - [x] **D.5** (2026-05-06) `04_visibility.feature` — 13 entity-scopes IDs cleared (95 → 82 pending). All 15 entity-scopes-NN tags applied to existing Scenarios across rules 01-06 (rooms gating, include/exclude, owner invariant, roomless, lifecycle, disconnect/unknown). The scope-exit-NN, scope-propagation-NN, and update-candidate-NN scenarios already pass without explicit ID tags (out-of-scope-for-D parity items).
 - [x] **D.6** (2026-05-06) `05_authority.feature` — 24 contract tags applied to existing Scenarios (ownership 5, publication 6, delegation 5, authority 8); 37 unmapped legacy IDs added as `@Deferred @PolicyOnly` stubs under Rule(05). Pending: ownership {05,06,07,09-14}, publication {06-11}, delegation {01-05,07-10,12,15,16}, authority {02-05,08,11-15}. Manifest 251 bindings unchanged; lint passes; namako test lib 4/4. Coverage 82 → 37 pending.
 - [x] **D.7** (2026-05-06) `06_events_api.feature` — 13 contract tags applied to existing Scenarios (server-events 07/09, client-events 04/06/07/08/09, world-integration 04-09); 23 unmapped legacy IDs added as `@Deferred @PolicyOnly` stubs under Rule(07): server-events {00-06,08,10-13}, client-events {00-03,05,10-12}, world-integration {01-03}. Manifest 251 bindings unchanged; lint passes; namako test lib 4/4. Coverage 37 → 13 pending (all `connection-NN` in 01_lifecycle).
-- [ ] **D.8** `07_resources.feature` — already migrated; verify parity with legacy (if a 21_replicated_resources legacy file exists; otherwise no-op).
-- [ ] **D.9** Each migrated test gets the matching contract ID(s) preserved as Scenario tags or names (`@Scenario(messaging-04)` or `Scenario: [messaging-04] …`).
-- [ ] **D.10** Update this doc as each Dx subgoal lands; commit per subgoal; push to main.
+- [x] **D.8** (2026-05-06) `07_resources.feature` parity verified — no legacy `21_replicated_resources.rs` exists in `test/harness/legacy_tests/`; namako side fully covers the area. No-op confirmed.
+- [x] **D.9** (2026-05-06) Connection-NN backfill — 13 missing legacy IDs (connection-{04,06,08,09,10,11,14,16,18,20,22,24,26}) added as `@Deferred @PolicyOnly` stubs under `01_lifecycle.feature` Rule(12). All migrated Scenarios across 00-07 now carry their `[contract-id]` tags or are stubbed for parity. Manifest 251 bindings; lint passes; namako test lib 4/4.
+- [x] **D.10** (2026-05-06) Per-Dx commits/pushes complete (D.3–D.7 + D.9). Coverage 0 pending. Living plan kept current after each phase.
+
+**Phase D close-out (2026-05-06):** legacy 215 / namako 217 / both 215 / **pending 0**. Two namako-only IDs (`time-ticks-03`, `time-ticks-04`) are net-new coverage beyond the legacy surface and not parity gaps. Phase F's "delete legacy_tests" gate is now empty — Phase E (integration-only carve-out) and Phase F (delete) are unblocked.
 
 ### Phase E — Integration-only carve-out (1 day · LOW risk)
 

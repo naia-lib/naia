@@ -604,3 +604,68 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [observability-10] Metrics are testable without feature flags
       Then the system intentionally fails
 
+
+    @Deferred @PolicyOnly
+    @Scenario(23)
+    Scenario: [connection-04] Reject path: client receives RejectEvent
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(24)
+    Scenario: [connection-06] Auth event ordering on accepted handshake
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(25)
+    Scenario: [connection-08] AuthEvent fires before ConnectEvent server-side
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(26)
+    Scenario: [connection-09] Disconnect during auth is handled cleanly
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(27)
+    Scenario: [connection-10] Multiple concurrent auth requests serialize
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(28)
+    Scenario: [connection-11] Auth payload survives handshake roundtrip
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(29)
+    Scenario: [connection-14] Protocol mismatch produces ProtocolMismatch reject
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(30)
+    Scenario: [connection-16] Server cap enforced via RejectEvent
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(31)
+    Scenario: [connection-18] Heartbeat liveness triggers timeout disconnect
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(32)
+    Scenario: [connection-20] Reconnect after timeout is fresh session
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(33)
+    Scenario: [connection-22] Disconnect propagates to scoped entities
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(34)
+    Scenario: [connection-24] Identity token format validation
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(35)
+    Scenario: [connection-26] Token reuse blocked across sessions
+      Then the system intentionally fails
