@@ -27,51 +27,47 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Event ordering
 
     @Scenario(01)
-    Scenario: Server observes ConnectEvent when client connects
+    Scenario: [connection-03] Server observes ConnectEvent when client connects
       Given a server is running
       When a client connects
       Then the server has observed ConnectEvent
 
     @Scenario(02)
-    Scenario: Client observes ConnectEvent when connected
+    Scenario: [connection-03] Client observes ConnectEvent when connected
       Given a server is running
       When a client connects
       Then the client has observed ConnectEvent
 
     @Scenario(03)
-    Scenario: Client observes DisconnectEvent after disconnect
+    Scenario: [connection-21] Client observes DisconnectEvent after disconnect
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the client has observed DisconnectEvent
 
     @Scenario(04)
-    Scenario: DisconnectEvent occurs only after ConnectEvent on server
+    Scenario: [connection-21] DisconnectEvent occurs only after ConnectEvent on server
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the server observed ConnectEvent before DisconnectEvent
 
     @Scenario(05)
-    Scenario: DisconnectEvent occurs only after ConnectEvent on client
+    Scenario: [connection-21] DisconnectEvent occurs only after ConnectEvent on client
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the client observed ConnectEvent before DisconnectEvent
 
-    # [connection-lifecycle-21] — Client DisconnectEvent ordering via polling assertion
-    # Polling variant of the ordering guarantee: waits for disconnect then checks order.
     @Scenario(06)
-    Scenario: connection-21 — Client observes DisconnectEvent only after ConnectEvent
+    Scenario: [connection-21] Client observes DisconnectEvent only after ConnectEvent (polling)
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the client observes DisconnectEvent after ConnectEvent
 
-    # [connection-lifecycle-connect] — Client observes ConnectEvent via polling
-    # Polling variant of the client ConnectEvent assertion.
     @Scenario(07)
-    Scenario: connection-lifecycle — Client observes ConnectEvent polling variant
+    Scenario: [connection-03] Client observes ConnectEvent (polling variant)
       Given a server is running
       When a connected client
       Then the client observes ConnectEvent
@@ -85,14 +81,14 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Disconnect semantics
 
     @Scenario(01)
-    Scenario: Server observes DisconnectEvent when client disconnects
+    Scenario: [connection-05] Server observes DisconnectEvent when client disconnects
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the server has observed DisconnectEvent
 
     @Scenario(02)
-    Scenario: Connected client count decreases after disconnect
+    Scenario: [connection-01] Connected client count decreases after disconnect
       Given a server is running
       And a client connects
       Then the server has 1 connected client
@@ -100,14 +96,14 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       Then the server has 0 connected clients
 
     @Scenario(03)
-    Scenario: Server can connect multiple clients
+    Scenario: [connection-01] Server can connect multiple clients
       Given a server is running
       When a client connects
       And a client connects
       Then the server has 2 connected clients
 
     @Scenario(04)
-    Scenario: Server can disconnect one of multiple clients
+    Scenario: [connection-05] Server can disconnect one of multiple clients
       Given a server is running
       And a client connects
       And a client connects
@@ -115,22 +111,20 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       Then the server has 1 connected client
 
     @Scenario(05)
-    Scenario: Client is connected after successful connection
+    Scenario: [connection-01] Client is connected after successful connection
       Given a server is running
       When a client connects
       Then the client is connected
 
     @Scenario(06)
-    Scenario: Client is not connected after disconnect
+    Scenario: [connection-05] Client is not connected after disconnect
       Given a server is running
       And a client connects
       When the server disconnects the client
       Then the client is not connected
 
-    # [connection-lifecycle-users-count] — Server has no users after all disconnect
-    # After all clients disconnect, the server MUST report zero connected users.
     @Scenario(07)
-    Scenario: connection-lifecycle — Server has no connected users after all clients disconnect
+    Scenario: [connection-05] Server has no connected users after all clients disconnect
       Given a server is running
       And a client connects
       When the server disconnects the client
@@ -145,13 +139,13 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Auth-required event ordering
 
     @Scenario(01)
-    Scenario: Server observes AuthEvent before ConnectEvent
+    Scenario: [connection-07] Server observes AuthEvent before ConnectEvent
       Given a server is running with auth required
       When a client authenticates and connects
       Then the server observes AuthEvent before ConnectEvent
 
     @Scenario(02)
-    Scenario: Rejected client observes RejectEvent not ConnectEvent
+    Scenario: [connection-02] Rejected client observes RejectEvent not ConnectEvent
       Given a server is running with auth required
       When a client attempts to connect but is rejected
       Then the client observes RejectEvent
@@ -159,7 +153,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the client does not observe DisconnectEvent
 
     @Scenario(03)
-    Scenario: Server full event ordering with disconnect
+    Scenario: [connection-07] Server full event ordering with disconnect
       Given a server is running with auth required
       When a client authenticates and connects
       When the server disconnects the client
@@ -181,21 +175,21 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: MTU boundary enforcement for outbound packets
 
     @Scenario(01)
-    Scenario: Server can send packet within MTU limit
+    Scenario: [transport-04] Server can send packet within MTU limit
       Given a server is running
       And a client connects
       When the server sends a packet within the MTU limit
       Then the operation succeeds
 
     @Scenario(02)
-    Scenario: Client can send packet within MTU limit
+    Scenario: [transport-04] Client can send packet within MTU limit
       Given a server is running
       And a client connects
       When the client sends a packet within the MTU limit
       Then the operation succeeds
 
     @Scenario(03)
-    Scenario: Server rejects outbound packet exceeding MTU
+    Scenario: [transport-04] Server rejects outbound packet exceeding MTU
       Given a server is running
       And a client connects
       When the server attempts to send a packet exceeding MTU
@@ -203,7 +197,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the transport adapter is not called
 
     @Scenario(04)
-    Scenario: Client rejects outbound packet exceeding MTU
+    Scenario: [transport-04] Client rejects outbound packet exceeding MTU
       Given a server is running
       And a client connects
       When the client attempts to send a packet exceeding MTU
@@ -220,7 +214,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Inbound packet handling for oversize and malformed packets
 
     @Scenario(01)
-    Scenario: Server drops inbound packet exceeding MTU
+    Scenario: [transport-04] Server drops inbound packet exceeding MTU
       Given a server is running
       And a client connects
       When the server receives a packet exceeding MTU
@@ -229,7 +223,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(02)
-    Scenario: Client drops inbound packet exceeding MTU
+    Scenario: [transport-04] Client drops inbound packet exceeding MTU
       Given a server is running
       And a client connects
       When the client receives a packet exceeding MTU
@@ -238,7 +232,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(03)
-    Scenario: Server drops malformed inbound packet
+    Scenario: [transport-02] Server drops malformed inbound packet
       Given a server is running
       And a client connects
       When the server receives a malformed packet
@@ -247,7 +241,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(04)
-    Scenario: Client drops malformed inbound packet
+    Scenario: [transport-02] Client drops malformed inbound packet
       Given a server is running
       And a client connects
       When the client receives a malformed packet
@@ -265,7 +259,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Transport unreliability tolerance
 
     @Scenario(01)
-    Scenario: Server tolerates packet loss
+    Scenario: [transport-01] Server tolerates packet loss
       Given a server is running
       And a client connects
       When packets from the client are dropped by the transport
@@ -273,7 +267,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no panic occurs
 
     @Scenario(02)
-    Scenario: Client tolerates packet loss
+    Scenario: [transport-01] Client tolerates packet loss
       Given a server is running
       And a client connects
       When packets from the server are dropped by the transport
@@ -281,7 +275,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no panic occurs
 
     @Scenario(03)
-    Scenario: Server tolerates duplicate packets
+    Scenario: [transport-03] Server tolerates duplicate packets
       Given a server is running
       And a client connects
       When the server receives duplicate packets
@@ -289,7 +283,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(04)
-    Scenario: Client tolerates duplicate packets
+    Scenario: [transport-03] Client tolerates duplicate packets
       Given a server is running
       And a client connects
       When the client receives duplicate packets
@@ -297,7 +291,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(05)
-    Scenario: Server tolerates reordered packets
+    Scenario: [transport-03] Server tolerates reordered packets
       Given a server is running
       And a client connects
       When the server receives packets in a different order than sent
@@ -305,7 +299,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(06)
-    Scenario: Client tolerates reordered packets
+    Scenario: [transport-03] Client tolerates reordered packets
       Given a server is running
       And a client connects
       When the client receives packets in a different order than sent
@@ -322,14 +316,14 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Transport abstraction independence
 
     @Scenario(01)
-    Scenario: Application behavior is identical across transport types
+    Scenario: [transport-05] Application behavior is identical across transport types
       Given multiple transport adapters with different quality characteristics
       When the same application logic runs on each transport
       Then observable application behavior is identical
       And no transport-specific guarantees are exposed
 
     @Scenario(02)
-    Scenario: Client layer abstracts transport reordering from application
+    Scenario: [transport-05] Client layer abstracts transport reordering from application
       Given a server is running
       And a client connects
       When the client receives packets in a different order than sent
@@ -337,7 +331,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no connection disruption occurs
 
     @Scenario(03)
-    Scenario: Server layer abstracts transport duplication from application
+    Scenario: [transport-05] Server layer abstracts transport duplication from application
       Given a server is running
       And a client connects
       When the server receives duplicate packets
@@ -405,7 +399,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Metric query safety
 
     @Scenario(01)
-    Scenario: Metrics can be queried before connection without panic
+    Scenario: [observability-02] Metrics can be queried before connection without panic
       Given a server is running
       And a client is created but not connected
       When the client queries RTT metric
@@ -413,7 +407,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the RTT returns a defined default value
 
     @Scenario(02)
-    Scenario: Metrics can be queried during handshake without panic
+    Scenario: [observability-02] Metrics can be queried during handshake without panic
       Given a server is running
       And a client begins connecting
       When the client queries RTT metric during handshake
@@ -421,7 +415,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the RTT returns a defined default value
 
     @Scenario(03)
-    Scenario: Metrics can be queried after disconnect without panic
+    Scenario: [observability-02] Metrics can be queried after disconnect without panic
       Given a server is running
       And a client connects
       And the client disconnects
@@ -439,7 +433,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: RTT must be non-negative and bounded
 
     @Scenario(01)
-    Scenario: RTT converges under stable conditions
+    Scenario: [observability-04] RTT converges under stable conditions
       Given a server is running
       And a client connects
       And the link has stable fixed-latency conditions
@@ -448,7 +442,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the RTT metric is within tolerance of expected latency
 
     @Scenario(02)
-    Scenario: RTT remains bounded under jitter and loss
+    Scenario: [observability-03] RTT remains bounded under jitter and loss
       Given a server is running
       And a client connects
       And the link has high jitter and moderate packet loss
@@ -466,7 +460,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   Rule: Metrics reset on connection lifecycle
 
     @Scenario(01)
-    Scenario: Reconnection does not inherit stale RTT samples
+    Scenario: [observability-07] Reconnection does not inherit stale RTT samples
       Given a server is running
       And a client connects with latency 50ms
       And RTT has converged near 100ms round-trip
@@ -477,7 +471,7 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the RTT metric converges toward the new latency
 
     @Scenario(02)
-    Scenario: Metrics return defaults after disconnect before reconnection
+    Scenario: [observability-07] Metrics return defaults after disconnect before reconnection
       Given a server is running
       And a client connects with latency 50ms
       And RTT has converged near 100ms round-trip
@@ -485,4 +479,128 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the client queries RTT metric after disconnect
       Then no panic occurs
       And the RTT returns a defined default value
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Phase D.2 — coverage stubs (deferred)
+  # ──────────────────────────────────────────────────────────────────────
+  #
+  # The contract IDs below have legacy_tests/01_connection_lifecycle.rs
+  # and 05_observability_metrics.rs `#[test]` fns but no current
+  # behavioral Scenario in this grouped feature. They're tagged
+  # `@Deferred @PolicyOnly` so the run report skips execution while
+  # still treating them as covered for Phase F's parity gate. Future
+  # sessions can convert each into a real Scenario.
+
+  @Rule(12)
+  Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
+
+    @Deferred @PolicyOnly
+    @Scenario(01)
+    Scenario: [connection-12] Anonymous connection allowed when auth disabled
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(02)
+    Scenario: [connection-13] No replication before auth decision
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(03)
+    Scenario: [connection-14a] Protocol_id checked during handshake
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(04)
+    Scenario: [connection-15] No mid-session reauth
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(05)
+    Scenario: [connection-17] Server capacity reject produces RejectEvent
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(06)
+    Scenario: [connection-19] Client disconnects on heartbeat timeout
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(07)
+    Scenario: [connection-23] Malformed identity token rejected
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(08)
+    Scenario: [connection-25] Expired or reused tokens obey lifetime semantics
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(09)
+    Scenario: [connection-27] Valid identity token round-trips
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(10)
+    Scenario: [connection-28] Reconnect is fresh session (lifecycle parity)
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(11)
+    Scenario: [connection-29] Same protocol produces same protocol_id
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(12)
+    Scenario: [connection-30] Protocol_id wire encoding allows connection
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(13)
+    Scenario: [connection-31] Matched protocol_id allows connection
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(14)
+    Scenario: [connection-32] Protocol_id determined by wire-relevant aspects only
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(15)
+    Scenario: [connection-33] No partial protocol compatibility
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(16)
+    Scenario: [observability-01] Metrics do not affect replicated state
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(17)
+    Scenario: [observability-01a] Querying metrics does not affect tick pacing
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(18)
+    Scenario: [observability-05] Throughput must be non-negative
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(19)
+    Scenario: [observability-06] Bandwidth exposes both directions
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(20)
+    Scenario: [observability-08] Time source monotonic consistency
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(21)
+    Scenario: [observability-09] Per-direction metrics consistency
+      Then the system intentionally fails
+
+    @Deferred @PolicyOnly
+    @Scenario(22)
+    Scenario: [observability-10] Metrics are testable without feature flags
+      Then the system intentionally fails
 

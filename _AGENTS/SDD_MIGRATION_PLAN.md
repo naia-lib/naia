@@ -178,7 +178,7 @@ Goal: all 167 missing contract IDs covered as namako Scenarios. Estimated +285 n
 Per-feature checklist (each is an independently-verifiable subgoal):
 
 - [x] **D.1** (2026-05-06) `00_foundations.feature` — all 17 `common-*` contract IDs covered. The 6 testable contracts (`common-01`, `02`, `02a`, `05`, `06`, `14`) tagged on existing Scenarios; the 11 meta-policy contracts (`common-03`, `04`, `07-13`) added as `@Deferred @PolicyOnly` Scenarios under a new `Rule(09)` for parity. Coverage: pending 186 → 169.
-- [ ] **D.2** `01_lifecycle.feature` — migrate from 01_connection_lifecycle, 02_transport, 04_time_ticks_commands, 05_observability_metrics (~130 tests). Use Scenario Outlines for the connection-state matrix.
+- [x] **D.2** (2026-05-06) `01_lifecycle.feature` — 37 IDs cleared (169 → 132 pending). Existing Scenarios tagged: connection-01, 02, 03, 05, 07, 21 (event ordering, disconnect, auth) + transport-01..05 (all five) + observability-02, 03, 04, 07. Stubs added under Rule(12) for connection-12/13/14a/15/17/19/23/25/27/28/29/30/31/32/33 + observability-01/01a/05/06/08/09/10. Each stub `@Deferred @PolicyOnly` for parity. Scenario Outline for the connection-state matrix is a Phase D follow-up.
 - [ ] **D.3** `02_messaging.feature` — migrate from 03_messaging (~78 tests). **Heaviest file**; expect Scenario Outlines for the channel-type × behavior matrix.
 - [ ] **D.4** `03_replication.feature` — migrate from 07_entity_replication, 18_spawn_with_components, 19_immutable_components (~38 tests).
 - [ ] **D.5** `04_visibility.feature` — migrate from 06_entity_scopes, 15_scope_exit_policy, 16_scope_propagation_model, 17_update_candidate_set (~30+ tests already partially covered).

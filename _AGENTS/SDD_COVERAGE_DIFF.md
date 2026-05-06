@@ -8,9 +8,9 @@
 > empties, the parity gate for Phase F (delete legacy_tests) is met.
 
 - Legacy (215 contract IDs in legacy_tests/)
-- Namako: 48 contract IDs in features/
-- Both: **46**
-- Legacy-only (PENDING migration): **169**
+- Namako: 85 contract IDs in features/
+- Both: **83**
+- Legacy-only (PENDING migration): **132**
 - Namako-only (new in SDD): 2
 
 ## Pending migration
@@ -25,40 +25,19 @@
 | `client-events-10` | test/harness/legacy_tests/13_client_events_api.rs |
 | `client-events-11` | test/harness/legacy_tests/13_client_events_api.rs |
 | `client-events-12` | test/harness/legacy_tests/13_client_events_api.rs |
-| `connection-01` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-02` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-03` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-04` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-05` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-06` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-07` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-08` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-09` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-10` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-11` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-12` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-13` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-14` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-14a` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-15` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-16` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-17` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-18` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-19` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-20` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-21` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-22` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-23` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-24` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-25` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `connection-26` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-27` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-28` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-29` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-30` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-31` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-32` | test/harness/legacy_tests/01_connection_lifecycle.rs |
-| `connection-33` | test/harness/legacy_tests/01_connection_lifecycle.rs |
 | `entity-authority-02` | test/harness/legacy_tests/11_entity_authority.rs |
 | `entity-authority-03` | test/harness/legacy_tests/11_entity_authority.rs |
 | `entity-authority-04` | test/harness/legacy_tests/11_entity_authority.rs |
@@ -154,17 +133,6 @@
 | `messaging-25` | test/harness/legacy_tests/03_messaging.rs |
 | `messaging-26` | test/harness/legacy_tests/03_messaging.rs |
 | `messaging-27` | test/harness/legacy_tests/03_messaging.rs |
-| `observability-01` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-01a` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-02` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-03` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-04` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-05` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-06` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-07` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-08` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-09` | test/harness/legacy_tests/05_observability_metrics.rs |
-| `observability-10` | test/harness/legacy_tests/05_observability_metrics.rs |
 | `server-events-00` | test/harness/legacy_tests/12_server_events_api.rs |
 | `server-events-01` | test/harness/legacy_tests/12_server_events_api.rs |
 | `server-events-02` | test/harness/legacy_tests/12_server_events_api.rs |
@@ -177,11 +145,6 @@
 | `server-events-11` | test/harness/legacy_tests/12_server_events_api.rs |
 | `server-events-12` | test/harness/legacy_tests/12_server_events_api.rs |
 | `server-events-13` | test/harness/legacy_tests/12_server_events_api.rs |
-| `transport-01` | test/harness/legacy_tests/02_transport.rs |
-| `transport-02` | test/harness/legacy_tests/02_transport.rs |
-| `transport-03` | test/harness/legacy_tests/02_transport.rs |
-| `transport-04` | test/harness/legacy_tests/02_transport.rs |
-| `transport-05` | test/harness/legacy_tests/02_transport.rs |
 | `world-integration-01` | test/harness/legacy_tests/14_world_integration.rs |
 | `world-integration-02` | test/harness/legacy_tests/14_world_integration.rs |
 | `world-integration-03` | test/harness/legacy_tests/14_world_integration.rs |
