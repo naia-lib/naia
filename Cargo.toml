@@ -11,7 +11,7 @@ members = [
     "socket/server",
     "socket/shared",
     "benches",
-    "iai",
+    # "iai",  -- disabled until iai-callgrind-runner is installed in CI/PATH; see _AGENTS/SDD_MIGRATION_PLAN.md Track 3
     "test/compile_fail",
     "test/harness",
     "test/loom",
