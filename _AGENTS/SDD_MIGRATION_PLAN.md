@@ -93,10 +93,10 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
   - **A.3.b** — Extract shared helpers (e.g. `connect_client_impl`, repeated mutate-and-track patterns) into `world_helpers.rs` so the per-binding moves don't need to drag along inlined helpers. (This is the Phase B helper layer building organically here; Phase B then refines + completes the catalog.)
   - **A.3.c** — Per-source-file migration: for each of the 22 contract-aligned files, move every binding to its classified purpose-aligned home. Build between every file move; resolve any cucumber ambiguity errors immediately. Source file may end empty (if so, delete it from `mod.rs`).
     - [x] **smoke.rs** (6 bindings) → given/setup, when/network_events, then/state_assertions. Pattern proven; helpers extracted to world_helpers. 251 bindings still in manifest.
-    - [ ] scope_propagation.rs (2 bindings)
-    - [ ] update_candidate_set.rs (3 bindings)
-    - [ ] immutable_components.rs (4 bindings)
-    - [ ] spawn_with_components.rs (4 bindings)
+    - [x] **scope_propagation.rs** (2 bindings) → when/server_actions, then/state_assertions. 2026-05-06.
+    - [x] **update_candidate_set.rs** (3 bindings) → given/state, when/server_actions, then/state_assertions. 2026-05-06.
+    - [x] **immutable_components.rs** (4 bindings) → given/state, then/state_assertions. 2026-05-06.
+    - [x] **spawn_with_components.rs** (4 bindings) → given/state, then/state_assertions. 2026-05-06.
     - [ ] client_events.rs (5 bindings)
     - [ ] world_integration.rs (5 bindings)
     - [ ] entity_authority.rs (7 bindings)

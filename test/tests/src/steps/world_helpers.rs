@@ -21,6 +21,19 @@
 //! belongs here when it is reusable across ≥ 2 step bindings AND its
 //! body is more than a single library call.
 
+// ──────────────────────────────────────────────────────────────────────
+// BDD-store keys
+// ──────────────────────────────────────────────────────────────────────
+//
+// Step bindings communicate state across phases via the scenario's
+// `bdd_store(key, val)` / `bdd_get(key)` API. Constants here are the
+// canonical key strings — using a shared symbol prevents two bindings
+// from disagreeing on what `"last_entity"` means.
+
+pub const LAST_ENTITY_KEY: &str = "last_entity";
+pub const SPAWN_POSITION_VALUE_KEY: &str = "spawn_position_value";
+pub const SPAWN_VELOCITY_VALUE_KEY: &str = "spawn_velocity_value";
+
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};

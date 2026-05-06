@@ -43,13 +43,12 @@ pub mod observability;
 pub mod priority_accumulator;
 pub mod replicated_resources;
 pub mod scope_exit;
-pub mod scope_propagation;
+// `scope_propagation` module migrated 2026-05-06: 1 when, 1 then.
 pub mod server_events;
-pub mod update_candidate_set;
-pub mod spawn_with_components;
-pub mod immutable_components;
-// `smoke` module migrated to purpose-aligned modules in A.3.c (2026-05-06):
-//   given/setup, when/network_events, then/state_assertions.
+// `update_candidate_set` module migrated 2026-05-06: 1 given, 1 when, 1 then.
+// `spawn_with_components` module migrated 2026-05-06: 2 given, 2 then.
+// `immutable_components` module migrated 2026-05-06: 2 given, 2 then.
+// `smoke` module migrated 2026-05-06: 2 given, 2 when, 2 then.
 pub mod transport;
 pub mod world_integration;
 
