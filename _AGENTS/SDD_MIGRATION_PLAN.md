@@ -194,11 +194,11 @@ Per-feature checklist (each is an independently-verifiable subgoal):
 
 Goal: the gherkin-resistant tests have a clean home that doesn't pollute the main test suite.
 
-- [ ] **E.1** Survey: per-file list of tests that didn't migrate cleanly to gherkin. Each gets a one-line "why" tag.
-- [ ] **E.2** Create `test/harness/contract_tests/integration_only/` with a `README.md` explaining the carve-out's purpose and the migration deletion criteria (i.e. when can a test in here move out).
-- [ ] **E.3** Move the carve-out tests; update `Cargo.toml` `[[test]]` entries to point at the new path.
-- [ ] **E.4** Verify all tests still pass.
-- [ ] **E.5** Update this doc; commit `phase E complete: integration-only carve-out`; push to main.
+- [x] **E.1** (2026-05-06) Surveyed all 14 legacy contract files: 10 are fully Gherkin-covered (all tests passing, parity stubs in place), 4 retain Rust integration tests for documented product gaps (8 failing tests across `03_messaging`, `06_entity_scopes`, `10_entity_delegation`) and 5 `#[ignore]` infrastructure placeholders (across `00_common`, `01_connection_lifecycle`, `06_entity_scopes`).
+- [x] **E.2** (2026-05-06) Created `test/harness/contract_tests/integration_only/` with `README.md` detailing carve-out criteria (known product gap OR infrastructure placeholder) and the migration-deletion path (gap fixed → namako Scenario exercises behaviour → Rust test deleted).
+- [x] **E.3** (2026-05-06) Moved 5 Rust files (`00_common`, `01_connection_lifecycle`, `03_messaging`, `06_entity_scopes`, `10_entity_delegation`) plus `_helpers.rs` into the carve-out directory; deleted 10 fully-covered files (`02`, `04`, `05`, `07`, `08`, `09`, `11`, `12`, `13`, `14`); updated `test/harness/Cargo.toml` `[[test]]` entries from 14 `contract_NN_*` → 5 `integration_only_NN_*`.
+- [x] **E.4** (2026-05-06) Verified test counts unchanged: 5 carve-out test bins still report exactly the same 8 failures + 5 ignored as before the move (no behaviour change, just rename). All other workspace tests still pass.
+- [x] **E.5** (2026-05-06) Plan updated; commit + push as `Phase E complete`.
 
 ### Phase F — Delete legacy_tests (½ day · LOW-IF-A-E-DONE risk)
 
