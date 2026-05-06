@@ -110,7 +110,7 @@ Goal: existing 220 tests stay green; step bindings reorganized into the new voca
     - [x] **messaging.rs** (9 bindings) → when/client_actions, when/server_actions, then/state_assertions. 2026-05-06.
     - [ ] scope_exit.rs (13 bindings)
     - [ ] entity_publication.rs (12 bindings)
-    - [ ] entity_scopes.rs (20 bindings)
+    - [x] **entity_scopes.rs** (20 bindings) → given/state, when/server_actions, when/network_events, then/state_assertions. 2026-05-06.
     - [ ] connection.rs (23 bindings)
     - [x] **entity_delegation.rs** (16 bindings) → given/state, when/client_actions, when/server_actions, when/network_events, then/state_assertions. 2026-05-06.
     - [ ] observability.rs (21 bindings)

@@ -43,7 +43,8 @@ pub mod connection;
 // 2 when→client_actions, 5 then→state_assertions.
 // `entity_replication` module migrated 2026-05-06: 3 given→state,
 // 2 when→server_actions, 4 then→state_assertions.
-pub mod entity_scopes;
+// `entity_scopes` module migrated 2026-05-06: 8 given→state,
+// 4 when→server_actions, 1 when→network_events, 7 then→state_assertions.
 // `messaging` module migrated 2026-05-06: 2 when→client_actions,
 // 3 when→server_actions, 4 then→state_assertions.
 pub mod observability;

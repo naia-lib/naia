@@ -79,6 +79,29 @@ fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
     ctx.scenario_mut().bdd_store(SECOND_CLIENT_KEY, client_key);
 }
 
+/// When the entity despawns on the client.
+///
+/// Polls until the client no longer has the entity locally. Used as
+/// a sequencing barrier in scope-exit tests.
+#[when("the entity despawns on the client")]
+fn when_entity_despawns_on_client(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.expect(|ectx| {
+        ectx.client(client_key, |client| {
+            if !client.has_entity(&entity_key) {
+                Some(())
+            } else {
+                None
+            }
+        })
+    });
+}
+
 /// When client A disconnects from the server.
 ///
 /// Server-initiated disconnect for the named client. Used by

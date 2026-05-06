@@ -1277,6 +1277,145 @@ fn then_client_a_observes_available_authority_status(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity scope — singleton-client predicates
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the entity is in-scope for the client.
+#[then("the entity is in-scope for the client")]
+fn then_entity_in_scope_for_client_singleton(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.server(|server| {
+        if let Some(scope) = server.user_scope(&client_key) {
+            if scope.has(&entity_key) {
+                namako_engine::codegen::AssertOutcome::Passed(())
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the entity is out-of-scope for the client.
+#[then("the entity is out-of-scope for the client")]
+fn then_entity_out_of_scope_for_client_singleton(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.server(|server| {
+        if let Some(scope) = server.user_scope(&client_key) {
+            if !scope.has(&entity_key) {
+                namako_engine::codegen::AssertOutcome::Passed(())
+            } else {
+                namako_engine::codegen::AssertOutcome::Pending
+            }
+        } else {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        }
+    })
+}
+
+/// Then the entity despawns on the client.
+#[then("the entity despawns on the client")]
+fn then_entity_despawns_on_client(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        if !client.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the entity spawns on the client.
+#[then("the entity spawns on the client")]
+fn then_entity_spawns_on_client(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        if client.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the entity spawns on the client as a new lifetime.
+#[then("the entity spawns on the client as a new lifetime")]
+fn then_entity_spawns_on_client_as_new_lifetime(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(crate::steps::world_helpers::LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    ctx.client(client_key, |client| {
+        if client.has_entity(&entity_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the server stops replicating entities to that client.
+///
+/// Polls until the user no longer exists server-side (post-disconnect).
+#[then("the server stops replicating entities to that client")]
+fn then_server_stops_replicating_to_client(
+    ctx: &TestWorldRef,
+) -> namako_engine::codegen::AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.server(|server| {
+        if !server.user_exists(&client_key) {
+            namako_engine::codegen::AssertOutcome::Passed(())
+        } else {
+            namako_engine::codegen::AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then no error is raised.
+///
+/// Trivially passes — reaching this step means the prior When did
+/// not panic. Used by edge-case scope tests against unknown
+/// entities/clients.
+#[then("no error is raised")]
+fn then_no_error_is_raised(_ctx: &TestWorldRef) -> namako_engine::codegen::AssertOutcome<()> {
+    namako_engine::codegen::AssertOutcome::Passed(())
+}
+
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
 fn then_entity_spawns_with_correct_values(

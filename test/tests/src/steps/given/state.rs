@@ -761,6 +761,190 @@ fn given_client_a_is_denied_authority(ctx: &mut TestWorldMut) {
     scenario.allow_flexible_next();
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity-scope preconditions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a server-owned entity exists.
+///
+/// Bare server-owned entity with Position(0, 0). Stored under
+/// `LAST_ENTITY_KEY`. Distinct from
+/// `a server-owned entity exists with a replicated component` —
+/// this one's `Position` IS the replicated component, but the
+/// scenario phrasing emphasizes existence rather than the component.
+#[given("a server-owned entity exists")]
+fn given_server_owned_entity_exists(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    let scenario = ctx.scenario_mut();
+    let entity_key = scenario.mutate(|mctx| {
+        let (entity_key, _) = mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity.insert_component(Position::new(0.0, 0.0));
+            })
+        });
+        entity_key
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+}
+
+/// Given the client owns an entity.
+///
+/// Client spawns a Public entity with Position(0, 0). Spins 50
+/// ticks for replication to land on the server before storing.
+#[given("the client owns an entity")]
+fn given_client_owns_entity(ctx: &mut TestWorldMut) {
+    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_test_harness::Position;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key = scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            client.spawn(|mut entity| {
+                entity
+                    .configure_replication(ClientReplicationConfig::Public)
+                    .insert_component(Position::new(0.0, 0.0));
+            })
+        })
+    });
+    for _ in 0..50 {
+        scenario.mutate(|_| {});
+    }
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+}
+
+/// Given the client and entity share a room.
+#[given("the client and entity share a room")]
+fn given_client_and_entity_share_room_singleton(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let room_key = scenario.last_room();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.enter_room(&room_key);
+            }
+        });
+    });
+}
+
+/// Given the client and entity do not share a room.
+#[given("the client and entity do not share a room")]
+fn given_client_and_entity_do_not_share_room(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let room_key = scenario.last_room();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut room) = server.room_mut(&room_key) {
+                if room.has_entity(&entity_key) {
+                    room.remove_entity(&entity_key);
+                }
+            }
+        });
+    });
+}
+
+/// Given the entity is in-scope for the client.
+///
+/// Includes the entity in the client's scope and waits until the
+/// client observes the entity locally.
+#[given("the entity is in-scope for the client")]
+fn given_entity_in_scope_for_client(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+    scenario.expect(|ectx| {
+        ectx.client(client_key, |client| {
+            if client.has_entity(&entity_key) {
+                Some(())
+            } else {
+                None
+            }
+        })
+    });
+}
+
+/// Given the entity is out-of-scope for the client.
+#[given("the entity is out-of-scope for the client")]
+fn given_entity_out_of_scope_for_client(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.exclude(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// Given the server excludes the entity for the client (precondition).
+///
+/// Distinct from the When variant — this one is a precondition step
+/// after which other Givens may run.
+#[given("the server excludes the entity for the client")]
+fn given_server_excludes_entity_for_client(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.exclude(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// Given the entity is not in any room.
+#[given("the entity is not in any room")]
+fn given_entity_not_in_any_room(ctx: &mut TestWorldMut) {
+    use naia_test_harness::EntityKey;
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let room_keys = server.room_keys();
+            for room_key in room_keys {
+                if let Some(mut room) = server.room_mut(&room_key) {
+                    if room.has_entity(&entity_key) {
+                        room.remove_entity(&entity_key);
+                    }
+                }
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
 /// Given the entity is not in the client's room.
 ///
 /// Spawns the stored entity into a separate room so it has no shared

@@ -417,6 +417,85 @@ fn when_server_releases_authority(ctx: &mut TestWorldMut) {
     });
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Entity-scope — server scope-mut operations
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server includes the entity for the client.
+#[when("the server includes the entity for the client")]
+fn when_server_includes_entity_for_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// When the server excludes the entity for the client.
+#[when("the server excludes the entity for the client")]
+fn when_server_excludes_entity_for_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.exclude(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// When the server includes an unknown entity for the client.
+///
+/// Edge-case test — invalid EntityKey should be a no-op.
+#[when("the server includes an unknown entity for the client")]
+fn when_server_includes_unknown_entity_for_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let unknown_entity_key = naia_test_harness::EntityKey::invalid();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.include(&unknown_entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
+/// When the server includes the entity for an unknown client.
+///
+/// Edge-case test — invalid ClientKey should be a no-op
+/// (`user_scope_mut` returns None for unknown clients).
+#[when("the server includes the entity for an unknown client")]
+fn when_server_includes_entity_for_unknown_client(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    let unknown_client_key = naia_test_harness::ClientKey::invalid();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&unknown_client_key) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
 /// When the server mutates entity {label}'s component to x={int} y={int}.
 ///
 /// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].
