@@ -384,3 +384,36 @@ fn when_client_sends_request(ctx: &mut TestWorldMut) {
         }
     }
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Resource authority — client-side mutations (alice/PlayerSelection)
+// ──────────────────────────────────────────────────────────────────────
+
+/// When alice mutates PlayerSelection.selected_id to {int}.
+///
+/// Alice must hold authority (see `alice holds authority on PlayerSelection` Given).
+/// The mutation propagates to the server side for verification.
+#[when("alice mutates PlayerSelection.selected_id to {int}")]
+fn when_alice_mutates_player_selection(ctx: &mut TestWorldMut, value: u16) {
+    use naia_test_harness::TestPlayerSelection;
+    let alice_key: ClientKey = named_client_mut(ctx, "alice");
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.client(alice_key, |cl| {
+            cl.mutate_resource::<TestPlayerSelection, _, _>(|r| { *r.selected_id = value; });
+        });
+    });
+}
+
+/// When alice releases authority on PlayerSelection.
+#[when("alice releases authority on PlayerSelection")]
+fn when_alice_releases_authority(ctx: &mut TestWorldMut) {
+    use naia_test_harness::TestPlayerSelection;
+    let alice_key: ClientKey = named_client_mut(ctx, "alice");
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.client(alice_key, |cl| {
+            assert!(cl.release_resource_authority::<TestPlayerSelection>().is_ok());
+        });
+    });
+}

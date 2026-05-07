@@ -51,6 +51,12 @@ impl OwnedLocalEntity {
         }
     }
 
+    pub fn id(&self) -> u16 {
+        match self {
+            Self::Host { id, .. } | Self::Remote { id, .. } => *id,
+        }
+    }
+
     pub fn ser(&self, writer: &mut dyn BitWrite) {
         match self {
             Self::Host { id, is_static } => {

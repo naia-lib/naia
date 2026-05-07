@@ -22,8 +22,8 @@ fn when_server_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
     let oversized: Vec<u8> = (0u16..1000).map(|i| (i % 256) as u8).collect();
-    let _ = scenario.inject_client_packet(&client_key, oversized);
     let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_key, oversized.clone()); });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -42,8 +42,8 @@ fn when_client_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
     let oversized: Vec<u8> = (0u16..1000).map(|i| (i % 256) as u8).collect();
-    let _ = scenario.inject_server_packet(&client_key, oversized);
     let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| { let _ = ctx.inject_server_packet(&client_key, oversized.clone()); });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -117,9 +117,11 @@ fn when_server_receives_duplicate_packets(ctx: &mut TestWorldMut) {
     scenario.clear_operation_result();
     let packet: Vec<u8> = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
     let result = catch_unwind(AssertUnwindSafe(|| {
-        for _ in 0..3 {
-            let _ = scenario.inject_client_packet(&client_key, packet.clone());
-        }
+        scenario.mutate(|ctx| {
+            for _ in 0..3 {
+                let _ = ctx.inject_client_packet(&client_key, packet.clone());
+            }
+        });
         for _ in 0..5 {
             scenario.mutate(|_| {});
         }
@@ -139,9 +141,11 @@ fn when_client_receives_duplicate_packets(ctx: &mut TestWorldMut) {
     scenario.clear_operation_result();
     let packet: Vec<u8> = vec![0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07];
     let result = catch_unwind(AssertUnwindSafe(|| {
-        for _ in 0..3 {
-            let _ = scenario.inject_server_packet(&client_key, packet.clone());
-        }
+        scenario.mutate(|ctx| {
+            for _ in 0..3 {
+                let _ = ctx.inject_server_packet(&client_key, packet.clone());
+            }
+        });
         for _ in 0..5 {
             scenario.mutate(|_| {});
         }
@@ -332,8 +336,8 @@ fn when_server_receives_malformed_packet(ctx: &mut TestWorldMut) {
     scenario.clear_operation_result();
     let client_key = scenario.last_client();
     let malformed = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
-    let _ = scenario.inject_client_packet(&client_key, malformed);
     let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_key, malformed.clone()); });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -352,8 +356,8 @@ fn when_client_receives_malformed_packet(ctx: &mut TestWorldMut) {
     scenario.clear_operation_result();
     let client_key = scenario.last_client();
     let malformed = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
-    let _ = scenario.inject_server_packet(&client_key, malformed);
     let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| { let _ = ctx.inject_server_packet(&client_key, malformed.clone()); });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }

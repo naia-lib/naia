@@ -482,17 +482,20 @@ impl Scenario {
         f(&mut ctx)
     }
 
-    /// TODO: THIS IS ABSOLUTELY HORRIBLE. FIX THIS! This should ONLY happen within a mutate block!
-    /// Inject a raw packet from a client to the server (for testing malformed data)
-    pub fn inject_client_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
+    /// Inject a raw packet from a client to the server (for testing malformed data).
+    ///
+    /// Call via `MutateCtx::inject_client_packet` — do not call directly on `Scenario`.
+    pub(crate) fn inject_client_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
         if let Some(addr) = self.client_to_addr_map.get(client_key) {
             return self.hub.inject_client_packet(addr, data);
         }
         false
     }
 
-    /// Inject a raw packet from the server to a client (for testing malformed/oversized data)
-    pub fn inject_server_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
+    /// Inject a raw packet from the server to a client (for testing malformed/oversized data).
+    ///
+    /// Call via `MutateCtx::inject_server_packet` — do not call directly on `Scenario`.
+    pub(crate) fn inject_server_packet(&mut self, client_key: &ClientKey, data: Vec<u8>) -> bool {
         if let Some(addr) = self.client_to_addr_map.get(client_key) {
             return self.hub.inject_server_packet(addr, data);
         }

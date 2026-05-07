@@ -351,10 +351,55 @@ fn when_server_inserts_score_dynamic(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| {
         c.server(|server| {
-            assert!(
-                server.insert_resource(TestScore::new(0, 0)),
-                "insert Score should succeed"
-            );
+            assert!(server.insert_resource(TestScore::new(0, 0)), "insert Score should succeed");
+        });
+    });
+}
+
+/// When the server inserts `MatchState { phase: N }` as a static resource.
+#[when(r#"the server inserts MatchState \{ phase: {int} \} as a static resource"#)]
+fn when_server_inserts_matchstate_static(ctx: &mut TestWorldMut, phase: u8) {
+    use naia_test_harness::TestMatchState;
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            assert!(server.insert_static_resource(TestMatchState::new(phase)), "insert MatchState should succeed");
+        });
+    });
+}
+
+/// When the server inserts `MatchState { phase: N }` as static (alias phrasing).
+#[when(r#"the server inserts MatchState \{ phase: {int} \} as static"#)]
+fn when_server_inserts_matchstate_as_static(ctx: &mut TestWorldMut, phase: u8) {
+    use naia_test_harness::TestMatchState;
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            assert!(server.insert_static_resource(TestMatchState::new(phase)), "insert MatchState should succeed");
+        });
+    });
+}
+
+/// When the server removes MatchState.
+#[when("the server removes MatchState")]
+fn when_server_removes_matchstate(ctx: &mut TestWorldMut) {
+    use naia_test_harness::TestMatchState;
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            assert!(server.remove_resource::<TestMatchState>(), "remove MatchState should succeed");
+        });
+    });
+}
+
+/// When the server mutates Score.home to {int}.
+#[when("the server mutates Score.home to {int}")]
+fn when_server_mutates_score_home(ctx: &mut TestWorldMut, value: u32) {
+    use naia_test_harness::TestScore;
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            server.mutate_resource::<TestScore, _, _>(|s| { *s.home = value; });
         });
     });
 }

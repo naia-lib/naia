@@ -444,6 +444,52 @@ fn then_client_matchstate_phase_equals(ctx: &TestWorldRef, expected: u8) -> Asse
 }
 
 
+/// Then the client's MatchState is present.
+#[then("the client's MatchState is present")]
+fn then_client_has_matchstate(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TestMatchState;
+    let key = ctx.last_client();
+    if ctx.client(key, |c| c.has_resource::<TestMatchState>()) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the client's MatchState is absent.
+#[then("the client's MatchState is absent")]
+fn then_client_has_no_matchstate(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TestMatchState;
+    let key = ctx.last_client();
+    if !ctx.client(key, |c| c.has_resource::<TestMatchState>()) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
+    }
+}
+
+/// Then the server's PlayerSelection.selected_id equals {int}.
+#[then("the server's PlayerSelection.selected_id equals {int}")]
+fn then_server_playerselection_selected_id_equals(ctx: &TestWorldRef, expected: u16) -> AssertOutcome<()> {
+    use naia_test_harness::TestPlayerSelection;
+    match ctx.server(|server| server.resource::<TestPlayerSelection, _, _>(|r| *r.selected_id)) {
+        Some(v) if v == expected => AssertOutcome::Passed(()),
+        _ => AssertOutcome::Pending,
+    }
+}
+
+/// Then the server-side authority status for PlayerSelection is "Available".
+#[then(r#"the server-side authority status for PlayerSelection is "Available""#)]
+fn then_server_playerselection_auth_available(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    use naia_test_harness::TestPlayerSelection;
+    let status = ctx.server(|server| server.resource_authority_status::<TestPlayerSelection>());
+    match status {
+        Some(EntityAuthStatus::Available) => AssertOutcome::Passed(()),
+        _ => AssertOutcome::Pending,
+    }
+}
+
 /// Then alice's authority status for PlayerSelection is "Granted".
 #[then(r#"alice's authority status for PlayerSelection is "Granted""#)]
 fn then_alice_auth_granted(ctx: &TestWorldRef) -> AssertOutcome<()> {

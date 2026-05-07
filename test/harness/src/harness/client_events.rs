@@ -698,18 +698,10 @@ fn register_client_spawns(
 
 /// Extract the comparable value from a LocalEntity.
 ///
-/// This relies on Naia's current internal representation where `LocalEntity` wraps
-/// an `OwnedLocalEntity` enum with a `u16` value. The server and client share the
-/// same value for the same user's view of an entity.
-///
-/// # TODO: Brittleness
-///
-/// This assumes Naia's internal representation. If Naia changes how `LocalEntity`
-/// is represented or provides a public API for comparison, this should be updated.
-/// Consider contributing a public comparison API to the naia crate.
+/// Uses `OwnedLocalEntity::id()` from naia_shared, which centralizes the variant
+/// match. If a new variant is ever added without an `id` field, the compile error
+/// surfaces in naia_shared rather than silently here.
 fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
     let owned: OwnedLocalEntity = (*local_entity).into();
-    match owned {
-        OwnedLocalEntity::Host { id: v, .. } | OwnedLocalEntity::Remote { id: v, .. } => v,
-    }
+    owned.id()
 }

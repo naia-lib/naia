@@ -117,6 +117,14 @@ impl<'a> ServerExpectCtx<'a> {
         crate::harness::resource_lookup::read_resource_in_world::<R, _, _, _>(&world_ref, f)
     }
 
+    /// Authority status of a server-side replicated resource.
+    pub fn resource_authority_status<R: naia_shared::ReplicatedComponent>(
+        &self,
+    ) -> Option<naia_shared::EntityAuthStatus> {
+        let (server, _) = self.scenario.server_and_registry()?;
+        server.resource_authority_status::<R>()
+    }
+
     /// Check if user exists for a ClientKey
     pub fn user_exists(&self, client_key: &ClientKey) -> bool {
         let Some(user_key) = self.scenario.client_to_user_key(client_key) else {
