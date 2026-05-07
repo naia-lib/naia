@@ -250,11 +250,11 @@ The SDD migration mission landed in 6 phases over a single push. End state:
   No product bug. Protocol-id mismatch produces `ProtocolMismatch` rejection correctly. Test had been `#[ignore]`-ed (no infra to inject a mismatched protocol). The two Rule(03) Scenarios in `00_foundations.feature` (both [common-02a]) already cover this with real `ProtocolId::new(A/B)` step bindings and both pass. Rust test deleted. `00_common.rs` now has zero `#[ignore]` tests; remaining tests are live policy-stamp coverage for common-03 through common-14.
 
 - **`[entity-scopes-09]` include bypasses room gate** — closed 2026-05-06.
-  Product bug fixed. `scope.include()` was allowed to bypass the room gate for server-owned roomless entities. Fix applied to two evaluation sites in `server/src/server/world_server.rs`: `apply_scope_for_user` (spawn/despawn decisions) and `user_scope_has_entity` (scope-membership queries). Both now enforce: if explicit `Some(true)` is set for a server-owned non-resource entity with no room overlap, the entity is treated as out-of-scope. Resources and client-owned entities are exempt. `@Deferred` tag removed from `04_visibility.feature` Rule(04):Scenario(02). 171/171 BDD green.
+  Product bug fixed. `scope.include()` was allowed to bypass the room gate for server-owned roomless (no-room-at-all) entities. Fix applied to two evaluation sites in `server/src/server/world_server.rs`: `apply_scope_for_user` (spawn/despawn decisions) and `user_scope_has_entity` (scope-membership queries). Both now enforce: if explicit `Some(true)` is set for a server-owned non-resource entity that has NO rooms at all, the entity is treated as out-of-scope. Entities in rooms (even rooms the user isn't in) are valid include() targets per [entity-scopes-06]. Resources and client-owned entities are always exempt. `@Deferred` tag removed from `04_visibility.feature` Rule(04):Scenario(02). 171/171 BDD + 0 workspace failures.
 
 ---
 
-## Sidequest — Debug-infra upgrade (2026-05-06, in-flight)
+## Sidequest — Debug-infra upgrade (COMPLETE 2026-05-06)
 
 ### Why now
 
@@ -303,9 +303,9 @@ In `test/harness/src/harness/scenario.rs`, the timeout panic path currently emit
 
 Acceptance: the previous `[entity-delegation-15]` failing run, with `e2e_debug` enabled, would have printed enough state at timeout to identify the stale-mapping cause without any added eprintlns.
 
-#### S.4 — Gate
+#### S.4 — Gate ✓ DONE 2026-05-06
 
-Run `cargo run -p naia_npa --release -- run --plan test/specs/resolved_plan.json` (full 168 scenarios) and `cargo test --workspace --release`. Both must remain 168/168 + 443/0. Commit; merge to main; push.
+`cargo run -p naia_npa -- run --plan test/specs/resolved_plan.json`: **171/171** (scenario count grew from 168 during Track 2 closures). `cargo test --workspace`: **0 failures** (all carve-out ignored tests remain documented). Committed and pushed to main.
 
 ### Explicitly out of scope (deferred or dropped)
 

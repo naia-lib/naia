@@ -1981,25 +1981,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if let Some(in_scope) = self.entity_scope_map.get(user_key, &global_entity) {
             if *in_scope {
                 // [entity-scopes-09]: explicit include() cannot bypass the room gate for
-                // server-owned non-resource entities.
-                let is_resource = self.resource_registry.is_resource_entity(&global_entity);
-                let server_owned = self
-                    .global_world_manager
-                    .entity_owner(&global_entity)
-                    .map(|o| o.is_server())
-                    .unwrap_or(false);
-                if server_owned && !is_resource {
-                    let Some(user) = self.users.get(user_key) else {
-                        return false;
-                    };
-                    let in_common_room = if let Some(entity_rooms) =
-                        self.entity_room_map.entity_get_rooms(&global_entity)
-                    {
-                        entity_rooms.intersection(user.room_keys()).next().is_some()
-                    } else {
-                        false
-                    };
-                    if !in_common_room {
+                // server-owned non-resource entities that have no rooms at all. Entities
+                // in rooms (even rooms the user isn't in) are valid include() targets per
+                // [entity-scopes-06]; only completely roomless entities are gated.
+                let entity_is_roomless = self
+                    .entity_room_map
+                    .entity_get_rooms(&global_entity)
+                    .is_none();
+                if entity_is_roomless {
+                    let is_resource = self.resource_registry.is_resource_entity(&global_entity);
+                    let server_owned = self
+                        .global_world_manager
+                        .entity_owner(&global_entity)
+                        .map(|o| o.is_server())
+                        .unwrap_or(false);
+                    if server_owned && !is_resource {
                         return false;
                     }
                 }
@@ -3525,15 +3521,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .copied();
         let is_resource = self.resource_registry.is_resource_entity(global_entity);
         // [entity-scopes-09]: explicit include() MUST NOT bypass the room gate for
-        // server-owned non-resource entities. Resources, client-owned entities, and
-        // entities that share a room are all exempt.
+        // server-owned entities that have no rooms at all. If the entity has rooms
+        // (even rooms the user isn't in), include() is a valid cross-room override
+        // per [entity-scopes-06]. Resources and client-owned entities are exempt.
+        let entity_is_roomless = self
+            .entity_room_map
+            .entity_get_rooms(global_entity)
+            .is_none();
         let server_owned_roomless_non_resource = self
             .global_world_manager
             .entity_owner(global_entity)
             .map(|o| o.is_server())
             .unwrap_or(false)
             && !is_resource
-            && !in_common_room;
+            && entity_is_roomless;
         let should_be_in_scope = match explicit {
             Some(true) if server_owned_roomless_non_resource => false,
             Some(in_scope) => in_scope,
