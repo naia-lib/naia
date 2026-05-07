@@ -2,7 +2,14 @@
 
 **Status:** Phase A in progress · Started 2026-05-06
 **Owner:** twin-Claude (autonomous execution)
-**Gate:** every phase must end with all existing tests still green + commit pushed to `main`
+**Gate:** every phase must end with all existing tests still green + commit pushed to `dev` (see `RELEASE_PROCESS.md`)
+
+> **Branching policy (re-established 2026-05-07):** all in-flight work lives on `dev`.
+> `main` is touched only at release time (merge `dev` → `main` + tag + `cargo publish`).
+> The wholesale move of in-flight work onto `main` between 2026-05-06 and 2026-05-07
+> was a process error caught and corrected on 2026-05-07; see
+> `BRANCH_REWIND_2026-05-07.md`. The references to "main" in the body below are
+> historical and should be read as "dev" for any future-tense action.
 
 ---
 
@@ -79,7 +86,7 @@ These move to `test/harness/contract_tests/integration_only/` with a per-file he
 
 ## Phase tracker
 
-Each phase ends with: tests green, commit on `main`, this document updated, pushed to origin.
+Each phase ends with: tests green, commit on `dev`, this document updated, pushed to origin. (Originally said "main" — corrected 2026-05-07.)
 
 ### Phase A — Catalog refactor (3-5 days · LOW risk)
 

@@ -2,7 +2,10 @@
 
 **Started:** 2026-05-07 · **Owner:** twin-Claude (autonomous execution)
 **Status:** Audit complete. Implementation in progress.
-**Gate per phase:** workspace builds clean, NPA run shows ≥172/172 pass with zero failures, plan doc updated, commit + push to `main`.
+**Gate per phase:** workspace builds clean, NPA run shows ≥172/172 pass with zero failures, plan doc updated, commit + push to `dev` (see `RELEASE_PROCESS.md`).
+
+> **Branching policy (re-established 2026-05-07):** all in-flight work lives on `dev`.
+> `main` is touched only at release time. See `BRANCH_REWIND_2026-05-07.md` for context.
 
 ---
 
@@ -389,7 +392,7 @@ The channel-kind matrix is the highest-leverage Outline candidate.
   - `cargo run -p naia_npa -- coverage` — ≥220/240 active scenarios, ≤20 deferred (Category A only)
   - `cargo run -p naia_npa -- coverage --fail-on-deferred-non-policy` — exits 0
   - Run report committed and matches live run
-- [ ] **Q6.5** Mark this plan COMPLETE at top, push to main.
+- [ ] **Q6.5** Mark this plan COMPLETE at top, push to dev. (Release-time merge to main per `RELEASE_PROCESS.md` is a separate step.)
 
 ---
 
