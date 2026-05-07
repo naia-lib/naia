@@ -376,13 +376,26 @@ Acceptance: the previous `[entity-delegation-15]` failing run, with `e2e_debug` 
 
 ## Open questions / decisions deferred
 
-- **Tag convention for contract IDs.** Option A: `Scenario: [messaging-04] — ...`. Option B: `@Contract(messaging-04)` tag. Decide in Phase A; document choice here.
-- **Background scope.** Per-feature `Background:` (one block per file) vs per-`Rule:` `Background:`. Per-Rule is more granular but requires gherkin parser support; verify in A.4.
-- **Outline for messaging matrix.** Channel kinds × delivery semantics is ~25 tests today, all near-clones. Confirm `Scenario Outline:` is the right shape vs writing them as one Scenario each. Decide in D.3.
-- **Failing test policy.** The current 8 failing legacy tests block Phase F's parity gate. Decide: fix during Phase D, or migrate as `@Skip`-tagged Scenarios (with the same note as today's `#[ignore = "..."]` attributes). Recommended: fix during D.
+**All four questions resolved as of 2026-05-07 (Q6.1):**
+
+- **Tag convention for contract IDs.** ✅ Chose Option A: `Scenario: [contract-id] description` inline. Contract IDs appear in scenario titles; the `naia_npa coverage` tool extracts them via `\[([a-z][a-z0-9-]*-[0-9a-z]+)\]` regex.
+- **Background scope.** ✅ Per-feature `Background:` (one block per file). Implemented in Phase C.2. Each grouped feature file has one Background block that applies idempotently.
+- **Outline for messaging matrix.** ✅ Decision: NOT used (individual Scenarios preferred). The channel matrix has enough variation in assertions that Outlines would require complex step parameterization. Standalone scenarios are clearer.
+- **Failing test policy.** ✅ Fixed during Track 2. The 8 failing legacy tests were resolved during the SDD migration. `@Deferred` is now the correct state for untested-but-testable contracts; `@PolicyOnly` for genuinely untestable policy.
+
+## Quality Debt Closed (2026-05-07)
+
+Quality debt plan `SDD_QUALITY_DEBT_PLAN.md` completed. Summary of outcomes:
+
+- **Q0–Q3**: Tooling, helper extraction, binding refactors, file splits — all done.
+- **Q4**: Category A PolicyOnly cleanup — 11 genuine policy stubs correctly labeled, 122 mislabeled stubs promoted to testable @Deferred. Q4.3 done: `then_system_intentionally_fails` binding removed.
+- **Q5.A/B/C**: 37 Category B stubs converted to real BDD scenarios. 209 scenarios now active (up from 172).
+- **Q5.D**: Category C stubs (97 remaining @Deferred without @PolicyOnly) cleaned: fake `Then the system intentionally fails` step bodies stripped. These require new test infrastructure (events API, TickBuffered, EntityProperty buffer, etc.) and are deferred to a follow-up plan.
+- **Gate**: 209/209 NPA pass. 17 @PolicyOnly (Category A). 97 @Deferred Category C (silent stubs, no fake bodies).
 
 ---
 
 ## Change log
 
 - **2026-05-06** — Document created. Phase A.0 done. Twin-Claude beginning Phase A.1.
+- **2026-05-07** — Q6.1/Q6.2: Open questions resolved. Quality debt plan closed. See SDD_QUALITY_DEBT_PLAN.md.

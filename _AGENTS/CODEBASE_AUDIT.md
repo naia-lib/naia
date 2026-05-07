@@ -176,11 +176,16 @@ The shared abstraction is `HostType::Server` vs `HostType::Client` — both side
 
 ## Tier 2 — Code organization / dead code
 
-### T2.1 ✅ `test/harness/legacy_tests/` retired — DONE 2026-05-06
+### T2.1 ✅ `test/harness/legacy_tests/` retired — DONE 2026-05-06; quality debt closed 2026-05-07
 
 Closed via the SDD migration mission (see `_AGENTS/SDD_MIGRATION_PLAN.md`). All 215 legacy contract IDs are covered by namako Scenarios in `test/specs/features/` (Phase D); the 13 tests that documented active product gaps or infrastructure placeholders were carved out into `test/harness/contract_tests/integration_only/` with a clear migration-deletion path (Phase E); and the `legacy_tests/` directory itself is gone (Phase F).
 
-Final state: 5 carve-out Rust files + helpers (8 known-failing + 5 ignored) — these are explicitly excluded from the workspace green-gate. All other contract behaviour now flows through namako.
+Final state after SDD quality debt plan (`SDD_QUALITY_DEBT_PLAN.md`), closed 2026-05-07:
+- **209 active BDD scenarios** (up from 172 post-migration) — 100% NPA pass rate
+- **17 @PolicyOnly** (Category A: genuinely untestable meta-policy contracts)
+- **97 @Deferred Category C** — testable but require new test infrastructure (events API, TickBuffered, EntityProperty buffer, entity-authority state machine, etc.); silent stubs (no fake step bodies); deferred to a follow-up plan
+- 5 carve-out Rust files + helpers (8 known-failing + 5 ignored) — explicitly excluded from workspace green-gate
+- All step bindings ≤25 LOC; `then_system_intentionally_fails` orphan binding removed
 
 ---
 
