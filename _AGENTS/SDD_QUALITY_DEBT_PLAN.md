@@ -320,17 +320,30 @@ Tasks:
 
 **End state (2026-05-07):** largest file in `steps/` is `network_events_transport.rs` at 477 LOC.
 
-### Phase Q4 — Clean up Category A stubs (LOW risk, ~½ day)
+### Phase Q4 — Fix @PolicyOnly misuse + clean up genuine Category A (LOW risk, ~½ day) ✅ DONE
 
-Goal: stop pretending `Then the system intentionally fails` is a test.
+Goal: `@PolicyOnly` means what it says. 122 scenarios had the tag applied as a "skip for now"
+escape hatch during the Phase F parity sprint; they are testable behaviors, not policy contracts.
+Additionally, the 12 genuine Category A contracts should lose their fake step body.
 
-- [ ] **Q4.1** Identify the ~20 Category A scenarios (list in §2.1). For each:
-  - Keep the `Scenario:` header with its `[contract-id]` tag.
-  - Keep the `@Deferred @PolicyOnly` tag.
-  - Remove the `Then the system intentionally fails` step body. Add a one-line `# Policy-only: <one-sentence justification>` comment in its place.
-- [ ] **Q4.2** Verify namako lint accepts a Scenario with no steps. (If it doesn't: replace with a single `Given a server is running` step that's already idempotent — but the comment-only form is preferable.)
-- [ ] **Q4.3** Remove the `the system intentionally fails` step binding from `then/state_assertions_entity.rs` if no scenarios still use it after Q5. (Note: `state_assertions.rs` was split in Q3.5; the binding now lives in `state_assertions_entity.rs`.)
-- [ ] **Q4.4** Gate: NPA 172/172 pass, lint passes, build clean. Refresh artifacts. Commit + push.
+**Audit finding (2026-05-07):** Only `00_foundations.feature` Rule 9 ("Meta-policy contracts")
+contains truly untestable policy contracts (11 scenarios: common-03 through common-13). Every
+`@PolicyOnly` scenario in every other file lives under `Rule: Coverage stubs for legacy contracts
+not yet expressed as Scenarios` — testable behavior mislabeled during the parity sprint.
+
+- [x] **Q4.1** Remove `@PolicyOnly` from the 122 mislabeled stubs in the 5 non-foundation files.
+  - `01_lifecycle.feature`: 36 scenarios
+  - `02_messaging.feature`: 23 scenarios
+  - `03_replication.feature`: 7 scenarios
+  - `05_authority.feature`: 33 scenarios
+  - `06_events_api.feature`: 23 scenarios
+  - Result: these become plain `@Deferred` — correctly visible to `--fail-on-deferred-non-policy`.
+- [x] **Q4.2** For the 11 genuine Category A scenarios in `00_foundations.feature` Rule 9:
+  - Kept `@Deferred @PolicyOnly`.
+  - Removed `Then the system intentionally fails`. Replaced with `# Policy-only: <one-line justification>` comment (existing comment kept for common-03).
+  - Confirmed: namako lint accepts zero-step Scenario — no placeholder needed.
+- [ ] **Q4.3** Remove the `the system intentionally fails` step binding from `then/state_assertions_entity.rs` if no scenarios still use it after Q5. (Note: `state_assertions.rs` was split in Q3.5.)
+- [x] **Q4.4** Gate: `naia_npa coverage --fail-on-deferred-non-policy` exits 1 (141 plain `@Deferred` now visible — 122 mislabeled + 20 pre-existing from `07_resources.feature` - 1). NPA 172/172 pass. Lint 172/172. Artifacts refreshed. Committed + pushed to `dev`.
 
 ### Phase Q5 — Category B stubs → real BDD scenarios (MEDIUM risk, ~5–7 days)
 

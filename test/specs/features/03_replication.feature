@@ -171,37 +171,37 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   @Rule(07)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(01)
     Scenario: [entity-replication-04] Component insert events fire for in-scope additions
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(02)
     Scenario: [entity-replication-05] Component remove events fire for in-scope removals
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(03)
     Scenario: [entity-replication-08] Replication preserves component-set parity
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(04)
     Scenario: [entity-replication-09] Replication preserves component value parity
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(05)
     Scenario: [entity-replication-10] No replication storms under steady-state
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(06)
     Scenario: [entity-replication-11] Component remove on out-of-scope is safe
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(07)
     Scenario: [entity-replication-12] Concurrent updates resolve to last-writer-wins
       Then the system intentionally fails

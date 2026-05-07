@@ -497,186 +497,185 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
   #
   # The contract IDs below have legacy_tests/01_connection_lifecycle.rs
   # and 05_observability_metrics.rs `#[test]` fns but no current
-  # behavioral Scenario in this grouped feature. They're tagged
-  # `@Deferred @PolicyOnly` so the run report skips execution while
-  # still treating them as covered for Phase F's parity gate. Future
-  # sessions can convert each into a real Scenario.
+  # behavioral Scenario in this grouped feature. They are tagged
+  # `@Deferred` (Category B) — testable behaviors waiting for a real
+  # Scenario body. Convert each to a real Scenario in Q5.
 
   @Rule(12)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(01)
     Scenario: [connection-12] Anonymous connection allowed when auth disabled
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(02)
     Scenario: [connection-13] No replication before auth decision
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(03)
     Scenario: [connection-14a] Protocol_id checked during handshake
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(04)
     Scenario: [connection-15] No mid-session reauth
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(05)
     Scenario: [connection-17] Server capacity reject produces RejectEvent
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(06)
     Scenario: [connection-19] Client disconnects on heartbeat timeout
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(07)
     Scenario: [connection-23] Malformed identity token rejected
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(08)
     Scenario: [connection-25] Expired or reused tokens obey lifetime semantics
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(09)
     Scenario: [connection-27] Valid identity token round-trips
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(10)
     Scenario: [connection-28] Reconnect is fresh session (lifecycle parity)
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(11)
     Scenario: [connection-29] Same protocol produces same protocol_id
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(12)
     Scenario: [connection-30] Protocol_id wire encoding allows connection
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(13)
     Scenario: [connection-31] Matched protocol_id allows connection
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(14)
     Scenario: [connection-32] Protocol_id determined by wire-relevant aspects only
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(15)
     Scenario: [connection-33] No partial protocol compatibility
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(16)
     Scenario: [observability-01] Metrics do not affect replicated state
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(17)
     Scenario: [observability-01a] Querying metrics does not affect tick pacing
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(18)
     Scenario: [observability-05] Throughput must be non-negative
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(19)
     Scenario: [observability-06] Bandwidth exposes both directions
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(20)
     Scenario: [observability-08] Time source monotonic consistency
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(21)
     Scenario: [observability-09] Per-direction metrics consistency
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(22)
     Scenario: [observability-10] Metrics are testable without feature flags
       Then the system intentionally fails
 
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(23)
     Scenario: [connection-04] Reject path: client receives RejectEvent
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(24)
     Scenario: [connection-06] Auth event ordering on accepted handshake
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(25)
     Scenario: [connection-08] AuthEvent fires before ConnectEvent server-side
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(26)
     Scenario: [connection-09] Disconnect during auth is handled cleanly
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(27)
     Scenario: [connection-10] Multiple concurrent auth requests serialize
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(28)
     Scenario: [connection-11] Auth payload survives handshake roundtrip
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(29)
     Scenario: [connection-14] Protocol mismatch produces ProtocolMismatch reject
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(30)
     Scenario: [connection-16] Server cap enforced via RejectEvent
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(31)
     Scenario: [connection-18] Heartbeat liveness triggers timeout disconnect
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(32)
     Scenario: [connection-20] Reconnect after timeout is fresh session
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(33)
     Scenario: [connection-22] Disconnect propagates to scoped entities
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(34)
     Scenario: [connection-24] Identity token format validation
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(35)
     Scenario: [connection-26] Token reuse blocked across sessions
       Then the system intentionally fails

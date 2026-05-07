@@ -180,57 +180,56 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       # Policy contract: only framework code can panic; user code
       # must not. Exemplified by 00_common.rs::framework_panic_on_invariant
       # which proves a misuse path inside the framework asserts loudly.
-      Then the system intentionally fails
 
     @Deferred @PolicyOnly
     @Scenario(04)
     Scenario: [common-04] Warnings are debug-only and non-normative
-      Then the system intentionally fails
+      # Policy-only: debug logs are advisory; no executable assertion exists.
 
     @Deferred @PolicyOnly
     @Scenario(05)
     Scenario: [common-07] Tests MUST NOT assert on logs
-      Then the system intentionally fails
+      # Policy-only: test-authorship rule; enforced by code review, not runtime.
 
     @Deferred @PolicyOnly
     @Scenario(06)
     Scenario: [common-08] Test obligation template
-      Then the system intentionally fails
+      # Policy-only: template contract; no observable runtime signal.
 
     @Deferred @PolicyOnly
     @Scenario(07)
     Scenario: [common-09] Observable signals subsection
-      Then the system intentionally fails
+      # Policy-only: signals taxonomy; no executable assertion exists.
 
     @Deferred @PolicyOnly
     @Scenario(08)
     Scenario: [common-10] Fixed invariants are locked
-      Then the system intentionally fails
+      # Policy-only: constant-locking rule; enforced by code review, not runtime.
 
     @Deferred @PolicyOnly
     @Scenario(09)
     Scenario: [common-11] Configurable defaults
-      Then the system intentionally fails
+      # Policy-only: defaults contract; no single observable signal to assert.
 
     @Deferred @PolicyOnly
     @Scenario(10)
     Scenario: [common-11a] New constants start as invariants
-      Then the system intentionally fails
+      # Policy-only: new-constant policy; enforced by code review, not runtime.
 
     @Deferred @PolicyOnly
     @Scenario(11)
     Scenario: [common-12] Internal measurements vs exposed metrics
-      Then the system intentionally fails
+      # Policy-only: measurement boundary rule; no executable assertion exists.
 
     @Deferred @PolicyOnly
     @Scenario(12)
     Scenario: [common-12a] Test tolerance constants
-      Then the system intentionally fails
+      # Policy-only: tolerance naming convention; enforced by code review.
 
     @Deferred @PolicyOnly
     @Scenario(13)
     Scenario: [common-13] Metrics are non-normative for gameplay
-      Then the system intentionally fails
+      # Policy-only: metrics-non-normative contract; no executable assertion exists.
 
 # ============================================================================
 # AMBIGUITIES + PROPOSED CLARIFICATIONS

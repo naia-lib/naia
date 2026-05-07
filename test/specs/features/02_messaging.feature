@@ -123,119 +123,118 @@ Feature: Messaging Channel Semantics
   # cover the most-exercised channel-direction, ordered-reliable, and
   # RPC paths. The remaining 21 IDs (handshake errors, channel matrix,
   # RPC corner cases, EntityProperty buffering, tick-buffered
-  # behavior) are tagged here as `@Deferred @PolicyOnly` for parity.
-  # Convert to real Scenarios by deepening the channel-matrix and
-  # request-response coverage in subsequent passes.
+  # behavior) are tagged `@Deferred` (Category B) — testable behaviors
+  # waiting for a real Scenario body. Convert in Q5.
 
   @Rule(04)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(01)
     Scenario: [messaging-01] User errors return Result
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(02)
     Scenario: [messaging-02] Remote/untrusted input does not panic
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(03)
     Scenario: [messaging-03] Wire-format errors surface cleanly
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(04)
     Scenario: [messaging-07] OrderedReliable preserves order under reordering
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(05)
     Scenario: [messaging-08] OrderedReliable preserves order under jitter
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(06)
     Scenario: [messaging-09] UnorderedReliable delivers all but in any order
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(07)
     Scenario: [messaging-10] UnorderedUnreliable best-effort semantics
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(08)
     Scenario: [messaging-11] SequencedUnreliable discards late updates
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(09)
     Scenario: [messaging-12] SequencedReliable exposes only latest
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(10)
     Scenario: [messaging-13] TickBuffered groups messages by tick
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(11)
     Scenario: [messaging-14] TickBuffered discards too-old ticks
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(12)
     Scenario: [messaging-15] TickBuffered discards too-far-ahead ticks
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(13)
     Scenario: [messaging-16] Reliable channel allows fragmentation
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(14)
     Scenario: [messaging-17] Unreliable fragmentation drops oversize
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(15)
     Scenario: [messaging-18] EntityProperty message buffering
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(16)
     Scenario: [messaging-19] EntityProperty message TTL
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(17)
     Scenario: [messaging-20] EntityProperty buffer caps with FIFO eviction
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(18)
     Scenario: [messaging-23] Request-response timeout semantics
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(19)
     Scenario: [messaging-24] Request-response IDs are unique
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(20)
     Scenario: [messaging-25] Disconnect cancels pending requests
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(21)
     Scenario: [messaging-26] Concurrent requests stay isolated per client
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(22)
     Scenario: [messaging-27] Reliable point-to-point request-response
       Then the system intentionally fails

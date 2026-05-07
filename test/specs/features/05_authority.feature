@@ -377,32 +377,32 @@ Feature: Entity Ownership, Publication, Delegation, Authority
   @Rule(05)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(01)
     Scenario: [entity-ownership-05] Server-owned entities cannot transfer ownership
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(02)
     Scenario: [entity-ownership-06] Client-owned entity ownership migrates on disconnect
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(03)
     Scenario: [entity-ownership-07] Ownership is queryable from both sides
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(04)
     Scenario: [entity-ownership-09] Despawn from owner removes from all clients
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(05)
     Scenario: [entity-ownership-10] Server cannot directly modify client-owned entity
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(06)
     Scenario: [entity-ownership-11] Client-owned entity may migrate to server-owned delegated
       Then the system intentionally fails
@@ -415,139 +415,139 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And client A spawns a client-owned entity with Private replication config
       Then the entity is out-of-scope for client B
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(08)
     Scenario: [entity-ownership-13] Owner change events fire correctly
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(09)
     Scenario: [entity-ownership-14] Concurrent ownership operations resolve deterministically
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(10)
     Scenario: [entity-publication-06] Publication state changes are observable client-side
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(11)
     Scenario: [entity-publication-07] Publish/Unpublish events fire correctly
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(12)
     Scenario: [entity-publication-08] Delegation migration ends client-owned publication semantics
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(13)
     Scenario: [entity-publication-09] Multi-publication transitions are deterministic
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(14)
     Scenario: [entity-publication-10] Publication after spawn is allowed
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(15)
     Scenario: [entity-publication-11] Republishing after unpublish creates new lifetime
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(16)
     Scenario: [entity-delegation-01] Delegation enables authority operations
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(17)
     Scenario: [entity-delegation-02] Delegation requires public publication
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(18)
     Scenario: [entity-delegation-03] Delegation defaults to Available status
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(19)
     Scenario: [entity-delegation-04] Disable delegation requires no holder
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(20)
     Scenario: [entity-delegation-05] Disable delegation clears all authority status
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(21)
     Scenario: [entity-delegation-07] Denied requests do not auto-promote on holder release
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(22)
     Scenario: [entity-delegation-08] Migration assigns initial authority to in-scope owner
       Then the system intentionally fails
 
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(24)
     Scenario: [entity-delegation-10] Holder can mutate, others cannot
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(25)
     Scenario: [entity-delegation-12] Holder release returns to Available for all
       Then the system intentionally fails
 
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(28)
     Scenario: [entity-authority-02] Holder writes succeed
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(29)
     Scenario: [entity-authority-03] Non-holder writes fail
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(30)
     Scenario: [entity-authority-04] Available status allows next request to win
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(31)
     Scenario: [entity-authority-05] Requested status blocks new requests
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(32)
     Scenario: [entity-authority-08] Authority denied on out-of-scope request
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(33)
     Scenario: [entity-authority-11] Server priority overrides current holder
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(34)
     Scenario: [entity-authority-12] Server give requires scope
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(35)
     Scenario: [entity-authority-13] Disable delegation clears authority
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(36)
     Scenario: [entity-authority-14] Authority is preserved across re-entry
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
+    @Deferred
     @Scenario(37)
     Scenario: [entity-authority-15] Duplicate authority signals are idempotent
       Then the system intentionally fails
