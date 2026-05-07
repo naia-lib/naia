@@ -249,6 +249,9 @@ The SDD migration mission landed in 6 phases over a single push. End state:
 - **`protocol_mismatch_is_deployment_error_not_panic`** (`00_common.rs`, `[common-02a]`) — closed 2026-05-06.
   No product bug. Protocol-id mismatch produces `ProtocolMismatch` rejection correctly. Test had been `#[ignore]`-ed (no infra to inject a mismatched protocol). The two Rule(03) Scenarios in `00_foundations.feature` (both [common-02a]) already cover this with real `ProtocolId::new(A/B)` step bindings and both pass. Rust test deleted. `00_common.rs` now has zero `#[ignore]` tests; remaining tests are live policy-stamp coverage for common-03 through common-14.
 
+- **`[entity-scopes-09]` include bypasses room gate** — closed 2026-05-06.
+  Product bug fixed. `scope.include()` was allowed to bypass the room gate for server-owned roomless entities. Fix applied to two evaluation sites in `server/src/server/world_server.rs`: `apply_scope_for_user` (spawn/despawn decisions) and `user_scope_has_entity` (scope-membership queries). Both now enforce: if explicit `Some(true)` is set for a server-owned non-resource entity with no room overlap, the entity is treated as out-of-scope. Resources and client-owned entities are exempt. `@Deferred` tag removed from `04_visibility.feature` Rule(04):Scenario(02). 171/171 BDD green.
+
 ---
 
 ## Sidequest — Debug-infra upgrade (2026-05-06, in-flight)
@@ -324,14 +327,11 @@ Run `cargo run -p naia_npa --release -- run --plan test/specs/resolved_plan.json
 
 ### Deferred (no unpark plan yet)
 
-- **`[entity-ownership-11]` stub label mismatch** — deferred 2026-05-06.
-  The feature file stub in `05_authority.feature` Rule(05):Scenario(06) says "Public client-owned entity replicates to other clients" but the spec contract [entity-ownership-11] (`08_entity_ownership.spec.md`) is "Client-owned entities may migrate to server-owned delegated" (delegation migration). The stub description is wrong. Attempted upgrade failed: Public replication does NOT automatically put the entity in non-owner clients' scope — server must explicitly include it. The stub is left as `@Deferred @PolicyOnly`. Unpark: (a) fix the stub description to match the spec, (b) add step bindings for delegation migration (enable-delegation on client-owned entity transfers ownership to server, and cannot revert).
+- **`[entity-ownership-11]` stub upgrade** — partial 2026-05-06.
+  Stub description corrected from "Public client-owned entity replicates to other clients" to "Client-owned entity may migrate to server-owned delegated" — now matches the spec (`08_entity_ownership.spec.md`). Stub remains `@Deferred @PolicyOnly`. Unpark: add step bindings for delegation migration (enable-delegation on client-owned entity transfers ownership to server, and cannot revert).
 
 - **`[entity-ownership-12]` partial coverage note** — 2026-05-06.
   The scenario added for [entity-ownership-12] tests "Private entity is never in scope for non-owners" which more precisely aligns with [entity-publication-02] from `09_entity_publication.spec.md`. The spec for [entity-ownership-12] is "Owning client always in-scope for its entities" (owner never receives despawn for its own entity; non-owner loses entity when out of scope). The added scenario provides partial coverage (half of the t2 obligation). Full coverage would also assert: given a scope-exclude for non-owner, entity despawns on non-owner but not on owner.
-
-- **`[entity-scopes-09]` include bypasses room gate** — deferred 2026-05-06.
-  Naia currently allows `scope.include()` to bypass the room gate for roomless entities. The contract says include MUST NOT bypass the room gate. This is a product bug; fixing it would change the server's scope-computation logic and may have correctness implications for existing room-based scoping. Unpark when product is ready to enforce the room gate in `user_scope_mut().include()`.
 
 - **Connection lifecycle placeholders** (`01_connection_lifecycle.rs`) — deferred 2026-05-06.
   Four `#[ignore]` tests remain: capacity reject, heartbeat timeout, token reuse, server-generated token. All require infrastructure not yet in the harness (configurable capacity limits, wall-clock time manipulation, token API on client). Unpark when harness supports these primitives.

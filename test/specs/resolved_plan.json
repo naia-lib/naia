@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "4d1eb5568606d76fa8851e666b50c48df28ee391274621343b5e53e03d09edd5",
+    "feature_fingerprint_hash": "e5db7117c80f857eeaf33289b84fa0e4ef60563ad6b2d6e4a6576e83e0e07cc6",
     "step_registry_hash": "750057f092fd4a94b9a11e206ba20709a875f0d931cc06180cb38c63592ad79e",
-    "resolved_plan_hash": "ba464f70e8d2b3980ed72b2d0a382f950aefaaa97b11496b225bee2a9bf2f066"
+    "resolved_plan_hash": "b9cc6e42195bd4d8a941ecca171c498b8d88ef5c8e050d379ad2ee9389d42037"
   },
   "scenarios": [
     {

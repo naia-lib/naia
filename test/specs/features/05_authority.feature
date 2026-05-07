@@ -404,7 +404,7 @@ Feature: Entity Ownership, Publication, Delegation, Authority
 
     @Deferred @PolicyOnly
     @Scenario(06)
-    Scenario: [entity-ownership-11] Public client-owned entity replicates to other clients
+    Scenario: [entity-ownership-11] Client-owned entity may migrate to server-owned delegated
       Then the system intentionally fails
 
     @Scenario(07)
