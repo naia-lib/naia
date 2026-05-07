@@ -56,6 +56,22 @@ impl TickBufferReceiver {
         Ok(())
     }
 
+    /// Directly inject a message into the specified channel's tick buffer (test_utils only)
+    #[cfg(feature = "test_utils")]
+    pub fn inject_message(
+        &mut self,
+        channel_kind: &ChannelKind,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: MessageContainer,
+    ) -> bool {
+        if let Some(channel) = self.channel_receivers.get_mut(channel_kind) {
+            channel.inject_message(host_tick, message_tick, message)
+        } else {
+            false
+        }
+    }
+
     /// Retrieved stored data from the tick buffer for the given [`Tick`]
     pub fn receive_messages(
         &mut self,

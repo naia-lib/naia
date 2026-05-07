@@ -875,6 +875,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .set_global_entity_counter_for_test(value);
     }
 
+    #[cfg(feature = "test_utils")]
+    pub fn inject_tick_buffer_message<C: Channel, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: &M,
+    ) -> bool {
+        let channel_kind = ChannelKind::of::<C>();
+        let message_box = M::clone_box(message);
+        let container = MessageContainer::new(message_box);
+        let Some(user) = self.users.get(user_key) else {
+            warn!("inject_tick_buffer_message: user {:?} does not exist", user_key);
+            return false;
+        };
+        let address = user.address();
+        let Some(connection) = self.user_connections.get_mut(&address) else {
+            warn!("inject_tick_buffer_message: no connection for user {:?}", user_key);
+            return false;
+        };
+        connection.inject_tick_buffer_message(&channel_kind, host_tick, message_tick, container)
+    }
+
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
         let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
             return false;
@@ -3619,18 +3642,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     fn handle_disconnects(&mut self) {
-        // disconnects
         if self.timeout_timer.ringing() {
             self.timeout_timer.reset();
 
+            // Only queue timeout-based disconnects here; manual disconnects are already
+            // queued by user_queue_disconnect() when they are initiated.
+            let mut user_disconnects: Vec<UserKey> = Vec::new();
             for (_, connection) in self.user_connections.iter() {
-                // Skip manual disconnects - they're already queued by user_queue_disconnect
-                if connection.manual_disconnect {
-                    continue;
+                if connection.should_drop() && !connection.manual_disconnect {
+                    user_disconnects.push(connection.user_key);
                 }
-                // TODO: Add timeout detection logic here for non-manual disconnects
-                // For now, handle_disconnects only processes manual disconnects which are
-                // already queued, so we skip them to avoid double-processing
+            }
+            for user_key in user_disconnects {
+                self.outstanding_disconnects.push(user_key);
             }
         }
     }

@@ -26,6 +26,19 @@ impl TickBufferReceiverChannel {
         self.incoming_messages.collect(host_tick)
     }
 
+    /// Directly insert a message into the tick buffer (test_utils only)
+    #[cfg(feature = "test_utils")]
+    pub fn inject_message(
+        &mut self,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: MessageContainer,
+    ) -> bool {
+        let message_capacity = self.settings.message_capacity as u16;
+        self.incoming_messages
+            .insert(host_tick, message_tick, 0, message, message_capacity)
+    }
+
     /// Given incoming packet data, read transmitted Messages and store
     /// them in a buffer to be returned to the application
     pub fn read_messages(

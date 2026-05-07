@@ -9,10 +9,12 @@ use crate::{world::entity::in_scope_entities::InScopeEntities, KeyGenerator, Rem
 
 pub type WaitlistHandle = u16;
 
+const PER_ENTITY_WAITLIST_CAP: usize = 128;
+
 pub struct RemoteEntityWaitlist {
     handle_store: KeyGenerator<WaitlistHandle>,
     handle_to_required_entities: HashMap<WaitlistHandle, HashSet<RemoteEntity>>,
-    waiting_entity_to_handles: HashMap<RemoteEntity, HashSet<WaitlistHandle>>,
+    waiting_entity_to_handles: HashMap<RemoteEntity, VecDeque<WaitlistHandle>>,
     ready_handles: HashSet<WaitlistHandle>,
     removed_handles: HashSet<WaitlistHandle>,
     handle_ttls: VecDeque<(Instant, WaitlistHandle)>,
@@ -62,14 +64,26 @@ impl RemoteEntityWaitlist {
             return new_handle;
         }
 
+        // Enforce per-entity FIFO cap: evict oldest handles before inserting.
+        let mut evictions = HashSet::new();
         for entity in entities {
-            if !self.waiting_entity_to_handles.contains_key(entity) {
-                self.waiting_entity_to_handles
-                    .insert(*entity, HashSet::new());
+            if let Some(queue) = self.waiting_entity_to_handles.get_mut(entity) {
+                if queue.len() >= PER_ENTITY_WAITLIST_CAP {
+                    if let Some(evicted) = queue.pop_front() {
+                        evictions.insert(evicted);
+                    }
+                }
             }
-            if let Some(message_set) = self.waiting_entity_to_handles.get_mut(entity) {
-                message_set.insert(new_handle);
-            }
+        }
+        for evicted in evictions {
+            self.removed_handles.insert(evicted);
+            self.remove_waiting_handle(&evicted);
+        }
+        for entity in entities {
+            self.waiting_entity_to_handles
+                .entry(*entity)
+                .or_insert_with(VecDeque::new)
+                .push_back(new_handle);
         }
 
         self.handle_ttls.push_back((Instant::now(), new_handle));
@@ -150,9 +164,9 @@ impl RemoteEntityWaitlist {
         // for all associated entities, remove from waitlist
         for entity in entities {
             let mut remove = false;
-            if let Some(message_set) = self.waiting_entity_to_handles.get_mut(&entity) {
-                message_set.remove(handle);
-                if message_set.is_empty() {
+            if let Some(queue) = self.waiting_entity_to_handles.get_mut(&entity) {
+                queue.retain(|h| h != handle);
+                if queue.is_empty() {
                     remove = true;
                 }
             }

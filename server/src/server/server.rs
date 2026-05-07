@@ -763,4 +763,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     pub fn total_dirty_update_count(&self) -> usize {
         self.world_server.total_dirty_update_count()
     }
+
+    pub fn inject_tick_buffer_message<C: Channel, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: &M,
+    ) -> bool {
+        self.world_server
+            .inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
+    }
 }

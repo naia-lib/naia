@@ -1136,8 +1136,10 @@ impl Scenario {
         client_world: &mut TestWorld,
         server_world: &mut TestWorld,
     ) {
-        // Client update
-        if client.connection_status().is_connected() {
+        // Client update — process_all_packets must also run during Disconnecting state,
+        // because that is where disconnect_with_events() fires the ClientDisconnectEvent.
+        let status = client.connection_status();
+        if status.is_connected() || status.is_disconnecting() {
             client.receive_all_packets();
             client.process_all_packets(client_world.proxy_mut(), now);
             client.send_all_packets(client_world.proxy_mut());

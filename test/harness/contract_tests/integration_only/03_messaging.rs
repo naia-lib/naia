@@ -383,15 +383,9 @@ fn messaging_19_entity_property_ttl() {
 /// EntityProperty message buffering enforces capacity caps
 /// Contract: [messaging-20]
 ///
-/// DEFERRED: RemoteEntityWaitlist has no per-entity message count cap (only a 60-second TTL).
-/// The 128-message FIFO eviction behaviour this test asserts does not exist in the product.
-/// Additionally the test premise is incorrect: the entity enters the room during spawn and the
-/// client is in the same room, so E is immediately in scope and messages would never be buffered.
-/// Unparking requires: (a) implement per-entity FIFO cap in RemoteEntityWaitlist, (b) fix the
-/// scenario setup so the entity starts out-of-scope before the flood, (c) write a namako Scenario
-/// for [messaging-20], then delete this test.
+/// Given more than 128 EntityProperty messages queued for an out-of-scope entity;
+/// when the entity enters scope; then exactly 128 messages are delivered (oldest evicted, FIFO).
 #[test]
-#[ignore]
 fn messaging_20_entity_property_buffer_caps() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
@@ -412,57 +406,66 @@ fn messaging_20_entity_property_buffer_caps() {
         test_protocol,
     );
 
-    // Spawn entity and send messages (but DON'T include in scope yet)
+    // Spawn entity and send messages (but DON'T include in scope yet).
+    // Use UnorderedChannel: ordered channels block delivery when early messages are evicted.
     const MESSAGES_TO_SEND: usize = 130;
     const PER_ENTITY_CAP: usize = 128;
-    
+
     let entity = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let entity = server.spawn(|mut e| {
                 e.insert_component(Position::new(7.0, 8.0));
                 e.enter_room(&room_key);
             }).0;
-            
-            // Send MORE than 128 EntityCommandMessages (will be buffered since entity not in scope)
+
+            // Send MORE than 128 EntityCommandMessages (buffered since entity not yet in client scope)
             for i in 0..MESSAGES_TO_SEND {
                 let mut cmd = EntityCommandMessage::new(&format!("cmd_{}", i));
                 server.set_entity_property(&mut cmd.target, &entity);
-                server.send_message::<ReliableChannel, _>(&client_a_key, &cmd);
+                server.send_message::<UnorderedChannel, _>(&client_a_key, &cmd);
             }
-            
+
             entity
         })
     });
 
-    // Process network (messages buffered)
+    // Process network (messages buffered in client's RemoteEntityWaitlist)
     scenario.expect(|_ctx| Some(()));
 
-    // Now include entity in scope (buffered messages delivered up to cap)
+    // Include entity in scope — entity spawn triggers waitlist release
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.user_scope_mut(&client_a_key).unwrap().include(&entity);
         })
     });
 
-    // Wait for replication and verify buffer cap enforced (with enough ticks)
+    // Accumulate received messages across ticks — waitlist release and message delivery
+    // may span two ticks (entity spawn in tick T, waitlist drain in tick T+1).
+    let mut all_received: Vec<String> = Vec::new();
+
     scenario.until(500.ticks()).spec_expect("messaging-20.t1: EntityProperty buffer enforces per-entity cap with FIFO eviction", |ctx| {
         let replicated = ctx.client(client_a_key, |c| c.has_entity(&entity));
         if replicated {
-            let messages_received: Vec<String> = ctx.client(client_a_key, |client| {
-                client.read_message::<ReliableChannel, EntityCommandMessage>()
+            let batch: Vec<String> = ctx.client(client_a_key, |client| {
+                client.read_message::<UnorderedChannel, EntityCommandMessage>()
                     .map(|msg| msg.command.clone())
                     .collect()
             });
-            
-            let cap_enforced = messages_received.len() == PER_ENTITY_CAP;
-            // FIFO eviction: first 2 messages (cmd_0, cmd_1) evicted, should have cmd_2..cmd_129
-            let expected_first = format!("cmd_{}", MESSAGES_TO_SEND - PER_ENTITY_CAP);
-            let expected_last = format!("cmd_{}", MESSAGES_TO_SEND - 1);
-            let fifo_eviction = messages_received.len() >= 2 &&
-                messages_received.first() == Some(&expected_first) &&
-                messages_received.last() == Some(&expected_last);
-            
-            (replicated && cap_enforced && fifo_eviction).then_some(())
+            all_received.extend(batch);
+
+            if all_received.len() == PER_ENTITY_CAP {
+                // FIFO eviction: oldest 2 (cmd_0, cmd_1) dropped; newest 128 (cmd_2..cmd_129) kept
+                let evicted_cmd_0 = !all_received.contains(&"cmd_0".to_string());
+                let evicted_cmd_1 = !all_received.contains(&"cmd_1".to_string());
+                let has_cmd_2 = all_received.contains(&"cmd_2".to_string());
+                let has_cmd_129 = all_received.contains(&"cmd_129".to_string());
+                let fifo_ok = evicted_cmd_0 && evicted_cmd_1 && has_cmd_2 && has_cmd_129;
+                fifo_ok.then_some(())
+            } else if all_received.len() > PER_ENTITY_CAP {
+                panic!("messaging-20.t1: received {} messages, expected cap of {}", all_received.len(), PER_ENTITY_CAP);
+            } else {
+                None
+            }
         } else {
             None
         }
@@ -2126,15 +2129,11 @@ fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
 /// Tick-buffered channel discards messages that are too far in the future
 /// Contract: [messaging-15-a]
 ///
-/// DEFERRED: the public API exposes no way to send a message "for a future tick" beyond the
-/// discard window from within the harness. The test exercises internal discard logic that requires
-/// a tick-injection primitive not yet available. Unpark when the harness gains that capability.
-///
-/// Given tick-buffered channel with MAX_FUTURE_TICKS bound; when client sends messages at exactly current_tick + MAX_FUTURE_TICKS (boundary),
-/// at current_tick + MAX_FUTURE_TICKS + 1 (beyond boundary), and much further ahead;
-/// then boundary message is accepted, beyond-boundary and far-ahead messages are dropped silently.
+/// Given tick-buffered channel with MAX_FUTURE_TICKS bound; when messages are injected at exactly
+/// current_tick + MAX_FUTURE_TICKS (boundary), at current_tick + MAX_FUTURE_TICKS + 1 (beyond
+/// boundary), and much further ahead; then boundary message is accepted, beyond-boundary and
+/// far-ahead messages are dropped silently.
 #[test]
-#[ignore]
 fn tick_buffered_channel_discards_too_far_ahead_ticks() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
@@ -2152,51 +2151,42 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
         test_protocol.clone(),
     );
 
-    // Per spec: MAX_FUTURE_TICKS = tick_buffer_capacity - 1
-    // Assuming default tick_buffer_capacity = 64, thus MAX_FUTURE_TICKS = 63
+    // default capacity = 64, so MAX_FUTURE_TICKS = 63 (capacity - 1)
     const MAX_FUTURE_TICKS: u16 = 63;
 
-    // Get current server tick and calculate test ticks
-    let (current_tick, tick_at_max, tick_beyond_max, tick_far_ahead) = scenario.mutate(|ctx| {
+    let (tick_t0, tick_at_max, tick_beyond_max, tick_far_ahead) = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let current = server.current_tick();
-            let at_max = current.wrapping_add(MAX_FUTURE_TICKS);
-            let beyond_max = current.wrapping_add(MAX_FUTURE_TICKS + 1);
-            let far_ahead = current.wrapping_add(MAX_FUTURE_TICKS + 100);
-            (current, at_max, beyond_max, far_ahead)
+            let t0 = server.current_tick();
+            (
+                t0,
+                t0.wrapping_add(MAX_FUTURE_TICKS),
+                t0.wrapping_add(MAX_FUTURE_TICKS + 1),
+                t0.wrapping_add(MAX_FUTURE_TICKS + 100),
+            )
         })
     });
 
-    // Client sends tick-buffered messages at various future ticks
-    scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client| {
-            // t2: Message at MAX_FUTURE_TICKS boundary - should be accepted
-            client.send_tick_buffer_message::<TickBufferedChannel, _>(
-                &tick_at_max,
-                &TestMessage::new(100),
+    // Inject messages directly at the server side — bypass client sender gate
+    let (accepted, rejected_beyond, rejected_far) = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let a = server.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
+                &client_a_key, &tick_t0, &tick_at_max, &TestMessage::new(100),
             );
-            // t3: Message at MAX_FUTURE_TICKS + 1 - should be dropped
-            client.send_tick_buffer_message::<TickBufferedChannel, _>(
-                &tick_beyond_max,
-                &TestMessage::new(200),
+            let b = server.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
+                &client_a_key, &tick_t0, &tick_beyond_max, &TestMessage::new(200),
             );
-            // t1: Message way too far ahead - should be dropped silently
-            client.send_tick_buffer_message::<TickBufferedChannel, _>(
-                &tick_far_ahead,
-                &TestMessage::new(300),
+            let c = server.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
+                &client_a_key, &tick_t0, &tick_far_ahead, &TestMessage::new(300),
             );
-        });
+            (a, b, c)
+        })
     });
 
-    // Wait for server to advance well past tick_at_max
-    scenario
-        .until(200.ticks())
-        .expect_msg("messaging-15-a.pre: server advanced past all test ticks", |ctx| {
-            let now = ctx.server(|s| s.current_tick());
-            naia_shared::sequence_greater_than(now, tick_at_max.wrapping_add(10)).then_some(())
-        });
+    assert!(accepted, "messaging-15-a.t2: boundary message should be accepted by insert()");
+    assert!(!rejected_beyond, "messaging-15-a.t3: beyond-boundary message should be rejected by insert()");
+    assert!(!rejected_far, "messaging-15-a.t1: far-ahead message should be rejected by insert()");
 
-    // Verify t2: Message at boundary was accepted
+    // Boundary tick: expect 1 message delivered
     let at_max_messages = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let mut tick_buffer = server.receive_tick_buffer_messages(&tick_at_max);
@@ -2204,49 +2194,30 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
         })
     });
 
-    assert_eq!(
-        at_max_messages.len(),
-        1,
-        "messaging-15-a.t2: Message at current_tick + MAX_FUTURE_TICKS should be accepted"
-    );
-    assert_eq!(
-        at_max_messages[0].1.value, 100,
-        "messaging-15-a.t2: Accepted message should have correct value"
-    );
+    assert_eq!(at_max_messages.len(), 1, "messaging-15-a.t2: boundary message delivered");
+    assert_eq!(at_max_messages[0].1.value, 100, "messaging-15-a.t2: correct message value");
 
-    scenario.expect_msg("messaging-15-a.t2: boundary message accepted", |_ctx| Some(()));
-
-    // Verify t3: Message beyond boundary was dropped
-    let beyond_max_messages = scenario.mutate(|ctx| {
+    // Beyond-boundary tick: expect 0 messages
+    let beyond_messages = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let mut tick_buffer = server.receive_tick_buffer_messages(&tick_beyond_max);
             tick_buffer.read::<TickBufferedChannel, TestMessage>()
         })
     });
 
-    assert_eq!(
-        beyond_max_messages.len(),
-        0,
-        "messaging-15-a.t3: Message at current_tick + MAX_FUTURE_TICKS + 1 should be dropped"
-    );
+    assert_eq!(beyond_messages.len(), 0, "messaging-15-a.t3: beyond-boundary message dropped");
 
-    scenario.expect_msg("messaging-15-a.t3: beyond-boundary message dropped", |_ctx| Some(()));
-
-    // Verify t1: Far-ahead message was dropped silently (no panic, no delivery)
-    let far_ahead_messages = scenario.mutate(|ctx| {
+    // Far-ahead tick: expect 0 messages
+    let far_messages = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let mut tick_buffer = server.receive_tick_buffer_messages(&tick_far_ahead);
             tick_buffer.read::<TickBufferedChannel, TestMessage>()
         })
     });
 
-    assert_eq!(
-        far_ahead_messages.len(),
-        0,
-        "messaging-15-a.t1: Too-far-ahead message should be dropped silently"
-    );
+    assert_eq!(far_messages.len(), 0, "messaging-15-a.t1: far-ahead message dropped silently");
 
-    scenario.spec_expect("messaging-15-a.t1: too-far-ahead messages dropped silently without panic", |_ctx| Some(()));
+    scenario.spec_expect("messaging-15-a: tick-buffer discard boundaries enforced without panic", |_ctx| Some(()));
 }
 
 // ============================================================================

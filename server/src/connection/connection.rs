@@ -7,7 +7,7 @@ use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
     GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook,
-    PacketType, Serde, SerdeErr, StandardHeader, Tick, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    PacketType, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -65,6 +65,7 @@ pub struct Connection {
     pub ping_manager: PingManager,
     tick_buffer: TickBufferReceiver,
     pub manual_disconnect: bool,
+    timeout_timer: Timer,
 }
 
 impl Connection {
@@ -90,7 +91,14 @@ impl Connection {
             ping_manager: PingManager::new(ping_config),
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             manual_disconnect: false,
+            timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
         }
+    }
+
+    /// Returns true when no packet has been received for longer than the
+    /// configured `disconnection_timeout_duration`.
+    pub fn should_drop(&self) -> bool {
+        self.timeout_timer.ringing()
     }
 
     // Incoming Data
@@ -98,11 +106,24 @@ impl Connection {
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         // Note: identity print is now in world_server::read_data_packet for consistency
         self.base.process_incoming_header(header, &mut []);
+        self.timeout_timer.reset();
     }
 
     #[cfg(feature = "test_utils")]
     pub fn diff_handler_receiver_count(&self) -> usize {
         self.base.world_manager.diff_handler_receiver_count()
+    }
+
+    #[cfg(feature = "test_utils")]
+    pub fn inject_tick_buffer_message(
+        &mut self,
+        channel_kind: &naia_shared::ChannelKind,
+        host_tick: &naia_shared::Tick,
+        message_tick: &naia_shared::Tick,
+        message: naia_shared::MessageContainer,
+    ) -> bool {
+        self.tick_buffer
+            .inject_message(channel_kind, host_tick, message_tick, message)
     }
 
     /// Read packet data received from a client, storing necessary data in an internal buffer

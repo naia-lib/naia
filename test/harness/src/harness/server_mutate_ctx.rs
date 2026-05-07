@@ -493,6 +493,27 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         server.receive_tick_buffer_messages(tick)
     }
 
+    /// Inject a message directly into the server's tick buffer for the given client (test_utils only).
+    /// Returns false if the message_tick is outside the accepted window (too far ahead).
+    pub fn inject_tick_buffer_message<C: Channel, M: Message>(
+        &mut self,
+        client_key: &ClientKey,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: &M,
+    ) -> bool {
+        let scenario = self.ctx.scenario_mut();
+        let Some(user_key) = scenario.client_to_user_key(client_key) else {
+            warn!(
+                "inject_tick_buffer_message: ClientKey {:?} has no associated UserKey",
+                client_key
+            );
+            return false;
+        };
+        let (server, _, _, _) = scenario.split_for_server_mut();
+        server.inject_tick_buffer_message::<C, M>(&user_key, host_tick, message_tick, message)
+    }
+
     /// Generate a new identity token
     ///
     /// This is a thin wrapper around Naia's public API for generating identity tokens.
