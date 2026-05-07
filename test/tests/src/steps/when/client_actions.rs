@@ -38,23 +38,10 @@ fn when_client_a_requests_authority_non_delegated(ctx: &mut TestWorldMut) {
 /// for the matching Then assertion. Covers [entity-ownership-02].
 #[when("the client attempts to write to the server-owned entity")]
 fn when_client_attempts_write_to_server_owned_entity(ctx: &mut TestWorldMut) {
+    let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("No entity has been created");
-
-    let original_value = scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            if let Some(entity) = server.entity(&entity_key) {
-                if let Some(pos) = entity.component::<Position>() {
-                    return (*pos.x, *pos.y);
-                }
-            }
-            (0.0, 0.0)
-        })
-    });
-
+    let original = read_server_position(scenario, entity_key);
     scenario.mutate(|mctx| {
         mctx.client(client_key, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
@@ -65,25 +52,24 @@ fn when_client_attempts_write_to_server_owned_entity(ctx: &mut TestWorldMut) {
             }
         });
     });
+    for _ in 0..20 { scenario.mutate(|_| {}); }
+    let final_value = read_server_position(scenario, entity_key);
+    let rejected = (original.0 - final_value.0).abs() < f32::EPSILON
+        && (original.1 - final_value.1).abs() < f32::EPSILON;
+    scenario.bdd_store(WRITE_REJECTED_KEY, rejected);
+}
 
-    for _ in 0..20 {
-        scenario.mutate(|_| {});
-    }
-
-    let final_value = scenario.mutate(|mctx| {
+/// Read Position (x,y) from the server view of `entity_key`, or
+/// `(0.0, 0.0)` if absent. Used by write-rejection helpers.
+fn read_server_position(scenario: &mut crate::Scenario, entity_key: EntityKey) -> (f32, f32) {
+    scenario.mutate(|mctx| {
         mctx.server(|server| {
-            if let Some(entity) = server.entity(&entity_key) {
-                if let Some(pos) = entity.component::<Position>() {
-                    return (*pos.x, *pos.y);
-                }
-            }
-            (0.0, 0.0)
+            server
+                .entity(&entity_key)
+                .and_then(|e| e.component::<Position>().map(|p| (*p.x, *p.y)))
+                .unwrap_or((0.0, 0.0))
         })
-    });
-
-    let write_rejected = (original_value.0 - final_value.0).abs() < f32::EPSILON
-        && (original_value.1 - final_value.1).abs() < f32::EPSILON;
-    scenario.bdd_store(WRITE_REJECTED_KEY, write_rejected);
+    })
 }
 
 /// When the client updates the replicated component.
@@ -128,32 +114,22 @@ fn when_client_updates_replicated_component(ctx: &mut TestWorldMut) {
 fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
     use naia_test_harness::test_protocol::{ServerToClientChannel, TestMessage};
     use std::panic::{catch_unwind, AssertUnwindSafe};
+    use crate::steps::world_helpers::panic_payload_to_string;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| {
-            ctx.client(client_key, |client| {
+        scenario.mutate(|c| {
+            c.client(client_key, |client| {
                 let _ = client.send_message::<ServerToClientChannel, _>(&TestMessage::new(42));
             });
         });
     }));
     match result {
-        Ok(()) => {
-            scenario.record_err(
-                "Channel direction violation: client cannot send on server-to-client channel",
-            );
-        }
-        Err(panic_payload) => {
-            let msg = if let Some(s) = panic_payload.downcast_ref::<&str>() {
-                s.to_string()
-            } else if let Some(s) = panic_payload.downcast_ref::<String>() {
-                s.clone()
-            } else {
-                "Unknown panic".to_string()
-            };
-            scenario.record_panic(msg);
-        }
+        Ok(()) => scenario.record_err(
+            "Channel direction violation: client cannot send on server-to-client channel",
+        ),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
     }
 }
 
@@ -300,31 +276,19 @@ fn when_client_invalid_api_operation(ctx: &mut TestWorldMut) {
 fn when_alice_requests_authority(ctx: &mut TestWorldMut) {
     use naia_shared::EntityAuthStatus;
     use naia_test_harness::TestPlayerSelection;
-    let client_key: ClientKey = ctx
-        .scenario_mut()
+    let client_key: ClientKey = ctx.scenario_mut()
         .bdd_get(&client_key_storage("alice"))
         .unwrap_or_else(|| ctx.scenario_mut().last_client());
     let scenario = ctx.scenario_mut();
-    scenario.mutate(|c| {
-        c.server(|server| {
-            assert!(server.configure_resource::<TestPlayerSelection>(
-                naia_server::ReplicationConfig::delegated()
-            ));
-        });
-    });
-    scenario.expect(|c| {
-        c.client(client_key, |cl| {
-            (cl.resource_authority_status::<TestPlayerSelection>()
-                == Some(EntityAuthStatus::Available))
-            .then_some(())
-        })
-    });
-    scenario.mutate(|c| {
-        c.client(client_key, |cl| {
-            let res = cl.request_resource_authority::<TestPlayerSelection>();
-            assert!(res.is_ok(), "request_resource_authority: {:?}", res);
-        });
-    });
+    scenario.mutate(|c| c.server(|s| {
+        assert!(s.configure_resource::<TestPlayerSelection>(naia_server::ReplicationConfig::delegated()));
+    }));
+    scenario.expect(|c| c.client(client_key, |cl|
+        (cl.resource_authority_status::<TestPlayerSelection>() == Some(EntityAuthStatus::Available))
+            .then_some(())));
+    scenario.mutate(|c| c.client(client_key, |cl| {
+        assert!(cl.request_resource_authority::<TestPlayerSelection>().is_ok());
+    }));
 }
 
 // ──────────────────────────────────────────────────────────────────────

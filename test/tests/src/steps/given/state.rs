@@ -85,41 +85,20 @@ fn given_entity_without_any_replicated_components(ctx: &mut TestWorldMut) {
 /// authority is undefined for non-delegated entities.
 #[given("the server spawns a non-delegated entity in-scope for client A")]
 fn given_server_spawns_non_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorldMut) {
-    use naia_server::ReplicationConfig as ServerReplicationConfig;
+    use naia_server::ReplicationConfig as SRC;
     use naia_test_harness::{ClientKey, Position};
+    use crate::steps::world_helpers::named_client_mut;
+    let client_a: ClientKey = named_client_mut(ctx, "A");
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
     let room_key = scenario.last_room();
-
-    let (entity_key, ()) = scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity
-                    .insert_component(Position::new(0.0, 0.0))
-                    .configure_replication(ServerReplicationConfig::public())
-                    .enter_room(&room_key);
-            })
-        })
-    });
-    scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_a) {
-                scope.include(&entity_key);
-            }
-        });
-    });
-    scenario.spec_expect(
-        "entity-authority-01: non-delegated entity replicated to client A",
-        |ectx| {
-            if ectx.client(client_a, |c| c.has_entity(&entity_key)) {
-                Some(())
-            } else {
-                None
-            }
-        },
-    );
+    let (entity_key, ()) = scenario.mutate(|c| c.server(|s|
+        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0))
+            .configure_replication(SRC::public()).enter_room(&room_key); })));
+    scenario.mutate(|c| c.server(|s| {
+        if let Some(mut scope) = s.user_scope_mut(&client_a) { scope.include(&entity_key); }
+    }));
+    scenario.spec_expect("entity-authority-01: non-delegated entity replicated", |ectx|
+        ectx.client(client_a, |c| c.has_entity(&entity_key)).then_some(()));
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     scenario.allow_flexible_next();
 }
@@ -131,29 +110,9 @@ fn given_server_spawns_non_delegated_entity_in_scope_for_client_a(ctx: &mut Test
 /// precondition for tests asserting the spawn-event timing.
 #[given("a server-owned entity enters scope for client A")]
 fn given_server_owned_entity_enters_scope_for_client_a(ctx: &mut TestWorldMut) {
-    use naia_test_harness::{ClientKey, Position};
-    let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let room_key = scenario.last_room();
-    let (entity_key, ()) = scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity
-                    .insert_component(Position::new(0.0, 0.0))
-                    .enter_room(&room_key);
-            })
-        })
-    });
-    scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_a) {
-                scope.include(&entity_key);
-            }
-        });
-    });
-    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    use crate::steps::world_helpers::{named_client_mut, spawn_position_entity_in_scope};
+    let client_a = named_client_mut(ctx, "A");
+    spawn_position_entity_in_scope(ctx, client_a);
 }
 
 /// Given the server has observed a spawn event for client A.
@@ -163,30 +122,15 @@ fn given_server_owned_entity_enters_scope_for_client_a(ctx: &mut TestWorldMut) {
 /// for server-owned entities scope membership is the proxy.
 #[given("the server has observed a spawn event for client A")]
 fn given_server_has_observed_spawn_event_for_client_a(ctx: &mut TestWorldMut) {
-    use naia_test_harness::{ClientKey};
+    use crate::steps::world_helpers::named_client_mut;
+    let client_a = named_client_mut(ctx, "A");
+    let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no entity spawned");
-    scenario.spec_expect(
-        "server-events-09: entity in scope for client A",
-        |ectx| {
-            ectx.server(|s| {
-                let in_scope = s
-                    .user_scope(&client_a)
-                    .map(|scope| scope.has(&entity_key))
-                    .unwrap_or(false);
-                if in_scope {
-                    Some(())
-                } else {
-                    None
-                }
-            })
-        },
-    );
+    scenario.spec_expect("server-events-09: entity in scope for client A", |ectx|
+        ectx.server(|s| s.user_scope(&client_a)
+            .map(|scope| scope.has(&entity_key))
+            .unwrap_or(false)
+            .then_some(())));
     scenario.allow_flexible_next();
 }
 
@@ -197,36 +141,17 @@ fn given_server_has_observed_spawn_event_for_client_a(ctx: &mut TestWorldMut) {
 /// [entity-ownership-02] tests for client-owned entity write paths.
 #[given("the client spawns a client-owned entity with a replicated component")]
 fn given_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
-    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_client::ReplicationConfig as CRC;
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let room_key = scenario.last_room();
-    let entity_key = scenario.mutate(|mctx| {
-        mctx.client(client_key, |client| {
-            client.spawn(|mut entity| {
-                entity
-                    .configure_replication(ClientReplicationConfig::Public)
-                    .insert_component(Position::new(0.0, 0.0));
-            })
-        })
-    });
-    scenario.expect(|ectx| {
-        ectx.server(|server| {
-            if server.has_entity(&entity_key) {
-                Some(())
-            } else {
-                None
-            }
-        })
-    });
-    scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            if let Some(mut entity) = server.entity_mut(&entity_key) {
-                entity.enter_room(&room_key);
-            }
-        });
-    });
+    let entity_key = scenario.mutate(|c| c.client(client_key, |cl|
+        cl.spawn(|mut e| { e.configure_replication(CRC::Public).insert_component(Position::new(0.0, 0.0)); })));
+    scenario.expect(|ectx| ectx.server(|s| s.has_entity(&entity_key).then_some(())));
+    scenario.mutate(|c| c.server(|s| {
+        if let Some(mut e) = s.entity_mut(&entity_key) { e.enter_room(&room_key); }
+    }));
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     scenario.bdd_store(LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
 }
@@ -318,41 +243,19 @@ fn given_two_entities_a_b_in_scope(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let room_key = scenario.last_room();
-    let (entity_a, entity_b) = scenario.mutate(|mctx| {
-        let (a, _) = mctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity.insert_component(Position::new(0.0, 0.0));
-            })
-        });
-        let (b, _) = mctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity.insert_component(Position::new(0.0, 0.0));
-            })
-        });
-        mctx.server(|server| {
-            for ek in [&a, &b] {
-                if let Some(mut e) = server.entity_mut(ek) {
-                    e.enter_room(&room_key);
-                }
-            }
-            if let Some(mut scope) = server.user_scope_mut(&client_key) {
-                scope.include(&a);
-                scope.include(&b);
-            }
-        });
-        (a, b)
-    });
-    scenario.bdd_store(ENTITY_A_KEY, entity_a);
-    scenario.bdd_store(ENTITY_B_KEY, entity_b);
-    scenario.expect(|ectx| {
-        ectx.client(client_key, |client| {
-            if client.has_entity(&entity_a) && client.has_entity(&entity_b) {
-                Some(())
-            } else {
-                None
-            }
-        })
-    });
+    let mut spawn = || scenario.mutate(|c| c.server(|s|
+        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0)); }))).0;
+    let (a, b) = (spawn(), spawn());
+    scenario.mutate(|c| c.server(|s| {
+        for ek in [&a, &b] { if let Some(mut e) = s.entity_mut(ek) { e.enter_room(&room_key); } }
+        if let Some(mut scope) = s.user_scope_mut(&client_key) {
+            scope.include(&a); scope.include(&b);
+        }
+    }));
+    scenario.bdd_store(ENTITY_A_KEY, a);
+    scenario.bdd_store(ENTITY_B_KEY, b);
+    scenario.expect(|ectx| ectx.client(client_key, |c|
+        (c.has_entity(&a) && c.has_entity(&b)).then_some(())));
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -523,30 +426,15 @@ fn given_client_and_entity_share_room(ctx: &mut TestWorldMut, name: String) {
 /// as a precondition before a When step that depends on B's view.
 #[given("the entity is in-scope for client B")]
 fn given_entity_in_scope_for_client_b(ctx: &mut TestWorldMut) {
-    use naia_test_harness::{ClientKey};
+    use crate::steps::world_helpers::named_client_mut;
+    let client_b = named_client_mut(ctx, "B");
+    let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    let client_b: ClientKey = scenario
-        .bdd_get(&client_key_storage("B"))
-        .expect("client B not connected");
-    let entity_key: EntityKey = scenario
-        .bdd_get(LAST_ENTITY_KEY)
-        .expect("no entity spawned");
-    scenario.spec_expect(
-        "entity-publication: entity in scope for client B",
-        |ectx| {
-            ectx.server(|server| {
-                let in_scope = server
-                    .user_scope(&client_b)
-                    .map(|s| s.has(&entity_key))
-                    .unwrap_or(false);
-                if in_scope {
-                    Some(())
-                } else {
-                    None
-                }
-            })
-        },
-    );
+    scenario.spec_expect("entity-publication: entity in scope for client B", |ectx|
+        ectx.server(|s| s.user_scope(&client_b)
+            .map(|sc| sc.has(&entity_key))
+            .unwrap_or(false)
+            .then_some(())));
     scenario.allow_flexible_next();
 }
 
@@ -617,90 +505,26 @@ fn given_server_with_player_selection_and_alice(ctx: &mut TestWorldMut) {
 /// waits for both to observe replication.
 #[given("the server spawns a delegated entity in-scope for both clients")]
 fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut TestWorldMut) {
-    use naia_server::ReplicationConfig as ServerReplicationConfig;
-    use naia_test_harness::{ClientKey, Position};
+    use crate::steps::world_helpers::{named_client_mut, spawn_delegated_entity_in_scope};
+    let client_a = named_client_mut(ctx, "A");
+    let client_b = named_client_mut(ctx, "B");
+    let entity_key = spawn_delegated_entity_in_scope(ctx, &[client_a, client_b]);
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let client_b: ClientKey = scenario
-        .bdd_get(&client_key_storage("B"))
-        .expect("client B not connected");
-    let room_key = scenario.last_room();
-    let (entity_key, ()) = scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity
-                    .insert_component(Position::new(0.0, 0.0))
-                    .configure_replication(ServerReplicationConfig::delegated())
-                    .enter_room(&room_key);
-            })
-        })
-    });
-    scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_a) {
-                scope.include(&entity_key);
-            }
-            if let Some(mut scope) = server.user_scope_mut(&client_b) {
-                scope.include(&entity_key);
-            }
-        });
-    });
-    scenario.spec_expect(
-        "entity-delegation-06: delegated entity replicated to both clients",
-        |ectx| {
-            let a_has = ectx.client(client_a, |c| c.has_entity(&entity_key));
-            let b_has = ectx.client(client_b, |c| c.has_entity(&entity_key));
-            if a_has && b_has {
-                Some(())
-            } else {
-                None
-            }
-        },
-    );
-    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.spec_expect("entity-delegation-06: replicated to both clients", |ectx|
+        (ectx.client(client_a, |c| c.has_entity(&entity_key))
+            && ectx.client(client_b, |c| c.has_entity(&entity_key))).then_some(()));
     scenario.allow_flexible_next();
 }
 
 /// Given the server spawns a delegated entity in-scope for client A.
 #[given("the server spawns a delegated entity in-scope for client A")]
 fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorldMut) {
-    use naia_server::ReplicationConfig as ServerReplicationConfig;
-    use naia_test_harness::{ClientKey, Position};
+    use crate::steps::world_helpers::{named_client_mut, spawn_delegated_entity_in_scope};
+    let client_a = named_client_mut(ctx, "A");
+    let entity_key = spawn_delegated_entity_in_scope(ctx, &[client_a]);
     let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let room_key = scenario.last_room();
-    let (entity_key, ()) = scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity
-                    .insert_component(Position::new(0.0, 0.0))
-                    .configure_replication(ServerReplicationConfig::delegated())
-                    .enter_room(&room_key);
-            })
-        })
-    });
-    scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_a) {
-                scope.include(&entity_key);
-            }
-        });
-    });
-    scenario.spec_expect(
-        "entity-delegation-17: delegated entity replicated to client A",
-        |ectx| {
-            if ectx.client(client_a, |c| c.has_entity(&entity_key)) {
-                Some(())
-            } else {
-                None
-            }
-        },
-    );
-    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.spec_expect("entity-delegation-17: replicated to client A", |ectx|
+        ectx.client(client_a, |c| c.has_entity(&entity_key)).then_some(()));
     scenario.allow_flexible_next();
 }
 
@@ -1016,24 +840,12 @@ fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
     connect_client(ctx);
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
-    let (entity_key, _) = scenario.mutate(|c| {
-        c.server(|server| {
-            server.spawn(|mut entity| {
-                entity.insert_component(Position::new(100.0, 200.0));
-            })
-        })
-    });
-    scenario.mutate(|c| {
-        c.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_entity(&entity_key);
-        });
-    });
-    for _ in 0..50 {
-        scenario.mutate(|_| {});
-    }
+    let (entity_key, _) = scenario.mutate(|c| c.server(|s|
+        s.spawn(|mut e| { e.insert_component(Position::new(100.0, 200.0)); })));
+    scenario.mutate(|c| c.server(|s| {
+        s.room_mut(&room_key).expect("room exists").add_entity(&entity_key);
+    }));
+    for _ in 0..50 { scenario.mutate(|_| {}); }
     scenario.allow_flexible_next();
 }
 
@@ -1054,92 +866,24 @@ fn given_client_disconnected(ctx: &mut TestWorldMut) {
 /// Then can verify ordering.
 #[given("multiple scope operations queued for the same tick")]
 fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, Auth, Position, ServerAuthEvent, ServerConnectEvent, TrackedServerEvent,
-    };
+    use naia_test_harness::Position;
+    use crate::steps::world_helpers::connect_named_client;
+    let client_key = connect_named_client(ctx, "ScopeTestClient", "scope_user", None);
     let scenario = ctx.scenario_mut();
-    let test_protocol = protocol();
     let room_key = scenario.last_room();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    let client_key = scenario.client_start(
-        "ScopeTestClient",
-        Auth::new("scope_user", "password"),
-        client_config,
-        test_protocol,
-    );
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(incoming_key);
-                }
-            }
-            None
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                if incoming_key == client_key {
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
-    scenario.track_server_event(TrackedServerEvent::Connect);
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_user(&client_key);
-        });
-    });
-    let (entity_key, _) = scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.spawn(|mut entity| {
-                entity.insert_component(Position::new(0.0, 0.0));
-            })
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_entity(&entity_key);
-        });
-    });
+    let (entity_key, _) = scenario.mutate(|c| c.server(|s|
+        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0)); })));
+    scenario.mutate(|c| c.server(|s| {
+        s.room_mut(&room_key).expect("room exists").add_entity(&entity_key);
+    }));
     scenario.trace_clear();
-    scenario.mutate(|ctx| {
-        ctx.trace_push("scope_op_include_1");
-        ctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_key) {
-                scope.include(&entity_key);
-            }
-        });
-        ctx.trace_push("scope_op_exclude_2");
-        ctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_key) {
-                scope.exclude(&entity_key);
-            }
-        });
-        ctx.trace_push("scope_op_include_3");
-        ctx.server(|server| {
-            if let Some(mut scope) = server.user_scope_mut(&client_key) {
-                scope.include(&entity_key);
-            }
-        });
+    scenario.mutate(|c| {
+        for (label, op) in [("scope_op_include_1", "in"), ("scope_op_exclude_2", "ex"), ("scope_op_include_3", "in")] {
+            c.trace_push(label);
+            c.server(|s| if let Some(mut scope) = s.user_scope_mut(&client_key) {
+                if op == "in" { scope.include(&entity_key); } else { scope.exclude(&entity_key); }
+            });
+        }
     });
     scenario.record_ok();
     scenario.allow_flexible_next();

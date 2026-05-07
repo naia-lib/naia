@@ -7,7 +7,10 @@
 use naia_test_harness::{ClientDisconnectEvent, EntityKey, TrackedClientEvent, TrackedServerEvent};
 
 use crate::steps::prelude::*;
-use crate::steps::world_helpers::{connect_named_client, graceful_disconnect_last_client};
+use crate::steps::world_helpers::{
+    connect_named_client, connect_named_client_with_auth_tracking, graceful_disconnect_last_client,
+    reject_named_client, tick_n,
+};
 
 /// When a client connects.
 ///
@@ -400,71 +403,17 @@ fn when_client_receives_packets_reordered(ctx: &mut TestWorldMut) {
 #[when("the same application logic runs on each transport")]
 fn when_same_application_logic_runs(ctx: &mut TestWorldMut) {
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, test_protocol::{TestMessage, UnreliableChannel}, Auth, ClientConnectEvent,
-        ServerAuthEvent, ServerConnectEvent,
-    };
-    let scenario = ctx.scenario_mut();
-    scenario.clear_operation_result();
+    use naia_test_harness::test_protocol::{TestMessage, UnreliableChannel};
+    ctx.scenario_mut().clear_operation_result();
     let result = catch_unwind(AssertUnwindSafe(|| {
-        let test_protocol = protocol();
-        let room_key = scenario.last_room();
-        let mut client_config = ClientConfig::default();
-        client_config.send_handshake_interval = Duration::from_millis(0);
-        client_config.jitter_buffer = JitterBufferType::Bypass;
-        let client_key = scenario.client_start(
-            "IdealClient",
-            Auth::new("test_user", "password"),
-            client_config,
-            test_protocol,
-        );
-        scenario.expect(|ctx| {
-            ctx.server(|server| {
-                if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                    if incoming_key == client_key {
-                        return Some(incoming_key);
-                    }
-                }
-                None
-            })
+        let client_key = connect_named_client(ctx, "IdealClient", "test_user", None);
+        let scenario = ctx.scenario_mut();
+        scenario.mutate(|c| {
+            c.server(|s| s.send_message::<UnreliableChannel, _>(&client_key, &TestMessage::new(100)));
         });
-        scenario.mutate(|ctx| {
-            ctx.server(|server| {
-                server.accept_connection(&client_key);
-            });
-        });
-        scenario.expect(|ctx| {
-            ctx.server(|server| {
-                if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                    if incoming_key == client_key {
-                        return Some(());
-                    }
-                }
-                None
-            })
-        });
-        scenario.mutate(|ctx| {
-            ctx.server(|server| {
-                server
-                    .room_mut(&room_key)
-                    .expect("room exists")
-                    .add_user(&client_key);
-            });
-        });
-        scenario.expect(|ctx| {
-            ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
-        });
-        scenario.mutate(|ctx| {
-            ctx.server(|server| {
-                server.send_message::<UnreliableChannel, _>(&client_key, &TestMessage::new(100));
-            });
-        });
-        for _ in 0..5 {
-            scenario.mutate(|_| {});
-        }
+        tick_n(ctx, 5);
     }));
+    let scenario = ctx.scenario_mut();
     match result {
         Ok(()) => scenario.record_ok(),
         Err(p) => scenario.record_panic(panic_payload_to_string(p)),
@@ -533,65 +482,7 @@ fn when_client_attempts_to_connect(ctx: &mut TestWorldMut) {
 /// ConnectEvent (client).
 #[when("a client authenticates and connects")]
 fn when_client_authenticates_and_connects(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, Auth, ClientConnectEvent, ServerAuthEvent, ServerConnectEvent,
-        TrackedClientEvent, TrackedServerEvent,
-    };
-    let scenario = ctx.scenario_mut();
-    let test_protocol = protocol();
-    let room_key = scenario.last_room();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    let client_key = scenario.client_start(
-        "TestClient",
-        Auth::new("test_user", "password"),
-        client_config,
-        test_protocol,
-    );
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(incoming_key);
-                }
-            }
-            None
-        })
-    });
-    scenario.track_server_event(TrackedServerEvent::Auth);
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                if incoming_key == client_key {
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
-    scenario.track_server_event(TrackedServerEvent::Connect);
-    scenario.mutate(|_| {});
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
-    });
-    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_user(&client_key);
-        });
-    });
-    scenario.allow_flexible_next();
+    connect_named_client_with_auth_tracking(ctx, "TestClient", "test_user");
 }
 
 /// When a client attempts to connect but is rejected.
@@ -600,42 +491,7 @@ fn when_client_authenticates_and_connects(ctx: &mut TestWorldMut) {
 /// `RejectEvent` so downstream Then steps can assert it.
 #[when("a client attempts to connect but is rejected")]
 fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, Auth, ClientRejectEvent, ServerAuthEvent, TrackedClientEvent,
-    };
-    let scenario = ctx.scenario_mut();
-    let test_protocol = protocol();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    let client_key = scenario.client_start(
-        "RejectedClient",
-        Auth::new("bad_user", "bad_password"),
-        client_config,
-        test_protocol,
-    );
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(incoming_key);
-                }
-            }
-            None
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.reject_connection(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientRejectEvent>())
-    });
-    scenario.track_client_event(client_key, TrackedClientEvent::Reject);
-    scenario.allow_flexible_next();
+    reject_named_client(ctx, "RejectedClient", "bad_user");
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -656,63 +512,7 @@ fn when_connected_client(ctx: &mut TestWorldMut) {
 /// to the same room so prior-session entities should be re-spawned.
 #[when("the client reconnects")]
 fn when_client_reconnects(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, Auth, ClientConnectEvent, ServerAuthEvent, ServerConnectEvent,
-        TrackedClientEvent, TrackedServerEvent,
-    };
-    let scenario = ctx.scenario_mut();
-    let test_protocol = protocol();
-    let room_key = scenario.last_room();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    let client_key = scenario.client_start(
-        "ReconnectedClient",
-        Auth::new("test_user", "password"),
-        client_config,
-        test_protocol,
-    );
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(incoming_key);
-                }
-            }
-            None
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                if incoming_key == client_key {
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
-    scenario.track_server_event(TrackedServerEvent::Connect);
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_user(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
-    });
-    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
-    scenario.allow_flexible_next();
+    connect_named_client(ctx, "ReconnectedClient", "test_user", None);
 }
 
 /// When the server receives a malformed packet.

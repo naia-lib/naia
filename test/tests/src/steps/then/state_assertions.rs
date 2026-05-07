@@ -348,32 +348,13 @@ fn then_write_is_rejected(
 /// Polls until server-side Position equals the value stored under
 /// `LAST_COMPONENT_VALUE_KEY` by the matching When binding.
 #[then("the server observes the component update")]
-fn then_server_observes_component_update(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{Position};
+fn then_server_observes_component_update(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use crate::steps::world_helpers::assert_server_position_eq;
     let entity_key = last_entity_ref(ctx);
-    let expected: (f32, f32) = ctx
-        .scenario()
+    let expected: (f32, f32) = ctx.scenario()
         .bdd_get(LAST_COMPONENT_VALUE_KEY)
         .expect("No component value stored");
-    ctx.server(|server| {
-        if let Some(entity) = server.entity(&entity_key) {
-            if let Some(pos) = entity.component::<Position>() {
-                if (*pos.x - expected.0).abs() < f32::EPSILON
-                    && (*pos.y - expected.1).abs() < f32::EPSILON
-                {
-                    AssertOutcome::Passed(())
-                } else {
-                    AssertOutcome::Pending
-                }
-            } else {
-                AssertOutcome::Pending
-            }
-        } else {
-            AssertOutcome::Pending
-        }
-    })
+    assert_server_position_eq(ctx, entity_key, expected)
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -430,32 +411,16 @@ fn then_client_receives_messages_abc_in_order(
 
 /// Then the client receives message A exactly once.
 #[then("the client receives message A exactly once")]
-fn then_client_receives_message_a_exactly_once(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_receives_message_a_exactly_once(ctx: &TestWorldRef) -> AssertOutcome<()> {
     use naia_test_harness::test_protocol::{OrderedChannel, TestMessage};
     let client_key = ctx.last_client();
-    let mut received: Vec<u32> = Vec::new();
-    ctx.client(client_key, |client| {
-        for msg in client.read_message::<OrderedChannel, TestMessage>() {
-            received.push(msg.value);
-        }
+    let received: Vec<u32> = ctx.client(client_key, |client| {
+        client.read_message::<OrderedChannel, TestMessage>().map(|m| m.value).collect()
     });
-    if received.is_empty() {
-        return AssertOutcome::Pending;
-    }
-    if received == [1] {
-        AssertOutcome::Passed(())
-    } else if received.len() > 1 {
-        AssertOutcome::Failed(format!(
-            "Message A received multiple times. Expected [1], got {:?}",
-            received
-        ))
-    } else {
-        AssertOutcome::Failed(format!(
-            "Wrong message received. Expected [1] (A), got {:?}",
-            received
-        ))
+    match received.as_slice() {
+        [] => AssertOutcome::Pending,
+        [1] => AssertOutcome::Passed(()),
+        other => AssertOutcome::Failed(format!("Expected [1] (A), got {:?}", other)),
     }
 }
 
@@ -510,33 +475,14 @@ fn then_entity_spawns_on_client_with_replicated_component(
 
 /// Then the client observes the component update.
 #[then("the client observes the component update")]
-fn then_client_observes_component_update(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{Position};
+fn then_client_observes_component_update(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use crate::steps::world_helpers::assert_client_position_eq;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
-    let expected: (f32, f32) = ctx
-        .scenario()
+    let expected: (f32, f32) = ctx.scenario()
         .bdd_get(LAST_COMPONENT_VALUE_KEY)
         .expect("No component value stored");
-    ctx.client(client_key, |client| {
-        if let Some(entity) = client.entity(&entity_key) {
-            if let Some(pos) = entity.component::<Position>() {
-                if (*pos.x - expected.0).abs() < f32::EPSILON
-                    && (*pos.y - expected.1).abs() < f32::EPSILON
-                {
-                    AssertOutcome::Passed(())
-                } else {
-                    AssertOutcome::Pending
-                }
-            } else {
-                AssertOutcome::Pending
-            }
-        } else {
-            AssertOutcome::Pending
-        }
-    })
+    assert_client_position_eq(ctx, client_key, entity_key, expected)
 }
 
 /// Then the client observes the server value.
@@ -545,33 +491,14 @@ fn then_client_observes_component_update(
 /// asserts that the server-authoritative value overrides the
 /// client-local modification.
 #[then("the client observes the server value")]
-fn then_client_observes_server_value(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{Position};
+fn then_client_observes_server_value(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use crate::steps::world_helpers::assert_client_position_eq;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
-    let server_value: (f32, f32) = ctx
-        .scenario()
+    let server_value: (f32, f32) = ctx.scenario()
         .bdd_get(LAST_COMPONENT_VALUE_KEY)
         .expect("No server component value stored");
-    ctx.client(client_key, |client| {
-        if let Some(entity) = client.entity(&entity_key) {
-            if let Some(pos) = entity.component::<Position>() {
-                if (*pos.x - server_value.0).abs() < f32::EPSILON
-                    && (*pos.y - server_value.1).abs() < f32::EPSILON
-                {
-                    AssertOutcome::Passed(())
-                } else {
-                    AssertOutcome::Pending
-                }
-            } else {
-                AssertOutcome::Pending
-            }
-        } else {
-            AssertOutcome::Pending
-        }
-    })
+    assert_client_position_eq(ctx, client_key, entity_key, server_value)
 }
 
 /// Then the entity GlobalEntity remains unchanged.
@@ -739,29 +666,17 @@ fn then_client_still_has_entity(
 ///
 /// Confirms no update leaked through while the entity was Paused.
 #[then("the client entity position is still 0.0")]
-fn then_client_entity_position_still_zero(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{Position};
+fn then_client_entity_position_still_zero(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::Position;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
         let Some(entity) = client.entity(&entity_key) else {
-            return AssertOutcome::Failed(
-                "Entity absent on client despite ScopeExit::Persist".into(),
-            );
+            return AssertOutcome::Failed("Entity absent despite ScopeExit::Persist".into());
         };
-        let Some(pos) = entity.component::<Position>() else {
-            return AssertOutcome::Pending;
-        };
-        if (*pos.x - 0.0).abs() < f32::EPSILON {
-            AssertOutcome::Passed(())
-        } else {
-            AssertOutcome::Failed(format!(
-                "Position updated while entity was out-of-scope: expected x=0, got x={}",
-                *pos.x,
-            ))
-        }
+        let Some(pos) = entity.component::<Position>() else { return AssertOutcome::Pending; };
+        if (*pos.x).abs() < f32::EPSILON { AssertOutcome::Passed(()) }
+        else { AssertOutcome::Failed(format!("Position leaked while out-of-scope: x={}", *pos.x)) }
     })
 }
 
@@ -1712,37 +1627,18 @@ fn then_server_tick_is_known_to_client(
 
 /// Then the entity spawns on the client with correct Position and Velocity values.
 #[then("the entity spawns on the client with correct Position and Velocity values")]
-fn then_entity_spawns_with_correct_values(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_spawns_with_correct_values(ctx: &TestWorldRef) -> AssertOutcome<()> {
     use naia_test_harness::{Position, Velocity};
     let client_key = ctx.last_client();
-    let scenario = ctx.scenario();
     let entity_key = last_entity_ref(ctx);
-    let expected_pos: (f32, f32) = scenario
-        .bdd_get(SPAWN_POSITION_VALUE_KEY)
-        .expect("No position value stored");
-    let expected_vel: (f32, f32) = scenario
-        .bdd_get(SPAWN_VELOCITY_VALUE_KEY)
-        .expect("No velocity value stored");
+    let exp_p: (f32, f32) = ctx.scenario().bdd_get(SPAWN_POSITION_VALUE_KEY).expect("no pos");
+    let exp_v: (f32, f32) = ctx.scenario().bdd_get(SPAWN_VELOCITY_VALUE_KEY).expect("no vel");
     ctx.client(client_key, |client| {
-        let Some(entity) = client.entity(&entity_key) else {
-            return AssertOutcome::Pending;
-        };
-        let Some(pos) = entity.component::<Position>() else {
-            return AssertOutcome::Pending;
-        };
-        let Some(vel) = entity.component::<Velocity>() else {
-            return AssertOutcome::Pending;
-        };
-        let pos_ok = (*pos.x - expected_pos.0).abs() < f32::EPSILON
-            && (*pos.y - expected_pos.1).abs() < f32::EPSILON;
-        let vel_ok = (*vel.vx - expected_vel.0).abs() < f32::EPSILON
-            && (*vel.vy - expected_vel.1).abs() < f32::EPSILON;
-        if pos_ok && vel_ok {
-            AssertOutcome::Passed(())
-        } else {
-            AssertOutcome::Pending
-        }
+        let Some(e) = client.entity(&entity_key) else { return AssertOutcome::Pending; };
+        let Some(p) = e.component::<Position>() else { return AssertOutcome::Pending; };
+        let Some(v) = e.component::<Velocity>() else { return AssertOutcome::Pending; };
+        let ok = (*p.x - exp_p.0).abs() < f32::EPSILON && (*p.y - exp_p.1).abs() < f32::EPSILON
+            && (*v.vx - exp_v.0).abs() < f32::EPSILON && (*v.vy - exp_v.1).abs() < f32::EPSILON;
+        if ok { AssertOutcome::Passed(()) } else { AssertOutcome::Pending }
     })
 }
