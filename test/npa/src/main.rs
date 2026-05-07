@@ -7,6 +7,7 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
+mod coverage;
 mod manifest;
 mod run;
 
@@ -29,6 +30,8 @@ pub enum Commands {
     Manifest,
     /// Execute a resolved plan and emit a run report
     Run(run::RunArgs),
+    /// Walk feature files and report scenario / contract-ID coverage.
+    Coverage(coverage::CoverageArgs),
 }
 
 fn main() -> Result<()> {
@@ -37,5 +40,6 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Manifest => manifest::run(),
         Commands::Run(args) => run::run(args),
+        Commands::Coverage(args) => coverage::run(args),
     }
 }
