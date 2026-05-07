@@ -22,6 +22,8 @@ pub struct MainServer {
     // Protocol
     socket_config: SocketConfig,
     message_kinds: MessageKinds,
+    // Config
+    require_auth: bool,
     // cont
     io: Io,
     auth_io: Option<(Box<dyn AuthSender>, Box<dyn AuthReceiver>)>,
@@ -63,6 +65,7 @@ impl MainServer {
             // Config
             socket_config: socket,
             message_kinds,
+            require_auth: server_config.require_auth,
             // Connection
             io,
             auth_io: None,
@@ -267,24 +270,37 @@ impl MainServer {
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
         // receive auth events
-        if let Some((_, auth_receiver)) = self.auth_io.as_mut() {
+        if let Some((auth_sender, auth_receiver)) = self.auth_io.as_mut() {
             loop {
                 match auth_receiver.receive() {
                     Ok(Some((auth_addr, auth_bytes))) => {
                         // create new user
                         let user_key = self.users.insert(MainUser::new(auth_addr));
 
-                        // convert bytes into auth object
-                        let mut reader = BitReader::new(auth_bytes);
-                        let Ok(auth_message) =
-                            self.message_kinds.read(&mut reader, &FakeEntityConverter)
-                        else {
-                            warn!("Server Error: cannot read auth message");
-                            continue;
-                        };
-
-                        // send out event
-                        self.incoming_events.push_auth(&user_key, auth_message);
+                        if self.require_auth {
+                            // convert bytes into auth object and fire ServerAuthEvent
+                            let mut reader = BitReader::new(auth_bytes);
+                            let Ok(auth_message) =
+                                self.message_kinds.read(&mut reader, &FakeEntityConverter)
+                            else {
+                                warn!("Server Error: cannot read auth message");
+                                continue;
+                            };
+                            self.incoming_events.push_auth(&user_key, auth_message);
+                        } else {
+                            // auto-accept: no ServerAuthEvent; generate token and send immediately
+                            let user = self.users.get_mut(&user_key).expect("user just inserted");
+                            let _ = user.take_auth_address(); // consume the auth address
+                            let identity_token = naia_shared::generate_identity_token();
+                            self.handshake_manager
+                                .authenticate_user(&identity_token, &user_key);
+                            if auth_sender.accept(&auth_addr, &identity_token).is_err() {
+                                warn!(
+                                    "Server Error: Cannot send auto-accept packet to {:?}",
+                                    &auth_addr
+                                );
+                            }
+                        }
                     }
                     Ok(None) => {
                         // No more auths, break loop

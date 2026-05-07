@@ -54,5 +54,9 @@ name = "integration_only_06_entity_scopes"
 path = "contract_tests/integration_only/06_entity_scopes.rs"
 
 [[test]]
+name = "integration_only_09_entity_ownership"
+path = "contract_tests/integration_only/09_entity_ownership.rs"
+
+[[test]]
 name = "integration_only_10_entity_delegation"
 path = "contract_tests/integration_only/10_entity_delegation.rs"

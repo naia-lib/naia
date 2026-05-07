@@ -525,6 +525,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.main_server.users_count()
     }
 
+    /// Get a User's socket address, if they are fully connected. Returns None if not found or not yet connected.
+    pub fn user_address(&self, user_key: &UserKey) -> Option<std::net::SocketAddr> {
+        self.main_server.user_address(user_key)
+    }
+
     /// Returns a UserScopeRef, which is used to query whether a given user has
     pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, E> {
         self.world_server.user_scope(user_key)

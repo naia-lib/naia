@@ -706,6 +706,22 @@ impl Scenario {
         &mut self.user_to_client_map
     }
 
+    /// Register user_key → client_key by matching socket address.
+    /// Used when `require_auth = false` so no ServerAuthEvent fires to establish the mapping.
+    pub(crate) fn map_connect_event_by_addr(&mut self, user_key: &UserKey) -> Option<ClientKey> {
+        let user_addr = self.server.as_ref()?.user_address(user_key)?;
+        let client_key = self.client_to_addr_map
+            .iter()
+            .find(|(_, addr)| **addr == user_addr)
+            .map(|(k, _)| *k)?;
+        self.user_to_client_map.insert(*user_key, client_key);
+        if let Some(state) = self.clients.get_mut(&client_key) {
+            state.set_user_key(*user_key);
+        }
+        self.pending_auths.remove(&client_key);
+        Some(client_key)
+    }
+
     pub(crate) fn pending_auths(&self) -> &HashMap<ClientKey, Auth> {
         &self.pending_auths
     }

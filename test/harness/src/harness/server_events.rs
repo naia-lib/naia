@@ -58,7 +58,9 @@ impl ServerEvents {
         // Convert main events: connections (from world_events in combined Events)
         let mut connections = Vec::new();
         for user_key in events.read::<naia_server::ConnectEvent>() {
-            if let Some(client_key) = scenario.user_to_client_key(&user_key) {
+            let client_key = scenario.user_to_client_key(&user_key)
+                .or_else(|| scenario.map_connect_event_by_addr(&user_key));
+            if let Some(client_key) = client_key {
                 connections.push(client_key);
             }
         }

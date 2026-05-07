@@ -130,6 +130,17 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       When the server disconnects the client
       Then the server has no connected users
 
+    # The client sends a token-authenticated disconnect packet; the server verifies
+    # the session token and fires DisconnectEvent immediately. This is the positive
+    # case for the identity-token disconnect-authentication mechanism: a valid token
+    # produces a clean disconnect without waiting for a heartbeat timeout.
+    @Scenario(08)
+    Scenario: [connection-22] Server observes DisconnectEvent on client-initiated graceful disconnect
+      Given a server is running
+      And a client connects
+      When the client disconnects gracefully
+      Then the server has observed DisconnectEvent
+
   # --------------------------------------------------------------------------
   # Rule: Auth-required event ordering
   # --------------------------------------------------------------------------

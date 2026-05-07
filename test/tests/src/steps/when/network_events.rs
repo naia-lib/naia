@@ -7,7 +7,7 @@
 use naia_test_harness::{ClientDisconnectEvent, EntityKey, TrackedClientEvent, TrackedServerEvent};
 
 use crate::steps::prelude::*;
-use crate::steps::world_helpers::connect_named_client;
+use crate::steps::world_helpers::{connect_named_client, graceful_disconnect_last_client};
 
 /// When a client connects.
 ///
@@ -84,6 +84,17 @@ fn when_second_client_connects_and_entity_enters_scope(ctx: &mut TestWorldMut) {
 #[when("the client disconnects")]
 fn when_client_disconnects(ctx: &mut TestWorldMut) {
     disconnect_last_client(ctx);
+}
+
+/// When the client disconnects gracefully.
+///
+/// The client sends token-authenticated disconnect packets. The server verifies
+/// the session token embedded in the disconnect packet and processes the
+/// disconnect immediately — this is the positive case for the identity-token
+/// disconnect-authentication mechanism.
+#[when("the client disconnects gracefully")]
+fn when_client_disconnects_gracefully(ctx: &mut TestWorldMut) {
+    graceful_disconnect_last_client(ctx);
 }
 
 /// When sufficient samples have been collected.

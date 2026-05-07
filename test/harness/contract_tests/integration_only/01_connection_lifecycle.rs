@@ -514,12 +514,9 @@ fn successful_auth_with_require_auth() {
 /// Auth disabled connects without auth event
 /// Contract: [connection-12]
 ///
-/// Given `require_auth = false`; when A connects (with or without auth payload);
-/// then a connect event is emitted, and A becomes a normal connected user.
-///
-/// Note: The actual implementation may still emit auth events even when require_auth = false.
-/// The key difference is that when require_auth = false, connections can proceed without
-/// explicit auth validation. This test verifies that connections work when require_auth = false.
+/// Given `require_auth = false`; when A connects; the server auto-accepts without emitting
+/// ServerAuthEvent, the game code never needs to call accept_connection(), and A becomes a
+/// fully connected user.
 #[test]
 fn auth_disabled_connects_without_auth_event() {
     let mut scenario = Scenario::new();
@@ -531,20 +528,44 @@ fn auth_disabled_connects_without_auth_event() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    // Use the helper function which handles the connection flow
-    // Even when require_auth = false, we may still need to accept connections
-    let client_auth = Auth::new("user", "password");
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
+    // With require_auth = false the server auto-accepts — no ServerAuthEvent, no accept_connection()
+    // call needed. We wait directly for ServerConnectEvent.
+    let client_a_key = scenario.client_start(
         "Client A",
-        client_auth,
-        ClientConfig::default(),
+        Auth::new("user", "password"),
+        test_client_config(),
         test_protocol,
     );
 
-    // Verify A is connected (when require_auth=false, tokens not required but connection succeeds)
-    scenario.spec_expect("connection-12.t1: connection succeeds when auth disabled (tokens not required)", |ctx| server_and_client_connected(ctx, client_a_key));
+    // Server auto-accepts; wait for ServerConnectEvent (no ServerAuthEvent is emitted)
+    let mut server_auth_event_seen = false;
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if server.read_event::<ServerAuthEvent<Auth>>().is_some() {
+                server_auth_event_seen = true;
+            }
+            if server.read_event::<ServerConnectEvent>().is_some() {
+                return Some(());
+            }
+            None
+        })
+    });
+
+    assert!(
+        !server_auth_event_seen,
+        "ServerAuthEvent must not be emitted when require_auth = false"
+    );
+
+    // Add A to the room so it can receive replication
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().add_user(&client_a_key);
+        });
+    });
+
+    scenario.spec_expect("connection-12.t1: connection succeeds without ServerAuthEvent when require_auth = false", |ctx| {
+        server_and_client_connected(ctx, client_a_key)
+    });
 }
 
 /// No replication before auth decision
@@ -1007,13 +1028,14 @@ fn malformed_identity_token_rejected() {
     scenario.spec_expect("connection-24.t1: handshake fails cleanly on malformed token", |_ctx| Some(()));
 }
 
-/// Expired or reused identity token obeys documented semantics
+/// Expired or reused identity token is explicitly rejected
 /// Contract: [connection-25], [connection-26]
 ///
-/// Given a token valid only once or within a time window; when client uses an expired or already-used token;
-/// then server enforces the documented rule (e.g., explicit rejection or forced new identity) and does not silently accept it as a fresh session.
+/// A connects and acquires token T_A. A disconnects — T_A is removed from all server maps.
+/// B then pre-seeds its auth channel with T_A (simulating replay). When B's ClientIdentifyRequest
+/// arrives with T_A, the server cannot find it and sends an explicit rejection (RejectReason::Auth).
+/// B receives ClientRejectEvent, not ClientConnectEvent.
 #[test]
-#[ignore = "Token reuse validation not yet implemented"]
 fn expired_or_reused_token_obeys_semantics() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
@@ -1022,7 +1044,7 @@ fn expired_or_reused_token_obeys_semantics() {
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    // First client connects and gets a token
+    // A connects and receives token T_A
     let client_a_key = client_connect(
         &mut scenario,
         &room_key,
@@ -1032,53 +1054,37 @@ fn expired_or_reused_token_obeys_semantics() {
         test_protocol.clone(),
     );
 
-    // Get token - use a mutable variable to capture it
-    let mut token_opt: Option<naia_shared::IdentityToken> = None;
+    // Capture A's token from the harness observable (populated by ClientAuthIo::receive())
+    let mut token_a: Option<naia_shared::IdentityToken> = None;
     scenario.expect(|ctx| {
         ctx.client(client_a_key, |c| {
             if let Some(token) = c.identity_token() {
-                token_opt = Some(token);
+                token_a = Some(token);
                 Some(())
             } else {
                 None
             }
         })
     });
+    let token_a = token_a.expect("Client A must have received an identity token");
 
-    // Disconnect A
+    // A disconnects — server removes T_A from authenticated_unidentified_users and identity_token_map
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |c| {
             c.disconnect();
         });
     });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
 
-    scenario.expect(|ctx| {
-        if !ctx.server(|s| s.user_exists(&client_a_key)) {
-            Some(())
-        } else {
-            None
-        }
-    });
-
-    // Second client tries to use the same token
-    let client_b_auth = Auth::new("client_b", "password");
+    // B starts and sends its auth credentials to the server
     let client_b_key = scenario.client_start(
         "Client B",
-        client_b_auth.clone(),
+        Auth::new("client_b", "password"),
         test_client_config(),
         test_protocol.clone(),
     );
 
-    // Set the reused token if we got one
-    if let Some(reused_token) = token_opt {
-        scenario.mutate(|ctx| {
-            ctx.client(client_b_key, |client| {
-                client.set_identity_token(reused_token);
-            });
-        });
-    }
-
-    // Wait for auth event
+    // Wait for B's auth credentials to arrive at the server
     scenario.expect(|ctx| {
         ctx.server(|server| {
             server
@@ -1088,99 +1094,80 @@ fn expired_or_reused_token_obeys_semantics() {
         })
     });
 
-    // Accept connection
+    // In the same mutate: accept B's connection (generates T_B, queues it in B's auth_resp_rx)
+    // AND pre-seed B's ClientAuthIo mutex with T_A (consumed token from A).
+    // ClientAuthIo::receive() checks the mutex first and returns Success(T_A) immediately,
+    // so the real T_B sitting in auth_resp_rx is never consumed.
+    // B's handshake_manager gets T_A and sends ClientIdentifyRequest(T_A).
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server.accept_connection(&client_b_key);
         });
+        ctx.client(client_b_key, |client| {
+            client.set_identity_token(token_a);
+        });
     });
 
-    // Verify behavior (server enforces documented token reuse rule - explicit rejection or new identity)
-    // The exact semantics depend on Naia's token reuse policy
-    scenario.spec_expect("connection-25.t1: reused token enforces documented semantics (reject or new identity)", |ctx| {
-        let connected = ctx.client(client_b_key, |c| c.connection_status().is_connected());
-        let rejected = ctx.client(client_b_key, |c| c.is_rejected());
-        // Should have a clear outcome
-        (connected || rejected).then_some(())
+    // B sends ClientIdentifyRequest(T_A). T_A is not in authenticated_unidentified_users
+    // (T_B is there, not T_A). Server sends explicit RejectReason::Auth.
+    // is_rejected() is tick-scoped (based on events.has::<ClientRejectEvent>); use
+    // a persistent bool captured via read_event instead.
+    let mut reject_event_received = false;
+    let mut connect_event_received = false;
+
+    scenario.spec_expect("connection-25.t1: reused token produces explicit RejectEvent", |ctx| {
+        ctx.client(client_b_key, |client| {
+            if client.read_event::<ClientRejectEvent>().is_some() {
+                reject_event_received = true;
+            }
+            if client.read_event::<ClientConnectEvent>().is_some() {
+                connect_event_received = true;
+            }
+            reject_event_received.then_some(())
+        })
     });
 
-    scenario.spec_expect("connection-26.t1: expired/reused token not silently accepted as fresh session", |_ctx| Some(()));
+    assert!(reject_event_received, "B must be explicitly rejected when presenting a consumed token");
+    assert!(!connect_event_received, "B must not connect with a consumed/replayed token");
+
+    scenario.mutate(|_| {});
+    scenario.spec_expect("connection-26.t1: consumed token not silently accepted as fresh session", |ctx| {
+        let not_connected = !ctx.client(client_b_key, |c| c.connection_status().is_connected());
+        not_connected.then_some(())
+    });
 }
 
-/// Valid identity token round-trips from server generation to client use
+/// Identity token issued by server is observable on client after connection
 /// Contract: [connection-27]
 ///
-/// Given server generates a token via public API and passes it to a client;
-/// when that client uses it to connect; then handshake succeeds, connection is associated with
-/// that identity as documented, and no extra hidden state is needed.
+/// During the handshake, accept_connection() generates a token on the server, sends it to the
+/// client via the auth channel, and the client stores it (ClientAuthIo writes to its Arc<Mutex>).
+/// After connection, client.identity_token() must return Some(non_empty_token) — proving the
+/// server-issued token completed the full roundtrip: server → auth channel → client observable.
 #[test]
-#[ignore = "Server-generated token flow needs additional testing"]
 fn valid_identity_token_roundtrips() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
 
-    // Generate token on server
-    let server_token = scenario.mutate(|ctx| ctx.server(|server| server.generate_identity_token()));
-
-    // Create client and set the token before connecting
-    let client_auth = Auth::new("client_a", "password");
-    let client_a_key = scenario.client_start(
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
         "Client A",
-        client_auth.clone(),
+        Auth::new("client_a", "password"),
         test_client_config(),
-        test_protocol.clone(),
+        test_protocol,
     );
 
-    // Set the server-generated token
-    scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client| {
-            client.set_identity_token(server_token);
-        });
-    });
-
-    // Wait for auth event
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server
-                .read_event::<ServerAuthEvent<Auth>>()
-                .is_some()
-                .then_some(())
+    // After a successful connection, the client must have the server-issued token.
+    // ClientAuthIo::receive() writes it to the shared Arc<Mutex> when the auth response arrives.
+    scenario.spec_expect("connection-27.t1: server-issued identity token is observable on client after connect", |ctx| {
+        ctx.client(client_a_key, |c| {
+            let token = c.identity_token()?;
+            (!token.is_empty()).then_some(())
         })
-    });
-
-    // Accept connection
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_a_key);
-        });
-    });
-
-    // Wait for connect event
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server
-                .read_event::<ServerConnectEvent>()
-                .is_some()
-                .then_some(())
-        })
-    });
-
-    // Add to room
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.room_mut(&room_key).unwrap().add_user(&client_a_key);
-        });
-    });
-
-    // Verify connection succeeds (server-generated token used by client - handshake succeeds)
-    scenario.spec_expect("connection-27.t1: server-generated token roundtrips successfully", |ctx| {
-        let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
-        (connected && user_exists).then_some(())
     });
 }
 

@@ -67,7 +67,9 @@ impl Handshaker for HandshakeManager {
                     };
                     let Some(user_key) = self.authenticated_unidentified_users.remove(&id_token)
                     else {
-                        return Ok(HandshakeAction::None);
+                        let reject_response =
+                            Self::write_reject_response(RejectReason::Auth).to_packet();
+                        return Ok(HandshakeAction::SendPacket(reject_response));
                     };
                     // Verify identity token exists (but keep it for disconnect verification)
                     if !self.identity_token_map.contains_key(&user_key) {
