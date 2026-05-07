@@ -246,6 +246,9 @@ The SDD migration mission landed in 6 phases over a single push. End state:
 - **`private_replication_only_owner_sees_it`** (`06_entity_scopes.rs`, `[entity-ownership-12]`) — closed 2026-05-06.
   No product bug. `ClientReplicationConfig::Private` entities never enter other clients' scope — behaviour was already correct. Test had been `#[ignore]`-ed as an infra placeholder. Used existing step bindings `client {word} spawns a client-owned entity with Private replication config` + `the entity is out-of-scope for client B` to upgrade the `@Deferred @PolicyOnly` stub to a real `@Scenario(07)` in `05_authority.feature` Rule(05). Rust test deleted; 170/170 BDD green.
 
+- **`protocol_mismatch_is_deployment_error_not_panic`** (`00_common.rs`, `[common-02a]`) — closed 2026-05-06.
+  No product bug. Protocol-id mismatch produces `ProtocolMismatch` rejection correctly. Test had been `#[ignore]`-ed (no infra to inject a mismatched protocol). The two Rule(03) Scenarios in `00_foundations.feature` (both [common-02a]) already cover this with real `ProtocolId::new(A/B)` step bindings and both pass. Rust test deleted. `00_common.rs` now has zero `#[ignore]` tests; remaining tests are live policy-stamp coverage for common-03 through common-14.
+
 ---
 
 ## Sidequest — Debug-infra upgrade (2026-05-06, in-flight)

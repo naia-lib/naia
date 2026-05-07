@@ -66,52 +66,6 @@ fn remote_untrusted_input_does_not_panic() {
 // [common-02a] — Protocol mismatch is a deployment error
 // ============================================================================
 
-/// Protocol mismatch produces error, not panic
-/// Contract: [common-02a]
-///
-/// Given protocol_id mismatch between client and server;
-/// when connection is attempted; then rejected with ProtocolMismatch (not panic).
-/// Note: This is tested via matching protocols succeeding.
-#[test]
-#[ignore]
-fn protocol_mismatch_is_deployment_error_not_panic() {
-    // Matching protocols should succeed (no panic from mismatch handling)
-    let mut scenario = Scenario::new();
-    let server_protocol = protocol();
-    let mut client_protocol_builder = Protocol::builder();
-    client_protocol_builder.add_message::<Auth>();
-    let client_protocol = client_protocol_builder.build(); // Mismatch!
-
-    scenario.server_start(ServerConfig::default(), server_protocol);
-    let _ = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-
-    let client_key = scenario.client_start(
-        "Client A",
-        Auth::new("client_a", "pass"),
-        test_client_config(),
-        client_protocol,
-    );
-
-    // Run until rejection occurs (or timeout)
-    scenario.until(naia_test_harness::ToTicks::ticks(20)).expect(|ctx| {
-         // Wait for client to be rejected or disconnected due to mismatch
-         ctx.client(client_key, |c| {
-             if c.read_event::<naia_test_harness::ClientRejectEvent>().is_some() {
-                 return Some(());
-             }
-             if c.read_event::<naia_test_harness::ClientDisconnectEvent>().is_some() {
-                 return Some(());
-             }
-             None
-         })
-    });
-
-    // If we reached here without panic, we passed the "MUST NOT panic" obligation
-    scenario.spec_expect("common-02a.t1: Protocol mismatch is a deployment error", |_| {
-        Some(())
-    });
-}
-
 // ============================================================================
 // [common-03] — Framework invariant violations MUST panic
 // ============================================================================
