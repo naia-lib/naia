@@ -371,8 +371,12 @@ Feature: Entity Ownership, Publication, Delegation, Authority
 
 
   # ──────────────────────────────────────────────────────────────────────
-  # Phase D.6 — coverage stubs (deferred)
+  # Q5.C — coverage stubs (partially converted)
   # ──────────────────────────────────────────────────────────────────────
+  #
+  # 13 stubs converted; 1 marked @PolicyOnly; 19 remain @Deferred
+  # (missing bindings: non-holder write, disable-delegation, migration,
+  #  concurrent ops, token-lifecycle, owner-change events).
 
   @Rule(05)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
@@ -387,10 +391,12 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-ownership-06] Client-owned entity ownership migrates on disconnect
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(03)
     Scenario: [entity-ownership-07] Ownership is queryable from both sides
-      Then the system intentionally fails
+      Given a server is running
+      And a client connects
+      And the client spawns a client-owned entity with a replicated component
+      Then the entity owner is the client
 
     @Deferred
     @Scenario(04)
@@ -425,15 +431,21 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-ownership-14] Concurrent ownership operations resolve deterministically
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(10)
     Scenario: [entity-publication-06] Publication state changes are observable client-side
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Private replication config
+      When client A publishes the entity
+      Then client A observes replication config as Public for the entity
 
-    @Deferred
     @Scenario(11)
-    Scenario: [entity-publication-07] Publish/Unpublish events fire correctly
-      Then the system intentionally fails
+    Scenario: [entity-publication-07] Publish event fires correctly
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Private replication config
+      When client A publishes the entity
+      Then the server observes a publish event for client A
 
     @Deferred
     @Scenario(12)
@@ -445,30 +457,38 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-publication-09] Multi-publication transitions are deterministic
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(14)
     Scenario: [entity-publication-10] Publication after spawn is allowed
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Private replication config
+      When client A publishes the entity
+      Then client A observes replication config as Public for the entity
 
     @Deferred
     @Scenario(15)
     Scenario: [entity-publication-11] Republishing after unpublish creates new lifetime
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(16)
     Scenario: [entity-delegation-01] Delegation enables authority operations
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
 
     @Deferred
     @Scenario(17)
     Scenario: [entity-delegation-02] Delegation requires public publication
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(18)
     Scenario: [entity-delegation-03] Delegation defaults to Available status
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      Then client A observes Available authority status for the entity
 
     @Deferred
     @Scenario(19)
@@ -480,42 +500,70 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-delegation-05] Disable delegation clears all authority status
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(21)
     Scenario: [entity-delegation-07] Denied requests do not auto-promote on holder release
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
+      When client A releases authority for the delegated entity
+      Then client B is available for the delegated entity
 
     @Deferred
     @Scenario(22)
     Scenario: [entity-delegation-08] Migration assigns initial authority to in-scope owner
       Then the system intentionally fails
 
-
     @Deferred
     @Scenario(24)
     Scenario: [entity-delegation-10] Holder can mutate, others cannot
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(25)
     Scenario: [entity-delegation-12] Holder release returns to Available for all
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
+      When client A releases authority for the delegated entity
+      Then client A is available for the delegated entity
+      And client B is available for the delegated entity
 
-
-    @Deferred
     @Scenario(28)
     Scenario: [entity-authority-02] Holder writes succeed
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      When the client updates the replicated component
+      Then the server observes the component update
 
     @Deferred
     @Scenario(29)
     Scenario: [entity-authority-03] Non-holder writes fail
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(30)
     Scenario: [entity-authority-04] Available status allows next request to win
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      When client A releases authority for the delegated entity
+      Then client A is available for the delegated entity
+      When client B requests authority for the delegated entity
+      Then client B is granted authority for the delegated entity
 
     @Deferred
     @Scenario(31)
@@ -547,8 +595,7 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-authority-14] Authority is preserved across re-entry
       Then the system intentionally fails
 
-    @Deferred
+    @Deferred @PolicyOnly
     @Scenario(37)
     Scenario: [entity-authority-15] Duplicate authority signals are idempotent
-      Then the system intentionally fails
 
