@@ -388,6 +388,14 @@ impl RemoteWorldManager {
                 EntityMessage::Noop => {
                     // do nothing
                 }
+                EntityMessage::SetAuthority(_, remote_entity, auth_status) => {
+                    // Update the stored auth status so get_entity_auth_status() reflects the new value
+                    self.remote_engine.receive_set_auth_status(remote_entity, auth_status);
+                    let Some(global_entity) = local_entity_map.global_entity_from_remote(&remote_entity) else {
+                        continue;
+                    };
+                    self.incoming_events.push(EntityEvent::SetAuthority(*global_entity, auth_status));
+                }
                 msg => {
                     // let msg_type = msg.get_type();
                     let event = msg.to_event(local_entity_map);

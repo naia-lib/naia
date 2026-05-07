@@ -341,8 +341,9 @@ impl HostWorldManager {
                 // 2. EntityMessage::RequestAuthority
                 // 3. EntityMessage::ReleaseAuthority
                 msg => {
-                    let event = msg.to_event(local_entity_map);
-                    self.incoming_events.push(event);
+                    if let Some(event) = msg.to_event(local_entity_map) {
+                        self.incoming_events.push(event);
+                    }
                 }
             }
         }

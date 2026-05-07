@@ -239,12 +239,20 @@ impl EntityMessage<RemoteEntity> {
 }
 //
 impl EntityMessage<HostEntity> {
-    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
+    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let host_entity = self.entity().unwrap();
-        let global_entity = *(local_entity_map
-            .global_entity_from_host(&host_entity)
-            .unwrap());
-        match self {
+        let global_entity = match local_entity_map.global_entity_from_host(&host_entity) {
+            Some(ge) => *ge,
+            None => {
+                error!(
+                    "to_event() failed to find HostEntity({:?}) in entity_map — message type: {:?}; skipping",
+                    host_entity,
+                    self.get_type()
+                );
+                return None;
+            }
+        };
+        Some(match self {
             EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
             EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
@@ -266,6 +274,6 @@ impl EntityMessage<HostEntity> {
             | EntityMessage::InsertComponent(_, _)
             | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
-        }
+        })
     }
 }

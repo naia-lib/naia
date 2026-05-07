@@ -246,6 +246,29 @@ impl LocalWorldManager {
         component_kinds_map: &ComponentKinds,
         is_static: bool,
     ) {
+        // Stale-mapping detection (per [entity-delegation-15] / scope re-entry):
+        // If the entity is mapped but its HostEntityChannel has already been
+        // removed from the HostEngine, that means a Despawn was sent (channel
+        // removed synchronously) and the ACK hasn't yet recycled the id from
+        // the entity_map. The remaining map entry is stale. Evict it so that
+        // we allocate a *fresh* HostEntity below — otherwise the stale ACK,
+        // when it arrives, would call `on_delivered_despawn_entity` and wipe
+        // the new mapping (since recycled HostEntity ids would alias).
+        if let Ok(existing_host_entity) =
+            self.entity_map.global_entity_to_host_entity(global_entity)
+        {
+            let channel_alive = self
+                .host
+                .get_host_world()
+                .contains_key(&existing_host_entity);
+            if !channel_alive {
+                // Stale mapping. Drop it without recycling the id (the in-flight
+                // Despawn ACK will recycle later via the idempotent path in
+                // `HostEntityGenerator::remove_by_host_entity`).
+                self.entity_map.remove_by_global_entity(global_entity);
+            }
+        }
+
         if self
             .entity_map
             .global_entity_to_host_entity(global_entity)

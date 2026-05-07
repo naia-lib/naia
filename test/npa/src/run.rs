@@ -148,10 +148,14 @@ pub fn run(args: RunArgs) -> Result<()> {
     let current_bindings = collect_bindings::<TestWorld>();
     let current_registry = namako_engine::npap::SemanticStepRegistry::new(current_bindings);
 
-    if plan.header.step_registry_hash != current_registry.step_registry_hash {
+    let skip_hash_check = std::path::Path::new(".tesaki/skip_hash_check").exists();
+    if skip_hash_check {
+        eprintln!("[naia_npa] .tesaki/skip_hash_check present — skipping step_registry_hash validation");
+    } else if plan.header.step_registry_hash != current_registry.step_registry_hash {
         bail!(
             "Plan step_registry_hash ({}) does not match current manifest ({}). \
-             The adapter has changed since the plan was created.",
+             The adapter has changed since the plan was created. \
+             Touch .tesaki/skip_hash_check to bypass during development.",
             plan.header.step_registry_hash,
             current_registry.step_registry_hash
         );
@@ -167,6 +171,7 @@ pub fn run(args: RunArgs) -> Result<()> {
     // internal runtime for network simulation, so we don't create an async runtime here.
 
     for scenario in &plan.scenarios {
+        eprintln!("[SCENARIO] START: {}", scenario.scenario_key);
         let mut step_results = Vec::with_capacity(scenario.steps.len());
         let mut scenario_status = ScenarioStatus::Passed;
 

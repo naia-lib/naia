@@ -231,8 +231,8 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And client B connects
       And the server spawns a delegated entity in-scope for both clients
       When the server gives authority to client A for the delegated entity
-      Then client B is denied authority for the delegated entity
-      And client B receives an authority denied event for the entity
+      Then client B receives an authority denied event for the entity
+      And client B is denied authority for the delegated entity
 
     # [entity-delegation-09] — Migration with out-of-scope owner yields no holder
     # When a client-owned Public entity is migrated to Delegated and the former

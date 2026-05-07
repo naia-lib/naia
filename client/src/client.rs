@@ -794,13 +794,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         self.check_client_authoritative_allowed();
 
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .ok()?;
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            return None;
+        };
 
-        self.global_world_manager
-            .entity_authority_status(&global_entity)
+        self.global_world_manager.entity_authority_status(&global_entity)
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!

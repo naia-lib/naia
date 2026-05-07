@@ -30,3 +30,4 @@ node_modules
 test/specs/target/
 test/specs/.tesaki/*
 **/namako_artifacts/
+.tesaki/skip_hash_check

@@ -107,10 +107,21 @@ impl HostEntityGenerator {
         converter: &mut LocalEntityMap,
         host_entity: &HostEntity,
     ) {
-        let global_entity = *(converter
-            .global_entity_from_host(host_entity)
-            .expect("Attempting to despawn entity which does not exist!"));
-        self.remove_by_global_entity(converter, &global_entity);
+        // The mapping may already have been cleared at send time by
+        // `LocalWorldManager::despawn_entity` (see [entity-delegation-15]).
+        // In that case, just recycle the id slot — the entity_map removal
+        // already happened. Otherwise (legacy path, or non-despawn cleanup),
+        // do the full remove.
+        if let Some(global_entity) = converter.global_entity_from_host(host_entity).copied() {
+            self.remove_by_global_entity(converter, &global_entity);
+        } else {
+            // Send-time cleanup already removed the mapping; just free the id.
+            if host_entity.is_static() {
+                self.static_generator.recycle_key(&host_entity.value());
+            } else {
+                self.generator.recycle_key(&host_entity.value());
+            }
+        }
     }
 
     pub fn remove_by_remote_entity(

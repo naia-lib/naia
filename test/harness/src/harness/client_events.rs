@@ -52,7 +52,12 @@ impl ClientEvents {
 
         let mut despawns = Vec::new();
         for entity in world_events.read::<naia_client::DespawnEntityEvent>() {
-            if let Some(entity_key) = register_client_entity_event(scenario, &client_key, &entity) {
+            // Entity is already removed from the world at this point, so look up
+            // the EntityKey directly from the registry rather than via has_entity check.
+            if let Some(entity_key) = scenario
+                .entity_registry()
+                .entity_key_for_client_test_entity(&client_key, &entity)
+            {
                 despawns.push(entity_key);
             }
         }

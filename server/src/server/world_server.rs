@@ -1357,7 +1357,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         // entity authority was granted for origin user
-
         // for any users that have this entity in scope, send an `update_authority_status` message
 
         // TODO: we can make this more efficient in the future by caching which Entities
@@ -1407,6 +1406,52 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Events are separate from network messages - they're notifications for external consumers
         self.incoming_world_events
             .push_auth_grant(origin_user, world_entity);
+
+        Ok(())
+    }
+
+    fn entity_handle_client_request_authority(
+        &mut self,
+        requester_user: &UserKey,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
+        let global_entity = self
+            .global_entity_map
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        if !self.user_scope_has_entity(requester_user, world_entity) {
+            return Err(AuthorityError::NotInScope);
+        }
+
+        let requester = AuthOwner::from_user_key(Some(requester_user));
+        self.global_world_manager
+            .client_request_authority(&global_entity, &requester)?;
+
+        for (user_key, user) in self.users.iter() {
+            let Some(connection) = self.user_connections.get_mut(&user.address()) else {
+                continue;
+            };
+            if !connection
+                .base
+                .world_manager
+                .has_global_entity(&global_entity)
+            {
+                continue;
+            }
+            let new_status = if requester_user == user_key {
+                EntityAuthStatus::Granted
+            } else {
+                EntityAuthStatus::Denied
+            };
+            connection
+                .base
+                .world_manager
+                .host_send_set_auth(&global_entity, new_status);
+        }
+
+        self.incoming_world_events
+            .push_auth_grant(requester_user, world_entity);
 
         Ok(())
     }
@@ -3079,7 +3124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    let _ = self.entity_give_authority(user_key, &world_entity);
+                    let _ = self.entity_handle_client_request_authority(user_key, &world_entity);
                 }
                 EntityEvent::ReleaseAuthority(global_entity) => {
                     // info!("received release auth entity message!");
