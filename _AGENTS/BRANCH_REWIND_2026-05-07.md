@@ -418,25 +418,26 @@ Before P0.0, Connor should personally confirm in the GitHub UI (or git CLI if he
 
 | Phase | Status | Timestamp | SHA / Notes |
 |---|---|---|---|
-| P0.0 backup | pending | | |
-| P0.1 hygiene | pending | | |
-| P0.2 stop tasks | pending | | |
-| P0.3 sync | pending | | |
-| P0.4 SHA verify | pending | | |
-| P0.5 unique-commit inventory | pending | | |
-| P1.1 dev local | pending | | |
-| P1.2 dev push | pending | | |
-| P1.3 dev verify | pending | | |
-| **STOP — Connor go-ahead** | pending | | |
-| P2.1 checkout dev | pending | | |
-| P2.2 move main | pending | | |
-| P2.3 force-push main | pending | | |
-| P2.4 verify | pending | | |
-| P3.1 delete stale branches | pending | | |
-| P3.2 prune origin | pending | | |
-| P3.3 verify | pending | | |
-| P4 doc updates | pending | | |
-| P5 final verification | pending | | |
+| P0.0 backup | ✅ done | 2026-05-07 11:53 | `naia-backup-2026-05-07/` (41 GB), tip = 8ffea924 |
+| P0.1 hygiene | ✅ done | 2026-05-07 11:55 | clean tree (only untracked: this doc), HEAD on main at 8ffea924 |
+| P0.2 stop tasks | ✅ done | 2026-05-07 11:55 | no benches running |
+| P0.3 sync | ✅ done | 2026-05-07 11:55 | origin/main == main; anellie remote 404 (dead fork, ignored) |
+| P0.4 SHA verify | ✅ done | 2026-05-07 11:55 | release-0.25.0-e..main = 51 ✓, ancestors check ✓ |
+| P0.5 unique-commit inventory | ✅ done | 2026-05-07 11:55 | bevy-demo +49, release-b +4, release-d2 +1 (all disposable per Connor) |
+| P1.1 dev local | ✅ done | 2026-05-07 (Connor "go") | `git branch dev main`; dev = 8ffea924 |
+| P1.2 dev push | ✅ done | 2026-05-07 | pre-push hook passed; origin/dev = 8ffea924 |
+| P1.3 dev verify | ✅ done | 2026-05-07 | origin/main == origin/dev == 8ffea924 |
+| **STOP — Connor go-ahead** | ✅ approved | 2026-05-07 | "Go to Phase 2, be careful here!" |
+| P2.1 checkout dev | ✅ done | 2026-05-07 | HEAD on dev (8ffea924) |
+| P2.2 move main | ✅ done | 2026-05-07 | local main → 4b646a1f |
+| P2.3 force-push main | ✅ done | 2026-05-07 | `--force-with-lease=main:8ffea924` succeeded; admin override of branch protection |
+| P2.4 verify | ✅ done | 2026-05-07 | origin/main = 4b646a1f, origin/dev = 8ffea924 |
+| P3.1 delete stale branches | ✅ done | 2026-05-07 | bevy-demo + release-0.25.0-{b,c,d,d2,e} deleted locally |
+| P3.2 prune origin | ✅ done | 2026-05-07 | `--prune` ran; only `dev`, `main`, `dependabot/...`, `release-0.25.0-e` (Connor handling) remained on origin |
+| P3.3 verify | ✅ done | 2026-05-07 | local refs: only `dev` and `main` |
+| P4 doc updates | ✅ done | 2026-05-07 (commit 83a7f83c) | SDD plans updated; RELEASE_PROCESS.md + BRANCH_REWIND_2026-05-07.md committed to dev |
+| P5 final verification | ✅ done | 2026-05-07 | NPA 172/172, build clean, dev..main = 0 (drift gate green) |
+| Connor — delete origin/release-0.25.0-e | confirmed handling | 2026-05-07 | "I will remove release-0.25.0-e myself on GH" |
 
 ---
 
