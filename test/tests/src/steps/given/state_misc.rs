@@ -5,7 +5,7 @@
 
 use crate::steps::prelude::*;
 
-use crate::steps::world_helpers::{connect_client, disconnect_last_client, last_entity_mut};
+use crate::steps::world_helpers::last_entity_mut;
 
 // ──────────────────────────────────────────────────────────────────────
 // Common — operational/disconnect/multi-command preconditions
@@ -49,7 +49,6 @@ fn given_client_disconnected(ctx: &mut TestWorldMut) {
 #[given("multiple scope operations queued for the same tick")]
 fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
     use naia_test_harness::Position;
-    use crate::steps::world_helpers::connect_named_client;
     let client_key = connect_named_client(ctx, "ScopeTestClient", "scope_user", None);
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();

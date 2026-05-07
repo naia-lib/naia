@@ -18,7 +18,8 @@ use crate::steps::world_helpers::{client_key_storage, last_entity_mut};
 /// waits for both to observe replication.
 #[given("the server spawns a delegated entity in-scope for both clients")]
 fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::{named_client_mut, spawn_delegated_entity_in_scope};
+    use crate::steps::world_helpers::named_client_mut;
+    use crate::steps::world_helpers_connect::spawn_delegated_entity_in_scope;
     let client_a = named_client_mut(ctx, "A");
     let client_b = named_client_mut(ctx, "B");
     let entity_key = spawn_delegated_entity_in_scope(ctx, &[client_a, client_b]);
@@ -32,7 +33,8 @@ fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut Test
 /// Given the server spawns a delegated entity in-scope for client A.
 #[given("the server spawns a delegated entity in-scope for client A")]
 fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::{named_client_mut, spawn_delegated_entity_in_scope};
+    use crate::steps::world_helpers::named_client_mut;
+    use crate::steps::world_helpers_connect::spawn_delegated_entity_in_scope;
     let client_a = named_client_mut(ctx, "A");
     let entity_key = spawn_delegated_entity_in_scope(ctx, &[client_a]);
     let scenario = ctx.scenario_mut();

@@ -11,5 +11,7 @@
 //! Phase A.1: stub. A.3 moves existing When bindings here.
 
 pub mod client_actions;
-pub mod network_events;
-pub mod server_actions;
+pub mod network_events_connection;
+pub mod network_events_transport;
+pub mod server_actions_entity;
+pub mod server_actions_scope;

@@ -20,7 +20,6 @@ use crate::steps::world_helpers::tick_n;
 /// hoists this Given to a Background block.
 #[given("a server is running")]
 fn given_server_running(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::ensure_server_started;
     ensure_server_started(ctx);
 }
 
@@ -52,7 +51,6 @@ fn given_client_named_connects(ctx: &mut TestWorldMut, name: String) {
 /// client. The result is the canonical 1-server-1-client baseline.
 #[given("a server and one connected client")]
 fn given_server_and_one_client(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::{connect_test_client, ensure_server_started};
     ensure_server_started(ctx);
     let _ = connect_test_client(ctx, "alice");
 }

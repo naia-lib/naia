@@ -45,7 +45,8 @@ fn given_server_spawns_non_delegated_entity_in_scope_for_client_a(ctx: &mut Test
 /// precondition for tests asserting the spawn-event timing.
 #[given("a server-owned entity enters scope for client A")]
 fn given_server_owned_entity_enters_scope_for_client_a(ctx: &mut TestWorldMut) {
-    use crate::steps::world_helpers::{named_client_mut, spawn_position_entity_in_scope};
+    use crate::steps::world_helpers::named_client_mut;
+    use crate::steps::world_helpers_connect::spawn_position_entity_in_scope;
     let client_a = named_client_mut(ctx, "A");
     spawn_position_entity_in_scope(ctx, client_a);
 }

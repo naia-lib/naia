@@ -33,10 +33,13 @@ pub use crate::{TestWorldMut, TestWorldRef};
 
 // Most-used helpers + BDD-store keys from `world_helpers`.
 pub use crate::steps::world_helpers::{
-    client_key_storage, connect_client, connect_named_client, connect_test_client,
-    disconnect_last_client, ensure_server_started, entity_label_to_key_storage,
+    client_key_storage, disconnect_last_client, entity_label_to_key_storage,
     panic_payload_to_string, CLIENT_LOCAL_VALUE_KEY, ENTITY_A_KEY, ENTITY_B_KEY,
     INITIAL_ENTITY_KEY, LAST_COMPONENT_VALUE_KEY, LAST_ENTITY_KEY, LAST_REQUEST_ERROR_KEY,
     RESPONSE_RECEIVE_KEY, SECOND_CLIENT_KEY, SPAWN_BURST_KEYS, SPAWN_POSITION_VALUE_KEY,
     SPAWN_VELOCITY_VALUE_KEY, WRITE_REJECTED_KEY,
+};
+// Connect-handshake and entity helpers (split into world_helpers_connect).
+pub use crate::steps::world_helpers_connect::{
+    connect_client, connect_named_client, connect_test_client, ensure_server_started,
 };

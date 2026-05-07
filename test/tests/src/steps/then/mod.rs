@@ -12,4 +12,7 @@
 
 pub mod event_assertions;
 pub mod ordering;
-pub mod state_assertions;
+pub mod state_assertions_entity;
+pub mod state_assertions_replication;
+pub mod state_assertions_delegation;
+pub mod state_assertions_network;

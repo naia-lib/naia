@@ -20,6 +20,7 @@
 pub mod prelude;
 pub mod vocab;
 pub mod world_helpers;
+pub mod world_helpers_connect;
 
 pub mod given;
 pub mod when;

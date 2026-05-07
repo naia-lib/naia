@@ -46,7 +46,6 @@ fn given_protocol_with_player_selection(_ctx: &mut TestWorldMut) {
 #[given(r#"a server with PlayerSelection \{ selected_id: 0 \} and connected client "alice""#)]
 fn given_server_with_player_selection_and_alice(ctx: &mut TestWorldMut) {
     use naia_test_harness::TestPlayerSelection;
-    use crate::steps::world_helpers::{connect_test_client, ensure_server_started};
     ensure_server_started(ctx);
     let _ = connect_test_client(ctx, "alice");
     let scenario = ctx.scenario_mut();
