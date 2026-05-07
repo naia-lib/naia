@@ -409,6 +409,25 @@ fn then_client_receives_messages_abc_in_order(
     }
 }
 
+/// Then the client's last sequenced message is S3.
+///
+/// Reads all messages from `SequencedChannel` and asserts the last
+/// received value is 3 (S3). SequencedReliable "latest wins" means the
+/// channel must not roll back to an older value after S3 is seen.
+#[then("the client's last sequenced message is S3")]
+fn then_client_last_sequenced_message_is_s3(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::test_protocol::{SequencedChannel, TestMessage};
+    let client_key = ctx.last_client();
+    let messages: Vec<u32> = ctx.client(client_key, |client| {
+        client.read_message::<SequencedChannel, TestMessage>().map(|m| m.value).collect()
+    });
+    match messages.last().copied() {
+        None => AssertOutcome::Pending,
+        Some(3) => AssertOutcome::Passed(()),
+        Some(v) => AssertOutcome::Failed(format!("Expected last sequenced message S3=3, got {v}")),
+    }
+}
+
 /// Then the client receives message A exactly once.
 #[then("the client receives message A exactly once")]
 fn then_client_receives_message_a_exactly_once(ctx: &TestWorldRef) -> AssertOutcome<()> {

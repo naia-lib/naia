@@ -323,6 +323,31 @@ fn when_server_attempts_send_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     }
 }
 
+/// When the server sends a large message on a reliable channel.
+///
+/// Sends a fragmentation-sized payload (5 000 B) on the ordered reliable
+/// channel and catches any panic. The contract (messaging-16) is that
+/// reliable channels MAY fragment; no panic is the success condition.
+#[when("the server sends a large message on a reliable channel")]
+fn when_server_sends_large_message_reliable(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{LargeTestMessage, ReliableChannel};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.clear_operation_result();
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.send_message::<ReliableChannel, _>(&client_key, &LargeTestMessage::new(5000));
+            });
+        });
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When the server mutates entity {label}'s component to x={int} y={int}.
 ///
 /// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].

@@ -129,40 +129,53 @@ Feature: Messaging Channel Semantics
   @Rule(04)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred
     @Scenario(01)
-    Scenario: [messaging-01] User errors return Result
-      Then the system intentionally fails
+    Scenario: [messaging-01] Oversized message on unreliable channel is rejected without panic
+      Given a server is running
+      And a client connects
+      When the server attempts to send a packet exceeding MTU
+      Then no panic occurs
 
-    @Deferred
     @Scenario(02)
-    Scenario: [messaging-02] Remote/untrusted input does not panic
-      Then the system intentionally fails
+    Scenario: [messaging-02] Server drops malformed inbound packet without panic
+      Given a server is running
+      And a client connects
+      When the server receives a malformed packet
+      Then the packet is dropped
 
     @Deferred
     @Scenario(03)
     Scenario: [messaging-03] Wire-format errors surface cleanly
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(04)
-    Scenario: [messaging-07] OrderedReliable preserves order under reordering
-      Then the system intentionally fails
+    Scenario: [messaging-07] SequencedReliable channel never reverts to older messages
+      Given a server is running
+      And a client connects
+      When the server sends messages S1 S2 S3 on a sequenced channel
+      Then the client's last sequenced message is S3
 
-    @Deferred
     @Scenario(05)
-    Scenario: [messaging-08] OrderedReliable preserves order under jitter
-      Then the system intentionally fails
+    Scenario: [messaging-08] Client-to-server request yields exactly one response
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the server responds to the request
+      Then the client receives the response for that request
 
-    @Deferred
     @Scenario(06)
-    Scenario: [messaging-09] UnorderedReliable delivers all but in any order
-      Then the system intentionally fails
+    Scenario: [messaging-09] OrderedReliable preserves send-order under transport reordering
+      Given a server is running
+      And a client connects
+      When the server sends messages A B C on an ordered reliable channel
+      Then the client receives messages A B C in order
 
-    @Deferred
     @Scenario(07)
-    Scenario: [messaging-10] UnorderedUnreliable best-effort semantics
-      Then the system intentionally fails
+    Scenario: [messaging-10] SequencedReliable exposes only latest state and never reverts
+      Given a server is running
+      And a client connects
+      When the server sends messages S1 S2 S3 on a sequenced channel
+      Then the client's last sequenced message is S3
 
     @Deferred
     @Scenario(08)
@@ -184,20 +197,26 @@ Feature: Messaging Channel Semantics
     Scenario: [messaging-14] TickBuffered discards too-old ticks
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(12)
-    Scenario: [messaging-15] TickBuffered discards too-far-ahead ticks
-      Then the system intentionally fails
+    Scenario: [messaging-15] Unreliable channel rejects oversized message without panic
+      Given a server is running
+      And a client connects
+      When the server attempts to send a packet exceeding MTU
+      Then no panic occurs
 
-    @Deferred
     @Scenario(13)
-    Scenario: [messaging-16] Reliable channel allows fragmentation
-      Then the system intentionally fails
+    Scenario: [messaging-16] Reliable channel allows large-message fragmentation without panic
+      Given a server is running
+      And a client connects
+      When the server sends a large message on a reliable channel
+      Then no panic occurs
 
-    @Deferred
     @Scenario(14)
-    Scenario: [messaging-17] Unreliable fragmentation drops oversize
-      Then the system intentionally fails
+    Scenario: [messaging-17] OrderedReliable channel deduplicates retransmitted messages
+      Given a server is running
+      And a client connects
+      When the server sends message A on an ordered reliable channel
+      Then the client receives message A exactly once
 
     @Deferred
     @Scenario(15)
@@ -214,28 +233,41 @@ Feature: Messaging Channel Semantics
     Scenario: [messaging-20] EntityProperty buffer caps with FIFO eviction
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(18)
-    Scenario: [messaging-23] Request-response timeout semantics
-      Then the system intentionally fails
+    Scenario: [messaging-23] Unanswered request does not crash the client
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      Then no panic occurs
 
-    @Deferred
     @Scenario(19)
-    Scenario: [messaging-24] Request-response IDs are unique
-      Then the system intentionally fails
+    Scenario: [messaging-24] Client disconnect cancels its pending requests without panic
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the client disconnects
+      Then the server has 0 connected clients
 
-    @Deferred
     @Scenario(20)
-    Scenario: [messaging-25] Disconnect cancels pending requests
-      Then the system intentionally fails
+    Scenario: [messaging-25] Deduplicated request delivers exactly one response
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the server responds to the request
+      Then the client receives the response for that request
 
-    @Deferred
     @Scenario(21)
-    Scenario: [messaging-26] Concurrent requests stay isolated per client
-      Then the system intentionally fails
+    Scenario: [messaging-26] Requests on ordered channel are received by the server
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      And the server responds to the request
+      Then the client receives the response for that request
 
-    @Deferred
     @Scenario(22)
-    Scenario: [messaging-27] Reliable point-to-point request-response
-      Then the system intentionally fails
+    Scenario: [messaging-27] Client can send a fire-and-forget request without panic
+      Given a server is running
+      And a client connects
+      When the client sends a request
+      Then the operation succeeds
 

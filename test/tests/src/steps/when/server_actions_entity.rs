@@ -97,6 +97,24 @@ fn when_server_sends_messages_abc_ordered(ctx: &mut TestWorldMut) {
     scenario.record_ok();
 }
 
+/// When the server sends messages S1 S2 S3 on a sequenced channel.
+///
+/// Sends values 1, 2, 3 on the `SequencedChannel` (SequencedReliable).
+/// Used to verify "latest wins" semantics (messaging-07, messaging-10).
+#[when("the server sends messages S1 S2 S3 on a sequenced channel")]
+fn when_server_sends_messages_s1_s2_s3_sequenced(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{SequencedChannel, TestMessage};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.send_message::<SequencedChannel, _>(&client_key, &TestMessage::new(1));
+            server.send_message::<SequencedChannel, _>(&client_key, &TestMessage::new(2));
+            server.send_message::<SequencedChannel, _>(&client_key, &TestMessage::new(3));
+        });
+    });
+}
+
 /// When the server sends message A on an ordered reliable channel.
 #[when("the server sends message A on an ordered reliable channel")]
 fn when_server_sends_message_a_ordered(ctx: &mut TestWorldMut) {
