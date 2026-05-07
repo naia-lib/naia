@@ -492,42 +492,43 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And the RTT returns a defined default value
 
   # ──────────────────────────────────────────────────────────────────────
-  # Phase D.2 — coverage stubs (deferred)
+  # Q5.B — coverage stubs (partially converted)
   # ──────────────────────────────────────────────────────────────────────
   #
-  # The contract IDs below have legacy_tests/01_connection_lifecycle.rs
-  # and 05_observability_metrics.rs `#[test]` fns but no current
-  # behavioral Scenario in this grouped feature. They are tagged
-  # `@Deferred` (Category B) — testable behaviors waiting for a real
-  # Scenario body. Convert each to a real Scenario in Q5.
+  # 13 stubs converted to real Scenarios; 5 marked @PolicyOnly (Category A);
+  # 17 remain @Deferred (Category B/C — bindings missing or untestable trigger).
 
   @Rule(12)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred
     @Scenario(01)
     Scenario: [connection-12] Anonymous connection allowed when auth disabled
-      Then the system intentionally fails
+      Given a server is running
+      And a client connects
+      Then the server has 1 connected client
 
     @Deferred
     @Scenario(02)
     Scenario: [connection-13] No replication before auth decision
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(03)
     Scenario: [connection-14a] Protocol_id checked during handshake
-      Then the system intentionally fails
+      Given a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the connection is rejected with ProtocolMismatch
 
     @Deferred
     @Scenario(04)
     Scenario: [connection-15] No mid-session reauth
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(05)
     Scenario: [connection-17] Server capacity reject produces RejectEvent
-      Then the system intentionally fails
+      Given a server is running with auth required
+      When a client attempts to connect but is rejected
+      Then the client observes RejectEvent
 
     @Deferred
     @Scenario(06)
@@ -549,45 +550,53 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [connection-27] Valid identity token round-trips
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(10)
     Scenario: [connection-28] Reconnect is fresh session (lifecycle parity)
-      Then the system intentionally fails
+      Given a server is running
+      And a client connects
+      When the client disconnects
+      And the client reconnects
+      Then the server has 1 connected client
 
-    @Deferred
     @Scenario(11)
     Scenario: [connection-29] Same protocol produces same protocol_id
-      Then the system intentionally fails
+      Given a server with protocol version A
+      And a client with protocol version A
+      When the client attempts to connect
+      Then the client is connected
 
-    @Deferred
     @Scenario(12)
     Scenario: [connection-30] Protocol_id wire encoding allows connection
-      Then the system intentionally fails
+      Given a server with protocol version A
+      And a client with protocol version A
+      When the client attempts to connect
+      Then the client is connected
 
-    @Deferred
     @Scenario(13)
     Scenario: [connection-31] Matched protocol_id allows connection
-      Then the system intentionally fails
+      Given a server with protocol version A
+      And a client with protocol version A
+      When the client attempts to connect
+      Then the client is connected
 
-    @Deferred
+    @Deferred @PolicyOnly
     @Scenario(14)
     Scenario: [connection-32] Protocol_id determined by wire-relevant aspects only
-      Then the system intentionally fails
 
-    @Deferred
     @Scenario(15)
     Scenario: [connection-33] No partial protocol compatibility
-      Then the system intentionally fails
+      Given a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the connection is rejected with ProtocolMismatch
 
-    @Deferred
+    @Deferred @PolicyOnly
     @Scenario(16)
     Scenario: [observability-01] Metrics do not affect replicated state
-      Then the system intentionally fails
 
-    @Deferred
+    @Deferred @PolicyOnly
     @Scenario(17)
     Scenario: [observability-01a] Querying metrics does not affect tick pacing
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(18)
@@ -599,36 +608,36 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [observability-06] Bandwidth exposes both directions
       Then the system intentionally fails
 
-    @Deferred
+    @Deferred @PolicyOnly
     @Scenario(20)
     Scenario: [observability-08] Time source monotonic consistency
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(21)
     Scenario: [observability-09] Per-direction metrics consistency
       Then the system intentionally fails
 
-    @Deferred
+    @Deferred @PolicyOnly
     @Scenario(22)
     Scenario: [observability-10] Metrics are testable without feature flags
-      Then the system intentionally fails
 
-
-    @Deferred
     @Scenario(23)
     Scenario: [connection-04] Reject path: client receives RejectEvent
-      Then the system intentionally fails
+      Given a server is running with auth required
+      When a client attempts to connect but is rejected
+      Then the client observes RejectEvent
 
-    @Deferred
     @Scenario(24)
     Scenario: [connection-06] Auth event ordering on accepted handshake
-      Then the system intentionally fails
+      Given a server is running with auth required
+      When a client authenticates and connects
+      Then the server observes AuthEvent before ConnectEvent
 
-    @Deferred
     @Scenario(25)
     Scenario: [connection-08] AuthEvent fires before ConnectEvent server-side
-      Then the system intentionally fails
+      Given a server is running with auth required
+      When a client authenticates and connects
+      Then the server observes AuthEvent before ConnectEvent
 
     @Deferred
     @Scenario(26)
@@ -645,15 +654,18 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [connection-11] Auth payload survives handshake roundtrip
       Then the system intentionally fails
 
-    @Deferred
     @Scenario(29)
     Scenario: [connection-14] Protocol mismatch produces ProtocolMismatch reject
-      Then the system intentionally fails
+      Given a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the connection is rejected with ProtocolMismatch
 
-    @Deferred
     @Scenario(30)
     Scenario: [connection-16] Server cap enforced via RejectEvent
-      Then the system intentionally fails
+      Given a server is running with auth required
+      When a client attempts to connect but is rejected
+      Then the client observes RejectEvent
 
     @Deferred
     @Scenario(31)
