@@ -324,6 +324,18 @@ Run `cargo run -p naia_npa --release -- run --plan test/specs/resolved_plan.json
 
 ### Deferred (no unpark plan yet)
 
+- **`[entity-ownership-11]` stub label mismatch** — deferred 2026-05-06.
+  The feature file stub in `05_authority.feature` Rule(05):Scenario(06) says "Public client-owned entity replicates to other clients" but the spec contract [entity-ownership-11] (`08_entity_ownership.spec.md`) is "Client-owned entities may migrate to server-owned delegated" (delegation migration). The stub description is wrong. Attempted upgrade failed: Public replication does NOT automatically put the entity in non-owner clients' scope — server must explicitly include it. The stub is left as `@Deferred @PolicyOnly`. Unpark: (a) fix the stub description to match the spec, (b) add step bindings for delegation migration (enable-delegation on client-owned entity transfers ownership to server, and cannot revert).
+
+- **`[entity-ownership-12]` partial coverage note** — 2026-05-06.
+  The scenario added for [entity-ownership-12] tests "Private entity is never in scope for non-owners" which more precisely aligns with [entity-publication-02] from `09_entity_publication.spec.md`. The spec for [entity-ownership-12] is "Owning client always in-scope for its entities" (owner never receives despawn for its own entity; non-owner loses entity when out of scope). The added scenario provides partial coverage (half of the t2 obligation). Full coverage would also assert: given a scope-exclude for non-owner, entity despawns on non-owner but not on owner.
+
+- **`[entity-scopes-09]` include bypasses room gate** — deferred 2026-05-06.
+  Naia currently allows `scope.include()` to bypass the room gate for roomless entities. The contract says include MUST NOT bypass the room gate. This is a product bug; fixing it would change the server's scope-computation logic and may have correctness implications for existing room-based scoping. Unpark when product is ready to enforce the room gate in `user_scope_mut().include()`.
+
+- **Connection lifecycle placeholders** (`01_connection_lifecycle.rs`) — deferred 2026-05-06.
+  Four `#[ignore]` tests remain: capacity reject, heartbeat timeout, token reuse, server-generated token. All require infrastructure not yet in the harness (configurable capacity limits, wall-clock time manipulation, token API on client). Unpark when harness supports these primitives.
+
 - **`protocol_type_order_mismatch_fails_fast_at_handshake`** (`03_messaging.rs`, `[connection-XX]`) — deferred 2026-05-06.
   Tests fast-fail detection of mismatched component/channel type ordering during the auth wire handshake. Exercising this requires infrastructure not yet wired into the harness (distinct protocol variants exchanged during connection, not at send-time). Unpark when harness supports multi-protocol handshake scenarios.
 
