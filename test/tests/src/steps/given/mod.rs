@@ -5,9 +5,22 @@
 //!
 //! Submodule split:
 //! - `setup` — protocol/server/client/room initialization
-//! - `state` — entity/component/scope/auth state preconditions
+//! - `state_entity` — entity/component/replication preconditions
+//! - `state_scope` — scope/room/authority preconditions
+//! - `state_publication` — Public/Private replication multi-client
+//! - `state_authority` — delegation multi-client
+//! - `state_resources` — replicated resources
+//! - `state_network` — RTT/jitter/latency
+//! - `state_misc` — disconnect/multi-command/queuing
 //!
-//! Phase A.1: stub. A.3 moves existing Given bindings here.
+//! The legacy single-file `state.rs` was split into the above modules
+//! during Q3 (2026-05-07) — see `_AGENTS/SDD_QUALITY_DEBT_PLAN.md`.
 
 pub mod setup;
-pub mod state;
+pub mod state_authority;
+pub mod state_entity;
+pub mod state_misc;
+pub mod state_network;
+pub mod state_publication;
+pub mod state_resources;
+pub mod state_scope;
