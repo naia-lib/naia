@@ -244,73 +244,35 @@ The file's 1206 lines already use horizontal-rule comment blocks to group sectio
 
 Each phase ends with: build clean, NPA 172+ /172+ pass, plan doc updated, **artifacts refreshed**, commit + push.
 
-### Phase Q0 — Verify perf gate (BLOCKER, ~5 min)
+### Phase Q0 — Verify perf gate (BLOCKER, ~5 min) ✅ DONE
 
 The original plan's success criterion 8 was never verified.
 
-- [ ] **Q0.1** Run `cargo run -p crucible -- run --assert` (or whatever the current bench command is — see `_AGENTS/BENCHMARKS.md`). Confirm 0 regressions.
-- [ ] **Q0.2** If anything regressed, stop and triage before continuing — perf debt is its own track.
+- [x] **Q0.1** Run `cargo run -p crucible -- run --assert` (or whatever the current bench command is — see `_AGENTS/BENCHMARKS.md`). Confirm 0 regressions.
+- [x] **Q0.2** If anything regressed, stop and triage before continuing — perf debt is its own track.
 
-### Phase Q1 — Tooling cleanup (LOW risk, ~1 day)
+### Phase Q1 — Tooling cleanup (LOW risk, ~1 day) ✅ DONE
 
 Goal: get the Python out, replace with Rust subcommand, refresh artifacts as a habit.
 
-- [ ] **Q1.1** Add `naia_npa coverage` subcommand at `test/npa/src/coverage.rs`. Behavior:
-  - Walks `test/specs/features/*.feature` for `[contract-id]` brackets and `@Deferred` tags
-  - Reports per-feature: `total / active / deferred / deferred-only-contract-IDs`
-  - Optional `--json` output for downstream tooling
-  - Optional `--fail-on-deferred-non-policy` flag: exits non-zero if any deferred scenario lacks `@PolicyOnly`
-  - Replace the regex-based contract-area list with a richer enum (or accept any `[a-z][a-z0-9-]*-[0-9a-z]+` pattern)
-- [ ] **Q1.2** Wire the subcommand into `test/npa/src/main.rs` `Commands` enum.
-- [ ] **Q1.3** Update `_AGENTS/DEBUGGING_PLAYBOOK.md` reference (and any other doc) from the Python script to `cargo run -p naia_npa -- coverage`.
-- [ ] **Q1.4** **Delete** `_AGENTS/scripts/coverage_diff.py` and `_AGENTS/scripts/` if it's now empty. Delete `_AGENTS/SDD_COVERAGE_DIFF.md` too — its content is regenerable on demand.
-- [ ] **Q1.5** Add a one-line refresh recipe to this doc and to `_AGENTS/SYSTEM.md`:
-  ```bash
-  cd /home/connor/Work/specops/namako && cargo run -q -p namako_cli -- lint \
-    --adapter-cmd /home/connor/Work/specops/naia/target/debug/naia_npa \
-    -s /home/connor/Work/specops/naia/test/specs \
-    -o /home/connor/Work/specops/naia/test/specs/resolved_plan.json
-  cd /home/connor/Work/specops/naia && cargo run -q -p naia_npa -- run \
-    -p test/specs/resolved_plan.json \
-    -o test/specs/run_report.json
-  ```
-- [ ] **Q1.6** Gate: `naia_npa coverage` runs cleanly; coverage diff Python file is gone; lint + run produce identical artifacts to what's currently committed; build clean. Commit + push.
+- [x] **Q1.1** Add `naia_npa coverage` subcommand at `test/npa/src/coverage.rs`.
+- [x] **Q1.2** Wire the subcommand into `test/npa/src/main.rs` `Commands` enum.
+- [x] **Q1.3** Update `_AGENTS/DEBUGGING_PLAYBOOK.md` reference from the Python script to `cargo run -p naia_npa -- coverage`.
+- [x] **Q1.4** Delete `_AGENTS/scripts/coverage_diff.py` and `_AGENTS/SDD_COVERAGE_DIFF.md`.
+- [x] **Q1.5** Refresh recipe documented in this doc and `_AGENTS/SYSTEM.md`.
+- [x] **Q1.6** Gate: passed.
 
-### Phase Q2 — Helper extraction (foundation for Q5, ~2 days)
+### Phase Q2 — Helper extraction (foundation for Q5, ~2 days) ✅ DONE
 
 Goal: every binding ≤25 LOC. Extract helpers preemptively before Q5 starts adding new bindings.
 
-- [ ] **Q2.1** Add 4 helpers to `test/tests/src/steps/world_helpers.rs`:
-  - `spawn_delegated_entity_in_scope(ctx, &[client_keys])` — replaces the 39–47 LOC delegated-entity setups
-  - `connect_client_full(ctx, label, &Auth, &room_key)` — connect + auth + room join + scope-include in one call (used by the 60–73 LOC reconnect/connect bindings)
-  - `observe_component_update(ctx, client_key, entity_key, predicate, n_ticks)` — replaces the 28–29 LOC observation polls in `then/state_assertions.rs`
-  - `enqueue_scope_ops_same_tick(ctx, ops: &[ScopeOp])` — splits the 92-LOC `given_multiple_scope_operations_same_tick` into a slim binding + a helper
-- [ ] **Q2.2** Refactor each of the 23 over-25-LOC bindings to consume the new helpers. Track per binding:
-  - [ ] given/state.rs:92 → `given_multiple_scope_operations_same_tick`
-  - [ ] when/network_events.rs:73 → `when_same_application_logic_runs`
-  - [ ] when/network_events.rs:62 → `when_client_authenticates_and_connects`
-  - [ ] when/network_events.rs:60 → `when_client_reconnects`
-  - [ ] when/client_actions.rs:49 → `when_client_attempts_write_to_server_owned_entity`
-  - [ ] given/state.rs:47 → `given_server_spawns_delegated_entity_in_scope_for_both_clients`
-  - [ ] given/state.rs:45 → `given_two_entities_a_b_in_scope`
-  - [ ] given/state.rs:40 → `given_server_spawns_non_delegated_entity_in_scope_for_client_a`
-  - [ ] when/network_events.rs:39 → `when_client_attempts_connection_rejected`
-  - [ ] given/state.rs:39 → `given_server_spawns_delegated_entity_in_scope_for_client_a`
-  - [ ] then/state_assertions.rs:35 → `then_entity_spawns_with_correct_values`
-  - [ ] given/state.rs:35 → `given_client_spawns_client_owned_entity_with_replicated_component`
-  - [ ] when/client_actions.rs:32 → `when_client_sends_on_server_to_client_channel`
-  - [ ] when/client_actions.rs:30 → `when_alice_requests_authority`
-  - [ ] then/state_assertions.rs:29 → `then_client_receives_message_a_exactly_once`
-  - [ ] then/state_assertions.rs:29 → `then_client_observes_server_value`
-  - [ ] then/state_assertions.rs:29 → `then_client_observes_component_update`
-  - [ ] then/state_assertions.rs:28 → `then_server_observes_component_update`
-  - [ ] given/state.rs:28 → `given_server_has_observed_spawn_event_for_client_a`
-  - [ ] given/state.rs:28 → `given_entity_in_scope_for_client_b`
-  - [ ] then/state_assertions.rs:26 → `then_client_entity_position_still_zero`
-  - [ ] given/state.rs:26 → `given_server_owned_entity_enters_scope_for_client_a`
-  - [ ] given/state.rs:26 → `given_connected_client_with_replicated_entities`
-- [ ] **Q2.3** Verify with `naia_npa coverage` (or a quick LOC count): zero bindings >25 LOC.
-- [ ] **Q2.4** Gate: NPA 172/172 pass, build clean, refresh artifacts. Commit + push.
+- [x] **Q2.1** Add helpers to `world_helpers.rs` / `world_helpers_connect.rs`:
+  - `spawn_delegated_entity_in_scope`, `spawn_position_entity_in_scope`
+  - `connect_named_client_with_auth_tracking`, `reject_named_client`
+  - `assert_server_position_eq`, `assert_client_position_eq`
+- [x] **Q2.2** Refactor all 23 over-25-LOC bindings. All now ≤25 LOC.
+- [x] **Q2.3** Zero bindings >25 LOC verified.
+- [x] **Q2.4** Gate: NPA 172/172 pass, build clean, artifacts refreshed. Committed + pushed.
 
 ### Phase Q3 — Split `given/state.rs` (LOW risk, ~½ day) ✅ DONE
 
@@ -350,11 +312,13 @@ Files to split and strategy:
 - `world_helpers_connect.rs` (new, ~380 LOC): `connect_test_client`, `connect_named_client_with_auth_tracking`, `reject_named_client`, private connect-handshake primitives, `spawn_delegated/position_entity_in_scope`, `assert_server/client_position_eq`, `ensure_server_started`, `connect_client`, `connect_named_client`
 
 Tasks:
-- [ ] **Q3.5.1** Split `then/state_assertions.rs` into 4 files. Update `then/mod.rs`.
-- [ ] **Q3.5.2** Split `when/server_actions.rs` into 2 files. Update `when/mod.rs`.
-- [ ] **Q3.5.3** Split `when/network_events.rs` into 2 files. Update `when/mod.rs`.
-- [ ] **Q3.5.4** Split `steps/world_helpers.rs` into 2 files. Update `steps/mod.rs` (add `world_helpers_connect`). Update all import sites.
-- [ ] **Q3.5.5** Gate: `RUSTFLAGS="-D warnings" cargo build --workspace --all-targets` clean. NPA 172/172. Every file in `steps/` ≤ 500 LOC. Refresh artifacts. Commit + push to `dev`.
+- [x] **Q3.5.1** Split `then/state_assertions.rs` (1644) → 4 files (entity/replication/delegation/network). Update `then/mod.rs`.
+- [x] **Q3.5.2** Split `when/server_actions.rs` (690) → `server_actions_entity.rs` + `server_actions_scope.rs`. Update `when/mod.rs`.
+- [x] **Q3.5.3** Split `when/network_events.rs` (668) → `network_events_connection.rs` + `network_events_transport.rs`. Update `when/mod.rs`.
+- [x] **Q3.5.4** Split `steps/world_helpers.rs` (596) → `world_helpers.rs` (222) + `world_helpers_connect.rs` (374). Updated `steps/mod.rs`, `prelude.rs`, and all import sites.
+- [x] **Q3.5.5** Gate: build clean (`-D warnings`), NPA 172/172, all files ≤500 LOC (max 477). Artifacts refreshed. Committed + pushed to `dev`.
+
+**End state (2026-05-07):** largest file in `steps/` is `network_events_transport.rs` at 477 LOC.
 
 ### Phase Q4 — Clean up Category A stubs (LOW risk, ~½ day)
 
@@ -365,7 +329,7 @@ Goal: stop pretending `Then the system intentionally fails` is a test.
   - Keep the `@Deferred @PolicyOnly` tag.
   - Remove the `Then the system intentionally fails` step body. Add a one-line `# Policy-only: <one-sentence justification>` comment in its place.
 - [ ] **Q4.2** Verify namako lint accepts a Scenario with no steps. (If it doesn't: replace with a single `Given a server is running` step that's already idempotent — but the comment-only form is preferable.)
-- [ ] **Q4.3** Remove the `the system intentionally fails` step binding from `then/state_assertions.rs` if no scenarios still use it after Q5.
+- [ ] **Q4.3** Remove the `the system intentionally fails` step binding from `then/state_assertions_entity.rs` if no scenarios still use it after Q5. (Note: `state_assertions.rs` was split in Q3.5; the binding now lives in `state_assertions_entity.rs`.)
 - [ ] **Q4.4** Gate: NPA 172/172 pass, lint passes, build clean. Refresh artifacts. Commit + push.
 
 ### Phase Q5 — Category B stubs → real BDD scenarios (MEDIUM risk, ~5–7 days)
