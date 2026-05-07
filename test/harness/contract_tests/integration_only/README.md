@@ -23,6 +23,16 @@ Two reasons only:
 If a test doesn't fit either category it does NOT belong here — write
 it as a Gherkin Scenario.
 
+## Relationship to BDD scenarios
+
+These integration tests are the **correctness oracle**. BDD scenarios in
+`test/specs/features/` are behavioral specifications derived from them.
+
+**Migration rule:** Do not delete an integration test until its BDD scenario
+has passing green runs. The two layers are complements, not competitors:
+integration tests prove the runtime is correct, BDD scenarios prove the
+contract is observable and documented.
+
 ## Migration deletion criteria
 
 A test in this directory is deleted (and its namako stub upgraded to a

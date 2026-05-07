@@ -4,7 +4,7 @@
 
 use anyhow::Result;
 use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
-use namako_engine::npap::{BindingSignature, SemanticBinding, SemanticStepRegistry};
+use namako_engine::npap::{BindingSignature, CustomParameterDef, SemanticBinding, SemanticStepRegistry};
 
 use naia_tests::TestWorld;
 
@@ -66,13 +66,28 @@ fn collect_bindings_from_inventory<W: WorldInventory>() -> Vec<SemanticBinding> 
     bindings
 }
 
+/// Custom parameter types from `naia_tests/steps/vocab.rs`.
+///
+/// Regexes must mirror the `#[param(regex = ...)]` attributes in vocab.rs exactly.
+fn naia_custom_parameters() -> Vec<CustomParameterDef> {
+    vec![
+        CustomParameterDef { name: "client".to_string(),    regex: r"[A-Za-z][A-Za-z0-9_]*".to_string() },
+        CustomParameterDef { name: "entity".to_string(),    regex: r"[a-z][a-z0-9_]*".to_string() },
+        CustomParameterDef { name: "component".to_string(), regex: r"[A-Z][A-Za-z0-9]*".to_string() },
+        CustomParameterDef { name: "channel".to_string(),   regex: r"[A-Z][A-Za-z0-9]*".to_string() },
+        CustomParameterDef { name: "role".to_string(),      regex: r"granted|denied|available|requested|releasing".to_string() },
+        CustomParameterDef { name: "room".to_string(),      regex: r"[a-z][a-z0-9_]*".to_string() },
+        CustomParameterDef { name: "message".to_string(),   regex: r"[A-Z][A-Za-z0-9]*".to_string() },
+    ]
+}
+
 /// Run the manifest command.
 pub fn run() -> Result<()> {
     // Collect all bindings from inventory (macro-generated at compile time)
     let bindings = collect_bindings_from_inventory::<TestWorld>();
 
     // Create the registry (computes step_registry_hash internally)
-    let registry = SemanticStepRegistry::new(bindings);
+    let registry = SemanticStepRegistry::new_with_params(bindings, naia_custom_parameters());
 
     // Output as JSON to stdout
     let json = serde_json::to_string_pretty(&registry)?;

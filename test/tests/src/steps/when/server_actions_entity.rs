@@ -1,6 +1,6 @@
 //! When-step bindings: server-initiated state changes.
 
-use naia_test_harness::{ClientKey, EntityKey};
+use naia_test_harness::EntityKey;
 
 use crate::steps::prelude::*;
 use crate::steps::world_helpers::last_entity_mut;
@@ -40,13 +40,12 @@ fn when_server_performs_idle_tick(ctx: &mut TestWorldMut) {
 /// client to despawn it. Used by [server-events-09] tests.
 #[when("the server removes the entity from client A's scope")]
 fn when_server_removes_entity_from_client_a_scope(ctx: &mut TestWorldMut) {
-    let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
+    let client_a = named_client_mut(ctx, "A");
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity spawned");
+    let scenario = ctx.scenario_mut();
     scenario.mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut scope) = server.user_scope_mut(&client_a) {

@@ -505,3 +505,78 @@ fn registry_hash_depends_on_impl_hash() {
         assert!(binding.get("impl_hash").is_some(), "binding has impl_hash");
     }
 }
+
+// ============================================================================
+// Coverage Subcommand Tests (H5 — audit 2026-05-07)
+// ============================================================================
+
+/// `coverage` exits 0 on the live spec tree.
+///
+/// Verifies the coverage report command works end-to-end on the real feature
+/// files and does not blow up. This catches regressions in the coverage parser
+/// (broken regex, missing file, etc.) that would silently make the CI gate
+/// ineffective.
+#[test]
+fn coverage_exits_zero_on_live_spec_tree() {
+    let specs = specs_dir();
+    let adapter_manifest = adapter_manifest();
+
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "--manifest-path",
+            adapter_manifest.to_str().unwrap(),
+            "--",
+            "coverage",
+            "--specs-root",
+            specs.to_str().unwrap(),
+        ])
+        .current_dir(&specs)
+        .output()
+        .expect("Failed to execute naia_npa coverage");
+
+    assert_success(&output, "coverage on live spec tree");
+    assert_output_contains(
+        &output,
+        "active scenario",
+        "coverage output includes active scenario count",
+    );
+}
+
+/// `coverage --fail-on-deferred-non-policy` exits 1 when deferred non-policy
+/// scenarios exist.
+///
+/// There are 97 @Deferred Category-C scenarios that lack @PolicyOnly; the
+/// flag must exit non-zero so CI can gate on this. A regression that makes
+/// the command exit 0 regardless of deferred count would silently break the
+/// quality gate.
+#[test]
+fn coverage_fail_on_deferred_non_policy_exits_one_with_pending_categories() {
+    let specs = specs_dir();
+    let adapter_manifest = adapter_manifest();
+
+    let output = Command::new("cargo")
+        .args([
+            "run",
+            "--manifest-path",
+            adapter_manifest.to_str().unwrap(),
+            "--",
+            "coverage",
+            "--specs-root",
+            specs.to_str().unwrap(),
+            "--fail-on-deferred-non-policy",
+        ])
+        .current_dir(&specs)
+        .output()
+        .expect("Failed to execute naia_npa coverage --fail-on-deferred-non-policy");
+
+    assert_failure(
+        &output,
+        "coverage --fail-on-deferred-non-policy exits non-zero when deferred non-policy exist",
+    );
+    assert_output_contains(
+        &output,
+        "gate failed",
+        "output contains gate-failed message",
+    );
+}

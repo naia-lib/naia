@@ -372,3 +372,72 @@ pub fn connect_named_client(
     scenario.allow_flexible_next();
     client_key
 }
+
+/// Connect a latency-conditioned client by label.
+///
+/// Runs the full auth → accept → ServerConnect → room-add → ClientConnect
+/// handshake, then applies a symmetric `LinkConditionerConfig(latency_ms, 0, 0.0)`.
+/// The `label` becomes the display name and is stored under `client_key_storage(label)`
+/// for downstream `named_client_*` lookups.
+///
+/// Used by the "Given/When a client connects with latency {int}ms" bindings, which
+/// differ only by label ("LatencyClient" vs "ReconnectedClient").
+pub fn connect_client_with_latency(
+    ctx: &mut crate::TestWorldMut,
+    label: &str,
+    latency_ms: u32,
+) -> crate::ClientKey {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{
+        Auth, ClientConnectEvent, LinkConditionerConfig, ServerAuthEvent, ServerConnectEvent,
+    };
+    let scenario = ctx.scenario_mut();
+    let test_protocol = protocol();
+    let room_key = scenario.last_room();
+    let mut client_config = ClientConfig::default();
+    client_config.send_handshake_interval = Duration::from_millis(0);
+    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_key = scenario.client_start(
+        label,
+        Auth::new("test_user", "password"),
+        client_config,
+        test_protocol,
+    );
+    let latency_config = LinkConditionerConfig::new(latency_ms, 0, 0.0);
+    scenario.configure_link_conditioner(
+        &client_key,
+        Some(latency_config.clone()),
+        Some(latency_config),
+    );
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                if incoming_key == client_key { return Some(incoming_key); }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| { ctx.server(|server| { server.accept_connection(&client_key); }); });
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
+                if incoming_key == client_key { return Some(()); }
+            }
+            None
+        })
+    });
+    scenario.track_server_event(TrackedServerEvent::Connect);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
+    scenario.allow_flexible_next();
+    scenario.bdd_store(&client_key_storage(label), client_key);
+    client_key
+}

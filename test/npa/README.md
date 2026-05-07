@@ -55,6 +55,21 @@ Executes a resolved plan produced by `namako lint`:
 2. Dispatches steps by `binding_id` only (no text matching at runtime)
 3. Produces a `run_report.json` with execution evidence
 
+#### `--scenario-key` (hidden gem for debugging)
+
+Run exactly one scenario by its key instead of the full plan:
+
+```bash
+cargo run -p naia_npa -- run -p resolved_plan.json --scenario-key "authority:Rule(03):Scenario(08)"
+```
+
+The full plan is loaded and validated normally; only the scenario list is
+filtered before dispatch. If the key is not found, the command errors and
+prints the 3 closest keys by edit distance ("did you mean…?"), which makes
+it fast to find the right key without grepping the plan JSON.
+
+Useful for isolating a single failing scenario without running the full suite.
+
 ---
 
 ## Execution Model

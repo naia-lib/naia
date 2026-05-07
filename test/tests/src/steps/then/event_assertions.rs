@@ -12,6 +12,7 @@ use naia_test_harness::{
 };
 
 use crate::steps::prelude::*;
+use crate::steps::vocab::ClientName;
 
 // ──────────────────────────────────────────────────────────────────────
 // Client-side entity-lifecycle events
@@ -125,20 +126,20 @@ fn then_client_receives_component_remove_event(ctx: &TestWorldRef) -> AssertOutc
 // Client-side authority events
 // ──────────────────────────────────────────────────────────────────────
 
-/// Then client A receives an authority granted event for the entity.
+/// Then client {client} receives an authority granted event for the entity.
 ///
 /// Covers [entity-authority-16.t1] (auth grant observable via Events API).
-#[then("client A receives an authority granted event for the entity")]
-fn then_client_a_receives_authority_granted_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let client_a: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
+#[then("client {client} receives an authority granted event for the entity")]
+fn then_client_receives_authority_granted_event(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity spawned");
-    ctx.client(client_a, |c| {
+    ctx.client(client_key, |c| {
         if let Some(ek) = c.read_event::<ClientEntityAuthGrantedEvent>() {
             if ek == entity_key {
                 AssertOutcome::Passed(())
@@ -151,20 +152,20 @@ fn then_client_a_receives_authority_granted_event(ctx: &TestWorldRef) -> AssertO
     })
 }
 
-/// Then client A receives an authority reset event for the entity.
+/// Then client {client} receives an authority reset event for the entity.
 ///
 /// Reset fires when authority returns to Available (e.g. server release).
-#[then("client A receives an authority reset event for the entity")]
-fn then_client_a_receives_authority_reset_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let client_a: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
+#[then("client {client} receives an authority reset event for the entity")]
+fn then_client_receives_authority_reset_event(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity spawned");
-    ctx.client(client_a, |c| {
+    ctx.client(client_key, |c| {
         if let Some(ek) = c.read_event::<ClientEntityAuthResetEvent>() {
             if ek == entity_key {
                 AssertOutcome::Passed(())
@@ -177,20 +178,20 @@ fn then_client_a_receives_authority_reset_event(ctx: &TestWorldRef) -> AssertOut
     })
 }
 
-/// Then client B receives an authority denied event for the entity.
+/// Then client {client} receives an authority denied event for the entity.
 ///
 /// Denied fires when status transitions Requested → Denied.
-#[then("client B receives an authority denied event for the entity")]
-fn then_client_b_receives_authority_denied_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let client_b: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("B"))
-        .expect("client B not connected");
+#[then("client {client} receives an authority denied event for the entity")]
+fn then_client_receives_authority_denied_event(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity spawned");
-    ctx.client(client_b, |c| {
+    ctx.client(client_key, |c| {
         if let Some(ek) = c.read_event::<ClientEntityAuthDeniedEvent>() {
             if ek == entity_key {
                 AssertOutcome::Passed(())
@@ -207,24 +208,24 @@ fn then_client_b_receives_authority_denied_event(ctx: &TestWorldRef) -> AssertOu
 // Server-side events
 // ──────────────────────────────────────────────────────────────────────
 
-/// Then the server observes a spawn event for client A.
+/// Then the server observes a spawn event for client {client}.
 ///
 /// `ServerSpawnEntityEvent` only fires for client-spawned entities;
 /// for server-owned entities scope membership is the proxy. Covers
 /// [server-events-07.t1].
-#[then("the server observes a spawn event for client A")]
-fn then_server_observes_spawn_event_for_client_a(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let client_a: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
+#[then("the server observes a spawn event for client {client}")]
+fn then_server_observes_spawn_event_for_client(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity spawned");
     ctx.server(|s| {
         let in_scope = s
-            .user_scope(&client_a)
+            .user_scope(&client_key)
             .map(|scope| scope.has(&entity_key))
             .unwrap_or(false);
         if in_scope {
@@ -235,15 +236,13 @@ fn then_server_observes_spawn_event_for_client_a(ctx: &TestWorldRef) -> AssertOu
     })
 }
 
-/// Then the server observes an authority grant event for client A.
-#[then("the server observes an authority grant event for client A")]
-fn then_server_observes_authority_grant_event_for_client_a(
+/// Then the server observes an authority grant event for client {client}.
+#[then("the server observes an authority grant event for client {client}")]
+fn then_server_observes_authority_grant_event_for_client(
     ctx: &TestWorldRef,
+    name: ClientName,
 ) -> AssertOutcome<()> {
-    let client_a: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
@@ -251,7 +250,7 @@ fn then_server_observes_authority_grant_event_for_client_a(
     ctx.server(|s| {
         let found = s
             .read_event::<ServerEntityAuthGrantEvent>()
-            .map(|(ck, ek)| ck == client_a && ek == entity_key)
+            .map(|(ck, ek)| ck == client_key && ek == entity_key)
             .unwrap_or(false);
         if found {
             AssertOutcome::Passed(())
@@ -281,13 +280,13 @@ fn then_server_observes_authority_reset_event(ctx: &TestWorldRef) -> AssertOutco
     })
 }
 
-/// Then the server observes a publish event for client A.
-#[then("the server observes a publish event for client A")]
-fn then_server_observes_publish_event_for_client_a(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let client_a: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
+/// Then the server observes a publish event for client {client}.
+#[then("the server observes a publish event for client {client}")]
+fn then_server_observes_publish_event_for_client(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
@@ -295,7 +294,7 @@ fn then_server_observes_publish_event_for_client_a(ctx: &TestWorldRef) -> Assert
     ctx.server(|s| {
         let found = s
             .read_event::<ServerPublishEntityEvent>()
-            .map(|(ck, ek)| ck == client_a && ek == entity_key)
+            .map(|(ck, ek)| ck == client_key && ek == entity_key)
             .unwrap_or(false);
         if found {
             AssertOutcome::Passed(())
@@ -418,23 +417,23 @@ fn then_client_has_observed_disconnect(ctx: &TestWorldRef) -> AssertOutcome<()> 
     }
 }
 
-/// Then the server observes a despawn event for client A.
+/// Then the server observes a despawn event for client {client}.
 ///
 /// Scope-absence proxy (mirrors spawn-event proxy above). Covers
 /// [server-events-09.t1].
-#[then("the server observes a despawn event for client A")]
-fn then_server_observes_despawn_event_for_client_a(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    let client_a: ClientKey = ctx
-        .scenario()
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
+#[then("the server observes a despawn event for client {client}")]
+fn then_server_observes_despawn_event_for_client(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key: EntityKey = ctx
         .scenario()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no entity spawned");
     ctx.server(|s| {
         let in_scope = s
-            .user_scope(&client_a)
+            .user_scope(&client_key)
             .map(|scope| scope.has(&entity_key))
             .unwrap_or(false);
         if !in_scope {

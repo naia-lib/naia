@@ -69,10 +69,13 @@ impl namako_engine::World for TestWorld {
     }
 
     fn ctx_ref(&mut self) -> Self::RefCtx<'_> {
-        // Note: This is a dummy implementation since TestWorldRef needs ExpectCtx.
-        // The actual TestWorldRef is created inside assert_then's polling loop.
-        // This will never be called in practice because we override assert_then.
-        panic!("ctx_ref() should not be called directly - use assert_then() instead")
+        // Intentional panic: namako_engine calls ctx_ref() for the default
+        // time-based polling path, which we replace entirely by overriding
+        // assert_then() below. This panic is the contract-enforcer — it
+        // guarantees that if namako ever stops calling our override and falls
+        // back to the default path, the test fails loudly rather than silently
+        // producing wrong results.
+        panic!("ctx_ref() should not be called directly — assert_then() override must be used")
     }
 
     /// Custom tick-based polling for Then step assertions.
@@ -307,9 +310,14 @@ impl<'a> TestWorldRef<'a> {
     }
 
     /// Get access to the underlying ExpectCtx.
-    /// Safety: We ensure single-threaded access and the pointer remains valid.
     fn ctx(&self) -> &mut ExpectCtx<'a> {
-        // Safety: Tests are single-threaded, pointer is valid for 'a
+        // SAFETY: `TestWorldRef` is created from a `&mut ExpectCtx<'a>` inside
+        // `assert_then()`'s polling closure and never escapes that closure. The
+        // pointer therefore remains valid and exclusively owned for the duration
+        // of any `ctx()` call. namako_engine is single-threaded so there is no
+        // concurrent access. The raw pointer is necessary because namako's
+        // `StepContext` trait provides only `&self` access to Then bindings, but
+        // `ExpectCtx` requires `&mut self` for its read-event APIs.
         unsafe { &mut *self.ctx }
     }
 

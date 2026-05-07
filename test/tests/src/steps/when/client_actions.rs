@@ -3,7 +3,8 @@
 use naia_test_harness::{ClientKey, EntityKey, Position};
 
 use crate::steps::prelude::*;
-use crate::steps::world_helpers::{last_entity_mut, named_client_mut};
+use crate::steps::vocab::ClientName;
+use crate::steps::world_helpers::last_entity_mut;
 
 /// When client A requests authority for the non-delegated entity.
 ///
@@ -276,9 +277,7 @@ fn when_client_invalid_api_operation(ctx: &mut TestWorldMut) {
 fn when_alice_requests_authority(ctx: &mut TestWorldMut) {
     use naia_shared::EntityAuthStatus;
     use naia_test_harness::TestPlayerSelection;
-    let client_key: ClientKey = ctx.scenario_mut()
-        .bdd_get(&client_key_storage("alice"))
-        .unwrap_or_else(|| ctx.scenario_mut().last_client());
+    let client_key: ClientKey = named_client_mut(ctx, "alice");
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| c.server(|s| {
         assert!(s.configure_resource::<TestPlayerSelection>(naia_server::ReplicationConfig::delegated()));
@@ -295,17 +294,15 @@ fn when_alice_requests_authority(ctx: &mut TestWorldMut) {
 // Authority requests/releases — multi-client
 // ──────────────────────────────────────────────────────────────────────
 
-/// When client {name} requests authority for the delegated entity.
-#[when("client {word} requests authority for the delegated entity")]
-fn when_client_requests_authority(ctx: &mut TestWorldMut, name: String) {
-    let scenario = ctx.scenario_mut();
-    let client_key: ClientKey = scenario
-        .bdd_get(&client_key_storage(&name))
-        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
-    let entity_key: EntityKey = scenario
+/// When client {client} requests authority for the delegated entity.
+#[when("client {client} requests authority for the delegated entity")]
+fn when_client_requests_authority(ctx: &mut TestWorldMut, name: ClientName) {
+    let client_key = named_client_mut(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no delegated entity spawned");
-    scenario.mutate(|mctx| {
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.client(client_key, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
                 entity
@@ -318,17 +315,15 @@ fn when_client_requests_authority(ctx: &mut TestWorldMut, name: String) {
     });
 }
 
-/// When client {name} releases authority for the delegated entity.
-#[when("client {word} releases authority for the delegated entity")]
-fn when_client_releases_authority(ctx: &mut TestWorldMut, name: String) {
-    let scenario = ctx.scenario_mut();
-    let client_key: ClientKey = scenario
-        .bdd_get(&client_key_storage(&name))
-        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
-    let entity_key: EntityKey = scenario
+/// When client {client} releases authority for the delegated entity.
+#[when("client {client} releases authority for the delegated entity")]
+fn when_client_releases_authority(ctx: &mut TestWorldMut, name: ClientName) {
+    let client_key = named_client_mut(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no delegated entity spawned");
-    scenario.mutate(|mctx| {
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.client(client_key, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
                 entity

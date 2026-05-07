@@ -255,7 +255,11 @@ fn print_human(report: &CoverageReport) {
         report.deferred_non_policy_scenarios
     );
 
-    println!("\nContracts with active (non-deferred) coverage: {}",
+    println!("\n{} active scenario(s), {} deferred, {} policy-only",
+        report.active_scenarios,
+        report.deferred_scenarios,
+        report.deferred_scenarios - report.deferred_non_policy_scenarios);
+    println!("Contracts with active (non-deferred) coverage: {}",
         report.contracts_with_active_coverage.len());
     println!("Contracts deferred-only (no active coverage): {}",
         report.contracts_deferred_only.len());

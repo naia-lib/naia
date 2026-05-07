@@ -170,26 +170,13 @@ fn then_client_eventually_observes_entity_at(
     x: i32,
     y: i32,
 ) -> AssertOutcome<()> {
-    use naia_test_harness::Position;
+    use crate::steps::world_helpers_connect::assert_client_position_eq;
     let client_key = ctx.last_client();
     let entity_key: naia_test_harness::EntityKey = ctx
         .scenario()
         .bdd_get(entity_label_to_key_storage(&label))
         .unwrap_or_else(|| panic!("entity '{}' not stored", label));
-    let (ex, ey) = (x as f32, y as f32);
-    ctx.client(client_key, |client| {
-        let Some(entity) = client.entity(&entity_key) else {
-            return AssertOutcome::Pending;
-        };
-        let Some(pos) = entity.component::<Position>() else {
-            return AssertOutcome::Pending;
-        };
-        if (*pos.x - ex).abs() < f32::EPSILON && (*pos.y - ey).abs() < f32::EPSILON {
-            AssertOutcome::Passed(())
-        } else {
-            AssertOutcome::Pending
-        }
-    })
+    assert_client_position_eq(ctx, client_key, entity_key, (x as f32, y as f32))
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -366,33 +353,38 @@ fn then_entity_becomes_out_of_scope_for_client_b(
 ///
 /// Polls until the named client's entity reports the expected
 /// `ReplicationConfig`. Covers [entity-publication-observability].
-#[then("client {word} observes replication config as {word} for the entity")]
+fn parse_client_replication_config(
+    name: &str,
+) -> Result<naia_client::ReplicationConfig, AssertOutcome<()>> {
+    use naia_client::ReplicationConfig;
+    match name {
+        "Public" => Ok(ReplicationConfig::Public),
+        "Private" => Ok(ReplicationConfig::Private),
+        "Delegated" => Ok(ReplicationConfig::Delegated),
+        other => Err(AssertOutcome::Failed(format!(
+            "Unknown replication config: '{other}'"
+        ))),
+    }
+}
+
+#[then("client {client} observes replication config as {word} for the entity")]
 fn then_client_observes_replication_config(
     ctx: &TestWorldRef,
-    label: String,
+    name: crate::steps::vocab::ClientName,
     config_name: String,
 ) -> AssertOutcome<()> {
-    use naia_client::ReplicationConfig as ClientReplicationConfig;
-    let client_key = named_client_ref(ctx, &label);
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
-    let expected = match config_name.as_str() {
-        "Public" => ClientReplicationConfig::Public,
-        "Private" => ClientReplicationConfig::Private,
-        "Delegated" => ClientReplicationConfig::Delegated,
-        other => {
-            return AssertOutcome::Failed(format!(
-                "Unknown replication config: '{}'",
-                other
-            ))
-        }
+    let expected = match parse_client_replication_config(&config_name) {
+        Ok(c) => c,
+        Err(outcome) => return outcome,
     };
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
             match entity.replication_config() {
                 Some(config) if config == expected => AssertOutcome::Passed(()),
                 Some(other) => AssertOutcome::Failed(format!(
-                    "Expected replication_config {:?}, got {:?}",
-                    expected, other
+                    "Expected replication_config {:?}, got {:?}", expected, other
                 )),
                 None => AssertOutcome::Pending,
             }
@@ -418,27 +410,39 @@ fn then_client_has_score(ctx: &TestWorldRef) -> AssertOutcome<()> {
     }
 }
 
-/// Then the client's Score.home equals 0.
-#[then("the client's Score.home equals 0")]
-fn then_client_score_home_0(ctx: &TestWorldRef) -> AssertOutcome<()> {
+/// Then the client's Score.home equals {int}.
+#[then("the client's Score.home equals {int}")]
+fn then_client_score_home_equals(ctx: &TestWorldRef, expected: u32) -> AssertOutcome<()> {
     use naia_test_harness::TestScore;
     let key = ctx.last_client();
     match ctx.client(key, |c| c.resource::<TestScore, _, _>(|s| *s.home)) {
-        Some(0) => AssertOutcome::Passed(()),
+        Some(v) if v == expected => AssertOutcome::Passed(()),
         _ => AssertOutcome::Pending,
     }
 }
 
-/// Then the client's Score.away equals 0.
-#[then("the client's Score.away equals 0")]
-fn then_client_score_away_0(ctx: &TestWorldRef) -> AssertOutcome<()> {
+/// Then the client's Score.away equals {int}.
+#[then("the client's Score.away equals {int}")]
+fn then_client_score_away_equals(ctx: &TestWorldRef, expected: u32) -> AssertOutcome<()> {
     use naia_test_harness::TestScore;
     let key = ctx.last_client();
     match ctx.client(key, |c| c.resource::<TestScore, _, _>(|s| *s.away)) {
-        Some(0) => AssertOutcome::Passed(()),
+        Some(v) if v == expected => AssertOutcome::Passed(()),
         _ => AssertOutcome::Pending,
     }
 }
+
+/// Then the client's MatchState.phase equals {int}.
+#[then("the client's MatchState.phase equals {int}")]
+fn then_client_matchstate_phase_equals(ctx: &TestWorldRef, expected: u8) -> AssertOutcome<()> {
+    use naia_test_harness::TestMatchState;
+    let key = ctx.last_client();
+    match ctx.client(key, |c| c.resource::<TestMatchState, _, _>(|s| *s.phase)) {
+        Some(v) if v == expected => AssertOutcome::Passed(()),
+        _ => AssertOutcome::Pending,
+    }
+}
+
 
 /// Then alice's authority status for PlayerSelection is "Granted".
 #[then(r#"alice's authority status for PlayerSelection is "Granted""#)]

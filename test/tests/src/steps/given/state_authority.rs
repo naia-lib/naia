@@ -6,7 +6,7 @@
 use crate::steps::prelude::*;
 
 use naia_test_harness::{EntityKey, Position};
-use crate::steps::world_helpers::{client_key_storage, last_entity_mut};
+use crate::steps::world_helpers::last_entity_mut;
 
 // ──────────────────────────────────────────────────────────────────────
 // Entity-delegation preconditions (multi-client + named delegation)
@@ -98,14 +98,12 @@ fn given_server_takes_authority_for_delegated_entity(ctx: &mut TestWorldMut) {
 #[given("client A is denied authority for the delegated entity")]
 fn given_client_a_is_denied_authority(ctx: &mut TestWorldMut) {
     use naia_shared::EntityAuthStatus;
-    use naia_test_harness::{ClientKey};
-    let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
+    let client_a = named_client_mut(ctx, "A");
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no delegated entity spawned");
+    let scenario = ctx.scenario_mut();
     scenario.spec_expect(
         "entity-authority-10: client A observes Denied (precondition)",
         |ectx| {

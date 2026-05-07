@@ -1,7 +1,8 @@
 //! Then-step bindings: entity-delegation authority and entity-scope singleton assertions.
 
 use crate::steps::prelude::*;
-use crate::steps::world_helpers::{last_entity_ref, named_client_ref};
+use crate::steps::vocab::ClientName;
+use crate::steps::world_helpers::last_entity_ref;
 
 // ──────────────────────────────────────────────────────────────────────
 // Entity-delegation — authority status assertions
@@ -11,13 +12,13 @@ use crate::steps::world_helpers::{last_entity_ref, named_client_ref};
 ///
 /// Polls until the named client observes EntityAuthStatus::Granted.
 /// Covers [entity-delegation-06.t1] (first in-scope request wins).
-#[then("client {word} is granted authority for the delegated entity")]
+#[then("client {client} is granted authority for the delegated entity")]
 fn then_client_is_granted_authority(
     ctx: &TestWorldRef,
-    name: String,
+    name: ClientName,
 ) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
-    let client_key = named_client_ref(ctx, &name);
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
@@ -42,13 +43,13 @@ fn then_client_is_granted_authority(
 ///
 /// Allows Requested as a transient state while the server round-trip
 /// completes. Covers [entity-delegation-07.t1].
-#[then("client {word} is denied authority for the delegated entity")]
+#[then("client {client} is denied authority for the delegated entity")]
 fn then_client_is_denied_authority(
     ctx: &TestWorldRef,
-    name: String,
+    name: ClientName,
 ) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
-    let client_key = named_client_ref(ctx, &name);
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
@@ -74,13 +75,13 @@ fn then_client_is_denied_authority(
 /// Covers [entity-delegation-11.t1] (release returns Denied clients
 /// to Available). Tolerates transient Releasing/Granted/Denied/Requested
 /// while the convergence completes.
-#[then("client {word} is available for the delegated entity")]
+#[then("client {client} is available for the delegated entity")]
 fn then_client_is_available_for_delegated_entity(
     ctx: &TestWorldRef,
-    name: String,
+    name: ClientName,
 ) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
-    let client_key = named_client_ref(ctx, &name);
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
@@ -143,13 +144,13 @@ fn then_client_a_observes_delegated_replication_config(
 }
 
 /// Then client {name} observes Available authority status for the entity.
-#[then("client {word} observes Available authority status for the entity")]
+#[then("client {client} observes Available authority status for the entity")]
 fn then_client_observes_available_authority_status(
     ctx: &TestWorldRef,
-    name: String,
+    name: ClientName,
 ) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
-    let client_key = named_client_ref(ctx, &name);
+    let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {

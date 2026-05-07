@@ -5,6 +5,7 @@
 //! clients, joined rooms.
 
 use crate::steps::prelude::*;
+use crate::steps::vocab::ClientName;
 use crate::steps::world_helpers::tick_n;
 
 /// Given a server is running.
@@ -33,14 +34,14 @@ fn given_client_connects(ctx: &mut TestWorldMut) {
     connect_client(ctx);
 }
 
-/// Given client {name} connects.
+/// Given client {client} connects.
 ///
 /// Connects a labeled client ("A", "B", ...) and stores the
 /// resulting ClientKey under `client_key_storage(name)`. Used by
 /// multi-client tests where bindings reference specific clients.
-#[given("client {word} connects")]
-fn given_client_named_connects(ctx: &mut TestWorldMut, name: String) {
-    connect_test_client(ctx, &name);
+#[given("client {client} connects")]
+fn given_client_named_connects(ctx: &mut TestWorldMut, name: ClientName) {
+    connect_test_client(ctx, name.as_ref());
 }
 
 /// Given a server and one connected client.
@@ -123,69 +124,7 @@ fn given_client_begins_connecting(ctx: &mut TestWorldMut) {
 /// known link characteristics.
 #[given("a client connects with latency {int}ms")]
 fn given_client_connects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, Auth, ClientConnectEvent, LinkConditionerConfig, ServerAuthEvent,
-        ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
-    };
-    let scenario = ctx.scenario_mut();
-    let test_protocol = protocol();
-    let room_key = scenario.last_room();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    let client_key = scenario.client_start(
-        "LatencyClient",
-        Auth::new("test_user", "password"),
-        client_config,
-        test_protocol,
-    );
-    let latency_config = LinkConditionerConfig::new(latency_ms, 0, 0.0);
-    scenario.configure_link_conditioner(
-        &client_key,
-        Some(latency_config.clone()),
-        Some(latency_config),
-    );
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(incoming_key);
-                }
-            }
-            None
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                if incoming_key == client_key {
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
-    scenario.track_server_event(TrackedServerEvent::Connect);
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_user(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
-    });
-    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
-    scenario.allow_flexible_next();
+    connect_client_with_latency(ctx, "LatencyClient", latency_ms);
 }
 
 /// Given the client disconnects.

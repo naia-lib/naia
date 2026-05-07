@@ -5,8 +5,6 @@
 
 use crate::steps::prelude::*;
 
-use crate::steps::world_helpers::last_entity_mut;
-
 // ──────────────────────────────────────────────────────────────────────
 // Common — operational/disconnect/multi-command preconditions
 // ──────────────────────────────────────────────────────────────────────
@@ -110,22 +108,3 @@ fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
     scenario.allow_flexible_next();
 }
 
-/// Given the entity is not in the client's room.
-///
-/// Spawns the stored entity into a separate room so it has no shared
-/// room with the client. Used by the update-candidate-set tests to
-/// confirm that out-of-scope entities don't generate dirty candidates.
-#[given("the entity is not in the client's room")]
-fn given_entity_not_in_clients_room(ctx: &mut TestWorldMut) {
-    let entity_key = last_entity_mut(ctx);
-
-    let scenario = ctx.scenario_mut();
-    scenario.mutate(|mctx| {
-        mctx.server(|server| {
-            let separate_room = server.make_room().key();
-            if let Some(mut entity) = server.entity_mut(&entity_key) {
-                entity.enter_room(&separate_room);
-            }
-        });
-    });
-}

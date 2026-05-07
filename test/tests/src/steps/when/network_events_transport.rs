@@ -427,11 +427,8 @@ fn when_tick_is_processed(ctx: &mut TestWorldMut) {
 /// [entity-delegation-14] (disconnect releases authority).
 #[when("client A disconnects from the server")]
 fn when_client_a_disconnects_from_server(ctx: &mut TestWorldMut) {
-    let scenario = ctx.scenario_mut();
-    let client_a: crate::ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    scenario.mutate(|mctx| {
+    let client_a = named_client_mut(ctx, "A");
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.server(|server| {
             server.disconnect_user(&client_a);
         });

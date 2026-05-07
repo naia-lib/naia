@@ -336,3 +336,23 @@ fn given_entity_not_in_any_room(ctx: &mut TestWorldMut) {
     scenario.mutate(|_| {});
 }
 
+
+/// Given the entity is not in the client's room.
+///
+/// Places the stored entity into a fresh isolated room, ensuring no shared
+/// room exists between it and the connected client. Used by scope tests that
+/// need an entity explicitly out of scope (e.g. update-candidate-set tests
+/// that verify out-of-scope entities don't generate dirty candidates).
+#[given("the entity is not in the client's room")]
+fn given_entity_not_in_clients_room(ctx: &mut TestWorldMut) {
+    let entity_key = last_entity_mut(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let separate_room = server.make_room().key();
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.enter_room(&separate_room);
+            }
+        });
+    });
+}

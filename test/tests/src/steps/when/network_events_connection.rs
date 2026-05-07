@@ -129,68 +129,6 @@ fn when_traffic_exchanged_multiple_windows(ctx: &mut TestWorldMut) {
 /// sessions.
 #[when("the client reconnects with latency {int}ms")]
 fn when_client_reconnects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{
-        protocol, Auth, ClientConnectEvent, LinkConditionerConfig, ServerAuthEvent,
-        ServerConnectEvent, TrackedClientEvent, TrackedServerEvent,
-    };
-    let scenario = ctx.scenario_mut();
-    let test_protocol = protocol();
-    let room_key = scenario.last_room();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
-    let client_key = scenario.client_start(
-        "ReconnectedClient",
-        Auth::new("test_user", "password"),
-        client_config,
-        test_protocol,
-    );
-    let latency_config = LinkConditionerConfig::new(latency_ms, 0, 0.0);
-    scenario.configure_link_conditioner(
-        &client_key,
-        Some(latency_config.clone()),
-        Some(latency_config),
-    );
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(incoming_key);
-                }
-            }
-            None
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                if incoming_key == client_key {
-                    return Some(());
-                }
-            }
-            None
-        })
-    });
-    scenario.track_server_event(TrackedServerEvent::Connect);
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server
-                .room_mut(&room_key)
-                .expect("room exists")
-                .add_user(&client_key);
-        });
-    });
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
-    });
-    scenario.track_client_event(client_key, TrackedClientEvent::Connect);
-    scenario.allow_flexible_next();
+    connect_client_with_latency(ctx, "ReconnectedClient", latency_ms);
 }
 

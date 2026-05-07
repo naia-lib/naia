@@ -1,10 +1,3 @@
-// Phase A.2 transitional: parameter types are defined here but not
-// referenced by step bindings until Phase A.3 moves the legacy bindings
-// onto them. Suppress dead_code under the workspace -D warnings gate
-// until A.3 lands. Remove this attribute once at least one binding per
-// type exists.
-#![allow(dead_code)]
-
 //! Parameter vocabulary for namako step bindings.
 //!
 //! **Purpose:** define the canonical, typed parameter shapes that step
@@ -99,6 +92,8 @@ impl AsRef<str> for ClientName {
 ///
 /// Convention: short tags like `e`, `e1`, `entity_a`, `target`. Avoid
 /// embedding type info in the name (`pos_entity` is worse than `e`).
+// Phase A.3: migrate entity-label {word} bindings onto this type.
+#[allow(dead_code)]
 #[derive(Parameter, Clone, Debug, PartialEq, Eq, Hash)]
 #[param(regex = r"[a-z][a-z0-9_]*", name = "entity")]
 pub struct EntityRef(pub String);
@@ -129,6 +124,8 @@ impl AsRef<str> for EntityRef {
 /// Component-kind name (e.g. `"Position"`, `"Velocity"`,
 /// `"ImmutableLabel"`). Maps to the test protocol's registered
 /// component types.
+// Phase A.3: migrate component-name {word} bindings onto this type.
+#[allow(dead_code)]
 #[derive(Parameter, Clone, Debug, PartialEq, Eq, Hash)]
 #[param(regex = r"[A-Z][A-Za-z0-9]*", name = "component")]
 pub struct ComponentName(pub String);
@@ -159,6 +156,8 @@ impl AsRef<str> for ComponentName {
 /// Channel name (e.g. `"OrderedReliable"`, `"UnorderedUnreliable"`,
 /// `"TickBuffered"`). Maps to the test protocol's registered channel
 /// kinds.
+// Phase A.3: migrate channel-name {word} bindings onto this type.
+#[allow(dead_code)]
 #[derive(Parameter, Clone, Debug, PartialEq, Eq, Hash)]
 #[param(regex = r"[A-Z][A-Za-z0-9]*", name = "channel")]
 pub struct ChannelName(pub String);
@@ -189,8 +188,10 @@ impl AsRef<str> for ChannelName {
 /// Authority role for a delegated entity, as observable on the client
 /// side. Maps to [`naia_shared::EntityAuthStatus`] for assertions.
 ///
-/// Phrases: `"client {client} is {role}"` →
-/// `client A is granted` / `client B is denied` / etc.
+/// Phrases: `"client {client} has {role} authority status for the entity"` →
+/// `client A has granted authority status` / etc.
+// Phase A.3: introduce consolidated authority-status assertions using this type.
+#[allow(dead_code)]
 #[derive(Parameter, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[param(
     regex = r"granted|denied|available|requested|releasing",
@@ -238,6 +239,8 @@ impl fmt::Display for AuthRole {
 /// Symbolic room reference. Resolves to a stored
 /// [`RoomKey`](crate::RoomKey) via the scenario's BDD store. Used in
 /// phrases like `"client {client} joins room {room}"`.
+// Phase A.3: introduce room-parameterized bindings onto this type.
+#[allow(dead_code)]
 #[derive(Parameter, Clone, Debug, PartialEq, Eq, Hash)]
 #[param(regex = r"[a-z][a-z0-9_]*", name = "room")]
 pub struct RoomRef(pub String);
@@ -267,6 +270,8 @@ impl AsRef<str> for RoomRef {
 
 /// Message-kind name (e.g. `"TestMessage"`, `"TestRequest"`). Maps to
 /// the test protocol's registered message types.
+// Phase A.3: migrate message-name {word} bindings onto this type.
+#[allow(dead_code)]
 #[derive(Parameter, Clone, Debug, PartialEq, Eq, Hash)]
 #[param(regex = r"[A-Z][A-Za-z0-9]*", name = "message")]
 pub struct MessageName(pub String);

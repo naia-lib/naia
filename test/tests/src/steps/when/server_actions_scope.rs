@@ -1,8 +1,9 @@
 //! When-step bindings: delegation authority, scope include/exclude, and transport operations.
 
-use naia_test_harness::{ClientKey, EntityKey};
+use naia_test_harness::EntityKey;
 
 use crate::steps::prelude::*;
+use crate::steps::vocab::ClientName;
 use crate::steps::world_helpers::last_entity_mut;
 
 // ──────────────────────────────────────────────────────────────────────
@@ -15,15 +16,12 @@ use crate::steps::world_helpers::last_entity_mut;
 /// per [entity-delegation-13].
 #[when("the server removes the delegated entity from client A's scope")]
 fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldMut) {
-    use naia_test_harness::ClientKey;
-    let scenario = ctx.scenario_mut();
-    let client_a: ClientKey = scenario
-        .bdd_get(&client_key_storage("A"))
-        .expect("client A not connected");
-    let entity_key: EntityKey = scenario
+    let client_a = named_client_mut(ctx, "A");
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no delegated entity spawned");
-    scenario.mutate(|mctx| {
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut scope) = server.user_scope_mut(&client_a) {
                 scope.exclude(&entity_key);
@@ -32,25 +30,23 @@ fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldM
     });
 }
 
-/// When the server attempts to give authority to client {name} for the delegated entity.
+/// When the server attempts to give authority to client {client} for the delegated entity.
 ///
 /// Sibling of `when_server_gives_authority` that records the operation
 /// result (Ok/Err/panic) into the scenario instead of unwrapping. Used
 /// by `[common-01]` negative scenarios that assert `give_authority`
 /// returns `Err` (e.g. `NotInScope`) rather than panicking.
 #[when(
-    "the server attempts to give authority to client {word} for the delegated entity"
+    "the server attempts to give authority to client {client} for the delegated entity"
 )]
-fn when_server_attempts_give_authority(ctx: &mut TestWorldMut, name: String) {
-    use crate::steps::world_helpers::{client_key_storage, panic_payload_to_string};
+fn when_server_attempts_give_authority(ctx: &mut TestWorldMut, name: ClientName) {
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    let scenario = ctx.scenario_mut();
-    let client_key: ClientKey = scenario
-        .bdd_get(&client_key_storage(&name))
-        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
-    let entity_key: EntityKey = scenario
+    let client_key = named_client_mut(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no delegated entity spawned");
+    let scenario = ctx.scenario_mut();
     scenario.clear_operation_result();
     // Capture (Result, panic-payload-if-any) inside a single mutate so the
     // borrow on `scenario` is released before recording.
@@ -80,18 +76,15 @@ fn when_server_attempts_give_authority(ctx: &mut TestWorldMut, name: String) {
     }
 }
 
-/// When the server gives authority to client {name} for the delegated entity.
-#[when("the server gives authority to client {word} for the delegated entity")]
-fn when_server_gives_authority(ctx: &mut TestWorldMut, name: String) {
-    use crate::steps::world_helpers::client_key_storage;
-    let scenario = ctx.scenario_mut();
-    let client_key: ClientKey = scenario
-        .bdd_get(&client_key_storage(&name))
-        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
-    let entity_key: EntityKey = scenario
+/// When the server gives authority to client {client} for the delegated entity.
+#[when("the server gives authority to client {client} for the delegated entity")]
+fn when_server_gives_authority(ctx: &mut TestWorldMut, name: ClientName) {
+    let client_key = named_client_mut(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("no delegated entity spawned");
-    scenario.mutate(|mctx| {
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut entity) = server.entity_mut(&entity_key) {
                 entity
@@ -140,22 +133,19 @@ fn when_server_releases_authority(ctx: &mut TestWorldMut) {
 // Entity-scope — server scope-mut operations
 // ──────────────────────────────────────────────────────────────────────
 
-/// When the server includes the entity for client {name}.
+/// When the server includes the entity for client {client}.
 ///
 /// Named-client variant of `the server includes the entity for the client`.
 /// Used by multi-client delegation tests where the act-on client is
 /// distinct from the most-recently-connected one.
-#[when("the server includes the entity for client {word}")]
-fn when_server_includes_entity_for_named_client(ctx: &mut TestWorldMut, name: String) {
-    use crate::steps::world_helpers::client_key_storage;
-    let scenario = ctx.scenario_mut();
-    let client_key: ClientKey = scenario
-        .bdd_get(&client_key_storage(&name))
-        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
-    let entity_key: EntityKey = scenario
+#[when("the server includes the entity for client {client}")]
+fn when_server_includes_entity_for_named_client(ctx: &mut TestWorldMut, name: ClientName) {
+    let client_key = named_client_mut(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("No entity has been created");
-    scenario.mutate(|mctx| {
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut scope) = server.user_scope_mut(&client_key) {
                 scope.include(&entity_key);
@@ -164,18 +154,15 @@ fn when_server_includes_entity_for_named_client(ctx: &mut TestWorldMut, name: St
     });
 }
 
-/// When the server excludes the entity for client {name}.
-#[when("the server excludes the entity for client {word}")]
-fn when_server_excludes_entity_for_named_client(ctx: &mut TestWorldMut, name: String) {
-    use crate::steps::world_helpers::client_key_storage;
-    let scenario = ctx.scenario_mut();
-    let client_key: ClientKey = scenario
-        .bdd_get(&client_key_storage(&name))
-        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
-    let entity_key: EntityKey = scenario
+/// When the server excludes the entity for client {client}.
+#[when("the server excludes the entity for client {client}")]
+fn when_server_excludes_entity_for_named_client(ctx: &mut TestWorldMut, name: ClientName) {
+    let client_key = named_client_mut(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
         .bdd_get(LAST_ENTITY_KEY)
         .expect("No entity has been created");
-    scenario.mutate(|mctx| {
+    ctx.scenario_mut().mutate(|mctx| {
         mctx.server(|server| {
             if let Some(mut scope) = server.user_scope_mut(&client_key) {
                 scope.exclude(&entity_key);
