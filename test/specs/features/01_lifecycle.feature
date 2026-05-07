@@ -510,7 +510,6 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(02)
     Scenario: [connection-13] No replication before auth decision
-      Then the system intentionally fails
 
     @Scenario(03)
     Scenario: [connection-14a] Protocol_id checked during handshake
@@ -522,7 +521,6 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(04)
     Scenario: [connection-15] No mid-session reauth
-      Then the system intentionally fails
 
     @Scenario(05)
     Scenario: [connection-17] Server capacity reject produces RejectEvent
@@ -533,22 +531,18 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(06)
     Scenario: [connection-19] Client disconnects on heartbeat timeout
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(07)
     Scenario: [connection-23] Malformed identity token rejected
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(08)
     Scenario: [connection-25] Expired or reused tokens obey lifetime semantics
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(09)
     Scenario: [connection-27] Valid identity token round-trips
-      Then the system intentionally fails
 
     @Scenario(10)
     Scenario: [connection-28] Reconnect is fresh session (lifecycle parity)
@@ -601,12 +595,10 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(18)
     Scenario: [observability-05] Throughput must be non-negative
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(19)
     Scenario: [observability-06] Bandwidth exposes both directions
-      Then the system intentionally fails
 
     @Deferred @PolicyOnly
     @Scenario(20)
@@ -615,7 +607,6 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(21)
     Scenario: [observability-09] Per-direction metrics consistency
-      Then the system intentionally fails
 
     @Deferred @PolicyOnly
     @Scenario(22)
@@ -642,17 +633,14 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(26)
     Scenario: [connection-09] Disconnect during auth is handled cleanly
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(27)
     Scenario: [connection-10] Multiple concurrent auth requests serialize
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(28)
     Scenario: [connection-11] Auth payload survives handshake roundtrip
-      Then the system intentionally fails
 
     @Scenario(29)
     Scenario: [connection-14] Protocol mismatch produces ProtocolMismatch reject
@@ -670,24 +658,19 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Deferred
     @Scenario(31)
     Scenario: [connection-18] Heartbeat liveness triggers timeout disconnect
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(32)
     Scenario: [connection-20] Reconnect after timeout is fresh session
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(33)
     Scenario: [connection-22] Disconnect propagates to scoped entities
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(34)
     Scenario: [connection-24] Identity token format validation
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(35)
     Scenario: [connection-26] Token reuse blocked across sessions
-      Then the system intentionally fails

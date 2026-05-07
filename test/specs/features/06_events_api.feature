@@ -299,115 +299,92 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Deferred
     @Scenario(01)
     Scenario: [server-events-00] Server events API surface contract
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(02)
     Scenario: [server-events-01] ConnectEvent fires per accepted client
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(03)
     Scenario: [server-events-02] DisconnectEvent fires on client drop
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(04)
     Scenario: [server-events-03] AuthEvent surfaces on server-side request
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(05)
     Scenario: [server-events-04] TickEvent fires per server tick
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(06)
     Scenario: [server-events-05] MessageEvent fires per inbound message
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(07)
     Scenario: [server-events-06] RequestEvent surfaces request payload
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(08)
     Scenario: [server-events-08] Per-user event isolation (no cross-user leakage)
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(09)
     Scenario: [server-events-10] Authority denied event observable on server
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(10)
     Scenario: [server-events-11] Authority release event observable on server
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(11)
     Scenario: [server-events-12] Publish event observable on server
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(12)
     Scenario: [server-events-13] Unpublish event observable on server
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(13)
     Scenario: [client-events-00] Client events API surface contract
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(14)
     Scenario: [client-events-01] ConnectEvent fires on accepted handshake
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(15)
     Scenario: [client-events-02] DisconnectEvent fires on link loss
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(16)
     Scenario: [client-events-03] RejectEvent fires on protocol mismatch
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(17)
     Scenario: [client-events-05] TickEvent fires per client tick
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(18)
     Scenario: [client-events-10] Authority granted event surfaces
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(19)
     Scenario: [client-events-11] Authority denied event surfaces
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(20)
     Scenario: [client-events-12] Authority reset event surfaces
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(21)
     Scenario: [world-integration-01] Entity insertion into ECS world via Events API
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(22)
     Scenario: [world-integration-02] Component insertion mirrors server insert
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(23)
     Scenario: [world-integration-03] Component removal mirrors server remove
-      Then the system intentionally fails
 

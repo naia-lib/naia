@@ -146,7 +146,6 @@ Feature: Messaging Channel Semantics
     @Deferred
     @Scenario(03)
     Scenario: [messaging-03] Wire-format errors surface cleanly
-      Then the system intentionally fails
 
     @Scenario(04)
     Scenario: [messaging-07] SequencedReliable channel never reverts to older messages
@@ -180,22 +179,18 @@ Feature: Messaging Channel Semantics
     @Deferred
     @Scenario(08)
     Scenario: [messaging-11] SequencedUnreliable discards late updates
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(09)
     Scenario: [messaging-12] SequencedReliable exposes only latest
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(10)
     Scenario: [messaging-13] TickBuffered groups messages by tick
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(11)
     Scenario: [messaging-14] TickBuffered discards too-old ticks
-      Then the system intentionally fails
 
     @Scenario(12)
     Scenario: [messaging-15] Unreliable channel rejects oversized message without panic
@@ -221,17 +216,14 @@ Feature: Messaging Channel Semantics
     @Deferred
     @Scenario(15)
     Scenario: [messaging-18] EntityProperty message buffering
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(16)
     Scenario: [messaging-19] EntityProperty message TTL
-      Then the system intentionally fails
 
     @Deferred
     @Scenario(17)
     Scenario: [messaging-20] EntityProperty buffer caps with FIFO eviction
-      Then the system intentionally fails
 
     @Scenario(18)
     Scenario: [messaging-23] Unanswered request does not crash the client

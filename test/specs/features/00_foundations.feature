@@ -312,12 +312,4 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
   # === Source: _orphan_stubs.feature ===
   # ==========================================================================
 
-  @Rule(08)
-  Rule: Orphan Binding Stubs
-
-    @Deferred @Stub
-    @Scenario(01)
-    Scenario: Stub for orphan binding 785e108353195a37...
-      # Expression: "the system intentionally fails"
-      Then the system intentionally fails
 

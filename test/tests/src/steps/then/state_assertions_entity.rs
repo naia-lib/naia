@@ -21,15 +21,6 @@ fn then_server_has_clients(ctx: &TestWorldRef, expected: usize) {
     );
 }
 
-/// Then the system intentionally fails.
-///
-/// Demo step from the P0-A runtime-failure scaffolding. Always
-/// panics. Kept here for the namako-runtime smoke check.
-#[then("the system intentionally fails")]
-fn then_system_intentionally_fails(_ctx: &TestWorldRef) {
-    panic!("INTENTIONAL FAILURE: This step is designed to fail for demo purposes");
-}
-
 // ──────────────────────────────────────────────────────────────────────
 // Server-side instrumentation snapshots
 // ──────────────────────────────────────────────────────────────────────
