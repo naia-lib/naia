@@ -312,16 +312,49 @@ Goal: every binding ≤25 LOC. Extract helpers preemptively before Q5 starts add
 - [ ] **Q2.3** Verify with `naia_npa coverage` (or a quick LOC count): zero bindings >25 LOC.
 - [ ] **Q2.4** Gate: NPA 172/172 pass, build clean, refresh artifacts. Commit + push.
 
-### Phase Q3 — Split `given/state.rs` (LOW risk, ~½ day)
+### Phase Q3 — Split `given/state.rs` (LOW risk, ~½ day) ✅ DONE
 
 Goal: no file >500 LOC in `steps/`.
 
-- [ ] **Q3.1** Create the 6 new files under `given/`:
+- [x] **Q3.1** Create the 6 new files under `given/`:
   - `state_entity.rs`, `state_scope.rs`, `state_authority.rs`, `state_publication.rs`, `state_network.rs`, `state_misc.rs`
-- [ ] **Q3.2** Move bindings from `state.rs` to the appropriate file (mechanical move, follow the existing `// ──` section dividers as the boundary).
-- [ ] **Q3.3** Update `given/mod.rs` to re-export each split file. Delete `state.rs` once empty.
-- [ ] **Q3.4** Verify cucumber-rs ambiguity check still passes (run the manifest; it'll panic-fail compile if a binding's text is ambiguous after the move).
-- [ ] **Q3.5** Gate: NPA 172/172 pass, build clean, every file ≤500 LOC, manifest still 258 bindings (or whatever it ended at after Q2). Refresh artifacts. Commit + push.
+- [x] **Q3.2** Move bindings from `state.rs` to the appropriate file (mechanical move, follow the existing `// ──` section dividers as the boundary).
+- [x] **Q3.3** Update `given/mod.rs` to re-export each split file. Delete `state.rs` once empty.
+- [x] **Q3.4** Verify cucumber-rs ambiguity check still passes (run the manifest; it'll panic-fail compile if a binding's text is ambiguous after the move).
+- [x] **Q3.5** Gate: NPA 172/172 pass, build clean, every file ≤500 LOC, manifest still 258 bindings (or whatever it ended at after Q2). Refresh artifacts. Commit + push.
+
+**Post-Q3 discovery:** Q3 only split `given/state.rs`. Three more step files and the helper module are still >500 LOC: `then/state_assertions.rs` (1644), `when/server_actions.rs` (690), `when/network_events.rs` (668), `steps/world_helpers.rs` (596). Q3.5 covers these.
+
+### Phase Q3.5 — Split remaining step files >500 LOC (LOW risk, ~½ day)
+
+Goal: every file under `steps/` ≤ 500 LOC — completing what Q3 started.
+
+Files to split and strategy:
+
+**`then/state_assertions.rs` (1644 LOC) → 4 files** (split at existing `// ──` section dividers):
+- `state_assertions_entity.rs` (L1–450): server count, fails, instrumentation, diff handler, component replication, component presence, authority status, entity ownership, messaging
+- `state_assertions_replication.rs` (L451–899): entity replication, priority accumulator, scope-exit (Persist), entity publication, replicated resources
+- `state_assertions_delegation.rs` (L900–1184): entity-delegation authority, entity scope singleton
+- `state_assertions_network.rs` (L1185–1644): RTT predicates, transport operation results, connection lifecycle, common errors
+
+**`when/server_actions.rs` (690 LOC) → 2 files** (split at L346):
+- `server_actions_entity.rs` (L1–345): basic ops, messaging, component insert/update, priority/spawn, entity update/despawn/immutable, replicated resources
+- `server_actions_scope.rs` (L346–690): delegation authority, scope include/exclude, Delegated config, transport/packet
+
+**`when/network_events.rs` (668 LOC) → 2 files** (split at L200):
+- `network_events_connection.rs` (L1–199): connect/disconnect/latency bindings
+- `network_events_transport.rs` (L200–668): transport anomalies + entity despawn + lifecycle
+
+**`steps/world_helpers.rs` (596 LOC) → 2 files** (split at L272; `connect_test_client` moves with connect helpers):
+- `world_helpers.rs` (keep, ~220 LOC): BDD store keys, label/key storage, core world-access helpers (`last_entity_mut/ref`, `named_client_mut/ref`), `tick_n`, `panic_payload_to_string`, graceful/raw disconnect
+- `world_helpers_connect.rs` (new, ~380 LOC): `connect_test_client`, `connect_named_client_with_auth_tracking`, `reject_named_client`, private connect-handshake primitives, `spawn_delegated/position_entity_in_scope`, `assert_server/client_position_eq`, `ensure_server_started`, `connect_client`, `connect_named_client`
+
+Tasks:
+- [ ] **Q3.5.1** Split `then/state_assertions.rs` into 4 files. Update `then/mod.rs`.
+- [ ] **Q3.5.2** Split `when/server_actions.rs` into 2 files. Update `when/mod.rs`.
+- [ ] **Q3.5.3** Split `when/network_events.rs` into 2 files. Update `when/mod.rs`.
+- [ ] **Q3.5.4** Split `steps/world_helpers.rs` into 2 files. Update `steps/mod.rs` (add `world_helpers_connect`). Update all import sites.
+- [ ] **Q3.5.5** Gate: `RUSTFLAGS="-D warnings" cargo build --workspace --all-targets` clean. NPA 172/172. Every file in `steps/` ≤ 500 LOC. Refresh artifacts. Commit + push to `dev`.
 
 ### Phase Q4 — Clean up Category A stubs (LOW risk, ~½ day)
 
