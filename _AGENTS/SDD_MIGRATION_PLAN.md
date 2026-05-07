@@ -237,6 +237,82 @@ The SDD migration mission landed in 6 phases over a single push. End state:
 - **`leaving_scope_vs_despawn_distinguishable`** (`06_entity_scopes.rs`, `[entity-scopes-15]`) — closed 2026-05-06.
   Same harness bug as above (`has_entity` registry-only check). Same fix. Namako Scenario added: Rule(05) `@Scenario(04)` in `04_visibility.feature`. Rust test deleted.
 
+- **`re_entering_scope_yields_correct_current_auth_status`** (`10_entity_delegation.rs`, `[entity-delegation-15]`) — closed 2026-05-06 (commit `9aa47e80`).
+  Root cause: server-side stale-mapping race in `LocalEntityMap`. When a delegated entity was excluded then re-included for a user during the in-flight Despawn-ACK window, `host_init_entity` saw the still-mapped `HostEntity` and skipped fresh allocation. The eventual stale ACK then wiped the (recycled-id-coincident) mapping, leaving the user permanently without a local entity for that global. Fix: `host_init_entity` cross-checks with `HostEngine` — if entity is in `entity_map` but its `HostEntityChannel` is gone, evict the stale mapping before allocating fresh. Made `HostEntityGenerator::remove_by_host_entity` idempotent so the late ACK becomes a slot-recycle no-op. Namako Scenario `[entity-delegation-15] Re-entering scope yields current authority status` (Rule(03) `@Scenario(08)` in `05_authority.feature`) now passes; 168/168 BDD + 443/0 workspace. Files touched: `shared/src/world/local/local_world_manager.rs`, `shared/src/world/host/host_entity_generator.rs`.
+
+---
+
+## Sidequest — Debug-infra upgrade (2026-05-06, in-flight)
+
+### Why now
+
+The `[entity-delegation-15]` hunt above took ~15 add-eprintln/rebuild iterations across ~90 minutes. Audit afterwards revealed that **most of what would have made it 3 iterations already exists** (the `e2e_debug` cargo feature exposes `Scenario::debug_dump_identity_state`, `RemoteEntityChannel::debug_channel_snapshot`, `LocalWorldManager::debug_channel_snapshot`, atomic instrumentation counters), but is invisible to a fresh agent. The dominant cost was *discoverability*, not capability. The fix is one short doc plus two thin tooling improvements that bolt onto what's there. Three items, ~3 hours total.
+
+### Audit results — what exists, what's missing
+
+| Capability | Already exists | Missing |
+|---|---|---|
+| Per-entity per-client state dump | `Scenario::debug_dump_identity_state` (gated on `e2e_debug`) | A pointer to it from any agent-facing doc |
+| Per-channel state snapshot | `RemoteEntityChannel::debug_channel_snapshot`, `debug_auth_diagnostic`, `LocalWorldManager::debug_channel_snapshot` | Same |
+| Server-side counters | `SERVER_SCOPE_DIFF_ENQUEUED`, `SERVER_SEND_ALL_PACKETS_CALLS` (atomic) | Same |
+| Single-scenario plan filter | `namako explain --scenario-key` (fidelity packet only) | Run-time filter on `naia_npa run` |
+| Auto-diagnostic on assertion timeout | None | New: dump state from `expect_with_ticks_internal` panic path |
+| Entity-id-spaces reference (`GlobalEntity` / `HostEntity` / `RemoteEntity` / `LocalEntity` / `OwnedLocalEntity` / `TestEntity` / `EntityKey`) | Scattered in `shared/src/world/local/local_entity.rs` | A single condensed table |
+
+### Tasks
+
+#### S.1 — `naia/_AGENTS/DEBUGGING_PLAYBOOK.md` (~1 hr) [HIGHEST LEVERAGE]
+
+A single-page agent-facing doc. Required sections, in order:
+
+1. **First move when a scenario fails.** Concrete two-line recipe: `cargo test ... --features e2e_debug` and call `scenario.debug_dump_identity_state("label", &entity_key, &[client_a, client_b])` inside the failing assertion.
+2. **Existing debug APIs — quick reference table.** Three columns: API path, what it dumps, when to use.
+3. **Entity id-spaces table.** Seven id types × {server/client/test-only, what it represents, who allocates, who recycles, where the wire format lives}. This is the single highest-density piece of context for cognition.
+4. **Five common failure patterns and what they look like in dump output.** Concrete:
+   - Stale mapping after in-flight despawn (the `[entity-delegation-15]` shape).
+   - Recycled HostEntity id collision.
+   - Scope-vs-despawn timing (B not-in-scope vs B-despawned distinction).
+   - Auth status drift after migration.
+   - SetAuthority dropped due to LocalEntityMap miss.
+5. **`cargo watch` recipe** for incremental dev loop.
+6. **What this playbook is NOT.** Not Naia internals docs; not protocol docs; not a tutorial. Pointer to `_AGENTS/SYSTEM.md` for those.
+
+Acceptance: a fresh agent reading only this doc can diagnose the next stale-mapping-class bug without re-reading source.
+
+#### S.2 — `naia_npa run --scenario-key <key>` flag (~30 min, ~15 lines) [ITERATION SPEED]
+
+In `test/npa/src/run.rs`, add an optional `--scenario-key` arg. When present, filter `plan.scenarios` to scenarios whose `scenario_key` matches before running. Hard-error if zero match (with a hint listing the closest 3 by string distance — keep it small). When absent, behave exactly as today. No env vars (per workspace rule). No new files.
+
+Acceptance: `cargo run -p naia_npa --release -- run --plan test/specs/resolved_plan.json --scenario-key "authority:Rule(03):Scenario(08)"` runs only that scenario and exits 0. The full-plan path still works unchanged.
+
+#### S.3 — Auto-dump on `expect_with_ticks_internal` timeout (~1 hr) [SELF-DIAGNOSING FAILURES]
+
+In `test/harness/src/harness/scenario.rs`, the timeout panic path currently emits `Scenario::expect timed out after N ticks: <label>` with no state context. Replace with: when `cfg(feature = "e2e_debug")`, just before the panic, walk the registered `EntityKey`s (or just `last_entity_ref` if it's set) and call `debug_dump_identity_state` for each across all known `ClientKey`s. When the feature is off, behave as today (no perf cost in release builds).
+
+Acceptance: the previous `[entity-delegation-15]` failing run, with `e2e_debug` enabled, would have printed enough state at timeout to identify the stale-mapping cause without any added eprintlns.
+
+#### S.4 — Gate
+
+Run `cargo run -p naia_npa --release -- run --plan test/specs/resolved_plan.json` (full 168 scenarios) and `cargo test --workspace --release`. Both must remain 168/168 + 443/0. Commit; merge to main; push.
+
+### Explicitly out of scope (deferred or dropped)
+
+- **Per-tick JSON state-snapshot output to disk.** Foundation for richer timeline diff tooling. Defer until S.1–S.3 is in use and we have evidence of remaining pain.
+- **Splitting entity-mapping logic into a leaf crate** to speed up rebuilds. Big refactor, marginal gain over `cargo watch`. Drop.
+- **Standalone single-scenario inspect CLI.** Subsumed by S.2 + S.3.
+- **Adding more `e2e_debug` instrumentation points.** Coverage already broad; S.1 documents what's there. Add new points only when bug-hunting evidence demands them.
+
+### Success criteria
+
+- S.1 file exists at `naia/_AGENTS/DEBUGGING_PLAYBOOK.md`, contains all six sections, fits in <300 lines.
+- S.2 flag works for in-list and not-in-list scenario keys; full-plan run unchanged.
+- S.3 produces dump output on timeout when `e2e_debug` is on; zero output / zero overhead when off.
+- 168/168 BDD scenarios + 443/0 workspace tests still pass.
+- No new env vars introduced.
+- Committed and pushed to `main` as a single mission-style commit.
+
+---
+
 ### Deferred (no unpark plan yet)
 
 - **`protocol_type_order_mismatch_fails_fast_at_handshake`** (`03_messaging.rs`, `[connection-XX]`) — deferred 2026-05-06.
