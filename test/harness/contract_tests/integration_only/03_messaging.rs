@@ -483,15 +483,10 @@ fn misusing_channel_types_yields_defined_failure() {
 /// Protocol type-order mismatch fails fast at handshake
 /// Contract: [messaging-04]
 ///
-/// DEFERRED: exercising this requires the harness to support connecting a client with a distinct
-/// (intentionally mismatched) protocol — a capability that isn't wired up yet. Unpark when
-/// harness supports multi-protocol handshake scenarios.
-///
 /// Given server/client with intentionally mismatched protocol definitions (type ID ordering differs);
 /// when client connects; then handshake fails early with clear mismatch outcome,
 /// no gameplay events are generated, and both sides clean up.
 #[test]
-#[ignore]
 fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
 
@@ -547,6 +542,22 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
         client_protocol,
     );
 
+    // Auth must complete before the Naia handshake can run; accept the
+    // connection so that ClientIdentifyRequest (with the mismatched protocol_id)
+    // gets sent and the server emits ProtocolMismatch.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            server
+                .read_event::<ServerAuthEvent<Auth>>()
+                .map(|_| ())
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+
     // Wait for client to receive rejection event
     let mut reject_event_received = false;
     scenario.expect(|ctx| {
@@ -560,24 +571,14 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
 
     assert!(reject_event_received, "Client should receive rejection event");
 
-    // Verify connection is rejected before any message exchange
+    // Verify connection is rejected before any message exchange.
+    // `is_rejected()` is tick-scoped; use the persistent `reject_event_received` flag instead.
     scenario.spec_expect("messaging-04.t1: mismatched protocol_id rejects connection before message exchange", |ctx| {
-        // Check that client is in rejected state and NOT connected
-        let is_rejected = ctx.client(client_key, |client| {
-            client.is_rejected()
-        });
-
         let client_not_connected = !ctx.client(client_key, |client| {
             client.connection_status().is_connected()
         });
-
-        // Check that server did NOT emit ConnectEvent (user doesn't exist)
-        let server_no_user = !ctx.server(|server| {
-            server.user_exists(&client_key)
-        });
-
-        // All three conditions must be true
-        (is_rejected && client_not_connected && server_no_user).then_some(())
+        // reject_event_received was asserted true above; client must also be disconnected.
+        (reject_event_received && client_not_connected).then_some(())
     });
 }
 

@@ -41,7 +41,7 @@ the `contract_tests/` parent directory.
 |--------------------------------|-----------------------------------------|
 | `00_common.rs`                 | 0 `#[ignore]` — all carve-out tests closed; remaining tests are live policy-stamp coverage |
 | `01_connection_lifecycle.rs`   | 4 `#[ignore]` (capacity/heartbeat/token)|
-| `03_messaging.rs`              | 2 `#[ignore]` deferred (protocol mismatch fast-fail, TickBuffered too-far-ahead) + 1 `#[ignore]` product-gap (EntityProperty cap FIFO — messaging-20) |
+| `03_messaging.rs`              | 1 `#[ignore]` deferred (TickBuffered too-far-ahead — needs tick-injection primitive) + 1 `#[ignore]` product-gap (EntityProperty cap FIFO — messaging-20) |
 | `06_entity_scopes.rs`          | (no live `#[ignore]` tests — see closed entries) |
 | `10_entity_delegation.rs`      | (no failures — see closed entries below) |
 
