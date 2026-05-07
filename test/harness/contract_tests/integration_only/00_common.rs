@@ -52,10 +52,7 @@ fn remote_untrusted_input_does_not_panic() {
 
     // Simulate malformed/garbage input - framework should handle gracefully
     let garbage = vec![0, 1, 2, 3, 255, 255, 12, 34];
-    scenario.inject_client_packet(&client_a_key, garbage);
-
-    // Allow some time for processing
-    scenario.mutate(|_ctx| {});
+    scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_a_key, garbage.clone()); });
 
     scenario.spec_expect("common-02.t1: Remote/untrusted input MUST NOT panic", |ctx| {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
