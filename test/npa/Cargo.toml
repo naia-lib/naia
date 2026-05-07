@@ -29,3 +29,9 @@ regex = "1.0"
 
 # Step bindings library (World + step functions)
 naia-tests = { path = "../tests" }
+
+[features]
+# Forward the harness-side `e2e_debug` flag so single-scenario debugging runs
+# (e.g. `cargo run -p naia_npa --features e2e_debug -- run --scenario-key ...`)
+# get the auto-dump-on-timeout + state-snapshot APIs.
+e2e_debug = ["naia-tests/e2e_debug"]

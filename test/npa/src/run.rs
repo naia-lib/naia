@@ -26,6 +26,14 @@ pub struct RunArgs {
     /// Output path for run_report.json
     #[arg(short, long, default_value = "run_report.json")]
     pub output: PathBuf,
+
+    /// Run only the scenario with this exact `scenario_key` (e.g.
+    /// `"authority:Rule(03):Scenario(08)"`). The full plan is loaded and
+    /// validated as usual; only the scenario list is filtered before
+    /// dispatch. Errors with the closest 3 keys (by edit distance) when
+    /// the requested key is not present.
+    #[arg(long)]
+    pub scenario_key: Option<String>,
 }
 
 /// Step dispatcher entry - contains the step function and metadata.
@@ -136,13 +144,72 @@ fn collect_bindings<W: WorldInventory>() -> Vec<SemanticBinding> {
     bindings
 }
 
+/// Return up to `n` `scenario_key`s from `scenarios`, ordered by ascending
+/// Levenshtein distance from `target`. Used to give a helpful error when
+/// `--scenario-key` is misspelled.
+fn closest_scenario_keys(
+    target: &str,
+    scenarios: &[namako_engine::npap::ResolvedScenario],
+    n: usize,
+) -> Vec<String> {
+    let mut scored: Vec<(usize, &str)> = scenarios
+        .iter()
+        .map(|s| (levenshtein(target, &s.scenario_key), s.scenario_key.as_str()))
+        .collect();
+    scored.sort_by_key(|(d, _)| *d);
+    scored.into_iter().take(n).map(|(_, k)| k.to_string()).collect()
+}
+
+/// Standard Levenshtein edit distance. Small enough that pulling in a
+/// dependency would be silly.
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    let mut curr: Vec<usize> = vec![0; b.len() + 1];
+    for (i, ca) in a.iter().enumerate() {
+        curr[0] = i + 1;
+        for (j, cb) in b.iter().enumerate() {
+            let cost = if ca == cb { 0 } else { 1 };
+            curr[j + 1] = (curr[j] + 1)
+                .min(prev[j + 1] + 1)
+                .min(prev[j] + cost);
+        }
+        std::mem::swap(&mut prev, &mut curr);
+    }
+    prev[b.len()]
+}
+
 /// Run the run command.
 pub fn run(args: RunArgs) -> Result<()> {
     // Step 1: Read and parse the resolved plan
     let plan_json = std::fs::read_to_string(&args.plan)
         .with_context(|| format!("Failed to read plan: {}", args.plan.display()))?;
-    let plan: ResolvedPlan =
+    let mut plan: ResolvedPlan =
         serde_json::from_str(&plan_json).context("Failed to parse resolved plan JSON")?;
+
+    // Optional single-scenario filter (--scenario-key). Filter early so the
+    // hash check and dispatch table build still see the full plan context.
+    if let Some(target_key) = args.scenario_key.as_ref() {
+        let matched = plan
+            .scenarios
+            .iter()
+            .any(|s| s.scenario_key == *target_key);
+        if !matched {
+            let suggestions = closest_scenario_keys(target_key, &plan.scenarios, 3);
+            let hint = if suggestions.is_empty() {
+                String::new()
+            } else {
+                format!("\n  Closest matches:\n    {}", suggestions.join("\n    "))
+            };
+            bail!(
+                "--scenario-key not found in plan: {:?}{}",
+                target_key,
+                hint
+            );
+        }
+        plan.scenarios.retain(|s| s.scenario_key == *target_key);
+    }
 
     // Step 2: Validate step_registry_hash matches current manifest
     let current_bindings = collect_bindings::<TestWorld>();

@@ -581,6 +581,7 @@ impl Scenario {
         match result {
             Some(value) => value,
             None => {
+                self.dump_all_state_for_timeout("expect timeout");
                 panic!(
                     "Scenario::expect timed out after {} ticks without satisfying condition",
                     max_ticks
@@ -636,11 +637,47 @@ impl Scenario {
         match result {
             Some(value) => value,
             None => {
+                self.dump_all_state_for_timeout(msg);
                 panic!(
                     "Scenario::expect timed out after {} ticks: {}",
                     max_ticks, msg
                 );
             }
+        }
+    }
+
+    /// Auto-dump server + per-client identity state for every registered
+    /// entity, called from the timeout panic path of
+    /// `expect_with_ticks_internal{,_msg}`. Gated on `e2e_debug` — zero cost
+    /// in release builds.
+    fn dump_all_state_for_timeout(&self, label: &str) {
+        #[cfg(feature = "e2e_debug")]
+        {
+            let client_keys: Vec<ClientKey> = self.clients.keys().copied().collect();
+            let entity_keys: Vec<EntityKey> =
+                self.entity_registry.all_entity_keys().collect();
+            if entity_keys.is_empty() {
+                eprintln!(
+                    "[expect-timeout auto-dump] no registered entities to dump (label: {})",
+                    label
+                );
+                return;
+            }
+            for ek in &entity_keys {
+                self.debug_dump_identity_state(
+                    &format!("{} :: timeout auto-dump", label),
+                    ek,
+                    &client_keys,
+                );
+            }
+        }
+        #[cfg(not(feature = "e2e_debug"))]
+        {
+            // Help fresh agents discover the feature flag without paying any cost.
+            let _ = label;
+            eprintln!(
+                "[expect-timeout] re-run with --features e2e_debug for an auto-dump of identity state"
+            );
         }
     }
 

@@ -23,3 +23,8 @@ naia-test-harness = { path = "../harness" }
 naia-server = { path = "../../server", default-features = false }
 naia-client = { path = "../../client", default-features = false }
 naia-shared = { path = "../../shared", default-features = false }
+
+[features]
+# Forward to the harness so consumers (e.g. naia_npa, cargo test) can opt into
+# e2e_debug instrumentation without having to know the harness path.
+e2e_debug = ["naia-test-harness/e2e_debug"]
