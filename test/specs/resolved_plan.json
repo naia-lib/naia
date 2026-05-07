@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "eb788f950fb88c040c4cb720f91942db08a50ee5431e15c571e2dacd6e3aafe8",
-    "step_registry_hash": "a31d02d00ba0ef0a35f27d665b5a48f247c5126e0b281460629b55c401f737ef",
-    "resolved_plan_hash": "a62f9a5f4431113d47626551a69abc9b3cf1877c7a3fe68f9589e2f736c6e849"
+    "feature_fingerprint_hash": "9ca03147b72eb71bf394f7437045a92d7d52e46ed3cc8ad04f3b1b4fa73eaed0",
+    "step_registry_hash": "750057f092fd4a94b9a11e206ba20709a875f0d931cc06180cb38c63592ad79e",
+    "resolved_plan_hash": "2c827fdf51c964b837dd4bf4e379e8e3254b6ef93dd69c1c2dd32e523eba5a17"
   },
   "scenarios": [
     {
@@ -2255,6 +2255,73 @@
       ]
     },
     {
+      "scenario_key": "authority:Rule(05):Scenario(07)",
+      "feature_path": "features/05_authority.feature",
+      "scenario_name": "[entity-ownership-12] Private client-owned entity stays with owner only",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c8ed53cdcb9eece5a2cf97564cb9260f8a127294113067dd467178b40c5dfbfd"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A spawns a client-owned entity with Private replication config",
+          "binding_id": "54e89324d1e984848c5bc5d9825671e31305d02b257804fb5bdb5b9f78cdffdd",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b6ef732cec98d66e81decd5889e1d8ca09cf549a149a7279f564a1fcf1b7a3c4"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is out-of-scope for client B",
+          "binding_id": "33185c17587aedfa44e434a27d73445f5a78b85c1c62e87ee1027af3f4b0e20c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3b0481b95e364f6b73a1ddd09746a851e1503a638a005223955ab1f5af045fe5"
+        }
+      ]
+    },
+    {
       "scenario_key": "events_api:Rule(01):Scenario(01)",
       "feature_path": "features/06_events_api.feature",
       "scenario_name": "[server-events-07] Server spawn event fires for in-scope user only",
@@ -3843,6 +3910,71 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "591c7f836d0f26bbc59b5245a274c9d35c8f6c43b3e87c86f6fa67f3ca2fc094"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "no panic occurs",
+          "binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647"
+        }
+      ]
+    },
+    {
+      "scenario_key": "foundations:Rule(01):Scenario(03)",
+      "feature_path": "features/00_foundations.feature",
+      "scenario_name": "[common-01] give_authority on out-of-scope client returns Err(NotInScope)",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns a delegated entity not in scope of any client",
+          "binding_id": "53b141a2f3ef22173679d86e4412e4ffdeadd400f5044719cbd456fba674fcdb",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a5fb125be4908b39b34f949e2f44fb0b1c3ff9d65be67e72d6aecdbeba65eba9"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server attempts to give authority to client A for the delegated entity",
+          "binding_id": "cf9c16d4e6740365161f2feaa0343850e3e1fdec0515a5c38236f73b9d05456f",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d2d9ebd0d17ae574e0ccd1797fe7d8d8d8a305785adecd5617f28e84b8660b2c"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the operation returns an Err result",
+          "binding_id": "15454276bdaa895ec98d18e54c015ab2239db51fbfab37580f293a092a4eb0f9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5f4e0f090f5044d1d7d3d2723529e3f85d171659cd4ea8c600f3bf770e423ac7"
         },
         {
           "effective_kind": "Then",

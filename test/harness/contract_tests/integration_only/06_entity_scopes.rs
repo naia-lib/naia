@@ -529,56 +529,6 @@ fn entity_in_multiple_rooms_projects_correctly() {
     });
 }
 
-/// Private replication: only owner sees it
-/// Contract: [entity-scopes-05], [entity-scopes-06]
-///
-/// Given A and B in same room; when A spawns E with owner-only/private replication;
-/// then A (and server) see E, but B never sees E or its components.
-#[test]
-#[ignore = "Private replication visibility needs investigation"]
-fn private_replication_only_owner_sees_it() {
-    let mut scenario = Scenario::new();
-    let test_protocol = protocol();
-
-    scenario.server_start(ServerConfig::default(), test_protocol.clone());
-
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
-        "Client A",
-        Auth::new("client_a", "password"),
-        test_client_config(),
-        test_protocol.clone(),
-    );
-    let client_b_key = client_connect(
-        &mut scenario,
-        &room_key,
-        "Client B",
-        Auth::new("client_b", "password"),
-        test_client_config(),
-        test_protocol,
-    );
-
-    // A spawns E with private replication
-    let entity_e = scenario.mutate(|ctx| {
-        ctx.client(client_a_key, |client_a| {
-            client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Private)
-                    .insert_component(Position::new(1.0, 2.0));
-            })
-        })
-    });
-
-    // Wait for entity to replicate to server and verify B does NOT see it (private replication)
-    scenario.expect(|ctx| {
-        let entity_exists = ctx.server(|server| server.has_entity(&entity_e));
-        let b_sees_e = ctx.client(client_b_key, |c| c.has_entity(&entity_e));
-        // B should NOT see private entity
-        (entity_exists && !b_sees_e).then_some(())
-    });
-}
 
 /// Authority releases when holder goes OutOfScope
 /// Contract: [entity-scopes-06], [entity-scopes-07]

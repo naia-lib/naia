@@ -39,11 +39,14 @@ the `contract_tests/` parent directory.
 
 | File                           | Status                                  |
 |--------------------------------|-----------------------------------------|
-| `00_common.rs`                 | 2 `#[ignore]` policy-stamp tests        |
+| `00_common.rs`                 | 1 `#[ignore]` (protocol_mismatch — deferred) |
 | `01_connection_lifecycle.rs`   | 4 `#[ignore]` (capacity/heartbeat/token)|
 | `03_messaging.rs`              | 2 `#[ignore]` deferred (protocol mismatch fast-fail, TickBuffered too-far-ahead) + 1 `#[ignore]` product-gap (EntityProperty cap FIFO — messaging-20) |
-| `06_entity_scopes.rs`          | 1 `#[ignore]` (scope_change_queue_drains_within_n_ticks) |
+| `06_entity_scopes.rs`          | (no live `#[ignore]` tests — see closed entries) |
 | `10_entity_delegation.rs`      | (no failures — see closed entries below) |
+
+- `api_misuse_returns_error_not_panic` (2026-05-06): `give_authority` on a client that is not in scope of a delegated entity returns `Err(NotInScope)` rather than panicking. Product behaviour was already correct; test was `#[ignore]`-ed as an infra placeholder. Converted to namako Scenario `[common-01] give_authority on out-of-scope client returns Err(NotInScope)` in `test/specs/features/00_foundations.feature` Rule(01):Scenario(03).
+- `private_replication_only_owner_sees_it` (2026-05-06): When client A spawns an entity with `ClientReplicationConfig::Private`, client B (in the same room) must NOT see the entity. Product behaviour was already correct; test was `#[ignore]`-ed as an infra placeholder. Converted to namako Scenario `[entity-ownership-12] Private client-owned entity stays with owner only` in `test/specs/features/05_authority.feature` Rule(05):Scenario(07).
 
 ### Closed since carve-out was created
 - `auth_denied_emitted_exactly_once_per_transition_into_denied` (2026-05-06): client missed an `Available → Denied` push for `EntityAuthDeniedEvent`. Fixed in `client/src/client.rs`. Behaviour now covered by namako Scenario `[entity-delegation-16] AuthDenied event fires on Available→Denied transition` in `test/specs/features/05_authority.feature`.

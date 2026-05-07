@@ -36,6 +36,19 @@ Feature: Foundations — Common Definitions, Determinism, Smoke
       Then the send returns an error
       And no panic occurs
 
+    # Closes the `api_misuse_returns_error_not_panic` carve-out test
+    # (test/harness/contract_tests/integration_only/00_common.rs).
+    # Exercises `give_authority` for an out-of-scope client; product
+    # contract is that this returns `Err(NotInScope)`, not panic.
+    @Scenario(03)
+    Scenario: [common-01] give_authority on out-of-scope client returns Err(NotInScope)
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity not in scope of any client
+      When the server attempts to give authority to client A for the delegated entity
+      Then the operation returns an Err result
+      And no panic occurs
+
   @Rule(02)
   Rule: Remote or untrusted input must never panic
 

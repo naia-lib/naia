@@ -23,62 +23,6 @@ use _helpers::{client_connect, test_client_config};
 // [common-01] — User-initiated misuse returns Result::Err
 // ============================================================================
 
-/// API misuse returns Err, not panic
-/// Contract: [common-01]
-///
-/// Given user code that misuses the API;
-/// when the misuse occurs; then Naia returns Result::Err (not panic).
-#[test]
-#[ignore]
-fn api_misuse_returns_error_not_panic() {
-    // This test verifies the error handling taxonomy principle:
-    // User-initiated misuse at the API layer returns Result::Err
-    // The framework does not panic for user errors
-    let mut scenario = Scenario::new();
-    let test_protocol = protocol();
-
-    scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
-
-    let client_a_key = client_connect(
-        &mut scenario,
-        &room_key,
-        "Client A",
-        Auth::new("client_a", "pass"),
-        test_client_config(),
-        test_protocol,
-    );
-
-    // Spawn an entity but do NOT put the client in its scope/room
-    // (This entity is global or in a new room, effectively invisible/unauthorized for client A)
-    let entity = scenario.mutate(|ctx| {
-        ctx.server(|server| {
-             let (entity, _) = server.spawn(|mut e| {
-                e.insert_component(Position::new(0.0, 0.0));
-                e.configure_replication(ReplicationConfig::delegated());
-            });
-            entity
-        })
-    });
-
-    // Advance to allow previous mutation to settle (required by harness)
-    scenario.expect(|_| Some(()));
-
-    // Try to give authority to client A (who is not in scope) - should ERROR
-    let result_is_err = scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.entity_mut(&entity)
-                .map(|mut e| e.give_authority(&client_a_key).is_err())
-                .unwrap_or(false)
-        })
-    });
-
-    // Verify error occurred and we didn't panic
-    scenario.spec_expect("common-01.t1: User-initiated misuse returns Result::Err", |_| {
-       if result_is_err { Some(()) } else { None }
-    });
-}
-
 // ============================================================================
 // [common-02] — Remote/untrusted input MUST NOT panic
 // ============================================================================

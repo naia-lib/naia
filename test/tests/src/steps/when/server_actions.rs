@@ -370,6 +370,54 @@ fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldM
     });
 }
 
+/// When the server attempts to give authority to client {name} for the delegated entity.
+///
+/// Sibling of `when_server_gives_authority` that records the operation
+/// result (Ok/Err/panic) into the scenario instead of unwrapping. Used
+/// by `[common-01]` negative scenarios that assert `give_authority`
+/// returns `Err` (e.g. `NotInScope`) rather than panicking.
+#[when(
+    "the server attempts to give authority to client {word} for the delegated entity"
+)]
+fn when_server_attempts_give_authority(ctx: &mut TestWorldMut, name: String) {
+    use crate::steps::world_helpers::{client_key_storage, panic_payload_to_string};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+    let scenario = ctx.scenario_mut();
+    let client_key: ClientKey = scenario
+        .bdd_get(&client_key_storage(&name))
+        .unwrap_or_else(|| panic!("No client '{}' has been connected", name));
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no delegated entity spawned");
+    scenario.clear_operation_result();
+    // Capture (Result, panic-payload-if-any) inside a single mutate so the
+    // borrow on `scenario` is released before recording.
+    let captured: std::thread::Result<Result<(), String>> = {
+        let mut out: std::thread::Result<Result<(), String>> = Ok(Ok(()));
+        scenario.mutate(|mctx| {
+            mctx.server(|server| {
+                let res = catch_unwind(AssertUnwindSafe(|| {
+                    if let Some(mut entity) = server.entity_mut(&entity_key) {
+                        entity
+                            .give_authority(&client_key)
+                            .map(|_| ())
+                            .map_err(|e| format!("{:?}", e))
+                    } else {
+                        Err("entity_mut returned None".to_string())
+                    }
+                }));
+                out = res;
+            });
+        });
+        out
+    };
+    match captured {
+        Ok(Ok(())) => scenario.record_ok(),
+        Ok(Err(e)) => scenario.record_err(e),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When the server gives authority to client {name} for the delegated entity.
 #[when("the server gives authority to client {word} for the delegated entity")]
 fn when_server_gives_authority(ctx: &mut TestWorldMut, name: String) {

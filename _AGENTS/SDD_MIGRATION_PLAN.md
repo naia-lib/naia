@@ -240,6 +240,12 @@ The SDD migration mission landed in 6 phases over a single push. End state:
 - **`re_entering_scope_yields_correct_current_auth_status`** (`10_entity_delegation.rs`, `[entity-delegation-15]`) — closed 2026-05-06 (commit `9aa47e80`).
   Root cause: server-side stale-mapping race in `LocalEntityMap`. When a delegated entity was excluded then re-included for a user during the in-flight Despawn-ACK window, `host_init_entity` saw the still-mapped `HostEntity` and skipped fresh allocation. The eventual stale ACK then wiped the (recycled-id-coincident) mapping, leaving the user permanently without a local entity for that global. Fix: `host_init_entity` cross-checks with `HostEngine` — if entity is in `entity_map` but its `HostEntityChannel` is gone, evict the stale mapping before allocating fresh. Made `HostEntityGenerator::remove_by_host_entity` idempotent so the late ACK becomes a slot-recycle no-op. Namako Scenario `[entity-delegation-15] Re-entering scope yields current authority status` (Rule(03) `@Scenario(08)` in `05_authority.feature`) now passes; 168/168 BDD + 443/0 workspace. Files touched: `shared/src/world/local/local_world_manager.rs`, `shared/src/world/host/host_entity_generator.rs`.
 
+- **`api_misuse_returns_error_not_panic`** (`00_common.rs`, `[common-01]`) — closed 2026-05-06.
+  No product bug. `give_authority` on a client that is not in scope of a delegated entity already returns `Err(NotInScope)` rather than panicking — the behaviour was correct. Test had been `#[ignore]`-ed as an infra placeholder (needed named-client step bindings that didn't exist). Added `when_server_attempts_give_authority` + `given_server_spawns_delegated_entity_not_in_scope_of_any_client` step bindings and upgraded the `@Deferred` stub to Scenario(03) in `00_foundations.feature` Rule(01). Rust test deleted.
+
+- **`private_replication_only_owner_sees_it`** (`06_entity_scopes.rs`, `[entity-ownership-12]`) — closed 2026-05-06.
+  No product bug. `ClientReplicationConfig::Private` entities never enter other clients' scope — behaviour was already correct. Test had been `#[ignore]`-ed as an infra placeholder. Used existing step bindings `client {word} spawns a client-owned entity with Private replication config` + `the entity is out-of-scope for client B` to upgrade the `@Deferred @PolicyOnly` stub to a real `@Scenario(07)` in `05_authority.feature` Rule(05). Rust test deleted; 170/170 BDD green.
+
 ---
 
 ## Sidequest — Debug-infra upgrade (2026-05-06, in-flight)

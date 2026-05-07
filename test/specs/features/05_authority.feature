@@ -407,10 +407,13 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     Scenario: [entity-ownership-11] Public client-owned entity replicates to other clients
       Then the system intentionally fails
 
-    @Deferred @PolicyOnly
     @Scenario(07)
     Scenario: [entity-ownership-12] Private client-owned entity stays with owner only
-      Then the system intentionally fails
+      Given a server is running
+      And client A connects
+      And client B connects
+      And client A spawns a client-owned entity with Private replication config
+      Then the entity is out-of-scope for client B
 
     @Deferred @PolicyOnly
     @Scenario(08)

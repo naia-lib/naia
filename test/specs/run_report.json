@@ -2,10 +2,10 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "eb788f950fb88c040c4cb720f91942db08a50ee5431e15c571e2dacd6e3aafe8",
-    "step_registry_hash": "a31d02d00ba0ef0a35f27d665b5a48f247c5126e0b281460629b55c401f737ef",
-    "resolved_plan_hash": "a62f9a5f4431113d47626551a69abc9b3cf1877c7a3fe68f9589e2f736c6e849",
-    "run_report_hash": "8b11def434bb476e604f4bcf7665bcb3a56c68464232d70a293b132008bce229"
+    "feature_fingerprint_hash": "9ca03147b72eb71bf394f7437045a92d7d52e46ed3cc8ad04f3b1b4fa73eaed0",
+    "step_registry_hash": "750057f092fd4a94b9a11e206ba20709a875f0d931cc06180cb38c63592ad79e",
+    "resolved_plan_hash": "2c827fdf51c964b837dd4bf4e379e8e3254b6ef93dd69c1c2dd32e523eba5a17",
+    "run_report_hash": "baefdd8580eb292399135e39332307f906d8c2292a4b613ab122ee0e4b9aa924"
   },
   "scenarios": [
     {
@@ -2043,6 +2043,66 @@
       ]
     },
     {
+      "scenario_key": "authority:Rule(05):Scenario(07)",
+      "status": "passed",
+      "steps": [
+        {
+          "planned_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "executed_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "planned_payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68",
+          "executed_payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68",
+          "executed_impl_hash": "1fc3726a59bc733ddb8ed975a792a228ad9d17ad14716331efd0c81e183c4706",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "executed_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "planned_payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68",
+          "executed_payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68",
+          "executed_impl_hash": "1fc3726a59bc733ddb8ed975a792a228ad9d17ad14716331efd0c81e183c4706",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "executed_binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "planned_payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653",
+          "executed_payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653",
+          "executed_impl_hash": "4a9053a72d27dfe8065eb54a3ee8db0ccae50cef9117366905b9a95f79b5312d",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "executed_binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "planned_payload_hash": "c8ed53cdcb9eece5a2cf97564cb9260f8a127294113067dd467178b40c5dfbfd",
+          "executed_payload_hash": "c8ed53cdcb9eece5a2cf97564cb9260f8a127294113067dd467178b40c5dfbfd",
+          "executed_impl_hash": "4a9053a72d27dfe8065eb54a3ee8db0ccae50cef9117366905b9a95f79b5312d",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "54e89324d1e984848c5bc5d9825671e31305d02b257804fb5bdb5b9f78cdffdd",
+          "executed_binding_id": "54e89324d1e984848c5bc5d9825671e31305d02b257804fb5bdb5b9f78cdffdd",
+          "planned_payload_hash": "b6ef732cec98d66e81decd5889e1d8ca09cf549a149a7279f564a1fcf1b7a3c4",
+          "executed_payload_hash": "b6ef732cec98d66e81decd5889e1d8ca09cf549a149a7279f564a1fcf1b7a3c4",
+          "executed_impl_hash": "0843827a00f26bd08360a2c81305ce2f65d39f5045ab500edae12bc1f375d570",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "33185c17587aedfa44e434a27d73445f5a78b85c1c62e87ee1027af3f4b0e20c",
+          "executed_binding_id": "33185c17587aedfa44e434a27d73445f5a78b85c1c62e87ee1027af3f4b0e20c",
+          "planned_payload_hash": "3b0481b95e364f6b73a1ddd09746a851e1503a638a005223955ab1f5af045fe5",
+          "executed_payload_hash": "3b0481b95e364f6b73a1ddd09746a851e1503a638a005223955ab1f5af045fe5",
+          "executed_impl_hash": "9f859b487e6e52a8ac9c004dd13f3e580b584b4a611b98d791cfee13d9fb95cf",
+          "status": "passed",
+          "error_message": null
+        }
+      ]
+    },
+    {
       "scenario_key": "events_api:Rule(01):Scenario(01)",
       "status": "passed",
       "steps": [
@@ -3558,6 +3618,66 @@
           "planned_payload_hash": "591c7f836d0f26bbc59b5245a274c9d35c8f6c43b3e87c86f6fa67f3ca2fc094",
           "executed_payload_hash": "591c7f836d0f26bbc59b5245a274c9d35c8f6c43b3e87c86f6fa67f3ca2fc094",
           "executed_impl_hash": "0bb5494da7f635d50e741cb24e64c1465744f3f7e9942cfd2fb65ef7e461a02f",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "executed_binding_id": "875c1526b35fdc8c07ff652fe42a46e4b6e261e18f6520419e10bc45f17c1a2e",
+          "planned_payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647",
+          "executed_payload_hash": "69422fb0f665b1907f9d2c2cdbf8d83a8b9a7f49f1c3c47ac6ee4d4e4caee647",
+          "executed_impl_hash": "2808104c8818f8a7cd319bdab4aa3a1573229e88ab62a55db178ebf853be932f",
+          "status": "passed",
+          "error_message": null
+        }
+      ]
+    },
+    {
+      "scenario_key": "foundations:Rule(01):Scenario(03)",
+      "status": "passed",
+      "steps": [
+        {
+          "planned_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "executed_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "planned_payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68",
+          "executed_payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68",
+          "executed_impl_hash": "1fc3726a59bc733ddb8ed975a792a228ad9d17ad14716331efd0c81e183c4706",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "executed_binding_id": "78df640f0f47f77897c3a489e30ce7a4d4c5c7000fe6f2781bfe61258005d79e",
+          "planned_payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653",
+          "executed_payload_hash": "24d248cd9d278bf0d3da176510ed155e4fa323fd550c51e7c27a362169a0c653",
+          "executed_impl_hash": "4a9053a72d27dfe8065eb54a3ee8db0ccae50cef9117366905b9a95f79b5312d",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "53b141a2f3ef22173679d86e4412e4ffdeadd400f5044719cbd456fba674fcdb",
+          "executed_binding_id": "53b141a2f3ef22173679d86e4412e4ffdeadd400f5044719cbd456fba674fcdb",
+          "planned_payload_hash": "a5fb125be4908b39b34f949e2f44fb0b1c3ff9d65be67e72d6aecdbeba65eba9",
+          "executed_payload_hash": "a5fb125be4908b39b34f949e2f44fb0b1c3ff9d65be67e72d6aecdbeba65eba9",
+          "executed_impl_hash": "fe7087cc3cabdc19afe6eaf10ccd2ffb87cb64324bff4b129340e35ea133af6b",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "cf9c16d4e6740365161f2feaa0343850e3e1fdec0515a5c38236f73b9d05456f",
+          "executed_binding_id": "cf9c16d4e6740365161f2feaa0343850e3e1fdec0515a5c38236f73b9d05456f",
+          "planned_payload_hash": "d2d9ebd0d17ae574e0ccd1797fe7d8d8d8a305785adecd5617f28e84b8660b2c",
+          "executed_payload_hash": "d2d9ebd0d17ae574e0ccd1797fe7d8d8d8a305785adecd5617f28e84b8660b2c",
+          "executed_impl_hash": "4ece7eaf5a6edacba7e017f54e2f23747c4c6dbfa45e559a0d0b878f56e4ecb0",
+          "status": "passed",
+          "error_message": null
+        },
+        {
+          "planned_binding_id": "15454276bdaa895ec98d18e54c015ab2239db51fbfab37580f293a092a4eb0f9",
+          "executed_binding_id": "15454276bdaa895ec98d18e54c015ab2239db51fbfab37580f293a092a4eb0f9",
+          "planned_payload_hash": "5f4e0f090f5044d1d7d3d2723529e3f85d171659cd4ea8c600f3bf770e423ac7",
+          "executed_payload_hash": "5f4e0f090f5044d1d7d3d2723529e3f85d171659cd4ea8c600f3bf770e423ac7",
+          "executed_impl_hash": "e1b07b733429a6d850b07a6b6cbcc87b6c9f2b4ab8a72d89aa615ca72b197958",
           "status": "passed",
           "error_message": null
         },

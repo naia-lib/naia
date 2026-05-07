@@ -704,6 +704,33 @@ fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorl
     scenario.allow_flexible_next();
 }
 
+/// Given the server spawns a delegated entity not in scope of any client.
+///
+/// The entity is created WITHOUT entering any room, so it is invisible to all
+/// connected clients. Used as the precondition for the `[common-01]`
+/// give-authority-on-out-of-scope negative test (`give_authority` must return
+/// `Err(NotInScope)` rather than panicking).
+#[given("the server spawns a delegated entity not in scope of any client")]
+fn given_server_spawns_delegated_entity_not_in_scope_of_any_client(
+    ctx: &mut TestWorldMut,
+) {
+    use naia_server::ReplicationConfig as ServerReplicationConfig;
+    let scenario = ctx.scenario_mut();
+    let (entity_key, ()) = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            server.spawn(|mut entity| {
+                entity
+                    .insert_component(Position::new(0.0, 0.0))
+                    .configure_replication(ServerReplicationConfig::delegated());
+                // Intentionally NOT calling enter_room — entity stays out of scope.
+            })
+        })
+    });
+    scenario.expect(|_| Some(()));
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.allow_flexible_next();
+}
+
 /// Given the server takes authority for the delegated entity.
 ///
 /// Server-side `take_authority()` precondition. All in-scope clients
