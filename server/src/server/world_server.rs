@@ -1979,6 +1979,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // Check explicit include/exclude
         if let Some(in_scope) = self.entity_scope_map.get(user_key, &global_entity) {
+            if *in_scope {
+                // [entity-scopes-09]: explicit include() cannot bypass the room gate for
+                // server-owned non-resource entities.
+                let is_resource = self.resource_registry.is_resource_entity(&global_entity);
+                let server_owned = self
+                    .global_world_manager
+                    .entity_owner(&global_entity)
+                    .map(|o| o.is_server())
+                    .unwrap_or(false);
+                if server_owned && !is_resource {
+                    let Some(user) = self.users.get(user_key) else {
+                        return false;
+                    };
+                    let in_common_room = if let Some(entity_rooms) =
+                        self.entity_room_map.entity_get_rooms(&global_entity)
+                    {
+                        entity_rooms.intersection(user.room_keys()).next().is_some()
+                    } else {
+                        false
+                    };
+                    if !in_common_room {
+                        return false;
+                    }
+                }
+            }
             return *in_scope;
         }
         // Default: in-scope if user and entity share a room
@@ -3499,11 +3524,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .get(user_key, global_entity)
             .copied();
         let is_resource = self.resource_registry.is_resource_entity(global_entity);
+        // [entity-scopes-09]: explicit include() MUST NOT bypass the room gate for
+        // server-owned non-resource entities. Resources, client-owned entities, and
+        // entities that share a room are all exempt.
+        let server_owned_roomless_non_resource = self
+            .global_world_manager
+            .entity_owner(global_entity)
+            .map(|o| o.is_server())
+            .unwrap_or(false)
+            && !is_resource
+            && !in_common_room;
         let should_be_in_scope = match explicit {
+            Some(true) if server_owned_roomless_non_resource => false,
             Some(in_scope) => in_scope,
             None => is_resource || in_common_room,
         };
-
         if should_be_in_scope {
             if currently_in_scope {
                 // Entity already present — resume if paused (ScopeExit::Persist re-entry)

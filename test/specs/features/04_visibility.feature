@@ -133,8 +133,6 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
     # [entity-scopes-roomless-02] — Include cannot bypass room gate for roomless entity
     # Include filter MUST NOT bypass the Rooms gate; a roomless entity MUST remain
     # out-of-scope even after explicit include.
-    # DEFERRED: naia currently allows scope.include() to bypass the room gate.
-    @Deferred
     @Scenario(02)
     Scenario: [entity-scopes-09] Include cannot bypass room gate for roomless entity
       Given a server is running

@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "9ca03147b72eb71bf394f7437045a92d7d52e46ed3cc8ad04f3b1b4fa73eaed0",
+    "feature_fingerprint_hash": "4d1eb5568606d76fa8851e666b50c48df28ee391274621343b5e53e03d09edd5",
     "step_registry_hash": "750057f092fd4a94b9a11e206ba20709a875f0d931cc06180cb38c63592ad79e",
-    "resolved_plan_hash": "2c827fdf51c964b837dd4bf4e379e8e3254b6ef93dd69c1c2dd32e523eba5a17"
+    "resolved_plan_hash": "ba464f70e8d2b3980ed72b2d0a382f950aefaaa97b11496b225bee2a9bf2f066"
   },
   "scenarios": [
     {
@@ -9646,6 +9646,76 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "101449778f7b6d0f362fffcb00425df499c6031c06dd7b24f901f6cac927a49f"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is out-of-scope for the client",
+          "binding_id": "acbc62be09cb3db4f8866b22610c8dff638971765cb65511b4fad4c6a0b31645",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2e89041781784e7767c0fa90f714ff465a0882085c2bcdbc7eb46ec56470a9fd"
+        }
+      ]
+    },
+    {
+      "scenario_key": "visibility:Rule(04):Scenario(02)",
+      "feature_path": "features/04_visibility.feature",
+      "scenario_name": "[entity-scopes-09] Include cannot bypass room gate for roomless entity",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists",
+          "binding_id": "0a3a91c6afc53452672d7999b24021f90930b056ed761fb896a7e2ad573077a9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f65d8da084bf24f191c05fda2667a5621874e1ac5e67d1df83eca7d0551a059"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is not in any room",
+          "binding_id": "39caaa558a17439b69999df26721698e611802667e43eb9900a45f658c533b65",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "101449778f7b6d0f362fffcb00425df499c6031c06dd7b24f901f6cac927a49f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
         },
         {
           "effective_kind": "Then",
