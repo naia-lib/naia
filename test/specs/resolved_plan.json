@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "e5db7117c80f857eeaf33289b84fa0e4ef60563ad6b2d6e4a6576e83e0e07cc6",
-    "step_registry_hash": "750057f092fd4a94b9a11e206ba20709a875f0d931cc06180cb38c63592ad79e",
-    "resolved_plan_hash": "b9cc6e42195bd4d8a941ecca171c498b8d88ef5c8e050d379ad2ee9389d42037"
+    "feature_fingerprint_hash": "eea54c2e73b3d6f640b71530a4ec5e75b07b348109f0701853c892f63092f188",
+    "step_registry_hash": "cdbddf303da8733d7c5ae77529a435d57f306ba5c680e84831c0fb2dc187e2a8",
+    "resolved_plan_hash": "3548324f87d0b2331e5b3c1bc1a82693477be821ec50fce67201f18a2ee2c46e"
   },
   "scenarios": [
     {
@@ -5665,6 +5665,58 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "94c6ee3bf48ce996e5c466a4200ba46d3504afff134ea18356b4f82547088f30"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(02):Scenario(08)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-22] Server observes DisconnectEvent on client-initiated graceful disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client disconnects gracefully",
+          "binding_id": "cf64c9916444454038f416416d805cf4a9bb3ff0f16791edd4804f8aa4b311d9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "12cafea12e30169765a137cef063b92b8b65f28ac20a039a446b452c600dc3f0"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server has observed DisconnectEvent",
+          "binding_id": "1e6430ccc16df0abe8fa9a2ef1ac0fdb9b234d4b1747c331ff1cd06c176c8fc2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3b82ab5dfdc20a66affaba6083903c870a2bbab49f0c59b2853be192dd24544c"
         }
       ]
     },
