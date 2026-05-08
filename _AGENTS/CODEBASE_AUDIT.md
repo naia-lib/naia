@@ -1,5 +1,7 @@
 # Naia Codebase Audit — 2026-05-05
 
+> **ARCHIVED — 2026-05-07.** Open items migrated to `_AGENTS/NAIA_PLAN.md` (P2, P7, P8, P11, P12). Do not re-audit items marked ✅ here.
+
 **Branch:** `release-0.25.0-e` (HEAD: `05a51856`)
 **Scope:** Full naia codebase (~102K LOC across 41 crates), with emphasis on tech debt, architectural smells, and refactor opportunities. This is broader than the Replicated Resources audit (`RESOURCES_AUDIT.md`) — it surveys the whole stack.
 

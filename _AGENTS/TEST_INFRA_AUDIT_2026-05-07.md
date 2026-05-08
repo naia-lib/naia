@@ -1,9 +1,11 @@
 # Naia Test Infrastructure Audit — 2026-05-07
 
+> **ARCHIVED — 2026-05-07.** C/H/M/L items all closed. A1–A4 migrated to `_AGENTS/NAIA_PLAN.md` (P1, P3, P9). Do not re-audit.
+
 **Scope:** Full audit of `test/` — step bindings, world infrastructure, test harness,
 NPA tooling, feature files, and architecture gaps.  
 **Auditor:** twin-Claude (post-SDD-quality-debt closeout, first-pass code read)  
-**Status:** H/M/L batch complete (2026-05-07). C1, C2, L3 verified, A1–A4 deferred pending decisions.
+**Status:** ✅ COMPLETE 2026-05-07. C1, C2, H1–H5, M1–M5, L1–L4 all done. A1–A4 migrated to NAIA_PLAN.md.
 
 ---
 

@@ -1,6 +1,8 @@
 # SDD Migration Plan — legacy_tests → namako
 
-**Status:** Phase A in progress · Started 2026-05-06
+> **ARCHIVED — 2026-05-07.** Plan complete. Superseded by `_AGENTS/NAIA_PLAN.md`. Do not re-audit.
+
+**Status:** ✅ COMPLETE 2026-05-06
 **Owner:** twin-Claude (autonomous execution)
 **Gate:** every phase must end with all existing tests still green + commit pushed to `dev` (see `RELEASE_PROCESS.md`)
 

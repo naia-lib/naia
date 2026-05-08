@@ -1,6 +1,8 @@
 # Replicated Resources — Spec & Implementation Plan
 
-**Status:** **R1–R9 + Mode B + InsertResourceEvent translation LANDED on `release-0.25.0-e`** (2026-05-05). All originally-deferred items closed.
+> **ARCHIVED — 2026-05-07.** Plan complete. Superseded by `_AGENTS/NAIA_PLAN.md`. Do not re-audit.
+
+**Status:** ✅ COMPLETE — R1–R9 + Mode B + InsertResourceEvent translation LANDED on `release-0.25.0-e` (2026-05-05). All originally-deferred items closed.
 **Owner:** Connor + Claude (twin)
 **Branch target:** `release-0.25.0-e`
 **Prereqs landed:** `is_static` Remote tagging (5ac5b51b), static-entity ID pool, priority accumulator (Fiedler pacing), entity authority/delegation/migration
