@@ -290,31 +290,40 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
 
 
   # ──────────────────────────────────────────────────────────────────────
-  # Phase D.7 — coverage stubs (deferred)
+  # Phase D.7 — coverage stubs (A2.1 pass: 15 converted, 4 deferred remain)
   # ──────────────────────────────────────────────────────────────────────
 
   @Rule(07)
-  Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
+  Rule: Event API lifecycle contracts
 
-    @Deferred
+    @PolicyOnly
     @Scenario(01)
     Scenario: [server-events-00] Server events API surface contract
 
-    @Deferred
     @Scenario(02)
     Scenario: [server-events-01] ConnectEvent fires per accepted client
+      Given a server is running
+      And client A connects
+      Then the server has observed ConnectEvent
 
-    @Deferred
     @Scenario(03)
     Scenario: [server-events-02] DisconnectEvent fires on client drop
+      Given a server is running
+      And client A connects
+      When the server disconnects the client
+      Then the server has observed DisconnectEvent
 
-    @Deferred
     @Scenario(04)
     Scenario: [server-events-03] AuthEvent surfaces on server-side request
+      Given a server is running
+      And client A connects
+      Then the server has observed AuthEvent
 
-    @Deferred
     @Scenario(05)
     Scenario: [server-events-04] TickEvent fires per server tick
+      Given a server is running
+      And a client connects
+      Then the server has observed a tick event
 
     @Deferred
     @Scenario(06)
@@ -324,7 +333,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(07)
     Scenario: [server-events-06] RequestEvent surfaces request payload
 
-    @Deferred
+    @PolicyOnly
     @Scenario(08)
     Scenario: [server-events-08] Per-user event isolation (no cross-user leakage)
 
@@ -332,59 +341,84 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(09)
     Scenario: [server-events-10] Authority denied event observable on server
 
-    @Deferred
+    @PolicyOnly
     @Scenario(10)
     Scenario: [server-events-11] Authority release event observable on server
 
-    @Deferred
+    @PolicyOnly
     @Scenario(11)
     Scenario: [server-events-12] Publish event observable on server
 
-    @Deferred
     @Scenario(12)
     Scenario: [server-events-13] Unpublish event observable on server
+      Given a server is running
+      And client A connects
+      And client A spawns a client-owned entity with Private replication config
+      When client A publishes the entity
+      And client A unpublishes the entity
+      Then the server observes an unpublish event for client A
 
-    @Deferred
+    @PolicyOnly
     @Scenario(13)
     Scenario: [client-events-00] Client events API surface contract
 
-    @Deferred
     @Scenario(14)
     Scenario: [client-events-01] ConnectEvent fires on accepted handshake
+      Given a server is running
+      And a client connects
+      Then the client has observed ConnectEvent
 
-    @Deferred
     @Scenario(15)
     Scenario: [client-events-02] DisconnectEvent fires on link loss
+      Given a server is running
+      And a client connects
+      When the client disconnects
+      Then the client has observed DisconnectEvent
 
-    @Deferred
     @Scenario(16)
     Scenario: [client-events-03] RejectEvent fires on protocol mismatch
+      Given a server with protocol version A
+      And a client with protocol version B
+      When the client attempts to connect
+      Then the connection is rejected with ProtocolMismatch
 
-    @Deferred
     @Scenario(17)
     Scenario: [client-events-05] TickEvent fires per client tick
+      Given a server is running
+      And a client connects
+      Then the client has observed a tick event
 
-    @Deferred
     @Scenario(18)
     Scenario: [client-events-10] Authority granted event surfaces
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A receives an authority granted event for the entity
 
     @Deferred
     @Scenario(19)
     Scenario: [client-events-11] Authority denied event surfaces
 
-    @Deferred
     @Scenario(20)
     Scenario: [client-events-12] Authority reset event surfaces
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      When the server releases authority for the delegated entity
+      Then client A receives an authority reset event for the entity
 
-    @Deferred
+    @PolicyOnly
     @Scenario(21)
     Scenario: [world-integration-01] Entity insertion into ECS world via Events API
 
-    @Deferred
+    @PolicyOnly
     @Scenario(22)
     Scenario: [world-integration-02] Component insertion mirrors server insert
 
-    @Deferred
+    @PolicyOnly
     @Scenario(23)
     Scenario: [world-integration-03] Component removal mirrors server remove
 

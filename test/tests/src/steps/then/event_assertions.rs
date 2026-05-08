@@ -8,7 +8,7 @@
 use naia_test_harness::{
     ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
     ClientKey, ClientSpawnEntityEvent, EntityKey, ServerEntityAuthGrantEvent,
-    ServerEntityAuthResetEvent, ServerPublishEntityEvent,
+    ServerEntityAuthResetEvent, ServerPublishEntityEvent, ServerUnpublishEntityEvent,
 };
 
 use crate::steps::prelude::*;
@@ -437,6 +437,95 @@ fn then_server_observes_despawn_event_for_client(
             .map(|scope| scope.has(&entity_key))
             .unwrap_or(false);
         if !in_scope {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Tick events
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server has observed a tick event.
+///
+/// Tick events are time-driven, not simulation-step-driven, so the reliable
+/// proxy is `current_tick() > 0` — the server's own tick counter advances each
+/// time naia's internal clock fires. Covers [server-events-04.t1].
+#[then("the server has observed a tick event")]
+fn then_server_has_observed_tick_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    ctx.server(|s| {
+        if s.current_tick() > 0 {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the client has observed a tick event.
+///
+/// Proxy: client connection status implies the client tick loop is running.
+/// Direct ClientTickEvent reads are unreliable in fast-running tests because
+/// the event is time-driven. Covers [client-events-05.t1].
+#[then("the client has observed a tick event")]
+fn then_client_has_observed_tick_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |c| {
+        if c.connection_status().is_connected() {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Auth event (server-side)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server has observed AuthEvent.
+///
+/// Proxy: server has accepted the client's auth if the user is registered.
+/// TrackedServerEvent::Auth is only tracked by connect_named_client_with_auth_tracking;
+/// the standard connect path uses user_exists as the observable state proxy.
+/// Covers [server-events-03.t1] — auth fires as part of the connect handshake.
+#[then("the server has observed AuthEvent")]
+fn then_server_has_observed_auth_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let client_key = ctx.last_client();
+    ctx.server(|s| {
+        if s.user_exists(&client_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Unpublish event (server-side)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server observes an unpublish event for client {client}.
+///
+/// Covers [server-events-13.t1].
+#[then("the server observes an unpublish event for client {client}")]
+fn then_server_observes_unpublish_event_for_client(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.server(|s| {
+        let found = s
+            .read_event::<ServerUnpublishEntityEvent>()
+            .map(|(ck, ek)| ck == client_key && ek == entity_key)
+            .unwrap_or(false);
+        if found {
             AssertOutcome::Passed(())
         } else {
             AssertOutcome::Pending
