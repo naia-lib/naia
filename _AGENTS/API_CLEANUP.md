@@ -2,7 +2,7 @@
 
 **Created:** 2026-05-08  
 **Scope:** Naming consistency and method ergonomics only. Excludes D-P7 (Replicate decomp) and D-P12 (architectural refactors).  
-**Status:** Awaiting implementation scheduling.
+**Status:** COMPLETE — all approved issues landed in commit 4bb7b008 (2026-05-08).
 
 ---
 
