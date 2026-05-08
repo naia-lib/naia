@@ -16,7 +16,7 @@ use naia_client::{
     Client as NaiaClient, ConnectionStatus, EntityPriorityMut, EntityPriorityRef, NaiaClientError,
 };
 
-use crate::ReplicationConfig;
+use crate::Publicity;
 
 #[derive(Resource)]
 pub struct ClientWrapper<T: Send + Sync + 'static> {
@@ -164,7 +164,7 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client.client.disable_entity_replication(entity);
     }
 
-    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<ReplicationConfig> {
+    pub(crate) fn replication_config(&self, entity: &Entity) -> Option<Publicity> {
         self.client.client.entity_replication_config(entity)
     }
 

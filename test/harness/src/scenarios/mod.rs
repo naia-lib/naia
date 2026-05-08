@@ -86,7 +86,7 @@ fn connect_one_client(scenario: &mut Scenario) -> crate::harness::ClientKey {
 pub fn contract06_scope_entry() -> Trace {
     let mut scenario = Scenario::new();
     scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|ctx| ctx.server(|s| s.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|s| s.create_room().key()));
     scenario.set_last_room(room_key);
 
     let client_key = connect_one_client(&mut scenario);
@@ -128,7 +128,7 @@ pub fn contract06_scope_entry() -> Trace {
 pub fn contract07_component_update() -> Trace {
     let mut scenario = Scenario::new();
     scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|ctx| ctx.server(|s| s.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|s| s.create_room().key()));
     scenario.set_last_room(room_key);
 
     let client_key = connect_one_client(&mut scenario);
@@ -195,7 +195,7 @@ pub fn contract07_component_update() -> Trace {
 pub fn contract10_delegation_grant() -> Trace {
     let mut scenario = Scenario::new();
     scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|ctx| ctx.server(|s| s.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|s| s.create_room().key()));
     scenario.set_last_room(room_key);
 
     let client_key = connect_one_client(&mut scenario);

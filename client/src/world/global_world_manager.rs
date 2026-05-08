@@ -14,7 +14,7 @@ use naia_shared::{
 use super::global_entity_record::GlobalEntityRecord;
 use crate::{
     world::{entity_owner::EntityOwner, mut_channel::MutChannelData},
-    ReplicationConfig,
+    Publicity,
 };
 
 pub struct GlobalWorldManager {
@@ -214,7 +214,7 @@ impl GlobalWorldManager {
     pub(crate) fn entity_replication_config(
         &self,
         global_entity: &GlobalEntity,
-    ) -> Option<ReplicationConfig> {
+    ) -> Option<Publicity> {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.replication_config());
         }
@@ -225,14 +225,14 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        record.set_replication_config(ReplicationConfig::Public);
+        record.set_replication_config(Publicity::Public);
     }
 
     pub(crate) fn entity_unpublish(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        record.set_replication_config(ReplicationConfig::Private);
+        record.set_replication_config(Publicity::Private);
     }
 
     pub(crate) fn entity_has_component(
@@ -248,7 +248,7 @@ impl GlobalWorldManager {
 
     pub(crate) fn entity_is_delegated(&self, global_entity: &GlobalEntity) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
-            return record.replication_config() == ReplicationConfig::Delegated;
+            return record.replication_config() == Publicity::Delegated;
         }
         false
     }
@@ -257,7 +257,7 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config() != ReplicationConfig::Public {
+        if record.replication_config() != Publicity::Public {
             panic!(
                 "Can only enable delegation on an Entity that is Public! Config: {:?}",
                 record.replication_config()
@@ -273,11 +273,11 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config() != ReplicationConfig::Public {
+        if record.replication_config() != Publicity::Public {
             panic!("Can only enable delegation on an Entity that is Public!");
         }
 
-        record.set_replication_config(ReplicationConfig::Delegated);
+        record.set_replication_config(Publicity::Delegated);
 
         if record.owner().is_client() {
             record.set_owner(EntityOwner::Server);
@@ -288,11 +288,11 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        if record.replication_config() != ReplicationConfig::Delegated {
+        if record.replication_config() != Publicity::Delegated {
             panic!("Can only disable delegation on an Entity that is Delegated!");
         }
 
-        record.set_replication_config(ReplicationConfig::Public);
+        record.set_replication_config(Publicity::Public);
         self.auth_handler.deregister_entity(global_entity);
     }
 
@@ -406,7 +406,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
     fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool {
         if let Some(record) = self.entity_records.get(global_entity) {
             let server_owned = record.owner() == EntityOwner::Server;
-            let is_public = record.replication_config() == ReplicationConfig::Public;
+            let is_public = record.replication_config() == Publicity::Public;
 
             return server_owned && is_public;
         }

@@ -152,7 +152,7 @@ impl BevyHarness {
                 let socket =
                     ServerSocket::new(LocalServerSocket::new(hub_for_server.clone()), None);
                 server.listen(socket);
-                server.make_room();
+                server.create_room();
             })
             .add_systems(
                 Update,

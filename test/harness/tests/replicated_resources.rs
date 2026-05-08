@@ -29,7 +29,7 @@ fn test_client_config() -> ClientConfig {
 fn server_with_one_client(scenario: &mut Scenario) -> ClientKey {
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
     scenario.set_last_room(room_key);
 
     let client_auth = Auth::new("alice", "secret");
@@ -148,7 +148,7 @@ fn insert_dynamic_resource_replicates_to_connected_client() {
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             assert!(
-                server.insert_resource(TestScore::new(7, 3)),
+                server.insert_resource(TestScore::new(7, 3), false),
                 "insert should succeed for fresh type"
             );
             assert!(server.has_resource::<TestScore>());
@@ -207,9 +207,9 @@ fn re_inserting_same_resource_returns_false() {
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            assert!(server.insert_resource(TestScore::new(0, 0)));
+            assert!(server.insert_resource(TestScore::new(0, 0), false));
             // Second insert returns false (ResourceAlreadyExists).
-            assert!(!server.insert_resource(TestScore::new(99, 99)));
+            assert!(!server.insert_resource(TestScore::new(99, 99), false));
         });
     });
 
@@ -233,7 +233,7 @@ fn remove_resource_propagates_to_client() {
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            assert!(server.insert_resource(TestScore::new(1, 2)));
+            assert!(server.insert_resource(TestScore::new(1, 2), false));
         });
     });
     settle(&mut scenario, 20);
@@ -267,7 +267,7 @@ fn server_mutation_replicates_to_client() {
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            assert!(server.insert_resource(TestScore::new(0, 0)));
+            assert!(server.insert_resource(TestScore::new(0, 0), false));
         });
     });
     settle(&mut scenario, 20);
@@ -337,7 +337,7 @@ fn per_field_diff_one_field_sends_fewer_bytes_than_two() {
         // Insert + steady-state.
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                assert!(server.insert_resource(TestScore::new(0, 0)));
+                assert!(server.insert_resource(TestScore::new(0, 0), false));
             });
         });
         settle(&mut scenario, 30);
@@ -401,7 +401,7 @@ fn delegated_resource_supports_client_authority_request() {
     // Insert resource (use TestScore which we've verified replicates).
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            assert!(server.insert_resource(TestScore::new(0, 0)));
+            assert!(server.insert_resource(TestScore::new(0, 0), false));
         });
     });
     settle(&mut scenario, 30);
@@ -490,7 +490,7 @@ fn resource_priority_gain_is_settable() {
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            assert!(server.insert_resource(TestScore::new(0, 0)));
+            assert!(server.insert_resource(TestScore::new(0, 0), false));
             // Gain knob applies to a present resource.
             assert!(server.set_resource_priority_gain::<TestScore>(7.5));
             // Returns false for a not-inserted resource type.
@@ -505,13 +505,13 @@ fn late_joining_client_observes_pre_existing_resource() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
     scenario.set_last_room(room_key);
 
     // Insert resource BEFORE any client connects.
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            assert!(server.insert_resource(TestScore::new(11, 22)));
+            assert!(server.insert_resource(TestScore::new(11, 22), false));
         });
     });
 

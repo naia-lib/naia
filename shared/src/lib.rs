@@ -170,6 +170,7 @@ pub use protocol::{Protocol, ProtocolPlugin};
 pub use protocol_id::ProtocolId;
 pub use types::{HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
+pub use world::publicity::Publicity;
 pub use world::entity_index::{EntityIndex, KeyGenerator32};
 pub use world::entity_event::EntityEvent;
 pub use world::host::host_entity_generator::HostEntityGenerator;

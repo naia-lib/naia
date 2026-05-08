@@ -120,7 +120,7 @@ fn given_server_with_player_selection_and_alice(ctx: &mut TestWorldMut) {
     scenario.mutate(|c| {
         c.server(|server| {
             assert!(
-                server.insert_resource(TestPlayerSelection::new(0)),
+                server.insert_resource(TestPlayerSelection::new(0), false),
                 "insert PlayerSelection should succeed for fresh type"
             );
         });

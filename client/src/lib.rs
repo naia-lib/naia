@@ -86,11 +86,11 @@ pub use error::NaiaClientError;
 pub use tick_events::{ClientTickEvent, ServerTickEvent, TickEvent, TickEvents};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
-    replication_config::ReplicationConfig,
+    replication_config::Publicity,
 };
 pub use world_events::{
     ConnectEvent, DespawnEntityEvent, DisconnectEvent, EntityAuthDeniedEvent,
     EntityAuthGrantedEvent, EntityAuthResetEvent, ErrorEvent, InsertComponentEvent, MessageEvent,
     PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvent, SpawnEntityEvent,
-    UnpublishEntityEvent, UpdateComponentEvent, WorldEvent, WorldEvents,
+    UnpublishEntityEvent, UpdateComponentEvent, WorldEvent, Events,
 };

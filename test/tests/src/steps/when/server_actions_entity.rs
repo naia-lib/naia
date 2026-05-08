@@ -351,7 +351,7 @@ fn when_server_inserts_score_dynamic(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| {
         c.server(|server| {
-            assert!(server.insert_resource(TestScore::new(0, 0)), "insert Score should succeed");
+            assert!(server.insert_resource(TestScore::new(0, 0), false), "insert Score should succeed");
         });
     });
 }
@@ -390,7 +390,7 @@ fn when_server_attempts_reinsert_score(ctx: &mut TestWorldMut, home: u32, away: 
     use naia_test_harness::TestScore;
     let scenario = ctx.scenario_mut();
     let accepted = scenario.mutate(|c| {
-        c.server(|server| server.insert_resource(TestScore::new(home, away)))
+        c.server(|server| server.insert_resource(TestScore::new(home, away), false))
     });
     assert!(!accepted, "re-insert of an existing Score must return false (ResourceAlreadyExists)");
 }

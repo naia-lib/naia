@@ -279,7 +279,7 @@ impl BenchWorld {
             for user_key in events.read::<ConnectEvent>() {
                 connected_user_keys.push(user_key);
                 if room_key.is_none() {
-                    room_key = Some(server.make_room().key());
+                    room_key = Some(server.create_room().key());
                 }
                 server
                     .room_mut(room_key.as_ref().unwrap())
@@ -309,7 +309,8 @@ impl BenchWorld {
         let mut server_entities: Vec<BenchEntity> = Vec::new();
         for _ in 0..static_entity_count {
             let entity = {
-                let mut em = server.spawn_static_entity(server_world.proxy_mut());
+                let mut em = server.spawn_entity(server_world.proxy_mut());
+                em.as_static();
                 let entity = em.id();
                 em.insert_component(HaloTile);
                 entity
@@ -492,7 +493,8 @@ impl BenchWorld {
         // Tiles are static entities: IDs from the static pool, no diff-tracking after scope-entry.
         for _ in 0..tile_count {
             let entity = {
-                let mut em = self.server.spawn_static_entity(self.server_world.proxy_mut());
+                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                em.as_static();
                 let id = em.id();
                 em.insert_component(HaloTile);
                 id

@@ -134,15 +134,6 @@ impl<'a, W: WorldMutType<TestEntity>> ServerEntityMut<'a, W> {
         self
     }
 
-    /// Insert multiple components
-    pub fn insert_components<R: ReplicatedComponent>(
-        &mut self,
-        component_refs: Vec<R>,
-    ) -> &mut Self {
-        self.entity_mut.insert_components(component_refs);
-        self
-    }
-
     /// Remove a component
     pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
         self.entity_mut.remove_component::<R>()

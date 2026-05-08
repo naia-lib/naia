@@ -147,7 +147,7 @@ fn given_server_running_with_auth(ctx: &mut TestWorldMut) {
     use naia_test_harness::protocol;
     let scenario = ctx.init();
     scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|c| c.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|c| c.server(|server| server.create_room().key()));
     scenario.set_last_room(room_key);
     scenario.clear_event_history();
 }
@@ -257,7 +257,7 @@ fn given_multiple_transport_adapters(ctx: &mut TestWorldMut) {
     use naia_test_harness::protocol;
     let scenario = ctx.init();
     scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|c| c.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|c| c.server(|server| server.create_room().key()));
     scenario.set_last_room(room_key);
     scenario.clear_operation_result();
     scenario.record_ok();

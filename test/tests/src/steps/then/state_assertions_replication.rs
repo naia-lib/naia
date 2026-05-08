@@ -356,12 +356,12 @@ fn then_entity_becomes_out_of_scope_for_client_b(
 /// `ReplicationConfig`. Covers [entity-publication-observability].
 fn parse_client_replication_config(
     name: &str,
-) -> Result<naia_client::ReplicationConfig, AssertOutcome<()>> {
-    use naia_client::ReplicationConfig;
+) -> Result<naia_client::Publicity, AssertOutcome<()>> {
+    use naia_client::Publicity;
     match name {
-        "Public" => Ok(ReplicationConfig::Public),
-        "Private" => Ok(ReplicationConfig::Private),
-        "Delegated" => Ok(ReplicationConfig::Delegated),
+        "Public" => Ok(Publicity::Public),
+        "Private" => Ok(Publicity::Private),
+        "Delegated" => Ok(Publicity::Delegated),
         other => Err(AssertOutcome::Failed(format!(
             "Unknown replication config: '{other}'"
         ))),

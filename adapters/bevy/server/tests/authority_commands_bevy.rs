@@ -95,7 +95,7 @@ fn sys_server_startup(
     mut server: Server,
     mut state: ResMut<ServerState>,
 ) {
-    let room_key = server.make_room().key();
+    let room_key = server.create_room().key();
     state.room_key = Some(room_key);
 
     let entity = commands

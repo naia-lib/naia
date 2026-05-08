@@ -1,6 +1,6 @@
 use bevy::prelude::{ButtonInput, Commands, KeyCode, Query, Res, ResMut, Vec2, Window};
 
-use naia_bevy_client::{Client, CommandsExt, ReplicationConfig};
+use naia_bevy_client::{Client, CommandsExt, Publicity};
 use naia_bevy_demo_shared::{components::Position, messages::KeyCommand};
 
 use crate::{app::Main, resources::Global};
@@ -39,10 +39,10 @@ pub fn key_input(
     if x {
         if let Some(entity) = global.cursor_entity {
             if let Some(prev_config) = commands.entity(entity).replication_config(&client) {
-                if prev_config != ReplicationConfig::Private {
+                if prev_config != Publicity::Private {
                     commands
                         .entity(entity)
-                        .configure_replication::<Main>(ReplicationConfig::Private);
+                        .configure_replication::<Main>(Publicity::Private);
                 }
             }
         }

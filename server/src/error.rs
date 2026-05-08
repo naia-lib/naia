@@ -6,6 +6,7 @@ pub enum NaiaServerError {
     Wrapped(Box<dyn Error>),
     SendError(SocketAddr),
     RecvError,
+    UserNotFound,
 }
 
 impl NaiaServerError {
@@ -24,6 +25,9 @@ impl fmt::Display for NaiaServerError {
             }
             NaiaServerError::RecvError => {
                 write!(f, "Naia Server Error: RecvError")
+            }
+            NaiaServerError::UserNotFound => {
+                write!(f, "Naia Server Error: UserNotFound")
             }
         }
     }

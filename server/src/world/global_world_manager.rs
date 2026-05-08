@@ -75,6 +75,13 @@ impl GlobalWorldManager {
             .insert(*global_entity, GlobalEntityRecord::new_static(entity_owner));
     }
 
+    pub fn mark_entity_as_static(&mut self, global_entity: &GlobalEntity) {
+        let Some(record) = self.entity_records.get_mut(global_entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.is_static = true;
+    }
+
     // Despawn
     pub fn remove_entity_diff_handlers(&mut self, global_entity: &GlobalEntity) {
         // Clean up associated components

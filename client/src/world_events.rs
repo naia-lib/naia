@@ -9,7 +9,7 @@ use naia_shared::{
 
 use crate::NaiaClientError;
 
-pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
+pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
     rejections: Vec<(SocketAddr, RejectReason)>,
     disconnections: Vec<SocketAddr>,
@@ -29,13 +29,13 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     empty: bool,
 }
 
-impl<E: Hash + Copy + Eq + Sync + Send> Default for WorldEvents<E> {
+impl<E: Hash + Copy + Eq + Sync + Send> Default for Events<E> {
     fn default() -> Self {
-        WorldEvents::new()
+        Events::new()
     }
 }
 
-impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
+impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub(crate) fn new() -> Self {
         Self {
             connections: Vec::new(),
@@ -267,9 +267,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 pub trait WorldEvent<E: Hash + Copy + Eq + Sync + Send> {
     type Iter;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter;
+    fn iter(events: &mut Events<E>) -> Self::Iter;
 
-    fn has(events: &WorldEvents<E>) -> bool;
+    fn has(events: &Events<E>) -> bool;
 }
 
 // ConnectEvent
@@ -277,12 +277,12 @@ pub struct ConnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
     type Iter = IntoIter<SocketAddr>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.connections);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.connections.is_empty()
     }
 }
@@ -292,12 +292,12 @@ pub struct RejectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
     type Iter = IntoIter<(SocketAddr, RejectReason)>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.rejections.is_empty()
     }
 }
@@ -307,12 +307,12 @@ pub struct DisconnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
     type Iter = IntoIter<SocketAddr>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.disconnections.is_empty()
     }
 }
@@ -322,12 +322,12 @@ pub struct ErrorEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ErrorEvent {
     type Iter = IntoIter<NaiaClientError>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.errors);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.errors.is_empty()
     }
 }
@@ -342,7 +342,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
 {
     type Iter = IntoIter<M>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(channel_map) = events.messages.get_mut(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<M>();
@@ -361,7 +361,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
         IntoIterator::into_iter(Vec::new())
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(channel_map) = events.messages.get(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<M>();
@@ -381,7 +381,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
 {
     type Iter = IntoIter<(ResponseSendKey<Q::Response>, Q)>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         let Some(channel_map) = events.requests.get_mut(&channel_kind) else {
             return IntoIterator::into_iter(Vec::new());
@@ -402,7 +402,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
         IntoIterator::into_iter(output_list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         let channel_kind: ChannelKind = ChannelKind::of::<C>();
         if let Some(channel_map) = events.requests.get(&channel_kind) {
             let message_kind: MessageKind = MessageKind::of::<Q>();
@@ -417,12 +417,12 @@ pub struct SpawnEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for SpawnEntityEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.spawns);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.spawns.is_empty()
     }
 }
@@ -432,12 +432,12 @@ pub struct DespawnEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DespawnEntityEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.despawns);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.despawns.is_empty()
     }
 }
@@ -447,12 +447,12 @@ pub struct PublishEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for PublishEntityEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.publishes);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.publishes.is_empty()
     }
 }
@@ -462,12 +462,12 @@ pub struct UnpublishEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for UnpublishEntityEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.unpublishes);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.unpublishes.is_empty()
     }
 }
@@ -477,12 +477,12 @@ pub struct EntityAuthGrantedEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthGrantedEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.auth_grants);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.auth_grants.is_empty()
     }
 }
@@ -492,12 +492,12 @@ pub struct EntityAuthResetEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthResetEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.auth_resets);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.auth_resets.is_empty()
     }
 }
@@ -507,12 +507,12 @@ pub struct EntityAuthDeniedEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthDeniedEvent {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.auth_denies);
         IntoIterator::into_iter(list)
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         !events.auth_denies.is_empty()
     }
 }
@@ -524,7 +524,7 @@ pub struct InsertComponentEvent<C: Replicate> {
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for InsertComponentEvent<C> {
     type Iter = IntoIter<E>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.inserts.remove(&component_kind) {
             return IntoIterator::into_iter(boxed_list);
@@ -533,7 +533,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for InsertCo
         IntoIterator::into_iter(Vec::new())
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         events.inserts.contains_key(&component_kind)
     }
@@ -546,7 +546,7 @@ pub struct UpdateComponentEvent<C: Replicate> {
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for UpdateComponentEvent<C> {
     type Iter = IntoIter<(Tick, E)>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.updates.remove(&component_kind) {
             return IntoIterator::into_iter(boxed_list);
@@ -555,7 +555,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for UpdateCo
         IntoIterator::into_iter(Vec::new())
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         events.updates.contains_key(&component_kind)
     }
@@ -568,7 +568,7 @@ pub struct RemoveComponentEvent<C: Replicate> {
 impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveComponentEvent<C> {
     type Iter = IntoIter<(E, C)>;
 
-    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+    fn iter(events: &mut Events<E>) -> Self::Iter {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         if let Some(boxed_list) = events.removes.remove(&component_kind) {
             let mut output_list: Vec<(E, C)> = Vec::new();
@@ -585,7 +585,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for RemoveCo
         IntoIterator::into_iter(Vec::new())
     }
 
-    fn has(events: &WorldEvents<E>) -> bool {
+    fn has(events: &Events<E>) -> bool {
         let component_kind: ComponentKind = ComponentKind::of::<C>();
         events.removes.contains_key(&component_kind)
     }

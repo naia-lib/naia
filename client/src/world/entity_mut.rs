@@ -4,7 +4,8 @@ use naia_shared::{
     AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType,
 };
 
-use crate::{world::entity_owner::EntityOwner, Client, ReplicationConfig};
+use crate::{world::entity_owner::EntityOwner, Client};
+use naia_shared::Publicity;
 
 // EntityMut
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
@@ -54,14 +55,14 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
     // Authority / Config
 
-    pub fn configure_replication(&mut self, config: ReplicationConfig) -> &mut Self {
+    pub fn configure_replication(&mut self, config: Publicity) -> &mut Self {
         self.client
             .configure_entity_replication(&mut self.world, &self.entity, config);
 
         self
     }
 
-    pub fn replication_config(&self) -> Option<ReplicationConfig> {
+    pub fn replication_config(&self) -> Option<Publicity> {
         self.client.entity_replication_config(&self.entity)
     }
 

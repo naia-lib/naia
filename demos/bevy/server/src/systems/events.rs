@@ -89,7 +89,7 @@ pub fn connect_events(
         server.send_message::<EntityAssignmentChannel, EntityAssignment>(
             &user_key,
             &assignment_message,
-        );
+        ).unwrap();
     }
 }
 

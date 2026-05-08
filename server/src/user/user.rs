@@ -38,7 +38,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
         self.server.user_address(&self.key).unwrap()
     }
 
-    pub fn room_count(&self) -> usize {
+    pub fn rooms_count(&self) -> usize {
         self.server.user_rooms_count(&self.key).unwrap()
     }
 
@@ -85,7 +85,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
         self
     }
 
-    pub fn room_count(&self) -> usize {
+    pub fn rooms_count(&self) -> usize {
         self.server.user_rooms_count(&self.key).unwrap()
     }
 

@@ -11,9 +11,9 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
     server: &'s mut WorldServer<E>,
     world: W,
     entity: E,
-    /// True only when this EntityMut was returned by `spawn_static_entity` —
-    /// allows component insertion during construction. False for all other
-    /// sources (entity_mut, etc.) where mutation of a static entity is illegal.
+    /// True after `as_static()` is called — allows component insertion during
+    /// construction. False for all other sources where mutation of a static
+    /// entity after construction is illegal.
     allow_static_insert: bool,
 }
 
@@ -27,17 +27,16 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
         }
     }
 
-    pub(crate) fn new_static_construction(server: &'s mut WorldServer<E>, world: W, entity: &E) -> Self {
-        Self {
-            server,
-            world,
-            entity: *entity,
-            allow_static_insert: true,
-        }
-    }
-
     pub fn id(&self) -> E {
         self.entity
+    }
+
+    /// Mark this entity as static: no diff-tracking after initial replication.
+    /// Must be called before inserting components; returns `&mut Self` for chaining.
+    pub fn as_static(&mut self) -> &mut Self {
+        self.server.mark_entity_as_static(&self.entity);
+        self.allow_static_insert = true;
+        self
     }
 
     pub fn despawn(&mut self) {
@@ -56,21 +55,10 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
 
     pub fn insert_component<R: ReplicatedComponent>(&mut self, component_ref: R) -> &mut Self {
         if !self.allow_static_insert && self.server.entity_is_static(&self.entity) {
-            panic!("Cannot insert_component on a static entity: call spawn_static_entity and insert all components during construction");
+            panic!("Cannot insert_component on a static entity after construction: call .as_static() and insert all components before dropping EntityMut");
         }
         self.server
             .insert_component(&mut self.world, &self.entity, component_ref);
-
-        self
-    }
-
-    pub fn insert_components<R: ReplicatedComponent>(
-        &mut self,
-        mut component_refs: Vec<R>,
-    ) -> &mut Self {
-        while let Some(component_ref) = component_refs.pop() {
-            self.insert_component(component_ref);
-        }
 
         self
     }

@@ -19,7 +19,7 @@ use crate::{
     },
     request::{GlobalRequestManager, GlobalResponseManager},
     world::global_world_manager::GlobalWorldManager,
-    world_events::WorldEvents,
+    world_events::Events,
 };
 
 pub struct Connection {
@@ -159,7 +159,7 @@ impl Connection {
         protocol: &Protocol,
         world: &mut W,
         now: &Instant,
-        incoming_events: &mut WorldEvents<E>,
+        incoming_events: &mut Events<E>,
     ) -> Vec<EntityEvent> {
         // Receive Message Events
         let (entity_converter, entity_waitlist) =

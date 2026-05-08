@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
@@ -45,7 +45,7 @@ fn messaging_01_user_errors_return_result() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -100,7 +100,7 @@ fn messaging_02_remote_input_no_panic() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -180,7 +180,7 @@ fn messaging_15_unreliable_fragmentation_limit() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -219,7 +219,7 @@ fn messaging_16_reliable_fragmentation_allowed() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -259,7 +259,7 @@ fn messaging_18_entity_property_message_buffering() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -327,7 +327,7 @@ fn messaging_19_entity_property_ttl() {
     // Wait for server to start
     scenario.expect(|_ctx| Some(()));
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -395,7 +395,7 @@ fn messaging_20_entity_property_buffer_caps() {
     // Wait for server to start
     scenario.expect(|_ctx| Some(()));
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -597,7 +597,7 @@ fn matched_protocol_id_enables_successful_messaging() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -644,7 +644,7 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -712,7 +712,7 @@ fn requests_fail_cleanly_on_disconnect_mid_flight() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -791,7 +791,7 @@ fn unordered_unreliable_channel_shows_best_effort_semantics() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -840,7 +840,7 @@ fn multi_type_mapping_across_messages_components_and_channels() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -963,7 +963,7 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1012,7 +1012,7 @@ fn client_to_server_request_yields_exactly_one_response() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1085,7 +1085,7 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1208,7 +1208,7 @@ fn many_concurrent_requests_from_a_single_client_remain_distinct() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1301,7 +1301,7 @@ fn reliable_point_to_point_request_response() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1396,7 +1396,7 @@ fn reliable_server_to_clients_broadcast_respects_rooms() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room_r_key, room_s_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
+        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1475,7 +1475,7 @@ fn response_completion_order_is_well_defined_and_documented() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1574,7 +1574,7 @@ fn server_to_client_request_yields_exactly_one_response() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1644,7 +1644,7 @@ fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1693,7 +1693,7 @@ fn ordered_reliable_channel_ignores_duplicated_packets() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1738,7 +1738,7 @@ fn ordered_reliable_channel_keeps_order_under_latency_and_reordering() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1783,7 +1783,7 @@ fn per_channel_ordering() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1873,7 +1873,7 @@ fn sequenced_reliable_channel_only_exposes_the_latest_message_in_a_stream() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1937,7 +1937,7 @@ fn channel_separation_for_different_message_types() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2000,7 +2000,7 @@ fn tick_buffered_channel_groups_messages_by_tick() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2106,7 +2106,7 @@ fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2140,7 +2140,7 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2235,7 +2235,7 @@ fn request_id_uniqueness() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2283,7 +2283,7 @@ fn response_matching_to_request() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2349,7 +2349,7 @@ fn request_timeout_semantics() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2388,7 +2388,7 @@ fn disconnect_cancels_pending_requests() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2434,7 +2434,7 @@ fn request_deduplication() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2500,7 +2500,7 @@ fn rpc_ordering_on_ordered_channel() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -2545,7 +2545,7 @@ fn fire_and_forget_request() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,

@@ -77,13 +77,13 @@ fn given_server_has_observed_spawn_event_for_client_a(ctx: &mut TestWorldMut) {
 /// [entity-ownership-02] tests for client-owned entity write paths.
 #[given("the client spawns a client-owned entity with a replicated component")]
 fn given_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
-    use naia_client::ReplicationConfig as CRC;
+    use naia_client::Publicity;
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let room_key = scenario.last_room();
     let entity_key = scenario.mutate(|c| c.client(client_key, |cl|
-        cl.spawn(|mut e| { e.configure_replication(CRC::Public).insert_component(Position::new(0.0, 0.0)); })));
+        cl.spawn(|mut e| { e.configure_replication(Publicity::Public).insert_component(Position::new(0.0, 0.0)); })));
     scenario.expect(|ectx| ectx.server(|s| s.has_entity(&entity_key).then_some(())));
     scenario.mutate(|c| c.server(|s| {
         if let Some(mut e) = s.entity_mut(&entity_key) { e.enter_room(&room_key); }
@@ -191,7 +191,7 @@ fn given_server_owned_entity_exists(ctx: &mut TestWorldMut) {
 /// ticks for replication to land on the server before storing.
 #[given("the client owns an entity")]
 fn given_client_owns_entity(ctx: &mut TestWorldMut) {
-    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_client::Publicity as ClientReplicationConfig;
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
@@ -349,7 +349,7 @@ fn given_entity_not_in_clients_room(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|mctx| {
         mctx.server(|server| {
-            let separate_room = server.make_room().key();
+            let separate_room = server.create_room().key();
             if let Some(mut entity) = server.entity_mut(&entity_key) {
                 entity.enter_room(&separate_room);
             }

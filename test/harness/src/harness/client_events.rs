@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::{debug, warn};
 
-use naia_client::{NaiaClientError, TickEvents, WorldEvents};
+use naia_client::{NaiaClientError, TickEvents, Events as NaiaClientEvents};
 use naia_shared::{
     handshake::RejectReason, ChannelKind, ComponentKind, GlobalResponseId, LocalEntity,
     MessageContainer, MessageKind, OwnedLocalEntity, Replicate, Tick, WorldRefType,
@@ -40,7 +40,7 @@ impl ClientEvents {
     pub fn new(
         scenario: &mut Scenario,
         client_key: ClientKey,
-        mut world_events: WorldEvents<TestEntity>,
+        mut world_events: NaiaClientEvents<TestEntity>,
         mut tick_events: TickEvents,
     ) -> Self {
         let mut spawns = Vec::new();

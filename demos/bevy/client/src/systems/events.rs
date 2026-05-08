@@ -16,7 +16,7 @@ use naia_bevy_client::{
         MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
         SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, ReplicationConfig, Tick,
+    sequence_greater_than, Client, CommandsExt, Random, Replicate, Publicity, Tick,
 };
 
 use naia_bevy_demo_shared::{
@@ -56,7 +56,7 @@ pub fn connect_events(
             // MUST call this to begin replication
             .enable_replication(&mut client)
             // make Entity Public, which means it will be visible to other Clients
-            .configure_replication::<Main>(ReplicationConfig::Public)
+            .configure_replication::<Main>(Publicity::Public)
             // Insert Position component
             .insert(Position::new(
                 16 * ((Random::gen_range_u32(0, 40) as i16) - 20),

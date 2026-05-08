@@ -30,8 +30,8 @@ impl<'a> UserRef<'a> {
     }
 
     /// Get the number of rooms this user belongs to
-    pub fn room_count(&self) -> usize {
-        self.user.room_count()
+    pub fn rooms_count(&self) -> usize {
+        self.user.rooms_count()
     }
 
     /// Get all room keys this user belongs to
@@ -80,8 +80,8 @@ impl<'a> UserMut<'a> {
     }
 
     /// Get the number of rooms this user belongs to
-    pub fn room_count(&self) -> usize {
-        self.user.room_count()
+    pub fn rooms_count(&self) -> usize {
+        self.user.rooms_count()
     }
 
     /// Get all room keys this user belongs to

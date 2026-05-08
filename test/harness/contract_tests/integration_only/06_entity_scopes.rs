@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_client::{ClientConfig, JitterBufferType, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
@@ -43,7 +43,7 @@ fn entities_only_replicate_when_room_scope_match() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
+        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -132,7 +132,7 @@ fn moving_user_between_rooms_updates_scope() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
+        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -228,7 +228,7 @@ fn moving_entity_between_rooms_updates_scope() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
+        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -334,7 +334,7 @@ fn custom_viewport_scoping_function() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -412,8 +412,8 @@ fn entity_in_multiple_rooms_projects_correctly() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room_a_key, room_b_key) = scenario.mutate(|ctx| {
-        let ra = ctx.server(|server| server.make_room().key());
-        let rb = ctx.server(|server| server.make_room().key());
+        let ra = ctx.server(|server| server.create_room().key());
+        let rb = ctx.server(|server| server.create_room().key());
         (ra, rb)
     });
 
@@ -540,7 +540,7 @@ fn authority_releases_when_holder_goes_out_of_scope() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -626,8 +626,8 @@ fn manual_user_scope_include_overrides_room_absence() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room_a_key, room_b_key) = scenario.mutate(|ctx| {
-        let ra = ctx.server(|server| server.make_room().key());
-        let rb = ctx.server(|server| server.make_room().key());
+        let ra = ctx.server(|server| server.create_room().key());
+        let rb = ctx.server(|server| server.create_room().key());
         (ra, rb)
     });
 
@@ -704,7 +704,7 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_a_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_u_key = client_connect(
         &mut scenario,
@@ -781,7 +781,7 @@ fn authority_releases_when_holder_disconnects() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -866,8 +866,8 @@ fn scope_leave_and_re_enter_semantics() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room1_key, _room2_key) = scenario.mutate(|ctx| {
-        let r1 = ctx.server(|server| server.make_room().key());
-        let r2 = ctx.server(|server| server.make_room().key());
+        let r1 = ctx.server(|server| server.create_room().key());
+        let r2 = ctx.server(|server| server.create_room().key());
         (r1, r2)
     });
 
@@ -953,7 +953,7 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
     let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.make_room().key(), server.make_room().key())));
+        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
 
     let client_a_key = client_connect(
         &mut scenario,

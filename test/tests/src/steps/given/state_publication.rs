@@ -13,7 +13,7 @@ use naia_test_harness::EntityKey;
 // Entity-publication preconditions (multi-client + replication-config variants)
 // ──────────────────────────────────────────────────────────────────────
 
-fn spawn_client_entity_with_config(ctx: &mut TestWorldMut, name: &str, config: naia_client::ReplicationConfig) {
+fn spawn_client_entity_with_config(ctx: &mut TestWorldMut, name: &str, config: naia_client::Publicity) {
     use naia_test_harness::Position;
     let client_key = named_client_mut(ctx, name);
     let scenario = ctx.scenario_mut();
@@ -34,13 +34,13 @@ fn spawn_client_entity_with_config(ctx: &mut TestWorldMut, name: &str, config: n
 /// Given client {client} spawns a client-owned entity with Private replication config.
 #[given("client {client} spawns a client-owned entity with Private replication config")]
 fn given_client_spawns_entity_private(ctx: &mut TestWorldMut, name: ClientName) {
-    spawn_client_entity_with_config(ctx, name.as_ref(), naia_client::ReplicationConfig::Private);
+    spawn_client_entity_with_config(ctx, name.as_ref(), naia_client::Publicity::Private);
 }
 
 /// Given client {client} spawns a client-owned entity with Public replication config.
 #[given("client {client} spawns a client-owned entity with Public replication config")]
 fn given_client_spawns_entity_public(ctx: &mut TestWorldMut, name: ClientName) {
-    spawn_client_entity_with_config(ctx, name.as_ref(), naia_client::ReplicationConfig::Public);
+    spawn_client_entity_with_config(ctx, name.as_ref(), naia_client::Publicity::Public);
 }
 
 /// Given client {client} and the entity share a room.

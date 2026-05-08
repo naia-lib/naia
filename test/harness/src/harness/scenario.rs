@@ -10,7 +10,7 @@ use parking_lot::Mutex as ParkingMutex;
 use naia_client::{
     transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
     Client as NaiaClient, ClientConfig, TickEvents as ClientTickEvents,
-    WorldEvents as ClientWorldEvents,
+    Events as ClientWorldEvents,
 };
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{

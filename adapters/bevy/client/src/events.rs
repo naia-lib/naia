@@ -7,7 +7,7 @@ use bevy_ecs::{
     system::SystemState,
 };
 
-use naia_client::{shared::GlobalResponseId, NaiaClientError, WorldEvents};
+use naia_client::{shared::GlobalResponseId, NaiaClientError, Events};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind, ReplicateBundle, Request,
@@ -99,8 +99,8 @@ pub struct MessageEvents<T> {
     phantom_t: PhantomData<T>,
 }
 
-impl<T> From<&mut WorldEvents<Entity>> for MessageEvents<T> {
-    fn from(events: &mut WorldEvents<Entity>) -> Self {
+impl<T> From<&mut Events<Entity>> for MessageEvents<T> {
+    fn from(events: &mut Events<Entity>) -> Self {
         Self {
             inner: events.take_messages(),
             phantom_t: PhantomData,
@@ -138,8 +138,8 @@ pub struct RequestEvents<T> {
     phantom_t: PhantomData<T>,
 }
 
-impl<T> From<&mut WorldEvents<Entity>> for RequestEvents<T> {
-    fn from(events: &mut WorldEvents<Entity>) -> Self {
+impl<T> From<&mut Events<Entity>> for RequestEvents<T> {
+    fn from(events: &mut Events<Entity>) -> Self {
         Self {
             inner: events.take_requests(),
             phantom_t: PhantomData,

@@ -44,7 +44,7 @@ impl App {
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.make_room().key();
+        let main_room_key = server.create_room().key();
 
         // Create 4 Character entities, with a range of X and name values
         {
@@ -141,7 +141,7 @@ impl App {
 
                         let new_message = StringMessage::new(new_message_contents);
                         self.server
-                            .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message);
+                            .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message).unwrap();
                     }
                 }
 

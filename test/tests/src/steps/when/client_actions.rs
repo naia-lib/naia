@@ -143,7 +143,7 @@ fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
 /// Reconfigures the stored entity to `Public` from the client side.
 #[when("client A publishes the entity")]
 fn when_client_a_publishes_entity(ctx: &mut TestWorldMut) {
-    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_client::Publicity;
     let client_a = named_client_mut(ctx, "A");
 
     let entity_key = last_entity_mut(ctx);
@@ -151,7 +151,7 @@ fn when_client_a_publishes_entity(ctx: &mut TestWorldMut) {
     scenario.mutate(|mctx| {
         mctx.client(client_a, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
-                entity.configure_replication(ClientReplicationConfig::Public);
+                entity.configure_replication(Publicity::Public);
             }
         });
     });
@@ -342,7 +342,7 @@ fn when_client_releases_authority(ctx: &mut TestWorldMut, name: ClientName) {
 /// publication-rollback tests.
 #[when("client A unpublishes the entity")]
 fn when_client_a_unpublishes_entity(ctx: &mut TestWorldMut) {
-    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_client::Publicity;
     let client_a = named_client_mut(ctx, "A");
 
     let entity_key = last_entity_mut(ctx);
@@ -350,7 +350,7 @@ fn when_client_a_unpublishes_entity(ctx: &mut TestWorldMut) {
     scenario.mutate(|mctx| {
         mctx.client(client_a, |client| {
             if let Some(mut entity) = client.entity_mut(&entity_key) {
-                entity.configure_replication(ClientReplicationConfig::Private);
+                entity.configure_replication(Publicity::Private);
             }
         });
     });

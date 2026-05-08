@@ -7,7 +7,7 @@ use naia_bevy_shared::{
     AuthorityError, EntityAuthStatus, HostOwned, ReplicatedResource, WorldMutType, WorldOpCommand,
     WorldProxyMut,
 };
-use naia_client::ReplicationConfig;
+use naia_client::Publicity;
 
 use crate::{client::ClientWrapper, Client};
 
@@ -19,7 +19,7 @@ pub trait CommandsExt<'a> {
     fn local_duplicate(&'a mut self) -> Entity;
     fn configure_replication<T: Send + Sync + 'static>(
         &'a mut self,
-        config: ReplicationConfig,
+        config: Publicity,
     ) -> &'a mut EntityCommands<'a>;
     fn enable_replication<T: Send + Sync + 'static>(
         &'a mut self,
@@ -32,7 +32,7 @@ pub trait CommandsExt<'a> {
     fn replication_config<T: Send + Sync + 'static>(
         &'a self,
         client: &Client<T>,
-    ) -> Option<ReplicationConfig>;
+    ) -> Option<Publicity>;
     fn request_authority<T: Send + Sync + 'static>(
         &'a mut self,
         client: &mut Client<T>,
@@ -82,7 +82,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 
     fn configure_replication<T: Send + Sync + 'static>(
         &'a mut self,
-        config: ReplicationConfig,
+        config: Publicity,
     ) -> &'a mut EntityCommands<'a> {
         let entity = self.id();
         self.commands().queue(WorldOpCommand::new(move |world| {
@@ -100,7 +100,7 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn replication_config<T: Send + Sync + 'static>(
         &'a self,
         client: &Client<T>,
-    ) -> Option<ReplicationConfig> {
+    ) -> Option<Publicity> {
         client.replication_config(&self.id())
     }
 

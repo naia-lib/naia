@@ -2,12 +2,13 @@ use std::collections::HashSet;
 
 use naia_shared::ComponentKind;
 
-use crate::{world::entity_owner::EntityOwner, ReplicationConfig};
+use crate::world::entity_owner::EntityOwner;
+use naia_shared::Publicity;
 
 pub struct GlobalEntityRecord {
     component_kinds: HashSet<ComponentKind>,
     owner: EntityOwner,
-    replication_config: ReplicationConfig,
+    replication_config: Publicity,
     is_replicating: bool,
 }
 
@@ -19,9 +20,9 @@ impl GlobalEntityRecord {
 
         // Host-owned entities always start public, client-owned entities always start private
         let replication_config = if owner.is_server() {
-            ReplicationConfig::Public
+            Publicity::Public
         } else {
-            ReplicationConfig::Private
+            Publicity::Private
         };
 
         Self {
@@ -36,7 +37,7 @@ impl GlobalEntityRecord {
         self.owner
     }
 
-    pub fn replication_config(&self) -> ReplicationConfig {
+    pub fn replication_config(&self) -> Publicity {
         self.replication_config
     }
 
@@ -52,7 +53,7 @@ impl GlobalEntityRecord {
         self.owner = owner;
     }
 
-    pub(crate) fn set_replication_config(&mut self, replication_config: ReplicationConfig) {
+    pub(crate) fn set_replication_config(&mut self, replication_config: Publicity) {
         self.replication_config = replication_config;
     }
 

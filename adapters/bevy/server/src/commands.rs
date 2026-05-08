@@ -192,11 +192,7 @@ fn replicate_resource_inner<R: ReplicatedResource>(
     let snapshot = value.copy_to_box();
 
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
-        let result = if is_static {
-            server.insert_static_resource::<_, R>(world.proxy_mut(), value)
-        } else {
-            server.insert_resource::<_, R>(world.proxy_mut(), value)
-        };
+        let result = server.insert_resource::<_, R>(world.proxy_mut(), value, is_static);
         if let Err(_e) = result {
             log::warn!(
                 "naia replicate_resource: type already inserted; skipping duplicate insert"

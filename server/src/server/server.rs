@@ -154,8 +154,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
-        self.world_server.send_message::<C, M>(user_key, message);
+    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) -> Result<(), NaiaServerError> {
+        self.world_server.send_message::<C, M>(user_key, message)
     }
 
     /// Sends a message to all connected users using a given channel
@@ -230,15 +230,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.spawn_entity(world)
     }
 
-    /// Spawn a static entity — IDs come from the static pool; no diff-tracking
-    /// after initial replication to clients. Insert all components via the
-    /// returned `EntityMut` during construction; the entity is immutable thereafter.
-    pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, world: W) -> EntityMut<'_, E, W> {
-        self.world_server.spawn_static_entity(world)
-    }
-
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
         self.world_server.entity_is_static(world_entity)
+    }
+
+    pub fn entity_is_delegated(&self, world_entity: &E) -> bool {
+        self.world_server.entity_is_delegated(world_entity)
     }
 
     // Replicated Resources -----------------------------------------------
@@ -248,30 +245,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     // per-field updates. Internally, a hidden 1-component entity carries
     // the resource value as its sole replicated component.
     //
-    // The convenience surface mirrors the entity-spawn split between
-    // `spawn_entity` (dynamic ID pool) and `spawn_static_entity` (static
-    // pool); user picks per-call.
+    // Use `insert_resource(world, value, false)` for dynamic (diff-tracked)
+    // resources and `insert_resource(world, value, true)` for static ones.
     //
     // See `_AGENTS/RESOURCES_PLAN.md`.
 
-    /// Insert a Replicated Resource using the dynamic entity ID pool.
+    /// Insert a Replicated Resource.
+    /// `is_static = true` → no diff-tracking (immutable after insertion).
+    /// `is_static = false` → delta-tracked; field changes are replicated.
     pub fn insert_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
         &mut self,
         world: W,
         value: R,
+        is_static: bool,
     ) -> Result<E, naia_shared::ResourceAlreadyExists> {
-        self.world_server.insert_resource(world, value)
-    }
-
-    /// Insert a Replicated Resource using the static entity ID pool.
-    /// Use this for long-lived singletons whose IDs you want kept small
-    /// and recycled separately from gameplay entities.
-    pub fn insert_static_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
-        &mut self,
-        world: W,
-        value: R,
-    ) -> Result<E, naia_shared::ResourceAlreadyExists> {
-        self.world_server.insert_static_resource(world, value)
+        self.world_server.insert_resource(world, value, is_static)
     }
 
     /// Remove the resource of type `R`. Returns `true` if a resource
@@ -300,8 +288,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 
     /// Number of currently-inserted resources.
-    pub fn resource_count(&self) -> usize {
-        self.world_server.resource_count()
+    pub fn resources_count(&self) -> usize {
+        self.world_server.resources_count()
     }
 
     /// Read-only access to the current value of resource `R`.
@@ -581,8 +569,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&'_ mut self) -> RoomMut<'_, E> {
-        self.world_server.make_room()
+    pub fn create_room(&'_ mut self) -> RoomMut<'_, E> {
+        self.world_server.create_room()
     }
 
     /// Returns whether or not a Room exists for the given RoomKey

@@ -199,27 +199,20 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     // Replicated Resources (test harness wrappers)
     // ========================================================================
 
-    /// Insert a Replicated Resource using the dynamic entity ID pool.
+    /// Insert a Replicated Resource.
+    /// `is_static = true` → no diff-tracking after insertion.
+    /// `is_static = false` → delta-tracked.
     ///
-    /// Returns `true` if a new resource was inserted, `false` if a
-    /// resource of type `R` was already present.
-    pub fn insert_resource<R: naia_shared::ReplicatedComponent>(&mut self, value: R) -> bool {
+    /// Returns `true` if inserted, `false` if `R` was already present.
+    pub fn insert_resource<R: naia_shared::ReplicatedComponent>(&mut self, value: R, is_static: bool) -> bool {
         let scenario = self.ctx.scenario_mut();
         let (server, world, _, _) = scenario.split_for_server_mut();
-        server.insert_resource(world.proxy_mut(), value).is_ok()
+        server.insert_resource(world.proxy_mut(), value, is_static).is_ok()
     }
 
-    /// Insert a Replicated Resource using the static entity ID pool
-    /// (long-lived singletons; smaller wire IDs; recycled separately).
-    pub fn insert_static_resource<R: naia_shared::ReplicatedComponent>(
-        &mut self,
-        value: R,
-    ) -> bool {
-        let scenario = self.ctx.scenario_mut();
-        let (server, world, _, _) = scenario.split_for_server_mut();
-        server
-            .insert_static_resource(world.proxy_mut(), value)
-            .is_ok()
+    /// Insert a static Replicated Resource (no diff-tracking after insertion).
+    pub fn insert_static_resource<R: naia_shared::ReplicatedComponent>(&mut self, value: R) -> bool {
+        self.insert_resource(value, true)
     }
 
     /// Remove the resource of type `R`. Returns `true` if a resource
@@ -361,10 +354,10 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     // Room Operations
 
     /// Create a new room
-    pub fn make_room(&'_ mut self) -> RoomMut<'_> {
+    pub fn create_room(&'_ mut self) -> RoomMut<'_> {
         let scenario = self.ctx.scenario_mut();
         let (server, _, registry, users) = scenario.split_for_server_mut();
-        let room = server.make_room();
+        let room = server.create_room();
         RoomMut::new(room, registry, users)
     }
 
@@ -436,7 +429,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let scenario = self.ctx.scenario_mut();
         if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
-            server.send_message::<C, M>(&user_key, message);
+            server.send_message::<C, M>(&user_key, message).unwrap();
         }
     }
 

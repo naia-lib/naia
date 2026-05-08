@@ -263,7 +263,7 @@ pub fn ensure_server_started(ctx: &mut TestWorldMut) {
     }
     let scenario = ctx.init();
     scenario.server_start(ServerConfig::default(), protocol());
-    let room_key = scenario.mutate(|c| c.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|c| c.server(|server| server.create_room().key()));
     scenario.set_last_room(room_key);
 }
 

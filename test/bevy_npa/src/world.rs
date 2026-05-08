@@ -135,7 +135,7 @@ impl BevyTestHarness {
                     None,
                 );
                 server.listen(socket);
-                server.make_room();
+                server.create_room();
             })
             .add_systems(
                 Update,

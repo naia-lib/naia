@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
@@ -40,7 +40,7 @@ fn cannot_delegate_client_owned_unpublished_err_not_published() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -52,7 +52,7 @@ fn cannot_delegate_client_owned_unpublished_err_not_published() {
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Private)
+                e.configure_replication(Publicity::Private)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -95,7 +95,7 @@ fn client_request_authority_on_non_delegated_returns_err_not_delegated() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -169,7 +169,7 @@ fn disable_delegation_clears_authority_semantics() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -313,7 +313,7 @@ fn disable_delegation_while_client_holds_authority() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -465,7 +465,7 @@ fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -558,7 +558,7 @@ fn server_authority_apis_on_non_delegated_return_err_not_delegated() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -626,7 +626,7 @@ fn server_owned_undelegated_accepts_only_server_writes() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -758,7 +758,7 @@ fn server_owned_undelegated_has_no_authority_status_and_no_auth_events() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -820,7 +820,7 @@ fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -831,7 +831,7 @@ fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Public)
+                e.configure_replication(Publicity::Public)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -884,7 +884,7 @@ fn migration_assigns_initial_authority_to_owner_if_owner_in_scope() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -895,7 +895,7 @@ fn migration_assigns_initial_authority_to_owner_if_owner_in_scope() {
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Public)
+                e.configure_replication(Publicity::Public)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -950,7 +950,7 @@ fn no_auth_events_for_non_delegated_entities_ever() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -1014,7 +1014,7 @@ fn after_migration_writes_follow_delegated_rules() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
@@ -1098,7 +1098,7 @@ fn duplicate_set_authority_does_not_emit_duplicate_events() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol);
@@ -1182,7 +1182,7 @@ fn auth_granted_emitted_exactly_once_on_available_to_granted() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol);
@@ -1252,7 +1252,7 @@ fn auth_lost_emitted_exactly_once_per_transition_out_of_granted() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
         Auth::new("client_a", "pass"), test_client_config(), test_protocol);

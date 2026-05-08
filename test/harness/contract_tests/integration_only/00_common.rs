@@ -7,7 +7,7 @@
 
 #![allow(unused_imports)]
 
-use naia_client::{ClientConfig, ReplicationConfig as ClientReplicationConfig};
+use naia_client::{ClientConfig, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::{EntityAuthStatus, Protocol};
 
@@ -39,7 +39,7 @@ fn remote_untrusted_input_does_not_panic() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -80,7 +80,7 @@ fn framework_invariant_violations_are_internal_bugs() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -113,7 +113,7 @@ fn warnings_are_debug_only_and_non_normative() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -145,7 +145,7 @@ fn determinism_under_deterministic_inputs() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -189,7 +189,7 @@ fn per_tick_operations_resolve_deterministically() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -240,7 +240,7 @@ fn tests_do_not_assert_on_logs() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -276,7 +276,7 @@ fn test_obligation_template_followed() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -308,7 +308,7 @@ fn observable_signals_are_defined() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -345,7 +345,7 @@ fn fixed_invariants_are_locked() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -378,7 +378,7 @@ fn configurable_defaults_can_be_overridden() {
 
     // Use default config (demonstrates configurability)
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -411,7 +411,7 @@ fn new_constants_start_as_invariants() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -443,7 +443,7 @@ fn reading_metrics_does_not_influence_behavior() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -478,7 +478,7 @@ fn test_tolerance_constants_documented() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -509,7 +509,7 @@ fn metrics_do_not_affect_replicated_state() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -553,7 +553,7 @@ fn reconnect_is_fresh_session() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // First connection
     let client_a_key = client_connect(

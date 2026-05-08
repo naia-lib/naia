@@ -2,7 +2,8 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, WorldRefType};
 
-use crate::{world::entity_owner::EntityOwner, Client, ReplicationConfig};
+use crate::{world::entity_owner::EntityOwner, Client};
+use naia_shared::Publicity;
 
 // EntityRef
 pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
@@ -32,7 +33,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E,
         self.world.component::<R>(&self.entity)
     }
 
-    pub fn replication_config(&self) -> Option<ReplicationConfig> {
+    pub fn replication_config(&self) -> Option<Publicity> {
         self.client.entity_replication_config(&self.entity)
     }
 

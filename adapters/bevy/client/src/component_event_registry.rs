@@ -44,7 +44,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
     pub(crate) fn receive_events(
         &mut self,
         world: &mut World,
-        events: &mut naia_client::WorldEvents<Entity>,
+        events: &mut naia_client::Events<Entity>,
     ) {
         // Insert Component Event
         if events.has_inserts() {

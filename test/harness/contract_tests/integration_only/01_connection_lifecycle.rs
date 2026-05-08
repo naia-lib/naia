@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
@@ -42,7 +42,7 @@ fn basic_connect_disconnect_lifecycle() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // A connects
     let client_a_key = client_connect(
@@ -82,7 +82,7 @@ fn basic_connect_disconnect_lifecycle() {
     let entity_a = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Public)
+                e.configure_replication(Publicity::Public)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -150,7 +150,7 @@ fn invalid_credentials_rejected() {
     server_config.require_auth = true;
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let invalid_auth = Auth::new("invalid_user", "wrong_password");
     let client_a_key = scenario.client_start(
@@ -231,7 +231,7 @@ fn connect_event_ordering_stable() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Collect connect events as they happen
     let mut connect_order = Vec::new();
@@ -387,7 +387,7 @@ fn disconnect_idempotent_and_clean() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -461,7 +461,7 @@ fn successful_auth_with_require_auth() {
     server_config.require_auth = true;
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Use helper to connect (handles auth and accept)
     let client_auth = Auth::new("valid_user", "valid_password");
@@ -526,7 +526,7 @@ fn auth_disabled_connects_without_auth_event() {
     server_config.require_auth = false;
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // With require_auth = false the server auto-accepts — no ServerAuthEvent, no accept_connection()
     // call needed. We wait directly for ServerConnectEvent.
@@ -585,7 +585,7 @@ fn no_replication_before_auth_decision() {
 
     // Create room and entity before A connects
     let (room_key, existing_entity) = scenario.mutate(|ctx| {
-        let room_key = ctx.server(|server| server.make_room().key());
+        let room_key = ctx.server(|server| server.create_room().key());
         let entity = ctx.server(|server| {
             server
                 .spawn(|mut e| {
@@ -681,7 +681,7 @@ fn no_mid_session_reauth() {
     server_config.require_auth = true;
     scenario.server_start(server_config, test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_auth = Auth::new("user_a", "password_a");
     let client_a_key = client_connect(
@@ -755,7 +755,7 @@ fn server_reject_connection_produces_reject_event() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // First client connects — server is now "at capacity" for this test
     let client_a_key = client_connect(
@@ -849,7 +849,7 @@ fn client_disconnects_due_to_heartbeat_timeout() {
     client_config.connection.heartbeat_interval = Duration::from_millis(100);
     client_config.connection.disconnection_timeout_duration = Duration::from_millis(200);
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -943,7 +943,7 @@ fn protocol_handshake_mismatch_fails() {
     // In a real scenario, this would be a different protocol version
     // For this test, we'll verify that handshake errors are handled
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Normal connection should work
     let client_a_key = client_connect(
@@ -977,7 +977,7 @@ fn malformed_identity_token_rejected() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Create client
     let client_auth = Auth::new("client_a", "password");
@@ -1042,7 +1042,7 @@ fn expired_or_reused_token_obeys_semantics() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // A connects and receives token T_A
     let client_a_key = client_connect(
@@ -1150,7 +1150,7 @@ fn valid_identity_token_roundtrips() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1186,7 +1186,7 @@ fn protocol_id_verified_before_connect_event() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Connect with matching protocol - should succeed
     let client_a_key = client_connect(
@@ -1221,7 +1221,7 @@ fn reconnect_is_fresh_session() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // First connection
     let client_a_key = client_connect(
@@ -1300,7 +1300,7 @@ fn same_protocol_produces_same_id() {
     let mut scenario = Scenario::new();
 
     scenario.server_start(ServerConfig::default(), protocol1.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Both clients use the same protocol definition
     let client_a_key = client_connect(
@@ -1345,7 +1345,7 @@ fn protocol_id_wire_encoding_allows_connection() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Connection succeeds, verifying wire encoding is correct
     let client_a_key = client_connect(
@@ -1377,7 +1377,7 @@ fn matched_protocol_id_allows_connection() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1411,7 +1411,7 @@ fn protocol_id_determined_by_wire_relevant_aspects() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Same protocol definition works
     let client_a_key = client_connect(
@@ -1444,7 +1444,7 @@ fn no_partial_protocol_compatibility() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     // Exact match works
     let client_a_key = client_connect(

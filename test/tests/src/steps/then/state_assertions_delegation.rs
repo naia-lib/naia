@@ -150,13 +150,13 @@ fn then_delegated_entity_is_no_longer_in_client_a_world(
 fn then_client_a_observes_delegated_replication_config(
     ctx: &TestWorldRef,
 ) -> AssertOutcome<()> {
-    use naia_client::ReplicationConfig as ClientReplicationConfig;
+    use naia_client::Publicity;
     let client_a = named_client_ref(ctx, "A");
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_a, |c| {
         if let Some(entity) = c.entity(&entity_key) {
             match entity.replication_config() {
-                Some(ClientReplicationConfig::Delegated) => {
+                Some(Publicity::Delegated) => {
                     AssertOutcome::Passed(())
                 }
                 Some(other) => AssertOutcome::Failed(format!(

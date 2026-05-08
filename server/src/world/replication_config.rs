@@ -1,13 +1,4 @@
-/// Publication visibility of a server entity.
-#[derive(Copy, Clone, PartialEq, Eq, Debug)]
-pub enum Publicity {
-    /// Client-owned, not yet published.
-    Private,
-    /// Replicates to users in scope.
-    Public,
-    /// Server can delegate authority to a client.
-    Delegated,
-}
+pub use naia_shared::Publicity;
 
 /// What happens to a user's view of an entity when it leaves their scope.
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]

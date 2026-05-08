@@ -2,7 +2,7 @@
 
 use std::time::Duration;
 
-use naia_client::{ClientConfig, JitterBufferType, ReplicationConfig as ClientReplicationConfig};
+use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{Protocol, Tick};
 
@@ -35,7 +35,7 @@ fn client_owned_entity_migrates_to_server_owned_delegated() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -50,7 +50,7 @@ fn client_owned_entity_migrates_to_server_owned_delegated() {
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Public)
+                e.configure_replication(Publicity::Public)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -123,7 +123,7 @@ fn private_entity_owner_retains_across_scope_changes() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -146,7 +146,7 @@ fn private_entity_owner_retains_across_scope_changes() {
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Private)
+                e.configure_replication(Publicity::Private)
                     .insert_component(Position::new(1.0, 2.0));
             })
         })
@@ -211,7 +211,7 @@ fn owner_retains_entity_when_non_owner_leaves_scope() {
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
-    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.make_room().key()));
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -234,7 +234,7 @@ fn owner_retains_entity_when_non_owner_leaves_scope() {
     let entity_e = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client_a| {
             client_a.spawn(|mut e| {
-                e.configure_replication(ClientReplicationConfig::Public)
+                e.configure_replication(Publicity::Public)
                     .insert_component(Position::new(5.0, 5.0));
             })
         })

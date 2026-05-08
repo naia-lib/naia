@@ -15,7 +15,7 @@ use naia_shared::{
 };
 
 use super::{
-    client_config::ClientConfig, error::NaiaClientError, world_events::WorldEvents,
+    client_config::ClientConfig, error::NaiaClientError, world_events::Events,
     JitterBufferType,
 };
 use crate::{
@@ -27,7 +27,7 @@ use crate::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
         global_world_manager::GlobalWorldManager,
     },
-    ReplicationConfig,
+    Publicity,
 };
 
 /// Client can send/receive messages to/from a server, and has a pool of
@@ -50,7 +50,7 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     global_world_manager: GlobalWorldManager,
     global_entity_map: GlobalEntityMap<E>,
     // Events
-    incoming_world_events: WorldEvents<E>,
+    incoming_world_events: Events<E>,
     incoming_tick_events: TickEvents,
     // Per-connection priority layer (single connection; no global/per-user split).
     priority: UserPriorityState<E>,
@@ -107,7 +107,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             global_world_manager: GlobalWorldManager::new(),
             global_entity_map: GlobalEntityMap::new(),
             // Events
-            incoming_world_events: WorldEvents::new(),
+            incoming_world_events: Events::new(),
             incoming_tick_events: TickEvents::new(),
             priority: UserPriorityState::new(),
             resource_registry: naia_shared::ResourceRegistry::new(),
@@ -276,7 +276,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.process_entity_events(&mut world, entity_events);
     }
 
-    pub fn take_world_events(&mut self) -> WorldEvents<E> {
+    pub fn take_world_events(&mut self) -> Events<E> {
         std::mem::take(&mut self.incoming_world_events)
     }
 
@@ -634,7 +634,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// Number of currently-mirrored Replicated Resources.
-    pub fn resource_count(&self) -> usize {
+    pub fn resources_count(&self) -> usize {
         self.resource_registry.len()
     }
 
@@ -704,7 +704,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
-    pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
+    pub fn entity_replication_config(&self, world_entity: &E) -> Option<Publicity> {
         self.check_client_authoritative_allowed();
         let global_entity = self
             .global_entity_map
@@ -719,7 +719,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         &mut self,
         world: &mut W,
         world_entity: &E,
-        config: ReplicationConfig,
+        config: Publicity,
     ) {
         self.check_client_authoritative_allowed();
         let global_entity = self
@@ -751,38 +751,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return;
         }
         match prev_config {
-            ReplicationConfig::Private => {
+            Publicity::Private => {
                 match next_config {
-                    ReplicationConfig::Private => {
+                    Publicity::Private => {
                         panic!("This should not be possible.");
                     }
-                    ReplicationConfig::Public => {
+                    Publicity::Public => {
                         // private -> public
                         self.publish_entity(&global_entity, true);
                     }
-                    ReplicationConfig::Delegated => {
+                    Publicity::Delegated => {
                         // private -> delegated
                         self.publish_entity(&global_entity, true);
                         self.entity_enable_delegation(world, &global_entity, world_entity, true);
                     }
                 }
             }
-            ReplicationConfig::Public => {
+            Publicity::Public => {
                 match next_config {
-                    ReplicationConfig::Private => {
+                    Publicity::Private => {
                         // public -> private
                         self.unpublish_entity(&global_entity, true);
                     }
-                    ReplicationConfig::Public => {
+                    Publicity::Public => {
                         panic!("This should not be possible.");
                     }
-                    ReplicationConfig::Delegated => {
+                    Publicity::Delegated => {
                         // public -> delegated
                         self.entity_enable_delegation(world, &global_entity, world_entity, true);
                     }
                 }
             }
-            ReplicationConfig::Delegated => {
+            Publicity::Delegated => {
                 panic!(
                     "Delegated Entities are always ultimately Server-owned. Client cannot modify."
                 )
@@ -1179,7 +1179,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         } else if self
             .global_world_manager
             .entity_replication_config(global_entity)
-            != Some(ReplicationConfig::Private)
+            != Some(Publicity::Private)
         {
             panic!("Server can only publish Private entities");
         }
@@ -1204,7 +1204,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         } else if self
             .global_world_manager
             .entity_replication_config(global_entity)
-            != Some(ReplicationConfig::Public)
+            != Some(Publicity::Public)
         {
             panic!("Server can only unpublish Public entities");
         }

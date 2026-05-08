@@ -1,4 +1,4 @@
-use naia_client::{EntityMut as NaiaEntityMut, EntityRef as NaiaEntityRef, ReplicationConfig};
+use naia_client::{EntityMut as NaiaEntityMut, EntityRef as NaiaEntityRef, Publicity};
 use naia_shared::{
     AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicaRefWrapper, ReplicatedComponent,
     WorldMutType, WorldRefType,
@@ -52,7 +52,7 @@ impl<'a, W: WorldRefType<TestEntity>> ClientEntityRef<'a, W> {
     }
 
     /// Get the replication configuration
-    pub fn replication_config(&self) -> Option<ReplicationConfig> {
+    pub fn replication_config(&self) -> Option<Publicity> {
         self.entity_ref.replication_config()
     }
 
@@ -130,13 +130,13 @@ impl<'a, W: WorldMutType<TestEntity>> ClientEntityMut<'a, W> {
     }
 
     /// Configure replication
-    pub fn configure_replication(&mut self, config: ReplicationConfig) -> &mut Self {
+    pub fn configure_replication(&mut self, config: Publicity) -> &mut Self {
         self.entity_mut.configure_replication(config);
         self
     }
 
     /// Get the replication configuration
-    pub fn replication_config(&self) -> Option<ReplicationConfig> {
+    pub fn replication_config(&self) -> Option<Publicity> {
         self.entity_mut.replication_config()
     }
 

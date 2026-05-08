@@ -459,9 +459,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
-    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
+    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) -> Result<(), NaiaServerError> {
         let cloned_message = M::clone_box(message);
-        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message);
+        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message)
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -471,7 +471,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         user_key: &UserKey,
         channel_kind: &ChannelKind,
         message_box: Box<dyn Message>,
-    ) {
+    ) -> Result<(), NaiaServerError> {
         let channel_settings = self.channel_kinds.channel(channel_kind);
 
         if !channel_settings.can_send_to_client() {
@@ -479,12 +479,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         let Some(user) = self.users.get(user_key) else {
-            warn!("user: {:?} does not exist", user_key);
-            return;
+            return Err(NaiaServerError::UserNotFound);
         };
         let Some(connection) = self.user_connections.get_mut(&user.address()) else {
-            warn!("currently not connected to user: {:?}", user_key);
-            return;
+            return Err(NaiaServerError::UserNotFound);
         };
         let mut converter = connection
             .base
@@ -497,6 +495,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             channel_kind,
             message,
         );
+        Ok(())
     }
 
     /// Sends a message to all connected users using a given channel
@@ -511,7 +510,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         message_box: Box<dyn Message>,
     ) {
         self.user_keys().iter().for_each(|user_key| {
-            self.send_message_inner(user_key, channel_kind, message_box.clone())
+            let _ = self.send_message_inner(user_key, channel_kind, message_box.clone());
         })
     }
 
@@ -816,17 +815,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .insert_entity_record(&global_entity, EntityOwner::Server);
     }
 
-    /// Creates a new static Entity (frozen after spawn; no diff-tracking after initial replication).
-    ///
-    /// Returns an `EntityMut` so components can be inserted during construction.
-    /// After the `EntityMut` is dropped the entity is immutable by convention —
-    /// do not call `insert_component`/`remove_component` on it again.
-    pub fn spawn_static_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> EntityMut<'_, E, W> {
-        let world_entity = world.spawn_entity();
-        self.spawn_static_entity_inner(&world_entity);
-        EntityMut::new_static_construction(self, world, &world_entity)
-    }
-
     fn spawn_static_entity_inner(&mut self, world_entity: &E) {
         let global_entity = self.global_entity_map.spawn(*world_entity, None);
         self.global_world_manager
@@ -905,6 +893,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.global_world_manager.entity_is_static(&global_entity)
     }
 
+    pub fn mark_entity_as_static(&mut self, world_entity: &E) {
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            panic!("entity not found in global map");
+        };
+        self.global_world_manager.mark_entity_as_static(&global_entity);
+    }
+
+    pub fn entity_is_delegated(&self, world_entity: &E) -> bool {
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            return false;
+        };
+        self.global_world_manager.entity_is_delegated(&global_entity)
+    }
+
     // ========================================================================
     // Replicated Resources
     // ========================================================================
@@ -931,51 +933,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///
     /// Errors with `ResourceAlreadyExists` if `R` was already inserted
     /// in this world. The world remains unchanged on error.
+    /// Insert a Replicated Resource.
+    ///
+    /// Pass `is_static = true` for long-lived singletons that never change
+    /// after insertion (no diff-tracking on the wire). Pass `false` for
+    /// resources whose fields are updated over time (delta-tracked).
+    ///
+    /// Errors with `ResourceAlreadyExists` if `R` was already inserted.
+    /// The world remains unchanged on error.
     pub fn insert_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
         &mut self,
         mut world: W,
         value: R,
+        is_static: bool,
     ) -> Result<E, ResourceAlreadyExists> {
         let world_entity = world.spawn_entity();
-        self.spawn_entity_inner(&world_entity);
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(&world_entity)
-            .expect("entity just spawned must be in global map");
-
-        if let Err(e) = self.resource_registry.insert::<R>(global_entity) {
-            // Roll back: remove from inner tracking + despawn from world.
-            self.despawn_entity_worldless(&world_entity);
-            world.despawn_entity(&world_entity);
-            return Err(e);
+        if is_static {
+            self.spawn_static_entity_inner(&world_entity);
+        } else {
+            self.spawn_entity_inner(&world_entity);
         }
-
-        // Attach R as a component via the proper hook path
-        // (registers component with the diff handler + change-detection).
-        // Mirrors `EntityMut::insert_component` plumbing.
-        self.insert_component(&mut world, &world_entity, value);
-
-        // Auto-include in every connected user's scope.
-        let user_keys: Vec<UserKey> = self.users.keys().copied().collect();
-        for user_key in user_keys {
-            self.user_scope_set_entity(&user_key, &world_entity, true);
-        }
-
-        Ok(world_entity)
-    }
-
-    /// Insert a Replicated Resource using a static entity ID (`is_static`
-    /// on the wire). Mirror of `insert_resource` but uses the static
-    /// entity ID pool, which is appropriate for long-lived singletons
-    /// whose ID we want kept small + recycled separately from gameplay
-    /// entities.
-    pub fn insert_static_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
-        &mut self,
-        mut world: W,
-        value: R,
-    ) -> Result<E, ResourceAlreadyExists> {
-        let world_entity = world.spawn_entity();
-        self.spawn_static_entity_inner(&world_entity);
         let global_entity = self
             .global_entity_map
             .entity_to_global_entity(&world_entity)
@@ -987,9 +964,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return Err(e);
         }
 
-        // Static entities get their components registered through the
-        // static-init path; insert via the normal pipeline (which routes
-        // to static_init_components for is_static entities).
         self.insert_component(&mut world, &world_entity, value);
 
         let user_keys: Vec<UserKey> = self.users.keys().copied().collect();
@@ -1052,7 +1026,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// Number of currently-inserted resources.
-    pub fn resource_count(&self) -> usize {
+    pub fn resources_count(&self) -> usize {
         self.resource_registry.len()
     }
 
@@ -1717,7 +1691,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Creates a new Room on the Server and returns a corresponding RoomMut,
     /// which can be used to add users/entities to the room or retrieve its
     /// key
-    pub fn make_room(&'_ mut self) -> RoomMut<'_, E> {
+    pub fn create_room(&'_ mut self) -> RoomMut<'_, E> {
         let new_room = Room::new();
         let room_key = self.rooms.insert(new_room);
         RoomMut::new(self, &room_key)
@@ -2627,7 +2601,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Get an count of how many Rooms the given User is inside
     pub(crate) fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
         if let Some(user) = self.users.get(user_key) {
-            return Some(user.room_count());
+            return Some(user.rooms_count());
         }
         None
     }
@@ -2862,7 +2836,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                self.send_message_inner(user_key, channel_kind, message_box.clone())
+                let _ = self.send_message_inner(user_key, channel_kind, message_box.clone());
             }
         }
     }

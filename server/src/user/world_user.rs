@@ -36,7 +36,7 @@ impl WorldUser {
         &self.rooms_cache
     }
 
-    pub(crate) fn room_count(&self) -> usize {
+    pub(crate) fn rooms_count(&self) -> usize {
         self.rooms_cache.len()
     }
 }

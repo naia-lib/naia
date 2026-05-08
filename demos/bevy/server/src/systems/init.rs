@@ -27,7 +27,7 @@ pub fn init(mut commands: Commands, mut server: Server) {
 
     // Create a new, singular room, which will contain Users and Entities that they
     // can receive updates from
-    let main_room_key = server.make_room().key();
+    let main_room_key = server.create_room().key();
 
     // Init Global Resource
     let global = Global {

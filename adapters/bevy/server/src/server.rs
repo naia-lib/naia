@@ -187,10 +187,10 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn resource_count(&self) -> usize {
+    pub(crate) fn resources_count(&self) -> usize {
         match self {
-            Self::Full(server) => server.resource_count(),
-            Self::WorldOnly(server) => server.resource_count(),
+            Self::Full(server) => server.resources_count(),
+            Self::WorldOnly(server) => server.resources_count(),
         }
     }
 
@@ -198,21 +198,11 @@ impl ServerImpl {
         &mut self,
         world: W,
         value: R,
+        is_static: bool,
     ) -> Result<Entity, naia_bevy_shared::ResourceAlreadyExists> {
         match self {
-            Self::Full(server) => server.insert_resource(world, value),
-            Self::WorldOnly(server) => server.insert_resource(world, value),
-        }
-    }
-
-    pub(crate) fn insert_static_resource<W: WorldMutType<Entity>, R: ReplicatedResource>(
-        &mut self,
-        world: W,
-        value: R,
-    ) -> Result<Entity, naia_bevy_shared::ResourceAlreadyExists> {
-        match self {
-            Self::Full(server) => server.insert_static_resource(world, value),
-            Self::WorldOnly(server) => server.insert_static_resource(world, value),
+            Self::Full(server) => server.insert_resource(world, value, is_static),
+            Self::WorldOnly(server) => server.insert_resource(world, value, is_static),
         }
     }
 
@@ -302,7 +292,7 @@ impl<'w> Server<'w> {
     }
 
     //// Messages ////
-    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) {
+    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) -> Result<(), NaiaServerError> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.send_message::<C, M>(user_key, message),
             ServerImpl::Full(server) => server.send_message::<C, M>(user_key, message),
@@ -474,10 +464,10 @@ impl<'w> Server<'w> {
 
     //// Rooms ////
 
-    pub fn make_room(&'_ mut self) -> RoomMut<'_, Entity> {
+    pub fn create_room(&'_ mut self) -> RoomMut<'_, Entity> {
         match &mut *self.server_impl {
-            ServerImpl::WorldOnly(server) => server.make_room(),
-            ServerImpl::Full(server) => server.make_room(),
+            ServerImpl::WorldOnly(server) => server.create_room(),
+            ServerImpl::Full(server) => server.create_room(),
         }
     }
 
@@ -653,8 +643,8 @@ impl<'w> Server<'w> {
     }
 
     /// Number of currently-inserted resources.
-    pub fn resource_count(&self) -> usize {
-        self.server_impl.resource_count()
+    pub fn resources_count(&self) -> usize {
+        self.server_impl.resources_count()
     }
 
     /// Server-side authority status for resource `R`. `None` if not

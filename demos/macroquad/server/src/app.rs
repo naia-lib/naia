@@ -52,7 +52,7 @@ impl App {
 
         // Create a new, singular room, which will contain Users and Entities that they
         // can receive updates from
-        let main_room_key = server.make_room().key();
+        let main_room_key = server.create_room().key();
 
         App {
             server,
@@ -140,7 +140,7 @@ impl App {
             // self.server.entity_property(assigment_message).set(&entity_id);
 
             self.server
-                .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message);
+                .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message).unwrap();
         }
 
         // Disconnect Events
