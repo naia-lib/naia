@@ -723,3 +723,36 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @PolicyOnly
     @Scenario(35)
     Scenario: [connection-26] Token reuse blocked across sessions
+
+  @Rule(13)
+  Rule: Reconnection edge cases
+
+    @Scenario(01)
+    Scenario: [connection-33] Reconnect with in-scope entity — entity re-enters scope cleanly
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      When the client disconnects
+      And the client reconnects
+      Then the client eventually sees the last entity
+
+    @Scenario(02)
+    Scenario: [connection-34] Reconnect while resource live — resource replicated to new session
+      Given a server is running
+      And a client connects
+      When the server inserts Score { home: 0, away: 0 } as a dynamic resource
+      And the client disconnects
+      And the client reconnects
+      Then the client's Score is present
+
+    @Scenario(03)
+    Scenario: [connection-35] Reconnect while authority held — authority Available after reconnect
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When client A requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      When client A disconnects from the server
+      And the client reconnects
+      Then client ReconnectedClient observes Available authority status for the entity

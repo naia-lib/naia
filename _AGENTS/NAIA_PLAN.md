@@ -11,14 +11,14 @@
 
 | Metric | Value |
 |---|---|
-| Active BDD scenarios | **306** (100% pass, `namako gate` green) |
+| Active BDD scenarios | **309** (100% pass, `namako gate` green) |
 | @PolicyOnly (messaging) | **4** (messaging-03, 11, 12, 19 — all justified) |
 | Plain @Deferred (junk) | **0** ✅ |
-| Step bindings | ~275, all ≤25 LOC |
+| Step bindings | ~280, all ≤25 LOC |
 | Step files max LOC | 477 (`network_events_transport.rs`) |
 | Build warnings | **0** (`-D warnings`) |
 | `cargo test --workspace` | green, 0 ignored outside documented carve-out |
-| `cargo-deny` advisories | 6 ignores expiring **2026-06-01** (25 days!) |
+| `cargo-deny` advisories | 6 ignores expiring **2026-06-01** (24 days!) |
 | Production `todo!()` | **0** ✅ |
 
 ### What's done (do not re-audit)
@@ -33,12 +33,15 @@
 - P3: server-events-08 converted to live test; 5 duplicate @PolicyOnly justified; 2 new step bindings — `dev`
 - P4: unpublish/republish bug fixed (scope preserved + diff handler deregistered); entity-publication-11 live; 5 observability @Deferred → @PolicyOnly — `dev`
 - P5: messaging-13/14/18/20 converted to live BDD; TickBufferedChannel + EntityProperty test infra added; messaging-11/12/19 kept @PolicyOnly with justified comments — `dev`
+- P6: vocab.rs Phase A.3 — EntityRef activated (regex fixed), 5 dead typed params deleted, 2 {word}→{entity} migrations — `dev`
+- P8: 10 unsafe impl Send/Sync removed from bevy adapters (T3.1); P8.3 N/A (handler signatures differ) — `dev`
+- P9: connection-33/34/35 reconnect edge cases added; 309 active scenarios — `dev`
 
 ---
 
 ## Priority stack
 
-Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. P1, P3, P4, and P5 complete. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
+Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. P1, P3, P4, P5, P6, P8, and P9 complete. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
 
 ---
 
@@ -113,16 +116,13 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## P9 — Test infrastructure additions (A4)
+## P9 — Test infrastructure additions (A4) — **COMPLETE** (2026-05-08)
 
-### A4 — Reconnection stress tests
-
-`connection-28` (reconnect) is happy-path only. Missing: reconnect with in-scope entities, reconnect while resource is live, reconnect while authority is held.
-
-- [ ] **P9.4** Write `reconnect_with_in_scope_entities`: connect → spawn entity in scope → disconnect → reconnect → entity re-enters scope cleanly (no stale key panic).
-- [ ] **P9.5** Write `reconnect_while_resource_live`: insert resource → disconnect → reconnect → resource value preserved on server, replicated to new session.
-- [ ] **P9.6** Write `reconnect_while_authority_held`: grant authority → disconnect (authority reclaimed) → reconnect → authority is Available again.
-- [ ] **P9.7** Convert these into BDD scenarios in `01_lifecycle.feature` under a new `Rule: Reconnection edge cases`.
+**Delivered:**
+- P9.4/P9.7: `[connection-33]` — reconnect with in-scope entity → entity re-enters scope cleanly. Uses `"a server-owned entity exists"` + `"the client and entity share a room"` + `"the client eventually sees the last entity"`.
+- P9.5/P9.7: `[connection-34]` — reconnect while resource live → Score replicated to new session.
+- P9.6/P9.7: `[connection-35]` — reconnect while authority held → authority Available on reconnect. Fixed `when_client_reconnects` to store key under `client_key_storage("ReconnectedClient")` for named lookup.
+- All 3 under `Rule: Reconnection edge cases` (@Rule(13)) in `01_lifecycle.feature`. Gate: 309 active scenarios (306 + 3), 100% pass.
 
 ---
 

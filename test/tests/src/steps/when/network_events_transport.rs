@@ -1,9 +1,9 @@
 //! When-step bindings: transport anomalies, entity despawn, and connection lifecycle.
 
 use crate::steps::prelude::*;
-use crate::steps::world_helpers::tick_n;
+use crate::steps::world_helpers::{client_key_storage, tick_n};
 use crate::steps::world_helpers_connect::{
-    connect_named_client_with_auth_tracking, reject_named_client,
+    connect_named_client, connect_named_client_with_auth_tracking, reject_named_client,
 };
 
 // ──────────────────────────────────────────────────────────────────────
@@ -323,9 +323,12 @@ fn when_connected_client(ctx: &mut TestWorldMut) {
 ///
 /// Starts a brand-new client session after a prior disconnect. Adds
 /// to the same room so prior-session entities should be re-spawned.
+/// Stores the new client key under "ReconnectedClient" for named lookup.
 #[when("the client reconnects")]
 fn when_client_reconnects(ctx: &mut TestWorldMut) {
-    connect_named_client(ctx, "ReconnectedClient", "test_user", None);
+    let client_key = connect_named_client(ctx, "ReconnectedClient", "test_user", None);
+    ctx.scenario_mut()
+        .bdd_store(&client_key_storage("ReconnectedClient"), client_key);
 }
 
 /// When the server receives a malformed packet.

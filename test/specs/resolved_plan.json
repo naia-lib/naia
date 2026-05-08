@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "cc9074465d96658274dadb166acd1f8b5931dff9ebc5143405f1e002bb2731c4",
-    "step_registry_hash": "afec11776f3f62f526e2c8966580ea27f7f9edc25c3834c257f8c3537eed2a8d",
-    "resolved_plan_hash": "1e01b3d056b179432c15b4b7197a4f65206596272e54269ea2d71c69aace6fd0"
+    "feature_fingerprint_hash": "a82f495b3aba86dc590b994010b45ca9b5d41a762e8c914f0158d68760e4424f",
+    "step_registry_hash": "c288f4c8080bb99c7c1f5c5757f4c6379e017eb58c3192d091a9f49c19bf487d",
+    "resolved_plan_hash": "6a86d53d55b8838c35142de0aef1ab97da64696c110cd664fe920e0b825bbd64"
   },
   "scenarios": [
     {
@@ -11000,6 +11000,251 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(13):Scenario(01)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-33] Reconnect with in-scope entity — entity re-enters scope cleanly",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists",
+          "binding_id": "0a3a91c6afc53452672d7999b24021f90930b056ed761fb896a7e2ad573077a9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f65d8da084bf24f191c05fda2667a5621874e1ac5e67d1df83eca7d0551a059"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client disconnects",
+          "binding_id": "1a2c5c87485998b897bf39449fc8e8ace74edc19718d530b933a78eaa7c9e287",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ff7fd15fe045e15a6b6081b5ff8f6ae59eb0140e3b6b5f2cad9e0c42199c1087"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client reconnects",
+          "binding_id": "644bcb949da7ef7d6bca6b1e1d26cc3a44521984b0138ce73b171537139d2933",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d0579c733770fc8ad4da85e285689bbe2dcf4dbf542a17740c6903584e516476"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client eventually sees the last entity",
+          "binding_id": "757aa43cccfc4e94135fae7de7a60bed20c3a296797348b6976a0d0826ca32fd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "2a8903fdfef75e876400247e4a69ecd4d4ee8d0790ad1e8566aac505f05636ca"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(13):Scenario(02)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-34] Reconnect while resource live — resource replicated to new session",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server inserts Score { home: 0, away: 0 } as a dynamic resource",
+          "binding_id": "d633a5c8258b495d7a13e25849abc4414384ee0f46f0617d87f326ef2397a1dd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a24c7e5ac843254415376bcfed00864e97e39f41134c0e0940f62df807e08d78"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client disconnects",
+          "binding_id": "1a2c5c87485998b897bf39449fc8e8ace74edc19718d530b933a78eaa7c9e287",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ff7fd15fe045e15a6b6081b5ff8f6ae59eb0140e3b6b5f2cad9e0c42199c1087"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client reconnects",
+          "binding_id": "644bcb949da7ef7d6bca6b1e1d26cc3a44521984b0138ce73b171537139d2933",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d0579c733770fc8ad4da85e285689bbe2dcf4dbf542a17740c6903584e516476"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client's Score is present",
+          "binding_id": "f1a9d9df96e82127393a1f1e0cddaefa9ce5f9ea3e74de88222da1eb74e0a921",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f3aee153df4acfc92a5736ee4b80192e81ef937f51fe93486953b4dfb7cbbed"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(13):Scenario(03)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-35] Reconnect while authority held — authority Available after reconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "55a52b71dda39e2cd06343e64ca68dffb96f8b3f5707da8b32361807548c3795"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns a delegated entity in-scope for client A",
+          "binding_id": "e76ae01abda621623e27db3e760889131e6572a560a3697590c2701cbeb0b36e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f7b5cdcc89f1c075a092e6beb0b68b907e66feecda30b7ea795674a2f1a78d32"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client A requests authority for the delegated entity",
+          "binding_id": "42a5c9c3154515d8725a1dccabb18afcb78640c40c4b6cd1dfd3743e5d63bcfd",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4a1eba63ca40c5449b5f9643a5f26405a9af98ebdba9ea84171305c1a4848b2d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client A is granted authority for the delegated entity",
+          "binding_id": "8f8457725a2f03a5bd8fd77af2f3a5f040d829fb67bd5550ed1c24388f7d2424",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9cf376db48bef25d39b3f4ce7f1ccdd622e7e7766e14d582787f7f5448b844c6"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client A disconnects from the server",
+          "binding_id": "e0f9be00f1b90aa96b5f9b7ab537c98a2a20fbb2c8c5f8921a7315382b519aa0",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6d076c7c2cf0e143569378309679debc9086c3a31887dcba3322a2baf65eb1e3"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client reconnects",
+          "binding_id": "644bcb949da7ef7d6bca6b1e1d26cc3a44521984b0138ce73b171537139d2933",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d0579c733770fc8ad4da85e285689bbe2dcf4dbf542a17740c6903584e516476"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client ReconnectedClient observes Available authority status for the entity",
+          "binding_id": "b2cd2db25930ee861df36bc4d4059d89c8ad167d54d5887016b881351331064a",
+          "captures": [
+            "ReconnectedClient"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d2e5ab286817b582fab0846cc8130314ef7d1948cc32c790544f73096b128610"
         }
       ]
     },
