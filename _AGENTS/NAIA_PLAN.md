@@ -11,7 +11,7 @@
 
 | Metric | Value |
 |---|---|
-| Active BDD scenarios | **300** (100% pass, `namako gate` green) |
+| Active BDD scenarios | **301** (100% pass, `namako gate` green) |
 | @PolicyOnly (Category A — genuinely untestable) | **17** |
 | Plain @Deferred (junk) | **0** ✅ |
 | Step bindings | 258, all ≤25 LOC |
@@ -19,7 +19,7 @@
 | Build warnings | **0** (`-D warnings`) |
 | `cargo test --workspace` | green, 0 ignored outside documented carve-out |
 | `cargo-deny` advisories | 6 ignores expiring **2026-06-01** (25 days!) |
-| Production `todo!()` | **1** (`adapters/bevy/server/src/commands.rs:78` — `give_authority`) |
+| Production `todo!()` | **0** ✅ |
 
 ### What's done (do not re-audit)
 
@@ -39,24 +39,23 @@ Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11.
 
 ---
 
-## P1 — Category C BDD, Phase 1: Entity-authority state machine
+## P1 — Category C BDD, Phase 1: Entity-authority state machine — **COMPLETE** (2026-05-07)
 
-**Context:** The SDD quality debt plan deferred ~80 Category C scenarios requiring new test infrastructure. Entity-authority state machine has the highest value/effort ratio — the harness already has all authority APIs; what's missing is step bindings for state transitions and polling assertions.
+All tasks delivered in commit `33016cc3` on `dev`.
 
-**Current deferred contracts (in `05_authority.feature`):**
-`entity-authority-02` through `entity-authority-15` (excluding -08, -11, -12 which proved to be product gaps). Key behaviors: Available→Requested→Granted lifecycle, denial propagation, simultaneous request arbitration, authority migration on scope-exit, disconnect-reclaim, and the Bevy commands extension.
+**Delivered:**
+- P1.5: `entity-authority-15` converted from `@PolicyOnly` to real test (duplicate give_authority idempotent)
+- P1.6: Bevy integration tests A1 (`give_authority` → Granted) and A2 (`take_authority` → Denied) in `adapters/bevy/server/tests/authority_commands_bevy.rs`
+- P1.7: `give_authority` todo!() implemented across all 4 layers (world_server, server, bevy server wrapper, commands)
+- Bug fix: `insert_component_worldless` now short-circuits for already-delegated components (`component_already_host_registered`); `GlobalDiffHandler::has_component` added
+- P1.8: namako gate green (301 active scenarios), `cargo check --workspace` clean, pushed to dev
 
-**Harness readiness:** All server-side authority APIs are live: `give_authority`, `entity_authority_status`, `entity_take_authority`, `entity_release_authority`. Client-side: `entity_request_authority`, `entity_release_authority`, `authority_status`. TrackedServerEvent has Grant/Reset variants. TrackedClientEvent has Grant/Denied/Reset variants.
-
-**Tasks:**
-- [ ] **P1.1** Audit `05_authority.feature` — list every @PolicyOnly scenario that is actually testable (authority state transitions). Write the updated Gherkin bodies directly in the feature file.
-- [ ] **P1.2** Add step bindings for missing authority state assertions: `"the entity's authority status is {word}"`, `"client {client} is eventually denied authority"` variants, simultaneous-request arbitration setup.
-- [ ] **P1.3** Unlock and convert `entity-authority-02..07` (state transitions, basic grant/deny/release cycle).
-- [ ] **P1.4** Unlock `entity-authority-09..14` (migration, scope-exit, disconnect-reclaim — may need harness extension for ungraceful disconnect simulation).
-- [ ] **P1.5** Unlock `entity-authority-15` (server-override revocation) — current @PolicyOnly is actually testable; the `"eventually denied"` polling binding exists.
-- [ ] **P1.6** Bevy authority commands: `commands.request_entity_authority`, `commands.release_entity_authority` — add Bevy-adapter integration tests in `adapters/bevy/server/tests/`.
-- [ ] **P1.7** Fix the one real `todo!()`: `adapters/bevy/server/src/commands.rs:78` — `give_authority` is unimplemented. Implement or document why it's deferred.
-- [ ] **P1.8** Gate: `namako gate` passes, `cargo test --workspace` green, artifacts refreshed, commit + push `dev`.
+**State snapshot after P1:**
+| Metric | Value |
+|---|---|
+| Active BDD scenarios | **301** |
+| Production `todo!()` | **0** ✅ |
+| Build warnings | **0** |
 
 ---
 
