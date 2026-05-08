@@ -71,13 +71,8 @@ fn collect_bindings_from_inventory<W: WorldInventory>() -> Vec<SemanticBinding> 
 /// Regexes must mirror the `#[param(regex = ...)]` attributes in vocab.rs exactly.
 fn naia_custom_parameters() -> Vec<CustomParameterDef> {
     vec![
-        CustomParameterDef { name: "client".to_string(),    regex: r"[A-Za-z][A-Za-z0-9_]*".to_string() },
-        CustomParameterDef { name: "entity".to_string(),    regex: r"[a-z][a-z0-9_]*".to_string() },
-        CustomParameterDef { name: "component".to_string(), regex: r"[A-Z][A-Za-z0-9]*".to_string() },
-        CustomParameterDef { name: "channel".to_string(),   regex: r"[A-Z][A-Za-z0-9]*".to_string() },
-        CustomParameterDef { name: "role".to_string(),      regex: r"granted|denied|available|requested|releasing".to_string() },
-        CustomParameterDef { name: "room".to_string(),      regex: r"[a-z][a-z0-9_]*".to_string() },
-        CustomParameterDef { name: "message".to_string(),   regex: r"[A-Z][A-Za-z0-9]*".to_string() },
+        CustomParameterDef { name: "client".to_string(), regex: r"[A-Za-z][A-Za-z0-9_]*".to_string() },
+        CustomParameterDef { name: "entity".to_string(), regex: r"[A-Za-z][A-Za-z0-9_]*".to_string() },
     ]
 }
 

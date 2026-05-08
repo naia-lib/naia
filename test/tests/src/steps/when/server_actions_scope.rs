@@ -3,7 +3,7 @@
 use naia_test_harness::EntityKey;
 
 use crate::steps::prelude::*;
-use crate::steps::vocab::ClientName;
+use crate::steps::vocab::{ClientName, EntityRef};
 use crate::steps::world_helpers::last_entity_mut;
 
 // ──────────────────────────────────────────────────────────────────────
@@ -335,21 +335,21 @@ fn when_server_sends_large_message_reliable(ctx: &mut TestWorldMut) {
     }
 }
 
-/// When the server mutates entity {label}'s component to x={int} y={int}.
+/// When the server mutates entity {entity}'s component to x={int} y={int}.
 ///
-/// `label` is "A" or "B"; resolves via [`entity_label_to_key_storage`].
+/// `entity` is "A" or "B"; resolves via [`entity_label_to_key_storage`].
 /// Used by B-BDD-8 (per-entity convergence under cross-entity reorder).
-#[when("the server mutates entity {word}'s component to x={int} y={int}")]
+#[when("the server mutates entity {entity}'s component to x={int} y={int}")]
 fn when_server_mutates_entity_component(
     ctx: &mut TestWorldMut,
-    label: String,
+    label: EntityRef,
     x: i32,
     y: i32,
 ) {
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let entity_key: EntityKey = scenario
-        .bdd_get(entity_label_to_key_storage(&label))
+        .bdd_get(entity_label_to_key_storage(label.as_ref()))
         .unwrap_or_else(|| panic!("entity '{}' not stored", label));
     scenario.mutate(|mctx| {
         mctx.server(|server| {

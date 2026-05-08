@@ -94,18 +94,13 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## P6 — vocab.rs Phase A.3
+## P6 — vocab.rs Phase A.3 — **COMPLETE** (2026-05-08)
 
-**Context:** `test/tests/src/steps/vocab.rs` has 6 typed parameter wrappers with `#[allow(dead_code)]` — staged for migration in the A.3 pass that never landed: `EntityRef`, `ComponentName`, `ChannelName`, `AuthRole`, `RoomRef`, `MessageName`.
-
-Migrating bindings to use these types improves cucumber error messages and enforces the vocabulary contract at compile time.
-
-**Tasks:**
-- [ ] **P6.1** Migrate entity-label `{word}` bindings to `EntityRef` (target: `then/state_assertions_entity.rs` and `given/state_entity.rs`).
-- [ ] **P6.2** Migrate channel-name `{word}` bindings to `ChannelName` (target: `when/server_actions_entity.rs` messaging steps).
-- [ ] **P6.3** Migrate authority-role `{word}` bindings to `AuthRole` (target: `then/state_assertions_delegation.rs`).
-- [ ] **P6.4** Migrate `ComponentName`, `RoomRef`, `MessageName` at appropriate sites or document why direct `{word}` is better for those.
-- [ ] **P6.5** Remove all `#[allow(dead_code)]` from vocab.rs as each type is activated. Gate: zero dead_code warnings, `namako gate` passes, commit + push `dev`.
+**Delivered:**
+- P6.1: EntityRef regex updated to `[A-Za-z][A-Za-z0-9_]*` (was lowercase-only) to accept uppercase entity labels "A"/"B". Two `{word}` bindings migrated to `{entity}`: `when/server_actions_scope.rs:342` and `then/state_assertions_replication.rs:166`.
+- P6.2/P6.3: No applicable `{word}` bindings for channel names or authority roles exist. All authority-status steps use literal text; all channel names are in the step literal, not parameterized.
+- P6.4: `ComponentName`, `ChannelName`, `AuthRole`, `RoomRef`, `MessageName` deleted — no migration targets exist and keeping dead types is clutter. `npa/src/manifest.rs` custom_parameters list updated to match.
+- P6.5: All `#[allow(dead_code)]` removed from vocab.rs. Gate: 0 build warnings, `namako gate` passes, committed + pushed `dev`.
 
 ---
 

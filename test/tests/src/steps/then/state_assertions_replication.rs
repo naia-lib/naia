@@ -1,6 +1,7 @@
 //! Then-step bindings: entity replication, priority, scope, and resource assertions.
 
 use crate::steps::prelude::*;
+use crate::steps::vocab::EntityRef;
 use crate::steps::world_helpers::{last_entity_ref, named_client_ref};
 
 // ──────────────────────────────────────────────────────────────────────
@@ -160,13 +161,13 @@ fn then_global_gain_on_last_entity_is_still(
     then_global_gain_on_last_entity_is(ctx, expected)
 }
 
-/// Then the client eventually observes entity {label} at x={int} y={int}.
+/// Then the client eventually observes entity {entity} at x={int} y={int}.
 ///
-/// `label` is "A" or "B"; resolves via `entity_label_to_key_storage`.
-#[then("the client eventually observes entity {word} at x={int} y={int}")]
+/// `entity` is "A" or "B"; resolves via `entity_label_to_key_storage`.
+#[then("the client eventually observes entity {entity} at x={int} y={int}")]
 fn then_client_eventually_observes_entity_at(
     ctx: &TestWorldRef,
-    label: String,
+    label: EntityRef,
     x: i32,
     y: i32,
 ) -> AssertOutcome<()> {
@@ -174,7 +175,7 @@ fn then_client_eventually_observes_entity_at(
     let client_key = ctx.last_client();
     let entity_key: naia_test_harness::EntityKey = ctx
         .scenario()
-        .bdd_get(entity_label_to_key_storage(&label))
+        .bdd_get(entity_label_to_key_storage(label.as_ref()))
         .unwrap_or_else(|| panic!("entity '{}' not stored", label));
     assert_client_position_eq(ctx, client_key, entity_key, (x as f32, y as f32))
 }
