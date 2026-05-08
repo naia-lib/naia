@@ -40,6 +40,14 @@ pub const CLIENT_LOCAL_VALUE_KEY: &str = "client_local_value";
 // Messaging RPC tests.
 pub const RESPONSE_RECEIVE_KEY: &str = "response_receive_key";
 
+// Tick-buffer tests (messaging-13/14).
+pub const TICK_BUFFER_TICK_KEY: &str = "tick_buffer_tick";
+pub const TICK_BUFFER_COUNT_KEY: &str = "tick_buffer_count";
+pub const TICK_BUFFER_REJECTED_KEY: &str = "tick_buffer_rejected";
+
+// EntityProperty buffering tests (messaging-18/20).
+pub const ENTITY_COMMAND_COUNT_KEY: &str = "entity_command_count";
+
 /// Look up the BDD-stored entity key for a label like "A" or "B".
 /// Used by multi-entity tests (priority accumulator B-BDD-8 and
 /// future scenarios that work with named entity pairs).

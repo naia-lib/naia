@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "4887df68d63a8d13494f1e404ace991c9afc588c0b18729ed0e082291030c8a7",
-    "step_registry_hash": "689a5fbec86137bb261056aa2d309bdc71feecafe328d584f7a9807514fab06a",
-    "resolved_plan_hash": "f0eb0c75474972f2eff21bd274254be4e4c6aa5dbcc5264acfd5d70186e13db6"
+    "feature_fingerprint_hash": "cc9074465d96658274dadb166acd1f8b5931dff9ebc5143405f1e002bb2731c4",
+    "step_registry_hash": "1ab5e32fa98d84fcc88ad8836a9b8df5b2399953fcfe63413bed9304bf8e41b0",
+    "resolved_plan_hash": "2a72ef1bc09c39201632970559f342260bbfefaedb8367b3606debe9cd67d490"
   },
   "scenarios": [
     {
@@ -11943,6 +11943,53 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client sends 3 tick-buffered messages for the same tick",
+          "binding_id": "f61ab6d39d31e4575d14aeeadfaeec9cc8d4c8eff90f974267d331d27e406fc1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "592695a1a6784ed2cf1216ada93845bcb28549bba352c81db8da63449fd4f13e"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server reads tick-buffered messages for that tick",
+          "binding_id": "2dc4dc5d4eeb0c6bfdaf6b27a3de962b6152c08542687b69f1094631ac7a6cc8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7ac1acb26090aee3011d93af7e44b4309db644ef6110a55142dce8036bb583b1"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server received 3 messages in the tick group",
+          "binding_id": "cf0fbe749f4c3d3e2a660ef4b8920011d5498c8fb36b565a37405f283201dbb9",
+          "captures": [
+            "3"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4bec5dad130b74e28be5f1d5449db1a88fed0274d997fda30bfeef6b8ec30707"
         }
       ]
     },
@@ -11959,6 +12006,42 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a tick-buffered message is injected for an expired tick",
+          "binding_id": "4219918f9295caa3abcb7ec39c3b99eb87d31bdd69fab1eab434ef9537b62637",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5e93b81aec7525ac5fc65c09842e9c0cd84d77d00b90de4267156636c2ddf6cf"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server rejected the tick-buffered message",
+          "binding_id": "b1d3bd54cbd248f2a4368f64b374a614de554c4657b467fbc5edbb9a8b81872e",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b0f9a6a531f39e05d9304ca5384d51f7676104b0a4a82d2a1d8cb26aa2947883"
         }
       ]
     },
@@ -12131,6 +12214,51 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns an entity not yet in client scope with a pending entity-command",
+          "binding_id": "202e2e574659653495e5bf8dc0ccc1e8f87ee3f5be43ac7f994503029841f87f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "91dbebbf74234cd73598c297ed8fe95360d86aa4a8a43ec21c24b4f2565fd29b"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client receives the entity-command message",
+          "binding_id": "51ce245944c44dc676009e9e97de3385be19a5c0f837c86bff7884d97aadb49b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d8bd7758c83b5329124461b247bacbe3d3e5e0c763388308d8f79ac04c8a8bb0"
         }
       ]
     },
@@ -12163,6 +12291,60 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns an entity not yet in client scope with 130 pending entity-commands",
+          "binding_id": "db1d145b0e3259920c231761825b5177d7c2b94ad8127018cf3d7454beb54652",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a0e708f08df2c10e16d13798bea5f1ed46b10e3efd2e8b7950a09421f6328797"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server includes the entity for the client",
+          "binding_id": "8a1db7f631202d16254b008de53ed076d238acf57733076a13d4e1ab9a58e8a1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3a5d51ed2cbf3c06c3e3a8b52a9ea3032fb816d65811e07675e4341b5680472d"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client collects all entity-command messages",
+          "binding_id": "43d54d609dd84dcb592aaa35c6dfa69bb0345fd7569ee7385ef1fbeda716f126",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "110385185b33b4fa42e470cecf9136a51aa980f2343c14a624905607a6433d14"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client received exactly 128 entity-command messages",
+          "binding_id": "bcadcc9832aaa71723029889bbc900f1062e5569a5dc4510358f321e3d548bdc",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "3547e71ff5010797ec87173eea3d2b0eed37ab5aaddbd69fcdb6a70b8ab38ded"
         }
       ]
     },

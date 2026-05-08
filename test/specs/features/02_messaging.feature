@@ -195,18 +195,20 @@ Feature: Messaging Channel Semantics
     @Scenario(09)
     Scenario: [messaging-12] SequencedReliable exposes only latest
 
-    # [messaging-13] — TickBuffered groups messages by tick.
-    # TickBuffered channel not included in the test protocol; no binding
-    # to send on or receive from a TickBuffered channel.
-    @PolicyOnly
     @Scenario(10)
     Scenario: [messaging-13] TickBuffered groups messages by tick
+      Given a server is running
+      And a client connects
+      When the client sends 3 tick-buffered messages for the same tick
+      And the server reads tick-buffered messages for that tick
+      Then the server received 3 messages in the tick group
 
-    # [messaging-14] — TickBuffered discards too-old ticks.
-    # Same constraint as [messaging-13]: TickBuffered channel not in test protocol.
-    @PolicyOnly
     @Scenario(11)
     Scenario: [messaging-14] TickBuffered discards too-old ticks
+      Given a server is running
+      And a client connects
+      When a tick-buffered message is injected for an expired tick
+      Then the server rejected the tick-buffered message
 
     @Scenario(12)
     Scenario: [messaging-15] Unreliable channel rejects oversized message without panic
@@ -229,23 +231,31 @@ Feature: Messaging Channel Semantics
       When the server sends message A on an ordered reliable channel
       Then the client receives message A exactly once
 
-    # [messaging-18] — EntityProperty message buffering.
-    # EntityProperty channel not included in the test protocol.
-    @PolicyOnly
     @Scenario(15)
     Scenario: [messaging-18] EntityProperty message buffering
+      Given a server is running
+      And a client connects
+      And the server spawns an entity not yet in client scope with a pending entity-command
+      When the server includes the entity for the client
+      Then the client receives the entity-command message
 
     # [messaging-19] — EntityProperty message TTL.
-    # EntityProperty channel not included in the test protocol.
+    # The contract test (messaging-19 in 03_messaging.rs) is broken: the
+    # expect closure always returns Some(()), so the TTL wait (60s ≈ 3750
+    # ticks) never actually elapses. Fixing it requires TestClock injection
+    # which the harness does not support.
     @PolicyOnly
     @Scenario(16)
     Scenario: [messaging-19] EntityProperty message TTL
 
-    # [messaging-20] — EntityProperty buffer caps with FIFO eviction.
-    # EntityProperty channel not included in the test protocol.
-    @PolicyOnly
     @Scenario(17)
     Scenario: [messaging-20] EntityProperty buffer caps with FIFO eviction
+      Given a server is running
+      And a client connects
+      And the server spawns an entity not yet in client scope with 130 pending entity-commands
+      When the server includes the entity for the client
+      And the client collects all entity-command messages
+      Then the client received exactly 128 entity-command messages
 
     @Scenario(18)
     Scenario: [messaging-23] Unanswered request does not crash the client

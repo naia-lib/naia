@@ -395,3 +395,63 @@ fn when_server_attempts_reinsert_score(ctx: &mut TestWorldMut, home: u32, away: 
     assert!(!accepted, "re-insert of an existing Score must return false (ResourceAlreadyExists)");
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Tick-buffered messaging — server-side read and inject (messaging-13/14)
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the server reads tick-buffered messages for that tick.
+///
+/// Waits (via spec_expect) for the server to advance past the tick stored
+/// under `TICK_BUFFER_TICK_KEY`, then reads the tick buffer and stores
+/// the message count under `TICK_BUFFER_COUNT_KEY`. Used by messaging-13.
+#[when("the server reads tick-buffered messages for that tick")]
+fn when_server_reads_tick_buffered_messages(ctx: &mut TestWorldMut) {
+    use naia_shared::sequence_greater_than;
+    use naia_test_harness::test_protocol::{TickBufferedChannel, TestMessage};
+    let tick: naia_shared::Tick = ctx
+        .scenario_mut()
+        .bdd_get(TICK_BUFFER_TICK_KEY)
+        .expect("no tick stored — did the client send tick-buffered messages?");
+    let scenario = ctx.scenario_mut();
+    scenario.spec_expect("tick-buffer: wait for server to advance past target tick", |ectx| {
+        let now = ectx.server(|s| s.current_tick());
+        sequence_greater_than(now, tick).then_some(())
+    });
+    let count = scenario.mutate(|mctx| {
+        mctx.server(|s| {
+            let mut tb = s.receive_tick_buffer_messages(&tick);
+            tb.read::<TickBufferedChannel, TestMessage>().len()
+        })
+    });
+    scenario.bdd_store(TICK_BUFFER_COUNT_KEY, count);
+}
+
+/// When a tick-buffered message is injected for an expired tick.
+///
+/// Advances 10 ticks, then uses inject_tick_buffer_message with
+/// message_tick = host_tick - 100 (past the buffer window). Stores
+/// the rejection outcome (true if rejected) under
+/// `TICK_BUFFER_REJECTED_KEY`. Used by messaging-14.
+#[when("a tick-buffered message is injected for an expired tick")]
+fn when_tick_buffered_message_injected_for_expired_tick(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{TickBufferedChannel, TestMessage};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    for _ in 0..10 {
+        scenario.mutate(|_| {});
+    }
+    let accepted = scenario.mutate(|mctx| {
+        mctx.server(|s| {
+            let host_tick = s.current_tick();
+            let msg_tick = host_tick.wrapping_sub(100);
+            s.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
+                &client_key,
+                &host_tick,
+                &msg_tick,
+                &TestMessage::new(99),
+            )
+        })
+    });
+    scenario.bdd_store(TICK_BUFFER_REJECTED_KEY, !accepted);
+}
+

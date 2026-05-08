@@ -501,3 +501,97 @@ fn then_named_client_does_not_have_entity(
         }
     })
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Tick-buffered messaging assertions (messaging-13/14)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server received {int} messages in the tick group.
+///
+/// Reads the count stored under `TICK_BUFFER_COUNT_KEY` by the matching
+/// When binding and asserts it equals `expected`. Used by messaging-13.
+#[then("the server received {int} messages in the tick group")]
+fn then_server_received_n_messages_in_tick_group(
+    ctx: &TestWorldRef,
+    expected: usize,
+) -> AssertOutcome<()> {
+    match ctx.scenario().bdd_get::<usize>(TICK_BUFFER_COUNT_KEY) {
+        Some(count) if count == expected => AssertOutcome::Passed(()),
+        Some(count) => AssertOutcome::Failed(format!(
+            "Expected {} messages in tick group, got {}",
+            expected, count
+        )),
+        None => AssertOutcome::Failed(
+            "No tick-buffer count stored — did 'server reads tick-buffered messages' run?"
+                .to_string(),
+        ),
+    }
+}
+
+/// Then the server rejected the tick-buffered message.
+///
+/// Reads the rejection flag stored under `TICK_BUFFER_REJECTED_KEY` by
+/// the matching When binding. Used by messaging-14.
+#[then("the server rejected the tick-buffered message")]
+fn then_server_rejected_tick_buffered_message(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    match ctx.scenario().bdd_get::<bool>(TICK_BUFFER_REJECTED_KEY) {
+        Some(true) => AssertOutcome::Passed(()),
+        Some(false) => AssertOutcome::Failed(
+            "Expected tick-buffered message to be rejected but inject returned accepted"
+                .to_string(),
+        ),
+        None => AssertOutcome::Failed(
+            "No rejection result stored — did 'inject expired tick-buffered message' run?"
+                .to_string(),
+        ),
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// EntityProperty messaging assertions (messaging-18/20)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the client receives the entity-command message.
+///
+/// Polls until the client has both the entity in scope AND a buffered
+/// EntityCommandMessage delivered on `ReliableChannel`. Used by
+/// messaging-18.
+#[then("the client receives the entity-command message")]
+fn then_client_receives_entity_command_message(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::EntityCommandMessage;
+    use naia_test_harness::test_protocol::ReliableChannel;
+    let client_key = ctx.last_client();
+    let entity_key = last_entity_ref(ctx);
+    ctx.client(client_key, |client| {
+        if !client.has_entity(&entity_key) {
+            return AssertOutcome::Pending;
+        }
+        let msgs: Vec<_> =
+            client.read_message::<ReliableChannel, EntityCommandMessage>().collect();
+        if msgs.is_empty() {
+            AssertOutcome::Pending
+        } else {
+            AssertOutcome::Passed(())
+        }
+    })
+}
+
+/// Then the client received exactly 128 entity-command messages.
+///
+/// Reads the total count stored under `ENTITY_COMMAND_COUNT_KEY` by
+/// `when_client_collects_entity_command_messages` and asserts it is
+/// 128 (the per-entity EntityProperty buffer cap). Used by messaging-20.
+#[then("the client received exactly 128 entity-command messages")]
+fn then_client_received_exactly_128_entity_commands(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    match ctx.scenario().bdd_get::<usize>(ENTITY_COMMAND_COUNT_KEY) {
+        Some(count) if count == 128 => AssertOutcome::Passed(()),
+        Some(count) => AssertOutcome::Failed(format!(
+            "Expected 128 entity-command messages (per-entity buffer cap), got {}",
+            count
+        )),
+        None => AssertOutcome::Failed(
+            "No entity-command count stored — did 'client collects all entity-command messages' run?"
+                .to_string(),
+        ),
+    }
+}

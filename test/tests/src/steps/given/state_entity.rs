@@ -5,7 +5,7 @@
 
 use crate::steps::prelude::*;
 
-use naia_test_harness::{ImmutableLabel, Position, Velocity};
+use naia_test_harness::{EntityCommandMessage, ImmutableLabel, Position, Velocity};
 
 #[given("a server-owned entity exists with only ImmutableLabel")]
 fn given_entity_with_only_immutable_label(ctx: &mut TestWorldMut) {
@@ -143,6 +143,68 @@ fn given_client_modifies_component_locally(ctx: &mut TestWorldMut) {
 // ──────────────────────────────────────────────────────────────────────
 // Multi-entity preconditions (priority accumulator)
 // ──────────────────────────────────────────────────────────────────────
+
+// ──────────────────────────────────────────────────────────────────────
+// EntityProperty messaging preconditions (messaging-18/20)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given the server spawns an entity not yet in client scope with a pending entity-command.
+///
+/// Spawns entity in the room but does NOT include it in the client's
+/// scope. Sends one EntityCommandMessage with the EntityProperty set
+/// to this entity so it is buffered on the client until the entity
+/// enters scope. Used by messaging-18.
+#[given("the server spawns an entity not yet in client scope with a pending entity-command")]
+fn given_entity_not_in_scope_with_pending_entity_command(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::ReliableChannel;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let room_key = scenario.last_room();
+    let entity_key = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let (entity_key, _) = server.spawn(|mut entity| {
+                entity.insert_component(Position::new(5.0, 5.0));
+                entity.enter_room(&room_key);
+            });
+            let mut cmd = EntityCommandMessage::new("buffered_command");
+            server.set_entity_property(&mut cmd.target, &entity_key);
+            server.send_message::<ReliableChannel, _>(&client_key, &cmd);
+            entity_key
+        })
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.expect(|_| Some(()));
+}
+
+/// Given the server spawns an entity not yet in client scope with 130 pending entity-commands.
+///
+/// Spawns entity in the room but does NOT include it in the client's
+/// scope. Sends 130 EntityCommandMessages (exceeding the 128-message
+/// per-entity cap) so the buffer evicts the 2 oldest on delivery.
+/// Used by messaging-20.
+#[given("the server spawns an entity not yet in client scope with 130 pending entity-commands")]
+fn given_entity_not_in_scope_with_130_entity_commands(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::UnorderedChannel;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let room_key = scenario.last_room();
+    let entity_key = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let (entity_key, _) = server.spawn(|mut entity| {
+                entity.insert_component(Position::new(7.0, 8.0));
+                entity.enter_room(&room_key);
+            });
+            for i in 0..130usize {
+                let mut cmd = EntityCommandMessage::new(&format!("cmd_{}", i));
+                server.set_entity_property(&mut cmd.target, &entity_key);
+                server.send_message::<UnorderedChannel, _>(&client_key, &cmd);
+            }
+            entity_key
+        })
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.expect(|_| Some(()));
+}
 
 /// Given two server-owned entities A and B exist each with a replicated component in-scope for the client.
 ///

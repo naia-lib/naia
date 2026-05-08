@@ -417,3 +417,80 @@ fn when_alice_releases_authority(ctx: &mut TestWorldMut) {
         });
     });
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Tick-buffered messaging — client-side sends (messaging-13/14)
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the client sends 3 tick-buffered messages for the same tick.
+///
+/// Sends 3 messages tagged for the same near-future tick and stores
+/// that tick under `TICK_BUFFER_TICK_KEY`. Used by messaging-13.
+#[when("the client sends 3 tick-buffered messages for the same tick")]
+fn when_client_sends_3_tick_buffered_messages_same_tick(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{TickBufferedChannel, TestMessage};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let tick: naia_shared::Tick =
+        scenario.mutate(|mctx| mctx.server(|s| s.current_tick().wrapping_add(5)));
+    scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            client.send_tick_buffer_message::<TickBufferedChannel, _>(&tick, &TestMessage::new(1));
+            client.send_tick_buffer_message::<TickBufferedChannel, _>(&tick, &TestMessage::new(2));
+            client.send_tick_buffer_message::<TickBufferedChannel, _>(&tick, &TestMessage::new(3));
+        });
+    });
+    scenario.bdd_store(TICK_BUFFER_TICK_KEY, tick);
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// EntityProperty messaging — client-side accumulation (messaging-20)
+// ──────────────────────────────────────────────────────────────────────
+
+/// When the client collects all entity-command messages.
+///
+/// Uses a polling loop to accumulate EntityCommandMessages across ticks
+/// until delivery is stable (3 consecutive empty ticks). Stores the
+/// total count under `ENTITY_COMMAND_COUNT_KEY`. Used by messaging-20.
+#[when("the client collects all entity-command messages")]
+fn when_client_collects_entity_command_messages(ctx: &mut TestWorldMut) {
+    use naia_test_harness::test_protocol::{UnorderedChannel, EntityCommandMessage};
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: naia_test_harness::EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity stored — missing Given for entity-command setup");
+    let mut all_count = 0usize;
+    let mut idle_ticks = 0usize;
+    let count = scenario.spec_expect(
+        "messaging-20: collect entity-command messages until stable",
+        |ectx| {
+            let replicated = ectx.client(client_key, |c| c.has_entity(&entity_key));
+            if !replicated {
+                idle_ticks = 0;
+                return None;
+            }
+            let batch = ectx.client(client_key, |client| {
+                client
+                    .read_message::<UnorderedChannel, EntityCommandMessage>()
+                    .count()
+            });
+            all_count += batch;
+            if batch == 0 {
+                idle_ticks += 1;
+                if idle_ticks >= 3 {
+                    return Some(all_count);
+                }
+                None
+            } else {
+                idle_ticks = 0;
+                if all_count >= 128 {
+                    Some(all_count)
+                } else {
+                    None
+                }
+            }
+        },
+    );
+    scenario.bdd_store(ENTITY_COMMAND_COUNT_KEY, count);
+}
