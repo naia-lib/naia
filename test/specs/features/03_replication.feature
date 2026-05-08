@@ -171,31 +171,48 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   @Rule(07)
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
-    @Deferred
+    # [entity-replication-04] — Component insert events fire for in-scope additions.
+    # No harness API for dynamic component insertion on existing entities.
+    @PolicyOnly
     @Scenario(01)
     Scenario: [entity-replication-04] Component insert events fire for in-scope additions
 
-    @Deferred
+    # [entity-replication-05] — Component remove events fire for in-scope removals.
+    # No harness API for dynamic component removal on existing entities.
+    @PolicyOnly
     @Scenario(02)
     Scenario: [entity-replication-05] Component remove events fire for in-scope removals
 
-    @Deferred
+    # [entity-replication-08] — Replication preserves component-set parity.
+    # Component enumeration API not exposed by the test harness; parity
+    # is implicitly verified by the spawn-with-components scenarios in Rule(02).
+    @PolicyOnly
     @Scenario(03)
     Scenario: [entity-replication-08] Replication preserves component-set parity
 
-    @Deferred
+    # [entity-replication-09] — Replication preserves component value parity.
+    # Server→client component value assertion not in harness bindings; covered
+    # implicitly by the "server observes component update" path in Rule(01).
+    @PolicyOnly
     @Scenario(04)
     Scenario: [entity-replication-09] Replication preserves component value parity
 
-    @Deferred
+    # [entity-replication-10] — No replication storms under steady-state.
+    # Verifying absence of outbound packets requires per-packet counting
+    # not exposed by the test harness.
+    @PolicyOnly
     @Scenario(05)
     Scenario: [entity-replication-10] No replication storms under steady-state
 
-    @Deferred
+    # [entity-replication-11] — Component remove on out-of-scope is safe.
+    # No harness API for dynamic component removal.
+    @PolicyOnly
     @Scenario(06)
     Scenario: [entity-replication-11] Component remove on out-of-scope is safe
 
-    @Deferred
+    # [entity-replication-12] — Concurrent updates resolve to last-writer-wins.
+    # The harness is single-threaded; truly concurrent writes are not constructible.
+    @PolicyOnly
     @Scenario(07)
     Scenario: [entity-replication-12] Concurrent updates resolve to last-writer-wins
 

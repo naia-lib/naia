@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "ffde036046dac01a54547a6d982f1e14653f7783646b48901570dd3f95d0cc8d",
+    "feature_fingerprint_hash": "87843da16afdd3a0030f549f2b1f5c7bccf6dcc071d5bc37d1bbe90e69edfb1d",
     "step_registry_hash": "e73f2aba210058adb9a727c750ffe3cfe7e383c587929d06f19be5b45767e36d",
-    "resolved_plan_hash": "a44338e8127f63150f4c741fc9bdf80f2e67bbbee0dcf620c2f61c371c3c30b9"
+    "resolved_plan_hash": "4f298865a2f94573190b6ee029ab8ea8aa03bb9f11a42c705d04c6b090f268ed"
   },
   "scenarios": [
     {
@@ -5412,9 +5412,57 @@
       ]
     },
     {
+      "scenario_key": "events_api:Rule(07):Scenario(06)",
+      "feature_path": "features/06_events_api.feature",
+      "scenario_name": "[server-events-05] MessageEvent fires per inbound message",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "events_api:Rule(07):Scenario(07)",
+      "feature_path": "features/06_events_api.feature",
+      "scenario_name": "[server-events-06] RequestEvent surfaces request payload",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "events_api:Rule(07):Scenario(08)",
       "feature_path": "features/06_events_api.feature",
       "scenario_name": "[server-events-08] Per-user event isolation (no cross-user leakage)",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "events_api:Rule(07):Scenario(09)",
+      "feature_path": "features/06_events_api.feature",
+      "scenario_name": "[server-events-10] Authority denied event observable on server",
       "steps": [
         {
           "effective_kind": "Given",
@@ -5809,6 +5857,95 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "d7f335d9e61b2df8cc5fd131ebc14bfac4d78bd1991d4df3e3d8be82b1cd3c0c"
+        }
+      ]
+    },
+    {
+      "scenario_key": "events_api:Rule(07):Scenario(19)",
+      "feature_path": "features/06_events_api.feature",
+      "scenario_name": "[client-events-11] Authority denied event surfaces",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "55a52b71dda39e2cd06343e64ca68dffb96f8b3f5707da8b32361807548c3795"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d3d2e45b8bca28c2705d7c6b3f4258531b27cf09b32ffe0ff68eb5edf8b77a69"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns a delegated entity in-scope for both clients",
+          "binding_id": "f6eaab730b012113bd4a6e7297dde71356bc0e0600283fe8d6a3c4e6168d4a52",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "020d819a1a4f7defa90bcc24ef049f3f3266d9b079d9d68f0defad68fc7aa85c"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client A requests authority for the delegated entity",
+          "binding_id": "42a5c9c3154515d8725a1dccabb18afcb78640c40c4b6cd1dfd3743e5d63bcfd",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4a1eba63ca40c5449b5f9643a5f26405a9af98ebdba9ea84171305c1a4848b2d"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client B requests authority for the delegated entity",
+          "binding_id": "42a5c9c3154515d8725a1dccabb18afcb78640c40c4b6cd1dfd3743e5d63bcfd",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a3bdf7b8164235f733ed35025c4a7826ccaf95b834153d66382a0f403f69c66c"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client B receives an authority denied event for the entity",
+          "binding_id": "36566001181cf4c04461f3762d4002427d0fc543e72156da1a2000024be737a0",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "461cb341d7326352cd1243b698c12674a9ef3e0c986e205fe054d1d2becec89b"
         }
       ]
     },
@@ -9866,6 +10003,22 @@
       ]
     },
     {
+      "scenario_key": "lifecycle:Rule(12):Scenario(02)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-13] No replication before auth decision",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "lifecycle:Rule(12):Scenario(03)",
       "feature_path": "features/01_lifecycle.feature",
       "scenario_name": "[connection-14a] Protocol_id checked during handshake",
@@ -9922,6 +10075,22 @@
       ]
     },
     {
+      "scenario_key": "lifecycle:Rule(12):Scenario(04)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-15] No mid-session reauth",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "lifecycle:Rule(12):Scenario(05)",
       "feature_path": "features/01_lifecycle.feature",
       "scenario_name": "[connection-17] Server capacity reject produces RejectEvent",
@@ -9961,6 +10130,70 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "4b067146ecee8915b555f87cf23050ac4e9879618b6fac0c129f7bdedb46097e"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(06)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-19] Client disconnects on heartbeat timeout",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(07)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-23] Malformed identity token rejected",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(08)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-25] Expired or reused tokens obey lifetime semantics",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(09)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-27] Valid identity token round-trips",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
         }
       ]
     },
@@ -10252,6 +10485,54 @@
       ]
     },
     {
+      "scenario_key": "lifecycle:Rule(12):Scenario(18)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-05] Throughput must be non-negative",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(19)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-06] Bandwidth exposes both directions",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(21)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-09] Per-direction metrics consistency",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "lifecycle:Rule(12):Scenario(23)",
       "feature_path": "features/01_lifecycle.feature",
       "scenario_name": "[connection-04] Reject path: client receives RejectEvent",
@@ -10381,6 +10662,54 @@
       ]
     },
     {
+      "scenario_key": "lifecycle:Rule(12):Scenario(26)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-09] Disconnect during auth is handled cleanly",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(27)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-10] Multiple concurrent auth requests serialize",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(28)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-11] Auth payload survives handshake roundtrip",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "lifecycle:Rule(12):Scenario(29)",
       "feature_path": "features/01_lifecycle.feature",
       "scenario_name": "[connection-14] Protocol mismatch produces ProtocolMismatch reject",
@@ -10476,6 +10805,149 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "4b067146ecee8915b555f87cf23050ac4e9879618b6fac0c129f7bdedb46097e"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(31)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-18] Heartbeat liveness triggers timeout disconnect",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(32)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-20] Reconnect after timeout is fresh session",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(33)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-22] Disconnect propagates to scoped entities",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with a replicated component",
+          "binding_id": "f20159a328b3a1860cc2107f9c88b0165fc6a8b716aad3396fe35617838cc721",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a807dd4c187b68fa877b0442ad648ac45ad8b79912964c4bd883139920482765"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client disconnects",
+          "binding_id": "1a2c5c87485998b897bf39449fc8e8ace74edc19718d530b933a78eaa7c9e287",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ff7fd15fe045e15a6b6081b5ff8f6ae59eb0140e3b6b5f2cad9e0c42199c1087"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server stops replicating entities to that client",
+          "binding_id": "0314f80078825685e0484d028f2ce7b6756bc0921ae2dc42bb9886051af7eaae",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0cd356f152ed188f65ef270dbbd3bb6595842a9eea6fb2944132b5fa76ad5b4f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(34)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-24] Identity token format validation",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(35)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-26] Token reuse blocked across sessions",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
         }
       ]
     },
@@ -11142,6 +11614,22 @@
       ]
     },
     {
+      "scenario_key": "messaging:Rule(04):Scenario(03)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-03] Wire-format errors surface cleanly",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "messaging:Rule(04):Scenario(04)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-07] SequencedReliable channel never reverts to older messages",
@@ -11359,6 +11847,70 @@
       ]
     },
     {
+      "scenario_key": "messaging:Rule(04):Scenario(08)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-11] SequencedUnreliable discards late updates",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(09)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-12] SequencedReliable exposes only latest",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(10)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-13] TickBuffered groups messages by tick",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(11)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-14] TickBuffered discards too-old ticks",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "messaging:Rule(04):Scenario(12)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-15] Unreliable channel rejects oversized message without panic",
@@ -11511,6 +12063,54 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "968921371acd33f5276a8e406b53ea10ad7eae954de2b036e573d8b7b1c7d638"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(15)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-18] EntityProperty message buffering",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(16)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-19] EntityProperty message TTL",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(17)",
+      "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-20] EntityProperty buffer caps with FIFO eviction",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
         }
       ]
     },
@@ -12583,6 +13183,118 @@
       ]
     },
     {
+      "scenario_key": "replication:Rule(07):Scenario(01)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-04] Component insert events fire for in-scope additions",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replication:Rule(07):Scenario(02)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-05] Component remove events fire for in-scope removals",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replication:Rule(07):Scenario(03)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-08] Replication preserves component-set parity",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replication:Rule(07):Scenario(04)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-09] Replication preserves component value parity",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replication:Rule(07):Scenario(05)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-10] No replication storms under steady-state",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replication:Rule(07):Scenario(06)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-11] Component remove on out-of-scope is safe",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "replication:Rule(07):Scenario(07)",
+      "feature_path": "features/03_replication.feature",
+      "scenario_name": "[entity-replication-12] Concurrent updates resolve to last-writer-wins",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "resources:Rule(01):Scenario(01)",
       "feature_path": "features/07_resources.feature",
       "scenario_name": "server inserts a dynamic resource and a connected client observes it",
@@ -13101,6 +13813,12 @@
       ]
     },
     {
+      "scenario_key": "resources:Rule(04):Scenario(05)",
+      "feature_path": "features/07_resources.feature",
+      "scenario_name": "client disconnects while holding authority value persists",
+      "steps": []
+    },
+    {
       "scenario_key": "resources:Rule(05):Scenario(01)",
       "feature_path": "features/07_resources.feature",
       "scenario_name": "client mutation of server-authoritative resource is silently dropped locally",
@@ -13110,6 +13828,12 @@
       "scenario_key": "resources:Rule(06):Scenario(01)",
       "feature_path": "features/07_resources.feature",
       "scenario_name": "per-resource priority gain affects send ordering under bandwidth pressure",
+      "steps": []
+    },
+    {
+      "scenario_key": "resources:Rule(06):Scenario(02)",
+      "feature_path": "features/07_resources.feature",
+      "scenario_name": "default priority gain is 1.0",
       "steps": []
     },
     {

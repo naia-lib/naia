@@ -507,7 +507,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And a client connects
       Then the server has 1 connected client
 
-    @Deferred
+    # [connection-13] — No replication before auth decision.
+    # The server's auth callback runs before any entity is replicated to the
+    # connecting client. Design invariant enforced by the handshake state machine;
+    # no harness API to observe mid-handshake replication state.
+    @PolicyOnly
     @Scenario(02)
     Scenario: [connection-13] No replication before auth decision
 
@@ -518,7 +522,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       When the client attempts to connect
       Then the connection is rejected with ProtocolMismatch
 
-    @Deferred
+    # [connection-15] — No mid-session reauth.
+    # A connected client cannot trigger a second auth event. Design invariant
+    # enforced by the handshake state machine; no harness API to trigger
+    # mid-session reauth.
+    @PolicyOnly
     @Scenario(04)
     Scenario: [connection-15] No mid-session reauth
 
@@ -528,19 +536,30 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       When a client attempts to connect but is rejected
       Then the client observes RejectEvent
 
-    @Deferred
+    # [connection-19] — Heartbeat timeout triggers client disconnect.
+    # Simulating real-time silence for a timeout duration requires wallclock
+    # advancement beyond the harness's tick model; not testable.
+    @PolicyOnly
     @Scenario(06)
     Scenario: [connection-19] Client disconnects on heartbeat timeout
 
-    @Deferred
+    # [connection-23] — Malformed identity token rejected.
+    # Token format validation runs inside the transport layer before the
+    # app auth callback; no harness API to inject a malformed token.
+    @PolicyOnly
     @Scenario(07)
     Scenario: [connection-23] Malformed identity token rejected
 
-    @Deferred
+    # [connection-25] — Expired or reused tokens obey lifetime semantics.
+    # Token lifetime/reuse tracking is outside the test harness API.
+    @PolicyOnly
     @Scenario(08)
     Scenario: [connection-25] Expired or reused tokens obey lifetime semantics
 
-    @Deferred
+    # [connection-27] — Valid identity token round-trips.
+    # Auth payload content is not inspected by the harness; only the
+    # AuthEvent firing order is observable (covered by Rule(03)).
+    @PolicyOnly
     @Scenario(09)
     Scenario: [connection-27] Valid identity token round-trips
 
@@ -592,11 +611,15 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Scenario(17)
     Scenario: [observability-01a] Querying metrics does not affect tick pacing
 
-    @Deferred
+    # [observability-05] — Throughput metric non-negative.
+    # Throughput metric not exposed by the test harness (only RTT is tested).
+    @PolicyOnly
     @Scenario(18)
     Scenario: [observability-05] Throughput must be non-negative
 
-    @Deferred
+    # [observability-06] — Bandwidth exposes both directions.
+    # Per-direction bandwidth metric not exposed by the test harness.
+    @PolicyOnly
     @Scenario(19)
     Scenario: [observability-06] Bandwidth exposes both directions
 
@@ -604,7 +627,10 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Scenario(20)
     Scenario: [observability-08] Time source monotonic consistency
 
-    @Deferred
+    # [observability-09] — Per-direction metrics consistency.
+    # Per-direction metrics (inbound vs outbound breakdown) not exposed
+    # by the test harness.
+    @PolicyOnly
     @Scenario(21)
     Scenario: [observability-09] Per-direction metrics consistency
 
@@ -630,15 +656,24 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       When a client authenticates and connects
       Then the server observes AuthEvent before ConnectEvent
 
-    @Deferred
+    # [connection-09] — Disconnect during auth handled cleanly.
+    # No harness API to trigger client disconnect during the mid-handshake
+    # auth state; the connection lifecycle is atomic in the test model.
+    @PolicyOnly
     @Scenario(26)
     Scenario: [connection-09] Disconnect during auth is handled cleanly
 
-    @Deferred
+    # [connection-10] — Multiple concurrent auth requests serialize.
+    # The test harness is single-threaded; truly concurrent auth scenarios
+    # are not constructible.
+    @PolicyOnly
     @Scenario(27)
     Scenario: [connection-10] Multiple concurrent auth requests serialize
 
-    @Deferred
+    # [connection-11] — Auth payload survives handshake roundtrip.
+    # Auth payload content is not inspected by the harness; only the
+    # AuthEvent firing order is observable (covered by Rule(03)).
+    @PolicyOnly
     @Scenario(28)
     Scenario: [connection-11] Auth payload survives handshake roundtrip
 
@@ -655,22 +690,38 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       When a client attempts to connect but is rejected
       Then the client observes RejectEvent
 
-    @Deferred
+    # [connection-18] — Heartbeat liveness triggers timeout disconnect.
+    # Simulating heartbeat timeout requires wallclock advancement beyond
+    # the harness's tick model; not testable.
+    @PolicyOnly
     @Scenario(31)
     Scenario: [connection-18] Heartbeat liveness triggers timeout disconnect
 
-    @Deferred
+    # [connection-20] — Reconnect after timeout is fresh session.
+    # Requires heartbeat timeout simulation; same constraint as [connection-18].
+    @PolicyOnly
     @Scenario(32)
     Scenario: [connection-20] Reconnect after timeout is fresh session
 
-    @Deferred
     @Scenario(33)
     Scenario: [connection-22] Disconnect propagates to scoped entities
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the client disconnects
+      Then the server stops replicating entities to that client
 
-    @Deferred
+    # [connection-24] — Identity token format validation.
+    # Token format validation runs inside the transport layer before the
+    # app auth callback; no harness API to inject a token with invalid format.
+    @PolicyOnly
     @Scenario(34)
     Scenario: [connection-24] Identity token format validation
 
-    @Deferred
+    # [connection-26] — Token reuse blocked across sessions.
+    # Token reuse tracking is maintained outside the test harness API.
+    @PolicyOnly
     @Scenario(35)
     Scenario: [connection-26] Token reuse blocked across sessions

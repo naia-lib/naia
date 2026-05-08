@@ -325,11 +325,19 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
       And a client connects
       Then the server has observed a tick event
 
-    @Deferred
+    # [server-events-05] — MessageEvent fires per inbound message.
+    # MessageEvent is not a variant of TrackedServerEvent; server-side
+    # message receipt is only observable via read_event() inside the
+    # server tick, not via the harness event history API.
+    @PolicyOnly
     @Scenario(06)
     Scenario: [server-events-05] MessageEvent fires per inbound message
 
-    @Deferred
+    # [server-events-06] — RequestEvent surfaces request payload.
+    # Request payload content inspection is not exposed by harness bindings;
+    # the round-trip (client sends request → server responds → client receives)
+    # is covered by Rule(03) Scenario(05) [messaging-08].
+    @PolicyOnly
     @Scenario(07)
     Scenario: [server-events-06] RequestEvent surfaces request payload
 
@@ -337,7 +345,10 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(08)
     Scenario: [server-events-08] Per-user event isolation (no cross-user leakage)
 
-    @Deferred
+    # [server-events-10] — Authority denied event observable on server.
+    # No server-side authority denied event binding exists; the harness
+    # only tracks server grant/reset events, not deny events.
+    @PolicyOnly
     @Scenario(09)
     Scenario: [server-events-10] Authority denied event observable on server
 
@@ -396,9 +407,15 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
       When client A requests authority for the delegated entity
       Then client A receives an authority granted event for the entity
 
-    @Deferred
     @Scenario(19)
     Scenario: [client-events-11] Authority denied event surfaces
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client B receives an authority denied event for the entity
 
     @Scenario(20)
     Scenario: [client-events-12] Authority reset event surfaces

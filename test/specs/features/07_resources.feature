@@ -137,8 +137,9 @@ Feature: Replicated Resources
 
     # [resource-authority-05] — Disconnect while holding authority reclaims cleanly
     # Ungraceful disconnect should reset authority to Available and preserve last value.
-    # Requires ungraceful disconnect support and server-side timeout detection.
-    @Deferred
+    # Requires ungraceful disconnect support and server-side timeout detection;
+    # neither is exposed by the test harness.
+    @PolicyOnly
     @Scenario(05)
     Scenario: client disconnects while holding authority value persists
 
@@ -162,10 +163,10 @@ Feature: Replicated Resources
     @Scenario(01)
     Scenario: per-resource priority gain affects send ordering under bandwidth pressure
 
-    # [resource-priority-02] — Default priority gain is 1.0
+    # [resource-priority-02] — Default priority gain is 1.0.
     # Requires a harness getter for the resource priority gain by type
     # (server_expect_ctx::resource_priority_gain not yet exposed).
-    @Deferred
+    @PolicyOnly
     @Scenario(02)
     Scenario: default priority gain is 1.0
 
