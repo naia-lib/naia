@@ -26,7 +26,7 @@ repo has used since 2019.
    git checkout dev
    RUSTFLAGS="-D warnings" cargo build --workspace --all-targets
    cargo test --workspace --all-targets
-   cargo run -p naia_npa -- run -p test/specs/resolved_plan.json -o test/specs/run_report.json
+   cargo run -p naia-npa -- run -p test/specs/resolved_plan.json -o test/specs/run_report.json
    ```
 2. Fast-forward merge `dev` → `main`:
    ```bash

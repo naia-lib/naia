@@ -36,12 +36,13 @@
 - P6: vocab.rs Phase A.3 — EntityRef activated (regex fixed), 5 dead typed params deleted, 2 {word}→{entity} migrations — `dev`
 - P8: 10 unsafe impl Send/Sync removed from bevy adapters (T3.1); P8.3 N/A (handler signatures differ) — `dev`
 - P9: connection-33/34/35 reconnect edge cases added; 309 active scenarios — `dev`
+- P11: kebab-case renames (×3), println→debug! (×3), feature audit; 0 build warnings — `dev`
 
 ---
 
 ## Priority stack
 
-Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. P1, P3, P4, P5, P6, P8, and P9 complete. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
+Active phases P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11 — **ALL COMPLETE**. Deferred phases (D-P0, D-P2, D-P7, D-P8.3, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
 
 ---
 
@@ -126,28 +127,15 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## P11 — Hygiene
+## P11 — Hygiene — **COMPLETE** (2026-05-08)
 
-### Crate naming consistency (T2.3)
-Mixed kebab-case vs snake_case across 30+ crates. Public crates must be kebab-case; internal ones are mixed.
-- [ ] **P11.1** Decide: kebab-case for all (matches crates.io publishing convention). Rename ~10 internal-only crates. Update any `cargo build -p name` references.
-
-### e2e_debug feature gate audit (T2.6)
-88 `#[cfg(feature = "e2e_debug")]` gates throughout server/client/shared. Not built in default config — a regression in this feature path would go undetected.
-- [ ] **P11.2** Determine if `e2e_debug` is still useful as a diagnostic tool. If yes: add CI matrix entry building `--features e2e_debug`. If no: retire the feature (delete all 88 gates).
-
-### T2.5 — TODO/FIXME/HACK triage (production code only)
-Only 2 remain after the T0.1 audit: one is a comment, one is the real `give_authority todo!()` (tracked in P1.7). After P1.7 lands, this is fully clean. No action needed unless new ones appear.
-- [ ] **P11.3** After P1.7: verify `grep -rn "todo!()" shared/ server/ client/ adapters/` returns 0 real hits.
-
-### T5.1 — println! in local hub
-- [ ] **P11.4** Replace `println!` at `shared/src/transport/local/hub.rs:296,325,353` with `log::debug!`.
-
-### T5.2 — Feature matrix audit
-- [ ] **P11.5** Audit which of the 12–14 features per crate have zero downstream callers. Retire unused features. Document surviving ones in `_AGENTS/FEATURES.md`.
-
-### T4.2 — CI audit
-- [ ] **P11.6** Confirm CI matrix covers: linux + wasm32 (as pre-push hook), plus `e2e_debug` (if retained per P11.2), plus transport matrix (local + webrtc). Add missing entries.
+**Delivered:**
+- P11.1: Renamed 3 snake_case package names to kebab-case: `naia_npa→naia-npa`, `naia_bevy_npa→naia-bevy-npa`, `naia_spec_tool→naia-spec-tool`. Updated `_AGENTS/RELEASE_PROCESS.md` and `_AGENTS/DEBUGGING_PLAYBOOK.md`. Binary `[[bin]]` names (file-level) unchanged (snake_case is conventional for binary file names).
+- P11.2: `e2e_debug` is actively useful (auto-dump-on-timeout + state-snapshot APIs for BDD debugging). Verified `cargo check -p naia-tests --features e2e_debug` builds cleanly (85 gates, 0 warnings). CI matrix entry deferred — CI is paused.
+- P11.3: `grep -rn "todo!()" shared/ server/ client/ adapters/` returns 0 real hits. ✅
+- P11.4: Replaced 3 `println!` with `debug!` in `shared/src/transport/local/hub.rs:296,325,353`. 0 build warnings.
+- P11.5: Feature audit complete. `zstd_support`, `transport_udp`, `advanced_handshake` have zero workspace callers but have real implementations — not retired (valid public API for external users). No FEATURES.md created (per session conventions). Features with workspace callers: `transport_local` (18), `test_time` (13), `bevy_support` (9), `transport_webrtc` (6), `wbindgen` (4), `mquad` (4), `interior_visibility` (3), `test_utils` (2), `bench_instrumentation` (2).
+- P11.6: Skipped — CI completely paused.
 
 ---
 

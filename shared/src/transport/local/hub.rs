@@ -293,7 +293,7 @@ impl LocalTransportHub {
                 conn.server_data_tx.send(bytes).map_err(|_| ())
             }
         } else {
-            println!(
+            debug!(
                 "[HUB] send_data: Client {} not found in connections",
                 client_addr
             );
@@ -322,7 +322,7 @@ impl LocalTransportHub {
                             total_delivered += 1;
                         }
                         Err(_) => {
-                            println!("[HUB] deliver_all_queued: Failed to send packet to client {} (channel closed?)", addr);
+                            debug!("[HUB] deliver_all_queued: Failed to send packet to client {} (channel closed?)", addr);
                         }
                     }
                 }
@@ -350,7 +350,7 @@ impl LocalTransportHub {
         // Deliver ready packets from server-to-client queues
         let delivered = self.deliver_all_queued_packets_to_clients(&mut connections, &now);
         if delivered > 0 {
-            println!(
+            debug!(
                 "[HUB] process_time_queues: Delivered {} total packets",
                 delivered
             );

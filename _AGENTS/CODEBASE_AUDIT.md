@@ -218,7 +218,7 @@ Sample from the workspace:
 ```
 naia-shared           ← kebab-case
 naia_benches          ← snake_case (bench harness)
-naia_bevy_npa         ← snake_case
+naia-bevy-npa        ← renamed to kebab-case (P11.1)
 naia-bevy-shared      ← kebab-case
 app                   ← no prefix at all (×6)
 dirty_receiver        ← snake_case

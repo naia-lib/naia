@@ -10,7 +10,7 @@
 ```bash
 # Run the single failing scenario with debug instrumentation enabled.
 # (After Sidequest S.2 lands, --scenario-key replaces the jq dance.)
-cargo run -p naia_npa --release --features e2e_debug -- run \
+cargo run -p naia-npa --release --features e2e_debug -- run \
   --plan test/specs/resolved_plan.json \
   --scenario-key "authority:Rule(03):Scenario(08)"
 ```
