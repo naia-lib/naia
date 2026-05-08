@@ -290,7 +290,7 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
 
 
   # ──────────────────────────────────────────────────────────────────────
-  # Phase D.7 — coverage stubs (A2.1 pass: 15 converted, 4 deferred remain)
+  # Phase D.7 — coverage stubs (P3 pass: 16 converted, 2 API-surface stubs)
   # ──────────────────────────────────────────────────────────────────────
 
   @Rule(07)
@@ -341,9 +341,17 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(07)
     Scenario: [server-events-06] RequestEvent surfaces request payload
 
-    @PolicyOnly
     @Scenario(08)
     Scenario: [server-events-08] Per-user event isolation (no cross-user leakage)
+      Given a server is running
+      And client A connects
+      And client B connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server excludes the entity for client B
+      Then client A has the entity in its world
+      And client B does not have the entity in its world
 
     # [server-events-10] — Authority denied event observable on server.
     # No server-side authority denied event binding exists; the harness
@@ -352,10 +360,16 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(09)
     Scenario: [server-events-10] Authority denied event observable on server
 
+    # [server-events-11] — Authority release event observable on server.
+    # Duplicate contract: Rule(01) @Scenario(04) verifies that
+    # ServerEntityAuthResetEvent fires when a client releases authority.
     @PolicyOnly
     @Scenario(10)
     Scenario: [server-events-11] Authority release event observable on server
 
+    # [server-events-12] — Publish event observable on server.
+    # Duplicate contract: Rule(01) @Scenario(05) verifies that
+    # ServerPublishEntityEvent fires when a client publishes an entity.
     @PolicyOnly
     @Scenario(11)
     Scenario: [server-events-12] Publish event observable on server
@@ -427,14 +441,23 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
       When the server releases authority for the delegated entity
       Then client A receives an authority reset event for the entity
 
+    # [world-integration-01] — Entity insertion into ECS world via Events API.
+    # Duplicate contract: Rule(03) @Scenario(01) [world-integration-04]
+    # verifies entity presence in client world mirrors scope state.
     @PolicyOnly
     @Scenario(21)
     Scenario: [world-integration-01] Entity insertion into ECS world via Events API
 
+    # [world-integration-02] — Component insertion mirrors server insert.
+    # Duplicate contract: Rule(03) @Scenario(05) [world-integration-08]
+    # verifies component insert propagates to client world.
     @PolicyOnly
     @Scenario(22)
     Scenario: [world-integration-02] Component insertion mirrors server insert
 
+    # [world-integration-03] — Component removal mirrors server remove.
+    # Duplicate contract: Rule(03) @Scenario(04) [world-integration-09]
+    # verifies component removal propagates to client world.
     @PolicyOnly
     @Scenario(23)
     Scenario: [world-integration-03] Component removal mirrors server remove

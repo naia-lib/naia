@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "4c018c4ffe5dff22d18f8cdaa61fd30b4a14d825cb948aebda19e14b18901d3a",
-    "step_registry_hash": "e73f2aba210058adb9a727c750ffe3cfe7e383c587929d06f19be5b45767e36d",
-    "resolved_plan_hash": "18295e4160bda68eeb0ca7bbffc49a8a01bc080f90c657e3cbc693712910c4f8"
+    "feature_fingerprint_hash": "ef39e99a22f575ce0b7d2b066670a2ac6fa1d578c896d687ed10a14ad8bde0fe",
+    "step_registry_hash": "689a5fbec86137bb261056aa2d309bdc71feecafe328d584f7a9807514fab06a",
+    "resolved_plan_hash": "cbdb7953c75ed393ace84c3f5cf14758c509dd6e73017c2ffd99c571aae1c86c"
   },
   "scenarios": [
     {
@@ -5534,6 +5534,97 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "55a52b71dda39e2cd06343e64ca68dffb96f8b3f5707da8b32361807548c3795"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d3d2e45b8bca28c2705d7c6b3f4258531b27cf09b32ffe0ff68eb5edf8b77a69"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists",
+          "binding_id": "0a3a91c6afc53452672d7999b24021f90930b056ed761fb896a7e2ad573077a9",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f65d8da084bf24f191c05fda2667a5621874e1ac5e67d1df83eca7d0551a059"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the client and entity share a room",
+          "binding_id": "3011094aa2318885e2fd0e228f464ff2baf3394ae9ec30523621c14d79a97127",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ea72ae25a367d86c4bbe304063f9ef81a59593c52d60ac98e99bc5620ef586e"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is in-scope for the client",
+          "binding_id": "1622b23b5f728a509b82f6d552e5ab5921223b07b94bf427a805fd853b029019",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ab2db0f97890f88eb9f055ba318b68d0245090cdf6bf4fa81319241e61b28a0a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server excludes the entity for client B",
+          "binding_id": "f165f8a421cbf1acbaa85930b2253e5696624ae82824d2602533a7997ed00b28",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "24e35837943c3306ed8c4580991f227e47e66c6fc0007d0bdb066ba3b21c5df4"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client A has the entity in its world",
+          "binding_id": "78e4460ab4639e8346dd8dc27f05f24833912003ba46f5bdaa3cf925563c984a",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f7d27f8d3bf8806800d1a5dc66e2afbfd0346287105205493ebed4671fc1ce1d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client B does not have the entity in its world",
+          "binding_id": "5ce60f8de795aa7e99bc6ef9d16b5a6a4ed498a85249eb34cc6ad3bfaf1ea642",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6d3a859c889d9691df6f79092dc01c2bb0d3e45a562bba491ce397b4af904fcc"
         }
       ]
     },

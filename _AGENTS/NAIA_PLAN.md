@@ -12,9 +12,9 @@
 | Metric | Value |
 |---|---|
 | Active BDD scenarios | **301** (100% pass, `namako gate` green) |
-| @PolicyOnly (Category A — genuinely untestable) | **17** |
+| @PolicyOnly (Category A — genuinely untestable) | **16** |
 | Plain @Deferred (junk) | **0** ✅ |
-| Step bindings | 258, all ≤25 LOC |
+| Step bindings | 260, all ≤25 LOC |
 | Step files max LOC | 477 (`network_events_transport.rs`) |
 | Build warnings | **0** (`-D warnings`) |
 | `cargo test --workspace` | green, 0 ignored outside documented carve-out |
@@ -30,12 +30,13 @@
 - SDD quality debt (Q0–Q6, junk→0, Outlines×3, 300 active) — `dev`
 - Test infra audit (C1, C2, H1–H5, M1–M5, L1–L4 all closed) — `dev`
 - Codebase audit: T0.1 (todo!→unreachable!), T1.3 (64-kind limit removed), T2.2 (demo naming), T3.4, T4.1 first-pass
+- P3: server-events-08 converted to live test; 5 duplicate @PolicyOnly justified; 2 new step bindings — `dev`
 
 ---
 
 ## Priority stack
 
-Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
+Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. P1 and P3 complete. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
 
 ---
 
@@ -59,22 +60,14 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## P3 — Category C BDD, Phase 2: Server/client events API
+## P3 — Category C BDD, Phase 2: Server/client events API — **COMPLETE** (2026-05-08)
 
-**Context:** `06_events_api.feature` has 23 @PolicyOnly scenarios across server and client events. The 12 active scenarios already use the existing TrackedEvent variants. The 23 deferred ones need variants or bindings that don't exist yet.
-
-**Gap analysis needed (do before writing code):**
-- Which `TrackedServerEvent` variants are missing? (Currently: Auth, Connect, Disconnect known. Spawn, Despawn, Grant, Reset, Publish, Unpublish needed.)
-- Which `TrackedClientEvent` variants are missing? (Spawn, Despawn, Insert, Remove, Publish, Unpublish.)
-- Are the variants missing from the harness enum, or do they exist but lack step bindings?
-
-**Tasks:**
-- [ ] **P3.1** Audit `test/harness/src/harness/server_expect_ctx.rs` and `client_expect_ctx.rs` — list every TrackedEvent variant present vs what the deferred scenarios need.
-- [ ] **P3.2** Add missing TrackedServerEvent variants to the harness enum and hook them into the server tick loop.
-- [ ] **P3.3** Add missing TrackedClientEvent variants to the harness enum and hook them into the client tick loop.
-- [ ] **P3.4** Add step bindings for each new variant (≤25 LOC each; extract helpers if needed).
-- [ ] **P3.5** Convert the @PolicyOnly scenarios in `06_events_api.feature` that are now testable — remove @PolicyOnly, write Gherkin bodies.
-- [ ] **P3.6** Gate: `namako gate` passes, commit + push `dev`.
+**Delivered:**
+- P3.1: Audit complete — found only 11 @PolicyOnly remain (not 23; prior sessions had already converted many). No new TrackedEvent variants needed.
+- P3.2/P3.3: No-op — all convertible scenarios had existing infrastructure.
+- P3.4: Added `"client {client} has the entity in its world"` and `"client {client} does not have the entity in its world"` step bindings in `state_assertions_entity.rs`.
+- P3.5: Converted `server-events-08` (per-user isolation) to live test. Added justified @PolicyOnly comments to `server-events-11`, `server-events-12`, `world-integration-01/02/03` (all duplicates of existing live tests in Rule(01) and Rule(03)).
+- P3.6: `namako gate` green (301 scenarios, all pass), committed + pushed `dev`.
 
 ---
 

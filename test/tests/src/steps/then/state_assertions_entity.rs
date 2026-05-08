@@ -7,6 +7,7 @@
 //! the *history* of emitted events.
 
 use crate::steps::prelude::*;
+use crate::steps::vocab::ClientName;
 use crate::steps::world_helpers::{last_entity_ref, named_client_ref};
 
 /// Then the server has {int} connected client(s).
@@ -458,3 +459,45 @@ fn then_client_receives_response(
     })
 }
 
+// ──────────────────────────────────────────────────────────────────────
+// Named-client world assertions (per-user isolation)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then client {client} has the entity in its world.
+///
+/// Polls until the named client's world contains the last-spawned entity.
+/// Use as a prerequisite before asserting another client does NOT have it.
+#[then("client {client} has the entity in its world")]
+fn then_named_client_has_entity(ctx: &TestWorldRef, name: ClientName) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
+    let entity_key = last_entity_ref(ctx);
+    ctx.client(client_key, |c| {
+        if c.has_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then client {client} does not have the entity in its world.
+///
+/// Polls until the named client's world no longer contains the
+/// last-spawned entity (timeout = failure). Covers the case where the
+/// entity was previously in scope and a despawn packet is in flight, as
+/// well as the case where it was never replicated to this client.
+#[then("client {client} does not have the entity in its world")]
+fn then_named_client_does_not_have_entity(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    let client_key = named_client_ref(ctx, name.as_ref());
+    let entity_key = last_entity_ref(ctx);
+    ctx.client(client_key, |c| {
+        if c.has_entity(&entity_key) {
+            AssertOutcome::Pending
+        } else {
+            AssertOutcome::Passed(())
+        }
+    })
+}
