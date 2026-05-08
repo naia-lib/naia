@@ -232,7 +232,7 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
         };
-        record.set_replication_config(ReplicationConfig::Public);
+        record.set_replication_config(ReplicationConfig::Private);
     }
 
     pub(crate) fn entity_has_component(

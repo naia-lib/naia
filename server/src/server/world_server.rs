@@ -2239,6 +2239,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_world_manager,
                 world_entity,
             );
+            // Re-evaluate scope for every user who shares a room with this entity.
+            // The EntityEnteredRoom change was already processed when Private (and
+            // returned early); now that the entity is Public we must trigger it again.
+            let entity_rooms: Vec<RoomKey> = self
+                .entity_room_map
+                .entity_get_rooms(global_entity)
+                .map(|rooms| rooms.iter().copied().collect())
+                .unwrap_or_default();
+            for room_key in entity_rooms {
+                self.scope_change_queue
+                    .push_back(ScopeChange::EntityEnteredRoom(*global_entity, room_key));
+            }
         }
         result
     }
@@ -2250,15 +2262,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         world_entity: &E,
         server_origin: bool,
     ) {
+        // Capture the owner's connection address before state change.
+        // entity_unpublish() transitions the owner from ClientPublic → Client,
+        // so we read it here while it is still ClientPublic.
+        let owner_addr: Option<SocketAddr> = self
+            .global_world_manager
+            .entity_owner(global_entity)
+            .and_then(|o| if let EntityOwner::ClientPublic(k) = o { Some(k) } else { None })
+            .and_then(|k| self.users.get(&k).map(|u| u.address()));
+
         if server_origin {
-            // send publish message to entity owner
-            let entity_owner = self.global_world_manager.entity_owner(global_entity);
-            let Some(EntityOwner::ClientPublic(user_key)) = entity_owner else {
-                panic!("Entity is not owned by a Client or is Private. Cannot publish entity. Owner is: {:?}", entity_owner);
-            };
             // Send UnpublishEntity action through EntityActionEvent system
-            if let Some(user) = self.users.get(&user_key) {
-                if let Some(connection) = self.user_connections.get_mut(&user.address()) {
+            if let Some(addr) = owner_addr {
+                if let Some(connection) = self.user_connections.get_mut(&addr) {
                     connection
                         .base
                         .world_manager
@@ -2269,7 +2285,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         self.global_world_manager.entity_unpublish(global_entity);
         world.entity_unpublish(world_entity);
-        self.cleanup_entity_replication(global_entity);
+
+        // Deregister each component from the diff handler so re-publishing
+        // can register them again without the "cannot Register more than once" panic.
+        if let Some(kinds) = self.global_world_manager.component_kinds(global_entity) {
+            for component_kind in kinds {
+                self.global_world_manager
+                    .remove_component_diff_handler(global_entity, &component_kind);
+            }
+        }
+
+        // Despawn from non-owner connections only.  Scope map entries and room
+        // membership are preserved so a subsequent publish_entity call restores
+        // non-owner visibility via room-based scope (entity-publication-11).
+        for (addr, connection) in self.user_connections.iter_mut() {
+            if owner_addr == Some(*addr) {
+                continue;
+            }
+            if connection.base.world_manager.has_global_entity(global_entity) {
+                connection.base.world_manager.despawn_entity(global_entity);
+            }
+        }
     }
 
     pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(

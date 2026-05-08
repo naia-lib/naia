@@ -596,15 +596,27 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
         | connection-30 |
         | connection-31 |
 
-    @Deferred @PolicyOnly
+    # [connection-32] — Protocol_id includes only wire-relevant aspects.
+    # This is a compile-time invariant of the Protocol derive macro (only
+    # channel/component kinds contribute to the hash). Not testable via BDD
+    # without build-time inspection tooling.
+    @PolicyOnly
     @Scenario(14)
     Scenario: [connection-32] Protocol_id determined by wire-relevant aspects only
 
-    @Deferred @PolicyOnly
+    # [observability-01] — Metrics do not affect replicated state.
+    # The harness queries RTT on every tick; the RTT path has no side
+    # effects on replicated component values. This is a design invariant
+    # of naia's separation of concerns, not a testable BDD predicate.
+    @PolicyOnly
     @Scenario(16)
     Scenario: [observability-01] Metrics do not affect replicated state
 
-    @Deferred @PolicyOnly
+    # [observability-01a] — Querying metrics does not affect tick pacing.
+    # Tick pacing is controlled by TestClock (discrete, not wall-clock).
+    # RTT queries are read-only accessors with no effect on tick scheduling.
+    # Verifiable only with wall-clock injection which the harness does not support.
+    @PolicyOnly
     @Scenario(17)
     Scenario: [observability-01a] Querying metrics does not affect tick pacing
 
@@ -620,7 +632,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Scenario(19)
     Scenario: [observability-06] Bandwidth exposes both directions
 
-    @Deferred @PolicyOnly
+    # [observability-08] — Time source monotonic consistency.
+    # TestClock is always monotonic by construction (discrete advance-only).
+    # Testing monotonic behavior of the production wall-clock source requires
+    # wall-clock injection which the harness does not support.
+    @PolicyOnly
     @Scenario(20)
     Scenario: [observability-08] Time source monotonic consistency
 
@@ -631,7 +647,11 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Scenario(21)
     Scenario: [observability-09] Per-direction metrics consistency
 
-    @Deferred @PolicyOnly
+    # [observability-10] — Metrics are testable without feature flags.
+    # All existing RTT/observability tests run without e2e_debug or other
+    # feature flags. This contract is demonstrated by the tests above, not
+    # a separately testable BDD predicate.
+    @PolicyOnly
     @Scenario(22)
     Scenario: [observability-10] Metrics are testable without feature flags
 

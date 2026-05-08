@@ -477,16 +477,19 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       When client A publishes the entity
       Then client A observes replication config as Public for the entity
 
-    # [entity-publication-11] — Republish scope restoration gap.
-    # `unpublish_entity` calls `cleanup_entity_replication` which removes ALL
-    # scope entries via `entity_scope_map.remove_entity()`. After republish,
-    # non-owner clients that were previously in scope have no scope entry and
-    # no room membership, so `user_scope_has_entity()` permanently returns false.
-    # The "creates new lifetime" contract requires the server to re-include
-    # previously-scoped clients after republish — this is not implemented.
-    @PolicyOnly
     @Scenario(15)
     Scenario: [entity-publication-11] Republishing after unpublish creates new lifetime
+      Given a server is running
+      And client A connects
+      And client B connects
+      And client A spawns a client-owned entity with Private replication config
+      And client B and the entity share a room
+      When client A publishes the entity
+      Then client B has the entity in its world
+      When client A unpublishes the entity
+      Then client B does not have the entity in its world
+      When client A publishes the entity
+      Then client B has the entity in its world
 
     @Scenario(16)
     Scenario: [entity-delegation-01] Delegation enables authority operations

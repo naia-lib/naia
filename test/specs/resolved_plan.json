@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "ef39e99a22f575ce0b7d2b066670a2ac6fa1d578c896d687ed10a14ad8bde0fe",
+    "feature_fingerprint_hash": "4887df68d63a8d13494f1e404ace991c9afc588c0b18729ed0e082291030c8a7",
     "step_registry_hash": "689a5fbec86137bb261056aa2d309bdc71feecafe328d584f7a9807514fab06a",
-    "resolved_plan_hash": "cbdb7953c75ed393ace84c3f5cf14758c509dd6e73017c2ffd99c571aae1c86c"
+    "resolved_plan_hash": "f0eb0c75474972f2eff21bd274254be4e4c6aa5dbcc5264acfd5d70186e13db6"
   },
   "scenarios": [
     {
@@ -2741,6 +2741,119 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "55a52b71dda39e2cd06343e64ca68dffb96f8b3f5707da8b32361807548c3795"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d3d2e45b8bca28c2705d7c6b3f4258531b27cf09b32ffe0ff68eb5edf8b77a69"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A spawns a client-owned entity with Private replication config",
+          "binding_id": "a695794c5030064b847c03cb3d76c429ad43e3432d5921964ea19cef072b41dc",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5fc933e1f3d16a3ba23df505623553c94b4c88e6eed72e78c11c3cdaf21895b8"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B and the entity share a room",
+          "binding_id": "c0b52caff7574c7fbe35aafed583a6ad646e6f996f66209e3faa810a091286cb",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "e27587cf8a4869b3064031b8977b0c7f53634cc80aef6421fd71716657a7cf92"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client A publishes the entity",
+          "binding_id": "3b46c6c2510559b5e25cb1b5d8cbce6aae41ac12cabebed67c902283432ba780",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "79d97e11c7361af6109d213257624640b12d91984564150bf17f391331dededf"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client B has the entity in its world",
+          "binding_id": "78e4460ab4639e8346dd8dc27f05f24833912003ba46f5bdaa3cf925563c984a",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "62eedfe73cc2d7a80afccac6fd5d8ed44cd4f48c97e644b678c3493a299bae82"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client A unpublishes the entity",
+          "binding_id": "9189f7699b6a4e81667bc00736e15a84ee6efdb665b958a42badd02691bf97f1",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "880b0b70042ab631f9e026279b2ebe6767d27f2cf45871d9229568219eb84096"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client B does not have the entity in its world",
+          "binding_id": "5ce60f8de795aa7e99bc6ef9d16b5a6a4ed498a85249eb34cc6ad3bfaf1ea642",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6d3a859c889d9691df6f79092dc01c2bb0d3e45a562bba491ce397b4af904fcc"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "client A publishes the entity",
+          "binding_id": "3b46c6c2510559b5e25cb1b5d8cbce6aae41ac12cabebed67c902283432ba780",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "79d97e11c7361af6109d213257624640b12d91984564150bf17f391331dededf"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client B has the entity in its world",
+          "binding_id": "78e4460ab4639e8346dd8dc27f05f24833912003ba46f5bdaa3cf925563c984a",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "62eedfe73cc2d7a80afccac6fd5d8ed44cd4f48c97e644b678c3493a299bae82"
         }
       ]
     },
@@ -10486,6 +10599,54 @@
       ]
     },
     {
+      "scenario_key": "lifecycle:Rule(12):Scenario(14)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-32] Protocol_id determined by wire-relevant aspects only",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(16)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-01] Metrics do not affect replicated state",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(17)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-01a] Querying metrics does not affect tick pacing",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "lifecycle:Rule(12):Scenario(18)",
       "feature_path": "features/01_lifecycle.feature",
       "scenario_name": "[observability-05] Throughput must be non-negative",
@@ -10518,9 +10679,41 @@
       ]
     },
     {
+      "scenario_key": "lifecycle:Rule(12):Scenario(20)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-08] Time source monotonic consistency",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
       "scenario_key": "lifecycle:Rule(12):Scenario(21)",
       "feature_path": "features/01_lifecycle.feature",
       "scenario_name": "[observability-09] Per-direction metrics consistency",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(12):Scenario(22)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[observability-10] Metrics are testable without feature flags",
       "steps": [
         {
           "effective_kind": "Given",

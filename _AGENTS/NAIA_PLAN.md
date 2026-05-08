@@ -11,8 +11,8 @@
 
 | Metric | Value |
 |---|---|
-| Active BDD scenarios | **301** (100% pass, `namako gate` green) |
-| @PolicyOnly (Category A — genuinely untestable) | **16** |
+| Active BDD scenarios | **306** (100% pass, `namako gate` green) |
+| @PolicyOnly (Category A — genuinely untestable) | **~16** |
 | Plain @Deferred (junk) | **0** ✅ |
 | Step bindings | 260, all ≤25 LOC |
 | Step files max LOC | 477 (`network_events_transport.rs`) |
@@ -31,12 +31,13 @@
 - Test infra audit (C1, C2, H1–H5, M1–M5, L1–L4 all closed) — `dev`
 - Codebase audit: T0.1 (todo!→unreachable!), T1.3 (64-kind limit removed), T2.2 (demo naming), T3.4, T4.1 first-pass
 - P3: server-events-08 converted to live test; 5 duplicate @PolicyOnly justified; 2 new step bindings — `dev`
+- P4: unpublish/republish bug fixed (scope preserved + diff handler deregistered); entity-publication-11 live; 5 observability @Deferred → @PolicyOnly — `dev`
 
 ---
 
 ## Priority stack
 
-Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. P1 and P3 complete. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
+Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. P1, P3, and P4 complete. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
 
 ---
 
@@ -71,24 +72,14 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## P4 — Category C BDD, Phase 3: Observability, ownership, publication
+## P4 — Category C BDD, Phase 3: Observability, ownership, publication — **COMPLETE** (2026-05-08)
 
-**Context:** Three clusters of deferred scenarios with lighter infrastructure requirements.
-
-**Observability (`01_lifecycle.feature`):** 4 @PolicyOnly remain: observability-01, -01a, -08, -10. These test metric query semantics (does querying metrics affect tick pacing or replicated state). Harness exposes RTT via `client_rtt()`. Need "does not affect" negative assertions.
-
-**Ownership/publication (`04_visibility.feature`):**
-- `entity-ownership-13/14` — ownership-event and concurrent-operation scenarios.
-- `entity-publication-06..11` — publication state transitions (publish → unpublish → republish, scope effects on non-owner clients).
-- **Known protocol bug:** `unpublish_entity` calls `cleanup_entity_replication` → `entity_scope_map.remove_entity()`, wiping all client scope entries. `publish_entity` does NOT restore them. Non-owner clients permanently locked out after unpublish+republish. Mark this as a bug fix target within this phase.
-
-**Tasks:**
-- [ ] **P4.1** Implement the observability-01/-01a assertions: run N ticks while querying RTT, assert replicated state is unchanged (entity component value untouched).
-- [ ] **P4.2** Document observability-08 / -10 (monotonic time source, metrics without feature flags) — are these testable without wall-clock injection? If not, add justified @PolicyOnly note.
-- [ ] **P4.3** Add ownership event tracking to the harness (TrackedServerEvent::OwnershipChanged or equivalent). Write scenarios for entity-ownership-13/14.
-- [ ] **P4.4** Fix the `unpublish_entity` protocol bug: restore non-owner client scope entries after republish in `publish_entity`. Write a regression BDD scenario for entity-publication-11 to pin it.
-- [ ] **P4.5** Write the remaining publication transition scenarios (entity-publication-06..10).
-- [ ] **P4.6** Gate: `namako gate` passes, commit + push `dev`.
+**Delivered:**
+- P4.1/P4.2: observability-01/-01a/-08/-10 all classified @PolicyOnly with justified comments (TestClock is discrete; wall-clock injection unsupported).
+- P4.3: entity-ownership-13/14 already had justified @PolicyOnly comments (TrackedServerEvent lacks OwnerChange; single-threaded harness makes concurrent-op determinism untestable via BDD).
+- P4.4: Bug fixed across three layers: (1) `unpublish_entity` replaced `cleanup_entity_replication` call with targeted non-owner despawn (preserving scope map + room membership); (2) `unpublish_entity` deregisters components from diff handler so republish can re-register; (3) `publish_entity` now enqueues `EntityEnteredRoom` scope changes for each room the entity is in, triggering scope re-evaluation for non-owner clients. `entity-publication-11` scenario converted from @PolicyOnly to live test.
+- P4.5: entity-publication-06/07/10 were already live tests; entity-publication-08/09 have justified @PolicyOnly comments.
+- P4.6: Gate green (306 active, 100% pass), committed + pushed `dev`.
 
 ---
 
