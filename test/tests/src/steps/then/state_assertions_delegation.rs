@@ -70,6 +70,34 @@ fn then_client_is_denied_authority(
     })
 }
 
+/// Then client {client} is eventually denied authority for the delegated entity.
+///
+/// Tolerant variant of `is denied authority` — treats Granted and
+/// Releasing as valid transient states. Used by server-override
+/// scenarios (server calls take_authority while client holds Granted),
+/// where the transition goes Granted → Releasing → Denied. The
+/// standard `is denied` assertion fails hard on Granted/Releasing,
+/// which would be a false failure during the revocation round-trip.
+#[then("client {client} is eventually denied authority for the delegated entity")]
+fn then_client_is_eventually_denied_authority(
+    ctx: &TestWorldRef,
+    name: ClientName,
+) -> AssertOutcome<()> {
+    use naia_shared::EntityAuthStatus;
+    let client_key = named_client_ref(ctx, name.as_ref());
+    let entity_key = last_entity_ref(ctx);
+    ctx.client(client_key, |c| {
+        if let Some(entity) = c.entity(&entity_key) {
+            match entity.authority() {
+                Some(EntityAuthStatus::Denied) => AssertOutcome::Passed(()),
+                _ => AssertOutcome::Pending,
+            }
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
 /// Then client {name} is available for the delegated entity.
 ///
 /// Covers [entity-delegation-11.t1] (release returns Denied clients
