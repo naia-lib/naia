@@ -35,23 +35,7 @@
 
 ## Priority stack
 
-Phases are roughly priority-ordered. P0 is a hard deadline; P1–P3 are high-value and should run in that order. P4–P7 can interleave. P8+ are improvements with no urgency.
-
----
-
-## P0 — DTLS stack migration (deadline: 2026-06-01)
-
-**Severity:** 🚨 CI-breaking deadline. Six `cargo-deny` ignores expire 2026-06-01. After that date `cargo deny check` fails and any CI gate using it breaks.
-
-**Root fix:** upgrade `webrtc-unreliable-client` and `webrtc-unreliable` from rustls 0.19 → 0.23, ring 0.16 → ≥0.17.12, webpki → rustls-webpki, reqwest 0.11 → 0.12.
-
-**Tasks:**
-- [ ] **P0.1** Check upstream status of `naia-lib/webrtc-unreliable-client` — is the migration PR open or merged?
-- [ ] **P0.2** If not upstream: fork and apply the rustls/ring/webpki upgrade chain. Build + test the socket layer.
-- [ ] **P0.3** Bump the dependency in `Cargo.toml`. Verify `cargo deny check` exits 0.
-- [ ] **P0.4** Remove all 6 `ignore` entries from `deny.toml`. Commit + push `dev`.
-
-**Gate:** `cargo deny check` exits 0 with no `ignore` entries for the six RUSTSECs.
+Active phases run in order P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11. Deferred phases (D-P0, D-P2, D-P7, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
 
 ---
 
@@ -73,31 +57,6 @@ Phases are roughly priority-ordered. P0 is a hard deadline; P1–P3 are high-val
 - [ ] **P1.6** Bevy authority commands: `commands.request_entity_authority`, `commands.release_entity_authority` — add Bevy-adapter integration tests in `adapters/bevy/server/tests/`.
 - [ ] **P1.7** Fix the one real `todo!()`: `adapters/bevy/server/src/commands.rs:78` — `give_authority` is unimplemented. Implement or document why it's deferred.
 - [ ] **P1.8** Gate: `namako gate` passes, `cargo test --workspace` green, artifacts refreshed, commit + push `dev`.
-
----
-
-## P2 — WorldServer decomposition (T1.1)
-
-**Severity:** ⚠️ High-impact architectural debt. `server/src/server/world_server.rs` is 3592 lines, 141 methods. The most production-critical file in the codebase is the hardest to review, the most likely to grow bugs, and the slowest to navigate.
-
-**Split plan** (per `CODEBASE_AUDIT.md`):
-- `world_server/connections.rs` — handshake + connect/disconnect/auth (~300 LOC)
-- `world_server/scope.rs` — `apply_scope_for_user`, `drain_scope_change_queue`, `user_scope_*` (~500 LOC)
-- `world_server/rooms.rs` — `make_room`, `room_mut`, room interactions (~200 LOC)
-- `world_server/entities.rs` — spawn/despawn/enable_replication lifecycle (~400 LOC)
-- `world_server/authority.rs` — `entity_*_authority`, `transfer_auth_*` (~500 LOC)
-- `world_server/resources.rs` — resource methods (~150 LOC)
-- `world_server/messages.rs` — send/broadcast/receive (~300 LOC)
-- `world_server/priority.rs` — global/user entity priority (~150 LOC)
-- `world_server/io.rs` — receive/send all packets, bytes counters (~200 LOC)
-- `world_server/mod.rs` — struct + `new()` + dispatch (~200 LOC)
-
-**Tasks:**
-- [ ] **P2.1** Create `server/src/server/world_server/` directory with the 10 module files.
-- [ ] **P2.2** Move methods from `world_server.rs` to the appropriate module file (mechanical move following existing section dividers). Each file gets its own `impl WorldServer<E>` block.
-- [ ] **P2.3** Update `server/src/server/mod.rs` to declare `pub(crate) mod world_server;`.
-- [ ] **P2.4** Verify `cargo check --workspace` clean; confirm `cargo test --workspace` still green.
-- [ ] **P2.5** Gate: build clean, NPA gate passes, commit + push `dev`.
 
 ---
 
@@ -174,32 +133,6 @@ Migrating bindings to use these types improves cucumber error messages and enfor
 
 ---
 
-## P7 — Replicate trait decomposition (T1.2)
-
-**Severity:** ⚠️ `shared/src/world/component/replicate.rs` defines a 29-method trait; the derive macro (`shared/derive/src/replicate.rs`) is 1499 lines. Intimidating to readers and brittle to extend.
-
-**Proposed split:**
-```rust
-pub trait ReplicateCore: Send + Sync + Named + Any { ... } // kind, to_any, copy, builder, dyn_ref/mut, diff_mask_size
-pub trait ReplicateWrite { fn write(...); fn write_update(...); }
-pub trait ReplicateRead { fn read_apply_update(...); fn read_apply_field_update(...); }
-pub trait ReplicateMirror { fn mirror(...); fn mirror_single_field(...); }
-pub trait ReplicateAuthority { fn set_mutator(...); fn publish(...); fn enable_delegation(...); fn localize(...); }
-pub trait ReplicateEntityRelations { fn relations_waiting(...); fn relations_complete(...); }
-pub trait Replicate: ReplicateCore + ReplicateWrite + ReplicateRead + ReplicateMirror + ReplicateAuthority + ReplicateEntityRelations {}
-impl<T: ...> Replicate for T {}
-```
-
-User-facing surface unchanged: code still says `R: Replicate`.
-
-**Tasks:**
-- [ ] **P7.1** Define the sub-traits in `replicate.rs` alongside the existing monolith. Run `cargo check` to ensure the blanket impl compiles.
-- [ ] **P7.2** Update internal call sites that only need a subset to declare the minimal bound.
-- [ ] **P7.3** Update the derive macro to generate impls for each sub-trait. Run full test suite.
-- [ ] **P7.4** Gate: build clean, tests pass, commit + push `dev`.
-
----
-
 ## P8 — Bevy adapter cleanup (T3.1, T3.3)
 
 ### T3.1 — unsafe impl Send/Sync documentation and fix
@@ -218,15 +151,7 @@ Server and client `component_event_registry.rs` are near-mirror images (~100 dup
 
 ---
 
-## P9 — Test infrastructure additions (A3, A4)
-
-### A3 — proptest for message ordering
-
-`OrderedReliable` and `SequencedReliable` are verified by a single hand-crafted A/B/C sequence. A proptest generating random message sequences would be dramatically stronger.
-
-- [ ] **P9.1** Add `proptest` dependency to `test/tests/Cargo.toml`.
-- [ ] **P9.2** Write `proptest_ordered_reliable_delivers_in_order` — generates a random sequence of up to 20 messages, sends all, asserts receive order matches send order.
-- [ ] **P9.3** Write `proptest_sequenced_reliable_never_reverts` — generates random sequence, asserts last-received is the last-sent.
+## P9 — Test infrastructure additions (A4)
 
 ### A4 — Reconnection stress tests
 
@@ -236,22 +161,6 @@ Server and client `component_event_registry.rs` are near-mirror images (~100 dup
 - [ ] **P9.5** Write `reconnect_while_resource_live`: insert resource → disconnect → reconnect → resource value preserved on server, replicated to new session.
 - [ ] **P9.6** Write `reconnect_while_authority_held`: grant authority → disconnect (authority reclaimed) → reconnect → authority is Available again.
 - [ ] **P9.7** Convert these into BDD scenarios in `01_lifecycle.feature` under a new `Rule: Reconnection edge cases`.
-
----
-
-## P10 — Docs and discoverability
-
-### T4.3 — README.md architecture overview
-- [ ] **P10.1** Add 1-page architecture overview: replication model, authority model, transport abstraction, Bevy/hecs/standalone entry points, wire protocol.
-
-### T4.4 — RESOURCES.md user walkthrough
-- [ ] **P10.2** Write `_AGENTS/RESOURCES.md`: what it is, quickstart, lifecycle ops, authority delegation, Bevy `Res<R>` semantics, per-field diff, limitations.
-
-### T4.5 — TESTING_GUIDE.md
-- [ ] **P10.3** Write `test/TESTING_GUIDE.md`: purpose of each test crate, when to use which, how to run everything.
-
-### T3.2 — Bevy adapter lib.rs module docs
-- [ ] **P10.4** Add `//!` module-level docs to `adapters/bevy/server/src/lib.rs` and `adapters/bevy/client/src/lib.rs`.
 
 ---
 
@@ -280,20 +189,6 @@ Only 2 remain after the T0.1 audit: one is a comment, one is the real `give_auth
 
 ---
 
-## P12 — Large architectural refactors (defer until P1–P4 land)
-
-### T1.4 — client.rs near-clone of WorldServer patterns
-`client/src/client.rs` (2311 lines, 95 methods) mirrors WorldServer symmetrically but with no shared abstraction. A `Host<E>` trait could unify them.
-
-- [ ] **P12.1** After P2 (WorldServer decomp) lands: evaluate extracting a `Host<E>` trait capturing the common entity-lifecycle, send/receive surface. WorldServer and Client become thin wrappers.
-- [ ] **P12.2** This is a 1-week+ refactor. Do not start until P2 is complete and the boundary is clear.
-
-### T5.3 — Box<dyn> vtable density audit
-434 `Box<dyn ...>` instances. Likely candidates for monomorphization: `Box<dyn ReplicateBuilder>` in `ComponentKinds`, `Box<dyn Replicate>` in `incoming_components`.
-- [ ] **P12.3** Profile under `halo_btb_16v16` bench. If box-dyn shows up in top-10 hotspots: evaluate per-kind enum dispatch via the derive macro.
-
----
-
 ## Archives (outdated plans — do not re-audit)
 
 The following documents are superseded by this plan. Their content is preserved for history but all outstanding items have been migrated above.
@@ -313,11 +208,32 @@ The following documents are superseded by this plan. Their content is preserved 
 
 ## Acceptance criteria for "done" state
 
-1. `cargo deny check` exits 0 with no `ignore` entries. ← **P0**
-2. `namako gate` passes at 100% (active scenario count ≥ 350). ← **P1–P5**
-3. `world_server.rs` does not exist as a monolith; replaced by `world_server/` module. ← **P2**
-4. Zero `todo!()` in production code. ← **P1.7**
-5. `vocab.rs` has zero `#[allow(dead_code)]` attributes. ← **P6**
-6. All step bindings ≤25 LOC, no file in `steps/` exceeds 500 LOC. ← ongoing
-7. `cargo test --workspace` green, 0 ignored (outside documented carve-out). ← ongoing
-8. `README.md` has architecture overview; `test/TESTING_GUIDE.md` exists. ← **P10**
+1. `namako gate` passes at 100% (active scenario count ≥ 350). ← **P1–P5**
+2. Zero `todo!()` in production code. ← **P1.7**
+3. `vocab.rs` has zero `#[allow(dead_code)]` attributes. ← **P6**
+4. All step bindings ≤25 LOC, no file in `steps/` exceeds 500 LOC. ← ongoing
+5. `cargo test --workspace` green, 0 ignored (outside documented carve-out). ← ongoing
+
+---
+
+## Deferred (indefinitely)
+
+The following phases are parked. Do not schedule without explicit instruction from Connor.
+
+### D-P0 — DTLS stack migration (deadline: 2026-06-01)
+6 RUSTSEC `cargo-deny` ignores expire 2026-06-01. Migration requires replacing the DTLS transport with a `rustls`-based stack. Deferred due to scope; if the deadline passes without action, add new `ignore` entries with updated dates.
+
+### D-P2 — WorldServer decomposition (T1.1)
+`server/src/server/world_server.rs` — 3592 lines, 141 methods. Split plan exists (10 module files: connections, scope, rooms, entities, authority, resources, messages, priority, io, mod). Deferred: high-effort mechanical refactor with low immediate value.
+
+### D-P7 — Replicate trait decomposition (T1.2)
+`shared/src/world/component/replicate.rs` defines a 29-method monolith; `shared/derive/src/replicate.rs` is 1499 lines. Proposed sub-trait split: `ReplicateCore`, `ReplicateWrite`, `ReplicateRead`, `ReplicateMirror`, `ReplicateAuthority`, `ReplicateEntityRelations`. Deferred: user-facing surface would be unchanged, benefit is internal ergonomics only.
+
+### D-P9.A3 — proptest for message ordering
+`OrderedReliable` / `SequencedReliable` property-based tests using `proptest`. 3 tasks (add dep, write 2 proptests). Deferred in favour of BDD coverage.
+
+### D-P10 — Docs and discoverability
+README architecture overview, `_AGENTS/RESOURCES.md` user walkthrough, `test/TESTING_GUIDE.md`, Bevy adapter `//!` module docs. Deferred until API surface stabilises post-P1–P5.
+
+### D-P12 — Large architectural refactors
+Two items: (1) `client.rs` (2311 lines, 95 methods) mirrors WorldServer patterns — a `Host<E>` trait could unify them, but depends on D-P2 (WorldServer decomp). (2) 434 `Box<dyn ...>` instances — profile under `halo_btb_16v16` bench first, then evaluate per-kind enum dispatch via derive macro if they appear in top-10 hotspots. Deferred: large scope, blocked on other deferred work.
