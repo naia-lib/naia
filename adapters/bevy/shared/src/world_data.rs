@@ -34,9 +34,6 @@ impl Clone for WorldData {
     }
 }
 
-unsafe impl Send for WorldData {}
-unsafe impl Sync for WorldData {}
-
 impl FromWorld for WorldData {
     fn from_world(_world: &mut World) -> Self {
         Self {

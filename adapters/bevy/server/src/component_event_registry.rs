@@ -24,10 +24,6 @@ pub(crate) struct ComponentEventRegistry {
     component_handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,
 }
 
-unsafe impl Send for ComponentEventRegistry {}
-unsafe impl Sync for ComponentEventRegistry {}
-
-
 impl ComponentEventRegistry {
     pub(crate) fn bundle_registry_mut(&mut self) -> &mut BundleEventRegistry {
         &mut self.bundle_registry

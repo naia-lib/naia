@@ -17,9 +17,6 @@ pub(crate) struct BundleEventRegistry<T: Send + Sync + 'static> {
     phantom_t: PhantomData<T>,
 }
 
-unsafe impl<T: Send + Sync + 'static> Send for BundleEventRegistry<T> {}
-unsafe impl<T: Send + Sync + 'static> Sync for BundleEventRegistry<T> {}
-
 impl<T: Send + Sync + 'static> Default for BundleEventRegistry<T> {
     fn default() -> Self {
         Self {

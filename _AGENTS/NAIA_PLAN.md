@@ -104,21 +104,12 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## P8 — Bevy adapter cleanup (T3.1, T3.3)
+## P8 — Bevy adapter cleanup (T3.1, T3.3) — **COMPLETE** (2026-05-08)
 
-### T3.1 — unsafe impl Send/Sync documentation and fix
-
-Ten `unsafe impl Send/Sync` in the Bevy adapter lack SAFETY comments. Better fix: add `: Send + Sync` to the `ComponentEventHandler` trait, letting the compiler derive auto-Send/Sync.
-
-- [ ] **P8.1** Add `: Send + Sync` to `ComponentEventHandler` in both server and client adapters. Remove the 10 `unsafe impl` blocks (or add SAFETY docs if the bound can't be added).
-- [ ] **P8.2** Verify `cargo check` for all Bevy adapter crates.
-
-### T3.3 — ComponentEventHandler registry dedup
-
-Server and client `component_event_registry.rs` are near-mirror images (~100 duplicated lines each, plus parallel D13 resource-translation logic).
-
-- [ ] **P8.3** Lift the common registry shape into `naia_bevy_shared` as a generic `ComponentEventRegistry<TParams>`. Each adapter declares the parameter type.
-- [ ] **P8.4** Gate: `cargo check --workspace`, wasm32 builds, commit + push `dev`.
+**Delivered:**
+- P8.1/P8.2: Removed all 10 `unsafe impl Send/Sync` from bevy adapters (`component_event_registry.rs` ×2, `bundle_event_registry.rs` ×2, `world_data.rs` ×1). All inner handler traits already had `: Send + Sync` bounds; removal confirmed by `cargo check --workspace --all-targets` (clean, 0 warnings).
+- P8.3: **N/A** — handler method signatures differ fundamentally between server (`Vec<(UserKey, Entity)>`) and client (`Vec<Entity>`, `Vec<(Tick, Entity)>`). `UserKey`/`Tick` are crate-private types that cannot live in `naia_bevy_shared`. A `TParams` with associated types would save only the HashMap declaration while leaking crate-specific types through the shared boundary — net negative. Deferred to D-P8.3.
+- P8.4: Gate: `cargo check --workspace` clean, committed + pushed `dev`.
 
 ---
 

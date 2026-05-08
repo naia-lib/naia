@@ -19,10 +19,6 @@ pub(crate) struct BundleEventRegistry {
     current_bundle_id: BundleId,
 }
 
-unsafe impl Send for BundleEventRegistry {}
-unsafe impl Sync for BundleEventRegistry {}
-
-
 impl BundleEventRegistry {
     pub(crate) fn register_bundle_handler<B: ReplicateBundle>(&mut self) {
         let set = B::kind_set();

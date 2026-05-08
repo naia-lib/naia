@@ -20,9 +20,6 @@ pub(crate) struct ComponentEventRegistry<T: Send + Sync + 'static> {
     component_handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,
 }
 
-unsafe impl<T: Send + Sync + 'static> Send for ComponentEventRegistry<T> {}
-unsafe impl<T: Send + Sync + 'static> Sync for ComponentEventRegistry<T> {}
-
 impl<T: Send + Sync + 'static> Default for ComponentEventRegistry<T> {
     fn default() -> Self {
         Self {
