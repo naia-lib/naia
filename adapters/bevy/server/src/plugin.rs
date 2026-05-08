@@ -41,12 +41,30 @@ impl PluginConfig {
 #[derive(Clone)]
 pub struct Singleton;
 
+/// Bevy plugin that wires naia's server replication into a Bevy `App`.
+///
+/// Registers the [`Server`] resource, adds all required systems, and emits
+/// naia events as standard Bevy events so they can be consumed in any system.
+///
+/// # Scheduled systems
+///
+/// The plugin schedules the following in `Update` (in dependency order):
+///
+/// 1. `receive_packets` — reads datagrams from the socket
+/// 2. `process_packets` — decodes and applies entity/component changes
+/// 3. `translate_world_events` — converts naia events to Bevy events
+/// 4. `translate_tick_events` — emits [`TickEvent`] Bevy events
+/// 5. `world_to_host_sync` — syncs Bevy world changes into naia
+/// 6. `send_packets` — serialises and flushes outbound packets
+///
+/// [`TickEvent`]: crate::events::TickEvent
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
     world_only: bool,
 }
 
 impl Plugin {
+    /// Creates the plugin with the given server configuration and protocol.
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
         Self::new_impl(server_config, protocol, false)
     }

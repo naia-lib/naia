@@ -1,7 +1,46 @@
-//! # Naia Server
-//! A server that uses either UDP or WebRTC communication to send/receive
-//! messages to/from connected clients, and syncs registered
-//! Entities/Components to clients to whom they are in-scope.
+//! Server-side half of the naia real-time entity replication and messaging
+//! library.
+//!
+//! The central type is [`Server<E>`], which listens for connections, maintains
+//! rooms and user scopes, replicates entities to in-scope clients, and routes
+//! typed messages and requests.
+//!
+//! # Main loop
+//!
+//! ```no_run
+//! # use naia_server::{Server, Events, TickEvents};
+//! # use naia_shared::{Instant, WorldMutType, WorldRefType};
+//! # fn run<E, W>(server: &mut Server<E>, world: W, now: Instant)
+//! #     where E: Copy + Eq + std::hash::Hash + Send + Sync,
+//! #           W: WorldMutType<E> + WorldRefType<E> + Copy
+//! # {
+//! loop {
+//!     server.receive_all_packets();                    // 1. read from socket
+//!     server.process_all_packets(world, &now);         // 2. decode + apply
+//!     let events: Events<E> = server.take_world_events(); // 3. drain events
+//!     let ticks: TickEvents = server.take_tick_events(&now); // 4. tick clock
+//!     // 5. mutate replicated components here
+//!     server.send_all_packets(world);                  // 6. flush outbound
+//! #   break;
+//! }
+//! # }
+//! ```
+//!
+//! Steps must run in this order every frame. Accepting a connection requires
+//! calling [`accept_connection`](Server::accept_connection) inside a
+//! [`ConnectEvent`] handler.
+//!
+//! # Key types
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`Server<E>`] | Main entry point |
+//! | [`EntityMut`] | Builder returned by [`spawn_entity`](Server::spawn_entity) |
+//! | [`EntityRef`] | Read-only entity handle |
+//! | [`RoomMut`] | Manages room membership |
+//! | [`UserScopeMut`] | Fine-grained entity-per-user visibility |
+//! | [`ReplicationConfig`] | Controls publicity and scope-exit behaviour |
+//! | [`Publicity`] | The three visibility states (Private / Public / Delegated) |
 
 #![deny(
     trivial_casts,

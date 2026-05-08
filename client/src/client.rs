@@ -30,8 +30,27 @@ use crate::{
     Publicity,
 };
 
-/// Client can send/receive messages to/from a server, and has a pool of
-/// in-scope entities/components that are synced with the server
+/// The naia client — connects to a server, receives replicated entities, and
+/// sends client-authoritative mutations and messages.
+///
+/// `E` is your world's entity key type (e.g. a `u32` or ECS `Entity`). It must
+/// be `Copy + Eq + Hash + Send + Sync`.
+///
+/// # Minimal client loop
+///
+/// ```text
+/// loop {
+///     client.receive_all_packets();                      // 1. read UDP/WebRTC
+///     client.process_all_packets(&mut world, &now);      // 2. decode + dispatch
+///     for event in client.take_world_events() { ... }   // 3. handle events
+///     for event in client.take_tick_events(&now) { ... } // 4. advance ticks
+///     // apply predicted state here
+///     client.send_all_packets(&world);                   // 5. flush outbound
+/// }
+/// ```
+///
+/// Steps 1–5 must run in this order every frame. Call [`auth`](Client::auth)
+/// and then [`connect`](Client::connect) once before entering the loop.
 pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     // Config
     client_config: ClientConfig,
@@ -64,7 +83,10 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
-    /// Create a new Client
+    /// Creates a new client with the given config and protocol.
+    ///
+    /// Call [`auth`](Client::auth) (optional) and then
+    /// [`connect`](Client::connect) before entering the main loop.
     pub fn new<P: Into<Protocol>>(client_config: ClientConfig, protocol: P) -> Self {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
@@ -72,6 +94,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Self::new_with_protocol_id(client_config, protocol, protocol_id)
     }
 
+    /// Creates a new client with an explicit protocol ID.
+    ///
+    /// # Adapter use only
+    ///
+    /// Bevy and macroquad adapters use this to inject a pre-computed ID.
+    /// Prefer [`new`](Client::new) in application code.
     pub fn new_with_protocol_id(
         client_config: ClientConfig,
         protocol: Protocol,
@@ -128,7 +156,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.priority.get_mut(entity)
     }
 
-    /// Set the auth object to use when setting up a connection with the Server
+    /// Stores the authentication message to send during the handshake.
+    ///
+    /// Must be called before [`connect`](Client::connect) if the server
+    /// requires authentication. The server receives this as an
+    /// [`AuthEvent`] in its connection handler.
+    ///
+    /// [`AuthEvent`]: naia_server::events::AuthEvent
     pub fn auth<M: Message>(&mut self, auth: M) {
         // get auth bytes
         let mut bit_writer = BitWriter::new();
@@ -141,11 +175,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.auth_message = Some(auth_bytes.to_vec());
     }
 
+    /// Stores HTTP-style key-value headers to include in the WebRTC upgrade
+    /// request.
+    ///
+    /// Used by WebRTC transports that support header-based authentication or
+    /// routing. Ignored by native UDP sockets.
     pub fn auth_headers(&mut self, headers: Vec<(String, String)>) {
         self.auth_headers = Some(headers);
     }
 
-    /// Connect to the given server address
+    /// Opens the socket and begins the handshake with the server.
+    ///
+    /// If [`auth`](Client::auth) was called, the auth payload is included in
+    /// the handshake. After connecting, process events via the main loop
+    /// until a [`ConnectionEvent`] arrives.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the client has already initiated a connection. Check
+    /// [`connection_status`](Client::connection_status) before calling.
+    ///
+    /// [`ConnectionEvent`]: crate::events::ConnectionEvent
     pub fn connect<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
@@ -179,7 +229,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    /// Returns client's current connection status
+    /// Returns the client's current connection lifecycle state.
+    ///
+    /// Transitions: `Disconnected` → `Connecting` (after
+    /// [`connect`](Client::connect)) → `Connected` (after handshake) →
+    /// `Disconnecting` (after [`disconnect`](Client::disconnect)) →
+    /// `Disconnected`.
     pub fn connection_status(&self) -> ConnectionStatus {
         if self.is_connected() {
             if self.is_disconnecting() {
@@ -222,7 +277,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         !self.io.is_loaded()
     }
 
-    /// Disconnect from Server
+    /// Initiates a clean disconnect from the server.
+    ///
+    /// Sends several disconnect packets to increase delivery probability,
+    /// then begins the disconnection process. A [`DisconnectionEvent`] is
+    /// emitted on the next [`take_world_events`](Client::take_world_events)
+    /// call.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the client is not currently connected.
+    ///
+    /// [`DisconnectionEvent`]: crate::events::DisconnectionEvent
     pub fn disconnect(&mut self) {
         if !self.is_connected() {
             panic!("Trying to disconnect Client which is not connected yet!")
@@ -239,19 +305,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.manual_disconnect = true;
     }
 
-    /// Returns socket config
+    /// Returns the socket configuration from the protocol.
     pub fn socket_config(&self) -> &SocketConfig {
         &self.protocol.socket
     }
 
-    // Receive Data from Server! Very important!
+    // Event loop ────────────────────────────────────────────────────────────
 
+    /// Reads all pending packets from the socket.
+    ///
+    /// Must be called **first** in the client loop, before
+    /// [`process_all_packets`](Client::process_all_packets). Handles
+    /// handshake progress, heartbeats, and buffers incoming data packets.
     pub fn receive_all_packets(&mut self) {
         // Need to run this to maintain connection with server, and receive packets
         // until none left
         self.maintain_socket();
     }
 
+    /// Decodes all buffered packets and applies changes to the world.
+    ///
+    /// Must be called after [`receive_all_packets`](Client::receive_all_packets)
+    /// and before [`take_world_events`](Client::take_world_events). Applies
+    /// server-replicated entity spawn/update/despawn events and queues them
+    /// for the next [`take_world_events`] call.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         // all other operations
         if self.is_disconnecting() {
@@ -276,10 +353,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.process_entity_events(&mut world, entity_events);
     }
 
+    /// Drains and returns all accumulated world events since the last call.
+    ///
+    /// Must be called after [`process_all_packets`](Client::process_all_packets).
+    /// The returned [`Events`] contains entity spawn/despawn/update notifications,
+    /// message arrivals, connection/disconnection signals, and authority events.
+    /// Not calling this causes the buffer to grow without bound.
+    ///
+    /// [`Events`]: crate::Events
     pub fn take_world_events(&mut self) -> Events<E> {
         std::mem::take(&mut self.incoming_world_events)
     }
 
+    /// Advances the tick clocks and returns any tick-boundary events.
+    ///
+    /// Must be called after [`take_world_events`](Client::take_world_events).
+    /// Returns a [`TickEvents`] containing client and server tick advances
+    /// since the last call. Also de-jitters buffered packets on tick
+    /// boundaries (unless the jitter buffer is in bypass mode).
+    ///
+    /// [`TickEvents`]: crate::TickEvents
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         let Some(connection) = &mut self.server_connection else {
             return TickEvents::default();
@@ -335,6 +428,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         std::mem::take(&mut self.incoming_tick_events)
     }
 
+    /// Flushes all queued messages and entity mutations to the server.
+    ///
+    /// Must be called **last** in the client loop. Serialises outbound
+    /// packets and hands them to the transport. Also handles handshake
+    /// packet retransmission when not yet connected. If this is not called,
+    /// the server never receives any updates.
     pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
         if let Some(connection) = &mut self.server_connection {
             let now = Instant::now();
@@ -358,9 +457,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    // Messages
+    // Messaging ─────────────────────────────────────────────────────────────
 
-    /// Queues up an Message to be sent to the Server
+    /// Queues a message to be sent to the server on the next
+    /// [`send_all_packets`](Client::send_all_packets) call.
+    ///
+    /// `C` is the channel type (ordering and reliability). `M` is the message
+    /// type (must be registered in the [`Protocol`]). Messages sent before
+    /// the connection is established are queued and delivered on connect.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the channel does not allow client-to-server
+    /// messages, or if the channel is `TickBuffered` (use
+    /// [`send_tick_buffer_message`](Client::send_tick_buffer_message) instead).
+    ///
+    /// [`Protocol`]: naia_shared::Protocol
     pub fn send_message<C: Channel, M: Message>(
         &mut self,
         message: &M,
@@ -404,7 +516,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Ok(())
     }
 
-    //
+    /// Sends a request to the server and returns a key for polling the
+    /// response.
+    ///
+    /// Use [`receive_response`](Client::receive_response) with the returned
+    /// key to collect the server's reply.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the client is not currently connected.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the channel is not bidirectional and reliable.
     pub fn send_request<C: Channel, Q: Request>(
         &mut self,
         request: &Q,
@@ -451,7 +575,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Ok(request_id)
     }
 
-    /// Sends a Response for a given Request. Returns whether or not was successful.
+    /// Sends a response to the server's request.
+    ///
+    /// `response_key` is obtained from the [`RequestEvent`] that delivered
+    /// the server's original request. Returns `true` on success; `false` if
+    /// the key is no longer valid (e.g. the connection was dropped).
+    ///
+    /// [`RequestEvent`]: crate::events::RequestEvent
     pub fn send_response<S: Response>(
         &mut self,
         response_key: &ResponseSendKey<S>,
@@ -495,7 +625,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         true
     }
 
-    /// Check if a response is available for the given request (non-destructive)
+    /// Returns `true` if a response to the given request has arrived.
+    ///
+    /// Non-destructive — does not consume the response. Call
+    /// [`receive_response`](Client::receive_response) to retrieve and consume
+    /// it.
     pub fn has_response<S: Response>(&self, response_key: &ResponseReceiveKey<S>) -> bool {
         let Some(connection) = &self.server_connection else {
             return false;
@@ -504,6 +638,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         connection.global_request_manager.has_response(&request_id)
     }
 
+    /// Polls for and consumes a response to a previously sent client request.
+    ///
+    /// Returns `Some(response)` once the server replies, or `None` if the
+    /// response has not yet arrived or the key is invalid. The key is
+    /// invalidated after a successful receive.
     pub fn receive_response<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,
@@ -534,6 +673,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
+    /// Queues a tick-buffered message stamped with the given client tick.
+    ///
+    /// Use this for client input on a [`TickBuffered`] channel. The server
+    /// receives the message when its tick counter reaches the stamped tick,
+    /// enabling tick-accurate input replay.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the channel does not have `TickBuffered` mode enabled.
+    ///
+    /// [`TickBuffered`]: naia_shared::ChannelMode::TickBuffered
     pub fn send_tick_buffer_message<C: Channel, M: Message>(&mut self, tick: &Tick, message: &M) {
         let cloned_message = M::clone_box(message);
         self.send_tick_buffer_message_inner(tick, &ChannelKind::of::<C>(), cloned_message);
@@ -563,10 +713,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    // Entities
+    // Entities ──────────────────────────────────────────────────────────────
 
-    /// Creates a new Entity and returns an EntityMut which can be used for
-    /// further operations on the Entity
+    /// Spawns a client-owned entity and returns a builder for configuring it.
+    ///
+    /// The spawned entity starts as [`Private`](naia_shared::Publicity::Private);
+    /// call [`configure_replication`](crate::EntityMut::configure_replication)
+    /// on the returned [`EntityMut`] to publish it.
+    ///
+    /// Requires that the protocol was built with
+    /// `enable_client_authoritative_entities()`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if client-authoritative entities are not enabled in the protocol.
     pub fn spawn_entity<W: WorldMutType<E>>(&'_ mut self, mut world: W) -> EntityMut<'_, E, W> {
         self.check_client_authoritative_allowed();
 
@@ -596,20 +756,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .host_init_entity(&global_entity, component_kinds, &self.protocol.component_kinds, false);
     }
 
-    /// Retrieves an EntityRef that exposes read-only operations for the
-    /// given Entity.
-    /// Panics if the Entity does not exist.
-    // ====================================================================
-    // Replicated Resources — client-side read API.
-    //
-    // The client maintains a `ResourceRegistry` populated when the
-    // remote-apply path delivers an InsertComponent for a resource kind.
-    // Clears on Despawn. The bevy adapter consumes this to drive the
-    // bevy-Resource mirror (see adapters/bevy/client/src/resource_sync).
-    // ====================================================================
+    // Replicated Resources (client-side mirror) ─────────────────────────────
+    // Populated when the remote-apply path delivers an InsertComponent for a
+    // resource kind. Clears on Despawn. The Bevy adapter consumes this to
+    // drive the Bevy-Resource mirror (see adapters/bevy/client/src/resource_sync).
 
-    /// True iff this client currently has a Replicated Resource of
-    /// type `R` mirrored from the server.
+    /// Returns `true` if the client has a server-replicated resource of type
+    /// `R` currently in scope.
     pub fn has_resource<R: 'static>(&self) -> bool {
         self.resource_registry.entity_for::<R>().is_some()
     }
@@ -652,6 +805,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         out
     }
 
+    /// Returns a read-only handle to the entity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity does not exist in the world.
     pub fn entity<W: WorldRefType<E>>(&'_ self, world: W, entity: &E) -> EntityRef<'_, E, W> {
         if world.has_entity(entity) {
             return EntityRef::new(self, world, entity);
@@ -659,9 +817,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         panic!("No Entity exists for given Key!");
     }
 
-    /// Retrieves an EntityMut that exposes read and write operations for the
-    /// Entity.
-    /// Panics if the Entity does not exist.
+    /// Returns a mutable handle to the entity.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity does not exist in the world, or if
+    /// client-authoritative entities are not enabled in the protocol.
     pub fn entity_mut<W: WorldMutType<E>>(
         &'_ mut self,
         world: W,
@@ -674,7 +835,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         panic!("No Entity exists for given Key!");
     }
 
-    /// Return a list of all Entities
+    /// Returns all entities currently present in the world.
     pub fn entities<W: WorldRefType<E>>(&self, world: &W) -> Vec<E> {
         world.entities()
     }
@@ -688,22 +849,41 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         EntityOwner::Local
     }
 
-    // Replicate options & authority management
+    // Authority and replication config ──────────────────────────────────────
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Registers the entity with the replication layer.
+    ///
+    /// # Adapter use only
+    ///
+    /// Called by the Bevy adapter when a [`Replicate`] component is inserted.
+    /// Use [`spawn_entity`](Client::spawn_entity) in application code.
+    ///
+    /// [`Replicate`]: naia_shared::Replicate
     pub fn enable_entity_replication(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
         self.spawn_entity_inner(entity);
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Unregisters the entity from the replication layer.
+    ///
+    /// # Adapter use only
+    ///
+    /// Called by the Bevy adapter when a [`Replicate`] component is removed.
+    ///
+    /// [`Replicate`]: naia_shared::Replicate
     pub fn disable_entity_replication(&mut self, entity: &E) {
         self.check_client_authoritative_allowed();
         // Despawn from connections and inner tracking
         self.despawn_entity_worldless(entity);
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Returns the current [`Publicity`] for the entity, or `None` if the
+    /// entity is not registered.
+    ///
+    /// # Adapter use only
+    ///
+    /// Use [`EntityRef::replication_config`](crate::EntityRef::replication_config)
+    /// in application code.
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<Publicity> {
         self.check_client_authoritative_allowed();
         let global_entity = self
@@ -714,7 +894,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_replication_config(&global_entity)
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Updates the replication config for a client-owned entity.
+    ///
+    /// # Adapter use only
+    ///
+    /// Application code should call
+    /// [`entity_mut(...).configure_replication(config)`](crate::EntityMut::configure_replication)
+    /// instead.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity is server-owned, not yet replicating, or if the
+    /// entity is already `Delegated`.
     pub fn configure_entity_replication<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -790,7 +981,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Returns the current authority status for the entity from the client's
+    /// perspective, or `None` if the entity is not delegable.
+    ///
+    /// # Adapter use only
+    ///
+    /// Application code should inspect authority via [`EntityRef::authority`](crate::EntityRef::authority).
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         self.check_client_authoritative_allowed();
 
@@ -801,7 +997,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.global_world_manager.entity_authority_status(&global_entity)
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Sends an authority request to the server for the given delegated entity.
+    ///
+    /// The server responds with either [`EntityAuthGrantedEvent`] or
+    /// [`EntityAuthDeniedEvent`]. Only valid for entities with
+    /// [`Delegated`](naia_shared::Publicity::Delegated) replication config.
+    ///
+    /// # Adapter use only
+    ///
+    /// Application code should call
+    /// [`entity_mut(...).request_authority()`](crate::EntityMut::request_authority)
+    /// instead.
+    ///
+    /// [`EntityAuthGrantedEvent`]: crate::events::EntityAuthGrantedEvent
+    /// [`EntityAuthDeniedEvent`]: crate::events::EntityAuthDeniedEvent
     pub fn entity_request_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
@@ -829,7 +1038,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         result
     }
 
-    /// This is used only for Bevy adapter crates, do not use otherwise!
+    /// Releases the client's authority over the given entity back to the
+    /// server.
+    ///
+    /// Only valid when this client holds `Granted` authority. The server
+    /// resumes ownership after confirming the release.
+    ///
+    /// # Adapter use only
+    ///
+    /// Application code should call
+    /// [`entity_mut(...).release_authority()`](crate::EntityMut::release_authority)
+    /// instead.
     pub fn entity_release_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         self.check_client_authoritative_allowed();
 
@@ -854,15 +1073,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         result
     }
 
-    // Connection
+    // Connection ────────────────────────────────────────────────────────────
 
-    /// Get the address currently associated with the Server
+    /// Returns the server's socket address.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection has not been established yet.
     pub fn server_address(&self) -> Result<SocketAddr, NaiaClientError> {
         self.io.server_addr()
     }
 
-    /// Gets the average Round Trip Time measured to the Server in seconds.
-    /// Returns 0.0 if not connected.
+    /// Returns the rolling-average round-trip time (seconds) to the server.
+    ///
+    /// Returns `0.0` if the connection has not been established yet.
     pub fn rtt(&self) -> f32 {
         self.server_connection
             .as_ref()
@@ -870,8 +1094,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .unwrap_or(0.0)
     }
 
-    /// Gets the average Jitter measured in connection to the Server in seconds.
-    /// Returns 0.0 if not connected.
+    /// Returns the rolling-average jitter (seconds) measured for the server
+    /// connection.
+    ///
+    /// Returns `0.0` if the connection has not been established yet.
     pub fn jitter(&self) -> f32 {
         self.server_connection
             .as_ref()
@@ -879,32 +1105,45 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .unwrap_or(0.0)
     }
 
-    // Ticks
+    // Ticks ─────────────────────────────────────────────────────────────────
 
-    /// Gets the current tick of the Client
+    /// Returns the client's current sending tick, or `None` if not connected.
+    ///
+    /// This is the tick at which the client is currently sending — use it to
+    /// stamp [`TickBuffered`] messages for prediction.
+    ///
+    /// [`TickBuffered`]: naia_shared::ChannelMode::TickBuffered
     pub fn client_tick(&self) -> Option<Tick> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_sending_tick)
     }
 
-    /// Gets the current instant of the Client
+    /// Returns the `GameInstant` corresponding to the client's current sending
+    /// tick, or `None` if not connected.
     pub fn client_instant(&self) -> Option<GameInstant> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_sending_instant)
     }
 
-    /// Gets the current tick of the Server
+    /// Returns the server tick that the client is currently receiving, or
+    /// `None` if not connected.
+    ///
+    /// This lags slightly behind the server's actual current tick due to
+    /// network latency and the jitter buffer.
     pub fn server_tick(&self) -> Option<Tick> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_receiving_tick)
     }
 
-    /// Gets the current instant of the Server
+    /// Returns the `GameInstant` corresponding to the current server-receive
+    /// tick, or `None` if not connected.
     pub fn server_instant(&self) -> Option<GameInstant> {
         let connection = self.server_connection.as_ref()?;
         Some(connection.time_manager.client_receiving_instant)
     }
 
+    /// Converts a tick counter value to the corresponding `GameInstant`,
+    /// or `None` if not connected.
     pub fn tick_to_instant(&self, tick: Tick) -> Option<GameInstant> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_to_instant(tick));
@@ -912,6 +1151,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         None
     }
 
+    /// Returns the duration of a single tick as configured in the protocol,
+    /// or `None` if not connected.
     pub fn tick_duration(&self) -> Option<Duration> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.tick_duration());
@@ -919,9 +1160,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         None
     }
 
-    // Interpolation
+    // Interpolation ─────────────────────────────────────────────────────────
 
-    /// Gets the interpolation tween amount for the current frame, for use by entities on the Client Tick (i.e. predicted)
+    /// Returns the interpolation fraction `[0.0, 1.0)` for the current frame
+    /// within the client sending tick.
+    ///
+    /// Use this to lerp predicted entities between their state at the previous
+    /// and current client ticks. Returns `None` if not connected.
     pub fn client_interpolation(&self) -> Option<f32> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.client_interpolation());
@@ -929,7 +1174,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         None
     }
 
-    /// Gets the interpolation tween amount for the current frame, for use by entities on the Server Tick (i.e. authoritative)
+    /// Returns the interpolation fraction `[0.0, 1.0)` for the current frame
+    /// within the server receive tick.
+    ///
+    /// Use this to lerp authoritative server-replicated entities between their
+    /// state at the previous and current server ticks. Returns `None` if not
+    /// connected.
     pub fn server_interpolation(&self) -> Option<f32> {
         if let Some(connection) = &self.server_connection {
             return Some(connection.time_manager.server_interpolation());
@@ -937,11 +1187,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         None
     }
 
-    // Bandwidth monitoring
+    // Diagnostics ───────────────────────────────────────────────────────────
+
+    /// Returns the rolling-average outgoing bandwidth to the server
+    /// (bytes/second).
     pub fn outgoing_bandwidth(&self) -> f32 {
         self.io.outgoing_bandwidth()
     }
 
+    /// Returns the rolling-average incoming bandwidth from the server
+    /// (bytes/second).
     pub fn incoming_bandwidth(&self) -> f32 {
         self.io.incoming_bandwidth()
     }
@@ -963,6 +1218,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.despawn_entity_worldless(entity);
     }
 
+    /// Despawns the entity from the replication layer without touching the
+    /// world.
+    ///
+    /// # Adapter use only
+    ///
+    /// The Bevy adapter calls this when the ECS world has already removed the
+    /// entity. Application code should despawn via the world, which triggers
+    /// the adapter hook automatically.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the entity is server-owned without delegation, or if the
+    /// client does not hold `Granted` authority over a delegated entity.
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
         let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
             warn!("attempting to despawn entity that has already been despawned?");
@@ -1068,7 +1336,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.protocol.component_kinds.kind_to_name(component_kind)
     }
 
-    // This intended to be used by adapter crates, do not use this as it will not update the world
+    /// Registers a component insertion with the replication layer without
+    /// touching the world's component storage.
+    ///
+    /// # Adapter use only
+    ///
+    /// The Bevy adapter calls this when the component already exists in the
+    /// ECS world. Application code should insert components via the world.
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
@@ -1146,7 +1420,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         world.remove_component::<R>(entity)
     }
 
-    // This intended to be used by adapter crates, do not use this as it will not update the world
+    /// Registers a component removal with the replication layer without
+    /// touching the world's component storage.
+    ///
+    /// # Adapter use only
+    ///
+    /// The Bevy adapter calls this when the component has already been removed
+    /// from the ECS world.
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         let global_entity = self
             .global_entity_map
@@ -2230,27 +2510,38 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Cl
     }
 }
 
+/// The lifecycle state of the client's connection to the server.
+///
+/// Retrieved via [`Client::connection_status`].
 #[derive(Copy, Clone, PartialEq, Eq)]
 pub enum ConnectionStatus {
+    /// No socket is open; [`connect`](Client::connect) has not been called.
     Disconnected,
+    /// The socket is open and the handshake is in progress.
     Connecting,
+    /// The handshake is complete and the connection is active.
     Connected,
+    /// [`disconnect`](Client::disconnect) has been called; awaiting confirmation.
     Disconnecting,
 }
 
 impl ConnectionStatus {
+    /// Returns `true` if the client is fully disconnected.
     pub fn is_disconnected(&self) -> bool {
         self == &ConnectionStatus::Disconnected
     }
 
+    /// Returns `true` if the handshake is in progress.
     pub fn is_connecting(&self) -> bool {
         self == &ConnectionStatus::Connecting
     }
 
+    /// Returns `true` if the connection is active.
     pub fn is_connected(&self) -> bool {
         self == &ConnectionStatus::Connected
     }
 
+    /// Returns `true` if the client is tearing down an active connection.
     pub fn is_disconnecting(&self) -> bool {
         self == &ConnectionStatus::Disconnecting
     }

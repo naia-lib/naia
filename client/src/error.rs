@@ -1,11 +1,23 @@
 use std::{error::Error, fmt};
 
+/// Errors that can be returned by the naia client.
+///
+/// Returned by methods such as [`Client::send_message`] and the
+/// packet-processing loop when an unrecoverable transport or protocol
+/// condition is encountered.
+///
+/// [`Client::send_message`]: crate::Client::send_message
 #[derive(Debug)]
 pub enum NaiaClientError {
+    /// A general descriptive error message.
     Message(String),
+    /// An error from an underlying layer, boxed for type erasure.
     Wrapped(Box<dyn Error + Send>),
+    /// A packet could not be sent to the server.
     SendError,
+    /// A packet could not be read from the socket.
     RecvError,
+    /// A numeric entity or message identifier was malformed or out of range.
     IdError(u16),
 }
 

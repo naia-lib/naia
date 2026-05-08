@@ -1,3 +1,45 @@
+//! Bevy adapter for the naia server.
+//!
+//! Adds naia's replication and messaging into a Bevy application. Entities and
+//! components that carry the [`Replicate`] marker are automatically tracked and
+//! replicated to connected clients; no manual diff loop is required.
+//!
+//! # Setup
+//!
+//! Add the plugin and call [`listen_on_app`] (or call [`Server::listen`] in a
+//! startup system):
+//!
+//! ```no_run
+//! # use bevy_app::App;
+//! # use naia_bevy_server::Plugin;
+//! fn main() {
+//!     App::new()
+//!         // .add_plugins(DefaultPlugins)
+//!         .add_plugins(Plugin::new(server_config(), protocol()))
+//!         // .add_systems(Startup, init)
+//!         .run();
+//! }
+//! # fn server_config() -> naia_bevy_server::ServerConfig { todo!() }
+//! # fn protocol() -> naia_shared::Protocol { todo!() }
+//! ```
+//!
+//! Interact with the server via the [`Server`] Bevy resource, or use
+//! [`CommandsExt`] / [`ServerCommandsExt`] on [`Commands`] to spawn entities
+//! and configure replication.
+//!
+//! # Key types
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`Plugin`] | Registers systems and the [`Server`] resource |
+//! | [`Server`] | Bevy-wrapped server resource |
+//! | [`CommandsExt`] | Extension methods on [`Commands`] for replication setup |
+//! | [`ServerCommandsExt`] | Server-only extension methods on [`Commands`] |
+//! | [`events`] | Bevy events mirroring naia world events |
+//!
+//! [`Commands`]: bevy_ecs::system::Commands
+//! [`Replicate`]: naia_bevy_shared::Replicate
+
 pub use naia_bevy_shared::{
     EntityAuthStatus, HandleTickEvents, HandleWorldEvents, Random, Replicate, ReplicateBundle,
     Tick, WorldUpdate,

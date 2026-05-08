@@ -40,12 +40,30 @@ impl PluginConfig {
     }
 }
 
+/// Bevy plugin that wires naia's client replication into a Bevy `App`.
+///
+/// `T` is the Bevy `Entity` type (pass `bevy_ecs::entity::Entity`).
+///
+/// Registers the [`Client`] resource, adds all required systems, and emits
+/// naia events as standard Bevy events so they can be consumed in any system.
+///
+/// # Scheduled systems
+///
+/// The plugin schedules the following in `Update` (in dependency order):
+///
+/// 1. `receive_packets` — reads datagrams from the socket
+/// 2. `process_packets` — decodes server-replicated state changes
+/// 3. `translate_world_events` — converts naia events to Bevy events
+/// 4. `translate_tick_events` — emits tick Bevy events
+/// 5. `world_to_host_sync` — syncs Bevy world changes back to naia
+/// 6. `send_packets` — serialises and flushes outbound packets
 pub struct Plugin<T> {
     config: Mutex<Option<PluginConfig>>,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> Plugin<T> {
+    /// Creates the plugin with the given client configuration and protocol.
     pub fn new(client_config: ClientConfig, protocol: Protocol) -> Self {
         let config = PluginConfig::new(client_config, protocol);
         Self {

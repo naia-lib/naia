@@ -1,6 +1,5 @@
 [![Latest Version](https://img.shields.io/crates/v/naia-server.svg)](https://crates.io/crates/naia-server)
 [![API Documentation](https://docs.rs/naia-server/badge.svg)](https://docs.rs/naia-server)
-![](https://tokei.rs/b1/github/naia-lib/naia)
 [![Discord chat](https://img.shields.io/discord/764975354913619988.svg?label=discord%20chat)](https://discord.gg/fD6QCtX)
 [![MIT/Apache][s3]][l3]
 
@@ -8,93 +7,156 @@
 [l3]: docs/LICENSE-MIT
 
 # naia
-a *n*etworking *a*rchitecture for *i*nteractive *a*pplications
 
-A cross-platform (including Wasm!) networking engine that intends to make multiplayer game development in Rust dead simple and lightning fast.
+Server-authoritative entity replication and typed message passing for
+multiplayer games in Rust, running on native (UDP) and browser (WebRTC).
 
-naia helps you to easily define a common, shared Protocol that allows Server & Client to exchange information. Then, naia facilitates sending/receiving parts of that Protocol as reliable/unreliable Messages between Server & Client, and also keeps a pool of tracked Entities synced with each Client for whom they are "in-scope". Entities are "scoped" to Clients with whom they share the same Room, as well as being sufficiently customizable to, for example, only keep Entities persisted & synced while within a Client's viewport or according to some other criteria.
+---
 
-The API is heavily inspired by the [Nengi.js](https://github.com/timetocode/nengi) & [Colyseus](https://github.com/colyseus/colyseus) Javascript multiplayer networking libraries. The internals follow the [Tribes 2 Networking model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf) fairly closely.
+## What naia is
 
-Thank very much to Kyren for support & [webrtc-unreliable](https://github.com/kyren/webrtc-unreliable), and to the [Laminar](https://github.com/amethyst/laminar) authors, for the cannibalized code within.
+naia lets you define a shared `Protocol` — a compile-time list of replicated
+component types, message types, and channel configurations — that both the
+server and the client agree on. Given that protocol:
 
-Any help is very welcome, please get in touch! I am open to any criticism / feedback in order to better this project.
+- The **server** spawns entities, attaches replicated components, assigns users
+  to rooms, and calls `send_all_packets` every tick. naia diffs changed fields
+  and delivers them to every in-scope client automatically.
+- The **client** receives entity spawn/update/despawn events and the current
+  server-side field values with no extra bookkeeping.
+- Either side can send typed messages over ordered-reliable, unordered-reliable,
+  or unreliable channels.
+- The server can **delegate authority** over a specific entity to a client,
+  allowing client mutations to flow back to the server while the server retains
+  final ownership.
 
-Currently guaranteed to work on Web & Linux, although Windows & MacOS have been reported working as well. Please file issues if you find inconsistencies and I'll do what I can.
+naia is ECS-agnostic. Bevy and macroquad adapters are included; the core crate
+works with any entity type that is `Copy + Eq + Hash + Send + Sync`.
 
-For more detailed information, please look at the [FAQ](https://github.com/naia-lib/naia/tree/main/faq).
+The internal networking model follows the
+[Tribes 2 Networking Model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
 
-## Demos
+---
 
-More comprehensive documentation / tutorials are on their way, but for now, the best way to get started with naia is to go through the basic demo, which demonstrates most of the functionality.
+## Crate map
 
-### Server:
+| Crate | Role | Add as a dependency when… |
+|-------|------|--------------------------|
+| `naia-shared` | Protocol definition, component derives, channel types | You are writing the shared protocol crate |
+| `naia-server` | Core server | Writing a server without Bevy |
+| `naia-client` | Core client | Writing a client without Bevy or macroquad |
+| `naia-bevy-server` | Bevy server adapter | Using Bevy on the server |
+| `naia-bevy-client` | Bevy client adapter | Using Bevy on the client |
 
-To run the basic server demo on Linux:
+---
 
-    1. cd /naia/demos/basic/server
-    2. cargo run
+## Quick concepts
 
-To run the basic server demo on Linux:
+- **Protocol** — the shared type registry. Both server and client build from
+  the same `Protocol` value; a hash mismatch during the handshake causes
+  rejection.
+- **Entity** — any `Copy + Eq + Hash` value your world allocates. naia tracks
+  which entities are replicated and to whom, but never allocates them itself.
+- **Room** — a coarse membership group. A user and an entity must share a room
+  before replication is possible. Think: match, zone, lobby.
+- **Channel** — a named transport lane with configurable ordering and
+  reliability. Messages and entity actions travel through channels.
+- **Tick** — the server's heartbeat. `take_tick_events` advances the tick
+  counter. `TickBuffered` channels deliver client input at the correct server
+  tick for prediction and rollback.
+- **Authority delegation** — a server entity can be marked `Delegated`,
+  allowing a client to request write authority. The server grants or denies
+  and can revoke at any time.
 
-    1. // go to (https://docs.rs/openssl/latest/openssl/) to install openssl on your machine
-    2. cd /naia/demos/basic/server
-    3. cargo run
+For the full mental-model guide, see [docs/CONCEPTS.md](docs/CONCEPTS.md).
 
-### Client:
+---
 
-To run the basic client demo on Linux:
+## Getting started
 
-    1. cd /naia/demos/basic/client/wasm_bindgen
-    2. cargo run
+### Core (no ECS)
 
-To run the basic client demo on Web:
+```toml
+# shared/Cargo.toml
+[dependencies]
+naia-shared = "0.24"
 
-    1. cargo install cargo-web  // should only need to do this once if you haven't already
-    2. cargo install cargo-make // should only need to do this once if you haven't already
-    3. cd /naia/demos/basic/client/wasm_bindgen
-    4. make serve
-    5. Web page will be blank - check debug console to see communications from the server
+# server/Cargo.toml
+[dependencies]
+naia-server = "0.24"
+naia-shared = { path = "../shared" }
 
-### Known Issues
-
-To run a miniquad client you will require the following be installed
-
-    sudo apt-get install libxi-dev libgl1-mesa-dev
-
-## Testing
-
-Naia has comprehensive test coverage including unit tests, regression tests, integration tests, and property-based tests.
-
-### Running Tests
-
-```bash
-# Run all tests
-cargo test --workspace
-
-# Run specific test package
-cargo test --package naia-test
-
-# Run with output
-cargo test --package naia-test -- --nocapture
+# client/Cargo.toml
+[dependencies]
+naia-client = "0.24"
+naia-shared = { path = "../shared" }
 ```
 
-### Test Coverage
+See [demos/basic/](demos/basic/) for a minimal working example.
 
-Generate a coverage report:
+### Bevy adapter
 
-```bash
-./scripts/test_coverage.sh
+```toml
+# shared/Cargo.toml
+[dependencies]
+naia-shared = "0.24"
+
+# server/Cargo.toml
+[dependencies]
+naia-bevy-server = "0.24"
+naia-shared = { path = "../shared" }
+
+# client/Cargo.toml
+[dependencies]
+naia-bevy-client = "0.24"
+naia-shared = { path = "../shared" }
 ```
 
-This creates an HTML coverage report in `coverage/index.html`.
+See [demos/bevy/](demos/bevy/) for a complete Bevy demo.
 
-### Testing Guide
+### macroquad adapter
 
-For detailed information on writing tests and our testing strategy, see [test/TESTING_GUIDE.md](test/TESTING_GUIDE.md).
+```toml
+# client/Cargo.toml
+[dependencies]
+naia-macroquad-client = "0.24"
+naia-shared = { path = "../shared" }
+```
 
-**Key Testing Principles:**
-- Every production bug gets a regression test
-- Focus on integration tests over unit test coverage
-- Test internal state consistency, not just external APIs
-- Verify all code paths, especially alternate ones
+See [demos/macroquad/](demos/macroquad/) for a macroquad demo.
+
+---
+
+## Channel reference
+
+| Mode | Ordering | Reliability | Canonical use |
+|------|----------|-------------|---------------|
+| `UnorderedUnreliable` | None | None | High-frequency telemetry |
+| `SequencedUnreliable` | Newest-wins | None | Position updates (stale ok) |
+| `UnorderedReliable` | None | Guaranteed | One-off notifications |
+| `OrderedReliable` | FIFO | Guaranteed | Chat, game events |
+| `TickBuffered` | Per-tick | Guaranteed | Client input for prediction |
+| Bidirectional + Reliable | FIFO | Guaranteed | Request / response pairs |
+
+---
+
+## Platform support
+
+| Target | Transport | Notes |
+|--------|-----------|-------|
+| Linux / macOS / Windows | UDP | `naia-socket-native` |
+| Browser (`wasm32-unknown-unknown`) | WebRTC data channel | Enable `wbindgen` feature on socket crate; build with `wasm-pack` or `trunk` |
+
+The server always runs natively. Only the client needs WebRTC support for
+browser targets.
+
+---
+
+## Links
+
+- [API docs (docs.rs)](https://docs.rs/naia-server)
+- [Concepts guide](docs/CONCEPTS.md)
+- [Migration guide](docs/MIGRATION.md)
+- [Changelog](CHANGELOG.md)
+- [Discord](https://discord.gg/fD6QCtX)
+- [Demos](demos/)

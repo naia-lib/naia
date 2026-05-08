@@ -15,32 +15,66 @@ use crate::{client::ClientWrapper, Client};
 // EntityCommands extension
 // =====================================================================
 
+/// Extension methods on [`EntityCommands`] for client-side replication and
+/// authority management.
+///
+/// Requires that the protocol was built with
+/// `enable_client_authoritative_entities()`.
 pub trait CommandsExt<'a> {
+    /// Spawns a local-only duplicate of this entity without replication.
+    ///
+    /// Copies all components to a new entity. The new entity is not
+    /// registered with the naia replication layer.
     fn local_duplicate(&'a mut self) -> Entity;
+
+    /// Updates the [`Publicity`] for this client-owned entity.
+    ///
+    /// Queued as a Bevy command — takes effect at the next
+    /// `apply_deferred` boundary.
     fn configure_replication<T: Send + Sync + 'static>(
         &'a mut self,
         config: Publicity,
     ) -> &'a mut EntityCommands<'a>;
+
+    /// Registers this entity with the naia replication layer.
+    ///
+    /// After this call, inserting `#[derive(Replicate)]` components will
+    /// begin tracking and transmission to the server.
     fn enable_replication<T: Send + Sync + 'static>(
         &'a mut self,
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a>;
+
+    /// Removes this entity from the naia replication layer.
     fn disable_replication<T: Send + Sync + 'static>(
         &'a mut self,
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a>;
+
+    /// Returns the current [`Publicity`] for this entity, or `None` if
+    /// the entity is not registered.
     fn replication_config<T: Send + Sync + 'static>(
         &'a self,
         client: &Client<T>,
     ) -> Option<Publicity>;
+
+    /// Sends an authority request to the server for this delegated entity.
+    ///
+    /// The server responds with an `EntityAuthGrantedEvent` or
+    /// `EntityAuthDeniedEvent`.
     fn request_authority<T: Send + Sync + 'static>(
         &'a mut self,
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a>;
+
+    /// Releases the client's authority over this entity back to the server.
     fn release_authority<T: Send + Sync + 'static>(
         &'a mut self,
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a>;
+
+    /// Returns the current authority status for this entity, or `None`
+    /// if the entity is not delegable.
     fn authority<T: Send + Sync + 'static>(
         &'a self,
         client: &Client<T>,
@@ -143,17 +177,30 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 // `WorldOpCommand` helper) that runs with `&mut World` and dispatches
 // into `ClientWrapper<T>` via `world.resource_scope`.
 
+/// Extension methods on [`Commands`] for client-side replicated resource
+/// authority management.
+///
+/// All methods queue Bevy commands that run at the next `apply_deferred`
+/// boundary.
 pub trait ClientCommandsExt {
-    /// Request authority on a delegable resource of type `R`. The
-    /// request is sent to the server; the response (Granted/Denied)
-    /// arrives later as part of the normal authority-channel flow.
-    /// Once Granted, mutations via `ResMut<R>` propagate to the server.
+    /// Requests authority on a delegable server-replicated resource.
+    ///
+    /// The server must have configured the resource with
+    /// `ReplicationConfig::delegated()` via
+    /// [`ServerCommandsExt::configure_replicated_resource`]. The server's
+    /// response (Granted or Denied) arrives asynchronously as part of the
+    /// normal authority-channel flow. Once `Granted`, mutations via
+    /// `ResMut<R>` propagate back to the server.
+    ///
+    /// [`ServerCommandsExt::configure_replicated_resource`]: naia_bevy_server::ServerCommandsExt::configure_replicated_resource
     fn request_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,
         R: ReplicatedResource;
 
-    /// Release authority on a previously-granted resource.
+    /// Releases the client's authority over a previously granted resource.
+    ///
+    /// The server resumes exclusive ownership after confirming the release.
     fn release_resource_authority<T, R>(&mut self)
     where
         T: Send + Sync + 'static,

@@ -1,7 +1,61 @@
-//! # Naia Client
-//! A cross-platform client that can send/receive messages to/from a server, and
-//! has a pool of in-scope Entities/Components that are synced with the
-//! server.
+//! Client-side half of the naia real-time entity replication and messaging
+//! library.
+//!
+//! The central type is [`Client<E>`], which connects to a naia server,
+//! maintains a local mirror of replicated entities, and sends client
+//! messages and (optionally) client-authoritative entity mutations.
+//!
+//! Runs natively (UDP) and in the browser (WebRTC via
+//! `wasm32-unknown-unknown`). The same application logic compiles for both
+//! targets; only the [`Socket`](transport::Socket) implementation differs.
+//!
+//! # Connection setup
+//!
+//! ```no_run
+//! # use naia_client::{Client, ClientConfig};
+//! # fn example<E, P, S>(mut client: Client<E>, protocol: P, socket: S)
+//! #     where E: Copy + Eq + std::hash::Hash + Send + Sync,
+//! #           P: Into<naia_shared::Protocol>,
+//! #           S: Into<Box<dyn naia_client::transport::Socket>>
+//! # {
+//! // Optional: include an auth message in the handshake.
+//! // client.auth(MyAuthMessage { token: "…".into() });
+//!
+//! client.connect(socket); // begin handshake; loop until ConnectionEvent fires
+//! # }
+//! ```
+//!
+//! # Main loop
+//!
+//! ```no_run
+//! # use naia_client::{Client, Events, TickEvents};
+//! # use naia_shared::{Instant, WorldMutType, WorldRefType};
+//! # fn run<E, W>(client: &mut Client<E>, world: W, now: Instant)
+//! #     where E: Copy + Eq + std::hash::Hash + Send + Sync,
+//! #           W: WorldMutType<E> + WorldRefType<E> + Copy
+//! # {
+//! loop {
+//!     client.receive_all_packets();                     // 1. read from socket
+//!     client.process_all_packets(world, &now);          // 2. decode + apply
+//!     let events: Events<E> = client.take_world_events(); // 3. drain events
+//!     let ticks: TickEvents = client.take_tick_events(&now); // 4. tick clock
+//!     // 5. apply prediction / interpolation here
+//!     client.send_all_packets(world);                   // 6. flush outbound
+//! #   break;
+//! }
+//! # }
+//! ```
+//!
+//! # Key types
+//!
+//! | Type | Purpose |
+//! |------|---------|
+//! | [`Client<E>`] | Main entry point |
+//! | [`EntityMut`] | Builder for client-authoritative entities |
+//! | [`EntityRef`] | Read-only entity handle |
+//! | [`Publicity`] | The three visibility states (Private / Public / Delegated) |
+//! | [`CommandHistory`] | Rollback buffer for client-prediction |
+//! | [`ConnectionStatus`](client::ConnectionStatus) | Lifecycle state |
 
 #![deny(
     trivial_casts,

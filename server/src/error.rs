@@ -1,11 +1,26 @@
 use std::{error::Error, fmt, net::SocketAddr};
 
+/// Errors that can be returned by the naia server.
+///
+/// Returned by methods such as [`Server::send_message`] and the
+/// packet-processing loop when an unrecoverable transport or protocol
+/// condition is encountered.
+///
+/// [`Server::send_message`]: crate::Server::send_message
 #[derive(Debug)]
 pub enum NaiaServerError {
+    /// A general descriptive error message.
     Message(String),
+    /// An error from an underlying layer, boxed for type erasure.
     Wrapped(Box<dyn Error>),
+    /// A packet could not be delivered to the given address.
     SendError(SocketAddr),
+    /// A packet could not be read from the socket.
     RecvError,
+    /// The supplied [`UserKey`] does not correspond to a currently connected
+    /// user.
+    ///
+    /// [`UserKey`]: crate::UserKey
     UserNotFound,
 }
 

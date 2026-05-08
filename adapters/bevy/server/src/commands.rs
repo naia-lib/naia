@@ -13,24 +13,73 @@ use crate::{plugin::Singleton, server::ServerImpl, Server};
 // EntityCommands extension
 // =====================================================================
 
+/// Extension methods on [`EntityCommands`] for server-side replication and
+/// authority management.
+///
+/// Import this trait and call its methods on `commands.entity(entity)`:
+///
+/// ```no_run
+/// # use bevy_ecs::system::Commands;
+/// # use naia_bevy_server::{CommandsExt, Server};
+/// fn spawn_player(mut commands: Commands, mut server: bevy_ecs::system::ResMut<Server>) {
+///     commands.spawn(/* … */)
+///         .enable_replication(&mut server);
+/// }
+/// ```
 pub trait CommandsExt<'a> {
+    /// Registers the entity with the naia replication layer.
+    ///
+    /// After this call, inserting any `#[derive(Replicate)]` component
+    /// on the entity will begin diff-tracking and replication to in-scope
+    /// clients.
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
-    /// Like `enable_replication` but marks the entity as static — IDs from the
-    /// static pool, no diff-tracking after initial replication, post-spawn
-    /// mutation panics. Use for tile entities and other frozen scenery.
+
+    /// Registers the entity as static — no diff-tracking after spawn.
+    ///
+    /// A full component snapshot is sent once when the entity enters a
+    /// user's scope. Use for tile entities, level geometry, or any entity
+    /// that never mutates after spawning.
     fn enable_static_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+
+    /// Removes the entity from the naia replication layer.
+    ///
+    /// Despawns the entity on all clients for whom it was in scope.
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+
+    /// Updates the [`ReplicationConfig`] for this entity.
+    ///
+    /// Queued as a Bevy command — takes effect at the next
+    /// `apply_deferred` boundary.
     fn configure_replication(&'a mut self, config: ReplicationConfig)
         -> &'a mut EntityCommands<'a>;
+
+    /// Returns the current [`ReplicationConfig`] for this entity, or
+    /// `None` if the entity is not registered.
     fn replication_config(&'a self, server: &Server) -> Option<ReplicationConfig>;
+
+    /// Grants authority over this entity to the given user.
+    ///
+    /// The entity must already have `Delegated` replication config.
     fn give_authority(
         &'a mut self,
         server: &mut Server,
         user_key: &UserKey,
     ) -> &'a mut EntityCommands<'a>;
+
+    /// Reclaims server authority over this entity, revoking any client grant.
     fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+
+    /// Returns the current authority status for this entity, or `None`
+    /// if the entity is not delegable.
     fn authority(&'a self, server: &Server) -> Option<EntityAuthStatus>;
+
+    /// Pauses replication for this entity without despawning it on clients.
+    ///
+    /// Component mutations are buffered but not transmitted until
+    /// [`resume_replication`](CommandsExt::resume_replication) is called.
     fn pause_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+
+    /// Resumes replication for an entity previously paused.
     fn resume_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
 }
 
@@ -119,22 +168,34 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 // resource within the same system, schedule a follow-up system after
 // an `apply_deferred` flush. This is standard Bevy behavior.
 
+/// Extension methods on [`Commands`] for server-side replicated resource
+/// management.
+///
+/// All methods queue Bevy commands that run at the next `apply_deferred`
+/// boundary — changes do not take effect in the same system.
 pub trait ServerCommandsExt {
-    /// Insert a Replicated Resource using the dynamic entity ID pool.
+    /// Inserts a dynamic (diff-tracked) replicated resource.
+    ///
+    /// The value is replicated to all connected clients. Subsequent
+    /// mutations via `ResMut<R>` are diff-tracked and transmitted
+    /// automatically.
     fn replicate_resource<R: ReplicatedResource>(&mut self, value: R);
 
-    /// Insert a Replicated Resource using the static entity ID pool —
-    /// long-lived singletons; smaller wire IDs; recycled separately
-    /// from gameplay entities.
+    /// Inserts a static (immutable) replicated resource.
+    ///
+    /// A full snapshot is sent to each client once on connect. No
+    /// diff-tracking occurs — the value must not change after insertion.
     fn replicate_resource_static<R: ReplicatedResource>(&mut self, value: R);
 
-    /// Remove the resource of type `R`. Despawns the hidden entity,
-    /// propagating the removal to every client where it was in scope.
+    /// Removes the replicated resource of type `R`.
+    ///
+    /// Despawns the hidden entity on all clients where it was in scope.
     fn remove_replicated_resource<R: ReplicatedResource>(&mut self);
 
-    /// Configure the replication mode of resource `R` (e.g.
-    /// `ReplicationConfig::delegated()` to enable client-authority
-    /// requests).
+    /// Updates the [`ReplicationConfig`] for the resource of type `R`.
+    ///
+    /// Use `ReplicationConfig::delegated()` to allow clients to request
+    /// authority over the resource.
     fn configure_replicated_resource<R: ReplicatedResource>(&mut self, config: ReplicationConfig);
 }
 
