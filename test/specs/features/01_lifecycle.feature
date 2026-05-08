@@ -516,11 +516,17 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [connection-13] No replication before auth decision
 
     @Scenario(03)
-    Scenario: [connection-14a] Protocol_id checked during handshake
+    Scenario Outline: [<contract-id>] Protocol mismatch is rejected
       Given a server with protocol version A
       And a client with protocol version B
       When the client attempts to connect
       Then the connection is rejected with ProtocolMismatch
+
+      Examples:
+        | contract-id    |
+        | connection-14a |
+        | connection-33  |
+        | connection-14  |
 
     # [connection-15] — No mid-session reauth.
     # A connected client cannot trigger a second auth event. Design invariant
@@ -531,10 +537,16 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     Scenario: [connection-15] No mid-session reauth
 
     @Scenario(05)
-    Scenario: [connection-17] Server capacity reject produces RejectEvent
+    Scenario Outline: [<contract-id>] Rejected client receives RejectEvent
       Given a server is running with auth required
       When a client attempts to connect but is rejected
       Then the client observes RejectEvent
+
+      Examples:
+        | contract-id   |
+        | connection-17 |
+        | connection-04 |
+        | connection-16 |
 
     # [connection-19] — Heartbeat timeout triggers client disconnect.
     # Simulating real-time silence for a timeout duration requires wallclock
@@ -572,36 +584,21 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       Then the server has 1 connected client
 
     @Scenario(11)
-    Scenario: [connection-29] Same protocol produces same protocol_id
+    Scenario Outline: [<contract-id>] Same-version protocol allows connection
       Given a server with protocol version A
       And a client with protocol version A
       When the client attempts to connect
       Then the client is connected
 
-    @Scenario(12)
-    Scenario: [connection-30] Protocol_id wire encoding allows connection
-      Given a server with protocol version A
-      And a client with protocol version A
-      When the client attempts to connect
-      Then the client is connected
-
-    @Scenario(13)
-    Scenario: [connection-31] Matched protocol_id allows connection
-      Given a server with protocol version A
-      And a client with protocol version A
-      When the client attempts to connect
-      Then the client is connected
+      Examples:
+        | contract-id   |
+        | connection-29 |
+        | connection-30 |
+        | connection-31 |
 
     @Deferred @PolicyOnly
     @Scenario(14)
     Scenario: [connection-32] Protocol_id determined by wire-relevant aspects only
-
-    @Scenario(15)
-    Scenario: [connection-33] No partial protocol compatibility
-      Given a server with protocol version A
-      And a client with protocol version B
-      When the client attempts to connect
-      Then the connection is rejected with ProtocolMismatch
 
     @Deferred @PolicyOnly
     @Scenario(16)
@@ -638,12 +635,6 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @Scenario(22)
     Scenario: [observability-10] Metrics are testable without feature flags
 
-    @Scenario(23)
-    Scenario: [connection-04] Reject path: client receives RejectEvent
-      Given a server is running with auth required
-      When a client attempts to connect but is rejected
-      Then the client observes RejectEvent
-
     @Scenario(24)
     Scenario: [connection-06] Auth event ordering on accepted handshake
       Given a server is running with auth required
@@ -676,19 +667,6 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
     @PolicyOnly
     @Scenario(28)
     Scenario: [connection-11] Auth payload survives handshake roundtrip
-
-    @Scenario(29)
-    Scenario: [connection-14] Protocol mismatch produces ProtocolMismatch reject
-      Given a server with protocol version A
-      And a client with protocol version B
-      When the client attempts to connect
-      Then the connection is rejected with ProtocolMismatch
-
-    @Scenario(30)
-    Scenario: [connection-16] Server cap enforced via RejectEvent
-      Given a server is running with auth required
-      When a client attempts to connect but is rejected
-      Then the client observes RejectEvent
 
     # [connection-18] — Heartbeat liveness triggers timeout disconnect.
     # Simulating heartbeat timeout requires wallclock advancement beyond
