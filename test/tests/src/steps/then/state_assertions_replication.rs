@@ -444,17 +444,6 @@ fn then_client_matchstate_phase_equals(ctx: &TestWorldRef, expected: u8) -> Asse
 }
 
 
-/// Then the client's MatchState is present.
-#[then("the client's MatchState is present")]
-fn then_client_has_matchstate(ctx: &TestWorldRef) -> AssertOutcome<()> {
-    use naia_test_harness::TestMatchState;
-    let key = ctx.last_client();
-    if ctx.client(key, |c| c.has_resource::<TestMatchState>()) {
-        AssertOutcome::Passed(())
-    } else {
-        AssertOutcome::Pending
-    }
-}
 
 /// Then the client's MatchState is absent.
 #[then("the client's MatchState is absent")]
@@ -465,6 +454,29 @@ fn then_client_has_no_matchstate(ctx: &TestWorldRef) -> AssertOutcome<()> {
         AssertOutcome::Passed(())
     } else {
         AssertOutcome::Pending
+    }
+}
+
+/// Then the server's Score.home equals {int}.
+///
+/// Server-side resource read — used to verify re-insert rejection leaves
+/// the original value intact. Covers [resource-registration-04].
+#[then("the server's Score.home equals {int}")]
+fn then_server_score_home_equals(ctx: &TestWorldRef, expected: u32) -> AssertOutcome<()> {
+    use naia_test_harness::TestScore;
+    match ctx.server(|server| server.resource::<TestScore, _, _>(|s| *s.home)) {
+        Some(v) if v == expected => AssertOutcome::Passed(()),
+        _ => AssertOutcome::Pending,
+    }
+}
+
+/// Then the server's Score.away equals {int}.
+#[then("the server's Score.away equals {int}")]
+fn then_server_score_away_equals(ctx: &TestWorldRef, expected: u32) -> AssertOutcome<()> {
+    use naia_test_harness::TestScore;
+    match ctx.server(|server| server.resource::<TestScore, _, _>(|s| *s.away)) {
+        Some(v) if v == expected => AssertOutcome::Passed(()),
+        _ => AssertOutcome::Pending,
     }
 }
 

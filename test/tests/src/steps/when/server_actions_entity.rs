@@ -356,19 +356,7 @@ fn when_server_inserts_score_dynamic(ctx: &mut TestWorldMut) {
     });
 }
 
-/// When the server inserts `MatchState { phase: N }` as a static resource.
-#[when(r#"the server inserts MatchState \{ phase: {int} \} as a static resource"#)]
-fn when_server_inserts_matchstate_static(ctx: &mut TestWorldMut, phase: u8) {
-    use naia_test_harness::TestMatchState;
-    let scenario = ctx.scenario_mut();
-    scenario.mutate(|c| {
-        c.server(|server| {
-            assert!(server.insert_static_resource(TestMatchState::new(phase)), "insert MatchState should succeed");
-        });
-    });
-}
-
-/// When the server inserts `MatchState { phase: N }` as static (alias phrasing).
+/// When the server inserts `MatchState { phase: N }` as static.
 #[when(r#"the server inserts MatchState \{ phase: {int} \} as static"#)]
 fn when_server_inserts_matchstate_as_static(ctx: &mut TestWorldMut, phase: u8) {
     use naia_test_harness::TestMatchState;
@@ -392,15 +380,18 @@ fn when_server_removes_matchstate(ctx: &mut TestWorldMut) {
     });
 }
 
-/// When the server mutates Score.home to {int}.
-#[when("the server mutates Score.home to {int}")]
-fn when_server_mutates_score_home(ctx: &mut TestWorldMut, value: u32) {
+/// When the server attempts to re-insert Score with new values.
+///
+/// Asserts the insert returns false (resource already exists) so the
+/// Then steps can verify the original value is unchanged. Covers the
+/// idempotency / re-insert-rejection contract.
+#[when(r#"the server attempts to re-insert Score \{ home: {int}, away: {int} \}"#)]
+fn when_server_attempts_reinsert_score(ctx: &mut TestWorldMut, home: u32, away: u32) {
     use naia_test_harness::TestScore;
     let scenario = ctx.scenario_mut();
-    scenario.mutate(|c| {
-        c.server(|server| {
-            server.mutate_resource::<TestScore, _, _>(|s| { *s.home = value; });
-        });
+    let accepted = scenario.mutate(|c| {
+        c.server(|server| server.insert_resource(TestScore::new(home, away)))
     });
+    assert!(!accepted, "re-insert of an existing Score must return false (ResourceAlreadyExists)");
 }
 

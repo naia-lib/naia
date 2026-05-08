@@ -105,22 +105,6 @@ fn given_alice_holds_authority(ctx: &mut TestWorldMut) {
     scenario.allow_flexible_next();
 }
 
-/// Given alice has set selected_id to {int}.
-#[given("alice has set selected_id to {int}")]
-fn given_alice_has_set_selected_id(ctx: &mut TestWorldMut, value: u16) {
-    use naia_test_harness::TestPlayerSelection;
-    let scenario = ctx.scenario_mut();
-    let alice_key = scenario.bdd_get(&crate::steps::world_helpers::client_key_storage("alice"))
-        .expect("alice not connected");
-    scenario.mutate(|mctx| {
-        mctx.client(alice_key, |cl| {
-            cl.mutate_resource::<TestPlayerSelection, _, _>(|r| { *r.selected_id = value; });
-        });
-    });
-    for _ in 0..10 {
-        scenario.mutate(|_| {});
-    }
-}
 
 /// Given a server with `PlayerSelection { selected_id: 0 }` and connected client "alice".
 ///
