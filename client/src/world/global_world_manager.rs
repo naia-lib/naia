@@ -127,6 +127,24 @@ impl GlobalWorldManager {
         component.set_mutator(&prop_mutator);
     }
 
+    /// Returns true if this component was already registered for host-side
+    /// tracking (i.e. the entity is delegated and the GlobalDiffHandler
+    /// already has this entity+component registered).  Used by callers to
+    /// skip redundant setup when authority is granted to a client for an
+    /// entity whose delegation was already enabled.
+    pub fn component_already_host_registered(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        self.entity_is_delegated(global_entity)
+            && self
+                .diff_handler
+                .read()
+                .expect("GlobalDiffHandler lock")
+                .has_component(global_entity, component_kind)
+    }
+
     // Remove Component
     pub fn host_remove_component(
         &mut self,

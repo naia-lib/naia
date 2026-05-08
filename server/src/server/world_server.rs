@@ -1339,7 +1339,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
-    pub(crate) fn entity_give_authority(
+    pub fn entity_give_authority(
         &mut self,
         origin_user: &UserKey,
         world_entity: &E,

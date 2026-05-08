@@ -422,6 +422,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.entity_take_authority(world_entity)
     }
 
+    /// This is used only for Bevy adapter crates, do not use otherwise!
+    pub fn entity_give_authority(
+        &mut self,
+        origin_user: &UserKey,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
+        self.world_server.entity_give_authority(origin_user, world_entity)
+    }
+
     pub fn configure_entity_replication<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,

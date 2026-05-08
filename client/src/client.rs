@@ -1077,6 +1077,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_to_global_entity(world_entity)
             .unwrap();
 
+        // When authority is granted for a previously-remote delegated entity
+        // (server calls give_authority while the entity is already in scope),
+        // entity_complete_delegation has already registered this component in
+        // the GlobalDiffHandler and set the Property to Delegated state.
+        // Re-entering here would double-panic in both host_insert_component
+        // and Property::enable_delegation.  Skip entirely.
+        if self
+            .global_world_manager
+            .component_already_host_registered(&global_entity, &component_kind)
+        {
+            return;
+        }
+
         // Register component in GlobalDiffHandler FIRST (before inserting into connection)
         // This ensures that when insert_component is called on the connection's world_manager,
         // the component is already registered in GlobalDiffHandler, allowing UserDiffHandler

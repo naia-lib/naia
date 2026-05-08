@@ -65,6 +65,10 @@ impl GlobalDiffHandler {
         self.max_kind_count
     }
 
+    pub fn has_component(&self, global_entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+        self.mut_receiver_builders.contains_key(&(*global_entity, *component_kind))
+    }
+
     pub fn register_component(
         &mut self,
         component_kinds: &ComponentKinds,

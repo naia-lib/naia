@@ -72,10 +72,11 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 
     fn give_authority(
         &'a mut self,
-        _server: &mut Server,
-        _user_key: &UserKey,
+        server: &mut Server,
+        user_key: &UserKey,
     ) -> &'a mut EntityCommands<'a> {
-        todo!()
+        server.entity_give_authority(&self.id(), user_key);
+        self
     }
 
     fn take_authority(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {

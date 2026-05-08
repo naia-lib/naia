@@ -646,7 +646,12 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     @Scenario(36)
     Scenario: [entity-authority-14] Authority is preserved across re-entry
 
-    @Deferred @PolicyOnly
     @Scenario(37)
     Scenario: [entity-authority-15] Duplicate authority signals are idempotent
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When the server gives authority to client A for the delegated entity
+      And the server gives authority to client A for the delegated entity
+      Then client A is granted authority for the delegated entity
 

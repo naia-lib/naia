@@ -603,6 +603,17 @@ impl<'w> Server<'w> {
         }
     }
 
+    pub(crate) fn entity_give_authority(&mut self, entity: &Entity, user_key: &UserKey) {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => {
+                let _ = server.entity_give_authority(user_key, entity);
+            }
+            ServerImpl::Full(server) => {
+                let _ = server.entity_give_authority(user_key, entity);
+            }
+        }
+    }
+
     pub(crate) fn entity_authority_status(&self, _entity: &Entity) -> Option<EntityAuthStatus> {
         todo!("entity_authority_status requires world access; use ServerImpl directly in exclusive systems")
     }
