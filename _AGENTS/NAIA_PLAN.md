@@ -159,11 +159,15 @@ The following documents are superseded by this plan. Their content is preserved 
 
 ## Acceptance criteria for "done" state
 
-1. `namako gate` passes at 100% (active scenario count ≥ 350). ← **P1–P5**
+1. BDD gate passes at 100%, ≥ 325 active scenarios with real steps. ← **TEST_INFRA_PLAN.md** (old 350 target retired — see that doc)
 2. Zero `todo!()` in production code. ← **P1.7**
 3. `vocab.rs` has zero `#[allow(dead_code)]` attributes. ← **P6**
-4. All step bindings ≤25 LOC, no file in `steps/` exceeds 500 LOC. ← ongoing
+4. All step bindings ≤25 LOC, no file in `steps/` exceeds 500 LOC. ← **TEST_INFRA_PLAN.md T5**
 5. `cargo test --workspace` green, 0 ignored (outside documented carve-out). ← ongoing
+
+## Active sub-plans
+
+- `_AGENTS/TEST_INFRA_PLAN.md` — test infrastructure overhaul (T0–T5); see that doc for phases
 
 ---
 
