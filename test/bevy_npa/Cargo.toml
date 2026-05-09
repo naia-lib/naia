@@ -19,12 +19,12 @@ anyhow = "1.0"
 futures = "0.3"
 regex = "1.0"
 
-naia-bevy-server = { path = "../../adapters/bevy/server", features = ["transport_local"] }
-naia-bevy-client = { path = "../../adapters/bevy/client", features = ["transport_local"] }
-naia-bevy-shared = { path = "../../adapters/bevy/shared" }
-naia-server = { path = "../../server", features = ["transport_local"] }
-naia-client = { path = "../../client", features = ["transport_local"] }
-naia-shared = { path = "../../shared", features = ["transport_local"] }
+naia-bevy-server = { path = "../../adapters/bevy/server", features = ["transport_local", "test_time"] }
+naia-bevy-client = { path = "../../adapters/bevy/client", features = ["transport_local", "test_time"] }
+naia-bevy-shared = { path = "../../adapters/bevy/shared", features = ["test_time"] }
+naia-server = { path = "../../server", features = ["transport_local", "test_time"] }
+naia-client = { path = "../../client", features = ["transport_local", "test_time"] }
+naia-shared = { path = "../../shared", features = ["transport_local", "test_time"] }
 
 bevy_app = { version = "0.18", default-features = false }
 bevy_ecs = { version = "0.18", default-features = false }

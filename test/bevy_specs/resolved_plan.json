@@ -2,11 +2,788 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "55a5a5cacc979f8df8dd2a663b8a687ecfd7079a46156230f436b0e50b3ef56b",
-    "step_registry_hash": "4cb5ed6b6e838d5926e9a07b4fe60a84a155345a09785f8cd318ec4f8e676ada",
-    "resolved_plan_hash": "660f775156937d767e3cbf740ca360a3efd7f161bb875425ac97315c58ad7c02"
+    "feature_fingerprint_hash": "d3f03def300d3c484e64781f7733da89e1119b4b8670c83730996ac553643d3f",
+    "step_registry_hash": "4db848ed70e9e5d40fc0403d1ed0c031fb99eca8cc4fd70694057d3d45141ddb",
+    "resolved_plan_hash": "1b13fcbab912cbce1def1711e263525ffc8cec27ed33f6255b6b80bc24952a83"
   },
   "scenarios": [
+    {
+      "scenario_key": "bevy_replication:Rule(01):Scenario(01)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-replication-01] enable_replication scopes entity into client Bevy world",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity spawns on the client",
+          "binding_id": "69e625a08441b8dcf994bdc599b83138886aea30ea282da4e46f26d2128c0a5b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "e1497d62fec04717b23d8722d124abf45ddc2dc7ed8bb051b71ae1d664f932ac"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(01):Scenario(02)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-replication-02] SpawnEntityEvent fires on entity scope entry",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed SpawnEntityEvent",
+          "binding_id": "39b4517a4f1d8a0bd46f393d616faa6f5ebce3ac1ab91bbaa7edd491c39ed129",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "db49e4e9ec33d69ce6094a590f2507773dbc337671d1eff61e8c37d146378076"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(01):Scenario(03)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-replication-03] disable_replication removes entity from client Bevy world",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disables replication for the entity",
+          "binding_id": "75e9197ad37317f5abcb5e61646a304a30334967dfdd121b8f80fd52ac246307",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "44ed5c3d20370625ea9c5abcda869aa3dced4f8ac6c63d67971b436e0b8dfdd2"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is absent from the client world",
+          "binding_id": "44af676055acc638dd310c18542776e997c64d9613849adf655e82d6a6944660",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6753a808b5f95b1f9dfaa1b20922c3fd8811b4f637d8347fb550b6d50485e24e"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(01):Scenario(04)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-replication-04] DespawnEntityEvent fires when entity leaves scope",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server disables replication for the entity",
+          "binding_id": "75e9197ad37317f5abcb5e61646a304a30334967dfdd121b8f80fd52ac246307",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "44ed5c3d20370625ea9c5abcda869aa3dced4f8ac6c63d67971b436e0b8dfdd2"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed DespawnEntityEvent",
+          "binding_id": "e2c2ebf36676a515908bbb57855610539424cf4345706ba8d901ac8be82b179c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b856dd874524f40eb3e65bbf573ba7fadb4aa6c1d8511d78663be6e0a5a47067"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(01):Scenario(05)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-replication-05] Bevy world mutation replicates via ECS change detection",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position at the origin",
+          "binding_id": "0aacb128ae5044ce0fc0ed9f06d3f2f70c846f0a54370606c239c239fdbb06df",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "add01e834c9cffdc17504a206cb5939f245be66376366061ca342d88cb7a73a5"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server mutates Position to 42 and 42",
+          "binding_id": "1016a8b4707823218b27badfd618a1bb02ad3bfbb54828dad5cf037cab32e365",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ef2accb5c016bc2b67f86ed078f79ce42aab4ff63aeedd3d13a797b611a70177"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client observes Position 42 and 42",
+          "binding_id": "0e4e35d0311f744c363d4d9ba0dea1a207ae3a19a7d0a4f0ee1aaf0066eeda67",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "82c455a96adaec805f5543a542d67c938e5943c62906456ef46dddd937d4da3f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(02):Scenario(01)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-authority-01] give_authority grants EntityAuthStatus::Granted",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is configured as Delegated",
+          "binding_id": "93eeb87d4172f1f09ecb5fc7b0f0d48fd73151e716ecb340503c7bea92865618",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a2a85f4900c2370e27209a954d46b3ba8395baab56de5f4ba725966d4ad0e7c9"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server grants authority to the client",
+          "binding_id": "44f824ad039cbc6ad846d80eb70915804de3b3ee22659a4ad69d2b285cc84100",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "73f5723a44354dec92a07f4361f0fbb45b2a8c5c3b4e44bca7b7f1c09e2a35c5"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has authority status Granted",
+          "binding_id": "95f2d0b8ef2bb8e93d238383d4811ded3439cefd0f750040e28ef290bd399515",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "bd1b9a598ceb4216c3147540d12c6473bf6b9dd7a878b255da60c384e34c6f68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(02):Scenario(02)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-authority-02] EntityAuthGrantedEvent fires on authority grant",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is configured as Delegated",
+          "binding_id": "93eeb87d4172f1f09ecb5fc7b0f0d48fd73151e716ecb340503c7bea92865618",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a2a85f4900c2370e27209a954d46b3ba8395baab56de5f4ba725966d4ad0e7c9"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server grants authority to the client",
+          "binding_id": "44f824ad039cbc6ad846d80eb70915804de3b3ee22659a4ad69d2b285cc84100",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "73f5723a44354dec92a07f4361f0fbb45b2a8c5c3b4e44bca7b7f1c09e2a35c5"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has observed EntityAuthGrantedEvent",
+          "binding_id": "e35a6526320e384829fde6755f318a753c6611f37363a1b9f7c117be7a33de96",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "396136582ef979acc3f5172aec348ccb19ce2e30c31b8a01862a2ad8ddc7143f"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(02):Scenario(03)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-authority-03] request_authority results in EntityAuthStatus::Granted",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for the client with Position",
+          "binding_id": "433f66dd320653b4cd01ee44954ab045b2f7b0c0baf09c116de472fb0b931320",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "b49a6cbbd0f47372b09fa7c6e4f206c2106dc6892430cf4221651b170c6547b8"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is configured as Delegated",
+          "binding_id": "93eeb87d4172f1f09ecb5fc7b0f0d48fd73151e716ecb340503c7bea92865618",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a2a85f4900c2370e27209a954d46b3ba8395baab56de5f4ba725966d4ad0e7c9"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client requests authority for the entity",
+          "binding_id": "851db43a7811831df910c331d9197b7c56bf7b4bdc260012252049680962be3f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "ca9ed14e0b43d4010908e759d4f8c6c995e12ef10af7a500601ba3e08d22f414"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has authority status Granted",
+          "binding_id": "95f2d0b8ef2bb8e93d238383d4811ded3439cefd0f750040e28ef290bd399515",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "bd1b9a598ceb4216c3147540d12c6473bf6b9dd7a878b255da60c384e34c6f68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(02):Scenario(04)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-authority-04] Second requester sees EntityAuthDeniedEvent",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a second client connects",
+          "binding_id": "94b2fd2a59da9762a7be056c2aced52d7699e28a7f4e0e5af3c8c220ac8dabd7",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "e44f88d2f096b67828e0e621a6571c664b93b0cc171c4921240a110c6c55b592"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server entity is spawned in-scope for both clients with Position",
+          "binding_id": "c998943817aa24a6025013c0de45490769f052daef7a481816e6c0a234445e67",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6fa92cecf26dac01e83694bd45bf855c16a86bbcd8cf5b637e5298c6412907d8"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is configured as Delegated",
+          "binding_id": "93eeb87d4172f1f09ecb5fc7b0f0d48fd73151e716ecb340503c7bea92865618",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a2a85f4900c2370e27209a954d46b3ba8395baab56de5f4ba725966d4ad0e7c9"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the first client requests authority for the entity",
+          "binding_id": "0413c17f9d6baa27ddf560e5aa4f6d9589710e43574637db83a3f3883da0be3b",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7a75a889344bcbbc85980f9d0ee5f55f9d6df0ca5ec8f25c39b948705e12f467"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the second client requests authority for the entity",
+          "binding_id": "69bbe9b0a02af17e3d7fdc9297fb35f28d9adfec0b85036227f7193248dc28cb",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a1824b91ac6e2da7c9f0854600b72d5daf084f9a2408b3f723b407707c4a0404"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the second client has observed EntityAuthDeniedEvent",
+          "binding_id": "5f9dad3915668c6cbd116d72200c8a4531b34b50bac0729eab2075f9bc057bd8",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "84cd3df9229b3509d850576a051d9592c22eb3a8749202e3979522ef6fcc3f96"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(03):Scenario(01)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-resource-01] replicate_resource inserts Bevy Resource on client with correct value",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server inserts TestScore home 3 away 1 as a replicated resource",
+          "binding_id": "d12b6335775b89cd9da64d0b78f623e1f61ab9857c982b0f87d1cf5cd8c5c443",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "30211163ff95c8f84864b8ab316b5f0fe7b1ee79f221d2e354eb2baae40dca15"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client has TestScore as a Bevy resource",
+          "binding_id": "5686a518aa5b25f59b0a158e3734d6ae72adb4856a1ae5c4806a29f289401069",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7ac187975d68c32aeac8af0e751c90a20743f6ca73ec0c17f9a0e7896fe8b4b6"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client TestScore.home equals 3",
+          "binding_id": "82917169a9f105a981ad4170315f36f921f0a2f36fa8b6fe21db3e652a229920",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f9eea1ca291124c35bea162b0907d0ef7b97b92c59e69e869650d2a8117d7ca8"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(03):Scenario(02)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-resource-02] ResMut mutation propagates to client Bevy Resource",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server inserts TestScore home 0 away 0 as a replicated resource",
+          "binding_id": "4214dd86a5535a843174d1efd33919387e61b4157f6566406302637b6b6af556",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "167eaf2ee2c21e8c51cbb975ad794fa6e0855ee007a8ed31f649b0432817e3f2"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server mutates TestScore to home 7 away 2",
+          "binding_id": "a324d46ad57b69b0476564c4152f53e2ab047a6562af56ea4fc3e8b2f29f52fb",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0bf10d012c59d123fd0809e2bd80060d83c2ef7cb2ce54a4a40fb737aecc3e3d"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client TestScore.home equals 7",
+          "binding_id": "4839431f6a14e4e67a48b6e95f3fd88416273eb08d0f3af2c18736cff3e19b5d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "7a0379dfac8670d1d666f642a3410cfa9597c274e43651bd86b9ef7a8a45a313"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the client TestScore.away equals 2",
+          "binding_id": "579cc99332fe4e4a3db6c27df5aaeb78b7bc7cf912105bf0b7ef71e18cf505f0",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "c17eec2d796942d511237c014855e6616ef696cd1fd354d6f1e29ef5c267cefe"
+        }
+      ]
+    },
+    {
+      "scenario_key": "bevy_replication:Rule(03):Scenario(03)",
+      "feature_path": "features/replication.feature",
+      "scenario_name": "[bevy-resource-03] request_resource_authority is observed as Denied by server",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a client connects",
+          "binding_id": "970cd18ecbee4cba3eb3372209b6d04c32a9252b3e400bacf910d7e2382d5eac",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server inserts TestPlayerSelection as a delegable resource",
+          "binding_id": "b2aee339ee3bb48c7cb32ab025de52f26fe900e2a5f272178858cd2744bea739",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5e307544c8b2578d826c8d9f33af7624b769c73355a5832d8dd94c6473f81850"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the client requests authority for TestPlayerSelection",
+          "binding_id": "2dd261f277773034a0d31c87280dcf03a174705bbaec613c90a9e0fca19d28f4",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9e372d1b5ae7305117b8f910ab6657be824acdffa32c97768c060dbdffa34cf0"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the server observes Denied authority for TestPlayerSelection",
+          "binding_id": "58434828d7a5fe0f96a6273a56e3ee44fcd786e4ecee4920fa86dbc39b84976a",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "8f85a91d84bdaf6fd8a081663bd60c46b785c1ea6a446eacdc128e317bb1b554"
+        }
+      ]
+    },
     {
       "scenario_key": "namako_smoke_test:Rule(01):Scenario(01)",
       "feature_path": "features/smoke.feature",
