@@ -21,11 +21,17 @@ mod update {
     pub mod immutable;
     pub mod mutate_path;
     pub mod mutation;
+    pub mod round_trip;
 }
 
 mod authority {
     pub mod contention;
+    pub mod cycle;
     pub mod grant;
+}
+
+mod resources {
+    pub mod throughput;
 }
 
 mod wire {
@@ -56,8 +62,11 @@ criterion_main!(
     update::mutate_path::mutate_path_group,
     update::bulk::update_bulk,
     update::immutable::update_immutable,
+    update::round_trip::update_round_trip,
     authority::grant::authority_grant_group,
     authority::contention::authority_contention,
+    authority::cycle::authority_cycle,
+    resources::throughput::resources_throughput,
     wire::framing::wire_framing_group,
     wire::bandwidth::wire_bandwidth,
     wire::bandwidth_realistic::wire_bandwidth_realistic_group,

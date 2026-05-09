@@ -149,6 +149,22 @@ impl RotationQ {
     }
 }
 
+// ─── Benchmark resource ───────────────────────────────────────────────────────
+
+/// Delta-tracked resource used by `resources/throughput` benchmarks.
+/// Registered via `add_resource` — replicated as a hidden entity to every
+/// connected client.
+#[derive(Replicate)]
+pub struct BenchResource {
+    pub value: Property<u32>,
+}
+
+impl BenchResource {
+    pub fn new(v: u32) -> Self {
+        Self::new_complete(v)
+    }
+}
+
 // ─── Halo scenario components ─────────────────────────────────────────────────
 //
 // Used by `scenarios/halo_btb_16v16`: a cyberlith-shaped scenario with 10K
@@ -193,6 +209,7 @@ pub fn bench_protocol() -> Protocol {
         .add_component::<RotationQ>()
         .add_component::<HaloTile>()
         .add_component::<HaloUnit>()
+        .add_resource::<BenchResource>()
         .add_message::<BenchAuth>()
         .add_channel::<BenchChannel>(
             ChannelDirection::Bidirectional,

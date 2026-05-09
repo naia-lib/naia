@@ -20,12 +20,13 @@ use naia_shared::{
 };
 
 use crate::bench_protocol::{
-    bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent, HaloTile,
-    HaloUnit, Position, PositionQ, PositionQState, Rotation, RotationQ, Velocity, VelocityQ,
-    VelocityQState,
+    bench_protocol, BenchAuth, BenchComponent, BenchEntity, BenchImmutableComponent, BenchResource,
+    HaloTile, HaloUnit, Position, PositionQ, PositionQState, Rotation, RotationQ, Velocity,
+    VelocityQ, VelocityQState,
 };
 use crate::serde_quat::BenchQuat;
-use naia_shared::SignedVariableFloat;
+use naia_server::ReplicationConfig;
+use naia_shared::{EntityAuthStatus, SignedVariableFloat};
 
 /// Simulated tick duration. 16 ms = 62.5 Hz, a reasonable game-server
 /// default. Load-bearing: don't change without auditing callers that
@@ -88,6 +89,7 @@ pub struct BenchWorldBuilder {
     scoped: bool,
     uncapped_bandwidth: bool,
     tick_ms: u64,
+    delegated: bool,
 }
 
 impl Default for BenchWorldBuilder {
@@ -106,6 +108,7 @@ impl BenchWorldBuilder {
             scoped: true,
             uncapped_bandwidth: false,
             tick_ms: TICK_MS,
+            delegated: false,
         }
     }
 
@@ -159,6 +162,13 @@ impl BenchWorldBuilder {
         self
     }
 
+    /// Configure all spawned dynamic entities as `Delegated` — required for
+    /// any bench that calls `give_authority_on_entity` or `take_authority_on_entity`.
+    pub fn delegated(mut self) -> Self {
+        self.delegated = true;
+        self
+    }
+
     /// Build to steady-state. Not measured — call from `iter_batched` setup.
     pub fn build(self) -> BenchWorld {
         BenchWorld::new(
@@ -169,6 +179,7 @@ impl BenchWorldBuilder {
             self.scoped,
             self.uncapped_bandwidth,
             self.tick_ms,
+            self.delegated,
         )
     }
 }
@@ -210,6 +221,7 @@ impl BenchWorld {
         scoped: bool,
         uncapped_bandwidth: bool,
         tick_ms: u64,
+        delegated: bool,
     ) -> Self {
         TestClock::init(0);
 
@@ -336,6 +348,14 @@ impl BenchWorld {
                 }
                 entity
             };
+            if delegated {
+                let mut world_mut = server_world.proxy_mut();
+                server.configure_entity_replication(
+                    &mut world_mut,
+                    &entity,
+                    ReplicationConfig::delegated(),
+                );
+            }
             if scoped {
                 server.room_mut(&room_key).add_entity(&entity);
             }
@@ -884,6 +904,148 @@ impl BenchWorld {
         if let Some(&user_key) = self.connected_user_keys.get(user_idx) {
             self.server.room_mut(&self.room_key).remove_user(&user_key);
         }
+    }
+
+    // ─── Round-trip helpers ───────────────────────────────────────────────────
+
+    /// Drive ticks until client 0 has a `BenchComponent` with value ≥
+    /// `min_value`. Returns `true` if confirmed within `timeout` ticks.
+    ///
+    /// With local (in-memory) transport the update propagates in exactly one
+    /// tick, so this always completes on the first iteration. The measured
+    /// latency is the wall time of that one tick including the client's receive
+    /// path — the true end-to-end round-trip cost.
+    pub fn tick_until_client_entity_updated(&mut self, min_value: u32, timeout: usize) -> bool {
+        for _ in 0..timeout {
+            advance_tick(
+                &self.hub,
+                &mut self.server,
+                &mut self.server_world,
+                &mut self.clients,
+                self.tick_ms,
+            );
+            drain_all_events(&mut self.server, &mut self.clients);
+            if let Some((client, world)) = self.clients.first() {
+                let confirmed = client.entities(&world.proxy()).iter().any(|entity| {
+                    client
+                        .entity(world.proxy(), entity)
+                        .component::<BenchComponent>()
+                        .map(|c| *c.value >= min_value)
+                        .unwrap_or(false)
+                });
+                if confirmed {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    // ─── Resource helpers ─────────────────────────────────────────────────────
+
+    /// Insert a delta-tracked `BenchResource` with initial value 0.
+    /// Panics if a resource of this type is already present.
+    pub fn insert_resource(&mut self) {
+        self.server
+            .insert_resource(self.server_world.proxy_mut(), BenchResource::new(0), false)
+            .expect("BenchResource already inserted");
+    }
+
+    /// Mutate the `BenchResource` value (wrapping add 1).
+    /// No-op if the resource is not currently inserted.
+    pub fn mutate_resource(&mut self) {
+        let Some(entity) = self.server.resource_entity::<BenchResource>() else {
+            return;
+        };
+        if let Some(mut res) = self
+            .server
+            .entity_mut(self.server_world.proxy_mut(), &entity)
+            .component::<BenchResource>()
+        {
+            *res.value = res.value.wrapping_add(1);
+        }
+    }
+
+    /// Drive ticks until client 0 has `BenchResource`. Returns `true` if
+    /// replicated within `timeout` ticks.
+    pub fn tick_until_client_has_resource(&mut self, timeout: usize) -> bool {
+        for _ in 0..timeout {
+            advance_tick(
+                &self.hub,
+                &mut self.server,
+                &mut self.server_world,
+                &mut self.clients,
+                self.tick_ms,
+            );
+            drain_all_events(&mut self.server, &mut self.clients);
+            if let Some((client, _)) = self.clients.first() {
+                if client.has_resource::<BenchResource>() {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    // ─── Authority cycle helpers ──────────────────────────────────────────────
+
+    /// Server takes authority back on entity[entity_idx].
+    /// Used by `authority/cycle` benchmarks.
+    pub fn take_authority_on_entity(&mut self, entity_idx: usize) {
+        if let Some(&entity) = self.server_entities.get(entity_idx) {
+            let _ = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .take_authority();
+        }
+    }
+
+    /// Drive ticks until client 0 has at least one entity with
+    /// `EntityAuthStatus::Granted`. Returns `true` within `timeout` ticks.
+    pub fn tick_until_client_auth_granted(&mut self, timeout: usize) -> bool {
+        for _ in 0..timeout {
+            advance_tick(
+                &self.hub,
+                &mut self.server,
+                &mut self.server_world,
+                &mut self.clients,
+                self.tick_ms,
+            );
+            drain_all_events(&mut self.server, &mut self.clients);
+            if let Some((client, world)) = self.clients.first() {
+                let granted = client.entities(&world.proxy()).iter().any(|entity| {
+                    client.entity_authority_status(entity) == Some(EntityAuthStatus::Granted)
+                });
+                if granted {
+                    return true;
+                }
+            }
+        }
+        false
+    }
+
+    /// Drive ticks until client 0 has NO entity with `EntityAuthStatus::Granted`.
+    /// Used to detect that a `take_authority` revocation has propagated.
+    pub fn tick_until_client_auth_not_granted(&mut self, timeout: usize) -> bool {
+        for _ in 0..timeout {
+            advance_tick(
+                &self.hub,
+                &mut self.server,
+                &mut self.server_world,
+                &mut self.clients,
+                self.tick_ms,
+            );
+            drain_all_events(&mut self.server, &mut self.clients);
+            if let Some((client, world)) = self.clients.first() {
+                let none_granted = !client.entities(&world.proxy()).iter().any(|entity| {
+                    client.entity_authority_status(entity) == Some(EntityAuthStatus::Granted)
+                });
+                if none_granted {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     pub fn server_mut(&mut self) -> &mut NaiaServer<BenchEntity> {
