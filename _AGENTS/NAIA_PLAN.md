@@ -37,6 +37,7 @@
 - P8: 10 unsafe impl Send/Sync removed from bevy adapters (T3.1); P8.3 N/A (handler signatures differ) — `dev`
 - P9: connection-33/34/35 reconnect edge cases added; 309 active scenarios — `dev`
 - P11: kebab-case renames (×3), println→debug! (×3), feature audit; 0 build warnings — `dev`
+- D-P10: Full docs overhaul — README, SECURITY.md, CHANGELOG.md, MIGRATION.md, CONCEPTS.md, all crate //! + /// API surface docs, Bevy adapter trait docs — `dev`
 
 ---
 
@@ -182,8 +183,8 @@ The following phases are parked. Do not schedule without explicit instruction fr
 ### D-P9.A3 — proptest for message ordering
 `OrderedReliable` / `SequencedReliable` property-based tests using `proptest`. 3 tasks (add dep, write 2 proptests). Deferred in favour of BDD coverage.
 
-### D-P10 — Docs and discoverability
-README architecture overview, `_AGENTS/RESOURCES.md` user walkthrough, `test/TESTING_GUIDE.md`, Bevy adapter `//!` module docs. Deferred until API surface stabilises post-P1–P5.
+### D-P10 — Docs and discoverability — **COMPLETE** (2026-05-08)
+Full documentation overhaul delivered across two sessions: README rewrite, `SECURITY.md`, `CHANGELOG.md`, `docs/MIGRATION.md`, `docs/CONCEPTS.md`, crate `//!` module docs for all four lib.rs files, full `///` API surface docs for `Server<E>`, `Client<E>`, all builder/accessor types (`EntityMut`, `EntityRef`, `RoomMut`, `RoomRef`, `UserMut`, `UserRef`, `UserScopeRef`, `UserScopeMut`), Bevy adapter `CommandsExt`/`ServerCommandsExt`/`ClientCommandsExt` traits, and both Bevy `Plugin` structs. `TESTING_GUIDE.md` and `RESOURCES.md` remain unwritten but are low-value given the existing `docs/CONCEPTS.md`.
 
 ### D-P12 — Large architectural refactors
 Two items: (1) `client.rs` (2311 lines, 95 methods) mirrors WorldServer patterns — a `Host<E>` trait could unify them, but depends on D-P2 (WorldServer decomp). (2) 434 `Box<dyn ...>` instances — profile under `halo_btb_16v16` bench first, then evaluate per-kind enum dispatch via derive macro if they appear in top-10 hotspots. Deferred: large scope, blocked on other deferred work.
