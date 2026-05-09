@@ -364,12 +364,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ///
     /// ```rust
     /// # use naia_server::Server;
-    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync, W: naia_shared::WorldMutType<E>>(server: &mut Server<E>, mut world: W, component: impl naia_shared::ReplicatedComponent) {
+    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync, W: naia_shared::WorldMutType<E>>(server: &mut Server<E>, world: W, component: impl naia_shared::ReplicatedComponent) {
     /// // Dynamic entity (default — components are diff-tracked):
-    /// server.spawn_entity(&mut world).insert_component(component);
-    ///
-    /// // Static entity (full snapshot on scope entry; never mutated):
-    /// // server.spawn_entity(&mut world).as_static().insert_component(component);
+    /// server.spawn_entity(world).insert_component(component);
     /// # }
     /// ```
     pub fn spawn_entity<W: WorldMutType<E>>(&'_ mut self, world: W) -> EntityMut<'_, E, W> {

@@ -11,15 +11,17 @@
 //! ```no_run
 //! # use bevy_app::App;
 //! # use naia_bevy_client::Plugin;
+//! # use naia_bevy_shared::Protocol;
+//! # struct MyClientTag;
 //! fn main() {
 //!     App::new()
 //!         // .add_plugins(DefaultPlugins)
-//!         .add_plugins(Plugin::new(client_config(), protocol()))
+//!         .add_plugins(Plugin::<MyClientTag>::new(client_config(), protocol()))
 //!         // .add_systems(Startup, init)  // call Client::connect here
 //!         .run();
 //! }
 //! # fn client_config() -> naia_bevy_client::ClientConfig { todo!() }
-//! # fn protocol() -> naia_shared::Protocol { todo!() }
+//! # fn protocol() -> Protocol { todo!() }
 //! ```
 //!
 //! Access the server connection via the [`Client`] Bevy resource, or use

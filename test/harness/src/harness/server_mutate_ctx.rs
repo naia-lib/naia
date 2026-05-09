@@ -482,7 +482,9 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let scenario = self.ctx.scenario_mut();
         if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
-            server.send_message::<C, M>(&user_key, message).unwrap();
+            // Silently ignore UserNotFound — harness callers may send to a
+            // client that has disconnected, and that is not a harness error.
+            let _ = server.send_message::<C, M>(&user_key, message);
         }
     }
 

@@ -212,14 +212,27 @@ Requires H-5 (T1.4) first.
 ### Gap E — Bevy adapter BDD expansion
 9 scenarios covering connection only. All new scenarios go in a new `bevy_specs/features/replication.feature`.
 
-**New live scenarios (7-9):**
-- Entity spawn via `CommandsExt::enable_replication` — client sees entity appear
-- Component insert via Bevy `Commands` + `insert_component` — client sees component value
-- Entity leaves scope — client despawns entity
-- Authority grant via `CommandsExt::give_authority` — client observes `EntityAuthGrantedEvent`
-- Authority denied via `CommandsExt::give_authority` (wrong user) — correct client observes `EntityAuthDeniedEvent`
-- Resource insert via `ServerCommandsExt::replicate_resource` — client sees resource value
-- Resource authority request via `ClientCommandsExt::request_resource_authority` — server observes request
+**Scope constraint:** These tests cover what the Bevy adapter adds *on top of* the core Naia protocol — the ECS change-detection bridge, Bevy event routing, and `Commands`-based APIs. They do NOT re-verify state-machine correctness (authority transitions, diff correctness, etc.) which is already covered by the 327 non-Bevy scenarios.
+
+**New live scenarios (12) — three rules:**
+
+*Rule: Entity lifecycle via Bevy CommandsExt (5)*
+- `enable_replication` + Position inserted → client Bevy world gets entity [ECS hook]
+- `SpawnEntityEvent<T>` fires on client [Bevy event bridge]
+- `disable_replication` removes entity from client world [CommandsExt API]
+- `DespawnEntityEvent<T>` fires when entity leaves scope [Bevy event bridge]
+- Position mutated via Bevy world mutation → client observes update [change-detection bridge]
+
+*Rule: Authority via Bevy CommandsExt (4)*
+- `give_authority` command → client observes `EntityAuthStatus::Granted` [CommandsExt API]
+- `EntityAuthGrantedEvent<T>` fires [Bevy event bridge]
+- `request_authority` via `ClientCommandsExt` → Granted [client Commands API]
+- `EntityAuthDeniedEvent<T>` fires for second requester [Bevy event bridge]
+
+*Rule: Resources via Bevy ServerCommandsExt (3)*
+- `replicate_resource` → client sees resource as Bevy `Resource<TestScore>` [ServerCommandsExt + resource mirror]
+- `ResMut<TestScore>` mutation → client `Resource<TestScore>` updates [ResMut change-detection bridge]
+- `request_resource_authority` via `ClientCommandsExt` → server observes Granted [client Commands API]
 
 ### Gap F — Server-side event observability (2 stubs → live tests)
 Requires H-3 (T1.3) first.
@@ -268,9 +281,11 @@ Run `cargo run --manifest-path test/npa/Cargo.toml -- coverage --specs-root test
 
 ### T4 — Bevy BDD expansion
 
-- [ ] **T4.1** — Create `test/bevy_specs/features/replication.feature`. Add entity spawn + scope + despawn scenarios (3-4). Add matching step bindings to `test/bevy_npa/src/steps.rs` and harness support to `test/bevy_npa/src/world.rs`.
-- [ ] **T4.2** — Add authority scenarios to `replication.feature`: give_authority (granted), give_authority (denied). Add matching step bindings.
-- [ ] **T4.3** — Add resource scenarios to `replication.feature`: replicate_resource (client sees value), request_resource_authority (server observes request). Add matching step bindings.
+Scope: test what the Bevy adapter adds on top of Naia (ECS bridge, event routing, Commands API). Do not re-verify core Naia protocol behavior.
+
+- [ ] **T4.1** — Create `test/bevy_specs/features/replication.feature` with @Feature(bevy_replication). Add 5 entity-lifecycle scenarios (Rule 01): enable_replication→spawn, SpawnEntityEvent, disable_replication→despawn, DespawnEntityEvent, Bevy mutation→propagates. Add matching step bindings and harness support (world.rs: expanded protocol with Position/TestScore/TestPlayerSelection, ServerState tracking room_key+last_entity, ClientState tracking spawn/despawn counts + authority status + score, new imperative harness methods).
+- [ ] **T4.2** — Add 4 authority scenarios (Rule 02): give_authority→Granted, EntityAuthGrantedEvent, ClientCommandsExt::request_authority→Granted, EntityAuthDeniedEvent for second requester. Add matching step bindings.
+- [ ] **T4.3** — Add 3 resource scenarios (Rule 03): replicate_resource→Bevy Resource on client, ResMut mutation→client Resource updates, ClientCommandsExt::request_resource_authority→server Granted. Add matching step bindings.
 
 ### T5 — Step binding cleanup
 
@@ -304,7 +319,7 @@ T0, T2.1, T3.3, T4.x, and T5.x are all parallelisable with the T1→T2→T3 chai
 1. `cargo run --manifest-path test/npa/Cargo.toml -- coverage --specs-root test/specs` reports **≥ 325 active**, with zero new `@PolicyOnly` stubs added.
 2. Static entity replication is covered by at least 4 live scenarios in `03_replication.feature`.
 3. All of the following are live tests (not stubs): `entity-replication-04/05/11`, `entity-delegation-05`, `entity-authority-13`, `server-events-05`, `server-events-10`.
-4. Bevy NPA has ≥ 20 scenarios (up from 9), covering replication, authority, and resources.
+4. Bevy NPA has ≥ 20 scenarios (up from 9), covering Bevy-adapter-specific behavior: ECS change-detection bridge, Bevy event routing (SpawnEntityEvent, DespawnEntityEvent, EntityAuthGrantedEvent, EntityAuthDeniedEvent), CommandsExt/ServerCommandsExt/ClientCommandsExt APIs, and the client Bevy Resource mirror for replicated resources.
 5. No step binding file exceeds 500 LOC.
 6. `LastOperation` dead code is fully removed — no commented-out enforcement, no dead field/enum.
 7. `cargo check --workspace` clean, 0 build warnings.

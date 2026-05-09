@@ -9,6 +9,7 @@
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
+use std::env;
 
 /// Get the naia_npa crate directory (CARGO_MANIFEST_DIR = naia/test/npa/)
 fn crate_dir() -> PathBuf {
@@ -546,14 +547,26 @@ fn coverage_exits_zero_on_live_spec_tree() {
 /// `coverage --fail-on-deferred-non-policy` exits 1 when deferred non-policy
 /// scenarios exist.
 ///
-/// There are 97 @Deferred Category-C scenarios that lack @PolicyOnly; the
-/// flag must exit non-zero so CI can gate on this. A regression that makes
-/// the command exit 0 regardless of deferred count would silently break the
-/// quality gate.
+/// Uses a synthetic fixture with one @Deferred (non-@PolicyOnly) scenario so
+/// the test is independent of the real spec tree's evolving tag state.
 #[test]
 fn coverage_fail_on_deferred_non_policy_exits_one_with_pending_categories() {
-    let specs = specs_dir();
     let adapter_manifest = adapter_manifest();
+
+    // Build a minimal synthetic spec tree in a temp dir.
+    let tmp = env::temp_dir().join("naia_npa_test_deferred_fixture");
+    let features_dir = tmp.join("features");
+    fs::create_dir_all(&features_dir).expect("create tmp features dir");
+    fs::write(
+        features_dir.join("synthetic.feature"),
+        "\
+Feature: Synthetic\n\
+\n\
+  @Deferred\n\
+  Scenario: deferred non-policy scenario [synth-01]\n\
+    Given a step\n",
+    )
+    .expect("write synthetic feature");
 
     let output = Command::new("cargo")
         .args([
@@ -563,12 +576,14 @@ fn coverage_fail_on_deferred_non_policy_exits_one_with_pending_categories() {
             "--",
             "coverage",
             "--specs-root",
-            specs.to_str().unwrap(),
+            tmp.to_str().unwrap(),
             "--fail-on-deferred-non-policy",
         ])
-        .current_dir(&specs)
+        .current_dir(&tmp)
         .output()
         .expect("Failed to execute naia_npa coverage --fail-on-deferred-non-policy");
+
+    let _ = fs::remove_dir_all(&tmp);
 
     assert_failure(
         &output,

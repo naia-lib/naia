@@ -11,15 +11,19 @@
 
 | Metric | Value |
 |---|---|
-| Active BDD scenarios | **309** (100% pass, `namako gate` green) |
-| @PolicyOnly (messaging) | **4** (messaging-03, 11, 12, 19 — all justified) |
+| Active BDD scenarios | **327** (100% pass, `namako gate` green, recertified 2026-05-09) |
+| Bevy BDD scenarios | **21** (100% pass) |
+| @PolicyOnly | **84** (all justified) |
 | Plain @Deferred (junk) | **0** ✅ |
 | Step bindings | ~280, all ≤25 LOC |
 | Step files max LOC | 477 (`network_events_transport.rs`) |
 | Build warnings | **0** (`-D warnings`) |
-| `cargo test --workspace` | green, 0 ignored outside documented carve-out |
-| `cargo-deny` advisories | 6 ignores expiring **2026-06-01** (24 days!) |
+| `cargo test --workspace` | green, 0 failures (3 fixed 2026-05-09) |
+| `cargo-deny` advisories | 6 ignores expiring **2027-06-01** |
 | Production `todo!()` | **0** ✅ |
+| Total production LOC | **58,917** |
+| Panic sites (production) | **504** (mostly entity-map lookups with implicit invariants) |
+| TODO/FIXME count | **53** (classified in AUDIT_REPORT_2026.md) |
 
 ### What's done (do not re-audit)
 
@@ -43,7 +47,17 @@
 
 ## Priority stack
 
-Active phases P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11 — **ALL COMPLETE**. Deferred phases (D-P0, D-P2, D-P7, D-P8.3, D-P9.A3, D-P10, D-P12) are listed in §Deferred and will not be scheduled without explicit instruction.
+Active phases P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11 — **ALL COMPLETE**. Full codebase audit complete (2026-05-09); new phases A1–A5 added from audit findings. Deferred phases listed in §Deferred.
+
+### Audit-derived active phases (priority order)
+
+| Phase | Finding | Severity |
+|---|---|---|
+| **A1** | Panic instead of error in reliable_message_receiver + fragment_receiver | ⚠️ |
+| **A2** | ID overflow unchecked in message_kinds + channel_kinds | ⚠️ |
+| **A3** | Hacky entity force-publish in delegation enable path (world_server.rs:2374) | ⚠️ |
+| **A4** | Authority double-send prevention needs BDD test (world_server.rs:1400 TODO) | 🔬 |
+| **A5** | Client request_authority returns NotDelegated for out-of-scope entity | ⚠️ |
 
 ---
 
@@ -140,6 +154,66 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
+## A1 — Receiver panic cleanup (audit finding)
+
+**Goal:** Convert two acknowledged panic sites to proper error returns.
+
+- `shared/src/messages/channels/receivers/reliable_message_receiver.rs:146` — TODO "bubble up error instead of panicking here"
+- `shared/src/messages/channels/receivers/fragment_receiver.rs:66` — same
+
+Both are in packet-receive paths that should return an error (or silently discard) on malformed input, not panic. Malformed input from a connected client could otherwise crash the connection handler.
+
+**Gate:** `cargo test --workspace` green + `namako gate` passes.
+
+---
+
+## A2 — ID overflow checks (audit finding)
+
+**Goal:** Add overflow detection for MessageKind and ChannelKind ID generation.
+
+- `shared/src/world/component/message_kinds.rs:113` — TODO "check for current_id overflow?"
+- `shared/src/connection/channel_kinds.rs:94` — same
+
+Both generate monotonically incrementing u8/u16 IDs. At the configured kind-count limits these cannot overflow in practice, but the absence of a `debug_assert!` or explicit guard means overflow would produce silent aliasing. Add `debug_assert!` with invariant comment.
+
+**Gate:** `cargo build --workspace` + 0 warnings.
+
+---
+
+## A3 — Delegation enable force-publish (audit finding)
+
+**Goal:** Remove the hacky `entity_publish` force-call in the delegation enable path.
+
+- `server/src/server/world_server.rs:2374` — TODO "this is probably a bad idea somehow! this is hacky"
+
+When enabling delegation for an entity owned by a public client, the code force-publishes the entity because the client message hasn't come through yet. The comment acknowledges this is wrong. The correct fix is to ensure the entity is always published before delegation is enabled (enforced at the call site or via a guard), not to silently force-publish inside the delegation handler.
+
+**Gate:** `cargo test --workspace` green + `namako gate` passes.
+
+---
+
+## A4 — Authority double-send BDD coverage (audit finding)
+
+**Goal:** Add a BDD scenario verifying the double-send prevention logic at `world_server.rs:1400`.
+
+The comment says "Potentially there will be a future error here! TODO: verify this with tests!" The code prevents SetAuthority from being sent twice (which would cause Denied→Denied invalid transition). Add a scenario that exercises the give_authority path and verifies no duplicate auth-state messages are delivered.
+
+**Gate:** New scenario under `05_authority.feature`; `namako gate` passes at 328 active.
+
+---
+
+## A5 — Client request_authority wrong error code (audit finding)
+
+**Goal:** Fix `client.request_authority(entity)` returning `NotDelegated` when entity is out of scope.
+
+- `client/src/world/global_world_manager.rs:312` — entity not in auth_handler map returns `Err(AuthorityError::NotDelegated)`, but the real reason is "entity not yet in scope / not visible to this client"
+
+This is misleading: a developer whose entity hasn't entered scope yet gets `NotDelegated` when they should get `NotInScope` (or the error variant should be clarified). Add an appropriate error variant or improve the check.
+
+**Gate:** `cargo test --workspace` green + `namako gate` passes.
+
+---
+
 ## Archives (outdated plans — do not re-audit)
 
 The following documents are superseded by this plan. Their content is preserved for history but all outstanding items have been migrated above.
@@ -175,11 +249,35 @@ The following documents are superseded by this plan. Their content is preserved 
 
 The following phases are parked. Do not schedule without explicit instruction from Connor.
 
-### D-P0 — DTLS stack migration (deadline: 2026-06-01)
+### D-A1 — CONCEPTS.md Bevy T-tag explanation (audit finding)
+The `T` type parameter on `Client<'w, T>` and `Plugin<T>` is completely absent from `docs/CONCEPTS.md`. A Bevy newcomer will not understand why the generic exists or how to create a marker type. Add a §Bevy client tag section explaining `T` as a zero-cost phantom marker for compile-time client identity.
+
+### D-A2 — CHANGELOG catch-up (audit finding)
+CHANGELOG.md covers through the Resources feature era. Missing: P1 (`give_authority` API), P9 (reconnect edge cases), P11 (kebab-case renames, println→debug!). Add entries under the appropriate version heading.
+
+### D-A3 — `give_authority` Bevy doc error cases (audit finding)
+`adapters/bevy/server/src/commands.rs:60-68` — the `give_authority` doc states the Delegated precondition but does not document what happens if the entity is not found or not Delegated (silent no-op? panic? error?). Add error behavior to the doc.
+
+### D-A4 — Entity migration between rooms BDD coverage (audit finding)
+No scenario tests an entity being moved between rooms while clients are scoped to it. This exercises the room-management + scope interaction path. Add under `04_visibility.feature`.
+
+### D-A5 — remove_resource under authority BDD coverage (audit finding)
+No scenario tests calling `remove_resource::<R>()` while a client holds authority for R. The behavior (does authority release? Does the client get a notification?) is unverified. Add under `07_resources.feature`.
+
+### D-A6 — Broadcast allocation (audit finding)
+`world_server.rs:513` — `message_box.clone()` in the broadcast loop allocates one `Box<dyn Message>` per connected user per broadcast. At 1262 CCU this is the most avoidable per-tick allocation. Consider `Arc<MessageBox>` or a ref-counted wrapper to amortize. Blocked on profiling to confirm it's a real bottleneck at target CCU.
+
+### D-A7 — Error propagation overhaul (audit finding)
+18 TODOs of the form "pass this on and handle above" scattered across `world_server.rs`, `client.rs`, `main_server.rs`, `base_time_manager.rs`, `connection.rs`, `advanced_handshaker.rs`, `simple_handshaker.rs`. All indicate IO errors silently dropped. Systematic fix: propagate to a `WorldEvents::IoError` variant or similar. Large scope.
+
+### D-A8 — Benchmark expansion (audit finding)
+Three benchmark scenarios missing: (1) single-client round-trip latency, (2) resource replication throughput, (3) authority grant/revoke cycle cost. Add to `benches/` suite.
+
+### D-P0 — DTLS stack migration (deadline: 2027-06-01)
 6 RUSTSEC `cargo-deny` ignores expire 2026-06-01. Migration requires replacing the DTLS transport with a `rustls`-based stack. Deferred due to scope; if the deadline passes without action, add new `ignore` entries with updated dates.
 
 ### D-P2 — WorldServer decomposition (T1.1)
-`server/src/server/world_server.rs` — 3592 lines, 141 methods. Split plan exists (10 module files: connections, scope, rooms, entities, authority, resources, messages, priority, io, mod). Deferred: high-effort mechanical refactor with low immediate value.
+`server/src/server/world_server.rs` — 3,826 lines, 153 methods (as of 2026-05-09 audit). Split plan exists (10 module files: connections, scope, rooms, entities, authority, resources, messages, priority, io, mod). Deferred: high-effort mechanical refactor with low immediate value.
 
 ### D-P7 — Replicate trait decomposition (T1.2)
 `shared/src/world/component/replicate.rs` defines a 29-method monolith; `shared/derive/src/replicate.rs` is 1499 lines. Proposed sub-trait split: `ReplicateCore`, `ReplicateWrite`, `ReplicateRead`, `ReplicateMirror`, `ReplicateAuthority`, `ReplicateEntityRelations`. Deferred: user-facing surface would be unchanged, benefit is internal ergonomics only.

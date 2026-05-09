@@ -20,7 +20,7 @@
 //!         .run();
 //! }
 //! # fn server_config() -> naia_bevy_server::ServerConfig { todo!() }
-//! # fn protocol() -> naia_shared::Protocol { todo!() }
+//! # fn protocol() -> naia_bevy_shared::Protocol { todo!() }
 //! ```
 //!
 //! Interact with the server via the [`Server`] Bevy resource, or use

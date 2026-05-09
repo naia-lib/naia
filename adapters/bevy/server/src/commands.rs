@@ -21,8 +21,8 @@ use crate::{plugin::Singleton, server::ServerImpl, Server};
 /// ```no_run
 /// # use bevy_ecs::system::Commands;
 /// # use naia_bevy_server::{CommandsExt, Server};
-/// fn spawn_player(mut commands: Commands, mut server: bevy_ecs::system::ResMut<Server>) {
-///     commands.spawn(/* … */)
+/// fn spawn_player(mut commands: Commands, mut server: Server) {
+///     commands.spawn_empty()
 ///         .enable_replication(&mut server);
 /// }
 /// ```
