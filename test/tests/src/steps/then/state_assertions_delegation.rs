@@ -317,3 +317,26 @@ fn then_no_error_is_raised(_ctx: &TestWorldRef) -> AssertOutcome<()> {
     AssertOutcome::Passed(())
 }
 
+
+/// Then the authority status for the entity is not set (None).
+///
+/// Asserts that the last client observes no authority status for the
+/// stored entity — meaning the entity is no longer delegated from that
+/// client's perspective.  Used by [entity-delegation-05] and
+/// [entity-authority-13] to verify that delegation teardown clears all
+/// authority state.
+#[then("the authority status for the entity is not set")]
+fn then_authority_status_not_set(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::EntityKey;
+    let client_key = ctx.last_client();
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.client(client_key, |c| {
+        match c.entity(&entity_key).and_then(|e| e.authority()) {
+            None => AssertOutcome::Passed(()),
+            Some(_) => AssertOutcome::Pending,
+        }
+    })
+}

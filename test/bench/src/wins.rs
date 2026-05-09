@@ -1,3 +1,19 @@
+// Win/loss criteria for the benchmark suite.
+//
+// A "win" means the observed median latency is at or below the stated
+// threshold.  A "loss" is a regression; the CI gate (`naia-bench-report
+// --assert-wins`) fails when out.fail > 0.
+//
+// Threshold sources:
+//   Win-2  ratio ≤ 3×   — idle tick must be O(1) vs entity count (100→10000).
+//   Win-3  ratio ≤ 200× — active tick growth bounded (10→1000 mutations).
+//   Win-4  ratio ≤ 1.20× — coalesced spawn ≤ burst spawn (build cost amortized).
+//   Win-5  ratio ≤ 1.05× — immutable idle ≤ mutable idle (skip-list savings).
+//   Phase thresholds — absolute ceilings measured on the naia-bench reference machine
+//                      and tightened each phase; see PHASE_THRESHOLDS array.
+//   Halo.idle_budget   ≤ 5 ms per tick for 16-client steady-state idle.
+//   Halo.client_keepup ≤ 4 ms per tick for active client receive path.
+
 use std::collections::BTreeMap;
 
 use bench_core::{AssertOutcome, BenchResult};

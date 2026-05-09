@@ -9,10 +9,10 @@ use crate::{
     events::{
         main_events::{AuthEvent, ConnectEvent, ErrorEvent, MainEvent, MainEvents},
         world_events::{
-            DelegateEntityEvent, DespawnEntityEvent, EntityAuthGrantEvent, EntityAuthResetEvent,
-            InsertComponentEvent, MessageEvent, PublishEntityEvent, RemoveComponentEvent,
-            RequestEvent, SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, WorldEvent,
-            WorldEvents,
+            DelegateEntityEvent, DespawnEntityEvent, EntityAuthDeniedEvent, EntityAuthGrantEvent,
+            EntityAuthResetEvent, InsertComponentEvent, MessageEvent, PublishEntityEvent,
+            RemoveComponentEvent, RequestEvent, SpawnEntityEvent, UnpublishEntityEvent,
+            UpdateComponentEvent, WorldEvent, WorldEvents,
         },
     },
     user::UserKey,
@@ -270,6 +270,19 @@ impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for DelegateEntityEvent {
 
     fn has(events: &Events<E>) -> bool {
         <DelegateEntityEvent as WorldEvent<E>>::has(&events.world_events)
+    }
+}
+
+// Entity Auth Denied Event
+impl<E: Hash + Copy + Eq + Sync + Send> Event<E> for EntityAuthDeniedEvent {
+    type Iter = <EntityAuthDeniedEvent as WorldEvent<E>>::Iter;
+
+    fn iter(events: &mut Events<E>) -> Self::Iter {
+        <EntityAuthDeniedEvent as WorldEvent<E>>::iter(&mut events.world_events)
+    }
+
+    fn has(events: &Events<E>) -> bool {
+        <EntityAuthDeniedEvent as WorldEvent<E>>::has(&events.world_events)
     }
 }
 

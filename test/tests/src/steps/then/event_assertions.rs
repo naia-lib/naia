@@ -532,3 +532,27 @@ fn then_server_observes_unpublish_event_for_client(
         }
     })
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Server inbound message count (server-events-05)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server has received at least one message.
+///
+/// Polls until `server_inbound_message_count() > 0` in a given tick.
+/// Covers [server-events-05].
+#[then("the server has received at least one message")]
+fn then_server_has_received_at_least_one_message(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    ctx.server(|s| {
+        if s.server_inbound_message_count() > 0 {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Server auth-denied count (server-events-10)
+// ──────────────────────────────────────────────────────────────────────
+

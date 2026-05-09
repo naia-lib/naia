@@ -89,7 +89,8 @@ pub use connection::connection::bench_send_counters;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,
-    EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Event, Events, InsertComponentEvent,
+    EntityAuthDeniedEvent, EntityAuthGrantEvent, EntityAuthResetEvent, ErrorEvent, Event, Events,
+    InsertComponentEvent,
     MainEvents, MessageEvent, PublishEntityEvent, QueuedDisconnectEvent, RemoveComponentEvent,
     RequestEvent, SpawnEntityEvent, TickEvent, TickEvents, UnpublishEntityEvent,
     UpdateComponentEvent, WorldEvents, WorldPacketEvent,

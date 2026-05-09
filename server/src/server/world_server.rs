@@ -3178,7 +3178,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    let _ = self.entity_handle_client_request_authority(user_key, &world_entity);
+                    if self.entity_handle_client_request_authority(user_key, &world_entity).is_err() {
+                        self.incoming_world_events.push_auth_denied(user_key, &world_entity);
+                    }
                 }
                 EntityEvent::ReleaseAuthority(global_entity) => {
                     // info!("received release auth entity message!");

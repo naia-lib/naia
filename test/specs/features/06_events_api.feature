@@ -326,12 +326,14 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
       Then the server has observed a tick event
 
     # [server-events-05] — MessageEvent fires per inbound message.
-    # MessageEvent is not a variant of TrackedServerEvent; server-side
-    # message receipt is only observable via read_event() inside the
-    # server tick, not via the harness event history API.
-    @PolicyOnly
+    # server_inbound_message_count() aggregates all messages received by the
+    # server in a given tick across all channels and message types.
     @Scenario(06)
     Scenario: [server-events-05] MessageEvent fires per inbound message
+      Given a server is running
+      And a client connects
+      When the client sends a packet within the MTU limit
+      Then the server has received at least one message
 
     # [server-events-06] — RequestEvent surfaces request payload.
     # Request payload content inspection is not exposed by harness bindings;
@@ -354,11 +356,20 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
       And client B does not have the entity in its world
 
     # [server-events-10] — Authority denied event observable on server.
-    # No server-side authority denied event binding exists; the harness
-    # only tracks server grant/reset events, not deny events.
-    @PolicyOnly
+    # The server denies a second client's RequestAuthority (first client holds it);
+    # the denial propagates to the requesting client as EntityAuthStatus::Denied.
+    # Server-side EntityAuthDeniedEvent is ephemeral (per-tick); verified via
+    # the durable client-side Denied status that the server's denial packet produces.
     @Scenario(09)
     Scenario: [server-events-10] Authority denied event observable on server
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
 
     # [server-events-11] — Authority release event observable on server.
     # Duplicate contract: Rule(01) @Scenario(04) verifies that

@@ -213,3 +213,34 @@ Feature: Replicated Resources
     @PolicyOnly
     @Scenario(04)
     Scenario: client requests authority via Commands extension
+
+  @Rule(10)
+  Rule: Resource delegation full-cycle coverage
+
+    @Scenario(01)
+    Scenario: [resource-delegation-01] Delegated resource full cycle: request authority then mutate
+      Given a Naia protocol with delegable replicated resource type "PlayerSelection"
+      And a server with PlayerSelection { selected_id: 0 } and connected client "alice"
+      And the initial replication round trip has elapsed
+      When alice requests authority on PlayerSelection
+      And one replication round trip elapses
+      Then alice's authority status for PlayerSelection is "Granted"
+      When alice mutates PlayerSelection.selected_id to 42
+      And one replication round trip elapses
+      Then the server's PlayerSelection.selected_id equals 42
+
+    @Scenario(02)
+    Scenario: [resource-delegation-02] Client releases authority and server reclaims
+      Given a Naia protocol with delegable replicated resource type "PlayerSelection"
+      And a server with PlayerSelection { selected_id: 0 } and connected client "alice"
+      And alice holds authority on PlayerSelection
+      When alice releases authority on PlayerSelection
+      And one replication round trip elapses
+      Then the server-side authority status for PlayerSelection is "Available"
+
+    # [resource-latejoin-02] — Late-joining client receives current dynamic resource value.
+    # Requires a step binding for connecting a second named client after resource insertion
+    # in the resource-vocabulary context (existing steps use single named client "alice").
+    @PolicyOnly
+    @Scenario(03)
+    Scenario: [resource-latejoin-02] Late-joining client receives current dynamic resource value

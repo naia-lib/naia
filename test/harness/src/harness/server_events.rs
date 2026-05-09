@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use naia_server::{Events, NaiaServerError, TickEvents};
+use naia_server::{EntityAuthDeniedEvent as NaiaEntityAuthDeniedEvent, Events, NaiaServerError, TickEvents};
 use naia_shared::{
     ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
     Replicate, Tick, WorldRefType,
@@ -25,6 +25,7 @@ pub struct ServerEvents {
     unpublishes: Vec<(ClientKey, EntityKey)>,
     delegates: Vec<(ClientKey, EntityKey)>,
     auth_grants: Vec<(ClientKey, EntityKey)>,
+    auth_denied_count: usize,
     auth_resets: Vec<EntityKey>,
     inserts: HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>,
     removes: HashMap<ComponentKind, Vec<(ClientKey, EntityKey, Box<dyn Replicate>)>>,
@@ -191,6 +192,9 @@ impl ServerEvents {
             }
         }
 
+        // Count auth-denied events (slot already held when client requested authority)
+        let auth_denied_count = events.read::<NaiaEntityAuthDeniedEvent>().count();
+
         // Convert world events: auth_resets
         let mut auth_resets = Vec::new();
         for entity in events.read::<naia_server::EntityAuthResetEvent>() {
@@ -281,6 +285,7 @@ impl ServerEvents {
             unpublishes,
             delegates,
             auth_grants,
+            auth_denied_count,
             auth_resets,
             inserts,
             removes,
@@ -321,6 +326,23 @@ impl ServerEvents {
             .get_mut(channel_kind)
             .and_then(|channel_requests| channel_requests.remove(message_kind))
             .unwrap_or_default()
+    }
+
+    /// Number of authority-request denials the server processed this tick.
+    ///
+    /// Increments each time a client's `RequestAuthority` is rejected because
+    /// another user already holds the entity's authority slot.
+    pub fn auth_denied_count(&self) -> usize {
+        self.auth_denied_count
+    }
+
+    /// Total inbound message count across all channels and message types this tick.
+    pub fn server_inbound_message_count(&self) -> usize {
+        self.messages
+            .values()
+            .flat_map(|per_type| per_type.values())
+            .map(|list| list.len())
+            .sum()
     }
 
     pub(crate) fn despawns(&self) -> &Vec<(ClientKey, EntityKey)> {

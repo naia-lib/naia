@@ -4,6 +4,8 @@
 //! and `world_helpers` for cross-cutting helpers.
 
 use crate::steps::prelude::*;
+use crate::steps::world_helpers::tick_n;
+
 
 // ──────────────────────────────────────────────────────────────────────
 // Common — operational/disconnect/multi-command preconditions
@@ -108,3 +110,27 @@ fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
     scenario.allow_flexible_next();
 }
 
+
+// ──────────────────────────────────────────────────────────────────────
+// Tick advancement
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given {int} ticks have elapsed.
+///
+/// Advances the simulation by N ticks with no mutations.  Used to let
+/// replication / authority packets propagate without writing full code
+/// in each scenario's Given section.
+#[given("{int} ticks have elapsed")]
+fn given_n_ticks_have_elapsed(ctx: &mut TestWorldMut, n: u32) {
+    tick_n(ctx, n);
+    ctx.scenario_mut().allow_flexible_next();
+}
+
+/// When {int} ticks elapse.
+///
+/// Identical to the Given variant but phrased as a When step.
+#[when("{int} ticks elapse")]
+fn when_n_ticks_elapse(ctx: &mut TestWorldMut, n: u32) {
+    tick_n(ctx, n);
+    ctx.scenario_mut().allow_flexible_next();
+}

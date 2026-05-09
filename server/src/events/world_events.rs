@@ -27,6 +27,7 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     unpublishes: Vec<(UserKey, E)>,
     delegates: Vec<(UserKey, E)>,
     auth_grants: Vec<(UserKey, E)>,
+    auth_denials: Vec<(UserKey, E)>,
     auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
@@ -48,6 +49,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
             unpublishes: Vec::new(),
             delegates: Vec::new(),
             auth_grants: Vec::new(),
+            auth_denials: Vec::new(),
             auth_resets: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
@@ -204,6 +206,12 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     pub(crate) fn push_auth_grant(&mut self, user_key: &UserKey, world_entity: &E) {
         self.auth_grants.push((*user_key, *world_entity));
+        self.empty = false;
+    }
+
+    /// Emit when the server rejects a client's authority request (slot already held).
+    pub(crate) fn push_auth_denied(&mut self, user_key: &UserKey, world_entity: &E) {
+        self.auth_denials.push((*user_key, *world_entity));
         self.empty = false;
     }
 
@@ -529,6 +537,23 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthGrantEvent {
 
     fn has(events: &WorldEvents<E>) -> bool {
         !events.auth_grants.is_empty()
+    }
+}
+
+// Entity Auth Denied Event
+/// Emitted when the server rejects a client's `RequestAuthority` because
+/// another user already holds the entity's authority slot.
+pub struct EntityAuthDeniedEvent;
+impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthDeniedEvent {
+    type Iter = IntoIter<(UserKey, E)>;
+
+    fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
+        let list = std::mem::take(&mut events.auth_denials);
+        IntoIterator::into_iter(list)
+    }
+
+    fn has(events: &WorldEvents<E>) -> bool {
+        !events.auth_denials.is_empty()
     }
 }
 

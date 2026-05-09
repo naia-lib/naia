@@ -74,6 +74,38 @@ fn when_server_removes_replicated_component(ctx: &mut TestWorldMut) {
     });
 }
 
+/// When the server inserts a replicated component on the stored entity.
+///
+/// Uses the harness `insert_component_on` API to add Position(1,1) to an
+/// already-registered entity.  Covers Gap-B (dynamic insert after spawn).
+#[when("the server inserts a replicated component on the entity")]
+fn when_server_inserts_component_on_entity(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    let entity_key = last_entity_mut(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            server.insert_component_on::<Position>(&entity_key, Position::new(1.0, 1.0));
+        });
+    });
+}
+
+/// When the server removes a replicated component from the stored entity.
+///
+/// Uses the harness `remove_component_from` API. Covers Gap-B (dynamic
+/// remove after spawn).
+#[when("the server removes a replicated component from the entity")]
+fn when_server_removes_component_from_entity(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    let entity_key = last_entity_mut(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            server.remove_component_from::<Position>(&entity_key);
+        });
+    });
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Messaging — server message sends + responses
 // ──────────────────────────────────────────────────────────────────────

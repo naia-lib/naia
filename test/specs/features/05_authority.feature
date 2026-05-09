@@ -520,14 +520,16 @@ Feature: Entity Ownership, Publication, Delegation, Authority
     @Scenario(19)
     Scenario: [entity-delegation-04] Disable delegation requires no holder
 
-    # [entity-delegation-05] — Disable delegation authority propagation.
-    # configure_replication(Public) on the server side does not currently send
-    # a client-side authority-cleared message; the client retains Available
-    # status indefinitely. The protocol path for "delegation disabled" events
-    # is not runtime-testable with the current harness.
-    @PolicyOnly
+    # [entity-delegation-05] — Disable delegation clears Available authority status.
+    # configure_replication(Public) sends a PublicityChange packet to in-scope
+    # clients; the client's auth_handler deregisters the entity, returning None.
     @Scenario(20)
     Scenario: [entity-delegation-05] Disable delegation clears all authority status
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      When the server disables delegation for the entity
+      Then the authority status for the entity is not set
 
     @Scenario(21)
     Scenario: [entity-delegation-07] Denied requests do not auto-promote on holder release
@@ -634,13 +636,20 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       When the server attempts to give authority to client A for the delegated entity
       Then the operation returns an Err result
 
-    # [entity-authority-13] — Disable delegation authority propagation gap.
-    # configure_replication(Public) on the server side does not currently send
-    # a client-side authority-cleared message; the client retains Denied status
-    # indefinitely. The "observes no authority status" assertion cannot be reached.
-    @PolicyOnly
+    # [entity-authority-13] — Disable delegation clears Denied authority status.
+    # configure_replication(Public) deregisters the entity from the auth handler;
+    # the Denied client observes authority status = None after the server reconfigures.
     @Scenario(35)
     Scenario: [entity-authority-13] Disable delegation clears authority
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When client A requests authority for the delegated entity
+      And client B requests authority for the delegated entity
+      Then client B is denied authority for the delegated entity
+      When the server disables delegation for the entity
+      Then the authority status for the entity is not set
 
     # [entity-authority-14] — Authority preserved across re-entry.
     # Covered by Rule(03)/Scenario(08) [entity-delegation-15] which tests

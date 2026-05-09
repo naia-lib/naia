@@ -190,6 +190,25 @@ fn when_server_configures_entity_delegated(ctx: &mut TestWorldMut) {
     });
 }
 
+/// When the server configures the delegated entity as Public (disables delegation).
+///
+/// Triggers `configure_replication(Public)` on the stored entity, which sends a
+/// `DisableDelegation` message to all in-scope clients.  Used by
+/// [entity-delegation-05] and [entity-authority-13].
+#[when("the server disables delegation for the entity")]
+fn when_server_disables_delegation_for_entity(ctx: &mut TestWorldMut) {
+    use naia_server::ReplicationConfig as ServerReplicationConfig;
+    let entity_key = last_entity_mut(ctx);
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity_mut) = server.entity_mut(&entity_key) {
+                entity_mut.configure_replication(ServerReplicationConfig::public());
+            }
+        });
+    });
+}
+
 /// When the server includes the entity for the client.
 #[when("the server includes the entity for the client")]
 fn when_server_includes_entity_for_client(ctx: &mut TestWorldMut) {

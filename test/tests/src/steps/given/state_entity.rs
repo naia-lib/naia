@@ -235,3 +235,42 @@ fn given_two_entities_a_b_in_scope(ctx: &mut TestWorldMut) {
         (c.has_entity(&a) && c.has_entity(&b)).then_some(())));
 }
 
+
+// ──────────────────────────────────────────────────────────────────────
+// Static entity preconditions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a server-owned static entity exists.
+///
+/// Spawns a static server entity (no diff-tracking after construction).
+/// The entity has no components.  Used by [static-entity-*] scenarios.
+#[given("a server-owned static entity exists")]
+fn given_static_entity_exists(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key = scenario.mutate(|mctx| {
+        let (entity_key, _) = mctx.server(|server| server.spawn_static(|_entity| {}));
+        entity_key
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+}
+
+/// Given a server-owned static entity exists with Position.
+///
+/// Spawns a static server entity with Position(0,0) inserted during
+/// construction.  Used by [static-entity-01/03] scenarios that assert the
+/// client receives the initial component values.
+#[given("a server-owned static entity exists with a replicated component")]
+fn given_static_entity_exists_with_replicated_component(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    let scenario = ctx.scenario_mut();
+    let entity_key = scenario.mutate(|mctx| {
+        let (entity_key, _) = mctx.server(|server| {
+            server.spawn_static(|mut entity| {
+                entity.insert_component(Position::new(0.0, 0.0));
+            })
+        });
+        entity_key
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.bdd_store(INITIAL_ENTITY_KEY, entity_key);
+}

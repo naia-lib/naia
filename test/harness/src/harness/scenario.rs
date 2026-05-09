@@ -107,14 +107,6 @@ type Server = NaiaServer<TestEntity>;
 const TICK_DURATION_MS: u64 = 16; // Default tick duration (~60 FPS)
 const DEFAULT_MAX_EXPECT_TICKS: usize = 500; // Maximum ticks before expect() times out
 
-/// Tracks the last operation type to enforce alternating mutate/expect calls
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum LastOperation {
-    None,
-    Mutate,
-    Expect,
-}
-
 /// A labeled trace event for deterministic ordering assertions.
 ///
 /// Trace events are used to verify the order of operations in tests.
@@ -173,8 +165,6 @@ pub struct Scenario {
     pending_auths: HashMap<ClientKey, Auth>,
     /// Mapping: ClientKey -> SocketAddr (for link conditioner configuration)
     client_to_addr_map: HashMap<ClientKey, SocketAddr>,
-    /// Tracks the last operation to enforce alternating mutate/expect calls
-    last_operation: LastOperation,
     /// Current tick count (incremented on each tick)
     global_tick: usize,
     /// Tracked server events in order of occurrence (for BDD ordering assertions)
@@ -235,7 +225,6 @@ impl Scenario {
             user_to_client_map: HashMap::new(),
             pending_auths: HashMap::new(),
             client_to_addr_map: HashMap::new(),
-            last_operation: LastOperation::None,
             global_tick: 0,
             server_event_history: Vec::new(),
             client_event_history: HashMap::new(),
@@ -389,7 +378,6 @@ impl Scenario {
         let result = f(&mut ctx);
         // Update network to propagate immediate effects without draining events
         self.tick();
-        self.last_operation = LastOperation::Mutate;
         result
     }
 
@@ -543,10 +531,6 @@ impl Scenario {
         max_ticks: usize,
         mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
     ) -> T {
-        // if self.last_operation == LastOperation::Expect {
-        //     panic!("Scenario::expect() called immediately after another expect() call. Tests MUST alternate between mutate() and expect() calls.");
-        // }
-
         let result = (|| {
             for _tick_count in 1..=max_ticks {
                 // Update network without draining events
@@ -577,9 +561,6 @@ impl Scenario {
             }
             None
         })();
-
-        // Update last operation after expect completes (whether success or timeout)
-        self.last_operation = LastOperation::Expect;
 
         match result {
             Some(value) => value,
@@ -599,10 +580,6 @@ impl Scenario {
         msg: &str,
         mut f: impl FnMut(&mut ExpectCtx<'_>) -> Option<T>,
     ) -> T {
-        // if self.last_operation == LastOperation::Expect {
-        //     panic!("Scenario::expect() called immediately after another expect() call. Tests MUST alternate between mutate() and expect() calls.");
-        // }
-
         let result = (|| {
             for _tick_count in 1..=max_ticks {
                 // Update network without draining events
@@ -633,9 +610,6 @@ impl Scenario {
             }
             None
         })();
-
-        // Update last operation after expect completes (whether success or timeout)
-        self.last_operation = LastOperation::Expect;
 
         match result {
             Some(value) => value,
@@ -684,13 +658,9 @@ impl Scenario {
         }
     }
 
-    /// Reset the operation state to allow the next call to be either `mutate()` or `expect()`.
-    ///
-    /// This is useful for helper functions like `client_connect()` that perform multiple
-    /// operations internally and should allow the caller to follow with either type of operation.
-    pub fn allow_flexible_next(&mut self) {
-        self.last_operation = LastOperation::None;
-    }
+    /// No-op. Previously reset the alternation-enforcement state machine; that
+    /// enforcement is removed, but call sites are preserved to avoid churn.
+    pub fn allow_flexible_next(&mut self) {}
 
     /// Get read-only access to entity registry
     pub(crate) fn entity_registry(&self) -> &EntityRegistry {

@@ -172,16 +172,26 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
   Rule: Coverage stubs for legacy contracts not yet expressed as Scenarios
 
     # [entity-replication-04] — Component insert events fire for in-scope additions.
-    # No harness API for dynamic component insertion on existing entities.
-    @PolicyOnly
     @Scenario(01)
     Scenario: [entity-replication-04] Component insert events fire for in-scope additions
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server inserts a replicated component on the entity
+      Then the client world has the component on the entity
 
     # [entity-replication-05] — Component remove events fire for in-scope removals.
-    # No harness API for dynamic component removal on existing entities.
-    @PolicyOnly
     @Scenario(02)
     Scenario: [entity-replication-05] Component remove events fire for in-scope removals
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server removes a replicated component from the entity
+      Then the client world no longer has the component on the entity
 
     # [entity-replication-08] — Replication preserves component-set parity.
     # Component enumeration API not exposed by the test harness; parity
@@ -205,14 +215,188 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
     Scenario: [entity-replication-10] No replication storms under steady-state
 
     # [entity-replication-11] — Component remove on out-of-scope is safe.
-    # No harness API for dynamic component removal.
-    @PolicyOnly
     @Scenario(06)
     Scenario: [entity-replication-11] Component remove on out-of-scope is safe
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      When the server removes a replicated component from the entity
+      Then no error is raised
 
     # [entity-replication-12] — Concurrent updates resolve to last-writer-wins.
     # The harness is single-threaded; truly concurrent writes are not constructible.
     @PolicyOnly
     @Scenario(07)
     Scenario: [entity-replication-12] Concurrent updates resolve to last-writer-wins
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Static entity replication
+  # ──────────────────────────────────────────────────────────────────────
+
+  @Rule(08)
+  Rule: Static entity replication
+
+    @Scenario(01)
+    Scenario: [static-entity-01] Static entity spawns on client
+      Given a server is running
+      And a client connects
+      And a server-owned static entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      Then the entity spawns on the client
+
+    @Scenario(02)
+    Scenario: [static-entity-02] Static entity component value appears on client
+      Given a server is running
+      And a client connects
+      And a server-owned static entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      Then the client world has the component on the entity
+
+    # [static-entity-03] — Post-construction component insert panics.
+    # Covered by integration test in test/harness/contract_tests/integration_only/02_static_entities.rs.
+    @PolicyOnly
+    @Scenario(03)
+    Scenario: [static-entity-03] Post-construction insert on static entity is rejected
+
+    @Scenario(04)
+    Scenario: [static-entity-04] Static entity exclude/include round-trip
+      Given a server is running
+      And a client connects
+      And a server-owned static entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      Then the entity spawns on the client
+      When the server excludes the entity for the client
+      Then the entity despawns on the client
+      When the server includes the entity for the client
+      Then the entity spawns on the client as a new lifetime
+
+  # ──────────────────────────────────────────────────────────────────────
+  # Component mutation with scope transitions
+  # ──────────────────────────────────────────────────────────────────────
+
+  @Rule(09)
+  Rule: Component state is snapshot-consistent at scope entry
+
+    @Scenario(01)
+    Scenario: [scope-snapshot-01] Component inserted before scope entry is visible on entry
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      When the server inserts a replicated component on the entity
+      And the server includes the entity for the client
+      Then the client world has the component on the entity
+
+    @Scenario(02)
+    Scenario: [scope-snapshot-02] Component removed before scope entry is absent on entry
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      When the server removes a replicated component from the entity
+      And the server includes the entity for the client
+      Then the client world no longer has the component on the entity
+
+    @Scenario(03)
+    Scenario: [scope-snapshot-03] Component insert and remove round-trip on in-scope entity
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server inserts a replicated component on the entity
+      Then the client world has the component on the entity
+      When the server removes a replicated component from the entity
+      Then the client world no longer has the component on the entity
+
+    @Scenario(04)
+    Scenario: [scope-snapshot-04] Both clients see component insert on in-scope entity
+      Given a server is running
+      And client A connects
+      And client B connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      And the entity is in-scope for client B
+      When the server inserts a replicated component on the entity
+      Then the client world has the component on the entity
+
+    @Scenario(05)
+    Scenario: [scope-snapshot-05] Both clients see component remove on in-scope entity
+      Given a server is running
+      And client A connects
+      And client B connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      And the entity is in-scope for client B
+      When the server removes a replicated component from the entity
+      Then the client world no longer has the component on the entity
+
+    @Scenario(06)
+    Scenario: [scope-snapshot-06] Delegated entity: client observes Delegated replication config
+      Given a server is running
+      And client A connects
+      And the server spawns a delegated entity in-scope for client A
+      Then client A observes Delegated replication config for the entity
+
+    @Scenario(07)
+    Scenario: [scope-snapshot-07] Component insert then entity leaves scope is idempotent
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server inserts a replicated component on the entity
+      And the server excludes the entity for the client
+      Then the entity despawns on the client
+
+    @Scenario(08)
+    Scenario: [scope-snapshot-08] Entity re-enters scope with latest component state after insert
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      Then the entity spawns on the client
+      When the server excludes the entity for the client
+      Then the entity despawns on the client
+      When the server inserts a replicated component on the entity
+      And the server includes the entity for the client
+      Then the client world has the component on the entity
+
+    @Scenario(09)
+    Scenario: [scope-snapshot-09] Static entity spawns on both clients
+      Given a server is running
+      And client A connects
+      And client B connects
+      And a server-owned static entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      And the entity is in-scope for client B
+      Then the entity spawns on the client
+
+    @Scenario(10)
+    Scenario: [scope-snapshot-10] Component update propagates after explicit tick advancement
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server updates the replicated component
+      And 10 ticks elapse
+      Then the client observes the component update
+
+    @Scenario(11)
+    Scenario: [scope-snapshot-11] Entity replication stable after extended tick idle
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      And 20 ticks have elapsed
+      Then the entity spawns on the client
 

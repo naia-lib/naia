@@ -86,6 +86,30 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         Some(ServerEntityMut::new(entity_mut, users, registry))
     }
 
+    /// Spawn a static server entity and return its EntityKey.
+    ///
+    /// Marks the entity as static (`as_static()`) inside the spawn closure so
+    /// no diff-tracking occurs after construction.  Components must be inserted
+    /// inside the closure `f`; inserting after this method returns panics.
+    pub fn spawn_static<F, R>(&mut self, f: F) -> (EntityKey, R)
+    where
+        F: for<'b> FnOnce(ServerEntityMut<'b, naia_demo_world::WorldMut<'b>>) -> R,
+    {
+        let scenario = self.ctx.scenario_mut();
+        let (server, world, registry, users) = scenario.split_for_server_mut();
+
+        let entity_mut = server.spawn_entity(world.proxy_mut());
+        let entity_key = registry.allocate_entity_key();
+        let entity = entity_mut.id();
+        registry.register_server_entity(&entity_key, &entity);
+
+        let mut server_entity_mut = ServerEntityMut::new(entity_mut, users, registry);
+        server_entity_mut.as_static();
+        let result = f(server_entity_mut);
+
+        (entity_key, result)
+    }
+
     /// Despawn an entity by EntityKey
     pub fn despawn(&mut self, key: &EntityKey) {
         if let Some(mut entity_mut) = self.entity_mut(key) {
@@ -94,6 +118,35 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
                 .scenario_mut()
                 .entity_registry_mut()
                 .unregister_server_entity(key);
+        }
+    }
+
+    /// Insert a component on an already-registered, in-scope entity.
+    ///
+    /// This is used to test dynamic component-insert events after spawn
+    /// (Gaps B and related). Panics if the entity does not exist or is static.
+    pub fn insert_component_on<C: naia_shared::ReplicatedComponent>(
+        &mut self,
+        key: &EntityKey,
+        value: C,
+    ) {
+        if let Some(mut entity_mut) = self.entity_mut(key) {
+            entity_mut.insert_component(value);
+        }
+    }
+
+    /// Remove a component from an already-registered, in-scope entity.
+    ///
+    /// This is used to test dynamic component-remove events after spawn
+    /// (Gaps B and related). Panics if the entity does not exist or is static.
+    pub fn remove_component_from<C: naia_shared::ReplicatedComponent>(
+        &mut self,
+        key: &EntityKey,
+    ) -> Option<C> {
+        if let Some(mut entity_mut) = self.entity_mut(key) {
+            entity_mut.remove_component::<C>()
+        } else {
+            None
         }
     }
 

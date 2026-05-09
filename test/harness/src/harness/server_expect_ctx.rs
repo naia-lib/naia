@@ -191,6 +191,20 @@ impl<'a> ServerExpectCtx<'a> {
         server.rooms_count()
     }
 
+    /// Number of authority-request denials the server processed this tick.
+    ///
+    /// Increments each time a client's `RequestAuthority` was rejected because
+    /// another user already held the entity's authority slot.
+    pub fn auth_denied_count(&self) -> usize {
+        self.events.auth_denied_count()
+    }
+
+    /// Total inbound message count (all channels, all types) that the server
+    /// received from clients this tick.
+    pub fn server_inbound_message_count(&self) -> usize {
+        self.events.server_inbound_message_count()
+    }
+
     /// Read messages from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, M) tuples for messages of type M received on channel C
     pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(
