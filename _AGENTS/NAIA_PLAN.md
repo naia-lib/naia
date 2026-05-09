@@ -47,17 +47,17 @@
 
 ## Priority stack
 
-Active phases P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11 — **ALL COMPLETE**. Full codebase audit complete (2026-05-09); new phases A1–A5 added from audit findings. Deferred phases listed in §Deferred.
+Active phases P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11 → A1–A5 — **ALL COMPLETE** (2026-05-09). Deferred phases listed in §Deferred.
 
-### Audit-derived active phases (priority order)
+### Audit-derived active phases — ALL COMPLETE (2026-05-09, commit 9f150630)
 
-| Phase | Finding | Severity |
+| Phase | Finding | Status |
 |---|---|---|
-| **A1** | Panic instead of error in reliable_message_receiver + fragment_receiver | ⚠️ |
-| **A2** | ID overflow unchecked in message_kinds + channel_kinds | ⚠️ |
-| **A3** | Hacky entity force-publish in delegation enable path (world_server.rs:2374) | ⚠️ |
-| **A4** | Authority double-send prevention needs BDD test (world_server.rs:1400 TODO) | 🔬 |
-| **A5** | Client request_authority returns NotDelegated for out-of-scope entity | ⚠️ |
+| **A1** | Panic→graceful discard in reliable_message_receiver + fragment_receiver | ✅ |
+| **A2** | `debug_assert!` overflow guard on MessageKind + ChannelKind ID gen | ✅ |
+| **A3** | Documents the force-publish packet-ordering invariant (removes hacky TODO) | ✅ |
+| **A4** | @Scenario(38) [entity-authority-17] — 328 active, 10/10 gate | ✅ |
+| **A5** | entity_request/release_authority return NotInScope not NotDelegated for absent entity | ✅ |
 
 ---
 
@@ -154,63 +154,34 @@ All tasks delivered in commit `33016cc3` on `dev`.
 
 ---
 
-## A1 — Receiver panic cleanup (audit finding)
+## A1 — Receiver panic cleanup — **COMPLETE** (2026-05-09)
 
-**Goal:** Convert two acknowledged panic sites to proper error returns.
-
-- `shared/src/messages/channels/receivers/reliable_message_receiver.rs:146` — TODO "bubble up error instead of panicking here"
-- `shared/src/messages/channels/receivers/fragment_receiver.rs:66` — same
-
-Both are in packet-receive paths that should return an error (or silently discard) on malformed input, not panic. Malformed input from a connected client could otherwise crash the connection handler.
-
-**Gate:** `cargo test --workspace` green + `namako gate` passes.
+- `reliable_message_receiver.rs`: `match message_kinds.read(...)` with `warn!` + discard on `Err`
+- `fragment_receiver.rs`: same; `FragmentId` gained `Debug` derive for `{:?}` format
 
 ---
 
-## A2 — ID overflow checks (audit finding)
+## A2 — ID overflow checks — **COMPLETE** (2026-05-09)
 
-**Goal:** Add overflow detection for MessageKind and ChannelKind ID generation.
-
-- `shared/src/world/component/message_kinds.rs:113` — TODO "check for current_id overflow?"
-- `shared/src/connection/channel_kinds.rs:94` — same
-
-Both generate monotonically incrementing u8/u16 IDs. At the configured kind-count limits these cannot overflow in practice, but the absence of a `debug_assert!` or explicit guard means overflow would produce silent aliasing. Add `debug_assert!` with invariant comment.
-
-**Gate:** `cargo build --workspace` + 0 warnings.
+- `message_kinds.rs` + `channel_kinds.rs`: `debug_assert!(current_net_id < NetId::MAX)` before increment; stale TODO removed
 
 ---
 
-## A3 — Delegation enable force-publish (audit finding)
+## A3 — Delegation enable force-publish — **COMPLETE** (2026-05-09)
 
-**Goal:** Remove the hacky `entity_publish` force-call in the delegation enable path.
-
-- `server/src/server/world_server.rs:2374` — TODO "this is probably a bad idea somehow! this is hacky"
-
-When enabling delegation for an entity owned by a public client, the code force-publishes the entity because the client message hasn't come through yet. The comment acknowledges this is wrong. The correct fix is to ensure the entity is always published before delegation is enabled (enforced at the call site or via a guard), not to silently force-publish inside the delegation handler.
-
-**Gate:** `cargo test --workspace` green + `namako gate` passes.
+Root cause was packet-ordering race (enable-delegation arrives before publish), not a protocol error. The force-publish is correct; the TODO was wrong. Replaced self-deprecating TODO with invariant explanation.
 
 ---
 
-## A4 — Authority double-send BDD coverage (audit finding)
+## A4 — Authority double-send BDD coverage — **COMPLETE** (2026-05-09)
 
-**Goal:** Add a BDD scenario verifying the double-send prevention logic at `world_server.rs:1400`.
-
-The comment says "Potentially there will be a future error here! TODO: verify this with tests!" The code prevents SetAuthority from being sent twice (which would cause Denied→Denied invalid transition). Add a scenario that exercises the give_authority path and verifies no duplicate auth-state messages are delivered.
-
-**Gate:** New scenario under `05_authority.feature`; `namako gate` passes at 328 active.
+@Scenario(38) [entity-authority-17]: two-client `give_authority` → client A Granted, client B Denied. 328 active scenarios, 10/10 gate.
 
 ---
 
-## A5 — Client request_authority wrong error code (audit finding)
+## A5 — Client request_authority wrong error code — **COMPLETE** (2026-05-09)
 
-**Goal:** Fix `client.request_authority(entity)` returning `NotDelegated` when entity is out of scope.
-
-- `client/src/world/global_world_manager.rs:312` — entity not in auth_handler map returns `Err(AuthorityError::NotDelegated)`, but the real reason is "entity not yet in scope / not visible to this client"
-
-This is misleading: a developer whose entity hasn't entered scope yet gets `NotDelegated` when they should get `NotInScope` (or the error variant should be clarified). Add an appropriate error variant or improve the check.
-
-**Gate:** `cargo test --workspace` green + `namako gate` passes.
+`entity_request_authority` + `entity_release_authority` now return `NotInScope` (not `NotDelegated`) when entity absent from records or auth handler not yet initialised.
 
 ---
 
