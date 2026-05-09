@@ -244,3 +244,23 @@ Feature: Replicated Resources
     @PolicyOnly
     @Scenario(03)
     Scenario: [resource-latejoin-02] Late-joining client receives current dynamic resource value
+
+  # ==========================================================================
+  # === D-A5: remove_resource under authority ===
+  # ==========================================================================
+
+  @Rule(11)
+  Rule: Resource removal propagates to authority-holding client
+
+    # [resource-authority-03] — When the server removes a resource while a client
+    # holds authority for it, the client's local resource mirror must be removed.
+    # Verifies the despawn path triggered by remove_resource propagates correctly
+    # to an authority-holding client (previously untested).
+    @Scenario(01)
+    Scenario: [resource-authority-03] remove_resource while client holds authority removes the resource from the client
+      Given a Naia protocol with delegable replicated resource type "PlayerSelection"
+      And a server with PlayerSelection { selected_id: 0 } and connected client "alice"
+      And alice holds authority on PlayerSelection
+      When the server removes PlayerSelection
+      And one replication round trip elapses
+      Then alice no longer has the PlayerSelection resource

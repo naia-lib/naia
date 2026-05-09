@@ -526,3 +526,25 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       When the server updates the replicated component
       Then the total dirty update candidate count is 0
 
+
+  # ==========================================================================
+  # === D-A4: Entity migration between rooms ===
+  # ==========================================================================
+
+  @Rule(19)
+  Rule: Entity migration between rooms transfers scope
+
+    # [room-migration-01] — When an entity moves from one room to another, the
+    # scope assignments update: the client whose room it left loses scope, and
+    # the client whose room it entered gains scope.  Exercises the
+    # room-management + scope interaction path (leave_room / enter_room + explicit
+    # include/exclude) that had no prior BDD coverage.
+    @Scenario(01)
+    Scenario: [room-migration-01] Entity migrating to a new room leaves old client's scope and enters new client's scope
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a server-owned entity in client A's room only
+      When the server migrates the entity to client B's room
+      Then the entity is out-of-scope for client A
+      And the entity is in-scope for client B

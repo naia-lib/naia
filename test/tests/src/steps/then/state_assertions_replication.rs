@@ -326,6 +326,15 @@ fn then_entity_in_scope_for_client_b(ctx: &TestWorldRef) {
     );
 }
 
+/// Then the entity is out-of-scope for client A.
+#[then("the entity is out-of-scope for client A")]
+fn then_entity_out_of_scope_for_client_a(ctx: &TestWorldRef) {
+    assert!(
+        !check_entity_in_scope(ctx, "A"),
+        "Expected entity to be out-of-scope for client A, but it was in-scope"
+    );
+}
+
 /// Then the entity is out-of-scope for client B.
 #[then("the entity is out-of-scope for client B")]
 fn then_entity_out_of_scope_for_client_b(ctx: &TestWorldRef) {
@@ -512,6 +521,22 @@ fn then_alice_auth_granted(ctx: &TestWorldRef) -> AssertOutcome<()> {
     match ctx.client(key, |c| c.resource_authority_status::<TestPlayerSelection>()) {
         Some(EntityAuthStatus::Granted) => AssertOutcome::Passed(()),
         _ => AssertOutcome::Pending,
+    }
+}
+
+/// Then alice no longer has the PlayerSelection resource.
+///
+/// Polls until the client's local resource mirror has been removed.
+/// Used to verify that `remove_resource` propagates to authority-holding
+/// clients — covers `[resource-authority-03]`.
+#[then("alice no longer has the PlayerSelection resource")]
+fn then_alice_no_longer_has_playerselection(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::TestPlayerSelection;
+    let key = ctx.last_client();
+    if !ctx.client(key, |c| c.has_resource::<TestPlayerSelection>()) {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Pending
     }
 }
 

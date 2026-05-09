@@ -356,3 +356,51 @@ fn given_entity_not_in_clients_room(ctx: &mut TestWorldMut) {
         });
     });
 }
+
+/// Given the server spawns a server-owned entity in client A's room only.
+///
+/// After `client A connects` / `client B connects`, both clients share the
+/// default room.  This step:
+///  1. Creates a second room and moves client B into it exclusively.
+///  2. Spawns a server-owned entity in the default room (client A's room).
+///  3. Includes the entity in client A's scope and waits for replication.
+///
+/// Stores the second room key under `SECOND_ROOM_KEY` for downstream steps.
+/// Used by `[room-migration-01]`.
+#[given("the server spawns a server-owned entity in client A's room only")]
+fn given_entity_in_client_a_room_only(ctx: &mut TestWorldMut) {
+    use naia_test_harness::Position;
+    let client_a = named_client_mut(ctx, "A");
+    let client_b = named_client_mut(ctx, "B");
+    let scenario = ctx.scenario_mut();
+    let room_a = scenario.last_room();
+
+    // Create a second room and move client B into it exclusively.
+    let room_b = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let rb = server.create_room().key();
+            server.room_mut(&rb).unwrap().add_user(&client_b);
+            server.room_mut(&room_a).unwrap().remove_user(&client_b);
+            rb
+        })
+    });
+    scenario.bdd_store(SECOND_ROOM_KEY, room_b);
+
+    // Spawn entity in client A's room, include in A's scope only.
+    let entity_key = scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            let (ek, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(0.0, 0.0)).enter_room(&room_a);
+            });
+            if let Some(mut scope) = server.user_scope_mut(&client_a) {
+                scope.include(&ek);
+            }
+            ek
+        })
+    });
+    scenario.spec_expect("room-migration-01: entity replicated to client A", |ectx| {
+        ectx.client(client_a, |c| c.has_entity(&entity_key).then_some(()))
+    });
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+    scenario.allow_flexible_next();
+}

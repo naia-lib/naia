@@ -229,11 +229,11 @@ CHANGELOG.md covers through the Resources feature era. Missing: P1 (`give_author
 ### D-A3 — `give_authority` Bevy doc error cases (audit finding)
 `adapters/bevy/server/src/commands.rs:60-68` — the `give_authority` doc states the Delegated precondition but does not document what happens if the entity is not found or not Delegated (silent no-op? panic? error?). Add error behavior to the doc.
 
-### D-A4 — Entity migration between rooms BDD coverage (audit finding)
-No scenario tests an entity being moved between rooms while clients are scoped to it. This exercises the room-management + scope interaction path. Add under `04_visibility.feature`.
+### D-A4 — Entity migration between rooms BDD coverage — **COMPLETE** (2026-05-09)
+@Rule(19) @Scenario(01) `[room-migration-01]` added to `04_visibility.feature`. New steps: `given_entity_in_client_a_room_only`, `when_server_migrates_entity_to_client_b_room`, `then_entity_out_of_scope_for_client_a`. Gate: 330 active, 10/10 pass.
 
-### D-A5 — remove_resource under authority BDD coverage (audit finding)
-No scenario tests calling `remove_resource::<R>()` while a client holds authority for R. The behavior (does authority release? Does the client get a notification?) is unverified. Add under `07_resources.feature`.
+### D-A5 — remove_resource under authority BDD coverage — **COMPLETE** (2026-05-09)
+@Rule(11) @Scenario(01) `[resource-authority-03]` added to `07_resources.feature`. New steps: `when_server_removes_playerselection`, `then_alice_no_longer_has_playerselection`. Gate: 330 active, 10/10 pass.
 
 ### D-A6 — Broadcast allocation (audit finding)
 `world_server.rs:513` — `message_box.clone()` in the broadcast loop allocates one `Box<dyn Message>` per connected user per broadcast. At 1262 CCU this is the most avoidable per-tick allocation. Consider `Arc<MessageBox>` or a ref-counted wrapper to amortize. Blocked on profiling to confirm it's a real bottleneck at target CCU.

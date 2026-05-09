@@ -48,6 +48,9 @@ pub const TICK_BUFFER_REJECTED_KEY: &str = "tick_buffer_rejected";
 // EntityProperty buffering tests (messaging-18/20).
 pub const ENTITY_COMMAND_COUNT_KEY: &str = "entity_command_count";
 
+// Room-migration tests (D-A4).
+pub const SECOND_ROOM_KEY: &str = "second_room_key";
+
 /// Look up the BDD-stored entity key for a label like "A" or "B".
 /// Used by multi-entity tests (priority accumulator B-BDD-8 and
 /// future scenarios that work with named entity pairs).

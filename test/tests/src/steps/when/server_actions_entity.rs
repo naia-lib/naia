@@ -3,7 +3,7 @@
 use naia_test_harness::EntityKey;
 
 use crate::steps::prelude::*;
-use crate::steps::world_helpers::last_entity_mut;
+use crate::steps::world_helpers::{last_entity_mut, SECOND_ROOM_KEY};
 
 /// When the server adds the entity to the client's room.
 ///
@@ -400,6 +400,41 @@ fn when_server_inserts_matchstate_as_static(ctx: &mut TestWorldMut, phase: u8) {
     });
 }
 
+/// When the server migrates the entity to client B's room.
+///
+/// Moves the entity from the current room (client A's room, `last_room`)
+/// to the second room stored under `SECOND_ROOM_KEY`, updates explicit
+/// scope: excludes the entity for client A and includes it for client B.
+/// Used by `[room-migration-01]`.
+#[when("the server migrates the entity to client B's room")]
+fn when_server_migrates_entity_to_client_b_room(ctx: &mut TestWorldMut) {
+    let client_a = named_client_mut(ctx, "A");
+    let client_b = named_client_mut(ctx, "B");
+    let entity_key: EntityKey = ctx
+        .scenario_mut()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    let room_a = ctx.scenario_mut().last_room();
+    let room_b = ctx
+        .scenario_mut()
+        .bdd_get(SECOND_ROOM_KEY)
+        .expect("SECOND_ROOM_KEY not set — run the room-only Given step first");
+    ctx.scenario_mut().mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut entity) = server.entity_mut(&entity_key) {
+                entity.leave_room(&room_a);
+                entity.enter_room(&room_b);
+            }
+            if let Some(mut scope) = server.user_scope_mut(&client_a) {
+                scope.exclude(&entity_key);
+            }
+            if let Some(mut scope) = server.user_scope_mut(&client_b) {
+                scope.include(&entity_key);
+            }
+        });
+    });
+}
+
 /// When the server removes MatchState.
 #[when("the server removes MatchState")]
 fn when_server_removes_matchstate(ctx: &mut TestWorldMut) {
@@ -408,6 +443,18 @@ fn when_server_removes_matchstate(ctx: &mut TestWorldMut) {
     scenario.mutate(|c| {
         c.server(|server| {
             assert!(server.remove_resource::<TestMatchState>(), "remove MatchState should succeed");
+        });
+    });
+}
+
+/// When the server removes PlayerSelection.
+#[when("the server removes PlayerSelection")]
+fn when_server_removes_playerselection(ctx: &mut TestWorldMut) {
+    use naia_test_harness::TestPlayerSelection;
+    let scenario = ctx.scenario_mut();
+    scenario.mutate(|c| {
+        c.server(|server| {
+            assert!(server.remove_resource::<TestPlayerSelection>(), "remove PlayerSelection should succeed");
         });
     });
 }
