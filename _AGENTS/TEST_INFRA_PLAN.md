@@ -30,7 +30,7 @@ The "309 active" figure **includes ~77 `@PolicyOnly` empty stubs** that triviall
 
 ### Harness (`test/harness/`)
 
-The simulation harness provides a deterministic tick-based server + N-client environment. It is well-designed at the conceptual level: the mutate/expect cycle cleanly separates state changes from assertions, and the TestClock gives full determinism.
+The simulation harness provides a deterministic tick-based server + N-client environment. The mutate/expect cycle cleanly separates state changes from assertions, and the TestClock gives full determinism.
 
 **Core modules:**
 | File | LOC | Responsibility |
@@ -71,7 +71,7 @@ The simulation harness provides a deterministic tick-based server + N-client env
 
 22 files, ~6k LOC. Three-layer structure: `given/` (state setup), `when/` (actions), `then/` (assertions). Vocabulary types (`ClientName`, `EntityRef`) enforce naming conventions at compile time.
 
-**Storage keys** are defined centrally in `world_helpers.rs:23-49` as `&'static str` constants — well-organized, not scattered.
+**Storage keys** are defined centrally in `world_helpers.rs:23-49` as `&'static str` constants — well-organized.
 
 **Key problem files by LOC:**
 | File | LOC | Issue |
@@ -89,11 +89,11 @@ The simulation harness provides a deterministic tick-based server + N-client env
 - "N ticks elapse" as a phrase-level binding (tests call `tick_n()` in code directly)
 - Server-side `MessageEvent` observable assertion
 - Resource late-join observable (client connecting after resource already inserted)
-- Authority-cleared assertion (after server calls `configure_replication(Public)`)
+- Authority-cleared assertion (client-side state after server reconfigures entity away from `Delegated`)
 
 ### NPA adapter (`test/npa/`)
 
-Clean four-command CLI: `manifest`, `run`, `coverage`, `help`. The `coverage` subcommand is functional (confirmed — it's what we ran above). Scenario-key filtering with edit-distance suggestions is useful for debugging. Run report is machine-readable JSON. Solid, low-debt.
+Clean four-command CLI: `manifest`, `run`, `coverage`, `help`. The `coverage` subcommand is functional. Scenario-key filtering with edit-distance suggestions is useful for debugging. Run report is machine-readable JSON. Solid, low-debt.
 
 ### Bevy NPA (`test/bevy_npa/`)
 
@@ -105,7 +105,7 @@ No README exists. The state is: working smoke layer, very thin coverage, clear p
 
 Crucible integration: baseline named `perf_v0`, post-assert via `naia-bench-report --assert-wins`. The `wins.rs` module defines pass/fail criteria for the benchmark suite (29 wins, 0 losses confirmed at last audit).
 
-**Gaps:** No per-subsystem micro-benchmarks (spawn throughput, event dispatch overhead). Wins criteria are defined but not documented (what threshold = a "win"?). No historical baseline tracking per release.
+**Gaps:** Wins criteria are defined but not commented (what threshold = a "win"?).
 
 ### Loom & compile_fail
 
@@ -115,168 +115,200 @@ Loom covers `DirtySet` concurrency properties. Compile_fail covers 2 derive-macr
 
 ## Quality issues (concrete)
 
-### H-1 — `scenario.rs` alternation enforcement is commented out
-**File:** `test/harness/src/harness/scenario.rs:384, 546, 602`
+### H-1 — `scenario.rs` dead alternation-enforcement code
+**File:** `test/harness/src/harness/scenario.rs:112, 177, 384, 392, 546, 582, 602, 638, 692`
 
-The `LastOperation` enum (line 112) and `last_operation` field (line 177) were designed to enforce strict mutate→expect alternation. Three enforcement blocks are commented out. The field is set but never checked, making it dead state.
+The `LastOperation` enum (line 112) and `last_operation` field (line 177) were designed to enforce strict mutate→expect alternation. Three enforcement checks are commented out (lines 384, 546, 602). The field is still assigned (lines 392, 582, 638) but never read, making it dead state.
 
-**Fix:** Either re-enable enforcement with clear panic messages, or remove the enum, field, and dead assignments entirely. The current state confuses readers about whether alternation is required.
+**Fix (delete path):** Remove the `LastOperation` enum, the `last_operation` field, and all six assignment sites. The commented-out enforcement blocks go with them. This is the preferred option — the alternation contract is not enforced today and the dead code misleads readers.
+
+**Fix (enable path — alternative):** Re-enable the three commented-out checks with clear panic messages and remove the `// if` wrapper. Only choose this if strict alternation enforcement is desirable for all current tests.
+
+→ **Decision: delete** unless there's a known reason the enforcement was disabled.
 
 ### H-2 — Missing harness API for dynamic component operations
 **Affected @PolicyOnly stubs:** `entity-replication-04`, `entity-replication-05`, `entity-replication-11`
 
 `ServerMutateCtx` has no method to insert or remove a component on an entity that's already registered and in-scope. This blocks three live-test conversions.
 
-**Fix:** Add `ServerMutateCtx::insert_component_on<C: ReplicatedComponent>(key, component)` and `remove_component_from<C>(key)`.
+**Fix:** Add `ServerMutateCtx::insert_component_on<C: ReplicatedComponent>(key, component)` and `remove_component_from<C>(key)` — each looks up the entity from the registry and calls `server.insert_component()` / `server.remove_component()`.
 
 ### H-3 — Missing server-side MessageEvent and AuthDenied tracking
 **Affected @PolicyOnly stubs:** `server-events-05`, `server-events-10`
 
-`server_events.rs` tracks `AuthGranted` and `AuthReset` but not `AuthDenied` or `MessageEvent`. The server-side message receipt is an important observable.
+`server_events.rs` tracks `AuthGranted` and `AuthReset` but not `AuthDenied` or server-received `MessageEvent`. The server-side message receipt is an important observable.
 
-**Fix:** Add `auth_denied_count()` to `ServerEvents`. For `MessageEvent`, add `server_message_count(channel)`.
+**Fix:** Add `auth_denied_count() -> usize` to `ServerEvents`. Add `server_message_count(channel: ChannelKind) -> usize` that counts inbound messages per channel.
 
 ### H-4 — No static entity harness path
-**Affected spec area:** `03_replication.feature` (no static-entity coverage)
+**Affected spec area:** `03_replication.feature` (no static-entity coverage at all)
 
-`ServerMutateCtx::spawn_entity` always creates dynamic entities. There is no `spawn_static_entity` or post-spawn `mark_as_static` API in the harness. The production API (`enable_static_replication`) is untested via BDD.
+`ServerMutateCtx::spawn_entity` always creates dynamic entities. There is no `spawn_static_entity` API in the harness. The production API (`enable_static_replication`) is untested via BDD.
 
-**Fix:** Add `ServerMutateCtx::spawn_static_entity(key)` that calls `server.enable_static_replication(&entity)`.
+**Fix:** Add `ServerMutateCtx::spawn_static_entity(key)` that calls `server.enable_static_replication(&entity)` before registering the entity in the registry.
 
-### H-5 — Protocol gap: authority not cleared on `configure_replication(Public)`
+### H-5 — Client does not reset authority state when entity is reconfigured away from `Delegated`
 **Affected @PolicyOnly stubs:** `entity-delegation-05`, `entity-authority-13`
 
-When the server calls `configure_replication(Public)` on a previously-`Delegated` entity, **no message is sent to clear the client's authority status**. A client that held `Denied` retains that status indefinitely. This is a real missing protocol path, not a harness limitation.
+When the server calls `configure_replication(Public)` on a previously-`Delegated` entity, the `ReplicationConfig` change message already travels to the client via the existing config-update packet. However, the **client does not reset its local authority state** when it processes that packet. A client that previously received `Denied` (or had a pending `Requested`) retains that stale authority status indefinitely.
 
-**Fix:** In `configure_entity_replication` (server), when transitioning from `Delegated` → `Public`, send an authority-reset message to any client that has non-`Available` authority state for that entity.
+The fix is **purely client-side** — no new server message is required. The existing config-change packet is the signal.
+
+**Fix:** In the client's `configure_entity_replication` handler, when the incoming config's `publicity` changes from `Delegated` to any non-`Delegated` value, clear the client's local `EntityAuthStatus` for that entity (reset to `None` / not-delegable).
 
 ### S-1 — Several step files approach or exceed 500-LOC limit
 `state_assertions_entity.rs` (597), `event_assertions.rs` (534), `state_assertions_replication.rs` (517), `client_actions.rs` (496).
 
-**Fix:** Split `state_assertions_entity.rs` into `state_assertions_auth.rs` + `state_assertions_messaging.rs`; the entity/component pieces stay. Evaluate others after this.
+**Fix:** Split `state_assertions_entity.rs` into `state_assertions_auth.rs` (authority/delegation assertions) + `state_assertions_messaging.rs` (message/request assertions); entity/component assertions stay in the original. Evaluate others after this split.
 
 ### S-2 — Missing "N ticks elapse" phrase binding
-Many step bodies call `tick_n(ctx, N)` directly in Rust. Feature files can't express time passing without a binding.
+Many step bodies call `tick_n(ctx, N)` directly in Rust code. Feature files cannot express time passing without a binding, forcing scenario logic into step Rust code.
 
-**Fix:** Add `#[when("{int} ticks elapse")]` and `#[given("{int} ticks have elapsed")]` in `setup.rs` or `state_misc.rs`.
+**Fix:** Add `#[when("{int} ticks elapse")]` and `#[given("{int} ticks have elapsed")]` in `given/state_misc.rs` (or `given/setup.rs`).
 
 ### B-1 — Wins criteria undocumented
-`test/bench/src/wins.rs` defines what constitutes a benchmark win but doesn't explain the thresholds.
+`test/bench/src/wins.rs` defines what constitutes a benchmark win but has no comment explaining the thresholds.
 
-**Fix:** Add a comment header to `wins.rs` explaining the decision criteria.
+**Fix:** Add a comment header to `wins.rs` explaining what a "win" means (e.g., new baseline ≤ X% of old baseline for latency metrics).
 
 ---
 
 ## Coverage gaps — new scenarios needed
 
-These represent behaviors currently not specced at all (not even as stubs) or stubs that are convertible with harness work:
-
 ### Gap A — Static entity replication (no coverage at all)
-`03_replication.feature` has zero scenarios for the `as_static()` / `enable_static_replication()` path. This is a meaningful user-facing feature.
+`03_replication.feature` has zero scenarios for the `as_static()` / `enable_static_replication()` path.
 
-**New scenarios (5-6):**
+**New live scenarios (4):**
 - `static-entity-01` — Static entity spawns on client when entering scope
-- `static-entity-02` — Static entity: no diff tracking after spawn (component update not replicated)
-- `static-entity-03` — Static entity: insert-component-on-spawn → correct initial value received
-- `static-entity-04` — Static entity: full snapshot sent on each new scope entry
-- `static-entity-05` — Static entity: `panic!` on `insert_component` after construction
+- `static-entity-02` — Static entity: component update on server is NOT replicated after initial spawn
+- `static-entity-03` — Static entity: correct initial component values received on spawn
+- `static-entity-04` — Static entity: full snapshot re-sent on scope re-entry (exclude then include)
+
+Note: the "panic on insert after construction" contract (`static-entity-05` from earlier drafts) belongs in a unit test or integration_only test, not BDD — panics are awkward to assert in Gherkin. Add it to `test/harness/contract_tests/integration_only/` instead.
 
 ### Gap B — Dynamic component operations (3 stubs → live tests)
-Requires H-2 first.
+Requires H-2 (T1.1) first.
 
 **Convert to live:**
-- `entity-replication-04` — Component insert events fire for in-scope additions
-- `entity-replication-05` — Component remove events fire for in-scope removals
-- `entity-replication-11` — Component remove on out-of-scope is safe
+- `entity-replication-04` — Component insert event fires for in-scope additions
+- `entity-replication-05` — Component remove event fires for in-scope removals
+- `entity-replication-11` — Component remove on out-of-scope entity is safe (no panic)
 
 ### Gap C — Resource delegation end-to-end (thin coverage)
-`07_resources.feature` has 9 real tests covering insert, diff, authority request/grant/release. Missing:
+`07_resources.feature` has 9 real tests covering insert, diff, authority request/grant/release. Missing end-to-end delegation flow and late-join.
 
-**New scenarios (3-4):**
-- `resource-delegation-01` — Server configures resource as Delegated; client requests authority; client mutations replicate
-- `resource-delegation-02` — Server reclaims authority via `configure_replicated_resource(Server)` after client held it
-- `resource-latejoin-02` — Client connecting after dynamic resource is live receives current value
+**New live scenarios (3):**
+- `resource-delegation-01` — Server configures resource as Delegated; client requests authority; client mutations replicate to server
+- `resource-delegation-02` — Server reclaims authority via `configure_replicated_resource(Server)` after client held it; server mutations resume replication
+- `resource-latejoin-02` — Client connecting after a dynamic resource is already live receives the current value immediately
 
-### Gap D — Authority cleared on reconfigure (protocol fix + 2 stubs → live tests)
-Requires H-5 first.
+### Gap D — Authority cleared on entity reconfigure (client fix + 2 stubs → live tests)
+Requires H-5 (T1.4) first.
 
 **Convert to live:**
-- `entity-delegation-05` — Disable delegation clears all authority status
-- `entity-authority-13` — Disable delegation clears authority
+- `entity-delegation-05` — After server reconfigures entity from `Delegated` to `Public`, client observes authority status is cleared (None / not-delegable)
+- `entity-authority-13` — Client that previously received `Denied` observes authority status cleared after entity is reconfigured to `Public`
 
 ### Gap E — Bevy adapter BDD expansion
-9 scenarios covering connection only. Meaningful expansion targets:
+9 scenarios covering connection only. All new scenarios go in a new `bevy_specs/features/replication.feature`.
 
-**New scenarios in `bevy_specs/` (6-8):**
-- Entity spawn with `CommandsExt::enable_replication` + verify client sees it
-- Component insert replication via Bevy `Commands`
-- Authority grant/deny via `CommandsExt::give_authority`
-- Resource insert via `ServerCommandsExt::replicate_resource`
-- Resource authority request via `ClientCommandsExt::request_resource_authority`
+**New live scenarios (7-9):**
+- Entity spawn via `CommandsExt::enable_replication` — client sees entity appear
+- Component insert via Bevy `Commands` + `insert_component` — client sees component value
+- Entity leaves scope — client despawns entity
+- Authority grant via `CommandsExt::give_authority` — client observes `EntityAuthGrantedEvent`
+- Authority denied via `CommandsExt::give_authority` (wrong user) — correct client observes `EntityAuthDeniedEvent`
+- Resource insert via `ServerCommandsExt::replicate_resource` — client sees resource value
+- Resource authority request via `ClientCommandsExt::request_resource_authority` — server observes request
 
 ### Gap F — Server-side event observability (2 stubs → live tests)
-Requires H-3 first.
+Requires H-3 (T1.3) first.
 
 **Convert to live:**
-- `server-events-05` — MessageEvent fires per inbound message
-- `server-events-10` — Authority denied event observable on server
+- `server-events-05` — Server-side `MessageEvent` count increments when client sends a message
+- `server-events-10` — Server-side `AuthDenied` count increments when a second client's authority request is rejected
 
 ---
 
 ## Plan
 
-### T0 — Housekeeping (small, low-risk)
+### T0 — Housekeeping
 
-- [ ] **T0.1** — Re-enable or delete the `LastOperation` alternation enforcement (`scenario.rs:384, 546, 602`). If deleting: remove the enum and field too.
-- [ ] **T0.2** — Document the wins criteria in `test/bench/src/wins.rs` (comment header).
-- [ ] **T0.3** — Add `bevy_npa/README.md` explaining purpose, current state, and relationship to naia_npa.
-- [ ] **T0.4** — Update `NAIA_PLAN.md` snapshot after each phase completes.
+- [ ] **T0.1** — Delete the dead `LastOperation` alternation code in `scenario.rs`: remove the enum (line 112), the `last_operation` field (line 177), all six assignment sites (lines 392, 582, 638, 692), and the three commented-out enforcement blocks (lines 384, 546, 602).
+- [ ] **T0.2** — Add a comment header to `test/bench/src/wins.rs` explaining the win/loss threshold criteria (H-1 fix for bench).
+- [ ] **T0.3** — Write `test/bevy_npa/README.md`: purpose (Bevy adapter BDD verification), relationship to naia_npa (same architecture, Bevy ECS world instead of raw harness), current state (smoke only, T4 expands it), and how to run.
+- [ ] **T0.4** — Add `static-entity-05` panic test to `test/harness/contract_tests/integration_only/` as a `#[should_panic]` unit test.
 
 ### T1 — Harness: new APIs
 
-- [ ] **T1.1** — `ServerMutateCtx::insert_component_on<C>(key, value)` and `remove_component_from<C>(key)`. Unlocks Gap B.
-- [ ] **T1.2** — `ServerMutateCtx::spawn_static_entity(key)`. Unlocks Gap A.
-- [ ] **T1.3** — `ServerEvents::auth_denied_count()` and `server_message_count(channel)`. Unlocks Gap F.
-- [ ] **T1.4** — Fix H-5 protocol gap: send authority-reset message when server transitions entity from `Delegated` → non-Delegated. Unlocks Gap D.
+- [ ] **T1.1** — Add `ServerMutateCtx::insert_component_on<C: ReplicatedComponent>(key: EntityKey, value: C)` and `remove_component_from<C: ReplicatedComponent>(key: EntityKey)` to `server_mutate_ctx.rs`. Both look up the entity via `EntityRegistry` then call through to `server.insert_component` / `server.remove_component`. Unlocks Gap B.
+- [ ] **T1.2** — Add `ServerMutateCtx::spawn_static_entity(key: EntityKey)` to `server_mutate_ctx.rs`. Calls `server.enable_static_replication(&entity)` immediately after spawn (before any components are inserted). Unlocks Gap A.
+- [ ] **T1.3** — Add to `server_events.rs`: `auth_denied_count() -> usize` (counts `EntityAuthDeniedEvent` firings), and `server_inbound_message_count(channel: ChannelKind) -> usize` (counts inbound `MessageEvent` per channel). Expose both via `ServerExpectCtx`. Unlocks Gap F.
+- [ ] **T1.4** — Fix H-5 client-side authority state: in the client's `configure_entity_replication` handler, when the incoming `ReplicationConfig` transitions the entity's publicity away from `Delegated`, reset the client's local `EntityAuthStatus` for that entity to `None`. No new server message — the existing config-update packet is the signal. Unlocks Gap D.
 
 ### T2 — Step bindings: new phrases
 
-- [ ] **T2.1** — `#[given|when("{int} ticks elapse")]` phrase binding.
-- [ ] **T2.2** — `"the server inserts {component} on {entity}"` and `"the server removes {component} from {entity}"` phrases. (Requires T1.1.)
-- [ ] **T2.3** — `"a server-owned static entity exists"` / `"a static entity with {component}"` Given phrases. (Requires T1.2.)
-- [ ] **T2.4** — Server-side event assertion phrases for MessageEvent and AuthDenied. (Requires T1.3.)
-- [ ] **T2.5** — `"the authority status for {entity} is Available"` / `"is cleared"` Then phrase. (Supports Gap D.)
+All new bindings must follow the vocab.rs discipline rules (parameter names are part of the contract; phrase text must be unique and unambiguous).
 
-### T3 — New BDD scenarios
+- [ ] **T2.1** — Add `#[when("{int} ticks elapse")]` and `#[given("{int} ticks have elapsed")]` in `given/state_misc.rs`. Both call `tick_n(scenario, n)`.
+- [ ] **T2.2** — Add `"the server inserts {component} on {entity}"` (When) and `"the server removes {component} from {entity}"` (When) in `when/server_actions_entity.rs`. Requires T1.1.
+- [ ] **T2.3** — Add `"a server-owned static entity exists"` and `"a static entity exists with {component}"` (Given) in `given/state_entity.rs`. Requires T1.2.
+- [ ] **T2.4** — Add `"the server has received {int} message(s)"` (Then) in `then/event_assertions.rs`, and `"the server has observed AuthDeniedEvent"` (Then) in `then/event_assertions.rs`. Requires T1.3.
+- [ ] **T2.5** — Add `"the authority status for {entity} is not set"` / `"the entity is not delegable"` (Then) in `then/state_assertions_delegation.rs`. Used to assert the client sees no authority state after reconfigure. Requires T1.4.
 
-- [ ] **T3.1** — Write static entity Rule in `03_replication.feature` (Gap A, 5-6 new scenarios). Requires T1.2 + T2.3.
-- [ ] **T3.2** — Convert `entity-replication-04/05/11` stubs to live tests (Gap B). Requires T1.1 + T2.2.
-- [ ] **T3.3** — Write resource delegation scenarios in `07_resources.feature` (Gap C, 3-4 new scenarios).
+### T3 — New and converted BDD scenarios
+
+Run `cargo run --manifest-path test/npa/Cargo.toml -- coverage --specs-root test/specs` to verify count after each sub-task.
+
+- [ ] **T3.1** — Add a new `Rule: Static entity replication` to `03_replication.feature` with 4 live scenarios (Gap A). Requires T1.2 + T2.3.
+- [ ] **T3.2** — Convert `entity-replication-04`, `entity-replication-05`, `entity-replication-11` stubs to live tests with real steps (Gap B). Requires T1.1 + T2.2.
+- [ ] **T3.3** — Add 3 new scenarios to `07_resources.feature` under a new `Rule: Resource delegation` (Gap C). No new harness work required — uses existing authority + resource APIs.
 - [ ] **T3.4** — Convert `entity-delegation-05` and `entity-authority-13` stubs to live tests (Gap D). Requires T1.4 + T2.5.
 - [ ] **T3.5** — Convert `server-events-05` and `server-events-10` stubs to live tests (Gap F). Requires T1.3 + T2.4.
 
 ### T4 — Bevy BDD expansion
 
-- [ ] **T4.1** — Add entity replication scenarios to `bevy_specs/` (spawn, component insert, scope). 3-4 scenarios.
-- [ ] **T4.2** — Add authority scenarios to `bevy_specs/` (give_authority, deny). 2-3 scenarios.
-- [ ] **T4.3** — Add resource scenarios to `bevy_specs/` (replicate_resource, request_resource_authority). 2-3 scenarios.
+- [ ] **T4.1** — Create `test/bevy_specs/features/replication.feature`. Add entity spawn + scope + despawn scenarios (3-4). Add matching step bindings to `test/bevy_npa/src/steps.rs` and harness support to `test/bevy_npa/src/world.rs`.
+- [ ] **T4.2** — Add authority scenarios to `replication.feature`: give_authority (granted), give_authority (denied). Add matching step bindings.
+- [ ] **T4.3** — Add resource scenarios to `replication.feature`: replicate_resource (client sees value), request_resource_authority (server observes request). Add matching step bindings.
 
 ### T5 — Step binding cleanup
 
-- [ ] **T5.1** — Split `state_assertions_entity.rs` (597 LOC) into `state_assertions_auth.rs` + `state_assertions_messaging.rs`.
-- [ ] **T5.2** — Audit `when/client_actions.rs` (496 LOC) and `when/network_events_transport.rs` (481 LOC) for split opportunities.
+Run `cargo check --workspace` and the gate after each split to confirm nothing broke.
+
+- [ ] **T5.1** — Split `then/state_assertions_entity.rs` (597 LOC): extract authority/delegation assertions into `then/state_assertions_auth.rs` and message/request assertions into `then/state_assertions_messaging.rs`. Entity/component assertions stay in the original file. Update `then/mod.rs` imports.
+- [ ] **T5.2** — After T5.1, re-measure all then/when files. If any still exceed 500 LOC, split further. Target files: `event_assertions.rs` (534), `state_assertions_replication.rs` (517), `client_actions.rs` (496), `network_events_transport.rs` (481).
+
+---
+
+## Dependency graph
+
+```
+T0  (no deps)
+T1.1 → T2.2 → T3.2
+T1.2 → T2.3 → T3.1
+T1.3 → T2.4 → T3.5
+T1.4 → T2.5 → T3.4
+T2.1 (no harness dep)
+T3.3 (no new harness dep — uses existing resource + authority APIs)
+T4.1 → T4.2 → T4.3
+T5.1 → T5.2
+```
+
+T0, T2.1, T3.3, T4.x, and T5.x are all parallelisable with the T1→T2→T3 chain.
 
 ---
 
 ## Acceptance criteria for "test infrastructure done"
 
-1. `cargo run --manifest-path test/npa/Cargo.toml -- coverage --specs-root test/specs` reports **≥ 325 active** (up from 309), with zero new `@PolicyOnly` stubs added.
-2. Static entity replication is covered by at least 4 live scenarios.
-3. `entity-replication-04/05/11`, `entity-delegation-05`, `entity-authority-13`, `server-events-05/10` are all live tests (not stubs).
-4. Bevy NPA has ≥ 20 scenarios (up from 9).
+1. `cargo run --manifest-path test/npa/Cargo.toml -- coverage --specs-root test/specs` reports **≥ 325 active**, with zero new `@PolicyOnly` stubs added.
+2. Static entity replication is covered by at least 4 live scenarios in `03_replication.feature`.
+3. All of the following are live tests (not stubs): `entity-replication-04/05/11`, `entity-delegation-05`, `entity-authority-13`, `server-events-05`, `server-events-10`.
+4. Bevy NPA has ≥ 20 scenarios (up from 9), covering replication, authority, and resources.
 5. No step binding file exceeds 500 LOC.
-6. `LastOperation` alternation: either enforced with panic, or fully removed — no commented-out enforcement.
+6. `LastOperation` dead code is fully removed — no commented-out enforcement, no dead field/enum.
 7. `cargo check --workspace` clean, 0 build warnings.
+8. `static-entity-05` panic contract is covered by a `#[should_panic]` unit test in `contract_tests/integration_only/`.
 
 ---
 
@@ -284,7 +316,7 @@ Requires H-3 first.
 
 The old target of **350** was aspirational. Given that ~77 of the 309 are already `@PolicyOnly` stubs (already counted), and many policy-only contracts are genuinely untestable (wallclock, packet inspection, concurrent ops, transport layer), the realistic ceiling from conversion alone is ~319.
 
-The new target of **≥ 325 active with real steps** is achievable through T3 (new scenarios in Gaps A, C) and is a more honest metric than raw count. If T4 (Bevy expansion) reaches ≥ 20 scenarios, that's an additional quality story there.
+The new target of **≥ 325 active** is achievable through T3 (new scenarios in Gaps A and C) and is a more honest metric. Bevy NPA expansion (T4) adds on top independently.
 
 The old 350 target is retired from `NAIA_PLAN.md` in favour of the criteria above.
 
