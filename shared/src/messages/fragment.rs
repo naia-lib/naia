@@ -7,7 +7,7 @@ const FRAGMENT_INDEX_BITS: u8 = 20;
 const FRAGMENT_INDEX_LIMIT: u32 = 2_u32.pow(FRAGMENT_INDEX_BITS as u32);
 
 // FragmentId
-#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub struct FragmentId {
     inner: u16,
 }

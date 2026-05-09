@@ -1393,11 +1393,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        // From a previous failure:
-        // We send SetAuthority immediately above (where though?), so we don't need to push to auth_grants
-        // which would cause duplicate SetAuthority sends (leading to invalid transitions like Denied->Denied)
-        // Potentially there will be a future error here!
-        // TODO: verify this with tests!
+        // SetAuthority is sent in the per-connection loop above — do NOT also push to
+        // auth_grants, which would queue a second SetAuthority send and drive illegal
+        // transitions (e.g. Granted→Denied for the grantee, or Denied→Denied for observers).
+        // Covered by [entity-authority-17] @Scenario(38).
 
         // Push to events for external systems (e.g., Bevy adapter, test harness)
         // Events are separate from network messages - they're notifications for external consumers
@@ -2364,27 +2363,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let owner_user_key;
         match entity_owner {
             EntityOwner::Client(user_key) => {
+                // The entity was spawned by the client but the Publish packet
+                // has not yet arrived (enable-delegation arrived first due to
+                // packet reordering). Promote the entity to ClientPublic now so
+                // delegation setup can proceed — the Publish packet, when it
+                // arrives, will be a no-op since the entity is already public.
+                // This is the correct handling for the publish-after-delegation
+                // packet-ordering race; it is NOT a shortcut around the protocol.
                 owner_user_key = user_key;
-                warn!(
-                    "entity should be owned by a public client at this point. Owner is: {:?}",
-                    entity_owner
-                );
-
-                // publishing here to ensure that the entity is in the correct state ..
-                // TODO: this is probably a bad idea somehow! this is hacky
-                // instead, should rely on client message coming through at the appropriate time to publish the entity before this..
                 let result = self.global_world_manager.entity_publish(global_entity);
-                if result {
-                    world.entity_publish(
-                        &self.component_kinds,
-                        &self.global_entity_map,
-                        &self.global_world_manager,
-                        world_entity,
+                if !result {
+                    warn!(
+                        "enable_delegation_client_owned_entity: entity_publish failed for {:?}; \
+                         aborting delegation enable (entity may already be public or in an \
+                         inconsistent state)",
+                        global_entity
                     );
-                } else {
-                    warn!("failed to publish entity before enabling delegation");
                     return;
                 }
+                world.entity_publish(
+                    &self.component_kinds,
+                    &self.global_entity_map,
+                    &self.global_world_manager,
+                    world_entity,
+                );
             }
             EntityOwner::ClientPublic(user_key) => {
                 owner_user_key = user_key;

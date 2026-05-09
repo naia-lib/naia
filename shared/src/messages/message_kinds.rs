@@ -108,9 +108,13 @@ impl MessageKinds {
             (net_id, M::create_builder(), M::protocol_name().to_string()),
         );
         self.net_id_map.insert(net_id, message_kind);
+        debug_assert!(
+            self.current_net_id < NetId::MAX,
+            "MessageKinds NetId overflow — too many message types registered (max {})",
+            NetId::MAX
+        );
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
-        //TODO: check for current_id overflow?
     }
 
     /// Bit width of every encoded `MessageKind` in this registry. Used by

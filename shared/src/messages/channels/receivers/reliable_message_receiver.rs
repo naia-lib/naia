@@ -141,12 +141,16 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 .unwrap();
             let (local_id, request_bytes) = request_or_response_container.to_id_and_bytes();
             let mut reader = BitReader::new(&request_bytes);
-            let request_or_response_result = message_kinds.read(&mut reader, converter);
-            if request_or_response_result.is_err() {
-                // TODO: bubble up error instead of panicking here
-                panic!("Cannot read request or response message!");
-            }
-            let request_or_response = request_or_response_result.unwrap();
+            let request_or_response = match message_kinds.read(&mut reader, converter) {
+                Ok(msg) => msg,
+                Err(e) => {
+                    // Malformed request/response from remote — discard and continue rather
+                    // than crashing the connection. This can arise from a buggy peer or
+                    // deliberate fuzzing; the connection stays up.
+                    warn!("Discarding malformed request/response message ({}); dropping packet.", e);
+                    return;
+                }
+            };
 
             // add it to incoming requests or responses
             match local_id {

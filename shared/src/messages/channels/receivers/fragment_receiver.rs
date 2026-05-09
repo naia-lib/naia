@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use log::warn;
 use naia_serde::BitReader;
 
 use crate::{
@@ -61,12 +62,15 @@ impl FragmentReceiver {
         let (first_message_index, fragment_count) = first_index_opt.unwrap();
         let concat_list = fragment_list.concat();
         let mut reader = BitReader::new(&concat_list);
-        let full_message_result = message_kinds.read(&mut reader, converter);
-        if full_message_result.is_err() {
-            // TODO: bubble up error instead of panicking here
-            panic!("Cannot read fragmented message!");
-        }
-        let full_message = full_message_result.unwrap();
+        let full_message = match message_kinds.read(&mut reader, converter) {
+            Ok(msg) => msg,
+            Err(e) => {
+                // Reassembled bytes are unreadable — peer sent a malformed fragmented
+                // message. Discard the whole sequence rather than crashing.
+                warn!("Discarding malformed reassembled fragment (id={:?}, {}); dropping message.", fragment_id, e);
+                return None;
+            }
+        };
         let end_message_index = first_message_index + fragment_count as u16 - 1;
         Some((first_message_index, end_message_index, full_message))
     }

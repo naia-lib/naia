@@ -667,3 +667,20 @@ Feature: Entity Ownership, Publication, Delegation, Authority
       And the server gives authority to client A for the delegated entity
       Then client A is granted authority for the delegated entity
 
+    # [entity-authority-17] — Single give_authority produces exactly one status update per client.
+    # Regression guard for the double-SetAuthority bug: one server give_authority call must
+    # send exactly one SetAuthority(Granted) to the target and one SetAuthority(Denied) to
+    # all other in-scope clients. A duplicate send would drive an illegal Granted→Denied or
+    # Denied→Denied transition visible as a wrong final auth state. See world_server.rs
+    # `entity_give_authority` — SetAuthority is sent in the per-connection loop above, NOT
+    # pushed to auth_grants, deliberately avoiding the double-send path.
+    @Scenario(38)
+    Scenario: [entity-authority-17] Server give_authority produces correct per-client auth status with multiple observers
+      Given a server is running
+      And client A connects
+      And client B connects
+      And the server spawns a delegated entity in-scope for both clients
+      When the server gives authority to client A for the delegated entity
+      Then client A is granted authority for the delegated entity
+      And client B is denied authority for the delegated entity
+
