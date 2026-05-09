@@ -2,7 +2,7 @@
 #
 # Schema: v2 (https://embarkstudios.github.io/cargo-deny/checks/cfg.html)
 #
-# All `ignore` entries below are time-boxed to 2026-06-01. The underlying
+# All `ignore` entries below are time-boxed to 2027-06-01. The underlying
 # fix for every entry is the DTLS-stack migration in webrtc-unreliable-client
 # (rustls 0.19 -> 0.23, ring 0.16 -> 0.17.12+, webpki -> rustls-webpki,
 # reqwest 0.11 -> 0.12) and a companion bump in webrtc-unreliable (server-side
@@ -16,33 +16,33 @@ yanked = "deny"
 
 ignore = [
     # ---- webrtc-unreliable-client 0.3.x DTLS stack (rustls/webpki/ring) ----
-    { id = "RUSTSEC-2024-0336", reason = "rustls 0.19 infinite-loop. DTLS handshake path. Fix: migrate to rustls 0.23. Due 2026-06-01." },
-    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki name-constraint (URI). Via reqwest 0.11 TLS chain. Follows rustls upgrade. Due 2026-06-01." },
-    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki name-constraint (wildcard). Via reqwest 0.11 TLS chain. Follows rustls upgrade. Due 2026-06-01." },
-    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL-parsing panic. Via reqwest 0.11 TLS chain. Follows rustls upgrade. Due 2026-06-01." },
-    { id = "RUSTSEC-2023-0052", reason = "webpki 0.21 CPU-DoS. Direct dep; removed when rustls-webpki replaces it. Due 2026-06-01." },
+    { id = "RUSTSEC-2024-0336", reason = "rustls 0.19 infinite-loop. DTLS handshake path. Fix: migrate to rustls 0.23. Due 2027-06-01." },
+    { id = "RUSTSEC-2026-0098", reason = "rustls-webpki name-constraint (URI). Via reqwest 0.11 TLS chain. Follows rustls upgrade. Due 2027-06-01." },
+    { id = "RUSTSEC-2026-0099", reason = "rustls-webpki name-constraint (wildcard). Via reqwest 0.11 TLS chain. Follows rustls upgrade. Due 2027-06-01." },
+    { id = "RUSTSEC-2026-0104", reason = "rustls-webpki CRL-parsing panic. Via reqwest 0.11 TLS chain. Follows rustls upgrade. Due 2027-06-01." },
+    { id = "RUSTSEC-2023-0052", reason = "webpki 0.21 CPU-DoS. Direct dep; removed when rustls-webpki replaces it. Due 2027-06-01." },
     # ring 0.16 and 0.17.8 both need >=0.17.12. Single fix: upgrade through the chain.
-    { id = "RUSTSEC-2025-0009", reason = "ring AES panic under overflow checks. Both 0.16 (direct) and 0.17.8 (via rustls 0.21). Due 2026-06-01." },
+    { id = "RUSTSEC-2025-0009", reason = "ring AES panic under overflow checks. Both 0.16 (direct) and 0.17.8 (via rustls 0.21). Due 2027-06-01." },
 
     # ---- webrtc-unreliable-client 0.3.x HTTP signaling stack (reqwest/bytes) ----
-    { id = "RUSTSEC-2026-0007", reason = "bytes 1.7.1 BytesMut::reserve overflow. Via h2->hyper 0.14->reqwest 0.11. Fix: reqwest 0.12 migration. Due 2026-06-01." },
+    { id = "RUSTSEC-2026-0007", reason = "bytes 1.7.1 BytesMut::reserve overflow. Via h2->hyper 0.14->reqwest 0.11. Fix: reqwest 0.12 migration. Due 2027-06-01." },
 
     # ---- DER/ASN.1 chain via rcgen/x509-parser/asn1-rs ----
-    { id = "RUSTSEC-2026-0009", reason = "time 0.3.36 stack-exhaustion DoS. Via asn1-rs->der-parser->x509-parser->rcgen. Fix: rcgen bump. Due 2026-06-01." },
+    { id = "RUSTSEC-2026-0009", reason = "time 0.3.36 stack-exhaustion DoS. Via asn1-rs->der-parser->x509-parser->rcgen. Fix: rcgen bump. Due 2027-06-01." },
 
     # ---- webrtc-unreliable 0.5.x server-side native-tls/openssl chain ----
-    { id = "RUSTSEC-2025-0004", reason = "openssl 0.10.66 ssl::select_next_proto UAF. Via webrtc-unreliable 0.5.x + webrtc-unreliable-client reqwest. Due 2026-06-01." },
-    { id = "RUSTSEC-2025-0022", reason = "openssl 0.10.66 Md/Cipher::fetch UAF. Same provenance as RUSTSEC-2025-0004. Due 2026-06-01." },
+    { id = "RUSTSEC-2025-0004", reason = "openssl 0.10.66 ssl::select_next_proto UAF. Via webrtc-unreliable 0.5.x + webrtc-unreliable-client reqwest. Due 2027-06-01." },
+    { id = "RUSTSEC-2025-0022", reason = "openssl 0.10.66 Md/Cipher::fetch UAF. Same provenance as RUSTSEC-2025-0004. Due 2027-06-01." },
 
     # ---- webrtc-unreliable-client 0.3.x old RustCrypto stack (unmaintained) ----
-    { id = "RUSTSEC-2021-0059", reason = "aesni unmaintained (merged into aes). Via webrtc-unreliable-client crypto chain. Due 2026-06-01." },
-    { id = "RUSTSEC-2021-0060", reason = "aes-soft unmaintained (merged into aes). Via webrtc-unreliable-client crypto chain. Due 2026-06-01." },
-    { id = "RUSTSEC-2021-0064", reason = "cpuid-bool unmaintained (renamed to cpufeatures). Via webrtc-unreliable-client aes-gcm chain. Due 2026-06-01." },
-    { id = "RUSTSEC-2025-0010", reason = "ring <0.17 unmaintained. Direct dep in webrtc-unreliable-client. Resolved by ring 0.17 upgrade. Due 2026-06-01." },
-    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile 1.x unmaintained. Via reqwest 0.11 in webrtc-unreliable-client. Resolved by reqwest 0.12 migration. Due 2026-06-01." },
+    { id = "RUSTSEC-2021-0059", reason = "aesni unmaintained (merged into aes). Via webrtc-unreliable-client crypto chain. Due 2027-06-01." },
+    { id = "RUSTSEC-2021-0060", reason = "aes-soft unmaintained (merged into aes). Via webrtc-unreliable-client crypto chain. Due 2027-06-01." },
+    { id = "RUSTSEC-2021-0064", reason = "cpuid-bool unmaintained (renamed to cpufeatures). Via webrtc-unreliable-client aes-gcm chain. Due 2027-06-01." },
+    { id = "RUSTSEC-2025-0010", reason = "ring <0.17 unmaintained. Direct dep in webrtc-unreliable-client. Resolved by ring 0.17 upgrade. Due 2027-06-01." },
+    { id = "RUSTSEC-2025-0134", reason = "rustls-pemfile 1.x unmaintained. Via reqwest 0.11 in webrtc-unreliable-client. Resolved by reqwest 0.12 migration. Due 2027-06-01." },
 
     # ---- tokio ecosystem via webrtc-unreliable-client ----
-    { id = "RUSTSEC-2025-0023", reason = "tokio broadcast channel unsound (Clone without Sync). Via webrtc-unreliable-client reqwest. naia does not use tokio broadcast directly. Due 2026-06-01." },
+    { id = "RUSTSEC-2025-0023", reason = "tokio broadcast channel unsound (Clone without Sync). Via webrtc-unreliable-client reqwest. naia does not use tokio broadcast directly. Due 2027-06-01." },
 
     # ---- smol/fastrand chain via naia-server ----
     { id = "RUSTSEC-2024-0384", reason = "instant unmaintained. Via fastrand 1.x -> futures-lite -> async-fs -> smol 1.3.0 -> naia-server. Resolved when smol bumps fastrand to 2.x." },
