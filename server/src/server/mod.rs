@@ -10,3 +10,5 @@ pub mod world_server;
 pub use world_server::WorldServer;
 
 mod scope_checks_cache;
+mod scope_change;
+mod room_store;

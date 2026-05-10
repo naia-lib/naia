@@ -10,7 +10,7 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    handshake::HandshakeHeader, AuthorityError, BigMap, BitReader, BitWriter, Channel, ChannelKind,
+    handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
@@ -38,6 +38,8 @@ use crate::{
     NaiaServerError, Publicity, ReplicationConfig, RoomKey, RoomMut, RoomRef, ScopeExit,
     ServerConfig, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef, WorldUser,
 };
+
+use super::{room_store::RoomStore, scope_change::ScopeChange};
 
 cfg_if! {
     if #[cfg(feature = "e2e_debug")] {
@@ -125,7 +127,7 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     disconnected_users: HashMap<SocketAddr, UserKey>,
     user_connections: HashMap<SocketAddr, Connection>,
     // Rooms
-    rooms: BigMap<RoomKey, Room>,
+    room_store: RoomStore,
     // Entities
     entity_room_map: EntityRoomMap,
     entity_scope_map: EntityScopeMap,
@@ -161,18 +163,6 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     resource_registry: ResourceRegistry,
 }
 
-/// Events that drive scope re-evaluation.
-/// Each variant encodes exactly the (user, entity) pairs that need attention.
-enum ScopeChange {
-    /// User was added to a room — check all entities in that room for this user.
-    UserEnteredRoom(UserKey, RoomKey),
-    /// User was removed from a room — entities in that room may need despawning.
-    UserLeftRoom(UserKey, RoomKey),
-    /// Entity was added to a room — check all users in that room for this entity.
-    EntityEnteredRoom(GlobalEntity, RoomKey),
-    /// Explicit include/exclude via UserScope API.
-    ScopeToggled(UserKey, GlobalEntity, bool),
-}
 
 impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Create a new WorldServer
@@ -218,7 +208,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             user_connections: HashMap::new(),
             disconnected_users: HashMap::new(),
             // Rooms
-            rooms: BigMap::new(),
+            room_store: RoomStore::new(),
             // Entities
             entity_room_map: EntityRoomMap::new(),
             entity_scope_map: EntityScopeMap::new(),
@@ -703,7 +693,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     #[cfg(debug_assertions)]
     pub(crate) fn scope_checks_recompute_slow(&self) -> Vec<(RoomKey, UserKey, E)> {
         let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
-        for (room_key, room) in self.rooms.iter() {
+        for (room_key, room) in self.room_store.iter() {
             for user_key in room.user_keys() {
                 for global_entity in room.entities() {
                     if let Ok(entity) = self
@@ -1697,20 +1687,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// key
     pub fn create_room(&'_ mut self) -> RoomMut<'_, E> {
         let new_room = Room::new();
-        let room_key = self.rooms.insert(new_room);
+        let room_key = self.room_store.insert(new_room);
         RoomMut::new(self, &room_key)
     }
 
     /// Returns whether or not a Room exists for the given RoomKey
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        self.rooms.contains_key(room_key)
+        self.room_store.contains(room_key)
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
     pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, E> {
-        if self.rooms.contains_key(room_key) {
+        if self.room_store.contains(room_key) {
             return RoomRef::new(self, room_key);
         }
         panic!("No Room exists for given Key!");
@@ -1720,7 +1710,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
     pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
-        if self.rooms.contains_key(room_key) {
+        if self.room_store.contains(room_key) {
             return RoomMut::new(self, room_key);
         }
         panic!("No Room exists for given Key!");
@@ -1728,18 +1718,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Return a list of all the Server's Rooms' keys
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        let mut output = Vec::new();
-
-        for (key, _) in self.rooms.iter() {
-            output.push(key);
-        }
-
-        output
+        self.room_store.keys()
     }
 
     /// Get a count of how many Rooms currently exist
     pub fn rooms_count(&self) -> usize {
-        self.rooms.len()
+        self.room_store.len()
     }
 
     // Bandwidth monitoring
@@ -1843,7 +1827,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Delete room cache entry
         if let Some(room_keys) = self.entity_room_map.remove_from_all_rooms(global_entity) {
             for room_key in room_keys {
-                if let Some(room) = self.rooms.get_mut(&room_key) {
+                if let Some(room) = self.room_store.get_mut(&room_key) {
                     room.remove_entity(global_entity, true);
                 }
             }
@@ -2678,7 +2662,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // Clean up all user data
         for room_key in user.room_keys() {
-            self.rooms
+            self.room_store
                 .get_mut(room_key)
                 .unwrap()
                 .unsubscribe_user(user_key);
@@ -2724,25 +2708,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Deletes the Room associated with a given RoomKey on the Server.
     /// Returns true if the Room existed.
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
-        self.room_remove_all_entities(room_key);
-
-        if self.rooms.contains_key(room_key) {
-            // TODO: what else kind of cleanup do we need to do here? Scopes?
-
-            // actually remove the room from the collection
-            let room = self.rooms.remove(room_key).unwrap();
-            for user_key in room.user_keys() {
-                self.users.get_mut(user_key).unwrap().uncache_room(room_key);
-            }
-            // Drop every (room_key, *, *) tuple from the scope-checks cache
-            // in one pass — covers users-in-room and entities-in-room that
-            // `room_remove_all_entities` cleared above.
-            self.scope_checks_cache.on_room_destroyed(*room_key);
-
-            true
-        } else {
-            false
-        }
+        let Self { room_store, users, entity_room_map, scope_checks_cache, .. } = self;
+        room_store.destroy(room_key, users, entity_room_map, scope_checks_cache)
     }
 
     //////// users
@@ -2750,10 +2717,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Returns whether or not an User is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
-        if let Some(room) = self.rooms.get(room_key) {
-            return room.has_user(user_key);
-        }
-        false
+        self.room_store.has_user(room_key, user_key)
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
@@ -2764,36 +2728,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let mut subscribed = false;
-        if let Some(user) = self.users.get_mut(user_key) {
-            if let Some(room) = self.rooms.get_mut(room_key) {
-                room.subscribe_user(user_key);
-                user.cache_room(room_key);
-                subscribed = true;
-            }
-        }
-        if subscribed {
-            // Mirror the new (room, user, *) tuples into the cache for every
-            // entity already in this room. Resolves global → world per entity
-            // once at churn time so per-tick `scope_checks()` is zero lookups.
-            let entities: Vec<E> = self
-                .rooms
-                .get(room_key)
-                .map(|room| {
-                    room.entities()
-                        .filter_map(|ge| {
-                            self.global_entity_map
-                                .global_entity_to_entity(ge)
-                                .ok()
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            self.scope_checks_cache
-                .on_user_added_to_room(*room_key, *user_key, entities);
-        }
-        self.scope_change_queue
-            .push_back(ScopeChange::UserEnteredRoom(*user_key, *room_key));
+        let Self { room_store, users, global_entity_map, scope_checks_cache, scope_change_queue, .. } = self;
+        let change = room_store.add_user(room_key, user_key, users, global_entity_map, scope_checks_cache);
+        scope_change_queue.push_back(change);
     }
 
     /// Removes a User from a Room
@@ -2802,35 +2739,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        if let Some(user) = self.users.get_mut(user_key) {
-            if let Some(room) = self.rooms.get_mut(room_key) {
-                room.unsubscribe_user(user_key);
-                user.uncache_room(room_key);
-                self.scope_checks_cache
-                    .on_user_removed_from_room(*room_key, *user_key);
-            }
-        }
-        self.scope_change_queue
-            .push_back(ScopeChange::UserLeftRoom(*user_key, *room_key));
+        let Self { room_store, users, scope_checks_cache, scope_change_queue, .. } = self;
+        let change = room_store.remove_user(room_key, user_key, users, scope_checks_cache);
+        scope_change_queue.push_back(change);
     }
 
     /// Get a count of Users in a given Room
     pub(crate) fn room_users_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(room_key) {
-            return room.users_count();
-        }
-        0
+        self.room_store.users_count(room_key)
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
     pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
-        let iter = self.rooms.get(room_key).map(|room| room.user_keys());
-        iter.into_iter().flatten()
+        self.room_store.user_keys_iter(room_key)
     }
 
     pub(crate) fn room_entities(&self, room_key: &RoomKey) -> impl Iterator<Item = &GlobalEntity> {
-        let iter = self.rooms.get(room_key).map(|room| room.entities());
-        iter.into_iter().flatten()
+        self.room_store.entities_iter(room_key)
     }
 
     /// Sends a message to all connected users in a given Room using a given channel
@@ -2842,11 +2767,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) {
         // Wrap once in Arc so per-user clones are refcount increments, not heap allocs.
         let container = MessageContainer::new(message_box);
-        if let Some(room) = self.rooms.get(room_key) {
-            let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
-            for user_key in &user_keys {
-                let _ = self.send_message_inner(user_key, channel_kind, container.clone());
-            }
+        let user_keys: Vec<UserKey> = self.room_store.user_keys_iter(room_key).cloned().collect();
+        for user_key in &user_keys {
+            let _ = self.send_message_inner(user_key, channel_kind, container.clone());
         }
     }
 
@@ -2855,79 +2778,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &GlobalEntity) -> bool {
-        let Some(room) = self.rooms.get(room_key) else {
-            return false;
-        };
-        room.has_entity(entity)
+        self.room_store.has_entity(room_key, entity)
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
-        let mut is_some = false;
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            room.add_entity(&global_entity);
-            is_some = true;
+        let Self { room_store, global_entity_map, entity_room_map, scope_checks_cache, scope_change_queue, .. } = self;
+        if let Some(change) = room_store.add_entity(room_key, world_entity, global_entity_map, entity_room_map, scope_checks_cache) {
+            scope_change_queue.push_back(change);
         }
-        if !is_some {
-            return;
-        }
-        self.entity_room_map
-            .entity_add_room(&global_entity, room_key);
-        // Mirror new (room, *, entity) tuples for every user already in the
-        // room — keeps the scope-checks cache in sync with the slow path.
-        let users: Vec<UserKey> = self
-            .rooms
-            .get(room_key)
-            .map(|room| room.user_keys().copied().collect())
-            .unwrap_or_default();
-        self.scope_checks_cache
-            .on_entity_added_to_room(*room_key, *world_entity, users);
-        self.scope_change_queue
-            .push_back(ScopeChange::EntityEnteredRoom(global_entity, *room_key));
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let global_entity = self
-            .global_entity_map
-            .entity_to_global_entity(world_entity)
-            .unwrap();
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            room.remove_entity(&global_entity, false);
-            self.entity_room_map
-                .remove_from_room(&global_entity, room_key);
-            self.scope_checks_cache
-                .on_entity_removed_from_room(*room_key, *world_entity);
-        }
+        let Self { room_store, global_entity_map, entity_room_map, scope_checks_cache, .. } = self;
+        room_store.remove_entity(room_key, world_entity, global_entity_map, entity_room_map, scope_checks_cache);
     }
 
-    /// Remove all Entities from a Room, associated with the given RoomKey
-    fn room_remove_all_entities(&mut self, room_key: &RoomKey) {
-        if let Some(room) = self.rooms.get_mut(room_key) {
-            let global_entities: Vec<GlobalEntity> = room.entities().copied().collect();
-            for global_entity in global_entities {
-                room.remove_entity(&global_entity, false);
-                self.entity_room_map
-                    .remove_from_room(&global_entity, room_key);
-            }
-            // The scope-checks cache cleanup for these tuples is performed by
-            // the caller (`room_destroy`) via `on_room_destroyed`, which is a
-            // single linear scan instead of per-entity retain calls.
-        }
-    }
 
     /// Get a count of Entities in a given Room
     pub(crate) fn room_entities_count(&self, room_key: &RoomKey) -> usize {
-        if let Some(room) = self.rooms.get(room_key) {
-            return room.entities_count();
-        }
-        0
+        self.room_store.entities_count(room_key)
     }
 
     // Private methods
@@ -3366,7 +3239,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         // Loop 1 (both paths): drain per-room entity-removal queues.
         // This handles entities removed from a room via room_remove_entity.
-        for (_, room) in self.rooms.iter_mut() {
+        for (_, room) in self.room_store.iter_mut() {
             while let Some((removed_user, removed_global_entity)) = room.pop_entity_removal_queue()
             {
                 let Some(user) = self.users.get(&removed_user) else {
@@ -3422,7 +3295,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
                     let entity_list: Vec<GlobalEntity> = self
-                        .rooms
+                        .room_store
                         .get(&room_key)
                         .map(|r| r.entities().copied().collect())
                         .unwrap_or_default();
@@ -3432,7 +3305,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
                 ScopeChange::UserLeftRoom(user_key, room_key) => {
                     let entity_list: Vec<GlobalEntity> = self
-                        .rooms
+                        .room_store
                         .get(&room_key)
                         .map(|r| r.entities().copied().collect())
                         .unwrap_or_default();
@@ -3478,7 +3351,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
                 ScopeChange::EntityEnteredRoom(global_entity, room_key) => {
                     let user_keys: Vec<UserKey> = self
-                        .rooms
+                        .room_store
                         .get(&room_key)
                         .map(|r| r.user_keys().copied().collect())
                         .unwrap_or_default();
