@@ -241,8 +241,9 @@ CHANGELOG.md covers through the Resources feature era. Missing: P1 (`give_author
 ### D-A7 — Error propagation overhaul (audit finding)
 18 TODOs of the form "pass this on and handle above" scattered across `world_server.rs`, `client.rs`, `main_server.rs`, `base_time_manager.rs`, `connection.rs`, `advanced_handshaker.rs`, `simple_handshaker.rs`. All indicate IO errors silently dropped. Systematic fix: propagate to a `WorldEvents::IoError` variant or similar. Large scope.
 
-### D-A8 — Benchmark expansion (audit finding)
+### D-A8 — Benchmark expansion (audit finding) — COMPLETE
 Three benchmark scenarios missing: (1) single-client round-trip latency, (2) resource replication throughput, (3) authority grant/revoke cycle cost. Add to `benches/` suite.
+Delivered: `update/round_trip`, `resources/throughput` (insert_latency + mutation_throughput), `authority/cycle` (grant_revoke_cycle). Added `BenchWorldBuilder::delegated()`, `BenchResource`, and 7 new `BenchWorld` helpers. Commit `f787ea94`.
 
 ### D-P0 — DTLS stack migration (deadline: 2027-06-01)
 6 RUSTSEC `cargo-deny` ignores expire 2026-06-01. Migration requires replacing the DTLS transport with a `rustls`-based stack. Deferred due to scope; if the deadline passes without action, add new `ignore` entries with updated dates.

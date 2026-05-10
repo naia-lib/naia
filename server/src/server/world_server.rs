@@ -460,8 +460,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Queues up an Message to be sent to the Client associated with a given
     /// UserKey
     pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) -> Result<(), NaiaServerError> {
-        let cloned_message = M::clone_box(message);
-        self.send_message_inner(user_key, &ChannelKind::of::<C>(), cloned_message)
+        let container = MessageContainer::new(M::clone_box(message));
+        self.send_message_inner(user_key, &ChannelKind::of::<C>(), container)
     }
 
     /// Queues up an Message to be sent to the Client associated with a given
@@ -470,7 +470,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         &mut self,
         user_key: &UserKey,
         channel_kind: &ChannelKind,
-        message_box: Box<dyn Message>,
+        message: MessageContainer,
     ) -> Result<(), NaiaServerError> {
         let channel_settings = self.channel_kinds.channel(channel_kind);
 
@@ -488,7 +488,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .base
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
-        let message = MessageContainer::new(message_box);
         connection.base.message_manager.send_message(
             &self.message_kinds,
             &mut converter,
@@ -509,9 +508,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         channel_kind: &ChannelKind,
         message_box: Box<dyn Message>,
     ) {
-        self.user_keys().iter().for_each(|user_key| {
-            let _ = self.send_message_inner(user_key, channel_kind, message_box.clone());
-        })
+        // Wrap once in Arc — each per-user clone is a refcount increment, not
+        // a heap allocation. At 1,262 CCU this drops from 1,262 clone_box()
+        // allocations per broadcast to 1.
+        let container = MessageContainer::new(message_box);
+        let user_keys: Vec<UserKey> = self.user_keys().iter().cloned().collect();
+        for user_key in user_keys {
+            let _ = self.send_message_inner(&user_key, channel_kind, container.clone());
+        }
     }
 
     //
@@ -2835,10 +2839,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         room_key: &RoomKey,
         message_box: Box<dyn Message>,
     ) {
+        // Wrap once in Arc so per-user clones are refcount increments, not heap allocs.
+        let container = MessageContainer::new(message_box);
         if let Some(room) = self.rooms.get(room_key) {
             let user_keys: Vec<UserKey> = room.user_keys().cloned().collect();
             for user_key in &user_keys {
-                let _ = self.send_message_inner(user_key, channel_kind, message_box.clone());
+                let _ = self.send_message_inner(user_key, channel_kind, container.clone());
             }
         }
     }
