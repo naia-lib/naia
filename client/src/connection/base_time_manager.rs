@@ -48,7 +48,8 @@ impl BaseTimeManager {
 
         // send packet
         if io.send_packet(writer.to_packet()).is_err() {
-            // TODO: pass this on and handle above
+            // Ping send failure is not fatal: the ping timer will
+            // retry on the next interval; timeout detects dead links.
             warn!("Client Error: Cannot send ping packet to Server");
         }
     }
@@ -71,7 +72,8 @@ impl BaseTimeManager {
 
         // send packet
         if io.send_packet(writer.to_packet()).is_err() {
-            // TODO: pass this on and handle above
+            // Pong send failure is not fatal: server re-pings on its timer;
+            // timeout detects dead links.
             warn!("Client Error: Cannot send pong packet to Server");
         }
         connection.mark_sent();

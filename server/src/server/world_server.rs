@@ -360,7 +360,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             let response = self.time_manager.process_ping(&mut reader).unwrap();
                             // send packet
                             if self.io.send_packet(&address, response.to_packet()).is_err() {
-                                // TODO: pass this on and handle above
+                                // Pong send failure is transient: client will re-ping on its
+                                // own timer. Persistent link failures show up via timeout.
                                 warn!("Server Error: Cannot send pong packet to {}", address);
                                 continue;
                             };
@@ -3283,7 +3284,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .send_packet(user_address, writer.to_packet())
                         .is_err()
                     {
-                        // TODO: pass this on and handle above
+                        // Ping send failure is not fatal: the connection timeout
+                        // will detect a persistently dead link via missed pongs.
                         warn!("Server Error: Cannot send ping packet to {}", user_address);
                     }
                     connection.base.mark_sent();
@@ -3334,7 +3336,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // send packet
         if io.send_packet(user_address, writer.to_packet()).is_err() {
-            // TODO: pass this on and handle above
+            // Heartbeat send failure is not fatal: the connection timeout
+            // will detect a persistently dead link when heartbeats stop arriving.
             warn!(
                 "Server Error: Cannot send heartbeat packet to {}",
                 user_address

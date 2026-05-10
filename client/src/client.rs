@@ -297,7 +297,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         for _ in 0..10 {
             let writer = self.handshake_manager.write_disconnect();
             if self.io.send_packet(writer.to_packet()).is_err() {
-                // TODO: pass this on and handle above
+                // Best-effort: we send 10 disconnect packets and move on.
+                // If none reach the server it will time out the connection anyway.
                 warn!("Client Error: Cannot send disconnect packet to Server");
             }
         }
@@ -450,7 +451,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         } else if self.io.is_loaded() {
             if let Some(outgoing_packet) = self.handshake_manager.send() {
                 if self.io.send_packet(outgoing_packet).is_err() {
-                    // TODO: pass this on and handle above
+                    // Single handshake send failure is not fatal: the handshake
+                    // manager retries on the next tick until the server responds.
                     warn!("Client Error: Cannot send handshake packet to Server");
                 }
             }
@@ -1960,7 +1962,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         }
                         PacketType::Pong => {
                             if connection.time_manager.read_pong(&mut reader).is_err() {
-                                // TODO: pass this on and handle above
+                                // Malformed pong: skip this sample. RTT estimation
+                                // recovers on the next successful pong exchange.
                                 warn!("Client Error: Cannot process pong packet from Server");
                             }
                         }
@@ -2009,7 +2012,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // send packet
         if io.send_packet(writer.to_packet()).is_err() {
-            // TODO: pass this on and handle above
+            // Heartbeat send failure is not fatal: the server's connection
+            // timeout will fire if heartbeats stop arriving persistently.
             warn!("Client Error: Cannot send heartbeat packet to Server");
         }
         connection.mark_sent();

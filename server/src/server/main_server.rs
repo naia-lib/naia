@@ -366,7 +366,9 @@ impl MainServer {
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
                                     if self.io.send_packet(&address, packet).is_err() {
-                                        // TODO: pass this on and handle above
+                                        // Single send failure is not fatal: the client will
+                                        // retry the handshake on its own timeout. Persistent
+                                        // failures will surface via connection timeout.
                                         warn!("Server Error: Cannot send packet to {}", &address);
                                     }
                                 }
@@ -376,7 +378,7 @@ impl MainServer {
                                 )) => {
                                     self.finalize_connection(&user_key, &address);
                                     if self.io.send_packet(&address, validate_packet).is_err() {
-                                        // TODO: pass this on and handle above
+                                        // Same rationale as SendPacket above: client retries.
                                         warn!(
                                             "Server Error: Cannot send validation packet to {}",
                                             &address

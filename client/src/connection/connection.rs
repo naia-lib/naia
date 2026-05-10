@@ -297,7 +297,9 @@ impl Connection {
             let packet = writer.to_packet();
             let packet_bytes = packet.slice().len() as u32;
             if io.send_packet(packet).is_err() {
-                // TODO: pass this on and handle above
+                // UDP send failure is transient: packet loss is recoverable
+                // through reliable-channel retransmit and unreliable-channel
+                // natural tolerance. Persistent failures show up via timeout.
                 warn!("Client Error: Cannot send data packet to Server");
             } else {
                 self.base.spend_bandwidth(packet_bytes);
