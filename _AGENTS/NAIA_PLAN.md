@@ -49,6 +49,22 @@
 
 Active phases P1 → P3 → P4 → P5 → P6 → P8 → P9 → P11 → A1–A5 — **ALL COMPLETE** (2026-05-09). Deferred phases listed in §Deferred.
 
+### V2 Audit-derived active phases (AUDIT_REPORT_V2.md, 2026-05-10)
+
+| Phase | Finding | Status |
+|---|---|---|
+| **V2.1** | [CRITICAL] Fix transmute lifetime UB in local transport (C.2) | ⬜ |
+| **V2.2** | [NOTABLE] Apply CacheMap LRU to address_to_timestamp_map (I.2/K.1) | ⬜ |
+| **V2.3** | [NOTABLE] Prune been_handshaked_users on disconnect (K.4) | ⬜ |
+| **V2.4** | [NOTABLE] Guard incomplete migration stub in host_world_manager (J.1) | ⬜ |
+| **V2.5** | [NOTABLE] Convert stale-key panics to Option returns (A.3) | ⬜ |
+| **V2.6** | [NOTABLE] Add // Safety: comments to all unsafe blocks (C.1/D.4) | ⬜ |
+| **V2.7** | [NOTABLE] Add pending-auth connection timeout (K.1) | ⬜ |
+| **V2.8** | [NOTABLE] Convert host_engine entity-not-found panic to warn+return (B.2) | ⬜ |
+| **V2.9** | [NOTABLE] Fix empty panic messages in UDP URL parsing (B.2) | ⬜ |
+
+---
+
 ### Audit-derived active phases — ALL COMPLETE (2026-05-09, commit 9f150630)
 
 | Phase | Finding | Status |
