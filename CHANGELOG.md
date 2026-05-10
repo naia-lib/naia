@@ -67,3 +67,32 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **`EntityMut::as_static()` builder method.** Replaces `spawn_static_entity`. Must be
   called before `insert_component` on entities that should be treated as static.
+
+- **`server.give_authority(user_key, entity)` and `entity_mut.give_authority(user_key)`.**
+  Server-initiated authority grant. Overrides any current holder (including the same user,
+  making it idempotent). Requires the entity to be `Delegated` and in-scope for the target
+  user; otherwise a silent no-op. Paired with `take_authority` to reclaim authority.
+  Bevy adapter: `entity_commands.give_authority(&mut server, &user_key)`.
+
+- **`server.take_authority(entity)` and `entity_mut.take_authority()`.**
+  Reclaims server authority from whatever client currently holds it. Sends
+  `SetAuthority(Denied)` to the previous holder and `SetAuthority(Available)` to
+  any observers. Bevy adapter: `entity_commands.take_authority(&mut server)`.
+
+- **Reconnect edge-case handling.** Clients that disconnect and reconnect mid-session
+  now correctly re-receive all in-scope entities and replicated resources on reconnect.
+  Previously, a rapid disconnect/reconnect could leave the client with a stale
+  entity set.
+
+### Changed
+
+- **Crate names kebab-cased.** The three internal test/tool crates were renamed for
+  consistency with Rust conventions:
+  - `naia_npa` → `naia-npa`
+  - `naia_bevy_npa` → `naia-bevy-npa`
+  - `naia_spec_tool` → `naia-spec-tool`
+  Binary file names (snake_case) are unchanged.
+
+- **`transport::local` hub debug output silenced.** Three `println!` calls in
+  `LocalTransportHub` were replaced with `log::debug!`. Local-transport noise no
+  longer appears in server stdout during tests or production use.

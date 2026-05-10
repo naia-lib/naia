@@ -235,8 +235,9 @@ CHANGELOG.md covers through the Resources feature era. Missing: P1 (`give_author
 ### D-A5 — remove_resource under authority BDD coverage — **COMPLETE** (2026-05-09)
 @Rule(11) @Scenario(01) `[resource-authority-03]` added to `07_resources.feature`. New steps: `when_server_removes_playerselection`, `then_alice_no_longer_has_playerselection`. Gate: 330 active, 10/10 pass.
 
-### D-A6 — Broadcast allocation (audit finding)
+### D-A6 — Broadcast allocation (audit finding) — COMPLETE
 `world_server.rs:513` — `message_box.clone()` in the broadcast loop allocates one `Box<dyn Message>` per connected user per broadcast. At 1262 CCU this is the most avoidable per-tick allocation. Consider `Arc<MessageBox>` or a ref-counted wrapper to amortize. Blocked on profiling to confirm it's a real bottleneck at target CCU.
+Delivered: `MessageContainer.inner` changed from `Box<dyn Message>` to `Arc<Box<dyn Message>>`. Both `broadcast_message_inner` and `room_broadcast_message` now wrap once in `Arc` before the loop; per-user clone is a refcount increment. `send_message_inner` now accepts `MessageContainer` directly. Also fixed the same pattern in `room_broadcast_message`. Commit `bbb197df`.
 
 ### D-A7 — Error propagation overhaul (audit finding)
 18 TODOs of the form "pass this on and handle above" scattered across `world_server.rs`, `client.rs`, `main_server.rs`, `base_time_manager.rs`, `connection.rs`, `advanced_handshaker.rs`, `simple_handshaker.rs`. All indicate IO errors silently dropped. Systematic fix: propagate to a `WorldEvents::IoError` variant or similar. Large scope.

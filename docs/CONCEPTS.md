@@ -337,7 +337,63 @@ for this purpose.
 
 ---
 
-## 10. Transport and Wasm
+## 10. Bevy adapter — the client tag type `T`
+
+When using the Bevy adapter (`naia-bevy-client`, `naia-bevy-server`), the
+`Client` SystemParam and `NaiaClientPlugin` carry a generic type parameter `T`:
+
+```rust
+use naia_bevy_client::{Client, NaiaClientPlugin};
+
+// Your marker type — a zero-sized struct, nothing more.
+#[derive(Resource)]
+pub struct MyClient;
+
+app.add_plugins(NaiaClientPlugin::<MyClient>::new(client_config, protocol()));
+
+fn my_system(client: Client<MyClient>) { … }
+```
+
+**Why does `T` exist?**
+
+Bevy applications sometimes run more than one naia client simultaneously (for
+example, a split-screen game where each half is a separate session, or a relay
+node that bridges two servers). The `T` phantom marker lets Bevy distinguish
+the two `Client` SystemParams at compile time — they are different types and
+therefore different Bevy resources, with no runtime overhead.
+
+**How to use it**
+
+1. Declare a zero-sized marker struct, typically in your game crate:
+   ```rust
+   #[derive(Resource)]
+   pub struct GameClient;
+   ```
+2. Pass `GameClient` as the type parameter everywhere:
+   ```rust
+   NaiaClientPlugin::<GameClient>::new(…)
+   Client<GameClient>        // SystemParam
+   NaiaClientConfig::<GameClient>::default()
+   ```
+3. If you only ever have one client, the marker is still required — just pick
+   any unit struct. The name does not matter to naia.
+
+**Single-client shorthand**
+
+For single-client apps the demo crates use a local `struct Client;` or simply
+alias the plugin:
+
+```rust
+type AppPlugin = NaiaClientPlugin<MyClient>;
+```
+
+`T` must satisfy `Resource` (a Bevy bound) plus `Sync + Send + 'static` (which
+`Resource` already implies). A `#[derive(Resource)]` unit struct always
+satisfies this.
+
+---
+
+## 11. Transport and Wasm
 
 naia's transport layer is pluggable. Two implementations ship out of the box:
 

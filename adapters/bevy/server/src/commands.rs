@@ -59,7 +59,21 @@ pub trait CommandsExt<'a> {
 
     /// Grants authority over this entity to the given user.
     ///
-    /// The entity must already have `Delegated` replication config.
+    /// The entity must already have `Delegated` replication config **and** must
+    /// be in scope for the target user (i.e. they share a room, or an explicit
+    /// `scope.include()` was called). If either precondition is not met the call
+    /// is a **silent no-op** — no panic, no error event, no state change.
+    ///
+    /// Specifically:
+    /// - Entity not found → no-op (the Bevy `EntityCommands` still refers to a
+    ///   valid Bevy entity, but naia has no replication record for it).
+    /// - Entity found but not `Delegated` → no-op (`AuthorityError::NotDelegated`
+    ///   is returned by the inner call and discarded here).
+    /// - Entity `Delegated` but not in scope for `user_key` → no-op
+    ///   (`AuthorityError::NotInScope`).
+    /// - All preconditions met → sends `SetAuthority(Granted)` to the target
+    ///   user and `SetAuthority(Denied)` to any other user who previously held
+    ///   authority.
     fn give_authority(
         &'a mut self,
         server: &mut Server,
