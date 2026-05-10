@@ -187,7 +187,7 @@ Root cause was packet-ordering race (enable-delegation arrives before publish), 
 
 ## Archives (outdated plans — do not re-audit)
 
-The following documents are superseded by this plan. Their content is preserved for history but all outstanding items have been migrated above.
+The following documents are superseded by this plan. All have been moved to `_AGENTS/ARCHIVE/`.
 
 | Document | Status | Superseded by |
 |---|---|---|
@@ -199,6 +199,12 @@ The following documents are superseded by this plan. Their content is preserved 
 | `TEST_INFRA_AUDIT_2026-05-07.md` | ✅ COMPLETE (C/H/M/L closed; A-items → P1/P3/P9) | This document |
 | `CODEBASE_AUDIT.md` | ✅ Open items → P2, P7, P8, P11, P12 | This document |
 | `CRUCIBLE_BENCH_PLAN_2026-04-27.md` | ✅ Implemented (crucible in slag, wired to naia bench) | Memory record |
+| `API_CLEANUP.md` | ✅ COMPLETE 2026-05-08 | This document |
+| `AUDIT_PLAN.md` + `AUDIT_REPORT_2026.md` | ✅ COMPLETE 2026-05-09 | This document |
+| `BENCHMARKS.md` | ✅ COMPLETE 2026-04-24 | Memory record |
+| `BRANCH_REWIND_2026-05-07.md` | ✅ Executed 2026-05-07 (one-time runbook) | N/A |
+| `DOCS_PLAN.md` | ✅ COMPLETE 2026-05-08 (D-P10) | This document |
+| `WORLDSERVER_DECOMP.md` | ✅ COMPLETE 2026-05-10 (D-P2) | This document |
 
 ---
 

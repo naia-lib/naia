@@ -1,7 +1,7 @@
 # Naia Documentation Overhaul Plan
 
 **Created:** 2026-05-08  
-**Status:** IN PROGRESS
+**Status:** ✅ COMPLETE (2026-05-08) — D-P10 delivered. See `NAIA_PLAN.md §D-P10`.
 
 This plan brings naia's documentation to production-grade quality. The goal is a
 cohesive documentation suite that is accurate to the current codebase, idiomatic
