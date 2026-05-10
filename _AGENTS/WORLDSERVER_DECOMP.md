@@ -89,33 +89,15 @@ Estimated lines to save: ~80–100
 
 ---
 
-### Phase 3 — `ConnectionStore`
+### ❌ Phase 3 — `ConnectionStore` — REJECTED after rigorous analysis (2026-05-10)
 
-**File:** `server/src/server/connection_store.rs`  
-**Owns:** `user_connections: HashMap<SocketAddr, Connection>`, `addrs_with_new_packets: HashSet<SocketAddr>`, `outstanding_disconnects: Vec<UserKey>`
+**Proposed fields:** `user_connections: HashMap<SocketAddr, Connection>`, `addrs_with_new_packets: HashSet<SocketAddr>`, `outstanding_disconnects: Vec<UserKey>`
 
-**Pure queries:**
-- `get(&SocketAddr) -> Option<&Connection>`
-- `get_mut(&SocketAddr) -> Option<&mut Connection>`
-- `iter_mut() -> impl Iterator<Item=(&SocketAddr, &mut Connection)>`
-- `contains(&SocketAddr) -> bool`
-- `len() -> usize`
+**Why rejected:** `user_connections` is touched in **37 distinct methods** spanning every domain (packet IO, authority, scope, messaging, entity management, component management, user lifecycle, heartbeat, bandwidth). Unlike `RoomStore` (12 dedicated room methods with extractable logic) and `UserStore` (typed API over a cohesive pair of maps), there is no "connection domain" — every caller is an orchestration method doing something else that happens to look up a connection by address. Extracting would rename ~60 `self.user_connections` call sites to `self.conn_store.connections` with zero logic consolidation, no borrow-checker benefit, and no line reduction. The borrow checker is never the problem here because connection key derivation (`user.address()`) is always sequential — no simultaneous disjoint borrows arise.
 
-**Pending-packet tracking:**
-- `mark_has_packets(&SocketAddr)`
-- `drain_addrs_with_packets() -> Vec<SocketAddr>`
+`addrs_with_new_packets` (2 usages) and `outstanding_disconnects` (3 usages) are packet-processing bookkeeping living adjacent to their only consumers and do not warrant extraction.
 
-**Disconnect tracking:**
-- `queue_disconnect(&UserKey)`
-- `drain_disconnects() -> Vec<UserKey>`
-
-**Connection lifecycle:**
-- `insert(&SocketAddr, Connection)`
-- `remove(&SocketAddr) -> Option<Connection>`
-
-**Note on cross-cutting:** `user_connections` is the most-touched field in `WorldServer` — packet processing, scope, messages, auth, heartbeat, and bandwidth all access it. The extraction gives `WorldServer` a cleaner accessor API but the orchestration methods stay.
-
-Estimated lines to save: ~60–80
+**Conclusion:** `user_connections` is the load-bearing fabric of WorldServer's orchestration layer. It stays.
 
 ---
 
@@ -138,9 +120,9 @@ Estimated lines to save: ~60–80
 | Baseline (pre-work) | 3,826 | — |
 | Phase 1 (RoomStore) | 3,710 | −116 |
 | Phase 2 (UserStore) | 3,699 | −11 |
-| Phase 3 (ConnectionStore) | ~3,620 | ~−80 |
+| **FINAL** | **3,699** | **−127 total** |
 
-Target: ~3,500 lines (−8% from baseline). The irreducible core is orchestration methods that legitimately touch 4–6 domains simultaneously — those belong on the coordinator struct by design.
+Phase 3 (ConnectionStore) rejected — see analysis above. The irreducible core at 3,699 lines consists of orchestration methods that legitimately touch 4–6 domains simultaneously; those belong on the coordinator struct by design. The −127 line reduction reflects genuine structural improvements (RoomStore, UserStore), not cosmetic churn.
 
 ---
 

@@ -253,8 +253,8 @@ Delivered: `update/round_trip`, `resources/throughput` (insert_latency + mutatio
 ### D-P0 — DTLS stack migration (deadline: 2027-06-01)
 6 RUSTSEC `cargo-deny` ignores expire 2026-06-01. Migration requires replacing the DTLS transport with a `rustls`-based stack. Deferred due to scope; if the deadline passes without action, add new `ignore` entries with updated dates.
 
-### D-P2 — WorldServer decomposition (T1.1) — IN PROGRESS
-`server/src/server/world_server.rs` — 3,826 lines baseline; 3,710 after Phase 1. Architecture and progress tracked in `_AGENTS/WORLDSERVER_DECOMP.md`. Uses manager-as-field pattern (struct+impl per file, held as `WorldServer` field). Phase 1 (`RoomStore`) complete (`eae71471`). Phases 2 (`UserStore`) and 3 (`ConnectionStore`) pending.
+### D-P2 — WorldServer decomposition (T1.1) — ✅ COMPLETE (2026-05-10)
+`server/src/server/world_server.rs` — 3,826 → 3,699 lines (−127). `RoomStore` (Phase 1, `eae71471`) + `UserStore` (Phase 2, `75c7ab9b`). `ConnectionStore` (Phase 3) rejected after rigorous analysis: `user_connections` touches 37 distinct methods across every domain — there is no "connection domain" to consolidate, only orchestration. Architecture and rationale in `_AGENTS/WORLDSERVER_DECOMP.md`.
 
 ### D-P7 — Replicate trait decomposition (T1.2)
 `shared/src/world/component/replicate.rs` defines a 29-method monolith; `shared/derive/src/replicate.rs` is 1499 lines. Proposed sub-trait split: `ReplicateCore`, `ReplicateWrite`, `ReplicateRead`, `ReplicateMirror`, `ReplicateAuthority`, `ReplicateEntityRelations`. Deferred: user-facing surface would be unchanged, benefit is internal ergonomics only.
