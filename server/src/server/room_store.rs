@@ -1,18 +1,15 @@
-use std::{
-    collections::HashMap,
-    hash::Hash,
-};
+use std::hash::Hash;
 
 use naia_shared::{BigMap, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntityMap};
 
 use crate::{
     room::{Room, RoomKey},
     server::scope_checks_cache::ScopeChecksCache,
-    user::{UserKey, WorldUser},
+    user::UserKey,
     world::entity_room_map::EntityRoomMap,
 };
 
-use super::scope_change::ScopeChange;
+use super::{scope_change::ScopeChange, user_store::UserStore};
 
 /// Owns the authoritative `Room` collection and exposes all room-level
 /// queries. Mutation methods that affect state outside of `rooms` (users,
@@ -47,9 +44,6 @@ impl RoomStore {
         self.rooms.get_mut(key)
     }
 
-    pub(super) fn remove(&mut self, key: &RoomKey) -> Option<Room> {
-        self.rooms.remove(key)
-    }
 
     pub(super) fn len(&self) -> usize {
         self.rooms.len()
@@ -128,12 +122,12 @@ impl RoomStore {
         &mut self,
         room_key: &RoomKey,
         user_key: &UserKey,
-        users: &mut HashMap<UserKey, WorldUser>,
+        user_store: &mut UserStore,
         entity_map: &GlobalEntityMap<E>,
         cache: &mut ScopeChecksCache<E>,
     ) -> ScopeChange {
         let mut subscribed = false;
-        if let Some(user) = users.get_mut(user_key) {
+        if let Some(user) = user_store.get_mut(user_key) {
             if let Some(room) = self.rooms.get_mut(room_key) {
                 room.subscribe_user(user_key);
                 user.cache_room(room_key);
@@ -162,10 +156,10 @@ impl RoomStore {
         &mut self,
         room_key: &RoomKey,
         user_key: &UserKey,
-        users: &mut HashMap<UserKey, WorldUser>,
+        user_store: &mut UserStore,
         cache: &mut ScopeChecksCache<E>,
     ) -> ScopeChange {
-        if let Some(user) = users.get_mut(user_key) {
+        if let Some(user) = user_store.get_mut(user_key) {
             if let Some(room) = self.rooms.get_mut(room_key) {
                 room.unsubscribe_user(user_key);
                 user.uncache_room(room_key);
@@ -182,7 +176,7 @@ impl RoomStore {
     pub(super) fn destroy<E: Copy + Eq + Hash + Send + Sync>(
         &mut self,
         room_key: &RoomKey,
-        users: &mut HashMap<UserKey, WorldUser>,
+        user_store: &mut UserStore,
         entity_room_map: &mut EntityRoomMap,
         cache: &mut ScopeChecksCache<E>,
     ) -> bool {
@@ -191,7 +185,7 @@ impl RoomStore {
         if self.rooms.contains_key(room_key) {
             let room = self.rooms.remove(room_key).unwrap();
             for user_key in room.user_keys() {
-                if let Some(user) = users.get_mut(user_key) {
+                if let Some(user) = user_store.get_mut(user_key) {
                     user.uncache_room(room_key);
                 }
             }

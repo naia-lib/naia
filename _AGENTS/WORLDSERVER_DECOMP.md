@@ -58,7 +58,7 @@ Lines saved in `world_server.rs`: ~116 (3,826 → 3,710)
 
 ---
 
-### Phase 2 — `UserStore`
+### ✅ Phase 2 — `UserStore` — DONE (commit pending, 2026-05-10)
 
 **File:** `server/src/server/user_store.rs`  
 **Owns:** `users: HashMap<UserKey, WorldUser>`, `disconnected_users: HashMap<SocketAddr, UserKey>`
@@ -137,8 +137,8 @@ Estimated lines to save: ~60–80
 |---|---|---|
 | Baseline (pre-work) | 3,826 | — |
 | Phase 1 (RoomStore) | 3,710 | −116 |
-| Phase 2 (UserStore) | ~3,610 | ~−100 |
-| Phase 3 (ConnectionStore) | ~3,530 | ~−80 |
+| Phase 2 (UserStore) | 3,699 | −11 |
+| Phase 3 (ConnectionStore) | ~3,620 | ~−80 |
 
 Target: ~3,500 lines (−8% from baseline). The irreducible core is orchestration methods that legitimately touch 4–6 domains simultaneously — those belong on the coordinator struct by design.
 
