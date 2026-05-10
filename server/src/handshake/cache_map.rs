@@ -20,6 +20,10 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
         self.map.contains_key(key)
     }
 
+    pub fn get(&self, key: &K) -> Option<&V> {
+        self.map.get(key)
+    }
+
     pub fn get_unchecked(&self, key: &K) -> &V {
         self.map
             .get(key)
@@ -35,6 +39,12 @@ impl<K: Eq + Hash + Clone, V: Clone> CacheMap<K, V> {
 
         self.keys.push_back(key.clone());
         self.map.insert(key, value);
+    }
+
+    pub fn remove(&mut self, key: &K) {
+        if self.map.remove(key).is_some() {
+            self.keys.retain(|k| k != key);
+        }
     }
 
     pub fn clear(&mut self) {

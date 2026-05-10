@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, panic};
+use std::{collections::HashMap, net::SocketAddr, panic, time::Duration};
 
 use log::{info, warn};
 
@@ -24,6 +24,7 @@ pub struct MainServer {
     message_kinds: MessageKinds,
     // Config
     require_auth: bool,
+    pending_auth_timeout: Duration,
     // cont
     io: Io,
     auth_io: Option<(Box<dyn AuthSender>, Box<dyn AuthReceiver>)>,
@@ -66,6 +67,7 @@ impl MainServer {
             socket_config: socket,
             message_kinds,
             require_auth: server_config.require_auth,
+            pending_auth_timeout: server_config.pending_auth_timeout,
             // Connection
             io,
             auth_io: None,
@@ -194,12 +196,24 @@ impl MainServer {
 
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
-    /// Panics if the user does not exist.
+    ///
+    /// # Panics
+    /// Panics if no user exists for the given key. Prefer [`user_opt`](Self::user_opt)
+    /// when the key may be stale.
     pub fn user(&'_ self, user_key: &UserKey) -> MainUserRef<'_> {
         if self.users.contains_key(user_key) {
             return MainUserRef::new(self, user_key);
         }
         panic!("No User exists for given Key!");
+    }
+
+    /// Returns `Some(MainUserRef)` if the user exists, or `None` if the key is stale.
+    pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<MainUserRef<'_>> {
+        if self.users.contains_key(user_key) {
+            Some(MainUserRef::new(self, user_key))
+        } else {
+            None
+        }
     }
 
     /// Return a list of all currently connected Users' keys
@@ -401,6 +415,31 @@ impl MainServer {
                     self.incoming_events
                         .push_error(NaiaServerError::Wrapped(Box::new(error)));
                 }
+            }
+        }
+
+        // Auto-reject connections that completed the network handshake but where the
+        // application never called accept_connection/reject_connection within the timeout.
+        if self.auth_io.is_some() {
+            let timeout = self.pending_auth_timeout;
+            // Collect (user_key, auth_addr) pairs for timed-out pending users.
+            let timed_out: Vec<(UserKey, Option<SocketAddr>)> = self
+                .users
+                .iter()
+                .filter(|(_, user)| !user.has_address() && user.created_at.elapsed() > timeout)
+                .map(|(key, user)| (key, user.peek_auth_address()))
+                .collect();
+            for (user_key, auth_addr_opt) in timed_out {
+                if let Some(auth_addr) = auth_addr_opt {
+                    warn!(
+                        "pending-auth timeout for {}: auto-rejecting after {:?}",
+                        auth_addr, timeout
+                    );
+                    if let Some((auth_sender, _)) = self.auth_io.as_mut() {
+                        let _ = auth_sender.reject(&auth_addr);
+                    }
+                }
+                self.user_delete(&user_key);
             }
         }
     }

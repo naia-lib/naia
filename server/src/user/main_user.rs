@@ -1,4 +1,4 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, time::Instant};
 
 use crate::{server::MainServer, UserKey};
 
@@ -8,6 +8,8 @@ use crate::{server::MainServer, UserKey};
 pub struct MainUser {
     auth_addr: Option<SocketAddr>,
     data_addr: Option<SocketAddr>,
+    /// Tracks when the user was created so a pending-auth timeout can be enforced.
+    pub(crate) created_at: Instant,
 }
 
 impl MainUser {
@@ -15,6 +17,7 @@ impl MainUser {
         Self {
             auth_addr: Some(auth_addr),
             data_addr: None,
+            created_at: Instant::now(),
         }
     }
 
@@ -32,6 +35,10 @@ impl MainUser {
 
     pub(crate) fn set_address(&mut self, addr: &SocketAddr) {
         self.data_addr = Some(*addr);
+    }
+
+    pub(crate) fn peek_auth_address(&self) -> Option<SocketAddr> {
+        self.auth_addr
     }
 
     pub(crate) fn take_auth_address(&mut self) -> SocketAddr {

@@ -41,6 +41,11 @@ pub extern "C" fn receive_id(id_token: JsObject) {
 
     id_token.to_string(&mut id_token_string);
 
+    // Safety: ID_CELL, MESSAGE_QUEUE, ERROR_QUEUE, and SERVER_ADDR are static muts that act
+    // as single-producer/single-consumer queues between the JS bridge callbacks (producer)
+    // and the Rust game loop (consumer). wasm32 is single-threaded — the JS event loop and
+    // Rust code never execute concurrently, so accessing these statics without synchronization
+    // is safe on this target. None of the callback functions re-enter.
     unsafe {
         if let Some(id_cell) = &mut ID_CELL {
             *id_cell = Some(id_token_string);
@@ -54,6 +59,7 @@ pub extern "C" fn receive(message: JsObject) {
 
     message.to_u8_array(&mut message_string);
 
+    // Safety: see receive_id above.
     unsafe {
         if let Some(msg_queue) = &mut MESSAGE_QUEUE {
             msg_queue.push_back(message_string.into_boxed_slice());
@@ -67,6 +73,7 @@ pub extern "C" fn error(error: JsObject) {
 
     error.to_string(&mut error_string);
 
+    // Safety: see receive_id above.
     unsafe {
         if let Some(error_queue) = &mut ERROR_QUEUE {
             error_queue.push_back(error_string);
@@ -80,6 +87,7 @@ pub extern "C" fn receive_candidate(candidate_js: JsObject) {
 
     candidate_js.to_string(&mut candidate_str);
 
+    // Safety: see receive_id above.
     unsafe {
         SERVER_ADDR = candidate_to_addr(&candidate_str);
     }
@@ -100,6 +108,8 @@ pub struct JsObjectWeak(u32);
 
 impl Drop for JsObject {
     fn drop(&mut self) {
+        // Safety: self.0 is a valid JS object handle issued by the JS bridge. Calling
+        // naia_free_object once on drop is the correct ownership protocol for JsObject.
         unsafe {
             naia_free_object(self.weak());
         }
@@ -108,10 +118,15 @@ impl Drop for JsObject {
 
 impl JsObject {
     pub fn string(string: &str) -> JsObject {
+        // Safety: string.as_ptr() is valid for string.len() bytes for the duration of this call.
+        // naia_create_string copies the bytes into a JS string and returns a new handle.
         unsafe { naia_create_string(string.as_ptr() as _, string.len() as _) }
     }
 
     pub fn to_string(&self, buf: &mut String) {
+        // Safety: naia_string_length returns the byte length of the JS string; we reserve at
+        // least that many bytes in buf before calling naia_unwrap_to_str. set_len is sound
+        // because naia_unwrap_to_str writes exactly len valid UTF-8 bytes into the buffer.
         let len = unsafe { naia_string_length(self.weak()) };
 
         if len as usize > buf.len() {

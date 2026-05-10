@@ -24,9 +24,13 @@ pub struct HandshakeManager {
     been_handshaked_users: HashMap<SocketAddr, UserKey>,
 
     connection_hash_key: hmac::Key,
-    address_to_timestamp_map: HashMap<SocketAddr, Timestamp>,
+    // Bounded LRU cache; caps at MAX_PENDING_CONNECTIONS to prevent OOM from
+    // spoofed source-address floods before authentication completes.
+    address_to_timestamp_map: CacheMap<SocketAddr, Timestamp>,
     timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
 }
+
+const MAX_PENDING_CONNECTIONS: usize = 1024;
 
 impl Handshaker for HandshakeManager {
     fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey) {
@@ -46,6 +50,10 @@ impl Handshaker for HandshakeManager {
             self.authenticated_and_identified_users.remove(&address);
             self.been_handshaked_users.remove(&address);
             self.address_to_timestamp_map.remove(&address);
+        } else {
+            // User disconnected before finalize_connection set data_addr; scan by value
+            // to ensure been_handshaked_users doesn't leak on pre-finalization drops.
+            self.been_handshaked_users.retain(|_, v| v != user_key);
         }
     }
 
@@ -182,7 +190,7 @@ impl HandshakeManager {
             been_handshaked_users: HashMap::new(),
 
             connection_hash_key,
-            address_to_timestamp_map: HashMap::new(),
+            address_to_timestamp_map: CacheMap::with_capacity(MAX_PENDING_CONNECTIONS),
             timestamp_digest_map: CacheMap::with_capacity(64),
         }
     }
@@ -251,8 +259,6 @@ impl HandshakeManager {
     }
 
     fn verify_disconnect_request(&mut self, address: &SocketAddr, reader: &mut BitReader) -> bool {
-        // Verify that timestamp hash has been written by this
-        // server instance
         if let Some(new_timestamp) = self.timestamp_validate(reader) {
             if let Some(old_timestamp) = self.address_to_timestamp_map.get(address) {
                 if *old_timestamp == new_timestamp {

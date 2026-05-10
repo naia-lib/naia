@@ -49,5 +49,10 @@ impl fmt::Display for NaiaServerError {
 }
 
 impl Error for NaiaServerError {}
+// Safety: NaiaServerError::Wrapped contains Box<dyn Error> which is !Send by default because
+// the error object may not be Send. We assert Send here because naia's internal usage of the
+// Wrapped variant only stores errors produced by transport layers that are themselves Send.
+// Callers who construct Wrapped with a !Send error type violate this invariant.
 unsafe impl Send for NaiaServerError {}
+// Safety: Same reasoning as Send above — the contained error object must also be Sync.
 unsafe impl Sync for NaiaServerError {}

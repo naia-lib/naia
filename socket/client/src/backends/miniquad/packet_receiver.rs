@@ -20,6 +20,10 @@ impl PacketReceiverImpl {
 
 impl PacketReceiver for PacketReceiverImpl {
     fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+        // Safety: MESSAGE_QUEUE, ERROR_QUEUE, and SERVER_ADDR are static muts written by the
+        // JS bridge callbacks before receive() is ever called. wasm32 is single-threaded;
+        // the JS bridge and Rust game loop are on the same thread and never run concurrently,
+        // so accessing these statics without synchronization is safe on this target.
         unsafe {
             if let Some(msg_queue) = &mut MESSAGE_QUEUE {
                 if let Some(message) = msg_queue.pop_front() {
@@ -40,6 +44,7 @@ impl PacketReceiver for PacketReceiverImpl {
 
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr {
+        // Safety: SERVER_ADDR is set once at socket initialization; wasm32 is single-threaded.
         unsafe { SERVER_ADDR }
     }
 }

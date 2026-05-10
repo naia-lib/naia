@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::HashMap,
     hash::Hash,
 };
 
@@ -12,7 +12,7 @@ use crate::{
     ComponentKind, ComponentKinds, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
     EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
     HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
-    MessageIndex, OwnedLocalEntity, ShortMessageIndex, WorldMutType,
+    MessageIndex, ShortMessageIndex, WorldMutType,
 };
 
 pub type CommandId = MessageIndex;
@@ -400,51 +400,8 @@ impl HostWorldManager {
         self.host_engine.remove_entity_channel(entity)
     }
 
-    #[allow(dead_code)]
-    fn on_delivered_migrate_response(
-        &mut self,
-        local_entity_map: &mut LocalEntityMap,
-        global_entity: GlobalEntity,
-        new_host_entity: HostEntity,
-    ) {
-        // Step 1: Get the old RemoteEntity from the global entity
-        let old_remote_entity = local_entity_map
-            .global_entity_to_remote_entity(&global_entity)
-            .expect("Global entity not found in local entity map");
-
-        // Step 2: Force-drain all buffers in RemoteEntityChannel
-        // Note: This would need to be implemented in RemoteWorldManager
-        // self.remote.force_drain_entity_buffers(&old_remote_entity);
-
-        // Step 3: Extract component state from RemoteEntityChannel
-        // Note: This would need to be implemented in RemoteWorldManager
-        // let component_kinds = self.remote.extract_component_kinds(&old_remote_entity);
-
-        // Step 4: Remove RemoteEntityChannel from RemoteEngine
-        // Note: This would need to be implemented in RemoteWorldManager
-        // let _old_remote_channel = self.remote.remove_entity_channel(&old_remote_entity);
-
-        // Step 5: Create new HostEntityChannel with extracted component state
-        // Note: For now, create with empty component set
-        let new_host_channel = HostEntityChannel::new_with_components(
-            HostType::Client, // TODO: Get actual host_type
-            HashSet::new(),   // TODO: Use extracted component_kinds
-        );
-
-        // Step 6: Insert new HostEntityChannel into HostEngine
-        self.host_engine
-            .insert_entity_channel(new_host_entity, new_host_channel);
-
-        // Step 7: Update LocalEntityMap to point to new HostEntity
-        local_entity_map.insert_with_host_entity(global_entity, new_host_entity);
-
-        // Step 8: Install entity redirect in LocalEntityMap
-        let old_entity = old_remote_entity.copy_to_owned();
-        let new_entity = OwnedLocalEntity::Host { id: new_host_entity.value(), is_static: false };
-        local_entity_map.install_entity_redirect(old_entity, new_entity);
-
-        // Step 9: Clean up old remote entity
-        // Note: This would need to be implemented in RemoteWorldManager
-        // self.remote.despawn_entity(local_entity_map, &old_remote_entity);
-    }
 }
+// NOTE: on_delivered_migrate_response was removed (2026-05-10). The entity migration path
+// requires RemoteWorldManager drain/extract/despawn APIs that do not exist. Any future
+// implementation must correctly extract component_kinds and host_type from the remote channel
+// before constructing the new HostEntityChannel — the prior stub silently passed wrong values.

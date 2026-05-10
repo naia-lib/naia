@@ -361,17 +361,14 @@ fn url_str_to_addr(url_str: &str) -> SocketAddr {
     if let Some(path_segments) = url.path_segments() {
         let path_segment_count = path_segments.count();
         if path_segment_count > 1 {
-            log::error!("server_url_str must not include a path");
-            panic!("");
+            panic!("server_url_str must not include a path (got: {url_str:?})");
         }
     }
     if url.query().is_some() {
-        log::error!("server_url_str must not include a query string");
-        panic!("");
+        panic!("server_url_str must not include a query string (got: {url_str:?})");
     }
     if url.fragment().is_some() {
-        log::error!("server_url_str must not include a fragment");
-        panic!("");
+        panic!("server_url_str must not include a fragment (got: {url_str:?})");
     }
 
     url_to_addr(&url)
@@ -387,15 +384,13 @@ fn url_to_addr(url: &Url) -> SocketAddr {
     }) {
         Ok(addr_list) => {
             if addr_list.is_empty() {
-                log::error!("{}", SOCKET_PARSE_FAIL_STR);
-                panic!("");
+                panic!("{SOCKET_PARSE_FAIL_STR}: {url}");
             }
 
             return *addr_list.first().expect(SOCKET_PARSE_FAIL_STR);
         }
         Err(err) => {
-            log::error!("URL -> SocketAddr parse fails with: {:?}", err);
-            panic!("");
+            panic!("URL -> SocketAddr parse fails for {url}: {err:?}");
         }
     }
 }

@@ -738,7 +738,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ///
     /// # Panics
     ///
-    /// Panics if the user does not exist.
+    /// Panics if the user does not exist. Use [`user_opt`](Self::user_opt) if the
+    /// key may be stale (e.g., stored across a disconnect event).
     pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
         if self.user_exists(user_key) {
             return UserRef::new(&self.world_server, user_key);
@@ -746,16 +747,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         panic!("No User exists for given Key!");
     }
 
+    /// Returns `Some(UserRef)` if the user exists, `None` if the key is stale.
+    pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, E>> {
+        if self.user_exists(user_key) {
+            Some(UserRef::new(&self.world_server, user_key))
+        } else {
+            None
+        }
+    }
+
     /// Returns a mutable handle to the user.
     ///
     /// # Panics
     ///
-    /// Panics if the user does not exist.
+    /// Panics if the user does not exist. Use [`user_mut_opt`](Self::user_mut_opt) if the
+    /// key may be stale.
     pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
         if self.user_exists(user_key) {
             return UserMut::new(&mut self.world_server, user_key);
         }
         panic!("No User exists for given Key!");
+    }
+
+    /// Returns `Some(UserMut)` if the user exists, `None` if the key is stale.
+    pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, E>> {
+        if self.user_exists(user_key) {
+            Some(UserMut::new(&mut self.world_server, user_key))
+        } else {
+            None
+        }
     }
 
     /// Returns the keys of all currently connected users.

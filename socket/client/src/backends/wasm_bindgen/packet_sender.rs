@@ -55,5 +55,8 @@ impl PacketSender for PacketSenderImpl {
     }
 }
 
+// Safety: wasm32-unknown-unknown is single-threaded; there are no real OS threads and no
+// data races are possible. These impls are required by trait bounds in the naia transport
+// abstraction layer but are vacuously safe on this target.
 unsafe impl Send for PacketSenderImpl {}
 unsafe impl Sync for PacketSenderImpl {}

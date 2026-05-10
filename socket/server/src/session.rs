@@ -537,6 +537,10 @@ impl<'a, R: AsyncBufRead + Unpin> Stream for RequestBuffer<'a, R> {
             self.add_newline = false;
             Poll::Ready(Some(Ok(String::from(NEWLINE_STR))))
         } else {
+            // Safety: self.buffer is a field of a pinned struct. The containing struct
+            // (SseStream) does not implement Unpin, so once pinned it will never be moved.
+            // Pinning a field of a pinned struct via new_unchecked is therefore sound as long
+            // as no method moves self.buffer out of the struct — none do.
             unsafe {
                 let mut_ref = Pin::new_unchecked(&mut self.buffer);
                 match Stream::poll_next(mut_ref, cx) {

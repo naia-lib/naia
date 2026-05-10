@@ -227,6 +227,8 @@ impl RemoteEntityChannel {
                         extern "Rust" {
                             fn client_processed_spawn_increment();
                         }
+                        // Safety: atomic counter defined by the naia-tests harness under
+                        // e2e_debug; no preconditions; never active in production builds.
                         unsafe {
                             client_processed_spawn_increment();
                         }

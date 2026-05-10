@@ -16,6 +16,8 @@ pub struct Timer {
 impl Timer {
     /// Creates a new Timer with a given Duration
     pub fn new(duration: Duration) -> Self {
+        // Safety: naia_now() is a pure, no-side-effect extern "C" provided by the miniquad
+        // JavaScript runtime. wasm32 is single-threaded; no data races are possible.
         unsafe {
             Self {
                 last: naia_now(),
@@ -27,6 +29,7 @@ impl Timer {
     /// Reset the Timer to stop ringing and wait till 'Duration' has elapsed
     /// again
     pub fn reset(&mut self) {
+        // Safety: see Timer::new above.
         unsafe {
             self.last = naia_now();
         }
@@ -35,6 +38,7 @@ impl Timer {
     /// Gets whether or not the Timer is "Ringing" (i.e. the given Duration has
     /// elapsed since the last "reset")
     pub fn ringing(&self) -> bool {
+        // Safety: see Timer::new above.
         unsafe { (naia_now() - self.last) > self.duration }
     }
 

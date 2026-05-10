@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "3d8807c3a4f19dccc50ceea6decdaaed3f7bc7b4a5e0f711ceaaaefb76b93a3c",
-    "step_registry_hash": "5f41604f9b58962ff6e9f40a6b4ba9883cf7678eb6eda87126d24139ea34e1d8",
-    "resolved_plan_hash": "833e4664eee1cb9a4f5d567777a8931d19194aae69f3a1b480140d4e3127d73c"
+    "feature_fingerprint_hash": "2883092f718f64a3c5fedab89584962b09802e765016ddd52987d94e8ba0ba5f",
+    "step_registry_hash": "c0e392baed901001ddc2defe14ece156daed9d27004307bfedf80f2cf84559a0",
+    "resolved_plan_hash": "ae7fb69c43002c77f94a68a0227e8389ee066855dc1496d277c7cf50a56252c0"
   },
   "scenarios": [
     {
@@ -4029,6 +4029,95 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "9cf376db48bef25d39b3f4ce7f1ccdd622e7e7766e14d582787f7f5448b844c6"
+        }
+      ]
+    },
+    {
+      "scenario_key": "authority:Rule(05):Scenario(38)",
+      "feature_path": "features/05_authority.feature",
+      "scenario_name": "[entity-authority-17] Server give_authority produces correct per-client auth status with multiple observers",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "55a52b71dda39e2cd06343e64ca68dffb96f8b3f5707da8b32361807548c3795"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d3d2e45b8bca28c2705d7c6b3f4258531b27cf09b32ffe0ff68eb5edf8b77a69"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns a delegated entity in-scope for both clients",
+          "binding_id": "f6eaab730b012113bd4a6e7297dde71356bc0e0600283fe8d6a3c4e6168d4a52",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "020d819a1a4f7defa90bcc24ef049f3f3266d9b079d9d68f0defad68fc7aa85c"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server gives authority to client A for the delegated entity",
+          "binding_id": "f85b7860acae67184672c8bb7f2a5c94b2ccc6d3015f30aa2e16e49d647334bb",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "12596c0e0d91799df665f0b697f0721868a2346912e1eaee6aae555bba6bef57"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client A is granted authority for the delegated entity",
+          "binding_id": "8f8457725a2f03a5bd8fd77af2f3a5f040d829fb67bd5550ed1c24388f7d2424",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "9cf376db48bef25d39b3f4ce7f1ccdd622e7e7766e14d582787f7f5448b844c6"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "client B is denied authority for the delegated entity",
+          "binding_id": "95c81a73e5ca40238924dff9d0f46954657a669de871b6b291209cd0b3c9879a",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0dd6bb7305e0e0fe8f1417b54ef90753c5dc67daf0878606f400cf12c7ce904f"
         }
       ]
     },
@@ -16179,6 +16268,67 @@
       "steps": []
     },
     {
+      "scenario_key": "resources:Rule(11):Scenario(01)",
+      "feature_path": "features/07_resources.feature",
+      "scenario_name": "[resource-authority-03] remove_resource while client holds authority removes the resource from the client",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a Naia protocol with delegable replicated resource type \"PlayerSelection\"",
+          "binding_id": "b1efda678029d6e9f9d702c3b3b95ce8558672e457dc212a98ca28f6922c0e67",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4f5a927fa8313339bab727e122835b0fd66a5fca204ff26bc1c99e78528d228c"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server with PlayerSelection { selected_id: 0 } and connected client \"alice\"",
+          "binding_id": "d0b7afbe09ca637ec8e239c480ede151f5dd9d57b045d8c80050515aa41631da",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0761ed47f6cc0e7319ae4bd14bb2fff3bc7c85f5f3c16684e4855f8a588546de"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "alice holds authority on PlayerSelection",
+          "binding_id": "9e06c5baaccf93bb05cc19c3c2c3a4d7b97e8f01d9a70f76132cb59f087ac223",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a39ee7af07134da6b5b84a6e804344fce1dd79a774056f0322d58a988c8e8d9a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server removes PlayerSelection",
+          "binding_id": "7a60fb6959ead617f8213ec053ced01a92fdf5eb5baf6d075abdea008f6f29f0",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f46ab8f80dd8832103cd5ff601a511b327c67946bd132321631f587f9ce5714f"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "one replication round trip elapses",
+          "binding_id": "6d230e39db2f0f33025a4135efda7666c38563b0ac2f810da1d07d6120ae0b38",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d1ca1238e8950b49cd84cb902ceea6ac8b9018697f1b95e380cc83781c96bdf1"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "alice no longer has the PlayerSelection resource",
+          "binding_id": "7e9cb0f90387ce694fba9ab87455a2ea53264e9e006a452d80229b7b2d050df2",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4116d228a48c981d0fa5eb1aa7c52dc4f700650fb91d1c28c6ebb8bfba6cd7dc"
+        }
+      ]
+    },
+    {
       "scenario_key": "visibility:Rule(01):Scenario(01)",
       "feature_path": "features/04_visibility.feature",
       "scenario_name": "[entity-scopes-01] Entity in shared room is in-scope for user",
@@ -18871,6 +19021,89 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "d84db8bd944afa30990beb044684a7c9f1a2a8e6775f4d1cb483b489da50d2d7"
+        }
+      ]
+    },
+    {
+      "scenario_key": "visibility:Rule(19):Scenario(01)",
+      "feature_path": "features/04_visibility.feature",
+      "scenario_name": "[room-migration-01] Entity migrating to a new room leaves old client's scope and enters new client's scope",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client A connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "A"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "55a52b71dda39e2cd06343e64ca68dffb96f8b3f5707da8b32361807548c3795"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "client B connects",
+          "binding_id": "dd52c8301dedd81a3e48f5ae6499bd6adbcedcf5fd0891c25b97144b93c2eff0",
+          "captures": [
+            "B"
+          ],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "d3d2e45b8bca28c2705d7c6b3f4258531b27cf09b32ffe0ff68eb5edf8b77a69"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the server spawns a server-owned entity in client A's room only",
+          "binding_id": "f80e378e8b4426d5ed0be44f8aa07c7d1ff4e2a8f28eb19198fdced24ad65d10",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "cf6fa990fdb51695cac424514a4917572240ec7fa721cfaee469f4767f7cd45a"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "the server migrates the entity to client B's room",
+          "binding_id": "f69d46abeb04f503cf09e904f72efa511ab780a6bd3a8c8c178aeee60279c829",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "240a788f376d610ff25349af128884686849896d42a5a980edd6407a8a8d4f23"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is out-of-scope for client A",
+          "binding_id": "db6cf08641fe0c742660017685a6b98f6b03ebe5b1830c91bc5b5737cdcb35e5",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "6d0dd936d5b1ea9b94008b0272dc2cb1a36e25b87b0fe464bdfa5a83d80e72b5"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the entity is in-scope for client B",
+          "binding_id": "653325107ac25d039b7fb86593e48ffe5b447095051a61e7624e19d10bb3274d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "1a72430b911b29e3cc718884447d1b46ed43c099f8a57b2d28b71230d394d05d"
         }
       ]
     }

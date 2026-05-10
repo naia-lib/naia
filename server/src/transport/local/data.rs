@@ -1,8 +1,4 @@
-use parking_lot::Mutex;
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::net::SocketAddr;
 
 use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
@@ -29,26 +25,26 @@ impl LocalServerSender {
 #[derive(Clone)]
 pub struct LocalServerReceiver {
     hub: LocalTransportHub,
-    last_payload: Arc<Mutex<Option<(SocketAddr, Box<[u8]>)>>>,
+    // Holds the most-recently-received packet so receive() can return a &[u8] tied
+    // to &self rather than to a now-dropped MutexGuard.
+    last_payload: Option<(SocketAddr, Box<[u8]>)>,
 }
 
 impl LocalServerReceiver {
     pub fn new(hub: LocalTransportHub) -> Self {
         Self {
             hub,
-            last_payload: Arc::new(Mutex::new(None)),
+            last_payload: None,
         }
     }
 
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         if let Some((client_addr, bytes)) = self.hub.try_recv_data() {
-            let boxed = bytes.into_boxed_slice();
-            *self.last_payload.lock() = Some((client_addr, boxed));
-            let payload_ref = self.last_payload.lock();
-            let (addr, payload_slice) = payload_ref.as_ref().unwrap();
-            let static_ref: &'static [u8] = unsafe { std::mem::transmute(payload_slice.as_ref()) };
-            Ok(Some((*addr, static_ref)))
+            self.last_payload = Some((client_addr, bytes.into_boxed_slice()));
+            let (addr, payload) = self.last_payload.as_ref().unwrap();
+            Ok(Some((*addr, payload.as_ref())))
         } else {
+            self.last_payload = None;
             Ok(None)
         }
     }

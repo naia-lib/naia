@@ -487,6 +487,9 @@ fn world_data(world: &World) -> &WorldData {
 }
 
 fn world_data_unchecked_mut(world: &'_ mut World) -> Mut<'_, WorldData> {
+    // Safety: We have exclusive access via &mut World. as_unsafe_world_cell() is used here
+    // because get_resource_mut() requires UnsafeWorldCell; no other borrow of WorldData
+    // is alive at the call site. The returned Mut<'_> is tied to the world's lifetime.
     unsafe {
         world
             .as_unsafe_world_cell()

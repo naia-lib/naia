@@ -146,6 +146,12 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
         immutable_world_entity: &Entity,
     ) {
         let mut query = world.query::<&mut R>();
+        // Safety: We need two simultaneous borrows of R from different entities (one &mut,
+        // one &). The standard Bevy query API only allows one borrow at a time. Using
+        // as_unsafe_world_cell() + query.get_unchecked lets us borrow two distinct entities
+        // simultaneously. The two entities are guaranteed to be different by the call-site
+        // contract (mutable_world_entity != immutable_world_entity), so the &mut and &
+        // borrows do not alias.
         unsafe {
             let world = world.as_unsafe_world_cell();
             if let Ok(immutable_component) = query.get_unchecked(world, *immutable_world_entity) {

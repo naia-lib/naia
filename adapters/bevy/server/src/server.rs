@@ -386,10 +386,24 @@ impl<'w> Server<'w> {
         }
     }
 
+    pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, Entity>> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.user_opt(user_key),
+            ServerImpl::Full(server) => server.user_opt(user_key),
+        }
+    }
+
     pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_mut(user_key),
             ServerImpl::Full(server) => server.user_mut(user_key),
+        }
+    }
+
+    pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, Entity>> {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.user_mut_opt(user_key),
+            ServerImpl::Full(server) => server.user_mut_opt(user_key),
         }
     }
 

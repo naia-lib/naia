@@ -1,4 +1,4 @@
-use std::default::Default;
+use std::{default::Default, time::Duration};
 
 use naia_shared::ConnectionConfig;
 
@@ -14,6 +14,13 @@ pub struct ServerConfig {
     pub connection: ConnectionConfig,
     /// Configuration used to monitor the ping & jitter on the network
     pub ping: PingConfig,
+    /// How long to wait for the application to call `accept_connection` or
+    /// `reject_connection` after the network handshake completes.
+    ///
+    /// If neither is called within this window the connection is auto-rejected.
+    /// This prevents unauthenticated clients from holding server memory
+    /// indefinitely. Default: 10 seconds.
+    pub pending_auth_timeout: Duration,
 }
 
 impl Default for ServerConfig {
@@ -22,6 +29,7 @@ impl Default for ServerConfig {
             require_auth: true,
             connection: ConnectionConfig::default(),
             ping: PingConfig::default(),
+            pending_auth_timeout: Duration::from_secs(10),
         }
     }
 }

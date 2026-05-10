@@ -703,6 +703,8 @@ impl LocalWorldManager {
                         extern "Rust" {
                             fn client_routed_remote_spawn_increment();
                         }
+                        // Safety: atomic counter defined by the naia-tests harness under
+                        // e2e_debug; no preconditions; never active in production builds.
                         unsafe {
                             client_routed_remote_spawn_increment();
                         }

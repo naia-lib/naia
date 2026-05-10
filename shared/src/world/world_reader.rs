@@ -83,6 +83,10 @@ impl WorldReader {
                     extern "Rust" {
                         fn client_saw_spawn_increment();
                     }
+                    // Safety: client_saw_spawn_increment is defined by the naia-tests harness
+                    // when compiled with feature = "e2e_debug". It atomically increments a
+                    // counter and has no preconditions. The e2e_debug feature is never enabled
+                    // in production builds.
                     unsafe {
                         client_saw_spawn_increment();
                     }
@@ -230,6 +234,8 @@ impl WorldReader {
                     extern "Rust" {
                         fn client_saw_set_auth_wire_increment();
                     }
+                    // Safety: same as client_saw_spawn_increment above — atomic counter defined
+                    // by the test harness; no preconditions; e2e_debug is never active in prod.
                     unsafe {
                         client_saw_set_auth_wire_increment();
                     }

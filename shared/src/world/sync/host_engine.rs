@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::warn;
+
 use crate::{
     world::sync::{config::EngineConfig, HostEntityChannel},
     EntityCommand, EntityMessage, EntityMessageType, HostEntity, HostType,
@@ -60,7 +62,10 @@ impl HostEngine {
         let host_entity = msg.entity().unwrap();
 
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
-            panic!("Cannot accept message for an entity that does not exist in the engine. Message: {:?}", msg);
+            // Discard messages for unknown entities — this can happen with reordered or stale
+            // packets from a buggy/lagging client after the entity has been despawned.
+            warn!("host_engine: message for unknown entity {:?}, discarding", host_entity);
+            return;
         };
 
         entity_channel.receive_message(id, msg.strip_entity());

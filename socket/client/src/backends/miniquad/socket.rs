@@ -94,6 +94,9 @@ impl Socket {
             None => "".to_string(),
         };
 
+        // Safety: connect() is called once at socket startup before any callbacks fire.
+        // ID_CELL, MESSAGE_QUEUE, and ERROR_QUEUE are written here and subsequently only
+        // accessed from the same wasm32 thread via the JS bridge callbacks and receive().
         unsafe {
             ID_CELL = Some(None);
             MESSAGE_QUEUE = Some(VecDeque::new());

@@ -11,6 +11,10 @@ pub struct PacketSenderImpl;
 impl PacketSender for PacketSenderImpl {
     /// Send a Packet to the Server
     fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
+        // Safety: naia_create_u8_array and naia_send are extern "C" FFI functions provided
+        // by the miniquad JavaScript bridge. wasm32 is single-threaded; SERVER_ADDR and the
+        // JS object handle are accessed without aliasing. The pointer passed to
+        // naia_create_u8_array is valid for the duration of the call (payload is borrowed).
         unsafe {
             let ptr = payload.as_ptr();
             let len = payload.len();
@@ -25,16 +29,20 @@ impl PacketSender for PacketSenderImpl {
 
     /// Get the Server's Socket address
     fn server_addr(&self) -> ServerAddr {
+        // Safety: SERVER_ADDR is a static mut set once at socket initialization before any
+        // PacketSender is cloned. wasm32 is single-threaded; there are no concurrent writes.
         unsafe { SERVER_ADDR }
     }
 
     fn connected(&self) -> bool {
+        // Safety: naia_is_connected() is a read-only FFI call into the JS bridge; no preconditions.
         unsafe {
             return naia_is_connected();
         }
     }
 
     fn disconnect(&mut self) {
+        // Safety: naia_disconnect() is an FFI call with no return value or preconditions.
         unsafe {
             naia_disconnect();
         }

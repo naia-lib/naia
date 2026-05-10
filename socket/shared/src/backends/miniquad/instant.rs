@@ -13,6 +13,9 @@ pub struct Instant {
 impl Instant {
     /// Creates an Instant from the moment the method is called
     pub fn now() -> Self {
+        // Safety: naia_now() is a pure extern "C" function provided by the miniquad JS
+        // runtime returning the current time in milliseconds. No preconditions; wasm32 is
+        // single-threaded so there are no data races.
         unsafe { Instant { inner: naia_now() } }
     }
 

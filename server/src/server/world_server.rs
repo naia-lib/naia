@@ -1562,7 +1562,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Retrieves an UserRef that exposes read-only operations for the User
     /// associated with the given UserKey.
-    /// Panics if the user does not exist.
+    ///
+    /// # Panics
+    /// Panics if no user exists for the given key. Prefer [`user_opt`](Self::user_opt)
+    /// when calling from a context where the key may be stale (e.g., inside a
+    /// disconnect handler that received a copy of the key before disconnect was processed).
     pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
         if self.user_store.contains(user_key) {
             return UserRef::new(self, user_key);
@@ -1570,14 +1574,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         panic!("No User exists for given Key!");
     }
 
+    /// Returns `Some(UserRef)` if the user exists, or `None` if the key is stale.
+    ///
+    /// Use this instead of [`user`](Self::user) when you cannot guarantee the key is still live.
+    pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, E>> {
+        if self.user_store.contains(user_key) {
+            Some(UserRef::new(self, user_key))
+        } else {
+            None
+        }
+    }
+
     /// Retrieves an UserMut that exposes read and write operations for the User
     /// associated with the given UserKey.
-    /// Returns None if the user does not exist.
+    ///
+    /// # Panics
+    /// Panics if no user exists for the given key. Prefer [`user_mut_opt`](Self::user_mut_opt)
+    /// when calling from a context where the key may be stale.
     pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
         if self.user_store.contains(user_key) {
             return UserMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
+    }
+
+    /// Returns `Some(UserMut)` if the user exists, or `None` if the key is stale.
+    ///
+    /// Use this instead of [`user_mut`](Self::user_mut) when you cannot guarantee the key is still live.
+    pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, E>> {
+        if self.user_store.contains(user_key) {
+            Some(UserMut::new(self, user_key))
+        } else {
+            None
+        }
     }
 
     /// Return a list of all currently connected Users' keys
