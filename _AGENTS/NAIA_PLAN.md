@@ -220,14 +220,17 @@ The following documents are superseded by this plan. Their content is preserved 
 
 The following phases are parked. Do not schedule without explicit instruction from Connor.
 
-### D-A1 — CONCEPTS.md Bevy T-tag explanation (audit finding)
+### D-A1 — CONCEPTS.md Bevy T-tag explanation (audit finding) — COMPLETE
 The `T` type parameter on `Client<'w, T>` and `Plugin<T>` is completely absent from `docs/CONCEPTS.md`. A Bevy newcomer will not understand why the generic exists or how to create a marker type. Add a §Bevy client tag section explaining `T` as a zero-cost phantom marker for compile-time client identity.
+Delivered: §10 "Bevy adapter — the client tag type T" added to `docs/CONCEPTS.md`. Commit `91985ca4`.
 
-### D-A2 — CHANGELOG catch-up (audit finding)
+### D-A2 — CHANGELOG catch-up (audit finding) — COMPLETE
 CHANGELOG.md covers through the Resources feature era. Missing: P1 (`give_authority` API), P9 (reconnect edge cases), P11 (kebab-case renames, println→debug!). Add entries under the appropriate version heading.
+Delivered: Added [Unreleased] ### Added entries for `give_authority`/`take_authority` and reconnect handling; ### Changed entries for kebab-case renames and debug! migration. Commit `91985ca4`.
 
-### D-A3 — `give_authority` Bevy doc error cases (audit finding)
+### D-A3 — `give_authority` Bevy doc error cases (audit finding) — COMPLETE
 `adapters/bevy/server/src/commands.rs:60-68` — the `give_authority` doc states the Delegated precondition but does not document what happens if the entity is not found or not Delegated (silent no-op? panic? error?). Add error behavior to the doc.
+Delivered: Expanded doc with all three silent-no-op cases (not found, not Delegated, not in scope) and success-path fan-out. Commit `91985ca4`.
 
 ### D-A4 — Entity migration between rooms BDD coverage — **COMPLETE** (2026-05-09)
 @Rule(19) @Scenario(01) `[room-migration-01]` added to `04_visibility.feature`. New steps: `given_entity_in_client_a_room_only`, `when_server_migrates_entity_to_client_b_room`, `then_entity_out_of_scope_for_client_a`. Gate: 330 active, 10/10 pass.
@@ -239,8 +242,9 @@ CHANGELOG.md covers through the Resources feature era. Missing: P1 (`give_author
 `world_server.rs:513` — `message_box.clone()` in the broadcast loop allocates one `Box<dyn Message>` per connected user per broadcast. At 1262 CCU this is the most avoidable per-tick allocation. Consider `Arc<MessageBox>` or a ref-counted wrapper to amortize. Blocked on profiling to confirm it's a real bottleneck at target CCU.
 Delivered: `MessageContainer.inner` changed from `Box<dyn Message>` to `Arc<Box<dyn Message>>`. Both `broadcast_message_inner` and `room_broadcast_message` now wrap once in `Arc` before the loop; per-user clone is a refcount increment. `send_message_inner` now accepts `MessageContainer` directly. Also fixed the same pattern in `room_broadcast_message`. Commit `bbb197df`.
 
-### D-A7 — Error propagation overhaul (audit finding)
+### D-A7 — Error propagation overhaul (audit finding) — COMPLETE
 18 TODOs of the form "pass this on and handle above" scattered across `world_server.rs`, `client.rs`, `main_server.rs`, `base_time_manager.rs`, `connection.rs`, `advanced_handshaker.rs`, `simple_handshaker.rs`. All indicate IO errors silently dropped. Systematic fix: propagate to a `WorldEvents::IoError` variant or similar. Large scope.
+Delivered: 12 TODOs found and resolved (audit count was approximate; some files cited had none). `WorldEvents::IoError` variant not appropriate — UDP send failures are transient and connection timeout already detects persistent dead links. Each TODO replaced with a one-line comment explaining why log-and-continue is correct at that site. No behaviour change. Commit `fd228a00`.
 
 ### D-A8 — Benchmark expansion (audit finding) — COMPLETE
 Three benchmark scenarios missing: (1) single-client round-trip latency, (2) resource replication throughput, (3) authority grant/revoke cycle cost. Add to `benches/` suite.
