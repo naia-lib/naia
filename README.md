@@ -152,6 +152,22 @@ browser targets.
 
 ---
 
+## Coming from another library?
+
+| You know… | naia equivalent | Key difference |
+|-----------|----------------|----------------|
+| **renet** `NetworkedEntity` / RenetServer | `Server<E>` + `#[derive(Replicate)]` | naia replicates ECS state automatically (diff + send); renet is message-only |
+| **renet** `send_message` / `receive_message` | `server.send_message::<Ch, M>()` | naia wraps channels as typed Rust generics |
+| **renet** `ClientId` | `UserKey` | Same concept — opaque handle to a connected client |
+| **lightyear** `Replicate` component | `#[derive(Replicate)]` on a struct | naia is ECS-agnostic; lightyear is Bevy-only |
+| **lightyear** `ComponentRegistry` | `Protocol::add_component::<C>()` | Same idea; naia uses a builder pattern |
+| **lightyear** `InputChannel` / predicted input | `TickBuffered` channel + `receive_tick_buffer_messages` | naia delivers client input at the matching server tick for rollback |
+| **lightyear** `Predicted` / `Interpolated` | not built-in | naia supplies the data; you write the prediction/interpolation logic ([see PREDICTION.md](docs/PREDICTION.md)) |
+| **bevy_replicon** `Replication` marker | `server.spawn_entity()` + `#[derive(Replicate)]` | naia has fine-grained per-user scope control via rooms + `UserScopeMut` |
+| **bevy_replicon** visibility filter | `server.user_scope_mut(&user)` / rooms | naia: rooms = coarse; user-scope = fine-grained |
+
+---
+
 ## Links
 
 - [API docs (docs.rs)](https://docs.rs/naia-server)
