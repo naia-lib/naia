@@ -83,7 +83,7 @@ impl App {
             let socket = webrtc::Socket::new("http://127.0.0.1:14191", &self.socket_config);
             self.client.connect(socket);
         }
-        for server_address in world_events.read::<DisconnectEvent>() {
+        for (server_address, _reason) in world_events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
         }
         for message in world_events.read::<MessageEvent<UnorderedReliableChannel, StringMessage>>()

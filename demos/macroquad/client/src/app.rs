@@ -137,7 +137,7 @@ impl App {
         }
 
         // Disconnect Events
-        for server_address in world_events.read::<DisconnectEvent>() {
+        for (server_address, _reason) in world_events.read::<DisconnectEvent>() {
             info!("Client disconnected from: {}", server_address);
 
             self.world = World::default();

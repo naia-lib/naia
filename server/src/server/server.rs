@@ -130,7 +130,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // handle queued disconnects (from verified disconnect handshake packets)
         for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
-            self.world_server.user_queue_disconnect(&user_key);
+            self.world_server.user_queue_disconnect(&user_key, naia_shared::DisconnectReason::ClientDisconnected);
         }
 
         // handle world packets
@@ -176,13 +176,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         // handle disconnects
         {
             let mut disconnects = Vec::new();
-            for (user_key, addr) in world_events.read::<DisconnectEvent>() {
+            for (user_key, addr, reason) in world_events.read::<DisconnectEvent>() {
                 self.main_server.disconnect_user(&user_key);
-                disconnects.push((user_key, addr));
+                disconnects.push((user_key, addr, reason));
             }
             // put back into world events
-            for (user_key, addr) in disconnects {
-                world_events.push_disconnection(&user_key, addr);
+            for (user_key, addr, reason) in disconnects {
+                world_events.push_disconnection(&user_key, addr, reason);
             }
         }
 

@@ -113,7 +113,7 @@ impl App {
                     .room_mut(&self.main_room_key)
                     .add_user(&user_key);
             }
-            for (_user_key, user_addr) in world_events.read::<DisconnectEvent>() {
+            for (_user_key, user_addr, _reason) in world_events.read::<DisconnectEvent>() {
                 info!("Naia Server disconnected from: {:?}", user_addr);
             }
             for (user_key, message) in

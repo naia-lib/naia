@@ -71,7 +71,7 @@ impl ServerEvents {
 
         // Convert world events: disconnections
         let mut disconnections = Vec::new();
-        for (user_key, _addr) in events.read::<naia_server::DisconnectEvent>() {
+        for (user_key, _addr, _reason) in events.read::<naia_server::DisconnectEvent>() {
             if let Some(client_key) = scenario.user_to_client_key(&user_key) {
                 disconnections.push(client_key);
             }

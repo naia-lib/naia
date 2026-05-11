@@ -1,3 +1,12 @@
+/// Why a connection was terminated.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum DisconnectReason {
+    ClientDisconnected,
+    TimedOut,
+    Kicked,
+    AuthTimeout,
+}
+
 pub type PacketIndex = u16;
 pub type Tick = u16;
 pub type MessageIndex = u16;

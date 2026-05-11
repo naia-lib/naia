@@ -153,7 +153,7 @@ impl ClientEvents {
             .collect();
         let disconnections: Vec<()> = world_events
             .read::<naia_client::DisconnectEvent>()
-            .map(|_| ())
+            .map(|(_, _reason)| ())
             .collect();
         let errors: Vec<NaiaClientError> = world_events.read::<naia_client::ErrorEvent>().collect();
         let messages = world_events.take_messages();

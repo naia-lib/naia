@@ -155,8 +155,8 @@ pub fn translate_world_events(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::DisconnectEvent>>()
                     .unwrap();
-                for (user_key, user) in events.read::<naia_events::DisconnectEvent>() {
-                    event_writer.write(bevy_events::DisconnectEvent(user_key, user));
+                for (user_key, user, reason) in events.read::<naia_events::DisconnectEvent>() {
+                    event_writer.write(bevy_events::DisconnectEvent(user_key, user, reason));
                 }
             }
 

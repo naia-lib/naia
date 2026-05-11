@@ -76,7 +76,7 @@ pub mod shared {
     };
 }
 
-pub use naia_shared::{EntityPriorityMut, EntityPriorityRef};
+pub use naia_shared::{DisconnectReason, EntityPriorityMut, EntityPriorityRef};
 
 mod client;
 mod client_config;

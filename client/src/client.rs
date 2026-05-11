@@ -333,7 +333,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         // all other operations
         if self.is_disconnecting() {
-            self.disconnect_with_events(&mut world);
+            let reason = if self.manual_disconnect || self.server_disconnect {
+                naia_shared::DisconnectReason::ClientDisconnected
+            } else {
+                naia_shared::DisconnectReason::TimedOut
+            };
+            self.disconnect_with_events(&mut world, reason);
             return;
         }
 
@@ -2026,7 +2031,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
-    fn disconnect_with_events<W: WorldMutType<E>>(&mut self, world: &mut W) {
+    fn disconnect_with_events<W: WorldMutType<E>>(&mut self, world: &mut W, reason: naia_shared::DisconnectReason) {
         let server_addr = self.server_address_unwrapped();
 
         self.incoming_world_events.clear();
@@ -2035,7 +2040,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.despawn_all_remote_entities(world);
         self.disconnect_reset_connection();
 
-        self.incoming_world_events.push_disconnection(&server_addr);
+        self.incoming_world_events.push_disconnection(&server_addr, reason);
     }
 
     fn despawn_all_remote_entities<W: WorldMutType<E>>(&mut self, world: &mut W) {

@@ -6,15 +6,15 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
-    Replicate, Request, ResponseSendKey,
+    Channel, ChannelKind, ComponentKind, DisconnectReason, GlobalResponseId, Message,
+    MessageContainer, MessageKind, Replicate, Request, ResponseSendKey,
 };
 
 use crate::{user::UserKey, ConnectEvent, ErrorEvent, NaiaServerError};
 
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<UserKey>,
-    disconnections: Vec<(UserKey, SocketAddr)>,
+    disconnections: Vec<(UserKey, SocketAddr, DisconnectReason)>,
     errors: Vec<NaiaServerError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
     requests: HashMap<
@@ -140,8 +140,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_disconnection(&mut self, user_key: &UserKey, addr: SocketAddr) {
-        self.disconnections.push((*user_key, addr));
+    pub(crate) fn push_disconnection(
+        &mut self,
+        user_key: &UserKey,
+        addr: SocketAddr,
+        reason: DisconnectReason,
+    ) {
+        self.disconnections.push((*user_key, addr, reason));
         self.empty = false;
     }
 
@@ -309,7 +314,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 // DisconnectEvent
 pub struct DisconnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
-    type Iter = IntoIter<(UserKey, SocketAddr)>;
+    type Iter = IntoIter<(UserKey, SocketAddr, DisconnectReason)>;
 
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);

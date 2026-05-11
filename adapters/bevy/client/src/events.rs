@@ -8,6 +8,7 @@ use bevy_ecs::{
 };
 
 use naia_client::{shared::GlobalResponseId, NaiaClientError, Events};
+use naia_client::DisconnectReason;
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind, ReplicateBundle, Request,
@@ -39,18 +40,20 @@ impl<T> ConnectEvent<T> {
 // DisconnectEvent
 #[derive(bevy_ecs::message::Message)]
 pub struct DisconnectEvent<T> {
+    pub reason: DisconnectReason,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> Default for DisconnectEvent<T> {
     fn default() -> Self {
-        Self::new()
+        Self::new(DisconnectReason::ClientDisconnected)
     }
 }
 
 impl<T> DisconnectEvent<T> {
-    pub fn new() -> Self {
+    pub fn new(reason: DisconnectReason) -> Self {
         Self {
+            reason,
             phantom_t: PhantomData,
         }
     }

@@ -98,7 +98,7 @@ pub fn disconnect_events(
     mut global: ResMut<Global>,
     mut event_reader: ResMut<Messages<DisconnectEvent>>,
 ) {
-    for DisconnectEvent(user_key, address) in event_reader.drain() {
+    for DisconnectEvent(user_key, address, _reason) in event_reader.drain() {
         info!("Naia Server disconnected from: {:?}", address);
 
         if let Some(entity) = global.user_to_square_map.remove(&user_key) {

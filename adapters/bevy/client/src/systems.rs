@@ -146,8 +146,8 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::DisconnectEvent<T>>>()
                     .unwrap();
-                for _ in events.read::<naia_events::DisconnectEvent>() {
-                    event_writer.write(bevy_events::DisconnectEvent::<T>::new());
+                for (_, reason) in events.read::<naia_events::DisconnectEvent>() {
+                    event_writer.write(bevy_events::DisconnectEvent::<T>::new(reason));
                 }
             }
 

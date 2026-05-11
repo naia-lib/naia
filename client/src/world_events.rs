@@ -3,8 +3,8 @@ use std::{
 };
 
 use naia_shared::{
-    handshake::RejectReason, Channel, ChannelKind, ComponentKind, GlobalResponseId, Message,
-    MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
+    handshake::RejectReason, Channel, ChannelKind, ComponentKind, DisconnectReason,
+    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
 };
 
 use crate::NaiaClientError;
@@ -12,7 +12,7 @@ use crate::NaiaClientError;
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
     rejections: Vec<(SocketAddr, RejectReason)>,
-    disconnections: Vec<SocketAddr>,
+    disconnections: Vec<(SocketAddr, DisconnectReason)>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
@@ -40,7 +40,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         Self {
             connections: Vec::new(),
             rejections: Vec::new(),
-            disconnections: Vec::new(),
+            disconnections: Vec::new(), // (SocketAddr, DisconnectReason)
             errors: Vec::new(),
             messages: HashMap::new(),
             requests: HashMap::new(),
@@ -138,8 +138,8 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_disconnection(&mut self, socket_addr: &SocketAddr) {
-        self.disconnections.push(*socket_addr);
+    pub(crate) fn push_disconnection(&mut self, socket_addr: &SocketAddr, reason: DisconnectReason) {
+        self.disconnections.push((*socket_addr, reason));
         self.empty = false;
     }
 
@@ -305,7 +305,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
 // DisconnectEvent
 pub struct DisconnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
-    type Iter = IntoIter<SocketAddr>;
+    type Iter = IntoIter<(SocketAddr, DisconnectReason)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);

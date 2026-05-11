@@ -144,7 +144,7 @@ impl App {
         }
 
         // Disconnect Events
-        for (user_key, user_addr) in world_events.read::<DisconnectEvent>() {
+        for (user_key, user_addr, _reason) in world_events.read::<DisconnectEvent>() {
             info!("Naia Server disconnected from: {}", user_addr);
             if let Some(entity) = self.user_to_square_map.remove(&user_key) {
                 self.server

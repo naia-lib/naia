@@ -13,6 +13,7 @@ use naia_bevy_shared::{
 };
 
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
+use naia_server::DisconnectReason;
 
 // ConnectEvent
 #[derive(bevy_ecs::message::Message)]
@@ -20,7 +21,7 @@ pub struct ConnectEvent(pub UserKey);
 
 // DisconnectEvent
 #[derive(bevy_ecs::message::Message)]
-pub struct DisconnectEvent(pub UserKey, pub SocketAddr);
+pub struct DisconnectEvent(pub UserKey, pub SocketAddr, pub DisconnectReason);
 
 // ErrorEvent
 #[derive(bevy_ecs::message::Message)]

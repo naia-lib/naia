@@ -63,7 +63,7 @@ pub mod shared {
 }
 
 pub use naia_shared::SerdeBevyServer as SerdeBevy;
-pub use naia_shared::{EntityPriorityMut, EntityPriorityRef};
+pub use naia_shared::{DisconnectReason, EntityPriorityMut, EntityPriorityRef};
 
 mod connection;
 mod error;
