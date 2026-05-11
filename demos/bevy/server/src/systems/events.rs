@@ -169,6 +169,34 @@ pub fn tick_events(
             server.user_scope_mut(&user_key).include(&entity);
         }
         server.mark_scope_checks_pending_handled();
+
+        // ── Distance-LOD priority (example — not active in this demo) ──────
+        //
+        // Priority controls how often an entity's state is sent relative to
+        // others when bandwidth is limited. A gain of 1.0 (default) means the
+        // entity accumulates 1 priority unit per tick. Higher gain = more
+        // frequent updates; lower gain = less frequent.
+        //
+        // To scale update rate by distance to the owning player:
+        //
+        //   for (user_key, square_entity) in &global.user_to_square_map {
+        //       // Compute player-position (from your ECS query) vs each entity.
+        //       let player_pos = position_query.get(*square_entity).ok();
+        //       for other_entity in server.user_scope(&user_key).iter() {
+        //           let other_pos = position_query.get(other_entity).ok();
+        //           let dist = match (player_pos, other_pos) {
+        //               (Some(a), Some(b)) => {
+        //                   let dx = (a.x - b.x) as f32;
+        //                   let dy = (a.y - b.y) as f32;
+        //                   (dx * dx + dy * dy).sqrt()
+        //               }
+        //               _ => 0.0,
+        //           };
+        //           // gain = 1 at dist 0, approaches 0 at large dist
+        //           let gain = 1.0 / (1.0 + dist / 100.0);
+        //           server.user_entity_priority_mut(user_key, &other_entity).set_gain(gain);
+        //       }
+        //   }
     }
 }
 

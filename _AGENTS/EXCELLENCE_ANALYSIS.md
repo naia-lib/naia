@@ -170,7 +170,7 @@ Gaps are classified by category and scored by **leverage** (1–5, where 5 = hig
 
 ---
 
-#### G-I2: No LOD-based update rate scaling ⭐⭐⭐
+#### G-I2: No LOD-based update rate scaling ⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `set_gain(f32)` already exists on `GlobalPriorityState` and `UserPriorityState` — the API is complete.
 
@@ -531,7 +531,7 @@ Active items only (closed/deferred gaps noted inline):
 | 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | ~~Docs~~ **COMPLETE** | XS | 1 |
 | 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
 | 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
-| 18 | **G-I2**: Distance-LOD `set_gain()` snippet in Bevy demo | Docs/Demo | XS | 2 |
+| 18 | **G-I2**: Distance-LOD `set_gain()` snippet in Bevy demo | ~~Docs/Demo~~ **COMPLETE** | XS | 2 |
 | 19 | **G-DOC2**: "Coming from X?" table in `README.md` | Docs | XS | 2 |
 | 20 | **G-SC1**: Zone-server architecture note in `CONCEPTS.md` | Docs | XS | 1 |
 | — | **G-P1**, **G-P2**, **G-T6**, **G-W2**, **G-S1**, **G-S3** | CLOSED — not gaps | — | — |
