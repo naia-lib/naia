@@ -41,10 +41,15 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     waitlist_store: WaitlistStore<(MessageIndex, MessageIndex, MessageContainer)>,
     incoming_requests: Vec<(LocalResponseId, MessageContainer)>,
     incoming_responses: Vec<(LocalRequestId, MessageContainer)>,
+    max_messages_per_tick: Option<u16>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     pub fn with_arranger(arranger: A) -> Self {
+        Self::with_arranger_and_cap(arranger, None)
+    }
+
+    pub fn with_arranger_and_cap(arranger: A, max_messages_per_tick: Option<u16>) -> Self {
         Self {
             reliable_receiver: ReliableReceiver::new(),
             incoming_messages: Vec::new(),
@@ -53,6 +58,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             waitlist_store: WaitlistStore::new(),
             incoming_requests: Vec::new(),
             incoming_responses: Vec::new(),
+            max_messages_per_tick,
         }
     }
 
@@ -192,8 +198,16 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
             }
         }
 
-        // return buffer
-        std::mem::take(&mut self.incoming_messages)
+        // return buffer, applying per-tick cap if set
+        let mut messages = std::mem::take(&mut self.incoming_messages);
+        if let Some(cap) = self.max_messages_per_tick {
+            let cap = cap as usize;
+            if messages.len() > cap {
+                warn!("Reliable channel: per-tick message cap ({}) exceeded; discarding {} excess messages.", cap, messages.len() - cap);
+                messages.truncate(cap);
+            }
+        }
+        messages
     }
 }
 

@@ -12,6 +12,10 @@ impl UnorderedReliableReceiver {
     pub fn new() -> Self {
         Self::with_arranger(UnorderedArranger)
     }
+
+    pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
+        Self::with_arranger_and_cap(UnorderedArranger, max_messages_per_tick)
+    }
 }
 
 // UnorderedArranger

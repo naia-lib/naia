@@ -142,7 +142,7 @@ Gaps are classified by category and scored by **leverage** (1–5, where 5 = hig
 
 ---
 
-#### G-S2: No per-channel rate limiting ⭐⭐⭐⭐
+#### G-S2: No per-channel rate limiting ⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `TickBufferSettings::message_capacity` already protects tick-buffered channels. `ReliableSettings` has no equivalent — reliable channels are unbounded.
 
@@ -511,7 +511,7 @@ Active items only (closed/deferred gaps noted inline):
 | 1 | **G-DOC1**: Prediction/rollback tutorial (`docs/PREDICTION.md`) | Implement | S | 5 |
 | 2 | **G-DX2**: `CommandHistory::new(max_ticks)` + demo update | ~~Implement~~ **COMPLETE** | S | 3 |
 | 3 | **G-DX3**: `DisconnectReason` enum on server + client events | ~~Implement~~ **COMPLETE** | S | 4 |
-| 4 | **G-S2**: `max_messages_per_tick` on `ReliableSettings` | Implement | S | 4 |
+| 4 | **G-S2**: `max_messages_per_tick` on `ReliableSettings` | ~~Implement~~ **COMPLETE** | S | 4 |
 | 5 | **G-W4** Phase 1: `is_compressed` bit + encoder size check | Implement | S | 2–4 |
 | 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | Implement | S | 3 |
 | 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | Implement | S | 3 |

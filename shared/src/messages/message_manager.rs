@@ -122,22 +122,22 @@ impl MessageManager {
                         Box::new(SequencedUnreliableReceiver::new()),
                     );
                 }
-                ChannelMode::UnorderedReliable(_) => {
+                ChannelMode::UnorderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(UnorderedReliableReceiver::new()),
+                        Box::new(UnorderedReliableReceiver::with_cap(settings.max_messages_per_tick)),
                     );
                 }
-                ChannelMode::SequencedReliable(_) => {
+                ChannelMode::SequencedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(SequencedReliableReceiver::new()),
+                        Box::new(SequencedReliableReceiver::with_cap(settings.max_messages_per_tick)),
                     );
                 }
-                ChannelMode::OrderedReliable(_) => {
+                ChannelMode::OrderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(OrderedReliableReceiver::new()),
+                        Box::new(OrderedReliableReceiver::with_cap(settings.max_messages_per_tick)),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {

@@ -73,12 +73,15 @@ impl ChannelSettings {
 #[derive(Clone)]
 pub struct ReliableSettings {
     pub rtt_resend_factor: f32,
+    /// Maximum messages to deliver per tick per connection. `None` = unlimited.
+    pub max_messages_per_tick: Option<u16>,
 }
 
 impl ReliableSettings {
     pub const fn default() -> Self {
         Self {
             rtt_resend_factor: 1.5,
+            max_messages_per_tick: None,
         }
     }
 }

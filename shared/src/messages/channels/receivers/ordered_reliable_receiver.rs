@@ -18,6 +18,13 @@ impl OrderedReliableReceiver {
             buffer: VecDeque::new(),
         })
     }
+
+    pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
+        Self::with_arranger_and_cap(
+            OrderedArranger { messages_received: 0, buffer: VecDeque::new() },
+            max_messages_per_tick,
+        )
+    }
 }
 
 enum MessageSlot {
