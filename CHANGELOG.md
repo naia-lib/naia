@@ -96,3 +96,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - **`transport::local` hub debug output silenced.** Three `println!` calls in
   `LocalTransportHub` were replaced with `log::debug!`. Local-transport noise no
   longer appears in server stdout during tests or production use.
+
+### Fixed (V2 audit, 2026-05-09)
+
+- **CRITICAL — UB transmute in local transport receivers.** `LocalServerReceiver`
+  and `LocalClientReceiver` extended the lifetime of a `MutexGuard`-owned buffer
+  via `std::mem::transmute`. Both structs now own their last-received payload as
+  `Option<Box<[u8]>>`, eliminating the transmute entirely.
+
+- **Handshake address-to-timestamp map unbounded.** Changed from `HashMap` to
+  `CacheMap<_, _, MAX_PENDING_CONNECTIONS=1024>` to prevent OOM from spoofed
+  source-address floods before authentication completes.
+
+- **Handshake `delete_user` scan-by-value gap.** When a user disconnected before
+  completing the identify step, their `been_handshaked_users` entry was left
+  orphaned. Fixed with a `retain()` scan on `None` address.
+
+- **`on_delivered_migrate_response` dead stub removed.** The function had two
+  incorrect magic values in its TODO body; it was not called anywhere. Removed to
+  avoid a future confusion hazard.
+
+- **`user()` panics on stale key.** Added `user_opt` and `user_mut_opt` on
+  `Server<E>`, `WorldServer<E>`, and `MainServer` so callers can avoid the panic
+  when a `UserKey` may be stale.
+
+- **Pending-auth timeout.** Connections that completed the network handshake but
+  whose application never called `accept_connection` / `reject_connection` within
+  `ServerConfig::pending_auth_timeout` (default 10 s) are now auto-rejected with
+  a warning log.
+
+- **`host_engine` receive on unknown entity panicked.** Changed to `warn!` + discard;
+  reordered packets from a lagging client after entity despawn no longer crash the server.
+
+- **`url_str_to_addr` panics lacked context.** All five `panic!("")` calls now
+  include the offending URL string.
+
+- **Safety comments on all `unsafe` blocks.** 20 unsafe sites across server, client,
+  shared, socket, and adapter crates now carry `// Safety:` comments explaining
+  the invariant that justifies each unsafe use.

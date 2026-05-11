@@ -74,22 +74,22 @@ Prioritized by correctness → API quality → test coverage → housekeeping.
 | Phase | Task | Status |
 |---|---|---|
 | **V3.1** | Investigate session.rs "catastrophic" TODO on Pin::new_unchecked — confirm soundness or fix | ✅ |
-| **V3.2** | Resolve bandwidth_accumulator half-finished feature — complete it or delete it | ⬜ |
-| **V3.3** | simple_handshaker TODO bubble-up consistency check vs advanced_handshaker | ⬜ |
+| **V3.2** | Resolve bandwidth_accumulator half-finished feature — complete it or delete it | ✅ |
+| **V3.3** | simple_handshaker TODO bubble-up consistency check vs advanced_handshaker | ✅ |
 
 #### API quality
 
 | Phase | Task | Status |
 |---|---|---|
-| **V3.4** | B.4 — Give RecvError a payload so consumers can distinguish failure modes | ⬜ |
-| **V3.5** | D.1 — Add doc comments to pause/resume/enable/disable_entity_replication | ⬜ |
-| **V3.6** | A.2 — Document broadcast_message silent per-user error discard behaviour | ⬜ |
-| **V3.7** | A.5 — Add explanation of E: Copy+Eq+Hash+Send+Sync bound to Server<E> doc | ⬜ |
-| **V3.8** | C.3/C.4 — Add caller-constraint doc to Send/Sync impls; document e2e_debug extern "Rust" linking contract | ⬜ |
-| **V3.9** | I.1 — Name magic numbers: digest CacheMap cap (64), scope-check assertion (1024), FRAGMENTATION_LIMIT_BYTES rationale | ⬜ |
-| **V3.10** | I.3 — Add rationale comments to ConnectionConfig::default() timeout values | ⬜ |
-| **V3.11** | H.1 — Document scope_checks_all() allocation cost; add warning to guide callers toward scope_checks_pending() | ⬜ |
-| **V3.12** | CHANGELOG.md — Record V2 audit fixes (V2.1–V2.9) under [Unreleased] | ⬜ |
+| **V3.4** | B.4 — Give RecvError a payload so consumers can distinguish failure modes | ✅ |
+| **V3.5** | D.1 — Add doc comments to pause/resume/enable/disable_entity_replication | ✅ |
+| **V3.6** | A.2 — Document broadcast_message silent per-user error discard behaviour | ✅ |
+| **V3.7** | A.5 — Add explanation of E: Copy+Eq+Hash+Send+Sync bound to Server<E> doc | ✅ |
+| **V3.8** | C.3/C.4 — Add caller-constraint doc to Send/Sync impls; document e2e_debug extern "Rust" linking contract | ✅ |
+| **V3.9** | I.1 — Name magic numbers: digest CacheMap cap (64), scope-check assertion (1024), FRAGMENTATION_LIMIT_BYTES rationale | ✅ |
+| **V3.10** | I.3 — Add rationale comments to ConnectionConfig::default() timeout values | ✅ |
+| **V3.11** | H.1 — Document scope_checks_all() allocation cost; add warning to guide callers toward scope_checks_pending() | ✅ |
+| **V3.12** | CHANGELOG.md — Record V2 audit fixes (V2.1–V2.9) under [Unreleased] | ✅ |
 
 #### Test coverage
 

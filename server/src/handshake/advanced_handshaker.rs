@@ -30,7 +30,15 @@ pub struct HandshakeManager {
     timestamp_digest_map: CacheMap<Timestamp, Vec<u8>>,
 }
 
+/// Maximum in-flight pending handshake connections held in the LRU map.
+/// Sized to hold ~1 K simultaneous pre-auth connections before the LRU evicts
+/// the oldest; prevents OOM from spoofed source-address floods.
 const MAX_PENDING_CONNECTIONS: usize = 1024;
+
+/// Number of recent handshake timestamps held in the digest replay-protection
+/// LRU. 64 covers ~1 second of 60 Hz reconnects from a single client — any
+/// older timestamp digests from the same client are considered expired.
+const MAX_TIMESTAMP_DIGESTS: usize = 64;
 
 impl Handshaker for HandshakeManager {
     fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey) {
@@ -191,7 +199,7 @@ impl HandshakeManager {
 
             connection_hash_key,
             address_to_timestamp_map: CacheMap::with_capacity(MAX_PENDING_CONNECTIONS),
-            timestamp_digest_map: CacheMap::with_capacity(64),
+            timestamp_digest_map: CacheMap::with_capacity(MAX_TIMESTAMP_DIGESTS),
         }
     }
 

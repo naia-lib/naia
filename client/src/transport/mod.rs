@@ -39,6 +39,10 @@ mod inner {
 
     pub struct SendError;
 
+    /// Transport-layer receive failure signal. Carries no payload because the
+    /// underlying OS error is already logged at the transport site before this
+    /// error is returned. All recovery paths are identical: wait for the
+    /// connection-timeout disconnect event.
     pub struct RecvError;
 
     pub trait Socket {

@@ -22,8 +22,14 @@ use crate::{
 /// The naia server — accepts connections, replicates entities, and routes
 /// messages.
 ///
-/// `E` is your world's entity key type (e.g. a `u32` or ECS `Entity`). It must
-/// be `Copy + Eq + Hash + Send + Sync`.
+/// `E` is your world's entity key type (e.g. a `u32` or ECS `Entity`).
+///
+/// The bounds on `E` are:
+/// - `Copy` — entity keys are small integers or thin wrappers; they pass
+///   through maps and closures without cloning.
+/// - `Eq + Hash` — keys are used as keys in `HashMap`/`BigMap` lookups.
+/// - `Send + Sync` — the server state is shared across the main-loop thread
+///   and (in WebRTC mode) the session-server async tasks.
 ///
 /// # Minimal server loop
 ///
@@ -242,7 +248,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// [`send_all_packets`](Server::send_all_packets) call.
     ///
     /// `C` is the channel type; `M` is the message type. Users that connect
-    /// after this call do not receive the message.
+    /// after this call do not receive the message. Per-user send failures are
+    /// silently discarded — use [`send_message`](Server::send_message) in a
+    /// loop if per-user delivery confirmation is required.
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         self.world_server.broadcast_message::<C, M>(message);
     }
@@ -310,12 +318,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns every `(room, user, entity)` triple that is eligible for scope
     /// evaluation.
     ///
-    /// Use this to implement a custom scope callback: iterate the triples,
-    /// then call [`user_scope_mut`](Server::user_scope_mut) to include or
-    /// exclude each entity for the corresponding user. For most use cases
-    /// [`scope_checks_pending`](Server::scope_checks_pending) is more
-    /// efficient because it returns only the triples whose scope status has
-    /// changed since the last evaluation.
+    /// **Allocation warning:** this allocates a new `Vec` on every call
+    /// proportional to `rooms × users × entities`. At 1,000 entities and 16
+    /// users this can be 16,000+ elements per frame. Prefer
+    /// [`scope_checks_pending`](Server::scope_checks_pending) for steady-state
+    /// scope evaluation; use `scope_checks_all` only for bulk re-evaluation
+    /// (e.g. on initial load or after a full scope reset).
     pub fn scope_checks_all(&self) -> Vec<(RoomKey, UserKey, E)> {
         self.world_server.scope_checks_all()
     }

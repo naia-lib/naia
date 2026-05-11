@@ -486,7 +486,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         Ok(())
     }
 
-    /// Sends a message to all connected users using a given channel
+    /// Sends a message to all connected users using the given channel.
+    ///
+    /// Per-user send failures are silently discarded. If a particular user's
+    /// send fails (e.g. their connection was just dropped), the error is ignored
+    /// and the remaining users still receive the message. Callers that need
+    /// per-user delivery guarantees should use `send_message` in a loop.
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         let cloned_message = M::clone_box(message);
         self.broadcast_message_inner(&ChannelKind::of::<C>(), cloned_message);
@@ -832,6 +837,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.despawn_entity_worldless(world_entity);
     }
 
+    /// Pauses replication for this entity: component changes are no longer
+    /// transmitted to any client until `resume_entity_replication` is called.
+    /// The entity remains spawned on clients; it simply stops receiving updates.
+    ///
+    /// # Adapter use only
     pub fn pause_entity_replication(&mut self, world_entity: &E) {
         let global_entity = self
             .global_entity_map
@@ -841,6 +851,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .pause_entity_replication(&global_entity);
     }
 
+    /// Resumes replication for an entity previously paused with
+    /// `pause_entity_replication`. Component changes will again be tracked and
+    /// transmitted to clients on the next send tick.
+    ///
+    /// # Adapter use only
     pub fn resume_entity_replication(&mut self, world_entity: &E) {
         let global_entity = self
             .global_entity_map

@@ -41,8 +41,15 @@ impl ConnectionConfig {
 impl Default for ConnectionConfig {
     fn default() -> Self {
         Self {
+            // 30 s: generous enough to survive a 20–25 s mobile network handoff
+            // or a brief server GC pause, but short enough that a dead peer is
+            // detected before the 60 s TCP keepalive would fire on the auth socket.
             disconnection_timeout_duration: Duration::from_secs(30),
+            // 4 s: keeps NAT mappings alive (most home routers timeout UDP at
+            // ~30 s; 4 s gives plenty of headroom even at 1 heartbeat / interval).
             heartbeat_interval: Duration::from_secs(4),
+            // None: bandwidth measurement is opt-in telemetry; disabled by default
+            // to avoid the per-packet accounting cost in production builds.
             bandwidth_measure_duration: None,
             bandwidth: BandwidthConfig::default(),
         }
