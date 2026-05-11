@@ -117,7 +117,61 @@ time of writing).
 
 ---
 
-## 3. Ground rules
+## 3. Out-of-scope — do not re-litigate these decisions
+
+The following are **closed decisions** made by the project owner. Do not
+include them as gaps, do not propose revisiting them, and do not spend
+audit time on them. If evidence emerges that a decision is actively causing
+harm (e.g. a security advisory with a concrete CVE), flag that as a new
+finding — but framing it as re-opening the old decision.
+
+### Transport architecture decisions
+
+| Topic | Decision | Rationale |
+|-------|----------|-----------|
+| **QUIC / `transport_quic`** | Deferred — do not propose | XL effort; existing UDP transport covers the target use cases. No implementation work without explicit instruction. |
+| **WebTransport / `transport_webtransport`** | Deferred, blocked on QUIC | WebTransport = HTTP/3 over QUIC; implement QUIC first to share the infra. Urgency is low while WebRTC still works. |
+| **DTLS advisory pile in `webrtc-unreliable`** | Deferred to 2027-06-01 | Advisories are time-boxed in `deny.toml`; do not raise before that date. |
+| **Single-socket architecture** | Closed — not a gap | WebRTC already serves native + WASM clients from one process. No multi-socket work needed. |
+| **TypeScript/JavaScript client** | Deferred indefinitely | XL effort, no peer ships one, Rust→WASM covers the browser use case. |
+
+### Security decisions
+
+| Topic | Decision | Rationale |
+|-------|----------|-----------|
+| **Auth payload plaintext over UDP** | Resolved by `SECURITY.md` + transport docs | The warning is documented; the fix is transport selection (QUIC when available). No per-method additions needed. |
+| **Packet integrity for native UDP** | Docs-only | Random corruption is handled by `SerdeErr` discard; deliberate injection is addressed by transport selection. No code changes. |
+
+### Feature scope decisions
+
+| Topic | Decision | Rationale |
+|-------|----------|-----------|
+| **Built-in client prediction framework** | Not a gap | `CommandHistory` + `TickBuffered` + `local_duplicate()` + demo code + `docs/PREDICTION.md` are the reference implementation. Naia supplies the primitives; the application assembles the loop. |
+| **Built-in snapshot interpolation framework** | Not a gap | The Bevy and Macroquad demos already implement it via an `Interp` component. Same philosophy as prediction. |
+| **Spatial / automatic interest management** | Out of scope | Rooms = coarse; `scope_checks_pending()` = fine-grained hook point. A spatial hash belongs in a third-party crate. Same reason naia has no physics. |
+| **Horizontal scaling / multi-server** | Deferred indefinitely | Application-architecture concern; all peers leave this to the developer. The zone-sharding pattern is documented in `docs/CONCEPTS.md`. |
+| **Packet replay / traffic recording** | Deferred indefinitely | ECS-snapshot replay (via `Historian`) is more useful for desync debugging than raw byte replay. Revisit only with a concrete desync use case. |
+| **AIMD congestion control** | Closed — not applicable | AIMD is a TCP-stream concept. State sync congestion response is already correct: defer lower-priority entities, compound their priority. The token bucket handles reliable pacing. |
+
+### Design invariants — do not challenge these
+
+These are load-bearing architectural choices. Do not recommend changing them.
+
+- **ECS-agnostic core.** `Server<E>` and `Client<E>` are generic over the
+  entity type. The Bevy adapter is a thin layer on top, not the core. This is
+  a deliberate differentiator vs lightyear.
+- **Server-authoritative model.** Naia is not a P2P library. Authority
+  delegation is bounded (server grants/revokes). Do not propose P2P modes or
+  symmetric authority.
+- **No physics / no spatial queries in naia core.** The `Historian` provides
+  lag-compensation primitives; the application does hit detection. Naia will
+  not bundle a physics engine.
+- **naia-as-async-std/smol.** The async runtime is smol/async-std, not tokio.
+  Do not propose switching runtimes.
+
+---
+
+## 5. Ground rules
 
 - **Evidence first.** Every gap claim must be grounded in something you
   actually read (a file, a competitor page, a GitHub issue). No guessing.
@@ -139,7 +193,7 @@ time of writing).
 
 ---
 
-## 4. After writing the document
+## 6. After writing the document
 
 1. Commit the file with message:
    `Excellence audit <YYYYMMDD>: fresh gap analysis`
