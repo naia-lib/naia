@@ -537,24 +537,17 @@ impl<'a, R: AsyncBufRead + Unpin> Stream for RequestBuffer<'a, R> {
             self.add_newline = false;
             Poll::Ready(Some(Ok(String::from(NEWLINE_STR))))
         } else {
-            // Safety: self.buffer is a field of a pinned struct. The containing struct
-            // (SseStream) does not implement Unpin, so once pinned it will never be moved.
-            // Pinning a field of a pinned struct via new_unchecked is therefore sound as long
-            // as no method moves self.buffer out of the struct — none do.
-            unsafe {
-                let mut_ref = Pin::new_unchecked(&mut self.buffer);
-                match Stream::poll_next(mut_ref, cx) {
-                    Poll::Ready(Some(item)) => {
-                        self.add_newline = true;
-                        Poll::Ready(Some(item))
-                    }
-                    Poll::Ready(None) => Poll::Ready(None),
-                    Poll::Pending => {
-                        // TODO: This could be catastrophic.. I don't understand futures very
-                        // well!
-                        Poll::Ready(None)
-                    }
+            // R: Unpin means Lines<R>: Unpin and &mut Lines<R>: Unpin, so Pin::new is safe.
+            let mut_ref = Pin::new(&mut self.buffer);
+            match Stream::poll_next(mut_ref, cx) {
+                Poll::Ready(Some(item)) => {
+                    self.add_newline = true;
+                    Poll::Ready(Some(item))
                 }
+                Poll::Ready(None) => Poll::Ready(None),
+                // The underlying reader is always a fully-buffered &[u8] (Vec<u8> read to
+                // completion before RequestBuffer is created), so Pending is unreachable.
+                Poll::Pending => unreachable!("in-memory &[u8] reader never yields Pending"),
             }
         }
     }

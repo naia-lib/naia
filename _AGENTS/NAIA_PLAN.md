@@ -73,7 +73,7 @@ Prioritized by correctness → API quality → test coverage → housekeeping.
 
 | Phase | Task | Status |
 |---|---|---|
-| **V3.1** | Investigate session.rs "catastrophic" TODO on Pin::new_unchecked — confirm soundness or fix | ⬜ |
+| **V3.1** | Investigate session.rs "catastrophic" TODO on Pin::new_unchecked — confirm soundness or fix | ✅ |
 | **V3.2** | Resolve bandwidth_accumulator half-finished feature — complete it or delete it | ⬜ |
 | **V3.3** | simple_handshaker TODO bubble-up consistency check vs advanced_handshaker | ⬜ |
 
