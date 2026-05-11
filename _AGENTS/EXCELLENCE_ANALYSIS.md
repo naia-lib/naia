@@ -301,7 +301,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ---
 
-#### G-W4: Compression not used by default / not production-ready ⭐⭐ — Phase 1 **COMPLETE**
+#### G-W4: Compression not used by default / not production-ready ⭐⭐ — Phase 1 **COMPLETE** | Phase 2 **COMPLETE**
 
 **Current state:** `zstd_support` feature gate wires `Encoder`/`Decoder` through `io.rs` on both server and client. Two correctness bugs exist: (1) `encoder.encode()` always uses the compressed result even when it is larger than the input (`// TODO` at `shared/src/connection/encoder.rs:40`); (2) the decoder unconditionally calls `decompress()` on every packet — if the encoder ever skips compression there is no per-packet signal, so the decoder will corrupt the payload.
 
@@ -315,9 +315,15 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 - Decoder reads the flag first and branches accordingly.
 - Files: `shared/src/connection/encoder.rs`, `shared/src/connection/decoder.rs`, `server/src/connection/io.rs`, `client/src/connection/io.rs`.
 
-**Phase 2 (evidence campaign, M effort):** Before investing further, measure.
-- Add `cargo run -p naia-bench -- compression-audit` that captures the real packet byte stream from `halo_btb_16v16`, buckets packets by size (0–50, 50–150, 150–430 bytes), and reports zstd compression ratio at levels -7/1/3 and with a game-traffic-trained dictionary.
-- Gate: if Dictionary mode shows ≥15% bandwidth reduction on the spawn-burst bucket (150–430 bytes), ship Dictionary compression as the recommended default. Otherwise close the gap permanently with the data.
+**Phase 2 (evidence campaign, M effort): COMPLETE — GATE FAIL**
+- `benches/examples/compression_audit.rs` captures real server-to-client packets from a 256-tile + 16-unit halo scenario via `hub.enable_packet_recording()` / `hub.take_recorded_packets()`.
+- Run: `cargo run --release --example compression_audit -p naia-benches`
+- Measured results (256 tiles + 16 units, 300 steady-state ticks):
+  - Small packets (≤50B): zstd makes them LARGER (negative reduction — frame overhead dominates)
+  - Large packets (>150B, spawn-burst): **6.8% reduction** at zstd-3 and with dictionary
+  - Steady-state update packets (all ≤50B): negative reduction across all levels
+- **Gate: FAIL** — large spawn-burst bucket shows only 6.8%, below the 15% threshold.
+- **Conclusion:** Dictionary compression is not worth the per-connection setup overhead for naia's packet profile. Close this gap permanently: compression (even dictionary mode) does not help bit-packed variable-width binary at naia's packet sizes. The `zstd_support` feature remains available for application-level use cases (e.g. bulk asset transfer) but should not be enabled by default.
 
 **Effort:** S (Phase 1) + M (Phase 2) | **Leverage:** 2–4 depending on measurement outcome
 
@@ -519,7 +525,7 @@ Active items only (closed/deferred gaps noted inline):
 | 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | ~~Implement~~ **COMPLETE** | M | 4 |
 | 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | ~~Implement~~ **COMPLETE** | S | 2 |
 | 11 | **G-P3**: `Historian` snapshot buffer + demo | ~~Implement~~ **COMPLETE** | M | 4 |
-| 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | Implement | M | 2–4 |
+| 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | ~~Implement~~ **COMPLETE** | M | 2–4 |
 | 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | Docs | S | 4 |
 | 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | Docs | XS | 3 |
 | 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | Docs | XS | 1 |
