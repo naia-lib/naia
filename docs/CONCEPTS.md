@@ -403,15 +403,28 @@ naia's transport layer is pluggable. Two implementations ship out of the box:
 | Target | Implementation | Socket type | Encryption |
 |--------|----------------|-------------|------------|
 | Native (Linux/macOS/Windows) | UDP datagram socket | `transport_udp` | **None** — dev / trusted LAN only |
-| Browser (Wasm) | WebRTC data channel | `transport_webrtc` | DTLS (WebRTC spec) |
+| Browser (`wasm32-unknown-unknown`) | WebRTC data channel | `transport_webrtc` | DTLS (WebRTC spec) |
+| iOS / Android (native) | — | Not yet supported | — |
+| iOS / Android (via WebView) | WebRTC data channel | `transport_webrtc` WASM build in WKWebView / Android WebView | DTLS |
+| Steam relay | — | Not built-in; implement via the `Socket` trait | — |
 
 > **Security note:** `transport_udp` sends all packets as unencrypted plaintext.
 > Use it for local development and trusted private networks only. For production
 > native deployments on the internet, use `transport_quic` (TLS 1.3, planned)
 > or place the server behind a TLS proxy. See `SECURITY.md` for details.
 
-The `Server` and `Client` APIs are identical for both — only the `Socket`
-value passed to `listen` / `connect` differs:
+**iOS and Android:** Native socket support is not yet implemented (blocked on
+`transport_quic` providing a production-ready encrypted mobile transport). As a
+workaround, the WASM client build runs inside WKWebView (iOS) or Android
+WebView using the same `transport_webrtc` path as the browser target. Frameworks
+such as Capacitor automate the WebView wrapper.
+
+**Steam relay:** `ISteamNetworkingSockets` (Valve SDR) is not built-in. Because
+the `Socket` trait is pluggable, a community crate can implement it without any
+changes to naia core.
+
+The `Server` and `Client` APIs are identical for both shipped transports — only
+the `Socket` value passed to `listen` / `connect` differs:
 
 ```rust
 // Native server:

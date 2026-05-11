@@ -20,6 +20,8 @@
 | A-8 — Enum `#[derive(Message)]` | **COMPLETE** — all three variant styles (Unit/Named/Unnamed), EntityProperty-aware; 39/39 integration tests pass | pending |
 | A-14 — `DefaultClientTag` + `DefaultPlugin` | **COMPLETE** — `naia-bevy-client` now exports both; crate doc updated with single-client vs multi-client patterns | pending |
 | A-6 — Per-component replication toggle | **CLOSED — deliberate design decision**: scope is per-entity, not per-component. If intra-entity visibility bifurcation is needed, move components to a separately scoped entity and link via `EntityProperty`. This is the established naia pattern. | n/a |
+| A-18 — iOS/Android platform gap | **COMPLETE** — README platform table + CONCEPTS.md §11 | pending |
+| A-19 — Steam relay gap | **COMPLETE** — README + CONCEPTS.md §11 | pending |
 | All others | open | — |
 
 ---
@@ -450,7 +452,7 @@ changes required.
 
 ---
 
-### A-18 — Mobile client support gap (iOS/Android)
+### A-18 — Mobile client support gap (iOS/Android) ✓ COMPLETE
 
 **Current state.**  
 `FEATURES.md` lists "Android-compatible Client Socket" and "iOS-compatible
@@ -467,7 +469,7 @@ that can accept it. Native mobile implementation is deferred pending QUIC.
 
 ---
 
-### A-19 — No Steam relay / ISteamNetworkingSockets integration
+### A-19 — No Steam relay / ISteamNetworkingSockets integration ✓ COMPLETE
 
 **Current state.**  
 lightyear ships Steam transport as a first-class option (added 2025). naia has

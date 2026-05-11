@@ -145,10 +145,16 @@ See [demos/macroquad/](demos/macroquad/) for a macroquad demo.
 | Target | Transport | Notes |
 |--------|-----------|-------|
 | Linux / macOS / Windows | UDP | `naia-socket-native` |
-| Browser (`wasm32-unknown-unknown`) | WebRTC data channel | Enable `wbindgen` feature on socket crate; build with `wasm-pack` or `trunk` |
+| Browser (`wasm32-unknown-unknown`) | WebRTC data channel | Enable `wbindgen` feature; build with `wasm-pack` or `trunk` |
+| iOS / Android (native) | — | Not yet supported — blocked on `transport_quic`; see FEATURES.md |
+| iOS / Android (via WebView) | WebRTC data channel | Run the WASM client inside WKWebView (iOS) or Android WebView; same build as the browser target |
 
 The server always runs natively. Only the client needs WebRTC support for
 browser targets.
+
+**Steam relay (ISteamNetworkingSockets):** Not built-in. The `Socket` trait is
+pluggable — a community crate can add Steam networking without modifying naia
+core.
 
 ---
 
