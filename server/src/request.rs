@@ -51,6 +51,12 @@ impl GlobalRequestManager {
         let (_, response_opt) = self.map.get_mut(request_id).unwrap();
         *response_opt = Some(response);
     }
+
+    /// Remove all outstanding request entries for a user that has disconnected.
+    /// Without this, disconnecting mid-request leaks the entry indefinitely.
+    pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
+        self.map.retain(|_, (key, _)| key != user_key);
+    }
 }
 
 // GlobalResponseManager
@@ -93,5 +99,10 @@ impl GlobalResponseManager {
         global_response_id: &GlobalResponseId,
     ) -> Option<(UserKey, ChannelKind, LocalResponseId)> {
         self.map.remove(global_response_id)
+    }
+
+    /// Remove all outstanding response entries for a user that has disconnected.
+    pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
+        self.map.retain(|_, (key, _, _)| key != user_key);
     }
 }

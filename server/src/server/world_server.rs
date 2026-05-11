@@ -2730,6 +2730,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.io.deregister_client(&user.address());
         }
 
+        self.global_request_manager.purge_user(user_key);
+        self.global_response_manager.purge_user(user_key);
+
         user
     }
 
