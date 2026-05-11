@@ -172,6 +172,7 @@ browser targets.
 
 - [API docs (docs.rs)](https://docs.rs/naia-server)
 - [Concepts guide](docs/CONCEPTS.md)
+- [Prediction/rollback guide](docs/PREDICTION.md)
 - [Migration guide](docs/MIGRATION.md)
 - [Changelog](CHANGELOG.md)
 - [Discord](https://discord.gg/fD6QCtX)

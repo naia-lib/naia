@@ -335,6 +335,9 @@ rollback-and-replay: apply the server's authoritative update, then replay
 buffered client inputs on top. `CommandHistory<M>` stores the input history
 for this purpose.
 
+For a complete step-by-step walkthrough of the full prediction loop, see
+**[docs/PREDICTION.md](PREDICTION.md)**.
+
 ---
 
 ## 10. Bevy adapter — the client tag type `T`

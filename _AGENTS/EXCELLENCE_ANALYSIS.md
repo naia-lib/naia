@@ -439,7 +439,7 @@ For reliable messages the token bucket already provides pacing; reliable content
 
 ### 2.9 Documentation & Onboarding
 
-#### G-DOC1: No prediction/rollback tutorial ⭐⭐⭐⭐⭐
+#### G-DOC1: No prediction/rollback tutorial ⭐⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `CONCEPTS.md` section 9 describes tick synchronisation and mentions "rollback-and-replay" in two sentences with no worked example. The Bevy demo (`demos/bevy/client/src/systems/events.rs` lines 328–441) already implements the full prediction loop — the pattern exists in code but is undiscoverable without reading the demo source.
 
@@ -514,7 +514,7 @@ Active items only (closed/deferred gaps noted inline):
 
 | Rank | Gap | Decision | Effort | Leverage |
 |---|---|---|---|---|
-| 1 | **G-DOC1**: Prediction/rollback tutorial (`docs/PREDICTION.md`) | Implement | S | 5 |
+| 1 | **G-DOC1**: Prediction/rollback tutorial (`docs/PREDICTION.md`) | ~~Implement~~ **COMPLETE** | S | 5 |
 | 2 | **G-DX2**: `CommandHistory::new(max_ticks)` + demo update | ~~Implement~~ **COMPLETE** | S | 3 |
 | 3 | **G-DX3**: `DisconnectReason` enum on server + client events | ~~Implement~~ **COMPLETE** | S | 4 |
 | 4 | **G-S2**: `max_messages_per_tick` on `ReliableSettings` | ~~Implement~~ **COMPLETE** | S | 4 |
