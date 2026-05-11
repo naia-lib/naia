@@ -315,6 +315,13 @@ Delivered: 12 TODOs found and resolved (audit count was approximate; some files 
 Three benchmark scenarios missing: (1) single-client round-trip latency, (2) resource replication throughput, (3) authority grant/revoke cycle cost. Add to `benches/` suite.
 Delivered: `update/round_trip`, `resources/throughput` (insert_latency + mutation_throughput), `authority/cycle` (grant_revoke_cycle). Added `BenchWorldBuilder::delegated()`, `BenchResource`, and 7 new `BenchWorld` helpers. Commit `f787ea94`.
 
+### A-17 — naia-metrics + naia-bevy-metrics observability crates — **COMPLETE** (2026-05-11)
+New crates expose naia's internal network health via the `metrics` facade (any exporter). Commit `bce12600` (API prereqs) + `7bec32b0` (DefaultServerTag) + `89fdd0b4` (naia-metrics/naia-bevy-metrics Phase 1) + `98f0848b` (client RTT p99 ring buffer) + `64578202` (replication counters + channel throughput).
+- `naia-metrics`: 19 gauges + 6 counters. 14 connection gauges (RTT/jitter/loss/bw), 3 server aggregates, 5 replication counters (spawns/despawns/component inserts+removes, messages_sent_total{channel}).
+- `naia-bevy-metrics`: `NaiaServerMetricsPlugin` + `NaiaClientMetricsPlugin<T>` emit each tick after `SendPackets`.
+- `naia-shared/observability` feature gates all counter call sites; activated transitively by `naia-metrics`.
+- Client `rtt_p99_ms` is now a real 32-sample ring buffer (was EWMA fallback).
+
 ### D-P0 — DTLS stack migration (deadline: 2027-06-01)
 6 RUSTSEC `cargo-deny` ignores expire 2026-06-01. Migration requires replacing the DTLS transport with a `rustls`-based stack. Deferred due to scope; if the deadline passes without action, add new `ignore` entries with updated dates.
 
