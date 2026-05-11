@@ -202,7 +202,6 @@ impl RemoteEntityChannel {
         outgoing_commands.append(&mut self.outgoing_commands);
     }
 
-    #[allow(dead_code)]
     pub(crate) fn has_component_kind(&self, component_kind: &ComponentKind) -> bool {
         self.component_channels.contains_key(component_kind)
     }
@@ -351,7 +350,7 @@ impl RemoteEntityChannel {
         self.incoming_messages.push(msg);
     }
 
-    #[allow(dead_code)]
+    #[allow(dead_code)] // used in migration unit tests
     pub(crate) fn get_state(&self) -> EntityChannelState {
         self.state
     }
@@ -437,8 +436,7 @@ impl RemoteEntityChannel {
         self.component_channels.insert(component_kind, comp_channel);
     }
 
-    /// BULLETPROOF: Extract all incoming events for testing and validation
-    #[allow(dead_code)]
+    #[allow(dead_code)] // used in bulletproof migration unit tests
     pub(crate) fn take_incoming_events(&mut self) -> Vec<EntityMessage<()>> {
         std::mem::take(&mut self.incoming_messages)
     }

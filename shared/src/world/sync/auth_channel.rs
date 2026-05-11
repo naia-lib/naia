@@ -190,7 +190,6 @@ impl AuthChannel {
     }
 
     /// Get current state of the AuthChannel (for testing)
-    #[allow(dead_code)]
     pub fn state(&self) -> EntityAuthChannelState {
         self.state
     }
@@ -219,11 +218,6 @@ impl AuthChannel {
 
     pub(crate) fn receiver_buffer_pop_front_until_and_including(&mut self, id: MessageIndex) {
         self.receiver.buffer_pop_front_until_and_including(id);
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn receiver_buffer_pop_front_until_and_excluding(&mut self, id: MessageIndex) {
-        self.receiver.buffer_pop_front_until_and_excluding(id);
     }
 
     pub(crate) fn receiver_receive_message(

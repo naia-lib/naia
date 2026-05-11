@@ -541,11 +541,6 @@ impl LocalWorldManager {
 
     // Remote-focused
 
-    #[allow(dead_code)]
-    pub(crate) fn has_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
-        self.remote.has_entity(remote_entity)
-    }
-
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
         self.entity_map.remote_entities()
     }

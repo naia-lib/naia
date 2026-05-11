@@ -96,14 +96,14 @@ Prioritized by correctness → API quality → test coverage → housekeeping.
 | Phase | Task | Status |
 |---|---|---|
 | **V3.13** | E.3 — Adversarial BDD scenarios: truncated/corrupted Data packet discard path | ✅ |
-| **V3.14** | E.5 — Property-based tests for priority accumulator and SequenceBuffer wrap-around | ⬜ |
+| **V3.14** | E.5 — Property-based tests for priority accumulator and SequenceBuffer wrap-around | ✅ |
 
 #### Housekeeping
 
 | Phase | Task | Status |
 |---|---|---|
-| **V3.15** | F.2 — Add inline rationale comments to all 24 cargo-deny ignore entries in deny.toml | ⬜ |
-| **V3.16** | J.2 — Audit 22 #[allow(dead_code)] sites; remove any that are genuinely unreachable | ⬜ |
+| **V3.15** | F.2 — Add inline rationale comments to all 24 cargo-deny ignore entries in deny.toml | ✅ |
+| **V3.16** | J.2 — Audit 22 #[allow(dead_code)] sites; remove any that are genuinely unreachable | ✅ |
 
 ---
 
