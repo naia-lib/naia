@@ -7,6 +7,8 @@ use naia_shared::{
 
 use crate::connection::{base_time_manager::BaseTimeManager, io::Io};
 
+const RTT_RING_SIZE: usize = 32;
+
 pub struct TimeManager {
     base: BaseTimeManager,
     ping_timer: Timer,
@@ -18,6 +20,9 @@ pub struct TimeManager {
     pruned_rtt_avg: f32,
     raw_rtt_avg: f32,
     rtt_stdv: f32,
+    rtt_ring: [u16; RTT_RING_SIZE],
+    rtt_ring_pos: usize,
+    rtt_ring_count: usize,
 
     // Ticks
     accumulator: f32,
@@ -90,6 +95,9 @@ impl TimeManager {
             pruned_rtt_avg,
             raw_rtt_avg: pruned_rtt_avg,
             rtt_stdv,
+            rtt_ring: [0u16; RTT_RING_SIZE],
+            rtt_ring_pos: 0,
+            rtt_ring_count: 0,
 
             accumulator: 0.0,
 
@@ -153,6 +161,27 @@ impl TimeManager {
         } else {
             // Pruned out sample
         }
+
+        let sample = rtt_millis.min(u16::MAX as u32) as u16;
+        if self.rtt_ring_count < RTT_RING_SIZE {
+            self.rtt_ring[self.rtt_ring_count] = sample;
+            self.rtt_ring_count += 1;
+        } else {
+            self.rtt_ring[self.rtt_ring_pos] = sample;
+            self.rtt_ring_pos = (self.rtt_ring_pos + 1) % RTT_RING_SIZE;
+        }
+    }
+
+    pub(crate) fn rtt_p99_ms(&self) -> f32 {
+        let count = self.rtt_ring_count;
+        if count < 2 {
+            return self.pruned_rtt_avg;
+        }
+        let mut sorted = [0u16; RTT_RING_SIZE];
+        sorted[..count].copy_from_slice(&self.rtt_ring[..count]);
+        sorted[..count].sort_unstable();
+        let idx = ((99 * (count - 1)) / 100).min(count - 1);
+        sorted[idx] as f32
     }
 
     // GameTime

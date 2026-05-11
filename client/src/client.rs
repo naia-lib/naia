@@ -1213,8 +1213,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     ///
     /// Returns `None` if not connected. Includes RTT (average in ms), jitter,
     /// packet-loss fraction, and send/recv bandwidth in kbps.
-    /// Note: `rtt_p50_ms` and `rtt_p99_ms` are set to `rtt_ms` on the client
-    /// because the client time manager uses an EWMA rather than a ring buffer.
     pub fn connection_stats(&self) -> Option<ConnectionStats> {
         let conn = self.server_connection.as_ref()?;
         let rtt_ms = conn.time_manager.rtt();
@@ -1223,7 +1221,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         Some(ConnectionStats {
             rtt_ms,
             rtt_p50_ms: rtt_ms,
-            rtt_p99_ms: rtt_ms,
+            rtt_p99_ms: conn.time_manager.rtt_p99_ms(),
             jitter_ms,
             packet_loss_pct,
             kbps_sent: self.io.outgoing_bandwidth(),
