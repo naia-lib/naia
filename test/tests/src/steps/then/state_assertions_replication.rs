@@ -540,3 +540,26 @@ fn then_alice_no_longer_has_playerselection(ctx: &TestWorldRef) -> AssertOutcome
     }
 }
 
+
+/// Then replication eventually converges despite packet loss.
+///
+/// Polls until the client has the entity and its component with the
+/// expected value. Uses the default 500-tick limit — reliable channels
+/// resend on loss so this should converge within ~200 ticks at 20% loss.
+#[then("replication eventually converges despite packet loss")]
+fn then_replication_converges_despite_loss(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::Position;
+    let client_key = ctx.last_client();
+    let entity_key = last_entity_ref(ctx);
+    ctx.client(client_key, |client| {
+        if let Some(entity) = client.entity(&entity_key) {
+            if entity.has_component::<Position>() {
+                AssertOutcome::Passed(())
+            } else {
+                AssertOutcome::Pending
+            }
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}

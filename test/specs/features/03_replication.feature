@@ -400,3 +400,21 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       And 20 ticks have elapsed
       Then the entity spawns on the client
 
+
+
+  # ==========================================================================
+  # Rule 10 — Replication under adverse transport
+  # ==========================================================================
+
+  @Rule(10)
+  Rule: Replication converges under packet loss
+
+    @Scenario(01)
+    Scenario: [replication-loss-01] Entity replication converges under 20% packet loss
+      Given a server is running
+      And a client connects
+      And the link has 20 percent packet loss
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      Then replication eventually converges despite packet loss

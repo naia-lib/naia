@@ -295,3 +295,12 @@ Feature: Messaging Channel Semantics
       When the client sends a request
       Then the operation succeeds
 
+
+    @Scenario(23)
+    Scenario: [messaging-28] TickBuffered input arrives at correct server tick under 10% packet loss
+      Given a server is running
+      And a client connects
+      And the link has 10 percent packet loss
+      When the client sends 3 tick-buffered messages for the same tick
+      And the server reads tick-buffered messages for that tick
+      Then the server received 3 messages in the tick group

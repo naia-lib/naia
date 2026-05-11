@@ -463,7 +463,7 @@ A dedicated file gets its own URL for linking from issues and Discord, and separ
 
 ### 2.10 Testing & Reliability
 
-#### G-QA1: No chaos / adversarial transport test ⭐⭐⭐⭐
+#### G-QA1: No chaos / adversarial transport test ⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state (re-investigated):** The gap was overstated. The harness already has `LinkConditionerConfig` with loss/jitter/latency, `configure_link_conditioner()` per-client, step bindings for "stable" (50ms/2ms/0%) and "adverse" (100ms/50ms/10%) conditions, and live adversarial scenarios in `01_lifecycle.feature` (transport-01 packet loss tolerance, observability-03 RTT under jitter+loss).
 
@@ -514,7 +514,7 @@ Active items only (closed/deferred gaps noted inline):
 | 4 | **G-S2**: `max_messages_per_tick` on `ReliableSettings` | ~~Implement~~ **COMPLETE** | S | 4 |
 | 5 | **G-W4** Phase 1: `is_compressed` bit + encoder size check | ~~Implement~~ **COMPLETE** | S | 2–4 |
 | 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | ~~Implement~~ **COMPLETE** | S | 3 |
-| 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | Implement | S | 3 |
+| 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | ~~Implement~~ **COMPLETE** | S | 3 |
 | 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | Implement | S+S | 4 |
 | 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | Implement | M | 4 |
 | 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | Implement | S | 2 |

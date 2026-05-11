@@ -49,3 +49,29 @@ fn given_link_high_jitter_loss(ctx: &mut TestWorldMut) {
     scenario.configure_link_conditioner(&client_key, Some(adverse.clone()), Some(adverse));
 }
 
+
+/// Given the link has 20 percent packet loss.
+///
+/// Configures server-to-client link conditioner with 50ms latency,
+/// 5ms jitter, 20% loss — used for replication convergence tests.
+#[given("the link has 20 percent packet loss")]
+fn given_link_20_percent_loss(ctx: &mut TestWorldMut) {
+    use naia_test_harness::LinkConditionerConfig;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    // Apply loss only on server-to-client to test dirty-set convergence.
+    let lossy = LinkConditionerConfig::new(50, 5, 0.2);
+    scenario.configure_link_conditioner(&client_key, None, Some(lossy));
+}
+
+/// Given the link has 10 percent packet loss.
+///
+/// Used for tick-buffer delivery under loss scenarios.
+#[given("the link has 10 percent packet loss")]
+fn given_link_10_percent_loss(ctx: &mut TestWorldMut) {
+    use naia_test_harness::LinkConditionerConfig;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let lossy = LinkConditionerConfig::new(50, 5, 0.1);
+    scenario.configure_link_conditioner(&client_key, Some(lossy.clone()), Some(lossy));
+}
