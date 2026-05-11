@@ -424,12 +424,18 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         }
     }
 
-    /// Send message to user
+    /// Send message to user.
+    ///
+    /// Best-effort wrapper: if the user has disconnected between the harness
+    /// resolving the `user_key` and the server actually dispatching, the
+    /// underlying `Server::send_message` returns `Err(UserNotFound)`. Per the
+    /// contract validated by `messaging_02_remote_input_no_panic`, harness
+    /// send-to-disconnected-user MUST drop silently and never panic. (G-5.)
     pub fn send_message<C: Channel, M: Message>(&mut self, client_key: &ClientKey, message: &M) {
         let scenario = self.ctx.scenario_mut();
         if let Some(user_key) = scenario.client_to_user_key(client_key) {
             let (server, _, _, _) = scenario.split_for_server_mut();
-            server.send_message::<C, M>(&user_key, message).unwrap();
+            let _ = server.send_message::<C, M>(&user_key, message);
         }
     }
 
