@@ -287,7 +287,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ---
 
-#### G-W3: No delta compression for numeric properties ⭐⭐⭐
+#### G-W3: No delta compression for numeric properties ⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `Property<f32>` sends the full `f32` (4 bytes) whenever it changes. Position updates are 8 bytes (x, y) per component per entity per tick.
 
@@ -529,7 +529,7 @@ Active items only (closed/deferred gaps noted inline):
 | 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | ~~Docs~~ **COMPLETE** | S | 4 |
 | 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 3 |
 | 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | ~~Docs~~ **COMPLETE** | XS | 1 |
-| 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | Docs | XS | 2 |
+| 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
 | 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | Docs | XS | 2 |
 | 18 | **G-I2**: Distance-LOD `set_gain()` snippet in Bevy demo | Docs/Demo | XS | 2 |
 | 19 | **G-DOC2**: "Coming from X?" table in `README.md` | Docs | XS | 2 |

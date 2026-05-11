@@ -471,3 +471,54 @@ configs for asymmetric paths) to both the server and client sockets.
 The local in-process transport (`transport_local`) used in the test harness
 accepts the same config via `hub.configure_link_conditioner()`, enabling
 loss/latency injection without a real UDP socket.
+
+---
+
+## 13. Bandwidth-Optimized Properties
+
+`Property<T>` is generic over any `T: Serde`. naia ships a set of compact
+numeric types in `naia_shared` that reduce wire size compared to raw `f32`/`u32`:
+
+| Type | Wire size | Use case |
+|------|-----------|----------|
+| `UnsignedInteger<N>` | exactly N bits | health (0–255 → 8 bits), flags |
+| `SignedInteger<N>` | exactly N bits | relative offsets |
+| `UnsignedVariableInteger<N>` | 1–N bits (varint) | counts that are usually small |
+| `SignedVariableInteger<N>` | 1–N bits (varint) | deltas that are usually near zero |
+| `UnsignedFloat<BITS, FRAC>` | exactly BITS bits | positive position, speed |
+| `SignedFloat<BITS, FRAC>` | exactly BITS bits | signed angle, velocity axis |
+| `SignedVariableFloat<BITS, FRAC>` | 1–BITS bits | per-tick deltas (often tiny) |
+
+`BITS` is the total bit width; `FRAC` is the number of decimal digits of
+precision retained.
+
+**Example — a quantized game unit:**
+
+```rust
+use naia_shared::{Property, Replicate, SignedVariableFloat, UnsignedInteger};
+
+// Tile position: i16 tile coords + sub-tile delta (variable-width float)
+#[derive(Clone, PartialEq, Serde)]
+pub struct PositionState {
+    pub tile_x: i16,               // already compact at i16
+    pub tile_y: i16,
+    pub dx: SignedVariableFloat<14, 2>,  // 14-bit max, 2 decimal digits
+    pub dy: SignedVariableFloat<14, 2>,  // encodes near-zero deltas in ~3 bits
+}
+
+#[derive(Replicate)]
+pub struct Position {
+    pub state: Property<PositionState>,
+}
+```
+
+Wrapping multi-axis state in a single `Property<State>` means one dirty-bit
+covers all axes — the whole struct is sent or nothing is, which is correct for
+coupled state and avoids partial-update edge cases.
+
+Compared to `Property<f32> × 4` (128 bits/tick), `PositionState` costs roughly
+32 bits (2 × i16) + ~6–28 bits (variable delta) = **38–60 bits/tick** when
+typical sub-tile movement is small — a 2–3× wire reduction.
+
+See `benches/src/bench_protocol.rs` for working examples of `PositionQ`,
+`VelocityQ`, and `RotationQ` using these types in a real benchmark scenario.
