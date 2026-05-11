@@ -397,10 +397,15 @@ satisfies this.
 
 naia's transport layer is pluggable. Two implementations ship out of the box:
 
-| Target | Implementation | Socket type |
-|--------|----------------|-------------|
-| Native (Linux/macOS/Windows) | UDP datagram socket | `naia-socket-native` |
-| Browser (Wasm) | WebRTC data channel | `naia-socket-webrtc-client` |
+| Target | Implementation | Socket type | Encryption |
+|--------|----------------|-------------|------------|
+| Native (Linux/macOS/Windows) | UDP datagram socket | `transport_udp` | **None** — dev / trusted LAN only |
+| Browser (Wasm) | WebRTC data channel | `transport_webrtc` | DTLS (WebRTC spec) |
+
+> **Security note:** `transport_udp` sends all packets as unencrypted plaintext.
+> Use it for local development and trusted private networks only. For production
+> native deployments on the internet, use `transport_quic` (TLS 1.3, planned)
+> or place the server behind a TLS proxy. See `SECURITY.md` for details.
 
 The `Server` and `Client` APIs are identical for both — only the `Socket`
 value passed to `listen` / `connect` differs:

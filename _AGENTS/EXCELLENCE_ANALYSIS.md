@@ -54,7 +54,7 @@ Gaps are classified by category and scored by **leverage** (1–5, where 5 = hig
 
 ### 2.1 Transport Layer
 
-#### G-T1: No encryption on native UDP transport ⭐⭐⭐⭐⭐
+#### G-T1: No encryption on native UDP transport ⭐⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** Native UDP sends plaintext. WebRTC (browser) has DTLS from the WebRTC spec. The `SECURITY.md` explicitly says "credentials are transmitted in plaintext."
 
@@ -526,7 +526,7 @@ Active items only (closed/deferred gaps noted inline):
 | 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | ~~Implement~~ **COMPLETE** | S | 2 |
 | 11 | **G-P3**: `Historian` snapshot buffer + demo | ~~Implement~~ **COMPLETE** | M | 4 |
 | 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | ~~Implement~~ **COMPLETE** | M | 2–4 |
-| 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | Docs | S | 4 |
+| 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | ~~Docs~~ **COMPLETE** | S | 4 |
 | 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | Docs | XS | 3 |
 | 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | Docs | XS | 1 |
 | 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | Docs | XS | 2 |

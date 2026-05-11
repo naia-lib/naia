@@ -16,7 +16,14 @@ use crate::transport::{
     RecvError, SendError, ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
-// Socket
+/// Native UDP client socket.
+///
+/// # Security
+///
+/// **All traffic is unencrypted plaintext.** This transport is suitable for
+/// local development and trusted private networks only. For internet-facing
+/// deployments, use a transport with built-in TLS (e.g. `transport_quic`).
+/// Credentials sent via `auth()` are visible on the wire.
 pub struct Socket {
     auth_io: Arc<Mutex<AuthIo>>,
 
@@ -27,6 +34,10 @@ pub struct Socket {
 }
 
 impl Socket {
+    /// Create a new plaintext UDP client socket.
+    ///
+    /// **Not suitable for untrusted networks** — see the type-level security
+    /// note above.
     pub fn new(server_session_url: &str, config: Option<LinkConditionerConfig>) -> Self {
         let data_addr_cell = AddrCell::default();
         let auth_io = Arc::new(Mutex::new(AuthIo::new(

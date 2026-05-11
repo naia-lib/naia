@@ -29,13 +29,27 @@ values.
 
 - **Packet authentication or encryption.** `AuthEvent` credentials are
   transmitted in plaintext by default. Applications that require confidentiality
-  or integrity guarantees MUST wrap the transport in TLS/DTLS.
+  or integrity guarantees MUST choose an encrypted transport (see below).
 - **Anti-cheat.** naia does not detect or reject malicious client mutations.
   Validate all client-originated state server-side.
 - **Rate limiting.** naia does not throttle message or mutation rates at the
   application layer. Implement rate limiting in your game logic if needed.
 - **Input validation.** naia does not validate or sanitise component values
   received from client-authoritative entities.
+
+### Transport encryption by deployment target
+
+| Transport | Encryption | Suitable for |
+|-----------|-----------|--------------|
+| `transport_udp` (native) | **None — plaintext** | Local dev / trusted LAN only |
+| `transport_webrtc` (browser) | DTLS (from WebRTC spec) | Internet browser clients |
+| `transport_quic` (native, planned) | TLS 1.3 (Quinn) | Production native deployments |
+
+**Production recommendation:** for native clients on untrusted networks, use
+`transport_quic` once available — it provides TLS 1.3 with no additional
+configuration. Until then, place `transport_udp` behind a VPN or a TLS
+terminating proxy (e.g. stunnel, NGINX stream proxy) if confidentiality is
+required.
 
 ### WebRTC (browser) considerations
 

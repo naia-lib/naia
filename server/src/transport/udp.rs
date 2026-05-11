@@ -14,7 +14,14 @@ use super::{
     SendError, Socket as TransportSocket,
 };
 
-// Socket
+/// Native UDP server socket.
+///
+/// # Security
+///
+/// **All traffic is unencrypted plaintext.** This transport is suitable for
+/// local development and trusted private networks only. For internet-facing
+/// deployments, use a transport with built-in TLS (e.g. `transport_quic`).
+/// Credentials sent via `AuthEvent` are visible on the wire.
 pub struct Socket {
     data_socket: Arc<Mutex<UdpSocket>>,
     auth_io: Arc<Mutex<AuthIo>>,
@@ -22,6 +29,10 @@ pub struct Socket {
 }
 
 impl Socket {
+    /// Create a new plaintext UDP server socket.
+    ///
+    /// **Not suitable for untrusted networks** — see the type-level security
+    /// note above.
     pub fn new(server_addrs: &ServerAddrs, config: Option<LinkConditionerConfig>) -> Self {
         let auth_socket = TcpListener::bind(server_addrs.auth_listen_addr).unwrap();
         auth_socket
