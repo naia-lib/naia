@@ -1,4 +1,7 @@
-use std::{collections::HashMap, hash::Hash};
+use std::{
+    collections::{HashMap, HashSet},
+    hash::Hash,
+};
 
 use naia_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, Replicate, Tick, WorldRefType,
@@ -49,14 +52,17 @@ pub type EntitySnapshot = HashMap<ComponentKind, Box<dyn Replicate>>;
 ///
 /// - Components are cloned via `Replicate::copy_to_box()` at snapshot time —
 ///   cheap for small structs (position, health), potentially heavy for large
-///   components.  Selectively snapping only the components you care about is
-///   a future extension; for now all replicated components are captured.
+///   components.  Use `enable_historian_filtered` to restrict snapshotting to
+///   only the component kinds relevant to your hit detection logic.
 /// - The buffer auto-evicts snapshots older than `max_ticks`.
 /// - Entity additions/removals are reflected in the next snapshot; the
 ///   Historian does NOT back-fill missing entities into past snapshots.
 pub struct Historian {
     max_ticks: u16,
     snapshots: std::collections::VecDeque<(Tick, HashMap<GlobalEntity, EntitySnapshot>)>,
+    /// If `Some`, only components whose `ComponentKind` is in this set are
+    /// captured. If `None`, all replicated components are captured (default).
+    component_filter: Option<HashSet<ComponentKind>>,
 }
 
 impl Historian {
@@ -64,6 +70,38 @@ impl Historian {
         Self {
             max_ticks,
             snapshots: std::collections::VecDeque::new(),
+            component_filter: None,
+        }
+    }
+
+    /// Create a Historian that only snapshots component kinds in `filter`.
+    ///
+    /// This reduces per-tick clone cost on servers with many component types.
+    /// Components not in the filter are invisible to `snapshot_at_tick`.
+    ///
+    /// ```no_run
+    /// # use naia_server::Server;
+    /// # use naia_shared::ComponentKind;
+    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync>(server: &mut Server<E>) {
+    /// server.enable_historian_filtered(
+    ///     64,
+    ///     [ComponentKind::of::<Position>(), ComponentKind::of::<Health>()],
+    /// );
+    /// # }
+    /// # struct Position; impl naia_shared::Replicate for Position {
+    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
+    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
+    /// # }
+    /// # struct Health; impl naia_shared::Replicate for Health {
+    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
+    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
+    /// # }
+    /// ```
+    pub fn new_filtered(max_ticks: u16, filter: impl IntoIterator<Item = ComponentKind>) -> Self {
+        Self {
+            max_ticks,
+            snapshots: std::collections::VecDeque::new(),
+            component_filter: Some(filter.into_iter().collect()),
         }
     }
 
@@ -90,6 +128,11 @@ impl Historian {
             };
             let mut entity_snapshot = EntitySnapshot::new();
             for kind in kinds {
+                if let Some(ref filter) = self.component_filter {
+                    if !filter.contains(&kind) {
+                        continue;
+                    }
+                }
                 if let Some(component_ref) = world.component_of_kind(&world_entity, &kind) {
                     entity_snapshot.insert(kind, component_ref.copy_to_box());
                 }

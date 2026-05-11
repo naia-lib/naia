@@ -15,7 +15,7 @@
 | A-10 — Compression docs | **COMPLETE** (CONCEPTS.md §17) | pending |
 | A-15 — Diagnostics docs | **COMPLETE** (CONCEPTS.md §18) | pending |
 | A-3 — FEATURES.md stale | **COMPLETE** (full rewrite) | pending |
-| A-9 — Historian (FAQ portion) | partial — FAQ + FEATURES.md done; CONCEPTS.md §20 + filtering remain | `10524bc1` |
+| A-9 — Historian (FAQ portion) | **COMPLETE** — FAQ + FEATURES.md + CONCEPTS.md §20 + `enable_historian_filtered` | pending |
 | A-11 — Request/response disconnect cleanup | **COMPLETE** — `purge_user()` on both managers, called from `user_delete` | `24bc167e` |
 | A-8 — Enum `#[derive(Message)]` | **COMPLETE** — all three variant styles (Unit/Named/Unnamed), EntityProperty-aware; 39/39 integration tests pass | pending |
 | All others | open | — |
@@ -286,7 +286,7 @@ already handles tagged enums.
 
 ---
 
-### A-9 — Historian: undocumented in public docs and lacks snapshot filtering (partial — FAQ done)
+### A-9 — Historian: undocumented in public docs and lacks snapshot filtering ✓ COMPLETE
 
 **Current state.**  
 `server/src/historian.rs` implements a rolling per-tick snapshot buffer for

@@ -984,6 +984,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.enable_historian(max_ticks);
     }
 
+    /// Like `enable_historian`, but only snapshots the component kinds in
+    /// `filter`. Reduces per-tick clone overhead when only a subset of
+    /// components are needed for hit detection (e.g. `Position`, `Health`).
+    ///
+    /// ```no_run
+    /// # use naia_server::Server;
+    /// # use naia_shared::ComponentKind;
+    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync>(server: &mut Server<E>) {
+    /// server.enable_historian_filtered(
+    ///     64,
+    ///     [ComponentKind::of::<Position>(), ComponentKind::of::<Health>()],
+    /// );
+    /// # }
+    /// # struct Position; impl naia_shared::Replicate for Position {
+    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
+    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
+    /// # }
+    /// # struct Health; impl naia_shared::Replicate for Health {
+    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
+    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
+    /// # }
+    /// ```
+    pub fn enable_historian_filtered(
+        &mut self,
+        max_ticks: u16,
+        filter: impl IntoIterator<Item = naia_shared::ComponentKind>,
+    ) {
+        self.world_server.enable_historian_filtered(max_ticks, filter);
+    }
+
     /// Record a snapshot of all replicated component values at the given tick.
     /// Call after game-state mutation and before `send_all_packets`.
     /// No-op if historian is not enabled.

@@ -1791,6 +1791,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.historian = Some(crate::historian::Historian::new(max_ticks));
     }
 
+    /// Like `enable_historian`, but only snapshots the component kinds in
+    /// `filter`. Use this to reduce per-tick clone cost when you only need
+    /// a subset of components for lag-compensation (e.g. `Position`, `Health`).
+    pub fn enable_historian_filtered(
+        &mut self,
+        max_ticks: u16,
+        filter: impl IntoIterator<Item = naia_shared::ComponentKind>,
+    ) {
+        self.historian = Some(crate::historian::Historian::new_filtered(max_ticks, filter));
+    }
+
     /// Record a snapshot of all replicated component values at the given tick.
     ///
     /// Call this each tick after game-state mutation and before
