@@ -671,23 +671,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Slow-path recompute — used by tests to verify the cache stays
     /// in sync with `(rooms × users × entities)` truth.
-    #[cfg(debug_assertions)]
-    pub(crate) fn scope_checks_recompute_slow(&self) -> Vec<(RoomKey, UserKey, E)> {
-        let mut list: Vec<(RoomKey, UserKey, E)> = Vec::new();
-        for (room_key, room) in self.room_store.iter() {
-            for user_key in room.user_keys() {
-                for global_entity in room.entities() {
-                    if let Ok(entity) = self
-                        .global_entity_map
-                        .global_entity_to_entity(global_entity)
-                    {
-                        list.push((room_key, *user_key, entity));
-                    }
-                }
-            }
-        }
-        list
-    }
+
 
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected

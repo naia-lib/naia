@@ -1,7 +1,4 @@
 use std::hash::Hash;
-#[cfg(debug_assertions)]
-use std::sync::atomic::{AtomicU64, Ordering};
-
 use crate::{RoomKey, UserKey};
 
 /// Push-based mirror of the `(room, user, entity)` tuples produced by
@@ -20,8 +17,6 @@ pub(crate) struct ScopeChecksCache<E: Copy + Eq + Hash + Send + Sync> {
     // that uses "add everything to scope on first sight" can poll only this
     // slice, which is empty on every tick after initial load.
     pending: Vec<(RoomKey, UserKey, E)>,
-    #[cfg(debug_assertions)]
-    read_counter: AtomicU64,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
@@ -29,11 +24,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
         Self {
             tuples: Vec::new(),
             pending: Vec::new(),
-            #[cfg(debug_assertions)]
-            read_counter: AtomicU64::new(0),
         }
     }
 
+    #[cfg(test)]
     pub fn as_slice(&self) -> &[(RoomKey, UserKey, E)] {
         &self.tuples
     }
@@ -54,15 +48,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
     /// bypassing the incremental system.
     pub fn mark_all_pending(&mut self) {
         self.pending = self.tuples.clone();
-    }
-
-    /// Returns true once every `period` reads. Used by debug-build assertions
-    /// in `WorldServer::scope_checks()` to amortize the slow-path equivalence
-    /// check (default period 1024 — same as the plan §3 step 3 assertion).
-    #[cfg(debug_assertions)]
-    pub fn should_assert_equivalence(&self, period: u64) -> bool {
-        let n = self.read_counter.fetch_add(1, Ordering::Relaxed).wrapping_add(1);
-        period > 0 && n.is_multiple_of(period)
     }
 
     pub fn on_user_added_to_room<I: IntoIterator<Item = E>>(

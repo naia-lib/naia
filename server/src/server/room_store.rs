@@ -49,9 +49,6 @@ impl RoomStore {
         self.rooms.len()
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = (RoomKey, &Room)> {
-        self.rooms.iter()
-    }
 
     pub(super) fn iter_mut(&mut self) -> impl Iterator<Item = (RoomKey, &mut Room)> {
         self.rooms.iter_mut()
