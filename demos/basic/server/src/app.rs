@@ -156,11 +156,13 @@ impl App {
                     }
                 }
 
-                // Update scopes of entities
+                // Update scopes of entities — re-enqueue all pairs each tick so we
+                // can evaluate every entity's position against each user's scope.
                 {
                     let server = &mut self.server;
                     let world = &self.world;
-                    for (_, user_key, entity) in server.scope_checks_all() {
+                    server.mark_all_scope_checks_pending();
+                    for (_, user_key, entity) in server.scope_checks_pending() {
                         if let Some(character) = world.proxy().component::<Character>(&entity) {
                             let x = *character.x;
                             let should_be_in_scope = (5..=15).contains(&x);
@@ -174,6 +176,7 @@ impl App {
                             }
                         }
                     }
+                    server.mark_scope_checks_pending_handled();
                 }
 
                 // VERY IMPORTANT! Calling this actually sends all update data

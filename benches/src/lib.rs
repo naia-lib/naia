@@ -406,13 +406,14 @@ impl BenchWorld {
         drain_all_events(&mut self.server, &mut self.clients);
     }
 
-    /// Returns the number of established (room, user, entity) tuples via
-    /// `scope_checks_all()`. Used by the `tick/scope_with_rooms` bench to
-    /// measure the clone cost of the full-list path — relevant for callers
-    /// that implement dynamic scope (e.g. distance-based include/exclude).
-    /// After initial load this Vec is stable; its clone cost is O(N tuples).
-    pub fn scope_checks_all_tuple_count(&self) -> usize {
-        self.server.scope_checks_all().len()
+    /// Returns the number of (room, user, entity) tuples via the pending path
+    /// (after mark_all_scope_checks_pending). Used by the scope bench to
+    /// measure the cost of a full re-evaluation cycle.
+    pub fn scope_checks_all_tuple_count(&mut self) -> usize {
+        self.server.mark_all_scope_checks_pending();
+        let count = self.server.scope_checks_pending().len();
+        self.server.mark_scope_checks_pending_handled();
+        count
     }
 
     /// Returns the number of pending (room, user, entity) tuples. Zero in

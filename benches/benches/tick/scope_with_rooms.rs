@@ -16,17 +16,14 @@ const CELLS: &[(usize, usize, &str)] = &[
     (16, 10_000, "16u_10000e"),
 ];
 
-/// Clone cost of `scope_checks_all()` — the full-list path used by game code
-/// that implements dynamic scope (e.g. distance or visibility checks that may
-/// exclude entities each tick). Bench shape: one `tick()` + one
-/// `scope_checks_all()` clone per iteration; dominant signal is the Vec clone
-/// of all (room, user, entity) tuples.
+/// Full re-evaluation cycle cost via `mark_all_scope_checks_pending()` +
+/// `scope_checks_pending()`. This is the path for game code that implements
+/// dynamic scope (e.g. distance or visibility checks that may exclude entities
+/// each tick). Bench shape: one `tick()` + one full-cycle iteration; dominant
+/// signal is the Vec clone of all (room, user, entity) tuples.
 ///
-/// The push-based `ScopeChecksCache` (Phase 8.2) eliminated the prior O(rooms
-/// × users × entities) HashMap rebuild — `scope_checks_all()` now pays only
-/// the O(N tuples) clone cost. For game servers that use add-all-on-first-sight
-/// scope, `scope_checks_pending()` is free after initial load; see
-/// `scope_checks_pending_tuple_count()` in `lib.rs`.
+/// For add-all-on-first-sight scope, `scope_checks_pending()` is free after
+/// initial load; see `scope_checks_pending_tuple_count()` in `lib.rs`.
 pub fn scope_with_rooms(c: &mut Criterion) {
     let mut group = c.benchmark_group("tick/scope_with_rooms/u_x_n");
     group.warm_up_time(Duration::from_millis(500));

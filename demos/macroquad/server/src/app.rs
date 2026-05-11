@@ -189,9 +189,9 @@ impl App {
 
         if has_ticked {
             // Add any newly-spawned or newly-joined entities to scope.
-            // This demo unconditionally includes everything — use
-            // scope_checks_all() instead if you need to exclude based on
-            // game-state conditions (e.g. distance or visibility).
+            // This demo unconditionally includes everything — for dynamic scope
+            // (e.g. distance/visibility), call mark_all_scope_checks_pending()
+            // each tick then process scope_checks_pending() with game-state logic.
             for (_, user_key, entity) in self.server.scope_checks_pending() {
                 self.server.user_scope_mut(&user_key).include(&entity);
             }

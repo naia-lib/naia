@@ -335,7 +335,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ---
 
-#### G-SC2: `scope_checks_all()` O(users × entities) allocation ⭐⭐⭐
+#### G-SC2: `scope_checks_all()` O(users × entities) allocation ⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `scope_checks_all()` does `self.scope_checks_cache.as_slice().to_vec()` — allocating a Vec every call. 5 TODOs in `world_server.rs` acknowledge this. The incremental `scope_checks_pending()` → `mark_scope_checks_pending_handled()` path is already allocation-free and O(churn).
 
@@ -513,7 +513,7 @@ Active items only (closed/deferred gaps noted inline):
 | 3 | **G-DX3**: `DisconnectReason` enum on server + client events | ~~Implement~~ **COMPLETE** | S | 4 |
 | 4 | **G-S2**: `max_messages_per_tick` on `ReliableSettings` | ~~Implement~~ **COMPLETE** | S | 4 |
 | 5 | **G-W4** Phase 1: `is_compressed` bit + encoder size check | ~~Implement~~ **COMPLETE** | S | 2–4 |
-| 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | Implement | S | 3 |
+| 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | ~~Implement~~ **COMPLETE** | S | 3 |
 | 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | Implement | S | 3 |
 | 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | Implement | S+S | 4 |
 | 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | Implement | M | 4 |

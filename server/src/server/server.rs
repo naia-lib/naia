@@ -315,27 +315,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     // Scope management ──────────────────────────────────────────────────────
 
-    /// Returns every `(room, user, entity)` triple that is eligible for scope
-    /// evaluation.
-    ///
-    /// **Allocation warning:** this allocates a new `Vec` on every call
-    /// proportional to `rooms × users × entities`. At 1,000 entities and 16
-    /// users this can be 16,000+ elements per frame. Prefer
-    /// [`scope_checks_pending`](Server::scope_checks_pending) for steady-state
-    /// scope evaluation; use `scope_checks_all` only for bulk re-evaluation
-    /// (e.g. on initial load or after a full scope reset).
-    pub fn scope_checks_all(&self) -> Vec<(RoomKey, UserKey, E)> {
-        self.world_server.scope_checks_all()
-    }
-
     /// Returns `(room, user, entity)` triples whose scope status is dirty and
-    /// needs re-evaluation.
+    /// needs re-evaluation. After initial entity/user load the returned Vec is
+    /// empty every tick — zero allocation, zero iteration.
     ///
-    /// This is the incremental counterpart to
-    /// [`scope_checks_all`](Server::scope_checks_all). After evaluating each
-    /// triple and updating [`user_scope_mut`](Server::user_scope_mut), call
+    /// Use this for incremental scope ("add every new entity once"). Call
     /// [`mark_scope_checks_pending_handled`](Server::mark_scope_checks_pending_handled)
-    /// to clear the dirty set.
+    /// after processing each batch.
+    ///
+    /// For a full re-evaluation of all pairs (e.g. at startup or after bulk
+    /// world changes), call [`mark_all_scope_checks_pending`](Server::mark_all_scope_checks_pending) first.
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
         self.world_server.scope_checks_pending()
     }
@@ -347,6 +336,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// the current batch has been handled.
     pub fn mark_scope_checks_pending_handled(&mut self) {
         self.world_server.mark_scope_checks_pending_handled();
+    }
+
+    /// Re-enqueues all current (room, user, entity) tuples into the pending
+    /// queue, forcing a full scope re-evaluation on the next
+    /// [`scope_checks_pending`](Server::scope_checks_pending) call. Use at
+    /// startup or after bulk world changes.
+    pub fn mark_all_scope_checks_pending(&mut self) {
+        self.world_server.mark_all_scope_checks_pending();
     }
 
     /// Flushes all queued updates and messages to connected clients.

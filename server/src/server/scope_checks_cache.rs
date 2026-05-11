@@ -49,6 +49,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
         self.pending.clear();
     }
 
+    /// Re-enqueues all current tuples into the pending queue. Use this to
+    /// force a full scope re-evaluation (e.g. at server startup) without
+    /// bypassing the incremental system.
+    pub fn mark_all_pending(&mut self) {
+        self.pending = self.tuples.clone();
+    }
+
     /// Returns true once every `period` reads. Used by debug-build assertions
     /// in `WorldServer::scope_checks()` to amortize the slow-path equivalence
     /// check (default period 1024 — same as the plan §3 step 3 assertion).

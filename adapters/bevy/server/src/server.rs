@@ -349,13 +349,6 @@ impl<'w> Server<'w> {
 
     //// Updates ////
 
-    pub fn scope_checks_all(&self) -> Vec<(RoomKey, UserKey, Entity)> {
-        match &*self.server_impl {
-            ServerImpl::WorldOnly(server) => server.scope_checks_all(),
-            ServerImpl::Full(server) => server.scope_checks_all(),
-        }
-    }
-
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, Entity)> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.scope_checks_pending(),
@@ -367,6 +360,13 @@ impl<'w> Server<'w> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.mark_scope_checks_pending_handled(),
             ServerImpl::Full(server) => server.mark_scope_checks_pending_handled(),
+        }
+    }
+
+    pub fn mark_all_scope_checks_pending(&mut self) {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.mark_all_scope_checks_pending(),
+            ServerImpl::Full(server) => server.mark_all_scope_checks_pending(),
         }
     }
 
