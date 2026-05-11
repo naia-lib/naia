@@ -265,7 +265,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ### 2.6 Protocol & Wire Format
 
-#### G-W1: Fragmentation limit is far below optimal ⭐⭐⭐
+#### G-W1: Fragmentation limit is far below optimal ⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `FRAGMENTATION_LIMIT_BYTES = 400` in `shared/src/constants.rs`. The constant looks arbitrary but is actually derived: `MTU_SIZE_BYTES = 576 (IPv4 min) - 60 (IP) - 8 (UDP) - 50 (DTLS) - 28 (SCTP) = 430` in `shared/serde/src/constants.rs`. The 400-byte fragmentation threshold leaves 30 bytes of headroom for naia headers within that 430-byte packet envelope — a deliberate WebRTC/SCTP worst-case design.
 
@@ -528,7 +528,7 @@ Active items only (closed/deferred gaps noted inline):
 | 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | ~~Implement~~ **COMPLETE** | M | 2–4 |
 | 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | ~~Docs~~ **COMPLETE** | S | 4 |
 | 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 3 |
-| 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | Docs | XS | 1 |
+| 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | ~~Docs~~ **COMPLETE** | XS | 1 |
 | 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | Docs | XS | 2 |
 | 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | Docs | XS | 2 |
 | 18 | **G-I2**: Distance-LOD `set_gain()` snippet in Bevy demo | Docs/Demo | XS | 2 |
