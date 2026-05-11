@@ -18,6 +18,8 @@
 | A-9 — Historian (FAQ portion) | **COMPLETE** — FAQ + FEATURES.md + CONCEPTS.md §20 + `enable_historian_filtered` | pending |
 | A-11 — Request/response disconnect cleanup | **COMPLETE** — `purge_user()` on both managers, called from `user_delete` | `24bc167e` |
 | A-8 — Enum `#[derive(Message)]` | **COMPLETE** — all three variant styles (Unit/Named/Unnamed), EntityProperty-aware; 39/39 integration tests pass | pending |
+| A-14 — `DefaultClientTag` + `DefaultPlugin` | **COMPLETE** — `naia-bevy-client` now exports both; crate doc updated with single-client vs multi-client patterns | pending |
+| A-6 — Per-component replication toggle | **CLOSED — deliberate design decision**: scope is per-entity, not per-component. If intra-entity visibility bifurcation is needed, move components to a separately scoped entity and link via `EntityProperty`. This is the established naia pattern. | n/a |
 | All others | open | — |
 
 ---
@@ -214,28 +216,23 @@ misprediction threshold, and tick-buffer miss handling.
 
 ---
 
-### A-6 — Per-component replication granularity is absent
+### A-6 — Per-component replication granularity ✗ CLOSED — deliberate design decision
 
-**Current state.**  
-naia's `#[derive(Replicate)]` marks an entire struct as a replication unit.
-There is no mechanism to enable or disable replication of individual components
-on a replicated entity at runtime. GitHub issue #186 requests this
-("per-component replication toggle"). bevy_replicon handles this natively —
-add or remove the `Replicated` marker component per-component at any time.
+**Decision.**  
+Scope in naia is per-entity, not per-component. This is intentional. When
+different subsets of data need different visibility rules (e.g. a player's
+`Position` is public but their `Inventory` is private), the correct approach is
+to place those components on separate entities with separate scope configuration,
+linked via `EntityProperty` references. This pattern is used throughout naia
+projects and preserves the invariant that all components on a replicated entity
+are always consistent with each other from the client's perspective.
 
-**Why it matters.**  
-Games often need to selectively reveal component data (e.g., send `Health`
-to the owning client but not `Position` to enemies out of FOV). Without
-per-component control, developers must decompose structs into multiple
-single-field entities or use message workarounds.
+Per-component scoping is a different architectural model (bevy_replicon's
+approach) that introduces partial-entity state on the client, complicating
+client-side consistency guarantees. This gap is not an implementation gap —
+it is a design boundary.
 
-**Recommendation.**  
-Design a `ReplicationConfig::component_mask` or a
-`server.entity_scope_component::<C>(&user_key, &entity, visible: bool)` API
-that controls per-component replication within an already-scoped entity.
-This is an M effort requiring changes to the diff tracker and scope state.
-
-**Effort:** M.  **Leverage:** 3
+**Closed. Not a candidate for implementation.**
 
 ---
 
@@ -380,7 +377,7 @@ Fix the FAQ entry. Two doc edits, no code changes.
 
 ---
 
-### A-14 — Bevy adapter T phantom type creates friction for new users
+### A-14 — Bevy adapter T phantom type creates friction for new users ✓ COMPLETE
 
 **Current state.**  
 `NaiaClientPlugin::<T>`, `Client<T>`, and `NaiaClientConfig::<T>` all carry a
@@ -390,13 +387,12 @@ a compile error about a missing type parameter with no helpful message.
 lightyear does not require a phantom type parameter for the common single-client
 case.
 
-**Recommendation.**  
-1. Provide a `DefaultClientTag` unit struct and type aliases
-   `type ClientPlugin = Plugin<DefaultClientTag>` in the adapter crate for
-   single-client use.
-2. Add a clear compile-error message (via `static_assertions` or diagnostic
-   attribute) when `T` is inferred as `_`.
-3. Move the `T` explanation to the top of the adapter `lib.rs` doc.
+**Resolution.**  
+`naia-bevy-client` now exports `DefaultClientTag` (unit struct) and
+`DefaultPlugin` (type alias for `Plugin<DefaultClientTag>`). The crate-level
+`lib.rs` doc now shows the single-client pattern (`DefaultPlugin::new(...)`,
+`Client<DefaultClientTag>`) and the multi-client pattern (distinct tag structs)
+side-by-side. Existing code using custom tags is fully unaffected.
 
 **Effort:** S.  **Leverage:** 3
 
