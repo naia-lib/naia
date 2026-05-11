@@ -9,21 +9,20 @@
 
 ## Current state snapshot
 
+*Last updated: 2026-05-10 (post V2+V3 audit)*
+
 | Metric | Value |
 |---|---|
-| Active BDD scenarios | **327** (100% pass, `namako gate` green, recertified 2026-05-09) |
+| Active BDD scenarios | **332** (100% pass, `namako gate` green, recertified 2026-05-10) |
 | Bevy BDD scenarios | **21** (100% pass) |
 | @PolicyOnly | **84** (all justified) |
 | Plain @Deferred (junk) | **0** ✅ |
-| Step bindings | ~280, all ≤25 LOC |
-| Step files max LOC | 477 (`network_events_transport.rs`) |
 | Build warnings | **0** (`-D warnings`) |
-| `cargo test --workspace` | green, 0 failures (3 fixed 2026-05-09) |
-| `cargo-deny` advisories | 6 ignores expiring **2027-06-01** |
+| `cargo test -p naia-shared --features test_time` | **218 passed**, 0 failures |
+| `cargo-deny` advisories | 21 ignores, all expiring **2027-06-01** |
 | Production `todo!()` | **0** ✅ |
-| Total production LOC | **58,917** |
-| Panic sites (production) | **504** (mostly entity-map lookups with implicit invariants) |
-| TODO/FIXME count | **53** (classified in AUDIT_REPORT_2026.md) |
+| Production `#[allow(dead_code)]` | **20** (all justified or test-only — see V3.16) |
+| TODO/FIXME in production code | **~33** (classified in AUDIT_REPORT_V2.md) |
 
 ### What's done (do not re-audit)
 
@@ -42,6 +41,8 @@
 - P9: connection-33/34/35 reconnect edge cases added; 309 active scenarios — `dev`
 - P11: kebab-case renames (×3), println→debug! (×3), feature audit; 0 build warnings — `dev`
 - D-P10: Full docs overhaul — README, SECURITY.md, CHANGELOG.md, MIGRATION.md, CONCEPTS.md, all crate //! + /// API surface docs, Bevy adapter trait docs — `dev`
+- **V2 production-readiness audit** (2026-05-10): CRITICAL transmute UB fixed; 8 NOTABLE safety/reliability findings resolved (CacheMap OOM cap, handshake delete-user gap, dead migration stub, user_opt API, Safety comments ×20, pending-auth timeout, host_engine panic→warn, UDP panic messages) — `dev` commits `5815dfed`..`f54ef583`
+- **V3 MINOR audit sweep** (2026-05-10): session.rs unsafe removed + Pending bug fixed; doc batch (magic numbers, API docs, CHANGELOG); adversarial BDD ×2 + `message_manager` channel-not-found panic fixed; SequenceBuffer wraparound unit tests ×7; dead_code audit (6 methods removed) — `dev` commits `7a9c6f35`..`e3579d4a`
 
 ---
 
