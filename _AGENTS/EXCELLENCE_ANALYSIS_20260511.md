@@ -8,8 +8,14 @@
 |-----|--------|--------|
 | A-1 — FAQ false statements + missing entries | **COMPLETE** | `10524bc1` |
 | A-5 — PREDICTION.md advanced sections | **COMPLETE** | `902627d8` |
-| A-9 — Historian (FAQ portion) | partial — FAQ done; CONCEPTS.md §16 + filtering remain | `10524bc1` |
-| A-13 — Per-entity rate (FAQ portion) | partial — FAQ done; CONCEPTS.md section remains | `10524bc1` |
+| A-4 — SECURITY.md stunnel guide + AEAD note | **COMPLETE** | pending |
+| A-7 — RTT = 0ms bug | **ALREADY FIXED** in private branch (`rtt_initial_estimate = 200ms`) | n/a |
+| A-12 — Reconnection flow | **COMPLETE** (CONCEPTS.md §19) | pending |
+| A-13 — Per-entity priority docs | **COMPLETE** (CONCEPTS.md §16 + FAQ) | pending |
+| A-10 — Compression docs | **COMPLETE** (CONCEPTS.md §17) | pending |
+| A-15 — Diagnostics docs | **COMPLETE** (CONCEPTS.md §18) | pending |
+| A-3 — FEATURES.md stale | **COMPLETE** (full rewrite) | pending |
+| A-9 — Historian (FAQ portion) | partial — FAQ + FEATURES.md done; CONCEPTS.md §20 + filtering remain | `10524bc1` |
 | All others | open | — |
 
 ---
@@ -486,24 +492,24 @@ A-1 and A-5 are complete. A-9/A-13 FAQ portions are done; CONCEPTS.md work remai
 | Rank | Gap ID | Description | Decision | Effort | Leverage | Status |
 |------|--------|-------------|----------|--------|----------|--------|
 | — | A-2 | Publish Bevy 0.18 release | After audit closes | S | 5 | deferred |
-| 1 | A-4 | Expand SECURITY.md + evaluate AEAD stepping stone | Doc now | XS–M | 4 | open |
-| 2 | A-7 | RTT = 0ms on new connection — issue #208 | Fix default estimate | XS | 3 | open |
-| 3 | A-12 | Reconnection flow undocumented | Add CONCEPTS.md section | XS | 3 | open |
-| 4 | A-13 | Per-entity rate: add CONCEPTS.md section | CONCEPTS.md only (FAQ done) | XS | 3 | partial |
-| 5 | A-9 | Historian: add CONCEPTS.md §16 + snapshot filtering | Doc + code | XS+S | 3 | partial |
-| 6 | A-8 | Enum #[derive(Message)] not supported — issue #163 | Fix proc-macro | S | 3 | open |
-| 7 | A-14 | Bevy T phantom type friction | Add DefaultClientTag alias | S | 3 | open |
-| 8 | A-11 | Request/Response: no timeout, disconnect cleanup unaudited | Audit + add TTL | S | 3 | open |
-| 9 | A-6 | Per-component replication granularity absent — issue #186 | Design + implement | M | 3 | open |
-| 10 | A-16 | Fuzz coverage: 2 targets only | Add 3 new targets | M | 3 | open |
-| 11 | A-10 | Compression (zstd) completely undocumented | Add CONCEPTS.md section | XS | 2 | open |
-| 12 | A-15 | ConnectionStats + BandwidthConfig undocumented | Add Diagnostics section | XS | 2 | open |
-| 13 | A-3 | FEATURES.md stale | Archive or rewrite | XS | 2 | open |
-| 14 | A-17 | No push-based metrics hooks | Add optional tracing/metrics feature | M | 2 | open |
-| 15 | A-18 | iOS/Android: document the gap | Clarify README | XS | 2 | open |
-| 16 | A-19 | No Steam relay | Document gap in README | XS | 2 | open |
-| — | A-1 | FAQ rewrote — 3 false statements + 2 new entries | **COMPLETE** `10524bc1` | XS | 4 | ✓ done |
-| — | A-5 | PREDICTION.md — 4 advanced sections added | **COMPLETE** `902627d8` | S | 4 | ✓ done |
+| 1 | A-9 | Historian: add CONCEPTS.md §20 + snapshot filtering | Doc + code | XS+S | 3 | partial |
+| 2 | A-8 | Enum #[derive(Message)] not supported — issue #163 | Fix proc-macro | S | 3 | open |
+| 3 | A-14 | Bevy T phantom type friction | Add DefaultClientTag alias | S | 3 | open |
+| 4 | A-11 | Request/Response: no timeout, disconnect cleanup unaudited | Audit + add TTL | S | 3 | open |
+| 5 | A-6 | Per-component replication granularity absent — issue #186 | Design + implement | M | 3 | open |
+| 6 | A-16 | Fuzz coverage: 2 targets only | Add 3 new targets | M | 3 | open |
+| 7 | A-17 | No push-based metrics hooks | Add optional tracing/metrics feature | M | 2 | open |
+| 8 | A-18 | iOS/Android: document the gap | Clarify README | XS | 2 | open |
+| 9 | A-19 | No Steam relay | Document gap in README | XS | 2 | open |
+| — | A-1 | FAQ — 3 false statements fixed + 2 new entries | **COMPLETE** `10524bc1` | XS | 4 | ✓ done |
+| — | A-5 | PREDICTION.md — 4 advanced sections | **COMPLETE** `902627d8` | S | 4 | ✓ done |
+| — | A-4 | SECURITY.md — stunnel guide + docker-compose + AEAD note | **COMPLETE** | XS | 4 | ✓ done |
+| — | A-7 | RTT = 0ms bug | **ALREADY FIXED** in private branch | — | 3 | ✓ done |
+| — | A-12 | Reconnection — CONCEPTS.md §19 | **COMPLETE** | XS | 3 | ✓ done |
+| — | A-13 | Per-entity priority — CONCEPTS.md §16 + FAQ | **COMPLETE** | XS | 3 | ✓ done |
+| — | A-10 | Compression — CONCEPTS.md §17 | **COMPLETE** | XS | 2 | ✓ done |
+| — | A-15 | Diagnostics — CONCEPTS.md §18 | **COMPLETE** | XS | 2 | ✓ done |
+| — | A-3 | FEATURES.md — full accurate rewrite | **COMPLETE** | XS | 2 | ✓ done |
 
 ---
 
@@ -512,16 +518,26 @@ A-1 and A-5 are complete. A-9/A-13 FAQ portions are done; CONCEPTS.md work remai
 The single biggest unlock is publishing the current private branch (A-2,
 deferred until this audit closes).
 
-**Already shipped in this audit cycle (2026-05-11):**
+**Shipped in this audit cycle (2026-05-11):**
 - A-1: FAQ no longer misleads developers about lag compensation, per-entity rate
   control, transport pluggability, or the Message derive.
 - A-5: `docs/PREDICTION.md` now covers multi-entity rollback, smooth error
-  interpolation, correction batching, and tick-buffer miss — closing the
-  perception gap with lightyear's assembled prediction framework.
+  interpolation, correction batching, and tick-buffer miss.
+- A-4: `SECURITY.md` now includes a concrete stunnel config + docker-compose
+  snippet and documents the AEAD stepping-stone evaluation.
+- A-7: RTT = 0ms bug confirmed already fixed in private branch (`rtt_initial_estimate = 200ms`).
+- A-12/A-13/A-10/A-15: `docs/CONCEPTS.md` now has §16 (priority/bandwidth),
+  §17 (compression), §18 (diagnostics), §19 (reconnection).
+- A-3: `FEATURES.md` fully rewritten — shipped features accurately listed,
+  stale "planned" items removed, genuine roadmap clearly separated.
 
-**Remaining to unlock the release:**  
-The next highest-value items are the fast documentation wins (A-4, A-12, A-13
-CONCEPTS.md, A-9 CONCEPTS.md, A-10, A-15, A-3) that together would make the
-library surface its actual capabilities. Combined with the A-7 RTT bug fix
-(one line of code) and A-8 enum Message support (proc-macro, S effort), the
-library is ready for a v0.25 release that tells an honest and compelling story.
+**Remaining to close the audit before v0.25:**
+- A-9: Add CONCEPTS.md §20 for Historian (XS doc) + component-kind snapshot
+  filtering (S code). High leverage — lag compensation is now documented in FAQ
+  and FEATURES.md but still absent from the main concepts guide.
+- A-8: Enum `#[derive(Message)]` proc-macro fix (S code). Real dev UX gap.
+- A-14: `DefaultClientTag` Bevy alias (S code). Reduces new-user friction.
+- A-11: Request/Response disconnect-path audit + TTL eviction (S code).
+- A-6: Per-component replication toggle (M — design + implement).
+- A-16: Additional fuzz targets (M).
+- A-18/A-19: Two-line README clarifications for mobile and Steam gaps.
