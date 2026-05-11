@@ -31,6 +31,7 @@ bench_instrumentation = []
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
 advanced_handshake = []
+observability = [ "dep:metrics" ]
 
 [dependencies]
 naia-socket-shared = { version = "0.24", path = "../socket/shared" }
@@ -44,3 +45,4 @@ zstd = { version = "0.12.2", optional = true }
 http = { version = "1.2", optional = true }
 parking_lot = "0.12"
 blake3 = "1"
+metrics = { version = "0.24", optional = true }

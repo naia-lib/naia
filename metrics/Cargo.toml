@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 metrics = "0.24"
-naia-shared = { path = "../shared" }
+naia-shared = { path = "../shared", features = ["observability"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-naia-shared = { path = "../shared", features = ["wbindgen"] }
+naia-shared = { path = "../shared", features = ["wbindgen", "observability"] }

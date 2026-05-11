@@ -11,8 +11,18 @@ pub const SERVER_CONN_PACKET_LOSS: &str = "naia_server_conn_packet_loss";
 pub const SERVER_CONN_KBPS_SENT:   &str = "naia_server_conn_kbps_sent";
 pub const SERVER_CONN_KBPS_RECV:   &str = "naia_server_conn_kbps_recv";
 
+// Server replication counters (no label — server-wide totals)
+pub use naia_shared::{
+    MESSAGES_SENT_TOTAL,
+    SERVER_SPAWNS_TOTAL,
+    SERVER_DESPAWNS_TOTAL,
+    SERVER_COMPONENT_INSERTS_TOTAL,
+    SERVER_COMPONENT_REMOVES_TOTAL,
+};
+
 // Client connection metrics (no label — one connection per process)
 pub const CLIENT_CONN_RTT_MS:      &str = "naia_client_conn_rtt_ms";
+pub const CLIENT_CONN_RTT_P99_MS:  &str = "naia_client_conn_rtt_p99_ms";
 pub const CLIENT_CONN_JITTER_MS:   &str = "naia_client_conn_jitter_ms";
 pub const CLIENT_CONN_PACKET_LOSS: &str = "naia_client_conn_packet_loss";
 pub const CLIENT_CONN_KBPS_SENT:   &str = "naia_client_conn_kbps_sent";

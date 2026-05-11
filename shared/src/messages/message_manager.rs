@@ -44,6 +44,8 @@ pub struct MessageManager {
     channel_senders: HashMap<ChannelKind, Box<dyn MessageChannelSender>>,
     channel_receivers: HashMap<ChannelKind, Box<dyn MessageChannelReceiver>>,
     channel_settings: HashMap<ChannelKind, ChannelSettings>,
+    #[cfg(feature = "observability")]
+    channel_names: HashMap<ChannelKind, String>,
     packet_to_message_map: HashMap<PacketIndex, Vec<(ChannelKind, Vec<MessageIndex>)>>,
     message_fragmenter: MessageFragmenter,
 }
@@ -152,10 +154,21 @@ impl MessageManager {
             channel_settings_map.insert(channel_kind, channel_settings);
         }
 
+        #[cfg(feature = "observability")]
+        let channel_names = {
+            let mut map = HashMap::new();
+            for (kind, name) in channel_kinds.channel_names() {
+                map.insert(kind, name);
+            }
+            map
+        };
+
         Self {
             channel_senders,
             channel_receivers,
             channel_settings: channel_settings_map,
+            #[cfg(feature = "observability")]
+            channel_names,
             packet_to_message_map: HashMap::new(),
             message_fragmenter: MessageFragmenter::new(),
         }
@@ -171,6 +184,11 @@ impl MessageManager {
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) {
+        #[cfg(feature = "observability")]
+        if let Some(name) = self.channel_names.get(channel_kind) {
+            metrics::counter!(crate::MESSAGES_SENT_TOTAL, "channel" => name.clone()).increment(1);
+        }
+
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };

@@ -350,7 +350,8 @@ impl HostWorldManager {
     }
 
     fn on_delivered_spawn_entity(&mut self, _host_entity: &HostEntity) {
-        // stubbed
+        #[cfg(feature = "observability")]
+        metrics::counter!(crate::SERVER_SPAWNS_TOTAL).increment(1);
     }
 
     pub fn on_delivered_despawn_entity(
@@ -358,6 +359,8 @@ impl HostWorldManager {
         local_entity_map: &mut LocalEntityMap,
         host_entity: &HostEntity,
     ) {
+        #[cfg(feature = "observability")]
+        metrics::counter!(crate::SERVER_DESPAWNS_TOTAL).increment(1);
         self.entity_generator
             .remove_by_host_entity(local_entity_map, host_entity);
     }
@@ -370,6 +373,8 @@ impl HostWorldManager {
     ) {
         // Component is already registered when entity comes into scope (in host_init_entity),
         // so we don't need to register again here when InsertComponent is delivered
+        #[cfg(feature = "observability")]
+        metrics::counter!(crate::SERVER_COMPONENT_INSERTS_TOTAL).increment(1);
     }
 
     fn on_delivered_remove_component(
@@ -378,6 +383,8 @@ impl HostWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
+        #[cfg(feature = "observability")]
+        metrics::counter!(crate::SERVER_COMPONENT_REMOVES_TOTAL).increment(1);
         entity_update_manager.deregister_component(global_entity, component_kind);
     }
 

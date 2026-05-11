@@ -48,6 +48,17 @@ pub use naia_socket_shared::TestClock;
 mod backends;
 mod bigmap;
 mod connection;
+
+#[cfg(feature = "observability")]
+pub const MESSAGES_SENT_TOTAL: &str = "naia_messages_sent_total";
+#[cfg(feature = "observability")]
+pub const SERVER_SPAWNS_TOTAL: &str = "naia_server_spawns_total";
+#[cfg(feature = "observability")]
+pub const SERVER_DESPAWNS_TOTAL: &str = "naia_server_despawns_total";
+#[cfg(feature = "observability")]
+pub const SERVER_COMPONENT_INSERTS_TOTAL: &str = "naia_server_component_inserts_total";
+#[cfg(feature = "observability")]
+pub const SERVER_COMPONENT_REMOVES_TOTAL: &str = "naia_server_component_removes_total";
 mod constants;
 mod game_time;
 pub mod handshake;

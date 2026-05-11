@@ -137,4 +137,15 @@ impl ChannelKinds {
         output.sort();
         output
     }
+
+    pub fn channel_name(&self, kind: &ChannelKind) -> Option<&str> {
+        self.kind_map.get(kind).map(|(_, _, name)| name.as_str())
+    }
+
+    pub fn channel_names(&self) -> Vec<(ChannelKind, String)> {
+        self.kind_map
+            .iter()
+            .map(|(kind, (_, _, name))| (*kind, name.clone()))
+            .collect()
+    }
 }
