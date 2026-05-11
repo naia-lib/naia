@@ -106,7 +106,7 @@ Gaps are classified by category and scored by **leverage** (1–5, where 5 = hig
 
 ---
 
-#### G-T5: No NAT traversal / hole-punching ⭐⭐⭐
+#### G-T5: No NAT traversal / hole-punching ⭐⭐⭐ — **COMPLETE**
 
 **Current state:** Server is always reachable on a public address. No P2P path exists in naia.
 
@@ -530,7 +530,7 @@ Active items only (closed/deferred gaps noted inline):
 | 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 3 |
 | 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | ~~Docs~~ **COMPLETE** | XS | 1 |
 | 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
-| 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | Docs | XS | 2 |
+| 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
 | 18 | **G-I2**: Distance-LOD `set_gain()` snippet in Bevy demo | Docs/Demo | XS | 2 |
 | 19 | **G-DOC2**: "Coming from X?" table in `README.md` | Docs | XS | 2 |
 | 20 | **G-SC1**: Zone-server architecture note in `CONCEPTS.md` | Docs | XS | 1 |

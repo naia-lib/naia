@@ -522,3 +522,24 @@ typical sub-tile movement is small — a 2–3× wire reduction.
 
 See `benches/src/bench_protocol.rs` for working examples of `PositionQ`,
 `VelocityQ`, and `RotationQ` using these types in a real benchmark scenario.
+
+---
+
+## 14. NAT Traversal and P2P
+
+naia is **server-authoritative by design** — a publicly reachable server
+holds all authoritative state, and clients connect to it. NAT traversal and
+peer-to-peer hole-punching are intentionally out of scope.
+
+If you need P2P networking (e.g. browser-to-browser direct connections for
+a rollback-netcode fighting game), the recommended Rust/Wasm ecosystem tools
+are:
+
+- **[matchbox_socket](https://github.com/johanhelsing/matchbox)** — async WebRTC
+  data-channel signaling for P2P connections in native and Wasm targets.
+- **[GGRS / bevy_ggrs](https://github.com/gschup/ggrs)** — GGPO-style rollback
+  netcode on top of matchbox; well-suited to deterministic simulations.
+
+These libraries are complementary to naia: a game can use naia for
+server→client replication (lobby, leaderboard, world state) and GGRS for the
+fast-path P2P match simulation in parallel.
