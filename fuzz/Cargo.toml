@@ -27,3 +27,21 @@ name = "header_deserialize"
 path = "fuzz_targets/header_deserialize.rs"
 test = false
 doc = false
+
+[[bin]]
+name = "serde_quantized"
+path = "fuzz_targets/serde_quantized.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "handshake_header"
+path = "fuzz_targets/handshake_header.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "replication_decode"
+path = "fuzz_targets/replication_decode.rs"
+test = false
+doc = false
