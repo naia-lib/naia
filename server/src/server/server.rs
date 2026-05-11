@@ -1,10 +1,10 @@
 use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
-    AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef, GlobalEntity, Instant, Message,
-    Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
+    AuthorityError, Channel, ComponentKind, DisconnectReason, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
+    Instant, Message, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response,
+    ResponseReceiveKey, ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -130,7 +130,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // handle queued disconnects (from verified disconnect handshake packets)
         for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
-            self.world_server.user_queue_disconnect(&user_key);
+            self.world_server
+                .user_queue_disconnect(&user_key, DisconnectReason::ClientDisconnected);
         }
 
         // handle world packets

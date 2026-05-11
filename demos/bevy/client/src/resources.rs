@@ -1,4 +1,4 @@
-use std::{collections::HashSet, default::Default};
+use std::collections::HashSet;
 
 use bevy::prelude::{ColorMaterial, Entity, Handle, Mesh, Resource};
 
@@ -20,11 +20,11 @@ impl OwnedEntity {
 }
 
 #[derive(Resource)]
-#[derive(Default)]
 pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
     pub cursor_entity: Option<Entity>,
     pub queued_command: Option<KeyCommand>,
+    // 128 ticks covers ~6s at 20 Hz — sufficient prediction window for any realistic RTT
     pub command_history: CommandHistory<KeyCommand>,
     pub red: Handle<ColorMaterial>,
     pub blue: Handle<ColorMaterial>,
@@ -37,5 +37,27 @@ pub struct Global {
     pub circle: Handle<Mesh>,
     pub response_keys: HashSet<ResponseReceiveKey<BasicResponse>>,
     pub request_index: u8,
+}
+
+impl Default for Global {
+    fn default() -> Self {
+        Self {
+            owned_entity: None,
+            cursor_entity: None,
+            queued_command: None,
+            command_history: CommandHistory::new(128),
+            red: Default::default(),
+            blue: Default::default(),
+            yellow: Default::default(),
+            green: Default::default(),
+            white: Default::default(),
+            purple: Default::default(),
+            orange: Default::default(),
+            aqua: Default::default(),
+            circle: Default::default(),
+            response_keys: HashSet::new(),
+            request_index: 0,
+        }
+    }
 }
 

@@ -4,17 +4,29 @@ use naia_shared::{sequence_greater_than, Tick};
 
 pub struct CommandHistory<T: Clone> {
     buffer: VecDeque<(Tick, T)>,
+    max_ticks: Option<u16>,
 }
 
 impl<T: Clone> Default for CommandHistory<T> {
     fn default() -> Self {
         Self {
             buffer: VecDeque::default(),
+            max_ticks: None,
         }
     }
 }
 
 impl<T: Clone> CommandHistory<T> {
+    /// Creates a bounded `CommandHistory` that retains at most `max_ticks` entries.
+    /// Oldest entries are evicted when the buffer exceeds the limit.
+    /// Recommended size: 128 ticks (covers ~6 seconds at 20 Hz, enough for any realistic RTT).
+    pub fn new(max_ticks: u16) -> Self {
+        Self {
+            buffer: VecDeque::new(),
+            max_ticks: Some(max_ticks),
+        }
+    }
+
     pub fn replays(&mut self, start_tick: &Tick) -> Vec<(Tick, T)> {
         // Remove history of commands until current received tick
         self.remove_to_and_including(*start_tick);
@@ -39,6 +51,13 @@ impl<T: Clone> CommandHistory<T> {
 
         // go ahead and push
         self.buffer.push_back((command_tick, new_command));
+
+        // Evict oldest entries when the bounded limit is exceeded
+        if let Some(max) = self.max_ticks {
+            while self.buffer.len() > max as usize {
+                self.buffer.pop_front();
+            }
+        }
     }
 
     fn remove_to_and_including(&mut self, index: Tick) {

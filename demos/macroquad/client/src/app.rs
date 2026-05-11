@@ -71,7 +71,7 @@ impl App {
             interp_entities: HashMap::new(),
             server_entities: HashSet::new(),
             queued_command: None,
-            command_history: CommandHistory::default(),
+            command_history: CommandHistory::new(128),
         }
     }
 

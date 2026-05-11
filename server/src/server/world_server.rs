@@ -11,10 +11,10 @@ use log::{info, warn};
 
 use naia_shared::{
     handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
-    ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
-    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
-    OutgoingPriorityHook, UserPriorityState,
+    ChannelKinds, ComponentKind, ComponentKinds, DisconnectReason, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
+    GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
+    GlobalResponseId, OutgoingPriorityHook, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
     Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
     Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
@@ -134,7 +134,7 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     global_entity_map: GlobalEntityMap<E>,
     // Events
     addrs_with_new_packets: HashSet<SocketAddr>,
-    outstanding_disconnects: Vec<UserKey>,
+    outstanding_disconnects: Vec<(UserKey, DisconnectReason)>,
     incoming_world_events: WorldEvents<E>,
     incoming_tick_events: TickEvents,
     // Requests/Responses
@@ -2634,6 +2634,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         &mut self,
         user_key: &UserKey,
         world: &mut W,
+        reason: DisconnectReason,
     ) {
         if self.client_authoritative_entities {
             self.despawn_all_remote_entities(user_key, world);
@@ -2654,10 +2655,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         let user = self.user_delete(user_key);
         self.incoming_world_events
-            .push_disconnection(user_key, user.address());
+            .push_disconnection(user_key, user.address(), reason);
     }
 
-    pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey) {
+    pub(crate) fn user_queue_disconnect(
+        &mut self,
+        user_key: &UserKey,
+        reason: DisconnectReason,
+    ) {
         let Some(user) = self.user_store.get(user_key) else {
             // User already disconnected, this is fine (disconnect packets may arrive multiple times)
             return;
@@ -2674,7 +2679,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         connection.manual_disconnect = true;
         // Add to outstanding_disconnects immediately so it gets processed in the next process_all_packets call
-        self.outstanding_disconnects.push(*user_key);
+        self.outstanding_disconnects.push((*user_key, reason));
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> WorldUser {
@@ -2884,8 +2889,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         let user_disconnects = std::mem::take(&mut self.outstanding_disconnects);
-        for user_key in user_disconnects {
-            self.user_disconnect(&user_key, world);
+        for (user_key, reason) in user_disconnects {
+            self.user_disconnect(&user_key, world, reason);
         }
     }
 
@@ -3583,7 +3588,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
             }
             for user_key in user_disconnects {
-                self.outstanding_disconnects.push(user_key);
+                self.outstanding_disconnects.push((user_key, DisconnectReason::TimedOut));
             }
         }
     }
