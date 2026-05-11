@@ -80,3 +80,13 @@ pub fn listen_on_app<S: Into<Box<dyn transport::Socket>>>(app: &mut bevy_app::Ap
         .resource_mut::<server::ServerImpl>()
         .listen(socket);
 }
+
+/// Phantom tag type for single-server Bevy apps.
+///
+/// Pass this as the `T` parameter to [`Plugin`], [`Server`], and event types
+/// when your app connects to exactly one server instance. For multi-server
+/// apps define your own tag structs instead.
+pub struct DefaultServerTag;
+
+/// Alias for [`Plugin`] — for single-server apps.
+pub type DefaultPlugin = Plugin;
