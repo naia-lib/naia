@@ -95,7 +95,7 @@ Prioritized by correctness → API quality → test coverage → housekeeping.
 
 | Phase | Task | Status |
 |---|---|---|
-| **V3.13** | E.3 — Adversarial BDD scenarios: truncated/corrupted Data packet discard path | ⬜ |
+| **V3.13** | E.3 — Adversarial BDD scenarios: truncated/corrupted Data packet discard path | ✅ |
 | **V3.14** | E.5 — Property-based tests for priority accumulator and SequenceBuffer wrap-around | ⬜ |
 
 #### Housekeeping

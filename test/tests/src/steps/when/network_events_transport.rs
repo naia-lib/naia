@@ -371,6 +371,68 @@ fn when_client_receives_malformed_packet(ctx: &mut TestWorldMut) {
     }
 }
 
+/// When the server receives a Data packet with a corrupted body.
+///
+/// Injects a packet with a valid `PacketType::Data` StandardHeader followed by
+/// random garbage bytes. This exercises the inner-layer deserialization failure
+/// path (distinct from the header-parse failure tested by "malformed packet").
+#[when("the server receives a Data packet with a corrupted body")]
+fn when_server_receives_data_packet_with_corrupted_body(ctx: &mut TestWorldMut) {
+    use naia_shared::{BitWriter, PacketType, Serde, StandardHeader};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let client_key = scenario.last_client();
+
+    // Build a well-formed StandardHeader with PacketType::Data, then append garbage.
+    let mut writer = BitWriter::new();
+    StandardHeader::new(PacketType::Data, 0, 0, 0).ser(&mut writer);
+    let mut packet = writer.to_bytes().to_vec();
+    // Append corrupt body bytes — enough to look like a real payload length.
+    packet.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xFF, 0x00, 0xAA, 0x55]);
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_key, packet.clone()); });
+        for _ in 0..3 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
+/// When the client receives a Data packet with a corrupted body.
+///
+/// Mirrors the server-side adversarial test: valid header, garbage body.
+#[when("the client receives a Data packet with a corrupted body")]
+fn when_client_receives_data_packet_with_corrupted_body(ctx: &mut TestWorldMut) {
+    use naia_shared::{BitWriter, PacketType, Serde, StandardHeader};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    let scenario = ctx.scenario_mut();
+    scenario.clear_operation_result();
+    let client_key = scenario.last_client();
+
+    let mut writer = BitWriter::new();
+    StandardHeader::new(PacketType::Data, 0, 0, 0).ser(&mut writer);
+    let mut packet = writer.to_bytes().to_vec();
+    packet.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xFF, 0x00, 0xAA, 0x55]);
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        scenario.mutate(|ctx| { let _ = ctx.inject_server_packet(&client_key, packet.clone()); });
+        for _ in 0..3 {
+            scenario.mutate(|_| {});
+        }
+    }));
+    match result {
+        Ok(()) => scenario.record_ok(),
+        Err(p) => scenario.record_panic(panic_payload_to_string(p)),
+    }
+}
+
 /// When duplicate replication messages arrive.
 ///
 /// Ticks 5 times — protocol-level dedup should keep state stable.

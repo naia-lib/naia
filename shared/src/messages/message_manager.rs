@@ -337,7 +337,11 @@ impl MessageManager {
             let channel_kind = ChannelKind::de(channel_kinds, reader)?;
 
             // continue read inside channel
-            let channel = self.channel_receivers.get_mut(&channel_kind).unwrap();
+            let Some(channel) = self.channel_receivers.get_mut(&channel_kind) else {
+                // Corrupt packet: channel kind decoded to a value not registered in this
+                // connection's channel set. Treat as a deserialization failure.
+                return Err(SerdeErr);
+            };
             channel.read_messages(message_kinds, local_world_manager, reader)?;
         }
 

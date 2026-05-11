@@ -260,6 +260,24 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       And no panic occurs
       And no connection disruption occurs
 
+    @Scenario(05)
+    Scenario: [transport-02] Server drops Data packet with corrupted body
+      Given a server is running
+      And a client connects
+      When the server receives a Data packet with a corrupted body
+      Then the packet is dropped
+      And no panic occurs
+      And no connection disruption occurs
+
+    @Scenario(06)
+    Scenario: [transport-02] Client drops Data packet with corrupted body
+      Given a server is running
+      And a client connects
+      When the client receives a Data packet with a corrupted body
+      Then the packet is dropped
+      And no panic occurs
+      And no connection disruption occurs
+
   # --------------------------------------------------------------------------
   # Rule: Transport unreliability tolerance
   # --------------------------------------------------------------------------
