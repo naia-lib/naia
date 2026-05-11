@@ -1,0 +1,20 @@
+[package]
+name = "naia-bevy-metrics"
+version = "0.25.0"
+authors = ["naia authors"]
+description = "Bevy plugins for naia metrics — automatically emits ConnectionStats each tick"
+license = "MIT OR Apache-2.0"
+edition = "2021"
+publish = false
+
+[features]
+server = ["dep:naia-bevy-server"]
+client = ["dep:naia-bevy-client"]
+
+[dependencies]
+naia-metrics    = { path = "../../../metrics" }
+naia-bevy-shared = { path = "../shared" }
+bevy_app        = { version = "0.18", default-features = false }
+bevy_ecs        = { version = "0.18", default-features = false }
+naia-bevy-server = { path = "../server", optional = true }
+naia-bevy-client = { path = "../client", optional = true }
