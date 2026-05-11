@@ -475,7 +475,7 @@ A dedicated file gets its own URL for linking from issues and Discord, and separ
 
 ---
 
-#### G-QA2: Fuzz testing of the packet deserialization path ⭐⭐⭐⭐
+#### G-QA2: Fuzz testing of the packet deserialization path ⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** BDD scenarios `adversarial-01` / `messaging-02` test targeted corrupt inputs (truncated packets, wrong type byte). No generative fuzzing exists; no `fuzz/` crate.
 
@@ -515,7 +515,7 @@ Active items only (closed/deferred gaps noted inline):
 | 5 | **G-W4** Phase 1: `is_compressed` bit + encoder size check | ~~Implement~~ **COMPLETE** | S | 2–4 |
 | 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | ~~Implement~~ **COMPLETE** | S | 3 |
 | 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | ~~Implement~~ **COMPLETE** | S | 3 |
-| 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | Implement | S+S | 4 |
+| 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | ~~Implement~~ **COMPLETE** | S+S | 4 |
 | 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | Implement | M | 4 |
 | 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | Implement | S | 2 |
 | 11 | **G-P3**: `Historian` snapshot buffer + demo | Implement | M | 4 |

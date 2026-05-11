@@ -1,0 +1,29 @@
+[package]
+name = "naia-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+# Intentionally NOT a member of the parent workspace — cargo-fuzz requires
+# nightly and libfuzzer linkage flags incompatible with the stable workspace.
+[workspace]
+
+[dependencies]
+libfuzzer-sys = "0.4"
+naia-serde = { path = "../shared/serde" }
+naia-shared = { path = "../shared", default-features = false }
+
+[[bin]]
+name = "packet_deserialize"
+path = "fuzz_targets/packet_deserialize.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "header_deserialize"
+path = "fuzz_targets/header_deserialize.rs"
+test = false
+doc = false
