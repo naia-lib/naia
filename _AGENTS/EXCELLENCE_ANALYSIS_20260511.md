@@ -2,6 +2,18 @@
 
 ---
 
+## Audit Progress
+
+| Gap | Status | Commit |
+|-----|--------|--------|
+| A-1 — FAQ false statements + missing entries | **COMPLETE** | `10524bc1` |
+| A-5 — PREDICTION.md advanced sections | **COMPLETE** | `902627d8` |
+| A-9 — Historian (FAQ portion) | partial — FAQ done; CONCEPTS.md §16 + filtering remain | `10524bc1` |
+| A-13 — Per-entity rate (FAQ portion) | partial — FAQ done; CONCEPTS.md section remains | `10524bc1` |
+| All others | open | — |
+
+---
+
 ## Executive Summary
 
 Naia's private development branch (specops/naia) is substantially more capable
@@ -49,7 +61,7 @@ bevy_replicon (simplicity + QUIC) are now the community defaults.
 
 ## Gap Analysis
 
-### A-1 — FAQ actively contradicts the current codebase
+### A-1 — FAQ actively contradicts the current codebase ✓ COMPLETE
 
 **Current state.**  
 `faq/README.md` contains three statements that are materially false against the
@@ -165,7 +177,7 @@ QUIC remains out of scope. Near-term actionable steps:
 
 ---
 
-### A-5 — Prediction guide covers only the simple linear case
+### A-5 — Prediction guide covers only the simple linear case ✓ COMPLETE
 
 **Current state.**  
 `docs/PREDICTION.md` provides an excellent walkthrough of the
@@ -266,7 +278,7 @@ already handles tagged enums.
 
 ---
 
-### A-9 — Historian: undocumented in public docs and lacks snapshot filtering
+### A-9 — Historian: undocumented in public docs and lacks snapshot filtering (partial — FAQ done)
 
 **Current state.**  
 `server/src/historian.rs` implements a rolling per-tick snapshot buffer for
@@ -343,7 +355,7 @@ implementing retry backoff.
 
 ---
 
-### A-13 — Per-entity update rate control is implemented but undocumented
+### A-13 — Per-entity update rate control is implemented but undocumented (partial — FAQ done)
 
 **Current state.**  
 `EntityPriorityMut::set_gain(f32)` and the accumulator system
@@ -468,52 +480,48 @@ points motivated contributors in the right direction.
 
 ## Prioritised Action Table
 
-| Rank | Gap ID | Description | Decision | Effort | Leverage |
-|------|--------|-------------|----------|--------|----------|
-| 1 | A-2 | Publish Bevy 0.18 release — private branch far ahead of crates.io | Ship immediately | S | 5 |
-| 2 | A-1 | FAQ contradicts codebase on 3 key points | Fix immediately | XS | 4 |
-| 3 | A-5 | Prediction guide missing multi-entity, threshold, tick-miss | Write guide extension | S | 4 |
-| 4 | A-4 | No native encryption — expand SECURITY.md + evaluate AEAD | Doc now; evaluate stepping stone | XS–M | 4 |
-| 5 | A-8 | Enum #[derive(Message)] not supported — issue #163 | Fix proc-macro | S | 3 |
-| 6 | A-7 | RTT = 0ms on new connection causes reliable burst — issue #208 | Initialize RTT estimate | XS | 3 |
-| 7 | A-12 | Reconnection flow undocumented | Add CONCEPTS.md section | XS | 3 |
-| 8 | A-13 | Per-entity update rate: feature exists, docs don't | Add CONCEPTS.md + fix FAQ | XS | 3 |
-| 9 | A-6 | Per-component replication granularity absent — issue #186 | Design + implement | M | 3 |
-| 10 | A-9 | Historian undocumented; no snapshot filtering | Add §16 CONCEPTS.md + filtering | XS+S | 3 |
-| 11 | A-14 | Bevy T phantom type friction | Add DefaultClientTag alias | S | 3 |
-| 12 | A-11 | Request/Response: no timeout, disconnect cleanup unaudited | Audit + add TTL | S | 3 |
-| 13 | A-16 | Fuzz coverage: 2 targets only | Add 3 new targets | M | 3 |
-| 14 | A-10 | Compression (zstd) completely undocumented | Add CONCEPTS.md section | XS | 2 |
-| 15 | A-15 | ConnectionStats + BandwidthConfig undocumented | Add Diagnostics section | XS | 2 |
-| 16 | A-3 | FEATURES.md stale | Archive or rewrite | XS | 2 |
-| 17 | A-17 | No push-based metrics hooks | Add optional tracing/metrics feature | M | 2 |
-| 18 | A-18 | iOS/Android: document the gap | Clarify README | XS | 2 |
-| 19 | A-19 | No Steam relay | Document gap in README | XS | 2 |
+A-2 (publish release) is deferred until remaining audit items are closed.
+A-1 and A-5 are complete. A-9/A-13 FAQ portions are done; CONCEPTS.md work remains.
+
+| Rank | Gap ID | Description | Decision | Effort | Leverage | Status |
+|------|--------|-------------|----------|--------|----------|--------|
+| — | A-2 | Publish Bevy 0.18 release | After audit closes | S | 5 | deferred |
+| 1 | A-4 | Expand SECURITY.md + evaluate AEAD stepping stone | Doc now | XS–M | 4 | open |
+| 2 | A-7 | RTT = 0ms on new connection — issue #208 | Fix default estimate | XS | 3 | open |
+| 3 | A-12 | Reconnection flow undocumented | Add CONCEPTS.md section | XS | 3 | open |
+| 4 | A-13 | Per-entity rate: add CONCEPTS.md section | CONCEPTS.md only (FAQ done) | XS | 3 | partial |
+| 5 | A-9 | Historian: add CONCEPTS.md §16 + snapshot filtering | Doc + code | XS+S | 3 | partial |
+| 6 | A-8 | Enum #[derive(Message)] not supported — issue #163 | Fix proc-macro | S | 3 | open |
+| 7 | A-14 | Bevy T phantom type friction | Add DefaultClientTag alias | S | 3 | open |
+| 8 | A-11 | Request/Response: no timeout, disconnect cleanup unaudited | Audit + add TTL | S | 3 | open |
+| 9 | A-6 | Per-component replication granularity absent — issue #186 | Design + implement | M | 3 | open |
+| 10 | A-16 | Fuzz coverage: 2 targets only | Add 3 new targets | M | 3 | open |
+| 11 | A-10 | Compression (zstd) completely undocumented | Add CONCEPTS.md section | XS | 2 | open |
+| 12 | A-15 | ConnectionStats + BandwidthConfig undocumented | Add Diagnostics section | XS | 2 | open |
+| 13 | A-3 | FEATURES.md stale | Archive or rewrite | XS | 2 | open |
+| 14 | A-17 | No push-based metrics hooks | Add optional tracing/metrics feature | M | 2 | open |
+| 15 | A-18 | iOS/Android: document the gap | Clarify README | XS | 2 | open |
+| 16 | A-19 | No Steam relay | Document gap in README | XS | 2 | open |
+| — | A-1 | FAQ rewrote — 3 false statements + 2 new entries | **COMPLETE** `10524bc1` | XS | 4 | ✓ done |
+| — | A-5 | PREDICTION.md — 4 advanced sections added | **COMPLETE** `902627d8` | S | 4 | ✓ done |
 
 ---
 
 ## What Would Make Naia Definitively #1
 
-The single biggest unlock is publishing the current private branch.
+The single biggest unlock is publishing the current private branch (A-2,
+deferred until this audit closes).
 
-The specops/naia codebase already ships lag compensation (Historian), per-entity
-bandwidth control (priority accumulators), configurable zstd compression with
-dictionary training, rich connection diagnostics (RTT P50/P99, packet loss,
-kbps), prediction primitives (TickBuffered + CommandHistory + local_duplicate),
-authority delegation, a two-level scoping model, Bevy 0.18 compatibility, and
-a solid 215-contract BDD harness. None of this is visible to the developer
-evaluating naia on crates.io today — they see a December 2024 release targeting
-Bevy 0.15 and a FAQ that says lag compensation doesn't exist.
+**Already shipped in this audit cycle (2026-05-11):**
+- A-1: FAQ no longer misleads developers about lag compensation, per-entity rate
+  control, transport pluggability, or the Message derive.
+- A-5: `docs/PREDICTION.md` now covers multi-entity rollback, smooth error
+  interpolation, correction batching, and tick-buffer miss — closing the
+  perception gap with lightyear's assembled prediction framework.
 
-A single published release (v0.25 or v1.0) with an updated README, a fixed FAQ,
-and the docs changes from A-1/A-9/A-10/A-12/A-13/A-15 above would immediately
-reposition naia from "historically interesting but apparently stagnant" to
-"actively developed and surprisingly full-featured." That reframing requires no
-new features — only the publication of work already done.
-
-The second unlock is a two-to-three section extension of `docs/PREDICTION.md`
-(A-5). naia's prediction primitives are correct and composable. The perception
-gap with lightyear exists not because naia lacks the parts, but because lightyear
-assembled them into a visible framework. Concrete multi-entity and
-misprediction-threshold examples close that gap without writing a single line of
-new production code.
+**Remaining to unlock the release:**  
+The next highest-value items are the fast documentation wins (A-4, A-12, A-13
+CONCEPTS.md, A-9 CONCEPTS.md, A-10, A-15, A-3) that together would make the
+library surface its actual capabilities. Combined with the A-7 RTT bug fix
+(one line of code) and A-8 enum Message support (proc-macro, S effort), the
+library is ready for a v0.25 release that tells an honest and compelling story.
