@@ -182,7 +182,7 @@ Gaps are classified by category and scored by **leverage** (1–5, where 5 = hig
 
 ### 2.5 Developer Experience
 
-#### G-DX1: No simulation of network conditions in dev builds ⭐⭐⭐⭐⭐
+#### G-DX1: No simulation of network conditions in dev builds ⭐⭐⭐⭐⭐ — **COMPLETE**
 
 **Decision: NOT A GAP in code.** `LinkConditionerConfig` is fully implemented on both server and client, with 6 named presets (`perfect_condition()` through `very_poor_condition()`). It works on native UDP and the local in-process transport. This is a **documentation gap only**.
 
@@ -527,7 +527,7 @@ Active items only (closed/deferred gaps noted inline):
 | 11 | **G-P3**: `Historian` snapshot buffer + demo | ~~Implement~~ **COMPLETE** | M | 4 |
 | 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | ~~Implement~~ **COMPLETE** | M | 2–4 |
 | 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | ~~Docs~~ **COMPLETE** | S | 4 |
-| 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | Docs | XS | 3 |
+| 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 3 |
 | 15 | **G-W1**: Update `FRAGMENTATION_LIMIT_BYTES` comment with derivation | Docs | XS | 1 |
 | 16 | **G-W3**: "Bandwidth-optimized properties" section in `CONCEPTS.md` | Docs | XS | 2 |
 | 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | Docs | XS | 2 |

@@ -424,3 +424,50 @@ client.connect(WebrtcSocket::new("https://myserver.example.com", 14192));
 For Wasm builds, enable the `wbindgen` feature on the socket crate and build
 with `wasm-pack` or `trunk`. The protocol, channel config, and all game logic
 are identical — only the entry point and socket type change.
+
+---
+
+## 12. Network Condition Simulation
+
+`LinkConditionerConfig` simulates packet loss, latency, and jitter — useful
+for testing replication robustness and prediction/rollback in a local dev loop
+without a real bad network.
+
+```rust
+use naia_shared::LinkConditionerConfig;
+
+// Build a custom profile:
+let lag = LinkConditionerConfig::new(
+    100,   // incoming_latency ms
+    25,    // incoming_jitter ms  (added or subtracted at random)
+    0.02,  // incoming_loss  (2% packet drop)
+);
+
+// Or use a named preset:
+let lag = LinkConditionerConfig::poor_condition();
+
+// Apply on the server socket (conditions inbound packets from clients):
+server.listen(NativeSocket::new(&addrs, Some(lag.clone())));
+
+// Apply on the client socket (conditions inbound packets from the server):
+client.connect(Socket::new(server_url, Some(lag)));
+```
+
+Named presets — all values are one-way (applied to the receiving side):
+
+| Preset | Latency (ms) | Jitter (ms) | Loss |
+|--------|-------------|-------------|------|
+| `perfect_condition()` | 1 | 0 | 0% |
+| `very_good_condition()` | 12 | 3 | 0.1% |
+| `good_condition()` | 40 | 10 | 0.2% |
+| `average_condition()` | 100 | 25 | 2% |
+| `poor_condition()` | 200 | 50 | 4% |
+| `very_poor_condition()` | 300 | 75 | 6% |
+
+The conditioner applies to **incoming** packets on whichever socket you pass it
+to. To simulate a bidirectional bad link, pass the same config (or different
+configs for asymmetric paths) to both the server and client sockets.
+
+The local in-process transport (`transport_local`) used in the test harness
+accepts the same config via `hub.configure_link_conditioner()`, enabling
+loss/latency injection without a real UDP socket.
