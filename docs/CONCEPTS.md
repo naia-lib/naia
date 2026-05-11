@@ -581,3 +581,177 @@ zones the application:
 naia provides the per-process primitive (`spawn_entity`, rooms, scopes,
 authority). Zone coordination is an application concern — all the information
 you need to implement it is available through the public API.
+
+---
+
+## 16. Per-Entity Priority and Bandwidth
+
+By default every replicated entity competes equally for outbound bandwidth. The
+priority accumulator system lets you tilt that competition: entities with a
+higher gain accumulate priority faster and therefore tend to be replicated more
+frequently within the same bandwidth budget.
+
+```rust
+// On the server, after spawning an entity:
+
+// 2× the replication frequency of a normal entity.
+server.global_entity_priority_mut(entity).set_gain(2.0);
+
+// ~25% of normal frequency — useful for background/ambient entities.
+server.global_entity_priority_mut(entity).set_gain(0.25);
+
+// Pause replication for this entity entirely (gain = 0.0).
+server.global_entity_priority_mut(entity).set_gain(0.0);
+
+// Per-user priority: replicate faster to the owner than to spectators.
+server.user_entity_priority_mut(&owner_key, entity).set_gain(3.0);
+server.user_entity_priority_mut(&spectator_key, entity).set_gain(0.5);
+```
+
+The effective gain for a given user is:
+`global_gain × user_gain` (both default to `1.0`).
+
+The send loop sorts all dirty entity bundles by their accumulated priority each
+tick and drains them against the per-connection bandwidth budget
+(`BandwidthConfig::target_bytes_per_sec`, default 512 kbps). Entities with
+higher gain win bandwidth sooner; entities with gain `0.0` are never selected.
+This replaces a separate per-entity "tick rate" with a continuous
+priority-weighted allocation that automatically adapts to varying numbers of
+dirty entities.
+
+Read-only access is available via `global_entity_priority` and
+`user_entity_priority` (returns `EntityPriorityRef`).
+
+---
+
+## 17. Compression
+
+naia supports optional **zstd packet compression** on a per-direction basis.
+Compression is configured via `CompressionConfig` in `ConnectionConfig`:
+
+```rust
+use naia_shared::{CompressionConfig, CompressionMode};
+
+let compression = CompressionConfig::new(
+    Some(CompressionMode::Default(3)),  // server → client, level 3
+    None,                               // client → server, uncompressed
+);
+```
+
+Three modes are available:
+
+| Mode | When to use |
+|------|-------------|
+| `CompressionMode::Default(level)` | General use. Level −7 (fastest) to 22 (best ratio). Level 3 is a good starting point. |
+| `CompressionMode::Dictionary(level, dict)` | Production. A custom zstd dictionary trained on real game packets achieves 40–60% better compression than the default dictionary on typical game-state delta data. |
+| `CompressionMode::Training(n_samples)` | Dictionary collection mode. Run with this mode for one or two play sessions; naia accumulates packet samples internally. Extract the trained dictionary, then switch to `Dictionary` mode. |
+
+**Typical workflow for dictionary training:**
+
+1. Set `CompressionMode::Training(2000)` in your development build.
+2. Run a representative play session (2000 packets ≈ a few minutes at 20 Hz).
+3. Extract the trained dictionary from the server's `CompressionEncoder` and
+   save it to a file (e.g. `assets/naia_dict.bin`).
+4. Ship with `CompressionMode::Dictionary(3, include_bytes!("../assets/naia_dict.bin").to_vec())`.
+
+Compression applies to the full packet payload after naia's internal bit-packing
+and quantization. Use it when bandwidth is the primary constraint; skip it if
+CPU cost is more important than wire size.
+
+---
+
+## 18. Diagnostics and Bandwidth Tuning
+
+### Connection diagnostics
+
+`Server::connection_stats(&user_key)` and `Client::connection_stats()` return a
+`ConnectionStats` snapshot computed on demand from internal ring buffers:
+
+```rust
+// Server side:
+if let Some(stats) = server.connection_stats(&user_key) {
+    println!("RTT p50={:.0}ms p99={:.0}ms loss={:.1}% out={:.1}kbps in={:.1}kbps",
+        stats.rtt_p50_ms, stats.rtt_p99_ms,
+        stats.packet_loss_pct * 100.0,
+        stats.kbps_sent, stats.kbps_recv);
+}
+
+// Client side:
+let stats = client.connection_stats();
+```
+
+Fields:
+
+| Field | Description |
+|-------|-------------|
+| `rtt_ms` | Round-trip time EWMA in milliseconds |
+| `rtt_p50_ms` | RTT 50th-percentile from the last 32 samples |
+| `rtt_p99_ms` | RTT 99th-percentile from the last 32 samples |
+| `jitter_ms` | EWMA of half the absolute RTT deviation |
+| `packet_loss_pct` | Fraction of sent packets unacknowledged in the last 64-packet window (`0.0`–`1.0`) |
+| `kbps_sent` | Rolling-average outgoing bandwidth in kilobits per second |
+| `kbps_recv` | Rolling-average incoming bandwidth in kilobits per second |
+
+Call `connection_stats` at most once per frame per connection (it performs a
+small sort for the percentile computation).
+
+### Bandwidth budget
+
+`BandwidthConfig` sets the per-connection outbound target:
+
+```rust
+use naia_shared::BandwidthConfig;
+
+// In ServerConfig / ClientConfig:
+config.connection.bandwidth = BandwidthConfig {
+    target_bytes_per_sec: 32_000, // 256 kbps — tighter budget for mobile
+};
+```
+
+The default is 64 000 bytes/sec (512 kbps). The send loop accumulates a token
+bucket of `target_bytes_per_sec × dt` each tick and drains it against the
+priority-sorted dirty entity list. Entities that do not fit in the current
+tick's budget carry their accumulated priority into the next tick.
+
+---
+
+## 19. Reconnection
+
+When a client disconnects and reconnects, call `client.connect(socket)` again
+after receiving the `DisconnectEvent`. naia restarts the full handshake sequence
+and the server fires a new `ConnectEvent` for the user.
+
+```rust
+// Client — handle disconnect and schedule a reconnect:
+for _event in events.read::<DisconnectEvent>() {
+    // Clear all server-replicated entities from your local world.
+    // naia does NOT do this automatically — the entities were despawned
+    // on the server side but your local Bevy world still has them.
+    for entity in replicated_entities.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+    replicated_entities.clear();
+
+    // Reconnect — naia will re-run the handshake.
+    // Add your own backoff timer if you want to avoid hammering the server.
+    client.connect(socket.clone());
+}
+```
+
+**What naia handles automatically on reconnect:**
+
+- Full handshake re-negotiation and protocol hash check.
+- Re-scoping: all entities currently in the user's rooms and scope will be
+  re-sent as fresh `SpawnEntityEvent` + `InsertComponentEvent` sequences.
+- Replicated resources: re-delivered as if the client is connecting for the
+  first time.
+
+**What the application must handle:**
+
+- Despawning stale local entities from the previous session before or
+  immediately after reconnecting (the `DespawnEntityEvent` for them was never
+  sent — the connection dropped).
+- Any client-local state tied to the old session (auth tokens, predicted
+  entities, `CommandHistory` buffers).
+- Retry backoff. naia does not implement reconnection backoff; a simple
+  `Timer` resource in your game loop is sufficient.

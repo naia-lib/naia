@@ -59,6 +59,72 @@ is still application-layer plaintext from naia's perspective. If you transmit
 sensitive credentials in `auth()`, ensure the WebRTC transport is configured
 for end-to-end encryption.
 
+## Securing native UDP deployments today
+
+Until `transport_quic` is available, the recommended path for native clients
+on untrusted networks is a **TLS-terminating proxy** on the server side.
+Below is a minimal working setup using stunnel.
+
+### stunnel configuration
+
+Install stunnel (`apt install stunnel4` / `brew install stunnel`), then create
+`/etc/stunnel/naia.conf`:
+
+```ini
+; /etc/stunnel/naia.conf
+[naia-udp]
+accept  = 0.0.0.0:14192          ; TLS port clients connect to
+connect = 127.0.0.1:14191        ; naia server's plain UDP port
+; cert and key from Let's Encrypt or self-signed:
+cert    = /etc/ssl/certs/naia.crt
+key     = /etc/ssl/private/naia.key
+protocol = connect
+```
+
+Run with `stunnel /etc/stunnel/naia.conf`. Clients connect to port 14192 via
+TLS; stunnel unwraps TLS and forwards UDP to port 14191 where naia listens.
+
+### docker-compose example
+
+```yaml
+# docker-compose.yml
+services:
+  game-server:
+    image: your-game-server:latest
+    environment:
+      LISTEN_ADDR: "0.0.0.0:14191"
+    expose:
+      - "14191"
+
+  stunnel:
+    image: dweomer/stunnel
+    ports:
+      - "14192:14192/udp"
+    volumes:
+      - ./stunnel.conf:/etc/stunnel/stunnel.conf:ro
+      - ./certs:/etc/stunnel/certs:ro
+    depends_on:
+      - game-server
+```
+
+```ini
+; stunnel.conf (mounted into container)
+[naia]
+accept  = 0.0.0.0:14192
+connect = game-server:14191
+cert    = /etc/stunnel/certs/naia.crt
+key     = /etc/stunnel/certs/naia.key
+```
+
+### AEAD stepping stone (future)
+
+A lighter-weight alternative to a full TLS proxy — a symmetric
+**AEAD-over-UDP** mode using XChaCha20-Poly1305 — is under evaluation. This
+would require a pre-shared key exchanged out-of-band (e.g. via HTTPS login
+flow) but would close the confidentiality gap for most indie use cases without
+requiring QUIC or a proxy process. No implementation timeline is set; the
+stunnel path above is the production recommendation today.
+
 ## Reporting a vulnerability
 
 Please report security issues privately to the maintainers via Discord or
