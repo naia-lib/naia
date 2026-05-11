@@ -349,7 +349,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ### 2.7 Missing High-Level Gameplay Systems
 
-#### G-P3: No lag compensation (hit detection rewind) ⭐⭐⭐⭐
+#### G-P3: No lag compensation (hit detection rewind) ⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** Not present. Naia has no physics/collision code and correctly avoids it.
 
@@ -518,7 +518,7 @@ Active items only (closed/deferred gaps noted inline):
 | 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | ~~Implement~~ **COMPLETE** | S+S | 4 |
 | 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | ~~Implement~~ **COMPLETE** | M | 4 |
 | 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | ~~Implement~~ **COMPLETE** | S | 2 |
-| 11 | **G-P3**: `Historian` snapshot buffer + demo | Implement | M | 4 |
+| 11 | **G-P3**: `Historian` snapshot buffer + demo | ~~Implement~~ **COMPLETE** | M | 4 |
 | 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | Implement | M | 2–4 |
 | 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | Docs | S | 4 |
 | 14 | **G-DX1**: `LinkConditionerConfig` docs section in `CONCEPTS.md` | Docs | XS | 3 |

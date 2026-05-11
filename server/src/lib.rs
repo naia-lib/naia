@@ -69,6 +69,7 @@ mod connection;
 mod error;
 mod events;
 mod handshake;
+pub mod historian;
 mod request;
 mod room;
 mod server;
@@ -84,6 +85,7 @@ cfg_if! {
 }
 
 pub use connection::tick_buffer_messages::TickBufferMessages;
+pub use historian::Historian;
 #[cfg(feature = "bench_instrumentation")]
 pub use connection::connection::bench_send_counters;
 pub use error::NaiaServerError;

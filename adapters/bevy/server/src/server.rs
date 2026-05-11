@@ -8,10 +8,10 @@ use bevy_ecs::{
 };
 
 use naia_server::{
-    shared::SocketConfig, transport::Socket, EntityOwner, EntityPriorityMut, EntityPriorityRef,
-    Events, NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, Server as NaiaServer,
-    TickBufferMessages, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
-    WorldServer as NaiaWorldServer, WorldServer,
+    shared::SocketConfig, transport::Socket, ConnectionStats, EntityOwner, EntityPriorityMut,
+    EntityPriorityRef, Events, Historian, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
+    RoomRef, Server as NaiaServer, TickBufferMessages, TickEvents, UserKey, UserMut, UserRef,
+    UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer, WorldServer,
 };
 
 use naia_bevy_shared::{
@@ -549,6 +549,34 @@ impl<'w> Server<'w> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rtt(user_key),
             ServerImpl::Full(server) => server.rtt(user_key),
+        }
+    }
+
+    pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.connection_stats(user_key),
+            ServerImpl::Full(server) => server.connection_stats(user_key),
+        }
+    }
+
+    pub fn enable_historian(&mut self, max_ticks: u16) {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.enable_historian(max_ticks),
+            ServerImpl::Full(server) => server.enable_historian(max_ticks),
+        }
+    }
+
+    pub fn record_historian_tick<W: WorldRefType<Entity>>(&mut self, world: W, tick: Tick) {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.record_historian_tick(world, tick),
+            ServerImpl::Full(server) => server.record_historian_tick(world, tick),
+        }
+    }
+
+    pub fn historian(&self) -> Option<&Historian> {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.historian(),
+            ServerImpl::Full(server) => server.historian(),
         }
     }
 

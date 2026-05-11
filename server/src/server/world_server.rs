@@ -161,6 +161,9 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     // Resources are 1-component entities that auto-include into every
     // user's scope. See `_AGENTS/RESOURCES_PLAN.md`.
     resource_registry: ResourceRegistry,
+    // Optional lag-compensation snapshot buffer. None until enable_historian()
+    // is called; record_historian_tick() is a no-op when None.
+    historian: Option<crate::historian::Historian>,
 }
 
 
@@ -229,6 +232,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             user_priorities: HashMap::new(),
             scope_checks_cache: ScopeChecksCache::new(),
             resource_registry: ResourceRegistry::new(),
+            historian: None,
         }
     }
 
@@ -1774,6 +1778,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
         None
+    }
+
+    // Historian — lag-compensation snapshot buffer
+
+    /// Enable the per-tick snapshot buffer for server-side lag compensation.
+    ///
+    /// `max_ticks` controls how many past ticks are retained. A value of 64
+    /// covers ~3 seconds at 20 Hz, which is appropriate for most games.
+    /// Call once at startup; calling again replaces the buffer.
+    pub fn enable_historian(&mut self, max_ticks: u16) {
+        self.historian = Some(crate::historian::Historian::new(max_ticks));
+    }
+
+    /// Record a snapshot of all replicated component values at the given tick.
+    ///
+    /// Call this each tick after game-state mutation and before
+    /// `send_all_packets`, so the snapshot reflects authoritative state.
+    /// This is a no-op if `enable_historian()` has not been called.
+    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
+        if let Some(historian) = &mut self.historian {
+            historian.record_tick(
+                tick,
+                &self.global_world_manager,
+                &self.global_entity_map,
+                &world,
+            );
+        }
+    }
+
+    /// Returns a read-only reference to the Historian, or `None` if it has not
+    /// been enabled via `enable_historian()`.
+    pub fn historian(&self) -> Option<&crate::historian::Historian> {
+        self.historian.as_ref()
     }
 
     /// Returns a snapshot of per-connection diagnostics for the given user.

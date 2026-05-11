@@ -97,6 +97,12 @@ impl GlobalWorldManager {
             .expect("Cannot despawn non-existant entity!");
     }
 
+    /// Returns an iterator over all tracked GlobalEntities.
+    /// Used by the Historian to snapshot all replicated entities each tick.
+    pub fn all_global_entities(&self) -> impl Iterator<Item = &GlobalEntity> {
+        self.entity_records.keys()
+    }
+
     // Component Kinds
     pub fn component_kinds(&self, global_entity: &GlobalEntity) -> Option<Vec<ComponentKind>> {
         if !self.entity_records.contains_key(global_entity) {

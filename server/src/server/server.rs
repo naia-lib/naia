@@ -7,6 +7,8 @@ use naia_shared::{
     ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
+use crate::Historian;
+
 use crate::{
     connection::tick_buffer_messages::TickBufferMessages,
     events::main_events::WorldPacketEvent,
@@ -972,6 +974,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// jitter, packet-loss fraction, and send/recv bandwidth in kbps.
     pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
         self.world_server.connection_stats(user_key)
+    }
+
+    // Historian — lag-compensation snapshot buffer
+
+    /// Enable the per-tick snapshot buffer for server-side lag compensation.
+    /// `max_ticks` controls how many past ticks are retained (e.g. 64 ≈ 3 s at 20 Hz).
+    pub fn enable_historian(&mut self, max_ticks: u16) {
+        self.world_server.enable_historian(max_ticks);
+    }
+
+    /// Record a snapshot of all replicated component values at the given tick.
+    /// Call after game-state mutation and before `send_all_packets`.
+    /// No-op if historian is not enabled.
+    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
+        self.world_server.record_historian_tick(world, tick);
+    }
+
+    /// Returns a reference to the Historian, or `None` if not enabled.
+    pub fn historian(&self) -> Option<&Historian> {
+        self.world_server.historian()
     }
 
     /// Despawns the entity from the replication layer without touching the world.
