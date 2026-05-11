@@ -795,6 +795,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.main_server.users_count()
     }
 
+    pub fn user_count(&self) -> usize {
+        self.world_server.user_count()
+    }
+
+    pub fn entity_count(&self) -> usize {
+        self.world_server.entity_count()
+    }
+
     /// Returns the socket address of the user, or `None` if the user is not
     /// found or the handshake is not yet complete.
     pub fn user_address(&self, user_key: &UserKey) -> Option<std::net::SocketAddr> {
@@ -903,6 +911,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns the number of currently existing rooms.
     pub fn rooms_count(&self) -> usize {
         self.world_server.rooms_count()
+    }
+
+    pub fn room_count(&self) -> usize {
+        self.world_server.room_count()
     }
 
     // Ticks ─────────────────────────────────────────────────────────────────

@@ -1608,6 +1608,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.user_store.len()
     }
 
+    pub fn user_count(&self) -> usize {
+        self.user_keys().len()
+    }
+
+    pub fn entity_count(&self) -> usize {
+        self.global_entity_map.entity_count()
+    }
+
     /// Returns a UserScopeRef, which is used to query whether a given user has
     pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, E> {
         if self.user_store.contains(user_key) {
@@ -1732,6 +1740,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Get a count of how many Rooms currently exist
     pub fn rooms_count(&self) -> usize {
         self.room_store.len()
+    }
+
+    pub fn room_count(&self) -> usize {
+        self.room_keys().len()
     }
 
     // Bandwidth monitoring

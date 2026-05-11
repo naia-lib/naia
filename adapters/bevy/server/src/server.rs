@@ -421,6 +421,20 @@ impl<'w> Server<'w> {
         }
     }
 
+    pub fn user_count(&self) -> usize {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.user_count(),
+            ServerImpl::Full(server) => server.user_count(),
+        }
+    }
+
+    pub fn entity_count(&self) -> usize {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.entity_count(),
+            ServerImpl::Full(server) => server.entity_count(),
+        }
+    }
+
     pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, Entity> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.user_scope(user_key),
@@ -517,6 +531,13 @@ impl<'w> Server<'w> {
         match &*self.server_impl {
             ServerImpl::WorldOnly(server) => server.rooms_count(),
             ServerImpl::Full(server) => server.rooms_count(),
+        }
+    }
+
+    pub fn room_count(&self) -> usize {
+        match &*self.server_impl {
+            ServerImpl::WorldOnly(server) => server.room_count(),
+            ServerImpl::Full(server) => server.room_count(),
         }
     }
 

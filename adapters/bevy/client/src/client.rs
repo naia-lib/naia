@@ -13,7 +13,8 @@ use naia_bevy_shared::{
 use naia_client::{
     shared::{GameInstant, SocketConfig},
     transport::Socket,
-    Client as NaiaClient, ConnectionStatus, EntityPriorityMut, EntityPriorityRef, NaiaClientError,
+    Client as NaiaClient, ConnectionStats, ConnectionStatus, EntityPriorityMut, EntityPriorityRef,
+    NaiaClientError,
 };
 
 use crate::Publicity;
@@ -188,6 +189,10 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
 
     pub fn entity_priority_mut(&mut self, entity: Entity) -> EntityPriorityMut<'_, Entity> {
         self.client.client.entity_priority_mut(entity)
+    }
+
+    pub fn connection_stats(&self) -> Option<ConnectionStats> {
+        self.client.client.connection_stats()
     }
 }
 
