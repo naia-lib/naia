@@ -22,6 +22,7 @@
 | A-6 — Per-component replication toggle | **CLOSED — deliberate design decision**: scope is per-entity, not per-component. If intra-entity visibility bifurcation is needed, move components to a separately scoped entity and link via `EntityProperty`. This is the established naia pattern. | n/a |
 | A-18 — iOS/Android platform gap | **COMPLETE** — README platform table + CONCEPTS.md §11 | pending |
 | A-19 — Steam relay gap | **COMPLETE** — README + CONCEPTS.md §11 | pending |
+| A-16 — Fuzz coverage shallow | **COMPLETE** — 3 new targets: `serde_quantized`, `handshake_header`, `replication_decode`; `WorldReader` exported | `34805f5f` |
 | All others | open | — |
 
 ---
@@ -417,18 +418,18 @@ two-line code snippets for each API.
 
 ---
 
-### A-16 — Fuzz coverage is shallow (2 targets)
+### A-16 — Fuzz coverage is shallow (2 targets) ✓ COMPLETE
 
-**Current state.**  
-The `fuzz/fuzz_targets/` directory contains exactly two targets:
-`header_deserialize.rs` and `packet_deserialize.rs`. The serde layer for
-component types, the replication protocol, channel processing, and the
-handshake state machine are not fuzz-covered. The CHANGELOG already records one
-UB transmute caught by code review rather than fuzz.
+**Resolution** (`34805f5f`).  
+Added three new fuzz targets — total coverage is now 5 targets:
 
-**Recommendation.**  
-Add fuzz targets for: (1) quantized serde types (`SignedVariableFloat`, etc.),
-(2) the server packet decoder pipeline, (3) the handshake state machine.
+| Target | Covers |
+|--------|--------|
+| `serde_quantized` | `UnsignedFloat`, `SignedFloat`, `UnsignedVariableFloat`, `SignedVariableFloat` across multiple const-param combinations; includes roundtrip (de→ser→de) assertions |
+| `handshake_header` | `HandshakeHeader::de` — the handshake enum (ClientIdentifyRequest, ServerIdentifyResponse, ServerRejectResponse + RejectReason, etc.) |
+| `replication_decode` | `WorldReader::read_world_events` — entity spawn/despawn, component insert/remove, authority messages, updates; uses a `FakeGlobalWorldManager` stub |
+
+Also exports `WorldReader` from `naia-shared` (was previously private mod).
 
 **Effort:** M.  **Leverage:** 3
 
@@ -497,7 +498,7 @@ A-1 and A-5 are complete. A-9/A-13 FAQ portions are done; CONCEPTS.md work remai
 | 3 | A-14 | Bevy T phantom type friction | Add DefaultClientTag alias | S | 3 | open |
 | 4 | A-11 | Request/Response: no timeout, disconnect cleanup unaudited | Audit + add TTL | S | 3 | open |
 | 5 | A-6 | Per-component replication granularity absent — issue #186 | Design + implement | M | 3 | open |
-| 6 | A-16 | Fuzz coverage: 2 targets only | Add 3 new targets | M | 3 | open |
+| 6 | A-16 | Fuzz coverage: 2 targets only | Add 3 new targets | M | 3 | **COMPLETE** `34805f5f` |
 | 7 | A-17 | No push-based metrics hooks | Add optional tracing/metrics feature | M | 2 | open |
 | 8 | A-18 | iOS/Android: document the gap | Clarify README | XS | 2 | open |
 | 9 | A-19 | No Steam relay | Document gap in README | XS | 2 | open |
