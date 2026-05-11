@@ -301,7 +301,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ---
 
-#### G-W4: Compression not used by default / not production-ready ⭐⭐
+#### G-W4: Compression not used by default / not production-ready ⭐⭐ — Phase 1 **COMPLETE**
 
 **Current state:** `zstd_support` feature gate wires `Encoder`/`Decoder` through `io.rs` on both server and client. Two correctness bugs exist: (1) `encoder.encode()` always uses the compressed result even when it is larger than the input (`// TODO` at `shared/src/connection/encoder.rs:40`); (2) the decoder unconditionally calls `decompress()` on every packet — if the encoder ever skips compression there is no per-packet signal, so the decoder will corrupt the payload.
 
@@ -512,7 +512,7 @@ Active items only (closed/deferred gaps noted inline):
 | 2 | **G-DX2**: `CommandHistory::new(max_ticks)` + demo update | ~~Implement~~ **COMPLETE** | S | 3 |
 | 3 | **G-DX3**: `DisconnectReason` enum on server + client events | ~~Implement~~ **COMPLETE** | S | 4 |
 | 4 | **G-S2**: `max_messages_per_tick` on `ReliableSettings` | ~~Implement~~ **COMPLETE** | S | 4 |
-| 5 | **G-W4** Phase 1: `is_compressed` bit + encoder size check | Implement | S | 2–4 |
+| 5 | **G-W4** Phase 1: `is_compressed` bit + encoder size check | ~~Implement~~ **COMPLETE** | S | 2–4 |
 | 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | Implement | S | 3 |
 | 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | Implement | S | 3 |
 | 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | Implement | S+S | 4 |

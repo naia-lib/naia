@@ -30,19 +30,30 @@ cfg_if! {
             }
 
             pub fn decode(&mut self, payload: &[u8]) -> &[u8] {
-                if let Some(decoder) = &mut self.decoder {
-                    self.result = decoder
-                        .decompress(
-                            payload,
-                            Decompressor::<'static>::upper_bound(payload)
-                                .expect("upper bound decode error"),
-                        )
-                        .expect("decode error");
-                    return &self.result;
-                } else {
-                    self.result = payload.to_vec();
-                    return &self.result;
+                // First byte is the is_compressed flag (written by encoder)
+                let (is_compressed, data) = match payload.split_first() {
+                    Some((&flag, rest)) => (flag != 0, rest),
+                    None => {
+                        self.result = Vec::new();
+                        return &self.result;
+                    }
+                };
+
+                if is_compressed {
+                    if let Some(decoder) = &mut self.decoder {
+                        self.result = decoder
+                            .decompress(
+                                data,
+                                Decompressor::<'static>::upper_bound(data)
+                                    .expect("upper bound decode error"),
+                            )
+                            .expect("decode error");
+                        return &self.result;
+                    }
                 }
+                // Not compressed (or no decoder configured): return raw data
+                self.result = data.to_vec();
+                &self.result
             }
         }
     }

@@ -37,15 +37,28 @@ cfg_if! {
             }
 
             pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
-                // TODO: only use compressed packet if the resulting size would be less!
                 match &mut self.encoder {
                     EncoderType::DictionaryTrainer(trainer) => {
                         trainer.record_bytes(payload);
-                        self.result = payload.to_vec();
+                        // Training mode: emit uncompressed with is_compressed=0 prefix
+                        self.result = Vec::with_capacity(1 + payload.len());
+                        self.result.push(0u8);
+                        self.result.extend_from_slice(payload);
                         return &self.result;
                     }
                     EncoderType::Compressor(encoder) => {
-                        self.result = encoder.compress(payload).expect("encode error");
+                        let compressed = encoder.compress(payload).expect("encode error");
+                        if compressed.len() < payload.len() {
+                            // Compression is beneficial: is_compressed=1 prefix + compressed bytes
+                            self.result = Vec::with_capacity(1 + compressed.len());
+                            self.result.push(1u8);
+                            self.result.extend_from_slice(&compressed);
+                        } else {
+                            // Compression is not beneficial: is_compressed=0 prefix + original bytes
+                            self.result = Vec::with_capacity(1 + payload.len());
+                            self.result.push(0u8);
+                            self.result.extend_from_slice(payload);
+                        }
                         return &self.result;
                     }
                 }
