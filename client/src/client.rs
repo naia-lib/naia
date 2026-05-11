@@ -4,7 +4,8 @@ use log::{debug, info, warn};
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionStats,
+    EntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
     FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message,
@@ -1206,6 +1207,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     /// (bytes/second).
     pub fn incoming_bandwidth(&self) -> f32 {
         self.io.incoming_bandwidth()
+    }
+
+    /// Returns a snapshot of per-connection diagnostics.
+    ///
+    /// Returns `None` if not connected. Includes RTT (average in ms), jitter,
+    /// packet-loss fraction, and send/recv bandwidth in kbps.
+    /// Note: `rtt_p50_ms` and `rtt_p99_ms` are set to `rtt_ms` on the client
+    /// because the client time manager uses an EWMA rather than a ring buffer.
+    pub fn connection_stats(&self) -> Option<ConnectionStats> {
+        let conn = self.server_connection.as_ref()?;
+        let rtt_ms = conn.time_manager.rtt();
+        let jitter_ms = conn.time_manager.jitter();
+        let packet_loss_pct = conn.base.packet_loss_pct();
+        Some(ConnectionStats {
+            rtt_ms,
+            rtt_p50_ms: rtt_ms,
+            rtt_p99_ms: rtt_ms,
+            jitter_ms,
+            packet_loss_pct,
+            kbps_sent: self.io.outgoing_bandwidth(),
+            kbps_recv: self.io.incoming_bandwidth(),
+        })
     }
 
     // Crate-Public methods

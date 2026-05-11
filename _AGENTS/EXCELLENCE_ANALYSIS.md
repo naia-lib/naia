@@ -229,7 +229,7 @@ This is a small breaking change; the information is already available at each di
 
 ---
 
-#### G-DX4: No built-in metrics / observability export ⭐⭐⭐⭐
+#### G-DX4: No built-in metrics / observability export ⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** `PingManager` tracks `rtt_average` + `jitter_average` (EWMA floats). `BandwidthMonitor` produces kbps from a sliding time window. Neither is exposed via any public API; packet loss is not tracked at all.
 
@@ -421,7 +421,7 @@ For reliable messages the token bucket already provides pacing; reliable content
 
 ---
 
-#### G-CC2: RTT measurement lacks percentiles ⭐⭐
+#### G-CC2: RTT measurement lacks percentiles ⭐⭐ — **COMPLETE**
 
 **Current state:** `PingManager` tracks `rtt_average` and `jitter_average` as EWMA f32 scalars. No history buffer, no percentiles.
 
@@ -516,8 +516,8 @@ Active items only (closed/deferred gaps noted inline):
 | 6 | **G-SC2**: Delete `scope_checks_all()`; add `mark_all_scope_checks_pending()` | ~~Implement~~ **COMPLETE** | S | 3 |
 | 7 | **G-QA1**: Add 2 adversarial BDD scenarios (replication convergence + tick-buffer under loss) | ~~Implement~~ **COMPLETE** | S | 3 |
 | 8 | **G-QA2**: `cargo-fuzz` harness + `proptest` roundtrip suite | ~~Implement~~ **COMPLETE** | S+S | 4 |
-| 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | Implement | M | 4 |
-| 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | Implement | S | 2 |
+| 9 | **G-DX4**: `ConnectionStats` struct + `LossMonitor` + `connection_stats()` API | ~~Implement~~ **COMPLETE** | M | 4 |
+| 10 | **G-CC2**: RTT ring buffer → `rtt_p50/p99` (implement with G-DX4) | ~~Implement~~ **COMPLETE** | S | 2 |
 | 11 | **G-P3**: `Historian` snapshot buffer + demo | Implement | M | 4 |
 | 12 | **G-W4** Phase 2: compression-audit bench + dictionary decision gate | Implement | M | 2–4 |
 | 13 | **G-T1**: `transport_udp` plaintext warnings in module doc + `SECURITY.md` | Docs | S | 4 |

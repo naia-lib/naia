@@ -165,6 +165,11 @@ impl BaseConnection {
         self.ack_manager.last_received_packet_index()
     }
 
+    /// Fraction of sent data-packets that were lost in the last 64-packet window.
+    pub fn packet_loss_pct(&self) -> f32 {
+        self.ack_manager.packet_loss_pct()
+    }
+
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.world_manager.collect_messages(now, rtt_millis);
         self.message_manager

@@ -14,9 +14,9 @@ use crate::{
     transport::Socket,
     transport::{PacketChannel, PacketSender},
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
-    ConnectEvent, DisconnectEvent, EntityOwner, Events, MainEvents, NaiaServerError,
-    ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents, UserKey, UserMut,
-    UserRef, UserScopeMut, UserScopeRef,
+    ConnectEvent, ConnectionStats, DisconnectEvent, EntityOwner, Events, MainEvents,
+    NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents,
+    UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
 };
 
 /// The naia server — accepts connections, replicates entities, and routes
@@ -965,6 +965,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// connection, or `None` if not yet measured.
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         self.world_server.jitter(user_key)
+    }
+
+    /// Returns a snapshot of per-connection diagnostics for the given user, or
+    /// `None` if the user is not connected. Includes RTT (average, p50, p99),
+    /// jitter, packet-loss fraction, and send/recv bandwidth in kbps.
+    pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
+        self.world_server.connection_stats(user_key)
     }
 
     /// Despawns the entity from the replication layer without touching the world.

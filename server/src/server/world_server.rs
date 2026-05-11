@@ -11,7 +11,7 @@ use log::{info, warn};
 
 use naia_shared::{
     handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
-    DisconnectReason,
+    ConnectionStats, DisconnectReason,
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
@@ -1774,6 +1774,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
         None
+    }
+
+    /// Returns a snapshot of per-connection diagnostics for the given user.
+    ///
+    /// Returns `None` if the user is not connected. All fields are rolling
+    /// averages or short-window estimates computed on demand; no per-tick
+    /// allocation occurs.
+    pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
+        let user = self.user_store.get(user_key)?;
+        let connection = self.user_connections.get(&user.address())?;
+        let pm = &connection.ping_manager;
+        Some(ConnectionStats {
+            rtt_ms: pm.rtt_average,
+            rtt_p50_ms: pm.rtt_p50_ms(),
+            rtt_p99_ms: pm.rtt_p99_ms(),
+            jitter_ms: pm.jitter_average,
+            packet_loss_pct: connection.base.packet_loss_pct(),
+            kbps_sent: self.io.outgoing_bandwidth_to_client(&user.address()),
+            kbps_recv: self.io.incoming_bandwidth_from_client(&user.address()),
+        })
     }
 
     // Crate-Public methods

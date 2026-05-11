@@ -3,8 +3,8 @@ use std::collections::HashMap;
 use crate::{types::PacketIndex, wrapping_number::sequence_greater_than};
 
 use super::{
-    packet_notifiable::PacketNotifiable, packet_type::PacketType, sequence_buffer::SequenceBuffer,
-    standard_header::StandardHeader,
+    loss_monitor::LossMonitor, packet_notifiable::PacketNotifiable, packet_type::PacketType,
+    sequence_buffer::SequenceBuffer, standard_header::StandardHeader,
 };
 
 pub const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
@@ -25,6 +25,7 @@ pub struct AckManager {
     received_packets: SequenceBuffer<ReceivedPacket>,
     // Whether or not we should send an empty ack on the next outgoing packet
     should_send_empty_ack: bool,
+    loss_monitor: LossMonitor,
 }
 
 impl Default for AckManager {
@@ -41,7 +42,12 @@ impl AckManager {
             sent_packets: HashMap::with_capacity(DEFAULT_SEND_PACKETS_SIZE),
             received_packets: SequenceBuffer::with_capacity(REDUNDANT_PACKET_ACKS_SIZE + 1),
             should_send_empty_ack: false,
+            loss_monitor: LossMonitor::new(),
         }
+    }
+
+    pub fn packet_loss_pct(&self) -> f32 {
+        self.loss_monitor.packet_loss_pct()
     }
 
     pub fn should_send_empty_ack(&self) -> bool {
@@ -92,6 +98,7 @@ impl AckManager {
         // the current `sender_ack_index` was (clearly) received so we should remove it
         if let Some(sent_packet) = self.sent_packets.get(&sender_ack_index) {
             if sent_packet.packet_type == PacketType::Data {
+                self.loss_monitor.record_acked();
                 self.notify_packet_delivered(
                     sender_ack_index,
                     base_packet_notifiables,
@@ -108,8 +115,10 @@ impl AckManager {
         for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
             let sent_packet_index = sender_ack_index.wrapping_sub(i);
             if let Some(sent_packet) = self.sent_packets.get(&sent_packet_index) {
+                let is_data = sent_packet.packet_type == PacketType::Data;
                 if sender_ack_bitfield & 1 == 1 {
-                    if sent_packet.packet_type == PacketType::Data {
+                    if is_data {
+                        self.loss_monitor.record_acked();
                         self.notify_packet_delivered(
                             sent_packet_index,
                             base_packet_notifiables,
@@ -119,6 +128,9 @@ impl AckManager {
 
                     self.sent_packets.remove(&sent_packet_index);
                 } else {
+                    if is_data {
+                        self.loss_monitor.record_lost();
+                    }
                     self.sent_packets.remove(&sent_packet_index);
                 }
             }
