@@ -331,7 +331,7 @@ Expose via `server.connection_stats(&user_key) -> ConnectionStats` (poll-style).
 
 ### 2.7 Scalability
 
-#### G-SC1: No multi-server architecture / horizontal scaling ⭐⭐⭐⭐
+#### G-SC1: No multi-server architecture / horizontal scaling ⭐⭐⭐⭐ — **COMPLETE**
 
 **Current state:** One server process owns all entities. The Naia server is a single-process authority. There is no built-in mechanism for multiple server instances to collaborate.
 
@@ -533,7 +533,7 @@ Active items only (closed/deferred gaps noted inline):
 | 17 | **G-T5**: NAT traversal out-of-scope note in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
 | 18 | **G-I2**: Distance-LOD `set_gain()` snippet in Bevy demo | ~~Docs/Demo~~ **COMPLETE** | XS | 2 |
 | 19 | **G-DOC2**: "Coming from X?" table in `README.md` | ~~Docs~~ **COMPLETE** | XS | 2 |
-| 20 | **G-SC1**: Zone-server architecture note in `CONCEPTS.md` | Docs | XS | 1 |
+| 20 | **G-SC1**: Zone-server architecture note in `CONCEPTS.md` | ~~Docs~~ **COMPLETE** | XS | 1 |
 | — | **G-P1**, **G-P2**, **G-T6**, **G-W2**, **G-S1**, **G-S3** | CLOSED — not gaps | — | — |
 | — | **G-T2**, **G-T3**, **G-T4**, **G-DX5**, **G-DX6**, **G-CC1** | DEFERRED | — | — |
 | — | **G-I1** | OUT OF SCOPE | — | — |

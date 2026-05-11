@@ -543,3 +543,38 @@ are:
 These libraries are complementary to naia: a game can use naia for
 server→client replication (lobby, leaderboard, world state) and GGRS for the
 fast-path P2P match simulation in parallel.
+
+---
+
+## 15. Multi-Server / Zone Architecture
+
+naia is a single-process authority. One server owns all entities it replicates;
+there is no built-in mechanism for multiple server instances to share state.
+
+For games that need horizontal scaling (e.g. an open world split across
+geographic zones), the standard pattern is **zone sharding at the application
+layer**:
+
+```
+Zone A server (naia process)          Zone B server (naia process)
+  owns entities in region A             owns entities in region B
+        │                                       │
+        └───── coordination service ────────────┘
+                 (your code: entity hand-off,
+                  cross-zone messages, matchmaking)
+```
+
+Each zone server runs an independent naia instance. When a player moves between
+zones the application:
+
+1. Serializes the player's replicated state (your `Replicate` components) on
+   the source server.
+2. Sends the serialized state to the destination server via your coordination
+   channel (Redis, gRPC, direct TCP — your choice).
+3. Despawns the entity on the source server (client gets a despawn event).
+4. Spawns the entity on the destination server and places the player's
+   connection in the new room.
+
+naia provides the per-process primitive (`spawn_entity`, rooms, scopes,
+authority). Zone coordination is an application concern — all the information
+you need to implement it is available through the public API.
