@@ -1,8 +1,8 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericParam, Generics, Ident, Index, LitStr,
-    Member, Type,
+    parse_macro_input, Data, DataEnum, DeriveInput, Fields, GenericParam, Generics, Ident, Index,
+    LitStr, Member, Type,
 };
 
 use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
@@ -14,6 +14,17 @@ pub fn message_impl(
     is_request: bool,
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
+
+    // Dispatch to the enum path before touching any struct-only helpers.
+    if let Data::Enum(ref data_enum) = input.data {
+        return enum_message_impl(
+            &input,
+            data_enum,
+            shared_crate_name,
+            is_fragment,
+            is_request,
+        );
+    }
 
     // Helper Properties
     let struct_type = get_struct_type(&input);
@@ -621,6 +632,545 @@ impl Field {
         match self {
             Self::EntityProperty(property) => &property.variable_name,
             Self::Normal(field) => &field.variable_name,
+        }
+    }
+}
+
+// ── Enum-message support ──────────────────────────────────────────────────────
+
+/// Minimum bits needed to encode `variant_count` distinct indices. Always ≥ 1.
+fn bits_needed_for(variant_count: usize) -> u8 {
+    if variant_count <= 2 {
+        return 1;
+    }
+    let max_index = variant_count - 1;
+    let bits = usize::BITS - max_index.leading_zeros();
+    if bits >= 256 {
+        panic!("cannot encode an enum in more than 255 bits!");
+    }
+    bits as u8
+}
+
+fn is_entity_property_type(ty: &Type) -> bool {
+    if let Type::Path(type_path) = ty {
+        if let Some(seg) = type_path.path.segments.first() {
+            return seg.ident == "EntityProperty";
+        }
+    }
+    false
+}
+
+enum FieldKind {
+    Normal(Type),
+    EntityProperty,
+}
+
+enum VariantStyle {
+    Unit,
+    Named,
+    Unnamed,
+}
+
+struct EnumVariantField {
+    name: Ident,
+    kind: FieldKind,
+}
+
+struct EnumVariant {
+    name: Ident,
+    index: u16,
+    fields: Vec<EnumVariantField>,
+    style: VariantStyle,
+}
+
+fn get_enum_variants(data_enum: &DataEnum) -> Vec<EnumVariant> {
+    data_enum
+        .variants
+        .iter()
+        .enumerate()
+        .map(|(i, variant)| {
+            let name = variant.ident.clone();
+            let index = i as u16;
+            let (fields, style) = match &variant.fields {
+                Fields::Unit => (vec![], VariantStyle::Unit),
+                Fields::Named(named) => {
+                    let fields = named
+                        .named
+                        .iter()
+                        .map(|f| {
+                            let fname = f.ident.clone().expect("named field has ident");
+                            let kind = if is_entity_property_type(&f.ty) {
+                                FieldKind::EntityProperty
+                            } else {
+                                FieldKind::Normal(f.ty.clone())
+                            };
+                            EnumVariantField { name: fname, kind }
+                        })
+                        .collect();
+                    (fields, VariantStyle::Named)
+                }
+                Fields::Unnamed(unnamed) => {
+                    let fields = unnamed
+                        .unnamed
+                        .iter()
+                        .enumerate()
+                        .map(|(fi, f)| {
+                            let fname = format_ident!("f{}", fi);
+                            let kind = if is_entity_property_type(&f.ty) {
+                                FieldKind::EntityProperty
+                            } else {
+                                FieldKind::Normal(f.ty.clone())
+                            };
+                            EnumVariantField { name: fname, kind }
+                        })
+                        .collect();
+                    (fields, VariantStyle::Unnamed)
+                }
+            };
+            EnumVariant {
+                name,
+                index,
+                fields,
+                style,
+            }
+        })
+        .collect()
+}
+
+fn enum_message_impl(
+    input: &DeriveInput,
+    data_enum: &DataEnum,
+    shared_crate_name: TokenStream,
+    is_fragment: bool,
+    is_request: bool,
+) -> proc_macro::TokenStream {
+    let (untyped_generics, typed_generics, turbofish) = get_generics(input);
+
+    let enum_name = &input.ident;
+    let enum_name_str = LitStr::new(
+        format!(
+            "{}{}",
+            &enum_name.to_string(),
+            &untyped_generics.to_string()
+        )
+        .as_str(),
+        enum_name.span(),
+    );
+    let lowercase_enum_name = Ident::new(
+        enum_name.to_string().to_lowercase().as_str(),
+        Span::call_site(),
+    );
+    let module_name = format_ident!("define_{}", lowercase_enum_name);
+    let builder_name = format_ident!("{}Builder", enum_name);
+    let builder_generic_fields = get_builder_generic_fields(&input.generics);
+
+    let variants = get_enum_variants(data_enum);
+    let bits_needed: u8 = bits_needed_for(variants.len());
+
+    let write_method = get_enum_write_method(&variants, bits_needed);
+    let bit_length_method = get_enum_bit_length_method(&variants, bits_needed);
+    let clone_method = get_enum_clone_method(&variants);
+    let relations_waiting_method = get_enum_relations_waiting_method(&variants);
+    let relations_complete_method = get_enum_relations_complete_method(&variants);
+    let builder_read_method = get_enum_builder_read_method(
+        enum_name,
+        &variants,
+        bits_needed,
+        &untyped_generics,
+    );
+
+    let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
+    let builder_new_method = get_builder_new_method(
+        &typed_generics,
+        &builder_name,
+        &untyped_generics,
+        &input.generics,
+    );
+    let builder_box_clone_method = get_builder_box_clone_method(&input.generics);
+    let is_fragment_method = get_is_fragment_method(is_fragment);
+    let is_request_method = get_is_request_method(is_request);
+
+    let gen = quote! {
+        mod #module_name {
+
+            pub use std::{any::Any, collections::HashSet};
+            pub use #shared_crate_name::{
+                Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter,
+                LocalEntityAndGlobalEntityConverterMut, EntityProperty, MessageKind, MessageKinds,
+                Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer,
+                RemoteEntity, UnsignedInteger,
+            };
+            use super::*;
+
+            struct #builder_name #typed_generics #builder_generic_fields
+            #builder_new_method
+            impl #typed_generics MessageBuilder for #builder_name #untyped_generics {
+                #builder_read_method
+                #builder_box_clone_method
+            }
+
+            impl #typed_generics Message for #enum_name #untyped_generics {
+                fn kind(&self) -> MessageKind {
+                    MessageKind::of::<#enum_name #untyped_generics>()
+                }
+                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+                    self
+                }
+                #is_fragment_method
+                #is_request_method
+                #bit_length_method
+                #builder_create_method
+                #relations_waiting_method
+                #relations_complete_method
+                #write_method
+            }
+            impl #typed_generics Named for #enum_name #untyped_generics {
+                fn name(&self) -> String {
+                    #enum_name_str.to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    #enum_name_str
+                }
+            }
+            impl #typed_generics Clone for #enum_name #untyped_generics {
+                #clone_method
+            }
+        }
+    };
+
+    proc_macro::TokenStream::from(gen)
+}
+
+fn get_enum_write_method(variants: &[EnumVariant], bits_needed: u8) -> TokenStream {
+    let arms = variants.iter().map(|v| {
+        let vname = &v.name;
+        let idx = v.index;
+        match &v.style {
+            VariantStyle::Unit => quote! {
+                Self::#vname => {
+                    UnsignedInteger::<#bits_needed>::new(#idx).ser(writer);
+                }
+            },
+            VariantStyle::Named => {
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                let writes = v.fields.iter().map(|f| {
+                    let n = &f.name;
+                    match &f.kind {
+                        FieldKind::Normal(_) => quote! { #n.ser(writer); },
+                        FieldKind::EntityProperty => {
+                            quote! { EntityProperty::write(#n, writer, converter); }
+                        }
+                    }
+                });
+                quote! {
+                    Self::#vname { #(#names),* } => {
+                        UnsignedInteger::<#bits_needed>::new(#idx).ser(writer);
+                        #(#writes)*
+                    }
+                }
+            }
+            VariantStyle::Unnamed => {
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                let writes = v.fields.iter().map(|f| {
+                    let n = &f.name;
+                    match &f.kind {
+                        FieldKind::Normal(_) => quote! { #n.ser(writer); },
+                        FieldKind::EntityProperty => {
+                            quote! { EntityProperty::write(#n, writer, converter); }
+                        }
+                    }
+                });
+                quote! {
+                    Self::#vname(#(#names),*) => {
+                        UnsignedInteger::<#bits_needed>::new(#idx).ser(writer);
+                        #(#writes)*
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        fn write(
+            &self,
+            message_kinds: &MessageKinds,
+            writer: &mut dyn BitWrite,
+            converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) {
+            self.kind().ser(message_kinds, writer);
+            match self {
+                #(#arms)*
+            }
+        }
+    }
+}
+
+fn get_enum_bit_length_method(variants: &[EnumVariant], bits_needed: u8) -> TokenStream {
+    let arms = variants.iter().map(|v| {
+        let vname = &v.name;
+        match &v.style {
+            VariantStyle::Unit => quote! {
+                Self::#vname => {
+                    output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
+                }
+            },
+            VariantStyle::Named => {
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                let lengths = v.fields.iter().map(|f| {
+                    let n = &f.name;
+                    match &f.kind {
+                        FieldKind::Normal(_) => quote! { output += #n.bit_length(); },
+                        FieldKind::EntityProperty => {
+                            quote! { output += #n.bit_length(converter); }
+                        }
+                    }
+                });
+                quote! {
+                    Self::#vname { #(#names),* } => {
+                        output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
+                        #(#lengths)*
+                    }
+                }
+            }
+            VariantStyle::Unnamed => {
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                let lengths = v.fields.iter().map(|f| {
+                    let n = &f.name;
+                    match &f.kind {
+                        FieldKind::Normal(_) => quote! { output += #n.bit_length(); },
+                        FieldKind::EntityProperty => {
+                            quote! { output += #n.bit_length(converter); }
+                        }
+                    }
+                });
+                quote! {
+                    Self::#vname(#(#names),*) => {
+                        output += <UnsignedInteger::<#bits_needed> as ConstBitLength>::const_bit_length();
+                        #(#lengths)*
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        fn bit_length(
+            &self,
+            message_kinds: &MessageKinds,
+            converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) -> u32 {
+            let mut output = 0;
+            output += message_kinds.kind_bit_length();
+            match self {
+                #(#arms)*
+            }
+            output
+        }
+    }
+}
+
+fn get_enum_clone_method(variants: &[EnumVariant]) -> TokenStream {
+    let arms = variants.iter().map(|v| {
+        let vname = &v.name;
+        match &v.style {
+            VariantStyle::Unit => quote! { Self::#vname => Self::#vname, },
+            VariantStyle::Named => {
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                let cloned = names.iter().map(|n| quote! { #n: #n.clone(), });
+                quote! {
+                    Self::#vname { #(#names),* } => Self::#vname { #(#cloned)* },
+                }
+            }
+            VariantStyle::Unnamed => {
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                let cloned = names.iter().map(|n| quote! { #n.clone(), });
+                quote! {
+                    Self::#vname(#(#names),*) => Self::#vname(#(#cloned)*),
+                }
+            }
+        }
+    });
+    quote! {
+        fn clone(&self) -> Self {
+            match self {
+                #(#arms)*
+            }
+        }
+    }
+}
+
+fn get_enum_relations_waiting_method(variants: &[EnumVariant]) -> TokenStream {
+    let arms = variants.iter().map(|v| {
+        let vname = &v.name;
+        let ep_fields: Vec<&Ident> = v
+            .fields
+            .iter()
+            .filter(|f| matches!(f.kind, FieldKind::EntityProperty))
+            .map(|f| &f.name)
+            .collect();
+        let collects = ep_fields.iter().map(|n| {
+            quote! {
+                if let Some(remote_entity) = #n.waiting_remote_entity() {
+                    output.insert(remote_entity);
+                }
+            }
+        });
+        match &v.style {
+            VariantStyle::Unit => quote! { Self::#vname => {} },
+            VariantStyle::Named => {
+                if ep_fields.is_empty() {
+                    quote! { Self::#vname { .. } => {} }
+                } else {
+                    quote! {
+                        Self::#vname { #(#ep_fields),*, .. } => { #(#collects)* }
+                    }
+                }
+            }
+            VariantStyle::Unnamed => {
+                if ep_fields.is_empty() {
+                    quote! { Self::#vname(..) => {} }
+                } else {
+                    // Bind each field positionally: EP fields by name, normal fields as _
+                    let pattern: Vec<TokenStream> = v.fields.iter().map(|f| {
+                        let n = &f.name;
+                        match &f.kind {
+                            FieldKind::EntityProperty => quote! { #n },
+                            FieldKind::Normal(_) => quote! { _ },
+                        }
+                    }).collect();
+                    quote! {
+                        Self::#vname(#(#pattern),*) => { #(#collects)* }
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
+            let mut output = HashSet::new();
+            match self {
+                #(#arms)*
+            }
+            if output.is_empty() {
+                return None;
+            }
+            Some(output)
+        }
+    }
+}
+
+fn get_enum_relations_complete_method(variants: &[EnumVariant]) -> TokenStream {
+    let arms = variants.iter().map(|v| {
+        let vname = &v.name;
+        let ep_fields: Vec<&Ident> = v
+            .fields
+            .iter()
+            .filter(|f| matches!(f.kind, FieldKind::EntityProperty))
+            .map(|f| &f.name)
+            .collect();
+        let completes = ep_fields.iter().map(|n| {
+            quote! { #n.waiting_complete(converter); }
+        });
+        match &v.style {
+            VariantStyle::Unit => quote! { Self::#vname => {} },
+            VariantStyle::Named => {
+                if ep_fields.is_empty() {
+                    quote! { Self::#vname { .. } => {} }
+                } else {
+                    quote! {
+                        Self::#vname { #(#ep_fields),*, .. } => { #(#completes)* }
+                    }
+                }
+            }
+            VariantStyle::Unnamed => {
+                if ep_fields.is_empty() {
+                    quote! { Self::#vname(..) => {} }
+                } else {
+                    let pattern: Vec<TokenStream> = v.fields.iter().map(|f| {
+                        let n = &f.name;
+                        match &f.kind {
+                            FieldKind::EntityProperty => quote! { #n },
+                            FieldKind::Normal(_) => quote! { _ },
+                        }
+                    }).collect();
+                    quote! {
+                        Self::#vname(#(#pattern),*) => { #(#completes)* }
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+            match self {
+                #(#arms)*
+            }
+        }
+    }
+}
+
+fn get_enum_builder_read_method(
+    enum_name: &Ident,
+    variants: &[EnumVariant],
+    bits_needed: u8,
+    untyped_generics: &TokenStream,
+) -> TokenStream {
+    let arms = variants.iter().map(|v| {
+        let vname = &v.name;
+        let idx = v.index;
+        match &v.style {
+            VariantStyle::Unit => quote! {
+                #idx => #enum_name :: #vname,
+            },
+            VariantStyle::Named => {
+                let reads = v.fields.iter().map(|f| {
+                    let n = &f.name;
+                    match &f.kind {
+                        FieldKind::Normal(ty) => quote! { let #n = <#ty>::de(reader)?; },
+                        FieldKind::EntityProperty => {
+                            quote! { let #n = EntityProperty::new_read(reader, converter)?; }
+                        }
+                    }
+                });
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                quote! {
+                    #idx => {
+                        #(#reads)*
+                        #enum_name :: #vname { #(#names),* }
+                    }
+                }
+            }
+            VariantStyle::Unnamed => {
+                let reads = v.fields.iter().map(|f| {
+                    let n = &f.name;
+                    match &f.kind {
+                        FieldKind::Normal(ty) => quote! { let #n = <#ty>::de(reader)?; },
+                        FieldKind::EntityProperty => {
+                            quote! { let #n = EntityProperty::new_read(reader, converter)?; }
+                        }
+                    }
+                });
+                let names: Vec<&Ident> = v.fields.iter().map(|f| &f.name).collect();
+                quote! {
+                    #idx => {
+                        #(#reads)*
+                        #enum_name :: #vname(#(#names),*)
+                    }
+                }
+            }
+        }
+    });
+    quote! {
+        fn read(
+            &self,
+            reader: &mut BitReader,
+            converter: &dyn LocalEntityAndGlobalEntityConverter,
+        ) -> Result<MessageContainer, SerdeErr> {
+            let index: UnsignedInteger<#bits_needed> = Serde::de(reader)?;
+            let index_u16: u16 = index.get() as u16;
+            let value: #enum_name #untyped_generics = match index_u16 {
+                #(#arms)*
+                _ => return Err(SerdeErr),
+            };
+            Ok(MessageContainer::new(Box::new(value)))
         }
     }
 }

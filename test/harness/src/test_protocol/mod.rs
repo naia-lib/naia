@@ -92,6 +92,15 @@ impl naia_shared::Request for TestRequest {
 
 impl naia_shared::Response for TestResponse {}
 
+// Enum message — validates #[derive(Message)] on enums (issue #163).
+// Covers all three variant styles: Unit, Named, Unnamed.
+#[derive(Message)]
+pub enum TestEnumMessage {
+    Ping,
+    Chat { text: String },
+    Move(u32, u32),
+}
+
 // Channels for testing
 #[derive(Channel)]
 pub struct ReliableChannel;

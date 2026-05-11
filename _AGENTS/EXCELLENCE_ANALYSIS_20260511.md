@@ -16,6 +16,8 @@
 | A-15 — Diagnostics docs | **COMPLETE** (CONCEPTS.md §18) | pending |
 | A-3 — FEATURES.md stale | **COMPLETE** (full rewrite) | pending |
 | A-9 — Historian (FAQ portion) | partial — FAQ + FEATURES.md done; CONCEPTS.md §20 + filtering remain | `10524bc1` |
+| A-11 — Request/response disconnect cleanup | **COMPLETE** — `purge_user()` on both managers, called from `user_delete` | `24bc167e` |
+| A-8 — Enum `#[derive(Message)]` | **COMPLETE** — all three variant styles (Unit/Named/Unnamed), EntityProperty-aware; 39/39 integration tests pass | pending |
 | All others | open | — |
 
 ---
@@ -261,7 +263,7 @@ retransmission until the real RTT stabilizes.
 
 ---
 
-### A-8 — Enum types cannot derive Message
+### A-8 — Enum types cannot derive Message ✓ COMPLETE
 
 **Current state.**  
 GitHub issue #163 (open): `#[derive(Message)]` does not support enum types.
@@ -323,7 +325,7 @@ switch to `Dictionary` mode).
 
 ---
 
-### A-11 — Request/Response has no timeout or disconnect cleanup guarantee
+### A-11 — Request/Response has no timeout or disconnect cleanup guarantee ✓ COMPLETE (purge_user)
 
 **Current state.**  
 `server/src/request.rs` implements `GlobalRequestManager` as a `HashMap` from
