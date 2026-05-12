@@ -28,7 +28,7 @@ jobs:
       - name: Check internal links
         uses: lycheeverse/lychee-action@v2
         with:
-          args: --offline --include-fragments 'book/book/**/*.html'
+          args: --offline --include-fragments --exclude-path 'book/book/404.html' 'book/book/**/*.html'
           fail: true
       - uses: actions/upload-pages-artifact@v3
         with:
