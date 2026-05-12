@@ -1,6 +1,7 @@
 .idea
 .cursor
 /target
+/fuzz/target
 # Namako integration-test artifacts (test/npa/tests/namako_integration_test.rs
 # writes resolved-plan + run-report JSON under test/specs/ on each run).
 test/specs/test_*_plan.json
