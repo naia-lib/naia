@@ -50,7 +50,47 @@ What are developers saying right now? Check:
 - GitHub issues and discussions on naia itself.
 - Any blog posts or tutorials published in the last 12 months.
 
-### 1.3 Identify gaps
+### 1.3 Run the Rust quality checklist
+
+Before forming any gap opinion, run these commands and record the raw output:
+
+```
+cargo clippy --workspace --all-targets -- -D warnings
+cargo doc --workspace --no-deps --all-features 2>&1 | grep "^warning"
+cargo audit
+grep -rn "\.unwrap()\|\.expect(" server/src/ client/src/ shared/src/ \
+  | grep -v "#\[cfg(test)\]" \
+  | grep -v "^\s*//"
+```
+
+For each command: note whether it is clean, and if not, quote the specific
+failures. An `unwrap()` in a connection-handling hot path is a silent
+correctness gap — a malformed packet should never crash the game server.
+Treat any `clippy` failure under `--all-targets` as a gap. Treat any
+`cargo audit` advisory not already listed in `deny.toml` as a gap.
+
+Also check:
+- Is MSRV declared in the workspace `Cargo.toml`? Is it tested anywhere?
+- Do all public items in `server/src/lib.rs`, `client/src/lib.rs`,
+  `shared/src/lib.rs` have `///` doc comments?
+- Does `cargo doc` produce any "missing documentation" warnings on public items?
+
+### 1.4 Developer journey test
+
+Starting from only the `README.md` and the `demos/` directory (no prior
+knowledge of the codebase), sketch the steps a new user would follow to
+build a minimal working server + client that:
+
+1. Establishes a connection
+2. Spawns one entity on the server
+3. Replicates one component update to the client
+
+Document every friction point: missing doc, wrong assumption, API that
+requires reading source to understand. This is distinct from "what is
+missing" — it is "what is confusing to a first-time user even if it
+technically exists."
+
+### 1.5 Identify gaps
 
 For each gap you find, ask:
 - Does naia lack this entirely, or does it exist but undocumented/undiscoverable?
@@ -109,6 +149,19 @@ Columns: Rank | Gap ID | Description | Decision | Effort | Leverage
 ## What Would Make Naia Definitively #1
 Short section: what is the single biggest unlock? Is it a feature, a doc, a
 transport change, an ecosystem move?
+
+## Regression Table
+After forming your independent analysis, read `_AGENTS/EXCELLENCE_ANALYSIS_20260511.md`
+and complete this table. Do NOT read this file before forming your own analysis.
+
+| Prev Gap ID | Description | Fixed? | Evidence |
+|-------------|-------------|--------|----------|
+| …           | …           | Yes/No/Partial | file:line or commit |
+
+A gap that appeared in the previous audit and is still present is a
+**persistent gap** — weight it more heavily in your prioritisation.
+A gap that is now absent should show a commit hash or the doc/code location
+that resolved it.
 ```
 
 Gap IDs should be fresh — do not try to reuse IDs from any previous analysis.
@@ -171,6 +224,22 @@ These are load-bearing architectural choices. Do not recommend changing them.
 
 ---
 
+## 4. Grading rubric
+
+Assign naia an overall letter grade. Use this rubric — do not invent your
+own scale. The grade must appear in the Executive Summary.
+
+| Grade | Meaning |
+|-------|---------|
+| **S** | Industry-leading — would be recommended over lightyear / renet for most new projects without reservation |
+| **A** | Production-ready — no significant gaps vs peers; minor papercuts only |
+| **B** | Usable — meaningful gaps that noticeably affect adoption or developer experience |
+| **C** | Functional — missing table-stakes features or has correctness concerns that would give a senior engineer pause |
+| **D** | Significant reliability or API problems that make production use risky |
+
+Apply `+` / `-` within a grade where evidence warrants it (e.g. `B+`).
+State the single thing that, if fixed, would move the grade up one tier.
+
 ## 5. Ground rules
 
 - **Evidence first.** Every gap claim must be grounded in something you
@@ -195,8 +264,13 @@ These are load-bearing architectural choices. Do not recommend changing them.
 
 ## 6. After writing the document
 
-1. Commit the file with message:
+1. Read `_AGENTS/EXCELLENCE_ANALYSIS_20260511.md` and complete the
+   Regression Table in your new document. This step is mandatory — do not
+   skip it.
+2. Commit the file with message:
    `Excellence audit <YYYYMMDD>: fresh gap analysis`
-2. Push to `origin dev` via:
-   `git push origin main:dev`
-3. Report a one-paragraph summary of the top 3 findings to the user.
+3. Push to `origin dev`.
+4. Report to the user:
+   - The overall grade (and what changed vs the previous `B-` if relevant)
+   - The top 3 new or persistent gaps
+   - The single change that would move the grade up one tier
