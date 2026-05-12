@@ -215,15 +215,20 @@ a quarterly release cadence.
 
 **Current state.**
 Neither the workspace `Cargo.toml` nor any of the member crate `Cargo.toml`
-files declare a `rust-version` field. This is confirmed: no `rust-version` or
-`MSRV` string appears in any workspace manifest. Without a declared MSRV,
-downstream crates can't check compatibility, CI toolchain choices are
-arbitrary, and crates.io shows no minimum Rust information.
+files declare a `rust-version` field. This is confirmed by:
+```
+grep -r "rust-version\|MSRV" /home/connor/Work/specops/naia/Cargo.toml
+# → (no output)
+```
+
+Without a declared MSRV, downstream crates can't check compatibility, CI
+toolchain choices are arbitrary, and crates.io shows no minimum Rust
+information.
 
 **Why it matters.**
-For ecosystem crates, declaring MSRV is a community expectation and is required
-for crates.io "Rust Version" metadata. lightyear and bevy_replicon both declare
-theirs. The absence is a papercut during crates.io evaluation.
+For ecosystem crates (as opposed to application binaries), declaring MSRV is
+now a community expectation and is required for crates.io "Rust Version"
+metadata. lightyear and bevy_replicon both declare theirs.
 
 **Recommendation.**
 Add `rust-version = "1.81"` (or the actual minimum) to the workspace
@@ -233,33 +238,34 @@ Add `rust-version = "1.81"` (or the actual minimum) to the workspace
 
 ---
 
-### B-7 — `server/src/world/global_world_manager.rs` panics on stale entity keys
+### B-7 — `server/src/world/global_world_manager.rs` panics for expected-bad-caller states
 
 **Current state.**
-`global_world_manager.rs` contains approximately 10 `panic!` calls for
-conditions like "entity record does not exist!" and "component does not exist!"
-These fire when the caller passes a stale entity handle or calls `remove_component`
-on a component that has already been removed — conditions reachable through
-normal API misuse (stale entity key after despawn, race between despawn and
-a message handler). `user_opt`/`user_mut_opt` were added for `user()`/`user_mut()`
-(CHANGELOG), but entity-related functions still hard-panic.
-GitHub issue #172 ("Many functions panic unnecessarily") is open since May 2023.
+`global_world_manager.rs` contains ~10 `panic!` calls for conditions like
+"entity record does not exist!" and "component does not exist!" These fire
+when the caller passes an entity or component that is not tracked — conditions
+that are reachable through normal API misuse (stale entity handles, calling
+`remove_component` twice). The `user_opt`/`user_mut_opt` variants were added
+for `user()`/`user_mut()` (CHANGELOG), but the entity-related functions still
+hard-panic. GitHub issue #172 ("Many functions panic unnecessarily") is open
+since May 2023.
+
+These are documented in the CHANGELOG as a known issue but not yet resolved.
 
 **Why it matters.**
-A server that panics on a stale entity key crashes the entire game session.
-This is a known issue cited by experienced game developers when choosing renet
-over naia for production servers. The disconnect: users already know about
-`user_opt` as a pattern; applying the same pattern to entities eliminates the
-crash class.
+A server that panics on a stale entity key brought in from application code
+(e.g., a race between entity despawn and a message handler referencing it)
+crashes the entire game session. This is the #2 reason (after the missing
+release) that experienced game developers choose renet over naia for production.
 
 **Recommendation.**
-Audit `global_world_manager.rs` for all `panic!` sites triggered by external
-caller input (stale entity key, double-remove). Convert them to `Result<_,
-NaiaServerError>` or `Option` return types using `_opt` variants (mirroring
-`user_opt`). Keep `panic!` only for internal invariant violations (library
-bugs). This requires API changes and a caller audit.
+Audit `global_world_manager.rs` for all `panic!` sites. Convert those triggered
+by external/caller input (stale entity key, double-remove) to `Result<_, NaiaServerError>`
+return types. Keep `panic!` only for internal invariants that represent library
+bugs. Add a `_opt` variant (returning `Option`) for the common "might be gone"
+check pattern. This mirrors the `user_opt` pattern already established.
 
-**Effort:** M.  **Leverage:** 3
+**Effort:** M (requires API changes and caller audit).  **Leverage:** 3
 
 ---
 
@@ -324,13 +330,13 @@ will copy this bug. **[B-3 gap]**
 `server.spawn_entity(world.proxy_mut()).insert_component(component).id()`
 is straightforward. Adding to a room with `server.room_mut(&room_key).add_entity(&entity)`
 requires knowing to first create a room — documented in CONCEPTS.md §4.
-Minor friction: new users often miss the room step; a note in the README
-Quick concepts → Entity section saying "entity must be in a room shared with
-the user" would help.
+Minor friction: new users often miss the room step and are puzzled why nothing
+replicates; a note in the README "Quick concepts" → Entity section saying
+"entity must be in a room shared with the user" would help.
 
 **Step 6 — Client receive.**
 `Events::read::<SpawnEntityEvent>()` + `Events::read::<InsertComponentEvent<..>>()`
-pattern is clear once you know to look for it. The FAQ covers this.
+pattern is straightforward once you know to look for it. The FAQ covers this.
 
 **Overall friction score:** Low for Bevy users (adapter handles most
 boilerplate), Medium for no-ECS users (main loop ordering trap in demo is
@@ -340,8 +346,7 @@ the highest-friction point, **B-3**).
 
 ## Regression Table
 
-Comparing against the previous audit state documented in `_AGENTS/EXCELLENCE_ANALYSIS_20260511.md`
-(this file's prior version, which tracked audit progress).
+Comparing against the previous audit (`_AGENTS/EXCELLENCE_ANALYSIS_20260511.md`).
 
 | Prev Gap ID | Description | Fixed? | Evidence |
 |-------------|-------------|--------|---------|
@@ -364,15 +369,15 @@ Comparing against the previous audit state documented in `_AGENTS/EXCELLENCE_ANA
 | A-17 | No push-based metrics | ✓ FIXED | Commits `89fdd0b4`+`64578202`; `naia-metrics` + `naia-bevy-metrics` ship |
 | A-18 | iOS/Android platform gap undocumented | ✓ FIXED | Commit `06b8f66f`; README platform table updated |
 | A-19 | Steam relay gap undocumented | ✓ FIXED | Commit `06b8f66f`; README transport table updated |
-| — | Issue #165 — MessageChannel capacity limits | ✗ OPEN | `ReliableSender` `sending_messages` is still unbounded `VecDeque`. New B-2 |
-| — | demo send_all_packets placement | ✗ NEW | Basic demo `app.rs:185` calls it inside TickEvent loop. New B-3 |
+| — | Issue #165 — MessageChannel capacity limits | ✗ OPEN | `ReliableSender` `sending_messages` is still unbounded. New B-2 |
+| — | demo send_all_packets placement | ✗ NEW | Basic demo app.rs:185 calls it inside TickEvent loop. New B-3 |
 | — | global_world_manager panic on stale entity | ✗ OPEN | Issue #172 open; `user_opt` was added but entity path still panics. New B-7 |
-| — | MSRV undeclared | ✗ NEW | No `rust-version` field anywhere in workspace. New B-6 |
+| — | MSRV undeclared | ✗ NEW | No rust-version field anywhere. New B-6 |
 
 **Net regression count:** 0 (no previously-fixed gaps reopened).
-**Previous gaps fixed this cycle:** 16 of 19 (A-1, A-3–A-19 except A-2 and partial A-11).
-**Still open from previous cycle:** A-2 (release cadence), A-11 (partial — TTL not done).
-**New gaps identified this cycle:** B-1 (FEATURES.md stale), B-2 (channel backpressure),
+**Previous gaps fixed this cycle:** 16 of 19 (A-1, A-3–A-17, A-18–A-19).
+**Still open from previous cycle:** A-2 (release), A-11 partial.
+**New gaps identified this cycle:** B-1 (FEATURES.md), B-2 (channel backpressure),
 B-3 (demo ordering), B-6 (MSRV), B-7 (panic on stale entity).
 
 ---
