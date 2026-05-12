@@ -3,13 +3,17 @@ name = "naia-metrics"
 version = "0.25.0"
 authors = ["naia authors"]
 description = "Observability emission layer for naia game networking — emits ConnectionStats via the metrics crate facade"
+documentation = "https://docs.rs/naia-metrics"
+homepage = "https://github.com/naia-lib/naia"
+repository = "https://github.com/naia-lib/naia"
+keywords = ["networking", "gamedev", "metrics", "observability", "webrtc"]
+categories = ["network-programming", "game-development"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-publish = false
 
 [dependencies]
 metrics = "0.24"
-naia-shared = { path = "../shared", features = ["observability"] }
+naia-shared = { version = "0.25", path = "../shared", features = ["observability"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-naia-shared = { path = "../shared", features = ["wbindgen", "observability"] }
+naia-shared = { version = "0.25", path = "../shared", features = ["wbindgen", "observability"] }

@@ -3,18 +3,22 @@ name = "naia-bevy-metrics"
 version = "0.25.0"
 authors = ["naia authors"]
 description = "Bevy plugins for naia metrics — automatically emits ConnectionStats each tick"
+documentation = "https://docs.rs/naia-bevy-metrics"
+homepage = "https://github.com/naia-lib/naia"
+repository = "https://github.com/naia-lib/naia"
+keywords = ["bevy", "networking", "gamedev", "metrics", "observability"]
+categories = ["network-programming", "game-development"]
 license = "MIT OR Apache-2.0"
 edition = "2021"
-publish = false
 
 [features]
 server = ["dep:naia-bevy-server"]
 client = ["dep:naia-bevy-client"]
 
 [dependencies]
-naia-metrics    = { path = "../../../metrics" }
-naia-bevy-shared = { path = "../shared" }
-bevy_app        = { version = "0.18", default-features = false }
-bevy_ecs        = { version = "0.18", default-features = false }
-naia-bevy-server = { path = "../server", optional = true }
-naia-bevy-client = { path = "../client", optional = true }
+naia-metrics     = { version = "0.25", path = "../../../metrics" }
+naia-bevy-shared = { version = "0.25", path = "../shared" }
+bevy_app         = { version = "0.18", default-features = false }
+bevy_ecs         = { version = "0.18", default-features = false }
+naia-bevy-server = { version = "0.25", path = "../server", optional = true }
+naia-bevy-client = { version = "0.25", path = "../client", optional = true }

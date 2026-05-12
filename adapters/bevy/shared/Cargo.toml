@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-shared"
-version = "0.24.0"
+version = "0.25.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia & Bevy interop, functionality shared by client & server versions"
@@ -22,7 +22,7 @@ advanced_handshake = [ "naia-shared/advanced_handshake" ]
 test_time = [ "naia-shared/test_time" ]
 
 [dependencies]
-naia-shared = { version = "0.24", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
+naia-shared = { version = "0.25", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
 bevy_app = { version = "0.18", default-features=false }
 bevy_ecs = { version = "0.18", default-features=false }
 log = { version = "0.4" }
