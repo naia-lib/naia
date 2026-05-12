@@ -1,0 +1,19 @@
+[book]
+title = "The Naia Book"
+authors = ["naia contributors"]
+description = "The definitive guide to the naia game networking library"
+language = "en"
+src = "src"
+
+[build]
+build-dir = "book"
+
+[preprocessor.mermaid]
+command = "mdbook-mermaid"
+
+[preprocessor.pagetoc]
+
+[output.html]
+additional-js = ["mermaid.min.js", "mermaid-init.js"]
+git-repository-url = "https://github.com/naia-lib/naia"
+edit-url-template = "https://github.com/naia-lib/naia/edit/main/book/src/{path}"

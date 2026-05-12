@@ -1,0 +1,38 @@
+name: Deploy book to GitHub Pages
+on:
+  push:
+    branches: [main]
+    paths: ['book/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: peaceiris/actions-mdbook@v2
+        with:
+          mdbook-version: 'latest'
+      - name: Install mdbook preprocessors
+        run: |
+          cargo install mdbook-mermaid mdbook-pagetoc
+          mdbook-mermaid install book/
+      - name: Build WASM demo
+        run: |
+          rustup target add wasm32-unknown-unknown
+          cargo install wasm-pack
+          cd demos/basic/client/wasm_bindgen
+          wasm-pack build --target web --out-dir ../../../../book/book/demo
+      - name: Build book
+        run: mdbook build book/
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: book/book
+      - uses: actions/deploy-pages@v4
+        id: deployment
