@@ -33,15 +33,15 @@
 - [x] macroquad adapter (client)
 - [x] BDD contract test harness (215 contracts across 8 feature files)
 - [x] Criterion + iai-callgrind benchmark suite
-- [x] Fuzz targets for packet header and packet body deserialisation
+- [x] Fuzz targets — five targets covering packet header, packet body, quantized serde types, replication protocol decoder, and handshake state machine
+- [x] Enum support in `#[derive(Message)]` — enum message types with proc-macro derived serialization
+- [x] `DefaultClientTag` and `DefaultPlugin` in Bevy adapter — reduces phantom-type boilerplate for single-client apps
+- [x] Historian component-kind filtering — `enable_historian_filtered` snapshots only specified components
+- [x] Optional `metrics` / `tracing` integration — `naia-metrics` and `naia-bevy-metrics` feature-gated observability crates
+- [x] Per-connection message channel backpressure — `ReliableSettings::max_queue_depth` caps the unacknowledged message queue; `send_message` returns `Err(MessageQueueFull)` when the limit is reached
 
 ## Planned
 
 - [ ] `transport_quic` — TLS 1.3 native transport (Quinn-based); XL effort, no set timeline
-- [ ] Enum support in `#[derive(Message)]` — proc-macro gap, issue #163
 - [ ] Per-component replication toggle — fine-grained enable/disable per component on a replicated entity, issue #186
-- [ ] `DefaultClientTag` alias in Bevy adapter — reduces phantom-type boilerplate for single-client apps
-- [ ] Historian component-kind filtering — opt-in allowlist to snapshot only specific components
-- [ ] Additional fuzz targets: quantized serde types, replication protocol decoder, handshake state machine
-- [ ] Optional `metrics` / `tracing` integration (feature-gated, no core API changes)
 - [ ] iOS / Android native client socket (blocked on `transport_quic`)

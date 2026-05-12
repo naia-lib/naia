@@ -19,6 +19,10 @@ pub enum NaiaClientError {
     RecvError,
     /// A numeric entity or message identifier was malformed or out of range.
     IdError(u16),
+    /// The target channel's send queue is at capacity. The message was not
+    /// queued. The caller may retry on the next tick or discard the message.
+    /// Configure [`ReliableSettings::max_queue_depth`] to adjust the limit.
+    MessageQueueFull,
 }
 
 impl NaiaClientError {
@@ -35,6 +39,7 @@ impl fmt::Display for NaiaClientError {
             Self::SendError => write!(f, "Naia Client Error: Send Error"),
             Self::RecvError => write!(f, "Naia Client Error: Recv Error"),
             Self::IdError(code) => write!(f, "Naia Client Error: Id Error: {}", code),
+            Self::MessageQueueFull => write!(f, "Naia Client Error: MessageQueueFull"),
         }
     }
 }

@@ -511,12 +511,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 .world_manager
                 .entity_converter_mut(&self.global_world_manager);
             let message = MessageContainer::new(message_box);
-            connection.base.message_manager.send_message(
+            let accepted = connection.base.message_manager.send_message(
                 &self.protocol.message_kinds,
                 &mut converter,
                 channel_kind,
                 message,
             );
+            if !accepted {
+                return Err(NaiaClientError::MessageQueueFull);
+            }
         } else {
             self.waitlist_messages
                 .push_back((*channel_kind, message_box));

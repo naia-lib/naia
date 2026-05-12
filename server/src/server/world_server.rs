@@ -482,13 +482,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .base
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
-        connection.base.message_manager.send_message(
+        let accepted = connection.base.message_manager.send_message(
             &self.message_kinds,
             &mut converter,
             channel_kind,
             message,
         );
-        Ok(())
+        if accepted { Ok(()) } else { Err(NaiaServerError::MessageQueueFull) }
     }
 
     /// Sends a message to all connected users using the given channel.

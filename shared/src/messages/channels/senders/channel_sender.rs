@@ -10,8 +10,11 @@ use crate::{
 };
 
 pub trait ChannelSender<P>: Send + Sync {
-    /// Queues a Message to be transmitted to the remote host into an internal buffer
-    fn send_message(&mut self, message: P);
+    /// Queues a Message to be transmitted to the remote host into an internal
+    /// buffer. Returns `true` if the message was accepted, `false` if the
+    /// channel's queue was full and the message was dropped (reliable) or the
+    /// oldest entry was evicted to make room (unreliable).
+    fn send_message(&mut self, message: P) -> bool;
     /// For reliable channels, will collect any Messages that need to be resent
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32);
     /// Returns true if there are queued Messages ready to be written

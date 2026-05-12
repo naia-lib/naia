@@ -44,9 +44,17 @@ impl UnorderedUnreliableSender {
     }
 }
 
+// Drop oldest entry when the queue grows beyond this bound. For unreliable
+// channels, evicting the oldest message is semantically correct.
+const MAX_QUEUE_DEPTH: usize = 1024;
+
 impl ChannelSender<MessageContainer> for UnorderedUnreliableSender {
-    fn send_message(&mut self, message: MessageContainer) {
+    fn send_message(&mut self, message: MessageContainer) -> bool {
+        if self.outgoing_messages.len() >= MAX_QUEUE_DEPTH {
+            self.outgoing_messages.pop_front();
+        }
         self.outgoing_messages.push_back(message);
+        true
     }
 
     fn collect_messages(&mut self, _: &Instant, _: &f32) {

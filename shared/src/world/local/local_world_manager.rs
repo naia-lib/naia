@@ -156,7 +156,7 @@ impl LocalWorldManager {
     ) -> Self {
         Self {
             entity_map: LocalEntityMap::new(host_type),
-            sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR),
+            sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR, None),
             sent_command_packets: SequenceList::new(),
             receiver: ReliableReceiver::new(),
 

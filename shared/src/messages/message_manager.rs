@@ -86,7 +86,10 @@ impl MessageManager {
                 | ChannelMode::OrderedReliable(settings) => {
                     channel_senders.insert(
                         channel_kind,
-                        Box::new(ReliableMessageSender::new(settings.rtt_resend_factor)),
+                        Box::new(ReliableMessageSender::new(
+                            settings.rtt_resend_factor,
+                            settings.max_queue_depth,
+                        )),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {
@@ -176,14 +179,17 @@ impl MessageManager {
 
     // Outgoing Messages
 
-    /// Queues an Message to be transmitted to the remote host
+    /// Queues a Message to be transmitted to the remote host. Returns `true`
+    /// if the message was accepted, `false` if the channel queue was full and
+    /// the message was dropped (reliable channels only — unreliable channels
+    /// always return `true`, evicting the oldest queued message if needed).
     pub fn send_message(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
         message: MessageContainer,
-    ) {
+    ) -> bool {
         #[cfg(feature = "observability")]
         if let Some(name) = self.channel_names.get(channel_kind) {
             metrics::counter!(crate::MESSAGES_SENT_TOTAL, "channel" => name.clone()).increment(1);
@@ -200,18 +206,24 @@ impl MessageManager {
             };
             if !settings.reliable() {
                 error!("ERROR: Attempting to send Message above the fragmentation size limit over an unreliable Message channel! Slim down the size of your Message, or send this Message through a reliable message channel.");
-                return;
+                return false;
             }
 
-            // Now fragment this message ...
+            // Fragment the message and attempt to queue all fragments. If any
+            // fragment is rejected (queue full), the partial send is logged and
+            // the whole message is considered dropped.
             let messages =
                 self.message_fragmenter
                     .fragment_message(message_kinds, converter, message);
+            let mut all_accepted = true;
             for message_fragment in messages {
-                channel.send_message(message_fragment);
+                if !channel.send_message(message_fragment) {
+                    all_accepted = false;
+                }
             }
+            all_accepted
         } else {
-            channel.send_message(message);
+            channel.send_message(message)
         }
     }
 

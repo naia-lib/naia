@@ -75,6 +75,14 @@ pub struct ReliableSettings {
     pub rtt_resend_factor: f32,
     /// Maximum messages to deliver per tick per connection. `None` = unlimited.
     pub max_messages_per_tick: Option<u16>,
+    /// Maximum number of unacknowledged messages buffered per connection on
+    /// this channel. When the queue is full, [`Server::send_message`] /
+    /// [`Client::send_message`] returns
+    /// `Err(NaiaServerError::MessageQueueFull)` /
+    /// `Err(NaiaClientError::MessageQueueFull)` and the caller must decide
+    /// whether to retry or discard. `None` = unlimited (not recommended for
+    /// production servers). Default: `Some(1024)`.
+    pub max_queue_depth: Option<usize>,
 }
 
 impl ReliableSettings {
@@ -82,6 +90,7 @@ impl ReliableSettings {
         Self {
             rtt_resend_factor: 1.5,
             max_messages_per_tick: None,
+            max_queue_depth: Some(1024),
         }
     }
 }

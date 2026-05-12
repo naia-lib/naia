@@ -17,10 +17,11 @@ pub struct ReliableSender<P: Send + Sync> {
     // idle (e.g. 10k entity-spawn commands waiting on acks).
     min_last_sent: Option<Instant>,
     has_unsent: bool,
+    max_queue_depth: Option<usize>,
 }
 
 impl<P: Send + Sync> ReliableSender<P> {
-    pub fn new(rtt_resend_factor: f32) -> Self {
+    pub fn new(rtt_resend_factor: f32, max_queue_depth: Option<usize>) -> Self {
         Self {
             rtt_resend_factor,
             next_send_message_index: 0,
@@ -28,6 +29,7 @@ impl<P: Send + Sync> ReliableSender<P> {
             outgoing_messages: VecDeque::new(),
             min_last_sent: None,
             has_unsent: false,
+            max_queue_depth,
         }
     }
 
@@ -87,11 +89,17 @@ impl<P: Send + Sync> ReliableSender<P> {
 }
 
 impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
-    fn send_message(&mut self, message: P) {
+    fn send_message(&mut self, message: P) -> bool {
+        if let Some(max) = self.max_queue_depth {
+            if self.sending_messages.len() >= max {
+                return false;
+            }
+        }
         self.sending_messages
             .push_back(Some((self.next_send_message_index, None, message)));
         self.next_send_message_index = self.next_send_message_index.wrapping_add(1);
         self.has_unsent = true;
+        true
     }
 
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {

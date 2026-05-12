@@ -23,17 +23,17 @@ pub struct ReliableMessageSender {
 }
 
 impl ReliableMessageSender {
-    pub fn new(rtt_resend_factor: f32) -> Self {
+    pub fn new(rtt_resend_factor: f32, max_queue_depth: Option<usize>) -> Self {
         Self {
-            reliable_sender: ReliableSender::new(rtt_resend_factor),
+            reliable_sender: ReliableSender::new(rtt_resend_factor, max_queue_depth),
             request_sender: RequestSender::new(),
         }
     }
 }
 
 impl ChannelSender<MessageContainer> for ReliableMessageSender {
-    fn send_message(&mut self, message: MessageContainer) {
-        self.reliable_sender.send_message(message);
+    fn send_message(&mut self, message: MessageContainer) -> bool {
+        self.reliable_sender.send_message(message)
     }
 
     fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {

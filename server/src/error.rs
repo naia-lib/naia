@@ -22,6 +22,10 @@ pub enum NaiaServerError {
     ///
     /// [`UserKey`]: crate::UserKey
     UserNotFound,
+    /// The target channel's send queue is at capacity. The message was not
+    /// queued. The caller may retry on the next tick or discard the message.
+    /// Configure [`ReliableSettings::max_queue_depth`] to adjust the limit.
+    MessageQueueFull,
 }
 
 impl NaiaServerError {
@@ -43,6 +47,9 @@ impl fmt::Display for NaiaServerError {
             }
             NaiaServerError::UserNotFound => {
                 write!(f, "Naia Server Error: UserNotFound")
+            }
+            NaiaServerError::MessageQueueFull => {
+                write!(f, "Naia Server Error: MessageQueueFull")
             }
         }
     }
