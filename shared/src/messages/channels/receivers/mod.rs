@@ -8,4 +8,5 @@ pub mod unordered_reliable_receiver;
 pub mod unordered_unreliable_receiver;
 
 mod reliable_message_receiver;
+pub(crate) use reliable_message_receiver::ReceiverArranger;
 pub mod reliable_receiver;

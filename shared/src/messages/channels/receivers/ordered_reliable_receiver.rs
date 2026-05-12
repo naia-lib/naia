@@ -48,6 +48,12 @@ pub struct OrderedArranger {
     messages_received: MessageIndex,
 }
 
+impl OrderedArranger {
+    pub(crate) fn new() -> Self {
+        Self { buffer: VecDeque::new(), messages_received: 0 }
+    }
+}
+
 impl ReceiverArranger for OrderedArranger {
     fn process(
         &mut self,
