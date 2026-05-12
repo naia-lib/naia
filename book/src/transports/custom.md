@@ -1,5 +1,7 @@
 # Writing a Custom Transport
 
+**Trait location:** `naia_shared::transport::Socket`
+
 naia's transport is defined by the `Socket` trait. Implementing it lets you
 plug in any network layer — Steam networking, QUIC, WebSockets, etc.
 

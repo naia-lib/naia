@@ -4,40 +4,63 @@ Entity replication is the core mechanism by which the server's game state is
 delivered to connected clients. naia tracks which entities are in each user's
 scope and automatically sends only the changed fields each tick.
 
+> **Core API:** Not using Bevy? The bare `naia-server` / `naia-client` API is
+> identical in concept but uses a direct method-call style instead of Bevy
+> systems. See [Core API Overview](../adapters/overview.md).
+
 ---
 
 ## The Replication Loop
 
-Every frame the server must execute these five steps in order:
+Internally naia runs these five steps in order every frame:
 
 ```
 receive_all_packets     – read UDP/WebRTC datagrams from the OS
 process_all_packets     – decode packets; apply client mutations
-take_world_events       – drain connect/disconnect/spawn/update/message events
-take_tick_events        – advance the tick clock; collect elapsed tick events
-                          (mutate replicated components here)
+                          (Bevy events are populated here)
+[YOUR SYSTEMS]          – read events, mutate components
 send_all_packets        – serialise diffs + messages; flush to network
 ```
 
-> **Danger:** `send_all_packets` must be the **last** step. Calling it inside the
-> `TickEvent` loop adds a full tick of latency to every component update.
+With the Bevy adapter, `NaiaServerPlugin` and `NaiaClientPlugin` own
+`receive_all_packets`, `process_all_packets`, and `send_all_packets`. Your
+systems run between `process_all_packets` and `send_all_packets` automatically —
+you never call those methods directly.
 
-**Why this order is mandatory:**
+The equivalent Bevy system ordering looks like this:
 
-- `receive_all_packets` fills the internal receive queue; nothing downstream
-  can run until bytes are available.
-- `process_all_packets` consumes that queue and converts bytes into
-  `EntityEvent` objects that `take_world_events` later drains.
-- `take_world_events` must come after `process_all_packets` so that events
-  produced by the latest batch of packets are visible this frame.
-- `take_tick_events` must come after `take_world_events` to avoid ordering
-  anomalies between world-state events and tick-boundary events.
-- `send_all_packets` must come last so that all mutations made during the
-  current frame are included in the outbound batch.
+```mermaid
+graph LR
+    A[receive_all_packets<br/>plugin] --> B[process_all_packets<br/>plugin]
+    B --> C[Your systems<br/>read events, mutate components]
+    C --> D[send_all_packets<br/>plugin]
+```
 
-The same five-step contract applies to the client, with the difference that
-the client processes packets from a single server connection rather than from
-many users.
+> **Danger:** `send_all_packets` must be the **last** step. The plugin enforces
+> this. In the bare core API, calling it inside a tick loop adds a full tick of
+> latency to every component update.
+
+---
+
+## Spawning a replicated entity
+
+With the Bevy adapter, use `CommandsExt::enable_replication`:
+
+```rust
+use naia_bevy_server::CommandsExt;
+
+let entity = commands
+    .spawn_empty()
+    .enable_replication(&mut server)   // registers entity with naia
+    .insert(Position::new(0.0, 0.0))  // initial component value
+    .id();
+```
+
+On the next `send_all_packets`, naia sends a `SpawnEntity` packet to every
+in-scope client with the initial component values.
+
+To despawn a replicated entity, call `commands.entity(entity).despawn()`. naia
+detects the despawn and sends `DespawnEntity` to all in-scope clients.
 
 ---
 
@@ -57,6 +80,51 @@ stateDiagram-v2
 
 ---
 
+## Receiving replication events on the client
+
+On the client, Bevy events fire as naia processes incoming packets:
+
+```rust
+use naia_bevy_client::events::{
+    SpawnEntityEvent, DespawnEntityEvent,
+    InsertComponentEvent, UpdateComponentEvent,
+};
+use my_game_shared::Position;
+
+fn handle_replication_events(
+    mut spawn_reader: EventReader<SpawnEntityEvent>,
+    mut despawn_reader: EventReader<DespawnEntityEvent>,
+    mut insert_reader: EventReader<InsertComponentEvent<Position>>,
+    mut update_reader: EventReader<UpdateComponentEvent<Position>>,
+    positions: Query<&Position>,
+) {
+    for SpawnEntityEvent(entity) in spawn_reader.read() {
+        println!("Entity spawned: {:?}", entity);
+    }
+
+    for DespawnEntityEvent(entity) in despawn_reader.read() {
+        println!("Entity despawned: {:?}", entity);
+    }
+
+    for InsertComponentEvent(entity) in insert_reader.read() {
+        if let Ok(pos) = positions.get(*entity) {
+            println!("Position inserted: ({:.2}, {:.2})", *pos.x, *pos.y);
+        }
+    }
+
+    for UpdateComponentEvent(entity) in update_reader.read() {
+        if let Ok(pos) = positions.get(*entity) {
+            println!("Position updated: ({:.2}, {:.2})", *pos.x, *pos.y);
+        }
+    }
+}
+```
+
+The `Position` component on the client entity is a standard Bevy component. naia
+writes the latest server values into it before your systems run.
+
+---
+
 ## Static vs Dynamic Entities
 
 **Dynamic entities** (the default) use per-field delta tracking. When any
@@ -68,12 +136,15 @@ a user's scope, naia sends a full component snapshot. After that no further
 updates are transmitted — static entities are assumed to be immutable for the
 lifetime of the session.
 
-Create a static entity via the `as_static()` builder method:
+Create a static entity with Bevy:
 
 ```rust
-server.spawn_entity(&mut world)
-    .as_static()           // must be called BEFORE insert_component
-    .insert_component(tile);
+// Bevy adapter — call as_static() on the EntityCommands before inserting components.
+commands
+    .spawn_empty()
+    .enable_replication(&mut server)
+    .as_static()        // must be called BEFORE insert
+    .insert(tile);
 ```
 
 > **Tip:** Use static entities for map tiles, level geometry, or any entity written once

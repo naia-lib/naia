@@ -1,5 +1,8 @@
 # WebRTC (Browser Clients)
 
+**Crate:** `naia-socket-webrtc` (exposed as `naia_client::transport::webrtc`
+on the client and embedded in `naia_server` for the signaling endpoint)
+
 naia's `transport_webrtc` enables browser clients built with
 `wasm32-unknown-unknown` to connect to a native naia server over WebRTC data
 channels. WebRTC provides DTLS encryption automatically.

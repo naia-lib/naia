@@ -2,7 +2,7 @@
 
 naia is a server-authoritative entity replication and typed message-passing library
 for multiplayer games in Rust. It runs on native platforms (UDP) and in the browser
-(WebRTC / WASM) from a single codebase.
+(WebRTC / WASM) from a **single codebase**.
 
 ---
 
@@ -28,6 +28,22 @@ works with any entity type that is `Copy + Eq + Hash + Send + Sync`.
 
 The internal networking model follows the
 [Tribes 2 Networking Model](https://www.gamedevs.org/uploads/tribes-networking-model.pdf).
+
+---
+
+## Why naia stands out
+
+Among Rust game networking libraries, naia is unique in:
+
+- **Browser clients** — the only Rust library with a production WebRTC transport
+  for `wasm32-unknown-unknown`, sharing all protocol and game logic with the
+  native client.
+- **Built-in lag compensation** — the `Historian` snapshots the world each tick
+  so you can rewind to the tick the client was seeing for server-side hit detection.
+- **Per-entity bandwidth control** — set priority gain per entity per user; the
+  token-bucket send loop allocates bandwidth proportionally.
+- **No tokio dependency** — naia uses smol / async-std internally, fitting cleanly
+  into stacks that already use those runtimes.
 
 ---
 
@@ -65,10 +81,19 @@ The internal networking model follows the
 
 ## How to read this book
 
-- **New to naia?** Start with [Why naia?](getting-started/why-naia.md), then
-  [Installation](getting-started/installation.md), then the first server/client walkthroughs.
+- **New to naia?** Start with [Bevy Quick Start](getting-started/bevy-quickstart.md)
+  — copy-paste a working server + client in under five minutes.
+- **Want a step-by-step walkthrough?** Read
+  [Your First Server](getting-started/first-server.md) then
+  [Your First Client](getting-started/first-client.md).
 - **Looking for a specific concept?** Jump to [Core Concepts](concepts/protocol.md).
 - **Building a prediction loop?** Read [Client-Side Prediction & Rollback](advanced/prediction.md).
 - **Optimising bandwidth?** Read [Priority-Weighted Bandwidth](advanced/bandwidth.md)
   and [Delta Compression](advanced/delta-compression.md).
-- **Comparing naia to other libraries?** See [Comparing naia to Alternatives](reference/comparison.md).
+- **Comparing naia to other libraries?** See [Why naia?](getting-started/why-naia.md)
+  for the decision guide and [Comparing naia to Alternatives](reference/comparison.md)
+  for the technical deep-dive.
+- **Migrating from an older API?** See the [Migration Guide](reference/migration.md).
+
+> **Not using Bevy?** See [Without Bevy](adapters/overview.md) for macroquad
+> and custom engine integration.

@@ -36,6 +36,9 @@ if tick % 60 == 0 {
 }
 ```
 
+For interpreting the `kbps_sent` values and RTT percentiles in production, see
+[Connection Diagnostics](diagnostics.md).
+
 ---
 
 ## Tuning checklist

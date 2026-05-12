@@ -29,6 +29,25 @@ it. Without server authority, any client can claim any position.
 > server must validate all client-originated state before applying it to
 > authoritative game state.
 
+## Reclaiming authority
+
+The server can revoke a client's authority at any time by calling
+`entity_take_authority`:
+
+```rust
+// Server forcibly reclaims authority over a delegated entity.
+server.entity_take_authority(&mut world, &entity);
+```
+
+After this call the entity returns to `Available` status. The client that held
+authority receives a notification that it was revoked.
+
+> **Tip:** Revoke authority automatically when a player disconnects. An entity
+> stuck in `Granted` state after a disconnect is a resource leak — the authority
+> slot can never be reclaimed without a server restart.
+
+---
+
 ## NAT traversal and P2P
 
 naia is server-authoritative by design — NAT traversal and peer-to-peer

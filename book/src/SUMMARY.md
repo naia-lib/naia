@@ -6,6 +6,7 @@
 
 - [Why naia?](getting-started/why-naia.md)
 - [Installation](getting-started/installation.md)
+- [Bevy Quick Start](getting-started/bevy-quickstart.md)
 - [Your First Server](getting-started/first-server.md)
 - [Your First Client](getting-started/first-client.md)
 - [Running the Demos](getting-started/demos.md)
@@ -43,10 +44,9 @@
 - [Local (In-Process)](transports/local.md)
 - [Writing a Custom Transport](transports/custom.md)
 
-# ECS Adapters
+# Without Bevy
 
-- [Overview & Adapter Contract](adapters/overview.md)
-- [Bevy](adapters/bevy.md)
+- [Core API Overview](adapters/overview.md)
 - [Macroquad](adapters/macroquad.md)
 - [Writing Your Own Adapter](adapters/custom.md)
 
@@ -66,6 +66,7 @@
 - [Feature Matrix](reference/features.md)
 - [Security & Trust Model](reference/security.md)
 - [Comparing naia to Alternatives](reference/comparison.md)
+- [Bevy Adapter Deep Dive](adapters/bevy.md)
 - [Glossary](reference/glossary.md)
 - [Migration Guide](reference/migration.md)
 - [API Docs (docs.rs)](reference/api.md)

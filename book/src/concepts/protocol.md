@@ -2,7 +2,12 @@
 
 Both the server and the client must agree on the complete set of replicable
 component types, message types, channel configurations, and protocol-level
-settings. In naia this agreement is expressed as a `Protocol` value.
+settings. In naia this agreement is expressed as a `Protocol` value and enforced
+at connection time via a deterministic hash.
+
+> **Core API:** Not using Bevy? The bare `naia-server` / `naia-client` API is
+> identical in concept but uses a direct method-call style instead of Bevy
+> systems. See [Core API Overview](../adapters/overview.md).
 
 Conventionally you put `Protocol` construction in a shared crate:
 
@@ -23,14 +28,32 @@ pub fn protocol() -> Protocol {
 }
 ```
 
-Both the server and the client call this same function and pass the result to
-`Server::new` / `Client::new`. naia derives a deterministic `ProtocolId` from
-the registered types and channel configuration; a client whose ID does not match
-the server's will be rejected during the handshake.
+Both the server and the client call this same function. With Bevy, pass the
+result to the plugins at startup:
 
-> **Danger:** If the server and client `Protocol` values disagree — even a single missing
-> `add_component` call — the handshake fails silently from the client's perspective.
-> Always build the `Protocol` from a **shared crate** imported by both sides.
+```rust
+use bevy::prelude::*;
+use naia_bevy_server::{Plugin as NaiaServerPlugin, ServerConfig};
+use naia_bevy_client::{ClientConfig, Plugin as NaiaClientPlugin};
+use my_game_shared::protocol;
+
+// Server app
+App::new()
+    .add_plugins(NaiaServerPlugin::new(ServerConfig::default(), protocol()));
+
+// Client app
+App::new()
+    .add_plugins(NaiaClientPlugin::new(ClientConfig::default(), protocol()));
+```
+
+naia derives a deterministic `ProtocolId` from the registered types and channel
+configuration; a client whose ID does not match the server's will be rejected
+during the handshake.
+
+> **Danger:** If the server and client `Protocol` values disagree — even a single
+> missing `add_component` call — the handshake fails silently from the client's
+> perspective. Always build the `Protocol` from a **shared crate** imported by
+> both sides.
 
 **The shared crate** typically contains:
 - `Protocol` construction
@@ -42,10 +65,8 @@ the server's will be rejected during the handshake.
 
 ## Entities and Components
 
-naia is ECS-agnostic. An entity is any value that satisfies
-`Copy + Eq + Hash + Send + Sync` — for instance a `u32`, a `bevy::Entity`, or
-a custom newtype. naia never allocates entities itself; the `WorldMutType<E>`
-you pass to `spawn_entity` does.
+With the Bevy adapter, an entity is a standard `bevy::Entity`. naia tracks the
+entity in its replication set after you call `commands.enable_replication(&mut server)`.
 
 **Replicated components** must derive `Replicate`:
 

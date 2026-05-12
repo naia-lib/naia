@@ -22,6 +22,49 @@ time by calling `entity_take_authority`. Clients never hold unrevocable ownershi
 > Mutations from a client-authoritative entity **must** be validated server-side
 > before being applied to authoritative game state.
 
+## Authentication
+
+naia supports application-layer authentication via a typed `Auth` message sent
+during the handshake. Define any `#[derive(Message)]` struct as your auth
+payload:
+
+```rust
+// shared/src/messages/auth.rs
+#[derive(Message)]
+pub struct Auth {
+    pub username: String,
+    pub token:    String,
+}
+```
+
+The client sends it before the connection is accepted:
+
+```rust
+client.connect_with_auth(
+    NativeSocket::new("127.0.0.1:14191"),
+    &Auth { username: "alice".into(), token: jwt_token },
+);
+```
+
+The server receives it via an `AuthEvent` (Bevy: `AuthEvents`) before the
+connection is fully established:
+
+```rust
+for (user_key, auth) in auth_events.read::<Auth>() {
+    if validate_token(&auth.token) {
+        server.accept_connection(&user_key);
+    } else {
+        server.reject_connection(&user_key);
+    }
+}
+```
+
+> **Danger:** Auth credentials are transmitted in plaintext over UDP. Use
+> `transport_webrtc` (DTLS encrypted) or a TLS proxy in front of UDP for any
+> deployment where credentials must be confidential.
+
+---
+
 ## What naia does NOT provide
 
 - **Packet authentication or encryption.** `AuthEvent` credentials are transmitted

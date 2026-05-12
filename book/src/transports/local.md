@@ -1,5 +1,8 @@
 # Local (In-Process) Transport
 
+**Crate:** `naia-socket-local` (exposed as `naia_server::transport::local` and
+`naia_client::transport::local`)
+
 `transport_local` runs the server and client in the same process with no real
 network sockets. It is used by naia's test harness and is ideal for:
 

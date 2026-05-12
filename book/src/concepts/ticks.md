@@ -4,6 +4,10 @@ Ticks are the heartbeat of a naia simulation. The server advances a global tick
 counter; the client maintains two tick streams that stay synchronized with the
 server despite network jitter.
 
+> **Core API:** Not using Bevy? The bare `naia-server` / `naia-client` API is
+> identical in concept but uses a direct method-call style instead of Bevy
+> systems. See [Core API Overview](../adapters/overview.md).
+
 ---
 
 ## Server ticks
@@ -15,10 +19,33 @@ Protocol::builder()
     .tick_interval(Duration::from_millis(50)) // 20 Hz
 ```
 
-`take_tick_events` advances the tick counter. Each elapsed server tick produces
-a `TickEvent` that triggers the game simulation step. The server should mutate
-replicated components inside the tick handler and call `send_all_packets` once
-after all ticks in the batch are processed.
+With the Bevy adapter, each elapsed server tick fires a `ServerTickEvent`.
+Mutate replicated components inside this system:
+
+```rust
+use naia_bevy_server::{Server, events::ServerTickEvent};
+use my_game_shared::{InputChannel, PlayerInput, Position};
+
+fn tick_system(
+    mut server: Server,
+    mut tick_reader: EventReader<ServerTickEvent>,
+    mut positions: Query<&mut Position>,
+) {
+    for ServerTickEvent(server_tick) in tick_reader.read() {
+        // Drain input for this exact tick.
+        let mut messages = server.receive_tick_buffer_messages(server_tick);
+        for (_user_key, _input) in messages.read::<InputChannel, PlayerInput>() {
+            // apply input ...
+        }
+
+        // Advance simulation.
+        for mut pos in positions.iter_mut() {
+            *pos.x += 0.1;
+        }
+    }
+    // NaiaServerPlugin calls send_all_packets after this system completes.
+}
+```
 
 ---
 
@@ -45,6 +72,29 @@ sequenceDiagram
 Use `client_interpolation()` and `server_interpolation()` to compute the
 sub-tick interpolation fraction `[0.0, 1.0)` for smooth rendering between
 discrete tick states.
+
+With the Bevy adapter, use `ClientTickEvent` to send input each tick:
+
+```rust
+use naia_bevy_client::{Client, events::ClientTickEvent};
+use my_game_shared::{InputChannel, PlayerInput};
+
+fn client_tick_system(
+    mut client: Client,
+    mut tick_reader: EventReader<ClientTickEvent>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+) {
+    for ClientTickEvent(_tick) in tick_reader.read() {
+        let input = PlayerInput {
+            up:    keyboard.pressed(KeyCode::KeyW),
+            down:  keyboard.pressed(KeyCode::KeyS),
+            left:  keyboard.pressed(KeyCode::KeyA),
+            right: keyboard.pressed(KeyCode::KeyD),
+        };
+        client.send_tick_buffer_message::<InputChannel, _>(&input);
+    }
+}
+```
 
 ---
 

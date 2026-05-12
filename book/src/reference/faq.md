@@ -120,6 +120,26 @@ Two approaches:
 
 ---
 
+### What is `DefaultClientTag`?
+
+`DefaultClientTag` and `DefaultPlugin` are provided by `naia-bevy-client` to
+reduce boilerplate for single-client Bevy applications. Instead of defining your
+own phantom marker type, you can write:
+
+```rust
+use naia_bevy_client::{DefaultPlugin, Client, DefaultClientTag};
+
+app.add_plugins(DefaultPlugin::new(client_config, protocol()));
+
+fn my_system(client: Client<DefaultClientTag>) { /* … */ }
+```
+
+If you have two simultaneous naia clients in the same Bevy app (split-screen,
+relay node), you must define separate marker types — `DefaultClientTag` is only
+for single-client setups. See [Bevy Adapter — Multi-client setup](../adapters/bevy.md#multi-client-setup).
+
+---
+
 ## Message/Event passing
 
 ### Can any message be passed through a channel?

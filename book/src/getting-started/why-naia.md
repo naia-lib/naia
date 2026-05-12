@@ -2,46 +2,97 @@
 
 naia occupies a specific niche in the Rust multiplayer networking ecosystem:
 **server-authoritative entity replication that targets both native and browser
-from a single codebase**, with a rich set of built-in primitives for prediction,
-lag compensation, and bandwidth control.
+from a single codebase**, with built-in primitives for prediction, lag
+compensation, and bandwidth control.
+
+This page helps you decide whether naia is the right fit for your project. For
+a technical deep-dive on how naia differs from each library, see
+[Comparing naia to Alternatives](../reference/comparison.md).
 
 ---
 
-## Library comparison
+## The short answer
 
-| | **naia** | **lightyear** | **renet** | **bevy_replicon** | **GGRS** |
-|-|----------|--------------|-----------|------------------|---------|
-| Entity replication | ✅ delta-compressed | ✅ | ❌ messages only | ✅ | ❌ |
-| Browser / WASM client | ✅ WebRTC | ❌ | ❌ | ❌ | ❌ |
-| ECS-agnostic | ✅ | ❌ Bevy-only | ✅ | ❌ Bevy-only | ✅ |
-| Lag compensation (Historian) | ✅ built-in | ❌ | ❌ | ❌ | ❌ |
-| Priority-weighted bandwidth | ✅ built-in | ❌ | ❌ | ❌ | ❌ |
-| Client-side prediction | primitives | built-in | ❌ | ❌ | ✅ GGPO-style |
-| Interest management | rooms + UserScope | rooms | ❌ | visibility filter | ❌ |
-| Authority delegation | ✅ | ✅ | ❌ | ❌ | ❌ |
-| P2P / NAT traversal | ❌ | ❌ | ❌ | ❌ | ✅ (via matchbox) |
-| zstd compression | ✅ + dict training | ❌ | ❌ | ❌ | ❌ |
-| smol / async-std | ✅ | ❌ (tokio) | ❌ (tokio) | ❌ (tokio) | n/a |
+Choose naia when you need **any** of the following:
+
+- **Browser clients** — naia is the only Rust game networking library with a
+  production WebRTC transport. Your game runs in `wasm32-unknown-unknown` with
+  the same code as the native client.
+- **Built-in lag compensation** — naia's `Historian` snapshots the world each
+  tick so you can rewind to the tick the client was seeing and run server-side
+  hit detection. No other Rust library ships this.
+- **Per-entity bandwidth control** — set gain per entity per user; the send loop
+  allocates bandwidth proportionally. Invisible entities can be paused entirely.
+- **smol / async-std runtime** — naia has zero tokio dependencies. If your stack
+  uses smol or async-std, naia fits without a runtime conflict.
+- **ECS-agnostic core** — naia's core works with any entity type that is
+  `Copy + Eq + Hash`. You can use it with Bevy, macroquad, or a custom engine.
 
 ---
 
-## When to choose naia
+## Decision guide
 
-- You need **browser clients** (WebRTC WASM) without a separate codebase.
-- You want **built-in lag compensation** without rolling your own snapshot buffer.
-- You need **fine-grained bandwidth control** per entity per user.
-- Your stack uses **smol / async-std** (naia has no tokio dependency).
-- You want an **ECS-agnostic** core you can wrap for any game framework.
+### I need browser clients (WASM)
 
-## When to choose something else
+**Use naia.** No other Rust game networking library ships a browser-compatible
+WebRTC transport. The client code is identical for native and WASM targets —
+only the socket type changes.
 
-- **lightyear** — you are all-in on Bevy and want the prediction/interpolation
-  framework built-in rather than building it yourself.
-- **renet** — you only need reliable message passing, not entity replication.
-- **GGRS + matchbox** — you are building a fighting game or any fixed-roster
-  P2P deterministic rollback game.
-- **bevy_replicon** — you want the simplest possible Bevy replication and don't
-  need browser clients or lag compensation.
+### I want to build on Bevy and I don't need browser clients
+
+**Consider lightyear first.** lightyear is Bevy-native and ships a
+prediction/interpolation framework baked in. naia's Bevy adapter is solid, but
+naia supplies prediction as primitives you assemble rather than a full framework.
+If you want the interpolation path handled for you, lightyear is a better fit.
+
+If you also need browser clients, lag compensation, or per-entity bandwidth
+control, naia is still the right choice even on Bevy.
+
+### I only need message passing, not entity replication
+
+**Consider renet.** renet is a lean message-passing library with no replication
+overhead. naia's replication machinery (diff tracking, scope management, priority
+sorting) adds overhead you won't benefit from if your game serializes its own
+state manually.
+
+### I'm building a fighting game or any P2P deterministic rollback game
+
+**Use GGRS + matchbox.** GGRS implements GGPO-style rollback for fixed-roster
+deterministic simulations. naia is server-authoritative — it is not designed for
+P2P netcode. That said, a game can use naia for the lobby/server layer and GGRS
+for the fast-path P2P match.
+
+### I want the simplest possible Bevy replication and don't need advanced features
+
+**Consider bevy_replicon.** bevy_replicon is simpler to set up and has less
+surface area. It lacks browser clients, per-entity bandwidth control, lag
+compensation, and zstd compression — if you don't need those, it may be easier
+to start with.
+
+---
+
+## What naia provides
+
+- Entity replication with per-field delta compression (`Property<T>`)
+- Static entities (write-once, zero per-tick cost after initial send)
+- Replicated resources (server-wide singletons, no room/scope setup required)
+- Two-level interest management: rooms (coarse) + `UserScope` (fine-grained)
+- Authority delegation (server grants/revokes client write authority per entity)
+- Tick synchronization with client tick leading by ~RTT/2
+- Client-side prediction primitives: `TickBuffered` channels, `CommandHistory`,
+  `local_duplicate()`
+- Lag compensation via the `Historian` snapshot buffer
+- Priority-weighted bandwidth allocation with token-bucket send loop
+- Optional zstd packet compression with custom dictionary training
+- Connection diagnostics: RTT (EWMA + P50/P99), jitter, packet loss, kbps
+
+## What naia does not provide
+
+- A built-in snapshot interpolation framework (the demos show the pattern; you
+  write the `Interp` component logic)
+- Spatial / automatic interest management (you write the scope predicate;
+  naia calls it via `scope_checks_pending()`)
+- P2P / NAT hole-punching (naia is server-authoritative by design)
 
 ---
 

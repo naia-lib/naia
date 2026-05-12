@@ -1,8 +1,10 @@
 # Macroquad Adapter
 
-The macroquad adapter (`naia-macroquad-client`) provides a client integration
-for the macroquad game framework. Only the client is supported — the server
-always runs natively using `naia-server` directly.
+**Crate:** `naia-macroquad-client` (client only)
+
+The macroquad adapter provides a client integration for the macroquad game
+framework. Only the client is supported — the server always runs natively using
+`naia-server` or `naia-bevy-server` directly.
 
 ---
 
@@ -51,3 +53,7 @@ async fn main() {
 ```
 
 See `demos/macroquad/` for a complete working example.
+
+> **Tip:** macroquad's async executor and naia's async runtime are compatible.
+> The `loop { … next_frame().await }` pattern interleaves naia's five-step loop
+> with macroquad's rendering without needing a separate thread.

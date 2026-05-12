@@ -1,5 +1,8 @@
 # Native UDP
 
+**Crate:** `naia-socket-native` (exposed as `naia_server::transport::udp` and
+`naia_client::transport::udp`)
+
 `transport_udp` is naia's native socket implementation for Linux, macOS, and
 Windows. It uses standard UDP datagrams and has no encryption.
 

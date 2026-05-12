@@ -36,6 +36,22 @@ let stats = client.connection_stats();
 
 ---
 
+## `metrics` and `tracing` integration
+
+For production observability, naia ships optional feature-gated integration with
+the `metrics` and `tracing` ecosystems. Enable via the `metrics` feature flag:
+
+```toml
+# server/Cargo.toml
+naia-bevy-server = { version = "0.24", features = ["metrics"] }
+```
+
+When `metrics` is enabled, naia emits counters and gauges compatible with any
+`metrics`-crate backend (Prometheus, StatsD, etc.). See the `naia-metrics` and
+`naia-bevy-metrics` crates for the full list of emitted metric names.
+
+---
+
 ## Interpreting the numbers
 
 - **rtt_p99 > 300 ms** — players on this connection will feel prediction

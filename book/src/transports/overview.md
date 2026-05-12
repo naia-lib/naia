@@ -3,11 +3,11 @@
 naia's transport layer is pluggable via the `Socket` trait. Three
 implementations ship out of the box:
 
-| Transport | Target | Encryption | Best for |
-|-----------|--------|------------|---------|
-| `transport_udp` | Native | **None** | Local dev, trusted LAN |
-| `transport_webrtc` | Browser WASM | DTLS | Internet browser clients |
-| `transport_local` | In-process | n/a | Unit tests, AI bots |
+| Transport | Crate | Target | Encryption | Best for |
+|-----------|-------|--------|------------|---------|
+| `transport_udp` | `naia-socket-native` | Native | **None** | Local dev, trusted LAN |
+| `transport_webrtc` | `naia-socket-webrtc` | Browser WASM | DTLS | Internet browser clients |
+| `transport_local` | `naia-socket-local` | In-process | n/a | Unit tests, AI bots |
 
 The `Server` and `Client` APIs are identical for all transports — only the
 `Socket` value passed to `listen` / `connect` differs.

@@ -3,6 +3,10 @@
 A naia connection passes through a well-defined set of states from the initial
 handshake through to disconnection and optional reconnect.
 
+> **Core API:** Not using Bevy? The bare `naia-server` / `naia-client` API is
+> identical in concept but uses a direct method-call style instead of Bevy
+> systems. See [Core API Overview](../adapters/overview.md).
+
 ---
 
 ## Connection state machine
@@ -36,19 +40,50 @@ The `Server` and `Client` APIs are identical for both shipped transports — onl
 the `Socket` value passed to `listen` / `connect` differs:
 
 ```rust
-// Native server:
-server.listen(NativeSocket::new("0.0.0.0:14191"));
+use naia_bevy_server::{transport::udp::NativeSocket, Server};
+use naia_bevy_client::{transport::webrtc::WebrtcSocket, Client};
 
-// Native client:
-client.connect(NativeSocket::new("127.0.0.1:14191"));
+// Bevy startup system — native server:
+fn startup_server(mut server: Server) {
+    server.listen(NativeSocket::new("0.0.0.0:14191"));
+}
 
-// Browser client (wasm32-unknown-unknown):
-client.connect(WebrtcSocket::new("https://myserver.example.com", 14192));
+// Bevy startup system — native client:
+fn startup_client(mut client: Client) {
+    client.connect(NativeSocket::new("127.0.0.1:14191"));
+}
+
+// Bevy startup system — browser client (wasm32-unknown-unknown):
+fn startup_browser_client(mut client: Client) {
+    client.connect(WebrtcSocket::new("https://myserver.example.com", 14192));
+}
 ```
 
 For Wasm builds, enable the `wbindgen` feature on the socket crate and build
 with `wasm-pack` or `trunk`. The protocol, channel config, and all game logic
 are identical — only the entry point and socket type change.
+
+---
+
+## Heartbeats and timeout detection
+
+naia sends automatic heartbeats when no other packets are outgoing. If a
+client stops responding for longer than the configured timeout window, the server
+fires a `DisconnectEvent` for that user and reclaims all associated resources.
+
+The timeout is controlled by `ServerConfig` / `ClientConfig`:
+
+```rust
+use naia_server::ServerConfig;
+use std::time::Duration;
+
+let mut config = ServerConfig::default();
+// Disconnect a client after 10 seconds with no response.
+config.connection.disconnection_timeout_duration = Duration::from_secs(10);
+```
+
+The default timeout is 10 seconds. Lower values catch dead connections faster
+but may cause false positives on brief network outages.
 
 ---
 
@@ -102,17 +137,25 @@ after receiving the `DisconnectEvent`. naia restarts the full handshake sequence
 and the server fires a new `ConnectEvent` for the user.
 
 ```rust
-// Client — handle disconnect and schedule a reconnect:
-for _event in events.read::<DisconnectEvent>() {
-    // Clear all server-replicated entities from your local world.
-    // naia does NOT do this automatically on disconnect.
-    for entity in replicated_entities.iter() {
-        commands.entity(entity).despawn_recursive();
-    }
-    replicated_entities.clear();
+use naia_bevy_client::{Client, events::DisconnectEvent};
 
-    // Reconnect — naia will re-run the handshake.
-    client.connect(socket.clone());
+// Bevy system — handle disconnect and reconnect:
+fn handle_disconnect(
+    mut commands: Commands,
+    mut client: Client,
+    mut disconnect_reader: EventReader<DisconnectEvent>,
+    replicated_entities: Query<Entity, With<ReplicatedMarker>>,
+) {
+    for DisconnectEvent(_) in disconnect_reader.read() {
+        // Clear all server-replicated entities from your local world.
+        // naia does NOT do this automatically on disconnect.
+        for entity in replicated_entities.iter() {
+            commands.entity(entity).despawn_recursive();
+        }
+
+        // Reconnect — naia will re-run the full handshake.
+        client.connect(NativeSocket::new("127.0.0.1:14191"));
+    }
 }
 ```
 

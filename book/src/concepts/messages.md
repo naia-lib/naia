@@ -4,6 +4,10 @@ All messages and entity actions are routed through typed channels. A channel is
 a named type that derives `Channel` and is registered in the `Protocol` with a
 `ChannelMode` and `ChannelDirection`.
 
+> **Core API:** Not using Bevy? The bare `naia-server` / `naia-client` API is
+> identical in concept but uses a direct method-call style instead of Bevy
+> systems. See [Core API Overview](../adapters/overview.md).
+
 ---
 
 ## Channel modes
@@ -71,18 +75,33 @@ Protocol::builder()
     .build()
 ```
 
-Then send and receive:
+With the Bevy adapter, send and receive using `Server` / `Client` SystemParams
+and `EventReader`:
 
 ```rust
-// Server → specific client:
-server.send_message::<GameChannel, ChatMessage>(&user_key, &msg)?;
+use naia_bevy_server::{Server, events::ConnectEvent};
+use naia_bevy_client::{Client, events::MessageEvent};
+use my_game_shared::{ChatMessage, GameChannel};
 
-// Client → server:
-client.send_message::<GameChannel, ChatMessage>(&msg);
+// Server — send to a specific client:
+fn send_welcome(mut server: Server, mut connect_reader: EventReader<ConnectEvent>) {
+    for ConnectEvent(user_key) in connect_reader.read() {
+        let msg = ChatMessage { text: "Welcome!".into(), sender: 0 };
+        let _ = server.send_message::<GameChannel, _>(user_key, &msg);
+    }
+}
 
-// Client receive:
-for event in events.read::<MessageEvent<GameChannel, ChatMessage>>() {
-    println!("{}", *event.message.text);
+// Client — receive:
+fn receive_chat(mut chat_reader: EventReader<MessageEvent<GameChannel, ChatMessage>>) {
+    for MessageEvent(msg) in chat_reader.read() {
+        println!("Server: {}", msg.text);
+    }
+}
+
+// Client — send to server:
+fn send_input(mut client: Client) {
+    let msg = ChatMessage { text: "Hello!".into(), sender: 42 };
+    client.send_message::<GameChannel, _>(&msg);
 }
 ```
 
@@ -100,16 +119,43 @@ occurred. The server buffers them and delivers them via
 tick-accurate input replay and is the foundation of client-side prediction.
 
 ```rust
-// Server tick handler:
-let mut messages = server.receive_tick_buffer_messages(&server_tick);
-for (_user_key, command) in messages.read::<PlayerInputChannel, KeyCommand>() {
-    // command arrived at exactly the right simulation step
+use naia_bevy_server::{Server, events::ServerTickEvent};
+use my_game_shared::{PlayerInputChannel, PlayerInput};
+
+// Server tick handler (Bevy system):
+fn handle_tick(
+    mut server: Server,
+    mut tick_reader: EventReader<ServerTickEvent>,
+) {
+    for ServerTickEvent(server_tick) in tick_reader.read() {
+        let mut messages = server.receive_tick_buffer_messages(server_tick);
+        for (user_key, command) in messages.read::<PlayerInputChannel, PlayerInput>() {
+            // command arrived at exactly the right simulation step
+            let _ = (user_key, command);
+        }
+    }
 }
 ```
 
 > **Warning:** Commands that arrive **after** their target tick has already executed are
 > discarded silently. The client's normal correction handler handles this as an
 > ordinary misprediction — see [Client-Side Prediction & Rollback](../advanced/prediction.md).
+
+---
+
+## Broadcasting to all users
+
+To send the same message to every connected user, iterate over `server.user_keys()`:
+
+```rust
+for user_key in server.user_keys() {
+    let _ = server.send_message::<GameChannel, _>(&user_key, &msg);
+}
+```
+
+naia does not ship a single `broadcast` call — the per-user loop lets you skip
+disconnected or unauthenticated users and is explicit about which users receive
+the message.
 
 ---
 
