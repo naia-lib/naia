@@ -60,8 +60,8 @@ impl namako_engine::World for TestWorld {
     type MutCtx<'a> = TestWorldMut<'a>;
     type RefCtx<'a> = TestWorldRef<'a>;
 
-    fn new() -> impl std::future::Future<Output = Result<Self, Self::Error>> {
-        async { Ok(Self::default()) }
+    async fn new() -> Result<Self, Self::Error> {
+        Ok(Self::default())
     }
 
     fn ctx_mut(&mut self) -> Self::MutCtx<'_> {
@@ -310,6 +310,7 @@ impl<'a> TestWorldRef<'a> {
     }
 
     /// Get access to the underlying ExpectCtx.
+    #[allow(clippy::mut_from_ref)]
     fn ctx(&self) -> &mut ExpectCtx<'a> {
         // SAFETY: `TestWorldRef` is created from a `&mut ExpectCtx<'a>` inside
         // `assert_then()`'s polling closure and never escapes that closure. The

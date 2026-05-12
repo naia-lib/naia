@@ -28,8 +28,6 @@ impl ReceiverArranger for UnorderedArranger {
         _end_message_index: MessageIndex,
         message: MessageContainer,
     ) -> Vec<MessageContainer> {
-        let mut output = Vec::new();
-        output.push(message);
-        output
+        vec![message]
     }
 }

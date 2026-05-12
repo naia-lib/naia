@@ -15,6 +15,8 @@ use naia_bevy_shared::{
 use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
 use naia_server::DisconnectReason;
 
+type RequestsInner = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
+
 // ConnectEvent
 #[derive(bevy_ecs::message::Message)]
 pub struct ConnectEvent(pub UserKey);
@@ -30,6 +32,7 @@ pub struct ErrorEvent(pub NaiaServerError);
 // TickEventReader
 #[derive(Resource)]
 pub(crate) struct CachedTickEventsState {
+    #[allow(clippy::type_complexity)]
     pub(crate) event_state: SystemState<(
         Res<'static, Messages<TickEvent>>,
         bevy_ecs::system::Local<'static, MessageCursor<TickEvent>>,
@@ -113,10 +116,7 @@ fn convert_messages<M: Message>(
 // RequestEvents
 #[derive(bevy_ecs::message::Message)]
 pub struct RequestEvents {
-    inner: HashMap<
-        ChannelKind,
-        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
-    >,
+    inner: RequestsInner,
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for RequestEvents {

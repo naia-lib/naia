@@ -17,10 +17,11 @@ use naia_test_harness::{
 };
 
 fn test_client_config() -> ClientConfig {
-    let mut config = ClientConfig::default();
-    config.send_handshake_interval = Duration::from_millis(0);
-    config.jitter_buffer = JitterBufferType::Bypass;
-    config
+    ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    }
 }
 
 /// Bring up server, connect one client. Returns the connected client_key.

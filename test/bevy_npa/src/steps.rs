@@ -311,7 +311,7 @@ fn then_client_has_test_score(ctx: &BevyRefCtx) -> AssertOutcome<()> {
 fn then_client_score_home_3(ctx: &BevyRefCtx) -> AssertOutcome<()> {
     let key = ctx.last_client_key().expect("no client");
     match ctx.client_score(key) {
-        Some((home, _)) if home == 3 => AssertOutcome::Passed(()),
+        Some((3, _)) => AssertOutcome::Passed(()),
         Some(_) => AssertOutcome::Pending,
         None => AssertOutcome::Pending,
     }
@@ -321,7 +321,7 @@ fn then_client_score_home_3(ctx: &BevyRefCtx) -> AssertOutcome<()> {
 fn then_client_score_home_7(ctx: &BevyRefCtx) -> AssertOutcome<()> {
     let key = ctx.last_client_key().expect("no client");
     match ctx.client_score(key) {
-        Some((home, _)) if home == 7 => AssertOutcome::Passed(()),
+        Some((7, _)) => AssertOutcome::Passed(()),
         Some(_) => AssertOutcome::Pending,
         None => AssertOutcome::Pending,
     }
@@ -331,7 +331,7 @@ fn then_client_score_home_7(ctx: &BevyRefCtx) -> AssertOutcome<()> {
 fn then_client_score_away_2(ctx: &BevyRefCtx) -> AssertOutcome<()> {
     let key = ctx.last_client_key().expect("no client");
     match ctx.client_score(key) {
-        Some((_, away)) if away == 2 => AssertOutcome::Passed(()),
+        Some((_, 2)) => AssertOutcome::Passed(()),
         Some(_) => AssertOutcome::Pending,
         None => AssertOutcome::Pending,
     }

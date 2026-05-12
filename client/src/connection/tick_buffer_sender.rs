@@ -61,6 +61,7 @@ impl TickBufferSender {
         false
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn write_messages(
         &mut self,
         protocol: &Protocol,

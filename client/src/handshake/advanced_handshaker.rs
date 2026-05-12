@@ -269,7 +269,7 @@ impl HandshakeManager {
             return None;
         };
 
-        return Some(HandshakeResult::Connected(time_manager));
+        return Some(HandshakeResult::Connected(Box::new(time_manager)));
     }
 
     fn write_signed_timestamp(&self, writer: &mut BitWriter) {

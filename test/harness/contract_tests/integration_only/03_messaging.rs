@@ -2306,10 +2306,7 @@ fn response_matching_to_request() {
     // Server receives request and sends response
     let response_id = scenario.expect_msg("messaging-22.pre: server receives request", |ctx| {
         ctx.server(|server| {
-            for (_, response_id, _request) in server.read_request::<RequestResponseChannel, TestRequest>() {
-                return Some(response_id);
-            }
-            None
+            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|(_, response_id, _request)| response_id)
         })
     });
 
@@ -2457,10 +2454,7 @@ fn request_deduplication() {
     // Server receives and responds
     let response_id = scenario.expect(|ctx| {
         ctx.server(|server| {
-            for (_, response_id, _request) in server.read_request::<RequestResponseChannel, TestRequest>() {
-                return Some(response_id);
-            }
-            None
+            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|(_, response_id, _request)| response_id)
         })
     });
 
@@ -2522,10 +2516,7 @@ fn rpc_ordering_on_ordered_channel() {
     // Verify requests are received (ordering is framework guarantee)
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            for (_, _, _request) in server.read_request::<RequestResponseChannel, TestRequest>() {
-                return Some(());
-            }
-            None
+            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|_| ())
         })
     });
 }
@@ -2566,10 +2557,7 @@ fn fire_and_forget_request() {
     // Verify request was sent
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            for (_, _, _request) in server.read_request::<RequestResponseChannel, TestRequest>() {
-                return Some(());
-            }
-            None
+            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|_| ())
         })
     });
 }

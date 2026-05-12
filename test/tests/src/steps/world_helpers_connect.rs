@@ -57,9 +57,11 @@ pub fn connect_named_client_with_auth_tracking(
     let test_protocol = protocol();
     let room_key = scenario.last_room();
 
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
 
     let client_key = scenario.client_start(
         client_name,
@@ -92,9 +94,11 @@ pub fn reject_named_client(
     let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
 
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
 
     let client_key = scenario.client_start(
         client_name,
@@ -302,6 +306,7 @@ pub fn connect_client(ctx: &mut TestWorldMut) {
 ///     }));
 /// })));
 /// ```
+#[allow(clippy::type_complexity)]
 pub fn connect_named_client(
     ctx: &mut TestWorldMut,
     client_name: &str,
@@ -312,9 +317,11 @@ pub fn connect_named_client(
     let test_protocol = protocol();
     let room_key = scenario.last_room();
 
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
 
     let client_key = scenario.client_start(
         client_name,
@@ -395,9 +402,11 @@ pub fn connect_client_with_latency(
     let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
     let client_key = scenario.client_start(
         label,
         Auth::new("test_user", "password"),

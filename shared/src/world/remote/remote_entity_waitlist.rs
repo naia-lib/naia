@@ -82,7 +82,7 @@ impl RemoteEntityWaitlist {
         for entity in entities {
             self.waiting_entity_to_handles
                 .entry(*entity)
-                .or_insert_with(VecDeque::new)
+                .or_default()
                 .push_back(new_handle);
         }
 

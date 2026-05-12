@@ -5,8 +5,6 @@
 // Tests organized by contract ID to match specs/contracts/0_common.md
 // ============================================================================
 
-#![allow(unused_imports)]
-
 use naia_client::{ClientConfig, Publicity as ClientReplicationConfig};
 use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::{EntityAuthStatus, Protocol};

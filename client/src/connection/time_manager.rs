@@ -9,6 +9,8 @@ use crate::connection::{base_time_manager::BaseTimeManager, io::Io};
 
 const RTT_RING_SIZE: usize = 32;
 
+type TickRanges = (Option<(Tick, Tick)>, Option<(Tick, Tick)>);
+
 pub struct TimeManager {
     base: BaseTimeManager,
     ping_timer: Timer,
@@ -42,6 +44,7 @@ pub struct TimeManager {
 }
 
 impl TimeManager {
+    #[allow(clippy::too_many_arguments)]
     pub fn from_parts(
         ping_interval: Duration,
         base: BaseTimeManager,
@@ -246,7 +249,7 @@ impl TimeManager {
     pub(crate) fn collect_ticks(
         &mut self,
         now: &Instant,
-    ) -> (Option<(Tick, Tick)>, Option<(Tick, Tick)>) {
+    ) -> TickRanges {
         // updates client_receiving_tick
         // returns (Some(start_tick, end_tick), None) if a client_receiving_tick has incremented
         // returns (None, Some(start_tick, end_tick)) if a client_sending_tick or server_receivable_tick has incremented
@@ -347,7 +350,7 @@ impl TimeManager {
                 1.0 + output
             }
         };
-        output.min(1.0).max(0.0)
+        output.clamp(0.0, 1.0)
     }
 
     pub(crate) fn server_interpolation(&self) -> f32 {
@@ -360,7 +363,7 @@ impl TimeManager {
                 1.0 + output
             }
         };
-        output.min(1.0).max(0.0)
+        output.clamp(0.0, 1.0)
     }
 
     pub(crate) fn rtt(&self) -> f32 {

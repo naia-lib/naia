@@ -662,12 +662,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return None;
         };
         let request_id = response_key.request_id();
-        let Some(container) = connection
+        let container = connection
             .global_request_manager
-            .destroy_request_id(&request_id)
-        else {
-            return None;
-        };
+            .destroy_request_id(&request_id)?;
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
             .ok()
             .map(|boxed_s| *boxed_s)
@@ -1853,7 +1850,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             self.server_connection = Some(Connection::new(
                                 &self.client_config.connection,
                                 &self.protocol.channel_kinds,
-                                time_manager,
+                                *time_manager,
                                 &self.global_world_manager,
                                 self.client_config.jitter_buffer,
                                 &self.protocol.component_kinds,

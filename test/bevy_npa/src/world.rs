@@ -295,8 +295,10 @@ impl BevyTestHarness {
         let key = ClientKey(self.next_client_id);
         self.next_client_id += 1;
 
-        let mut cfg = ClientConfig::default();
-        cfg.send_handshake_interval = Duration::from_millis(0);
+        let cfg = ClientConfig {
+            send_handshake_interval: Duration::from_millis(0),
+            ..Default::default()
+        };
 
         let mut app = App::new();
         app.add_plugins(ClientPlugin::<ClientSingleton>::new(cfg, bevy_protocol()));
@@ -693,8 +695,8 @@ impl namako_engine::World for BevyTestWorld {
     type MutCtx<'a> = BevyMutCtx<'a>;
     type RefCtx<'a> = BevyRefCtx<'a>;
 
-    fn new() -> impl std::future::Future<Output = Result<Self, Self::Error>> {
-        async { Ok(Self::default()) }
+    async fn new() -> Result<Self, Self::Error> {
+        Ok(Self::default())
     }
 
     fn ctx_mut(&mut self) -> BevyMutCtx<'_> {

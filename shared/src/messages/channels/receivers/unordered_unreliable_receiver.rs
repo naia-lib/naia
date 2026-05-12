@@ -9,13 +9,12 @@ use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     messages::{
         channels::{
-            receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver},
-            senders::request_sender::LocalRequestId,
+            receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver, RequestsAndResponses},
         },
         message_kinds::MessageKinds,
     },
     world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
+    LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
 
 pub struct UnorderedUnreliableReceiver {
@@ -111,10 +110,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
 
     fn receive_requests_and_responses(
         &mut self,
-    ) -> (
-        Vec<(LocalResponseId, MessageContainer)>,
-        Vec<(LocalRequestId, MessageContainer)>,
-    ) {
+    ) -> RequestsAndResponses {
         panic!("UnorderedUnreliable channels do not support requests");
     }
 }

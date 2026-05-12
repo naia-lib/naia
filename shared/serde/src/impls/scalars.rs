@@ -126,7 +126,7 @@ impl Serde for char {
         unsafe {
             std::ptr::copy_nonoverlapping(
                 bytes.as_ptr().offset(0_isize) as *const u32,
-                container.as_mut_ptr() as *mut u32,
+                container.as_mut_ptr(),
                 1,
             )
         }
@@ -269,7 +269,7 @@ impl Serde for i8 {
         unsafe {
             std::ptr::copy_nonoverlapping(
                 byte.as_ptr() as *const i8,
-                container.as_mut_ptr() as *mut i8,
+                container.as_mut_ptr(),
                 1,
             )
         }
@@ -306,7 +306,7 @@ impl Serde for usize {
         unsafe {
             std::ptr::copy_nonoverlapping(
                 byte_array.as_ptr().offset(0_isize) as *const u64,
-                container.as_mut_ptr() as *mut u64,
+                container.as_mut_ptr(),
                 1,
             )
         }
@@ -343,7 +343,7 @@ impl Serde for isize {
         unsafe {
             std::ptr::copy_nonoverlapping(
                 byte_array.as_ptr().offset(0_isize) as *const u64,
-                container.as_mut_ptr() as *mut u64,
+                container.as_mut_ptr(),
                 1,
             )
         }

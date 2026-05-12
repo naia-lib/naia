@@ -122,10 +122,10 @@ impl OwnedLocalEntity {
         if *is_static { RemoteEntity::new_static(*id) } else { RemoteEntity::new(*id) }
     }
 
-    pub(crate) fn to_reversed(&self) -> OwnedLocalEntity {
+    pub(crate) fn to_reversed(self) -> OwnedLocalEntity {
         match self {
-            OwnedLocalEntity::Host { id, is_static } => OwnedLocalEntity::Remote { id: *id, is_static: *is_static },
-            OwnedLocalEntity::Remote { id, is_static } => OwnedLocalEntity::Host { id: *id, is_static: *is_static },
+            OwnedLocalEntity::Host { id, is_static } => OwnedLocalEntity::Remote { id, is_static },
+            OwnedLocalEntity::Remote { id, is_static } => OwnedLocalEntity::Host { id, is_static },
         }
     }
 

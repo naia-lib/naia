@@ -128,6 +128,7 @@ impl FragmentedMessage {
         self.total
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_payload(self) -> Box<[u8]> {
         self.bytes
     }

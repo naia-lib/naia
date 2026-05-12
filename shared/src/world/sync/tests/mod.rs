@@ -2,8 +2,6 @@
 //! Each sub-module corresponds to a step in the test-driven refactor plan
 //! described in `REFACTOR_PLAN.md`.
 
-#![cfg(test)]
-
 mod bulletproof_migration;
 mod command_validation_tests;
 mod engine;

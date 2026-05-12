@@ -46,7 +46,7 @@ pub fn on_despawn(
     mut host_owned_map: ResMut<HostOwnedMap>,
 ) {
     for entity in removals.read() {
-        if let Ok(_) = query.get(entity) {
+        if query.get(entity).is_ok() {
             // Entity is still alive, expected if Auth is reset on Delegated Entity
         } else {
             // The entity is gone. If we don't have a HostOwnedMap entry

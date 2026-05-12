@@ -146,8 +146,7 @@ fn invalid_credentials_rejected() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
-    let mut server_config = ServerConfig::default();
-    server_config.require_auth = true;
+    let server_config = ServerConfig { require_auth: true, ..Default::default() };
     scenario.server_start(server_config, test_protocol.clone());
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
@@ -256,7 +255,7 @@ fn connect_event_ordering_stable() {
                         return Some(incoming_client_key);
                     }
                 }
-                return None;
+                None
             })
         });
 
@@ -276,7 +275,7 @@ fn connect_event_ordering_stable() {
                         return Some(());
                     }
                 }
-                return None;
+                None
             })
         });
 
@@ -313,7 +312,7 @@ fn connect_event_ordering_stable() {
                         return Some(incoming_client_key);
                     }
                 }
-                return None;
+                None
             })
         });
 
@@ -333,7 +332,7 @@ fn connect_event_ordering_stable() {
                         return Some(());
                     }
                 }
-                return None;
+                None
             })
         });
 
@@ -457,8 +456,7 @@ fn successful_auth_with_require_auth() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
-    let mut server_config = ServerConfig::default();
-    server_config.require_auth = true;
+    let server_config = ServerConfig { require_auth: true, ..Default::default() };
     scenario.server_start(server_config, test_protocol.clone());
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
@@ -522,8 +520,7 @@ fn auth_disabled_connects_without_auth_event() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
-    let mut server_config = ServerConfig::default();
-    server_config.require_auth = false;
+    let server_config = ServerConfig { require_auth: false, ..Default::default() };
     scenario.server_start(server_config, test_protocol.clone());
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
@@ -579,8 +576,7 @@ fn no_replication_before_auth_decision() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
-    let mut server_config = ServerConfig::default();
-    server_config.require_auth = true;
+    let server_config = ServerConfig { require_auth: true, ..Default::default() };
     scenario.server_start(server_config, test_protocol.clone());
 
     // Create room and entity before A connects
@@ -677,8 +673,7 @@ fn no_mid_session_reauth() {
     let mut scenario = Scenario::new();
     let test_protocol = protocol();
 
-    let mut server_config = ServerConfig::default();
-    server_config.require_auth = true;
+    let server_config = ServerConfig { require_auth: true, ..Default::default() };
     scenario.server_start(server_config, test_protocol.clone());
 
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));

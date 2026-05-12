@@ -220,6 +220,6 @@ impl HandshakeManager {
             return None;
         };
 
-        Some(HandshakeResult::Connected(time_manager))
+        Some(HandshakeResult::Connected(Box::new(time_manager)))
     }
 }

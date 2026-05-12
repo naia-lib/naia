@@ -76,7 +76,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     }
 
     /// * Idempotent*: the caller must already have deduplicated on
-    /// `(MessageIndex, Entity)`; re‑injecting the same `(id, msg)` WILL panic!
+    ///   `(MessageIndex, Entity)`; re‑injecting the same `(id, msg)` WILL panic!
     ///
     /// *Non‑blocking*: may push zero or more *ordered* events into the
     /// engine’s outgoing buffer, but never touches the ECS directly.
@@ -101,7 +101,6 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         entity_channel.drain_incoming_messages_into(entity, &mut self.incoming_events);
     }
 
-    ///
     pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
             panic!(

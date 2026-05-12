@@ -12,15 +12,16 @@ use naia_shared::{
 
 use crate::{user::UserKey, ConnectEvent, ErrorEvent, NaiaServerError};
 
+pub(crate) type MessagesMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>;
+pub(crate) type RequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
+pub(crate) type RemovesMap<E> = HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>;
+
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<UserKey>,
     disconnections: Vec<(UserKey, SocketAddr, DisconnectReason)>,
     errors: Vec<NaiaServerError>,
-    messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
-    requests: HashMap<
-        ChannelKind,
-        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
-    >,
+    messages: MessagesMap,
+    requests: RequestsMap,
     spawns: Vec<(UserKey, E)>,
     despawns: Vec<(UserKey, E)>,
     publishes: Vec<(UserKey, E)>,
@@ -30,7 +31,7 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     auth_denials: Vec<(UserKey, E)>,
     auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
-    removes: HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>,
+    removes: RemovesMap<E>,
     updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     empty: bool,
 }
@@ -76,9 +77,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     pub fn has_messages(&self) -> bool {
         !self.messages.is_empty()
     }
-    pub fn take_messages(
-        &mut self,
-    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>> {
+    pub fn take_messages(&mut self) -> MessagesMap {
         mem::take(&mut self.messages)
     }
 
@@ -86,12 +85,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     pub fn has_requests(&self) -> bool {
         !self.requests.is_empty()
     }
-    pub fn take_requests(
-        &mut self,
-    ) -> HashMap<
-        ChannelKind,
-        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
-    > {
+    pub fn take_requests(&mut self) -> RequestsMap {
         mem::take(&mut self.requests)
     }
 
@@ -123,9 +117,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     pub fn has_removes(&self) -> bool {
         !self.removes.is_empty()
     }
-    pub fn take_removes(
-        &mut self,
-    ) -> Option<HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>> {
+    pub fn take_removes(&mut self) -> Option<RemovesMap<E>> {
         if self.removes.is_empty() {
             None
         } else {
@@ -177,8 +169,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
         }
         let channel_map = self.requests.get_mut(channel_kind).unwrap();
         let request_type_id = request.kind();
-        channel_map.entry(request_type_id).or_insert_with(Vec::new);
-        let list = channel_map.get_mut(&request_type_id).unwrap();
+        let list = channel_map.entry(request_type_id).or_default();
         list.push((*user_key, global_response_id, request));
 
         self.empty = false;
@@ -247,8 +238,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     ) {
         let component_kind = component.kind();
 
-        self.removes.entry(component_kind).or_insert_with(Vec::new);
-        let list = self.removes.get_mut(&component_kind).unwrap();
+        let list = self.removes.entry(component_kind).or_default();
         list.push((*user_key, *world_entity, component));
         self.empty = false;
     }
@@ -366,7 +356,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, M: Message> WorldEvent<E>
 }
 
 pub(crate) fn read_channel_messages<C: Channel, M: Message>(
-    messages: &mut HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    messages: &mut MessagesMap,
 ) -> Vec<(UserKey, M)> {
     let channel_kind: ChannelKind = ChannelKind::of::<C>();
     if let Some(channel_map) = messages.get_mut(&channel_kind) {
@@ -396,7 +386,7 @@ pub(crate) fn read_messages<M: Message>(
 }
 
 pub(crate) fn push_message_impl(
-    messages: &mut HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    messages: &mut MessagesMap,
     user_key: &UserKey,
     channel_kind: &ChannelKind,
     message: MessageContainer,
@@ -406,8 +396,7 @@ pub(crate) fn push_message_impl(
     }
     let channel_map = messages.get_mut(channel_kind).unwrap();
     let message_type_id = message.kind();
-    channel_map.entry(message_type_id).or_insert_with(Vec::new);
-    let list = channel_map.get_mut(&message_type_id).unwrap();
+    let list = channel_map.entry(message_type_id).or_default();
     list.push((*user_key, message));
 }
 

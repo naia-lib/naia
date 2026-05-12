@@ -972,6 +972,7 @@ impl Scenario {
     ///
     /// - **Registry updates happen after all event collection**: This ensures all events from
     ///   the current tick are available for matching and registration.
+    ///
     /// Update simulation without draining events (for expect() to handle events)
     fn tick(&mut self) {
         // Increment tick counter
@@ -1064,6 +1065,7 @@ impl Scenario {
 
     /// Create a client socket from the transport hub
     /// Returns the socket along with handles to identity_token, rejection_code, and client_addr
+    #[allow(clippy::type_complexity)]
     fn create_client_socket(
         &self,
     ) -> (

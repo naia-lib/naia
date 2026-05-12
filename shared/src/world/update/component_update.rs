@@ -1,8 +1,10 @@
-use naia_serde::{BitReader, OwnedBitReader, SerdeErr};
+use naia_serde::{BitReader, OwnedBitReader};
 
 use crate::{
-    world::component::component_kinds::ComponentKind, ComponentKinds,
-    LocalEntityAndGlobalEntityConverter, RemoteEntity,
+    world::component::component_kinds::ComponentKind,
+    world::component::replicate::SplitUpdateResult,
+    ComponentKinds,
+    LocalEntityAndGlobalEntityConverter,
 };
 
 pub struct ComponentUpdate {
@@ -23,13 +25,7 @@ impl ComponentUpdate {
         self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kinds: &ComponentKinds,
-    ) -> Result<
-        (
-            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
-            Option<Self>,
-        ),
-        SerdeErr,
-    > {
+    ) -> SplitUpdateResult {
         let kind = self.kind;
         component_kinds.split_update(converter, &kind, self)
     }

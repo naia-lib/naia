@@ -61,6 +61,7 @@ impl FragmentWriter {
         self.fragments.push(fragmented_message);
     }
 
+    #[allow(clippy::wrong_self_convention)]
     fn to_messages(mut self) -> Vec<MessageContainer> {
         self.flush_current();
 

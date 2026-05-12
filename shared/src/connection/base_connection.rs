@@ -198,6 +198,7 @@ impl BaseConnection {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn write_packet<E: Copy + Eq + Hash + Sync + Send, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,

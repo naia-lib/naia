@@ -13,6 +13,8 @@ use crate::{
     Scenario, TestEntity,
 };
 
+type ClientRemovesMap = HashMap<ComponentKind, Vec<(EntityKey, Box<dyn Replicate>)>>;
+
 #[derive(Default)]
 pub struct ClientEvents {
     connections: Vec<()>,
@@ -29,7 +31,7 @@ pub struct ClientEvents {
     auth_denies: Vec<EntityKey>,
     auth_resets: Vec<EntityKey>,
     inserts: HashMap<ComponentKind, Vec<EntityKey>>,
-    removes: HashMap<ComponentKind, Vec<(EntityKey, Box<dyn Replicate>)>>,
+    removes: ClientRemovesMap,
     updates: HashMap<ComponentKind, Vec<(Tick, EntityKey)>>,
     client_ticks: Vec<Tick>,
     server_ticks: Vec<Tick>,

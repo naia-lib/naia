@@ -8,7 +8,7 @@ use crate::{
     messages::{
         channels::{
             receivers::{
-                channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+                channel_receiver::{ChannelReceiver, MessageChannelReceiver, RequestsAndResponses},
                 fragment_receiver::FragmentReceiver,
                 indexed_message_reader::IndexedMessageReader,
                 reliable_receiver::ReliableReceiver,
@@ -231,10 +231,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
 
     fn receive_requests_and_responses(
         &mut self,
-    ) -> (
-        Vec<(LocalResponseId, MessageContainer)>,
-        Vec<(LocalRequestId, MessageContainer)>,
-    ) {
+    ) -> RequestsAndResponses {
         (
             std::mem::take(&mut self.incoming_requests),
             std::mem::take(&mut self.incoming_responses),

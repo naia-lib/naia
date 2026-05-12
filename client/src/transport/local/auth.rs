@@ -50,9 +50,9 @@ impl PendingRequest {
         let status_code = response.status().as_u16();
 
         if status_code != 200 {
-            let result = Ok((status_code, String::new()));
-            self.cached_result = Some(result.clone());
-            return Ok(Some(result.unwrap()));
+            let result = (status_code, String::new());
+            self.cached_result = Some(Ok(result.clone()));
+            return Ok(Some(result));
         }
 
         // Parse response body: "identity_token\r\nserver_addr"
@@ -85,9 +85,9 @@ impl PendingRequest {
         // Update addr_cell synchronously
         self.addr_cell.set(server_addr);
 
-        let result = Ok((status_code, identity_token));
-        self.cached_result = Some(result.clone());
-        Ok(Some(result.unwrap()))
+        let result = (status_code, identity_token);
+        self.cached_result = Some(Ok(result.clone()));
+        Ok(Some(result))
     }
 }
 

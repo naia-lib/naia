@@ -27,9 +27,11 @@ use crate::test_protocol::{protocol, Auth, Position};
 /// Connect one client through the full handshake, add to the scenario's last
 /// room, and return its key. Trace capture must be enabled by the caller.
 fn connect_one_client(scenario: &mut Scenario) -> crate::harness::ClientKey {
-    let mut cfg = ClientConfig::default();
-    cfg.send_handshake_interval = Duration::from_millis(0);
-    cfg.jitter_buffer = JitterBufferType::Bypass;
+    let cfg = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
 
     let client_key = scenario.client_start("Client", Auth::new("user", "password"), cfg, protocol());
 

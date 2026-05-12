@@ -16,6 +16,18 @@ use super::{
     NaiaServerSocketError,
 };
 
+type ClientAuthSender =
+    channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
+type ClientMsgReceiver =
+    channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
+type SenderChannelReceiver = channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>;
+type AuthListenResult = (
+    Box<dyn AuthSender>,
+    Box<dyn AuthReceiver>,
+    Box<dyn PacketSender>,
+    Box<dyn PacketReceiver>,
+);
+
 /// Used to send packets from the Server Socket
 #[allow(dead_code)]
 pub trait SocketTrait {
@@ -43,12 +55,7 @@ impl Socket {
     pub fn listen_with_auth(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
-    ) -> (
-        Box<dyn AuthSender>,
-        Box<dyn AuthReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    ) -> AuthListenResult {
         let (from_client_auth_sender, from_client_auth_receiver) = channel::unbounded();
         let (to_session_all_auth_sender, to_session_all_auth_receiver) = channel::unbounded();
         let from_client_auth_sender = Some(from_client_auth_sender);
@@ -79,16 +86,11 @@ impl Socket {
     fn setup_receiver_loop(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
-        from_client_auth_sender: Option<
-            channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-        >,
+        from_client_auth_sender: Option<ClientAuthSender>,
         to_session_all_auth_receiver: Option<
             channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
         >,
-    ) -> (
-        channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-        channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>,
-    ) {
+    ) -> (ClientMsgReceiver, SenderChannelReceiver) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();
         let (sender_sender, sender_receiver) = channel::unbounded();
@@ -122,10 +124,8 @@ impl Socket {
 
     fn setup_sender_loop(
         config: &SocketConfig,
-        from_client_receiver: channel::Receiver<
-            Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>,
-        >,
-        sender_receiver: channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>,
+        from_client_receiver: ClientMsgReceiver,
+        sender_receiver: SenderChannelReceiver,
     ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
         // Set up sender loop
         let (to_client_sender, to_client_receiver) = channel::unbounded();

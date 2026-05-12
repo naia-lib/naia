@@ -164,8 +164,10 @@ impl BevyHarness {
         // -- Client App --
         let hub_for_client = hub.clone();
         let mut client_app = App::new();
-        let mut cfg = ClientConfig::default();
-        cfg.send_handshake_interval = Duration::from_millis(0);
+        let cfg = ClientConfig {
+            send_handshake_interval: Duration::from_millis(0),
+            ..Default::default()
+        };
         client_app.add_plugins(ClientPlugin::<Main>::new(cfg, protocol()));
         ClientAppEvents::add_resource_events::<Main, TestScore>(&mut client_app);
         ClientAppEvents::add_component_events::<Main, TestScore>(&mut client_app);

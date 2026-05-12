@@ -127,6 +127,7 @@ impl Connection {
     }
 
     /// Read packet data received from a client, storing necessary data in an internal buffer
+    #[allow(clippy::too_many_arguments)]
     pub fn read_packet(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -161,6 +162,7 @@ impl Connection {
     }
 
     /// Receive & process stored packet data
+    #[allow(clippy::too_many_arguments)]
     pub fn process_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         message_kinds: &MessageKinds,
@@ -236,6 +238,7 @@ impl Connection {
     }
 
     // Outgoing data
+    #[allow(clippy::too_many_arguments)]
     pub fn send_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -343,6 +346,7 @@ impl Connection {
 
     /// Send any message, component actions and component updates to the client
     /// Will split the data into multiple packets.
+    #[allow(clippy::too_many_arguments)]
     fn send_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -448,6 +452,7 @@ impl Connection {
         false
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,

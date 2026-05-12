@@ -36,9 +36,9 @@ pub fn sequence_equal_or_less_than(s1: u16, s2: u16) -> bool {
 /// wrapping_diff(65535,0) will return 1
 /// wrapping_diff(0,65535) will return -1
 pub fn wrapping_diff(a: u16, b: u16) -> i16 {
-    const MAX: i32 = std::i16::MAX as i32;
-    const MIN: i32 = std::i16::MIN as i32;
-    const ADJUST: i32 = (std::u16::MAX as i32) + 1;
+    const MAX: i32 = i16::MAX as i32;
+    const MIN: i32 = i16::MIN as i32;
+    const ADJUST: i32 = (u16::MAX as i32) + 1;
 
     let a: i32 = i32::from(a);
     let b: i32 = i32::from(b);
@@ -124,7 +124,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn max_wrap() {
-        let a: u16 = std::u16::MAX;
+        let a: u16 = u16::MAX;
         let b: u16 = a.wrapping_add(2);
 
         let result = wrapping_diff(a, b);
@@ -144,7 +144,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn max_wrap_backwards() {
-        let a: u16 = std::u16::MAX;
+        let a: u16 = u16::MAX;
         let b: u16 = a.wrapping_add(2);
 
         let result = wrapping_diff(b, a);
@@ -164,7 +164,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_min_wrap() {
-        let diff: u16 = std::u16::MAX / 2;
+        let diff: u16 = u16::MAX / 2;
         let a: u16 = 0;
         let b: u16 = a.wrapping_sub(diff);
 
@@ -175,7 +175,7 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_min_wrap_backwards() {
-        let diff: u16 = std::u16::MAX / 2;
+        let diff: u16 = u16::MAX / 2;
         let a: u16 = 0;
         let b: u16 = a.wrapping_sub(diff);
 
@@ -186,8 +186,8 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_max_wrap() {
-        let diff: u16 = std::u16::MAX / 2;
-        let a: u16 = std::u16::MAX;
+        let diff: u16 = u16::MAX / 2;
+        let a: u16 = u16::MAX;
         let b: u16 = a.wrapping_add(diff);
 
         let result = i32::from(wrapping_diff(a, b));
@@ -197,8 +197,8 @@ mod wrapping_diff_tests {
 
     #[test]
     fn medium_max_wrap_backwards() {
-        let diff: u16 = std::u16::MAX / 2;
-        let a: u16 = std::u16::MAX;
+        let diff: u16 = u16::MAX / 2;
+        let a: u16 = u16::MAX;
         let b: u16 = a.wrapping_add(diff);
 
         let result = i32::from(wrapping_diff(b, a));

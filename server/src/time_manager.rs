@@ -101,8 +101,7 @@ impl TimeManager {
         self.tick_speedup_potential = (((self.tick_duration_avg_max - self.tick_duration_avg_min)
             / self.tick_duration_avg_min)
             * 30.0)
-            .max(0.0)
-            .min(10.0);
+            .clamp(0.0, 10.0);
     }
 
     pub(crate) fn process_ping(&self, reader: &mut BitReader) -> Result<BitWriter, SerdeErr> {

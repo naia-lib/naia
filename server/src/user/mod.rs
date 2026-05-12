@@ -1,4 +1,5 @@
 pub(crate) mod main_user;
+#[allow(clippy::module_inception)]
 pub(crate) mod user;
 pub(crate) mod world_user;
 

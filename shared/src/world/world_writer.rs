@@ -27,6 +27,7 @@ impl WorldWriter {
         *last_id_opt = Some(*current_id);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn write_into_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
@@ -71,6 +72,7 @@ impl WorldWriter {
         );
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_commands<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
@@ -745,6 +747,7 @@ impl WorldWriter {
         }
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn write_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
@@ -832,6 +835,7 @@ impl WorldWriter {
 
     /// For a given entity, write component value updates into a packet
     /// Only component values that changed in the internal (naia's) host world will be written
+    #[allow(clippy::too_many_arguments)]
     fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,

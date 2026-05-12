@@ -511,7 +511,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // a heap allocation. At 1,262 CCU this drops from 1,262 clone_box()
         // allocations per broadcast to 1.
         let container = MessageContainer::new(message_box);
-        let user_keys: Vec<UserKey> = self.user_keys().iter().cloned().collect();
+        let user_keys: Vec<UserKey> = self.user_keys().to_vec();
         for user_key in user_keys {
             let _ = self.send_message_inner(&user_key, channel_kind, container.clone());
         }
@@ -620,11 +620,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         response_key: &ResponseReceiveKey<S>,
     ) -> Option<(UserKey, S)> {
         let request_id = response_key.request_id();
-        let Some((user_key, container)) =
-            self.global_request_manager.destroy_request_id(&request_id)
-        else {
-            return None;
-        };
+        let (user_key, container) = self.global_request_manager.destroy_request_id(&request_id)?;
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
             .ok()
             .map(|boxed_s| *boxed_s)
@@ -675,8 +671,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Slow-path recompute — used by tests to verify the cache stays
     /// in sync with `(rooms × users × entities)` truth.
-
-
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
@@ -2025,13 +2019,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         };
 
         // Owning client is always in-scope for client-owned entities
-        let is_owner = if let Some(owner) = self.global_world_manager.entity_owner(&global_entity) {
-            match owner {
-                EntityOwner::Client(owner_key)
-                | EntityOwner::ClientWaiting(owner_key)
-                | EntityOwner::ClientPublic(owner_key) => owner_key == *user_key,
-                _ => false,
-            }
+        let is_owner = if let Some(
+            EntityOwner::Client(owner_key)
+            | EntityOwner::ClientWaiting(owner_key)
+            | EntityOwner::ClientPublic(owner_key),
+        ) = self.global_world_manager.entity_owner(&global_entity)
+        {
+            owner_key == *user_key
         } else {
             false
         };

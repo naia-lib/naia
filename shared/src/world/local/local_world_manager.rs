@@ -125,11 +125,13 @@ cfg_if! {
 const RESEND_COMMAND_RTT_FACTOR: f32 = 1.5;
 const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 
+type SentCommandPackets = SequenceList<(Instant, Vec<(CommandId, EntityMessage<OwnedLocalEntity>)>)>;
+type OutgoingEvents = (VecDeque<(CommandId, EntityCommand)>, HashMap<GlobalEntity, HashSet<ComponentKind>>);
+
 pub struct LocalWorldManager {
     entity_map: LocalEntityMap,
     sender: ReliableSender<EntityCommand>,
-    sent_command_packets:
-        SequenceList<(Instant, Vec<(CommandId, EntityMessage<OwnedLocalEntity>)>)>,
+    sent_command_packets: SentCommandPackets,
     receiver: ReliableReceiver<EntityMessage<OwnedLocalEntity>>,
 
     host: HostWorldManager,
@@ -1068,17 +1070,8 @@ impl LocalWorldManager {
     }
 
     fn handle_dropped_command_packets(&mut self, now: &Instant) {
-        let mut pop = false;
-
-        loop {
-            if let Some((_, (time_sent, _))) = self.sent_command_packets.front() {
-                if time_sent.elapsed(now) > COMMAND_RECORD_TTL {
-                    pop = true;
-                }
-            } else {
-                break;
-            }
-            if pop {
+        while let Some((_, (time_sent, _))) = self.sent_command_packets.front() {
+            if time_sent.elapsed(now) > COMMAND_RECORD_TTL {
                 self.sent_command_packets.pop_front();
             } else {
                 break;
@@ -1096,10 +1089,7 @@ impl LocalWorldManager {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
-    ) -> (
-        VecDeque<(CommandId, EntityCommand)>,
-        HashMap<GlobalEntity, HashSet<ComponentKind>>,
-    ) {
+    ) -> OutgoingEvents {
         // get outgoing world commands
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();

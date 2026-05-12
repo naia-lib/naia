@@ -179,6 +179,7 @@ impl<T> RequestEvents<T> {
 // ClientTickEventReader
 #[derive(Resource)]
 pub(crate) struct CachedClientTickEventsState<T: Send + Sync + 'static> {
+    #[allow(clippy::type_complexity)]
     pub(crate) event_state: SystemState<(
         bevy_ecs::system::Res<'static, Messages<ClientTickEvent<T>>>,
         bevy_ecs::system::Local<'static, MessageCursor<ClientTickEvent<T>>>,

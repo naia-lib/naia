@@ -172,7 +172,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn component_kinds(&mut self, entity: &Entity) -> Vec<ComponentKind> {
         let mut kinds = Vec::new();
 
-        let world_data = world_data(&self.world);
+        let world_data = world_data(self.world);
 
         let components = self.world.components();
 
@@ -210,10 +210,8 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         entity: &Entity,
         component_kind: &ComponentKind,
     ) -> Option<ReplicaDynMutWrapper<'_>> {
-        let world_data = world_data(&self.world);
-        let Some(component_access) = world_data.component_access(component_kind) else {
-            return None;
-        };
+        let world_data = world_data(self.world);
+        let component_access = world_data.component_access(component_kind)?;
         let new_component_access = component_access.box_clone();
         new_component_access.component_mut(self.world, entity)
     }

@@ -254,10 +254,7 @@ impl GlobalWorldManager {
         let Some(record) = self.entity_records.get(global_entity) else {
             panic!("entity record does not exist!");
         };
-        match record.owner {
-            EntityOwner::ClientPublic(_) => true,
-            _ => false,
-        }
+        matches!(record.owner, EntityOwner::ClientPublic(_))
     }
 
     pub(crate) fn entity_is_public_and_owned_by_user(

@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 pub(crate) mod events;
 pub(crate) mod main_events;
 pub(crate) mod tick_events;

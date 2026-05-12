@@ -1,7 +1,6 @@
 use rand::Rng;
 
 /// Container for cross-platform Random methods
-
 pub struct Random;
 
 impl Random {

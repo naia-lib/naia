@@ -25,28 +25,26 @@ pub fn init(
     commands.spawn(Camera2d);
 
     // Setup Global Resource
-    let mut global = Global::default();
-
-    // Load colors
-    global.red = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::RED)));
-    global.blue = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::BLUE)));
-    global.yellow = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
-        1.0, 1.0, 0.0,
-    ))));
-    global.green = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::GREEN)));
-    global.white = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::WHITE)));
-    global.purple = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
-        1.0, 0.0, 1.0,
-    ))));
-    global.orange = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
-        1.0, 0.5, 0.0,
-    ))));
-    global.aqua = materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
-        0.0, 1.0, 1.0,
-    ))));
-
-    // Load shapes
-    global.circle = meshes.add(Circle::new(6.));
+    let global = Global {
+        red: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::RED))),
+        blue: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::BLUE))),
+        yellow: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
+            1.0, 1.0, 0.0,
+        )))),
+        green: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::GREEN))),
+        white: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::WHITE))),
+        purple: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
+            1.0, 0.0, 1.0,
+        )))),
+        orange: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
+            1.0, 0.5, 0.0,
+        )))),
+        aqua: materials.add(ColorMaterial::from(Color::LinearRgba(LinearRgba::rgb(
+            0.0, 1.0, 1.0,
+        )))),
+        circle: meshes.add(Circle::new(6.)),
+        ..Default::default()
+    };
 
     // Insert Global Resource
     commands.insert_resource(global);

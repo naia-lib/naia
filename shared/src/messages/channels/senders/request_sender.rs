@@ -81,6 +81,7 @@ impl RequestOrResponse {
         }
     }
 
+    #[allow(clippy::wrong_self_convention)]
     pub(crate) fn to_id_and_bytes(self) -> (LocalRequestOrResponseId, Box<[u8]>) {
         (self.id, self.bytes)
     }
@@ -130,6 +131,7 @@ pub struct LocalRequestId {
 }
 
 impl LocalRequestId {
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Request(*self)
     }
@@ -157,6 +159,7 @@ pub struct LocalResponseId {
 }
 
 impl LocalResponseId {
+    #[allow(clippy::wrong_self_convention)]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Response(*self)
     }

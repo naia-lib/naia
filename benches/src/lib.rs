@@ -213,6 +213,7 @@ pub struct BenchWorld {
 }
 
 impl BenchWorld {
+    #[allow(clippy::too_many_arguments)]
     fn new(
         user_count: usize,
         entity_count: usize,
@@ -1106,7 +1107,7 @@ pub fn advance_tick(
     hub: &LocalTransportHub,
     server: &mut NaiaServer<BenchEntity>,
     server_world: &mut World,
-    clients: &mut Vec<(NaiaClient<BenchEntity>, World)>,
+    clients: &mut [(NaiaClient<BenchEntity>, World)],
     tick_ms: u64,
 ) {
     TestClock::advance(tick_ms);

@@ -584,7 +584,7 @@ fn then_client_receives_entity_command_message(ctx: &TestWorldRef) -> AssertOutc
 #[then("the client received exactly 128 entity-command messages")]
 fn then_client_received_exactly_128_entity_commands(ctx: &TestWorldRef) -> AssertOutcome<()> {
     match ctx.scenario().bdd_get::<usize>(ENTITY_COMMAND_COUNT_KEY) {
-        Some(count) if count == 128 => AssertOutcome::Passed(()),
+        Some(128) => AssertOutcome::Passed(()),
         Some(count) => AssertOutcome::Failed(format!(
             "Expected 128 entity-command messages (per-entity buffer cap), got {}",
             count

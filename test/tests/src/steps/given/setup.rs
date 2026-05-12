@@ -80,9 +80,11 @@ fn given_client_created_not_connected(ctx: &mut TestWorldMut) {
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{protocol, Auth};
     let scenario = ctx.scenario_mut();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
     let _ = scenario.client_start(
         "UnconnectedClient",
         Auth::new("test_user", "password"),
@@ -103,9 +105,11 @@ fn given_client_begins_connecting(ctx: &mut TestWorldMut) {
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{protocol, Auth};
     let scenario = ctx.scenario_mut();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
     let _ = scenario.client_start(
         "ConnectingClient",
         Auth::new("test_user", "password"),
@@ -180,9 +184,11 @@ fn given_client_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{protocol, Auth, ProtocolId};
     let scenario = ctx.scenario_mut();
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
     let protocol_id = match version.as_str() {
         "A" => ProtocolId::new(1),
         "B" => ProtocolId::new(2),

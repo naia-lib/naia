@@ -15,7 +15,7 @@ cfg_if! {
 }
 
 pub enum HandshakeResult {
-    Connected(TimeManager),
+    Connected(Box<TimeManager>),
     Rejected(RejectReason),
 }
 

@@ -33,17 +33,11 @@ pub enum EntityOwner {
 impl EntityOwner {
     /// Returns `true` if this entity originated on the server.
     pub fn is_server(&self) -> bool {
-        match self {
-            EntityOwner::Server => true,
-            _ => false,
-        }
+        matches!(self, EntityOwner::Server)
     }
 
     /// Returns `true` if this entity was spawned by this client.
     pub fn is_client(&self) -> bool {
-        match self {
-            EntityOwner::Client => true,
-            _ => false,
-        }
+        matches!(self, EntityOwner::Client)
     }
 }

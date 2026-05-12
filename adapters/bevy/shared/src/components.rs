@@ -20,17 +20,9 @@ impl HostOwned {
     }
 }
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct HostOwnedMap {
     map: HashMap<Entity, HostOwned>,
-}
-
-impl Default for HostOwnedMap {
-    fn default() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
-    }
 }
 
 impl HostOwnedMap {

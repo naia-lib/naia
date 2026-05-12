@@ -1,21 +1,17 @@
-use std::{
-    collections::{HashMap, HashSet},
-    default::Default,
-};
+use std::collections::{HashMap, HashSet};
 
 use bevy_app::App;
 use bevy_ecs::{
     component::{Component, Mutable},
     entity::Entity,
     prelude::Resource,
-    world::{FromWorld, World},
 };
 
 use naia_shared::{ComponentKind, Replicate};
 
 use super::component_access::{ComponentAccess, ComponentAccessor};
 
-#[derive(Resource)]
+#[derive(Resource, Default)]
 pub struct WorldData {
     entities: HashSet<Entity>,
     kind_to_accessor_map: HashMap<ComponentKind, Box<dyn ComponentAccess>>,
@@ -34,21 +30,9 @@ impl Clone for WorldData {
     }
 }
 
-impl FromWorld for WorldData {
-    fn from_world(_world: &mut World) -> Self {
-        Self {
-            entities: HashSet::default(),
-            kind_to_accessor_map: HashMap::default(),
-        }
-    }
-}
-
 impl WorldData {
     pub fn new() -> Self {
-        Self {
-            entities: HashSet::default(),
-            kind_to_accessor_map: HashMap::default(),
-        }
+        Self::default()
     }
 
     pub fn merge(&mut self, other: Self) {
@@ -59,7 +43,7 @@ impl WorldData {
     }
 
     pub fn add_systems(&self, app: &mut App) {
-        for (_kind, accessor) in &self.kind_to_accessor_map {
+        for accessor in self.kind_to_accessor_map.values() {
             accessor.add_systems(app);
         }
     }

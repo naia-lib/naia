@@ -15,11 +15,17 @@ pub struct SharedPlugin<T: Send + Sync + 'static> {
     phantom_t: PhantomData<T>,
 }
 
-impl<T: Send + Sync + 'static> SharedPlugin<T> {
-    pub fn new() -> Self {
+impl<T: Send + Sync + 'static> Default for SharedPlugin<T> {
+    fn default() -> Self {
         Self {
             phantom_t: PhantomData,
         }
+    }
+}
+
+impl<T: Send + Sync + 'static> SharedPlugin<T> {
+    pub fn new() -> Self {
+        Self::default()
     }
 }
 

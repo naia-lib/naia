@@ -1,8 +1,7 @@
 use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    Channel, ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
-    Replicate, Request,
+    Channel, ComponentKind, Message, MessageContainer, MessageKind, Replicate, Request,
 };
 
 use crate::{
@@ -10,9 +9,9 @@ use crate::{
         main_events::{AuthEvent, ConnectEvent, ErrorEvent, MainEvent, MainEvents},
         world_events::{
             DelegateEntityEvent, DespawnEntityEvent, EntityAuthDeniedEvent, EntityAuthGrantEvent,
-            EntityAuthResetEvent, InsertComponentEvent, MessageEvent, PublishEntityEvent,
-            RemoveComponentEvent, RequestEvent, SpawnEntityEvent, UnpublishEntityEvent,
-            UpdateComponentEvent, WorldEvent, WorldEvents,
+            EntityAuthResetEvent, InsertComponentEvent, MessageEvent, MessagesMap, PublishEntityEvent,
+            RemoveComponentEvent, RemovesMap, RequestEvent, RequestsMap, SpawnEntityEvent,
+            UnpublishEntityEvent, UpdateComponentEvent, WorldEvent, WorldEvents,
         },
     },
     user::UserKey,
@@ -67,9 +66,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub fn has_messages(&self) -> bool {
         self.world_events.has_messages()
     }
-    pub fn take_messages(
-        &mut self,
-    ) -> HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>> {
+    pub fn take_messages(&mut self) -> MessagesMap {
         self.world_events.take_messages()
     }
 
@@ -77,12 +74,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub fn has_requests(&self) -> bool {
         self.world_events.has_requests()
     }
-    pub fn take_requests(
-        &mut self,
-    ) -> HashMap<
-        ChannelKind,
-        HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>,
-    > {
+    pub fn take_requests(&mut self) -> RequestsMap {
         self.world_events.take_requests()
     }
 
@@ -114,9 +106,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub fn has_removes(&self) -> bool {
         self.world_events.has_removes()
     }
-    pub fn take_removes(
-        &mut self,
-    ) -> Option<HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>> {
+    pub fn take_removes(&mut self) -> Option<RemovesMap<E>> {
         self.world_events.take_removes()
     }
 }

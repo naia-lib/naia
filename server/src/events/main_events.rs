@@ -72,8 +72,7 @@ impl MainEvents {
 
     pub(crate) fn push_auth(&mut self, user_key: &UserKey, auth_message: MessageContainer) {
         let message_type_id = auth_message.kind();
-        self.auths.entry(message_type_id).or_insert_with(Vec::new);
-        let list = self.auths.get_mut(&message_type_id).unwrap();
+        let list = self.auths.entry(message_type_id).or_default();
         list.push((*user_key, auth_message));
         self.empty = false;
     }

@@ -3,9 +3,10 @@ use std::{any::TypeId, collections::HashMap};
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
 use crate::{
-    ComponentFieldUpdate, ComponentUpdate, LocalEntityAndGlobalEntityConverter, RemoteEntity,
+    ComponentUpdate, LocalEntityAndGlobalEntityConverter,
     Replicate, ReplicateBuilder,
 };
+use crate::world::component::replicate::SplitUpdateResult;
 
 type NetId = u16;
 
@@ -33,7 +34,6 @@ type NetId = u16;
 /// `ComponentKinds`, so ser/de pays only an inline u8 read plus N
 /// `write_bit` calls — no struct construction, no HashMap lookup for the
 /// width. Pinned by `benches/tests/component_kind_wire.rs`.
-
 fn bit_width_for_kind_count(count: NetId) -> u8 {
     // count <= 1 → 0 bits (degenerate; nothing to disambiguate).
     // count   N → ceil(log2(N)) bits.
@@ -185,13 +185,7 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kind: &ComponentKind,
         update: ComponentUpdate,
-    ) -> Result<
-        (
-            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
-            Option<ComponentUpdate>,
-        ),
-        SerdeErr,
-    > {
+    ) -> SplitUpdateResult {
         self
             .kind_to_builder(component_kind)
             .split_update(converter, update)
@@ -231,14 +225,15 @@ impl ComponentKinds {
         self.kind_map.get(component_kind).map(|(net_id, _, _)| *net_id)
     }
 
-    fn kind_to_builder(&self, component_kind: &ComponentKind) -> &Box<dyn ReplicateBuilder> {
-        &self
+    fn kind_to_builder(&self, component_kind: &ComponentKind) -> &dyn ReplicateBuilder {
+        self
             .kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
             )
             .1
+            .as_ref()
     }
 
     pub fn kind_is_immutable(&self, component_kind: &ComponentKind) -> bool {

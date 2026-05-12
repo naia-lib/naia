@@ -25,6 +25,7 @@ pub struct LocalClientSocket {
 impl LocalClientSocket {
     /// Create a new client socket with per-client identity token storage
     /// This is used when multiple clients need to connect to the same server
+    #[allow(clippy::too_many_arguments)]
     pub fn new_with_tokens(
         _client_addr: SocketAddr,
         _server_addr: SocketAddr,

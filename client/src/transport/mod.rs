@@ -115,7 +115,6 @@ mod inner {
     // Identity
 
     pub trait IdentityReceiver: IdentityReceiverClone + Send + Sync {
-        ///
         fn receive(&mut self) -> IdentityReceiverResult;
     }
 

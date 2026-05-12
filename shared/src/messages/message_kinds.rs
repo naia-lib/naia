@@ -146,12 +146,13 @@ impl MessageKinds {
             .0
     }
 
-    fn kind_to_builder(&self, message_kind: &MessageKind) -> &Box<dyn MessageBuilder> {
-        &self
+    fn kind_to_builder(&self, message_kind: &MessageKind) -> &dyn MessageBuilder {
+        self
             .kind_map
             .get(message_kind)
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
             .1
+            .as_ref()
     }
 
     pub fn all_names(&self) -> Vec<String> {

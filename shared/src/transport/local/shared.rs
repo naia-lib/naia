@@ -34,25 +34,31 @@ pub enum LocalAuthError {
     ParseError,
 }
 
+/// (client→server sender, server receives, server→client sender, client receives)
+pub(crate) type DataChannels = (
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+);
+
+/// (client→server sender, server receives, server→client sender, client receives)
+pub(crate) type AuthChannels = (
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+);
+
 // Helper to create data packet channels
-pub(crate) fn create_data_channels() -> (
-    mpsc::Sender<Vec<u8>>,   // client sends to server
-    mpsc::Receiver<Vec<u8>>, // server receives from client
-    mpsc::Sender<Vec<u8>>,   // server sends to client
-    mpsc::Receiver<Vec<u8>>, // client receives from server
-) {
+pub(crate) fn create_data_channels() -> DataChannels {
     let (client_tx, server_rx) = mpsc::channel();
     let (server_tx, client_rx) = mpsc::channel();
     (client_tx, server_rx, server_tx, client_rx)
 }
 
 // Helper to create 1:1 auth channels
-pub(crate) fn create_auth_channels() -> (
-    mpsc::Sender<Vec<u8>>,   // client sends requests
-    mpsc::Receiver<Vec<u8>>, // server receives requests
-    mpsc::Sender<Vec<u8>>,   // server sends responses
-    mpsc::Receiver<Vec<u8>>, // client receives responses
-) {
+pub(crate) fn create_auth_channels() -> AuthChannels {
     let (req_tx, req_rx) = mpsc::channel();
     let (resp_tx, resp_rx) = mpsc::channel();
     (req_tx, req_rx, resp_tx, resp_rx)

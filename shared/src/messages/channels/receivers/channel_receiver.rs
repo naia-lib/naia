@@ -11,6 +11,11 @@ use crate::{
     LocalEntityAndGlobalEntityConverter, LocalResponseId,
 };
 
+pub type RequestsAndResponses = (
+    Vec<(LocalResponseId, MessageContainer)>,
+    Vec<(LocalRequestId, MessageContainer)>,
+);
+
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from an internal buffer and return their content
     fn receive_messages(
@@ -33,8 +38,5 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
 
     fn receive_requests_and_responses(
         &mut self,
-    ) -> (
-        Vec<(LocalResponseId, MessageContainer)>,
-        Vec<(LocalRequestId, MessageContainer)>,
-    );
+    ) -> RequestsAndResponses;
 }

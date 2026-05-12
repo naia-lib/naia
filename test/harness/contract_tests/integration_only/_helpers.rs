@@ -16,6 +16,7 @@ use std::time::Duration;
 /// - `jitter_buffer = Bypass` for immediate packet processing
 ///
 /// Use this instead of `ClientConfig::default()` in all tests.
+#[allow(clippy::field_reassign_with_default)]
 pub fn test_client_config() -> ClientConfig {
     let mut config = ClientConfig::default();
     config.send_handshake_interval = Duration::from_millis(0);
@@ -112,7 +113,7 @@ pub fn client_connect(
                     return Some(incoming_client_key);
                 }
             }
-            return None;
+            None
         })
     });
 
@@ -131,7 +132,7 @@ pub fn client_connect(
                     return Some(());
                 }
             }
-            return None;
+            None
         })
     });
 
@@ -139,7 +140,7 @@ pub fn client_connect(
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server
-                .room_mut(&room_key)
+                .room_mut(room_key)
                 .expect("room to exist")
                 .add_user(&client_key);
         });

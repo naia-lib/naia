@@ -9,6 +9,8 @@ use naia_shared::{
 
 use crate::NaiaClientError;
 
+type RemovesMap<E> = HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>;
+
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
     rejections: Vec<(SocketAddr, RejectReason)>,
@@ -24,7 +26,7 @@ pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     auth_denies: Vec<E>,
     auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<E>>,
-    removes: HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>,
+    removes: RemovesMap<E>,
     updates: HashMap<ComponentKind, Vec<(Tick, E)>>,
     empty: bool,
 }
@@ -118,7 +120,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     pub fn has_removes(&self) -> bool {
         !self.removes.is_empty()
     }
-    pub fn take_removes(&mut self) -> Option<HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>> {
+    pub fn take_removes(&mut self) -> Option<RemovesMap<E>> {
         if self.removes.is_empty() {
             None
         } else {

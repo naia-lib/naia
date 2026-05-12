@@ -4,7 +4,7 @@ use naia_shared::LinkConditionerConfig;
 
 use crate::transport::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
-    ConditionedPacketReceiver, PacketReceiver as TransportReceiver,
+    ConditionedPacketReceiver, ListenResult, PacketReceiver as TransportReceiver,
     PacketSender as TransportSender, RecvError, SendError, Socket as TransportSocket,
 };
 
@@ -34,14 +34,7 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
-    fn listen(
-        self: Box<Self>,
-    ) -> (
-        Box<dyn TransportAuthSender>,
-        Box<dyn TransportAuthReceiver>,
-        Box<dyn TransportSender>,
-        Box<dyn TransportReceiver>,
-    ) {
+    fn listen(self: Box<Self>) -> ListenResult {
         let Socket { inner, config } = *self;
         let local = inner.expect("server socket already taken");
         let (auth_sender, auth_receiver, sender, receiver) = local.listen_with_auth();

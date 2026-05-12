@@ -35,10 +35,7 @@ enum MessageSlot {
 
 impl MessageSlot {
     fn is_not_received(&self) -> bool {
-        match self {
-            MessageSlot::NotReceived => true,
-            _ => false,
-        }
+        matches!(self, MessageSlot::NotReceived)
     }
 }
 

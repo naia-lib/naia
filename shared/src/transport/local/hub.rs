@@ -38,6 +38,15 @@ struct ClientConnection {
     server_to_client_queue: Arc<Mutex<TimeQueue<Vec<u8>>>>,
 }
 
+type PacketRecorder = Arc<Mutex<Option<Vec<(bool, Vec<u8>)>>>>;
+type ClientChannels = (
+    SocketAddr,
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+    mpsc::Sender<Vec<u8>>,
+    mpsc::Receiver<Vec<u8>>,
+);
+
 /// Shared transport hub managing multiple client connections
 #[derive(Clone)]
 pub struct LocalTransportHub {
@@ -47,7 +56,7 @@ pub struct LocalTransportHub {
     traffic_paused: Arc<Mutex<bool>>,
     /// Wire-level packet recorder. `None` = disabled; `Some(buf)` = recording.
     /// bool field in each tuple: `true` = server-to-client, `false` = client-to-server.
-    packet_recorder: Arc<Mutex<Option<Vec<(bool, Vec<u8>)>>>>,
+    packet_recorder: PacketRecorder,
 }
 
 impl LocalTransportHub {
@@ -83,13 +92,7 @@ impl LocalTransportHub {
     /// Register a new client connection and return its address and channel handles
     pub fn register_client(
         &self,
-    ) -> (
-        SocketAddr,                       // client_addr
-        mpsc::Sender<Vec<u8>>,   // auth_req_tx (client sends)
-        mpsc::Receiver<Vec<u8>>, // auth_resp_rx (client receives)
-        mpsc::Sender<Vec<u8>>,   // client_data_tx (client sends)
-        mpsc::Receiver<Vec<u8>>, // client_data_rx (client receives)
-    ) {
+    ) -> ClientChannels {
         // Generate unique client address
         let client_id = {
             let mut id = self.next_client_id.lock();
@@ -234,6 +237,7 @@ impl LocalTransportHub {
 
     /// Send auth response to a specific client
     /// Returns Err(()) if traffic is paused (packets are dropped)
+    #[allow(clippy::result_unit_err)]
     pub fn send_auth_response(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
         let paused = *self.traffic_paused.lock(); // Single check
         if paused {
@@ -252,6 +256,7 @@ impl LocalTransportHub {
     /// Returns Err(()) if traffic is paused (packets are dropped)
     /// Applies link conditioning if configured
     /// Also processes time queues to deliver any ready packets
+    #[allow(clippy::result_unit_err)]
     pub fn send_data(&self, client_addr: &SocketAddr, bytes: Vec<u8>) -> Result<(), ()> {
         let paused = *self.traffic_paused.lock(); // Single check
         if paused {

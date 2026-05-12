@@ -10,17 +10,16 @@ use crate::{
     messages::{
         channels::{
             receivers::{
-                channel_receiver::{ChannelReceiver, MessageChannelReceiver},
+                channel_receiver::{ChannelReceiver, MessageChannelReceiver, RequestsAndResponses},
                 indexed_message_reader::IndexedMessageReader,
             },
-            senders::request_sender::LocalRequestId,
         },
         message_kinds::MessageKinds,
     },
     sequence_greater_than,
     types::MessageIndex,
     world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
+    LocalEntityAndGlobalEntityConverter, MessageContainer,
 };
 
 pub struct SequencedUnreliableReceiver {
@@ -117,10 +116,7 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
 
     fn receive_requests_and_responses(
         &mut self,
-    ) -> (
-        Vec<(LocalResponseId, MessageContainer)>,
-        Vec<(LocalRequestId, MessageContainer)>,
-    ) {
+    ) -> RequestsAndResponses {
         panic!("SequencedUnreliable channels do not support requests");
     }
 }

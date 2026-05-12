@@ -22,13 +22,21 @@ mod channel;
 pub use channel::PacketChannel;
 
 pub use inner::{
-    AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError, Socket,
+    AuthReceiver, AuthSender, ListenResult, PacketReceiver, PacketSender, RecvError, SendError,
+    Socket,
 };
 mod inner {
 
     use std::net::SocketAddr;
 
     use naia_shared::IdentityToken;
+
+    pub type ListenResult = (
+        Box<dyn AuthSender>,
+        Box<dyn AuthReceiver>,
+        Box<dyn PacketSender>,
+        Box<dyn PacketReceiver>,
+    );
 
     #[derive(Debug)]
     pub struct SendError;
@@ -41,14 +49,7 @@ mod inner {
     pub struct RecvError;
 
     pub trait Socket {
-        fn listen(
-            self: Box<Self>,
-        ) -> (
-            Box<dyn AuthSender>,
-            Box<dyn AuthReceiver>,
-            Box<dyn PacketSender>,
-            Box<dyn PacketReceiver>,
-        );
+        fn listen(self: Box<Self>) -> ListenResult;
     }
 
     // Packet
@@ -102,18 +103,15 @@ mod inner {
     // Auth
 
     pub trait AuthSender: Send + Sync {
-        ///
         fn accept(
             &self,
             address: &SocketAddr,
             identity_token: &IdentityToken,
         ) -> Result<(), SendError>;
-        ///
         fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
     }
 
     pub trait AuthReceiver: AuthReceiverClone + Send + Sync {
-        ///
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
     }
 

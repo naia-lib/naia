@@ -38,6 +38,11 @@ use crate::{
     LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable,
 };
 
+type RequestsAndResponsesOut = (
+    Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
+    Vec<(GlobalRequestId, MessageContainer)>,
+);
+
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
 pub struct MessageManager {
@@ -399,10 +404,7 @@ impl MessageManager {
     /// Retrieve all requests from the channel buffers
     pub fn receive_requests_and_responses(
         &mut self,
-    ) -> (
-        Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
-        Vec<(GlobalRequestId, MessageContainer)>,
-    ) {
+    ) -> RequestsAndResponsesOut {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {

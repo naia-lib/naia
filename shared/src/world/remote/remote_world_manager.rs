@@ -230,6 +230,7 @@ impl RemoteWorldManager {
         self.waitlist.despawn_entity(entity);
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
@@ -268,6 +269,7 @@ impl RemoteWorldManager {
         std::mem::take(&mut self.incoming_events)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn process_incoming_messages<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,

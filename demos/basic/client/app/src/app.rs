@@ -28,6 +28,7 @@ pub struct App {
 }
 
 impl App {
+    #[allow(clippy::should_implement_trait)]
     pub fn default() -> Self {
         info!("Basic Naia Client Demo started");
 

@@ -10,8 +10,8 @@ use naia_shared::{http_utils, IdentityToken, LinkConditionerConfig};
 
 use super::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
-    ConditionedPacketReceiver, PacketReceiver, PacketSender as TransportSender, RecvError,
-    SendError, Socket as TransportSocket,
+    ConditionedPacketReceiver, ListenResult, PacketReceiver, PacketSender as TransportSender,
+    RecvError, SendError, Socket as TransportSocket,
 };
 
 /// Native UDP server socket.
@@ -67,14 +67,7 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 }
 
 impl TransportSocket for Socket {
-    fn listen(
-        self: Box<Self>,
-    ) -> (
-        Box<dyn TransportAuthSender>,
-        Box<dyn TransportAuthReceiver>,
-        Box<dyn TransportSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    fn listen(self: Box<Self>) -> ListenResult {
         let auth_sender = AuthSender::new(self.auth_io.clone());
         let auth_receiver = AuthReceiver::new(self.auth_io.clone());
         let packet_sender = UdpPacketSender::new(self.data_socket.clone());
@@ -189,7 +182,7 @@ impl AuthIo {
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         match self.socket.accept() {
             Ok((mut stream, addr)) => {
-                let recv_len = stream.read(&mut self.buffer).unwrap();
+                let recv_len = stream.read(&mut self.buffer).map_err(|_| RecvError)?;
                 if self.outgoing_streams.contains_key(&addr) {
                     // already have a stream for this address
                     // TODO: handle this case?
@@ -199,13 +192,13 @@ impl AuthIo {
 
                 let request = http_utils::bytes_to_request(&self.buffer[..recv_len]);
                 if request.headers().contains_key("Authorization") {
-                    let auth_bytes = request
+                    let auth_str = request
                         .headers()
                         .get("Authorization")
-                        .unwrap()
+                        .ok_or(RecvError)?
                         .to_str()
-                        .unwrap();
-                    let auth_bytes = base64::decode(auth_bytes).unwrap();
+                        .map_err(|_| RecvError)?;
+                    let auth_bytes = base64::decode(auth_str).map_err(|_| RecvError)?;
                     self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
                     return Ok(Some((addr, &self.buffer[..auth_bytes.len()])));
                 } else {
@@ -235,11 +228,10 @@ impl AuthIo {
             let response = http::Response::builder()
                 .status(200)
                 .body(response_body_bytes)
-                .unwrap();
+                .map_err(|_| SendError)?;
             let response_bytes = http_utils::response_to_bytes(response);
-            stream.write_all(&response_bytes).unwrap();
-
-            stream.flush().unwrap();
+            stream.write_all(&response_bytes).map_err(|_| SendError)?;
+            stream.flush().map_err(|_| SendError)?;
 
             return Ok(());
         }
@@ -252,11 +244,10 @@ impl AuthIo {
             let response = http::Response::builder()
                 .status(401)
                 .body(Vec::new())
-                .unwrap();
+                .map_err(|_| SendError)?;
             let response_bytes = http_utils::response_to_bytes(response);
-            stream.write_all(&response_bytes).unwrap();
-
-            stream.flush().unwrap();
+            stream.write_all(&response_bytes).map_err(|_| SendError)?;
+            stream.flush().map_err(|_| SendError)?;
 
             return Ok(());
         }

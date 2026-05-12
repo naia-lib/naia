@@ -9,7 +9,7 @@ use naia_server_socket::{
 pub use naia_server_socket::ServerAddrs;
 
 use super::{
-    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
+    AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender, ListenResult,
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
     Socket as TransportSocket,
 };
@@ -43,7 +43,6 @@ impl TransportReceiver for Box<dyn PacketReceiver> {
 }
 
 impl TransportAuthSender for Box<dyn AuthSender> {
-    ///
     fn accept(
         &self,
         address: &SocketAddr,
@@ -53,14 +52,12 @@ impl TransportAuthSender for Box<dyn AuthSender> {
             .accept(address, identity_token)
             .map_err(|_| SendError)
     }
-    ///
     fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
         self.as_ref().reject(address).map_err(|_| SendError)
     }
 }
 
 impl TransportAuthReceiver for Box<dyn AuthReceiver> {
-    ///
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         match self.as_mut().receive() {
             Ok(auth_opt) => match auth_opt {
@@ -85,14 +82,7 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
-    fn listen(
-        self: Box<Self>,
-    ) -> (
-        Box<dyn TransportAuthSender>,
-        Box<dyn TransportAuthReceiver>,
-        Box<dyn TransportSender>,
-        Box<dyn TransportReceiver>,
-    ) {
+    fn listen(self: Box<Self>) -> ListenResult {
         let (inner_auth_sender, inner_auth_receiver, inner_packet_sender, inner_packet_receiver) =
             ServerSocket::listen_with_auth(&self.server_addrs, &self.config);
         (

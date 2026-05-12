@@ -8,9 +8,11 @@ use crate::{
     LocalEntityAndGlobalEntityConverter, MessageContainer, MessageIndex, MessageKinds,
 };
 
+type FragmentEntry = (u32, Option<(MessageIndex, u32)>, Vec<Box<[u8]>>);
+
 pub struct FragmentReceiver {
     // <FragmentId, (FragmentsReceived, Option(FirstMessageIndex, FragmentCount), FragmentData)
-    map: HashMap<FragmentId, (u32, Option<(MessageIndex, u32)>, Vec<Box<[u8]>>)>,
+    map: HashMap<FragmentId, FragmentEntry>,
 }
 
 impl FragmentReceiver {

@@ -39,9 +39,7 @@ impl GlobalRequestManager {
         &mut self,
         request_id: &GlobalRequestId,
     ) -> Option<MessageContainer> {
-        let Some(response_opt) = self.map.get(request_id) else {
-            return None;
-        };
+        let response_opt = self.map.get(request_id)?;
         if response_opt.is_some() {
             let response_opt = self.map.remove(request_id).unwrap();
             return Some(response_opt.unwrap());

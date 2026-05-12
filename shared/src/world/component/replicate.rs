@@ -18,6 +18,14 @@ use crate::{
     ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity,
 };
 
+pub type SplitUpdateResult = Result<
+    (
+        Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
+        Option<ComponentUpdate>,
+    ),
+    SerdeErr,
+>;
+
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Returns true if the component type is marked `#[replicate(immutable)]`.
     fn is_immutable(&self) -> bool {
@@ -36,13 +44,7 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
-    ) -> Result<
-        (
-            Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
-            Option<ComponentUpdate>,
-        ),
-        SerdeErr,
-    >;
+    ) -> SplitUpdateResult;
 
     fn box_clone(&self) -> Box<dyn ReplicateBuilder>;
 }

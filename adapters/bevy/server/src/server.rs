@@ -23,6 +23,7 @@ use naia_bevy_shared::{
 use crate::Replicate;
 
 #[derive(Resource)]
+#[allow(clippy::large_enum_variant)]
 pub(crate) enum ServerImpl {
     Full(NaiaServer<Entity>),
     WorldOnly(NaiaWorldServer<Entity>),

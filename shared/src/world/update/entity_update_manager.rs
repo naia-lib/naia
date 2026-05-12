@@ -13,10 +13,12 @@ use crate::{
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
 
+type SentUpdatesMap = HashMap<PacketIndex, (Instant, HashMap<(GlobalEntity, ComponentKind), DiffMask>)>;
+
 pub struct EntityUpdateManager {
     address: Option<SocketAddr>,
     diff_handler: UserDiffHandler,
-    sent_updates: HashMap<PacketIndex, (Instant, HashMap<(GlobalEntity, ComponentKind), DiffMask>)>,
+    sent_updates: SentUpdatesMap,
     last_update_packet_index: PacketIndex,
 }
 

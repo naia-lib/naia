@@ -22,6 +22,21 @@ use naia_socket_shared::{IdentityToken, SocketConfig};
 
 use crate::{executor, server_addrs::ServerAddrs, NaiaServerSocketError};
 
+type ClientAuthSender =
+    smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
+
+type AuthMuxMap = Arc<
+    Mutex<
+        HashMap<
+            SocketAddr,
+            (
+                Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>,
+                Option<Option<IdentityToken>>,
+            ),
+        >,
+    >,
+>;
+
 static RTC_URL_POST_PATH: OnceCell<String> = OnceCell::new();
 static RTC_URL_OPTIONS_PATH: OnceCell<String> = OnceCell::new();
 
@@ -29,9 +44,7 @@ pub fn start_session_server(
     server_addrs: ServerAddrs,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
-    from_client_auth_sender: Option<
-        smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-    >,
+    from_client_auth_sender: Option<ClientAuthSender>,
     to_session_all_auth_receiver: Option<
         smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
     >,
@@ -60,9 +73,7 @@ async fn listen(
     server_addrs: ServerAddrs,
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
-    from_client_auth_sender: Option<
-        smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-    >,
+    from_client_auth_sender: Option<ClientAuthSender>,
     to_session_all_auth_receiver: Option<
         smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
     >,
@@ -157,17 +168,7 @@ async fn setup_auth_mux(
 }
 
 async fn serve_auth_mux_in(
-    map: Arc<
-        Mutex<
-            HashMap<
-                SocketAddr,
-                (
-                    Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>,
-                    Option<Option<IdentityToken>>,
-                ),
-            >,
-        >,
-    >,
+    map: AuthMuxMap,
     to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
 ) {
     loop {
@@ -195,17 +196,7 @@ async fn serve_auth_mux_in(
 }
 
 async fn serve_auth_mux_out(
-    map: Arc<
-        Mutex<
-            HashMap<
-                SocketAddr,
-                (
-                    Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>,
-                    Option<Option<IdentityToken>>,
-                ),
-            >,
-        >,
-    >,
+    map: AuthMuxMap,
     sender_receiver: smol::channel::Receiver<(
         SocketAddr,
         futures_channel::oneshot::Sender<Option<IdentityToken>>,
@@ -241,9 +232,7 @@ async fn serve_auth_mux_out(
 async fn serve(
     mut session_endpoint: SessionEndpoint,
     mut stream: Arc<Async<TcpStream>>,
-    from_client_auth_sender: Option<
-        smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-    >,
+    from_client_auth_sender: Option<ClientAuthSender>,
     to_session_single_auth_receiver: Option<
         futures_channel::oneshot::Receiver<Option<IdentityToken>>,
     >,

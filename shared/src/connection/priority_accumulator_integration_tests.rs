@@ -8,8 +8,6 @@
 //! server+client round-trip (spawn bursts, RTT-factor resend, scope-exit
 //! eviction across a live Connection) stay as follow-up cucumber work.
 
-#![cfg(test)]
-
 use naia_socket_shared::Instant;
 
 use crate::connection::{
@@ -356,16 +354,16 @@ fn b_bdd_10_despawn_evicts_global_entry() {
 fn b_bdd_5_reset_on_send_preserves_gain() {
     use std::collections::HashMap;
     let mut entries: HashMap<u32, EntityPriorityData> = HashMap::new();
-    let mut m = EntityPriorityMut { entries: &mut entries, entity: 1 };
-    m.set_gain(3.0);
-    m.boost_once(100.0);
-    assert_eq!(m.accumulated(), 100.0);
-    assert_eq!(m.gain(), Some(3.0));
+    {
+        let mut m = EntityPriorityMut { entries: &mut entries, entity: 1 };
+        m.set_gain(3.0);
+        m.boost_once(100.0);
+        assert_eq!(m.accumulated(), 100.0);
+        assert_eq!(m.gain(), Some(3.0));
+    } // Drop the mut handle first to re-acquire after reset.
 
     // Simulate send: the send loop writes accumulated = 0 directly on the
     // stored data. Here we reproduce that via a fresh handle call sequence.
-    // Drop the mut handle first to re-acquire after reset.
-    drop(m);
     entries.get_mut(&1).unwrap().accumulated = 0.0;
 
     let m2 = EntityPriorityMut { entries: &mut entries, entity: 1 };

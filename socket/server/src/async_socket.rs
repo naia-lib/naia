@@ -10,9 +10,11 @@ use naia_socket_shared::{parse_server_url, url_to_socket_addr, IdentityToken, So
 use super::session::start_session_server;
 use crate::{error::NaiaServerSocketError, server_addrs::ServerAddrs};
 
+type ClientAuthSender =
+    smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
+
 /// A socket which communicates with clients using an underlying
 /// unordered & unreliable network protocol
-
 pub struct Socket {
     rtc_server: RtcServer,
     to_client_sender: smol::channel::Sender<(SocketAddr, Box<[u8]>)>,
@@ -24,9 +26,7 @@ impl Socket {
     pub async fn listen(
         server_addrs: ServerAddrs,
         config: SocketConfig,
-        from_client_auth_sender: Option<
-            smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
-        >,
+        from_client_auth_sender: Option<ClientAuthSender>,
         to_session_all_auth_receiver: Option<
             smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
         >,

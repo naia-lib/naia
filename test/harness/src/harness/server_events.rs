@@ -9,16 +9,16 @@ use naia_shared::{
 use crate::harness::EntityKey;
 use crate::{ClientKey, Scenario, TestEntity};
 
+type HarnessRequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(ClientKey, GlobalResponseId, MessageContainer)>>>;
+type HarnessRemovesMap = HashMap<ComponentKind, Vec<(ClientKey, EntityKey, Box<dyn Replicate>)>>;
+
 pub struct ServerEvents {
     auths: HashMap<MessageKind, Vec<(ClientKey, MessageContainer)>>,
     connections: Vec<ClientKey>,
     disconnections: Vec<ClientKey>,
     errors: Vec<NaiaServerError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<(ClientKey, MessageContainer)>>>,
-    requests: HashMap<
-        ChannelKind,
-        HashMap<MessageKind, Vec<(ClientKey, GlobalResponseId, MessageContainer)>>,
-    >,
+    requests: HarnessRequestsMap,
     spawns: Vec<(ClientKey, EntityKey)>,
     despawns: Vec<(ClientKey, EntityKey)>,
     publishes: Vec<(ClientKey, EntityKey)>,
@@ -28,7 +28,7 @@ pub struct ServerEvents {
     auth_denied_count: usize,
     auth_resets: Vec<EntityKey>,
     inserts: HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>,
-    removes: HashMap<ComponentKind, Vec<(ClientKey, EntityKey, Box<dyn Replicate>)>>,
+    removes: HarnessRemovesMap,
     updates: HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>,
     ticks: Vec<Tick>,
 }

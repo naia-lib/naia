@@ -661,7 +661,7 @@ fn is_entity_property_type(ty: &Type) -> bool {
 }
 
 enum FieldKind {
-    Normal(Type),
+    Normal(Box<Type>),
     EntityProperty,
 }
 
@@ -702,7 +702,7 @@ fn get_enum_variants(data_enum: &DataEnum) -> Vec<EnumVariant> {
                             let kind = if is_entity_property_type(&f.ty) {
                                 FieldKind::EntityProperty
                             } else {
-                                FieldKind::Normal(f.ty.clone())
+                                FieldKind::Normal(Box::new(f.ty.clone()))
                             };
                             EnumVariantField { name: fname, kind }
                         })
@@ -719,7 +719,7 @@ fn get_enum_variants(data_enum: &DataEnum) -> Vec<EnumVariant> {
                             let kind = if is_entity_property_type(&f.ty) {
                                 FieldKind::EntityProperty
                             } else {
-                                FieldKind::Normal(f.ty.clone())
+                                FieldKind::Normal(Box::new(f.ty.clone()))
                             };
                             EnumVariantField { name: fname, kind }
                         })
