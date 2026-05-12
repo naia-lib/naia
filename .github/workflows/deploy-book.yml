@@ -21,10 +21,15 @@ jobs:
           mdbook-version: 'latest'
       - name: Install mdbook preprocessors
         run: |
-          cargo install mdbook-mermaid mdbook-pagetoc mdbook-linkcheck
+          cargo install mdbook-mermaid mdbook-pagetoc
           mdbook-mermaid install book/
       - name: Build book
         run: mdbook build book/
+      - name: Check internal links
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: --offline --include-fragments 'book/book/**/*.html'
+          fail: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: book/book

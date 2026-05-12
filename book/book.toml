@@ -17,6 +17,3 @@ command = "mdbook-mermaid"
 additional-js = ["mermaid.min.js", "mermaid-init.js"]
 git-repository-url = "https://github.com/naia-lib/naia"
 edit-url-template = "https://github.com/naia-lib/naia/edit/main/book/src/{path}"
-
-[output.linkcheck]
-follow-web-links = false
