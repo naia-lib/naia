@@ -1,7 +1,7 @@
 use crate::BigMapKey;
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
-// GlobalEntity
+/// Stable, process-wide identifier for a replicated entity, independent of any ECS-local handle.
 #[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
 pub struct GlobalEntity(u64);
 

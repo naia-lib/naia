@@ -9,6 +9,7 @@ use naia_shared::transport::local::ClientServerAddr;
 struct MaybeAddr(pub(crate) ClientServerAddr);
 
 // AddrCell equivalent for server address discovery
+#[doc(hidden)]
 #[derive(Clone)]
 pub struct LocalAddrCell {
     cell: Arc<RwLock<MaybeAddr>>,
@@ -21,6 +22,7 @@ impl Default for LocalAddrCell {
 }
 
 impl LocalAddrCell {
+    #[doc(hidden)]
     pub fn new() -> Self {
         Self {
             cell: Arc::new(RwLock::new(MaybeAddr(ClientServerAddr::Finding))),

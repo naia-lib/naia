@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+/// Rolling time-window byte counter for measuring incoming or outgoing bandwidth.
 #[derive(Clone)]
 pub struct BandwidthMonitor {
     time_queue: ExpiringTimeQueue<usize>,
@@ -8,6 +9,7 @@ pub struct BandwidthMonitor {
 }
 
 impl BandwidthMonitor {
+    /// Creates a monitor with the given measurement window duration.
     pub fn new(bandwidth_measure_duration: Duration) -> Self {
         Self {
             time_queue: ExpiringTimeQueue::new(bandwidth_measure_duration),
@@ -16,6 +18,7 @@ impl BandwidthMonitor {
         }
     }
 
+    /// Records `bytes` bytes in the measurement window.
     pub fn record_packet(&mut self, bytes: usize) {
         self.clear_expired_packets();
 

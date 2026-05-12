@@ -22,18 +22,21 @@ const ENTITY_INDEX_RECYCLE_TIMEOUT: Duration = Duration::from_secs(2);
 // the scan is O(receivers), which multiplied by users is the O(U·N) cost the
 // matrix shows. After Phase 3 lands a dirty-push model, `receivers_visited`
 // per idle tick should drop to zero. Enabled via `bench_instrumentation`.
+/// Diagnostic counters for the `dirty_receiver_candidates` scan.
 #[cfg(feature = "bench_instrumentation")]
 pub mod dirty_scan_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    pub static SCAN_CALLS: AtomicU64 = AtomicU64::new(0);
-    pub static RECEIVERS_VISITED: AtomicU64 = AtomicU64::new(0);
-    pub static DIRTY_RESULTS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static SCAN_CALLS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static RECEIVERS_VISITED: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static DIRTY_RESULTS: AtomicU64 = AtomicU64::new(0);
 
+    /// Resets all scan counters to zero.
     pub fn reset() {
         SCAN_CALLS.store(0, Ordering::Relaxed);
         RECEIVERS_VISITED.store(0, Ordering::Relaxed);
         DIRTY_RESULTS.store(0, Ordering::Relaxed);
     }
+    /// Returns a snapshot of all scan counters as a tuple.
     pub fn snapshot() -> (u64, u64, u64) {
         (
             SCAN_CALLS.load(Ordering::Relaxed),

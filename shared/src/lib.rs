@@ -2,6 +2,7 @@
 //! Common functionality shared between naia-server & naia-client crates.
 
 #![deny(trivial_numeric_casts, unstable_features, unused_import_braces)]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate cfg_if;
@@ -49,18 +50,24 @@ mod backends;
 mod bigmap;
 mod connection;
 
+/// Observability counter name for total messages sent by the server.
 #[cfg(feature = "observability")]
 pub const MESSAGES_SENT_TOTAL: &str = "naia_messages_sent_total";
+/// Observability counter name for total entity spawns issued by the server.
 #[cfg(feature = "observability")]
 pub const SERVER_SPAWNS_TOTAL: &str = "naia_server_spawns_total";
+/// Observability counter name for total entity despawns issued by the server.
 #[cfg(feature = "observability")]
 pub const SERVER_DESPAWNS_TOTAL: &str = "naia_server_despawns_total";
+/// Observability counter name for total component inserts issued by the server.
 #[cfg(feature = "observability")]
 pub const SERVER_COMPONENT_INSERTS_TOTAL: &str = "naia_server_component_inserts_total";
+/// Observability counter name for total component removes issued by the server.
 #[cfg(feature = "observability")]
 pub const SERVER_COMPONENT_REMOVES_TOTAL: &str = "naia_server_component_removes_total";
 mod constants;
 mod game_time;
+/// Standard handshake protocol module for client identification and connection timing exchange.
 pub mod handshake;
 mod key_generator;
 mod messages;
@@ -74,7 +81,9 @@ mod wrapping_number;
 
 cfg_if! {
     if #[cfg(any(feature = "transport_udp", feature = "transport_local"))]{
+        #[doc(hidden)]
         pub mod transport;
+        #[doc(hidden)]
         pub use transport as http_utils;
     }
 }

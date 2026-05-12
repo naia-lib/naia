@@ -795,10 +795,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.main_server.users_count()
     }
 
+    /// Returns the number of users that have fully connected (handshake complete).
     pub fn user_count(&self) -> usize {
         self.world_server.user_count()
     }
 
+    /// Returns the total number of replicated entities currently tracked by the server.
     pub fn entity_count(&self) -> usize {
         self.world_server.entity_count()
     }
@@ -913,6 +915,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.rooms_count()
     }
 
+    /// Returns the number of rooms that contain at least one connected user.
     pub fn room_count(&self) -> usize {
         self.world_server.room_count()
     }
@@ -1146,32 +1149,39 @@ cfg_if! {
 
 #[cfg(feature = "test_utils")]
 impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
+    #[doc(hidden)]
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
         self.world_server.set_global_entity_counter_for_test(value);
     }
 
+    #[doc(hidden)]
     pub fn diff_handler_global_count(&self) -> usize {
         self.world_server.diff_handler_global_count()
     }
 
+    #[doc(hidden)]
     pub fn diff_handler_global_count_by_kind(
         &self,
     ) -> std::collections::HashMap<naia_shared::ComponentKind, usize> {
         self.world_server.diff_handler_global_count_by_kind()
     }
 
+    #[doc(hidden)]
     pub fn diff_handler_user_counts(&self) -> std::collections::HashMap<UserKey, usize> {
         self.world_server.diff_handler_user_counts()
     }
 
+    #[doc(hidden)]
     pub fn scope_change_queue_len(&self) -> usize {
         self.world_server.scope_change_queue_len()
     }
 
+    #[doc(hidden)]
     pub fn total_dirty_update_count(&self) -> usize {
         self.world_server.total_dirty_update_count()
     }
 
+    #[doc(hidden)]
     pub fn inject_tick_buffer_message<C: Channel, M: Message>(
         &mut self,
         user_key: &UserKey,

@@ -16,6 +16,7 @@ pub type RequestsAndResponses = (
     Vec<(LocalRequestId, MessageContainer)>,
 );
 
+/// Trait implemented by all channel receivers that surface typed payloads.
 pub trait ChannelReceiver<P>: Send + Sync {
     /// Read messages from an internal buffer and return their content
     fn receive_messages(
@@ -27,6 +28,7 @@ pub trait ChannelReceiver<P>: Send + Sync {
     ) -> Vec<P>;
 }
 
+/// Extended receiver trait for message channels that also parses raw wire bits and surfaces request/response pairs.
 pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
     /// Read messages from raw bits, parse them and store then into an internal buffer
     fn read_messages(
@@ -36,6 +38,7 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr>;
 
+    /// Drains and returns all pending request/response pairs from this channel's internal buffer.
     fn receive_requests_and_responses(
         &mut self,
     ) -> RequestsAndResponses;

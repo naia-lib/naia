@@ -3,19 +3,18 @@
 
 use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
 
+/// Wire-level packet classification encoded in every packet header.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
 pub enum PacketType {
-    // A packet containing Message/Entity/Component data
+    /// Contains message, entity, and component replication data.
     Data,
-    // A packet sent to maintain the connection by preventing a timeout
+    /// Keep-alive packet sent to prevent connection timeout.
     Heartbeat,
-    // A packet sent by the client to request a connection
+    /// Client-initiated handshake packet.
     Handshake,
-    // A Ping message, used to calculate RTT. Must be responded to with a Pong
-    // message
+    /// RTT probe — must be replied to with a `Pong`.
     Ping,
-    // A Pong message, used to calculate RTT. Must be the response to all Ping
-    // messages
+    /// RTT response to a `Ping`.
     Pong,
 }
 

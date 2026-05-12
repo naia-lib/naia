@@ -5,30 +5,43 @@ use crate::{
 
 // TODO! make this agnostic to type of entity
 
-// command to sync entities from host -> remote
+/// Wire command syncing entity lifecycle and authority transitions from host to remote.
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub enum EntityCommand {
+    /// Spawn an entity with no initial components.
     Spawn(GlobalEntity),
+    /// Spawn an entity pre-loaded with the listed component kinds.
     SpawnWithComponents(GlobalEntity, Vec<ComponentKind>),
+    /// Despawn an existing entity.
     Despawn(GlobalEntity),
+    /// Insert a component onto an existing entity.
     InsertComponent(GlobalEntity, ComponentKind),
+    /// Remove a component from an existing entity.
     RemoveComponent(GlobalEntity, ComponentKind),
 
-    // Former SystemChannel messages
+    /// Publish a delegated entity so it becomes visible to other users.
     Publish(Option<SubCommandId>, GlobalEntity),
+    /// Retract a previously published entity.
     Unpublish(Option<SubCommandId>, GlobalEntity),
+    /// Enable client-authority delegation for an entity.
     EnableDelegation(Option<SubCommandId>, GlobalEntity),
-    DisableDelegation(Option<SubCommandId>, GlobalEntity), // only sent by server
-    SetAuthority(Option<SubCommandId>, GlobalEntity, EntityAuthStatus), // only sent by server
+    /// Revoke client-authority delegation (server only).
+    DisableDelegation(Option<SubCommandId>, GlobalEntity),
+    /// Update the authority status for a delegated entity (server only).
+    SetAuthority(Option<SubCommandId>, GlobalEntity, EntityAuthStatus),
 
-    // These aren't commands, they are something else
-    RequestAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
-    ReleaseAuthority(Option<SubCommandId>, GlobalEntity), // only sent by client
-    EnableDelegationResponse(Option<SubCommandId>, GlobalEntity), // only sent by client
-    MigrateResponse(Option<SubCommandId>, GlobalEntity, RemoteEntity, HostEntity), // only sent by server: (subid, global, old_remote, new_host)
+    /// Client requests authority over a delegated entity.
+    RequestAuthority(Option<SubCommandId>, GlobalEntity),
+    /// Client releases previously held authority.
+    ReleaseAuthority(Option<SubCommandId>, GlobalEntity),
+    /// Client acknowledges that delegation has been enabled.
+    EnableDelegationResponse(Option<SubCommandId>, GlobalEntity),
+    /// Server notifies that an entity has migrated from remote to host (subid, global, old_remote, new_host).
+    MigrateResponse(Option<SubCommandId>, GlobalEntity, RemoteEntity, HostEntity),
 }
 
 impl EntityCommand {
+    /// Returns the primary `GlobalEntity` this command targets.
     pub fn entity(&self) -> GlobalEntity {
         match self {
             Self::Spawn(entity) => *entity,
@@ -48,6 +61,7 @@ impl EntityCommand {
         }
     }
 
+    /// Returns the `ComponentKind` for insert/remove commands, or `None` for all other variants.
     pub fn component_kind(&self) -> Option<ComponentKind> {
         match self {
             Self::InsertComponent(_, component_kind) => Some(*component_kind),
@@ -56,6 +70,7 @@ impl EntityCommand {
         }
     }
 
+    /// Returns the `EntityMessageType` discriminant for this command.
     pub fn get_type(&self) -> EntityMessageType {
         match self {
             Self::Spawn(_) => EntityMessageType::Spawn,
@@ -98,6 +113,7 @@ impl EntityCommand {
         }
     }
 
+    /// Returns `true` if this command can be applied to a remote (client-owned) entity.
     pub fn is_valid_for_remote_entity(&self) -> bool {
         match self {
             Self::Publish(_, _)

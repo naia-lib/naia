@@ -1,12 +1,14 @@
 use crate::named::Named;
 
-// Channel Trait
+/// Marker trait for types that represent a named communication channel.
 pub trait Channel: Named + 'static {}
 
-// ChannelSettings
+/// Configuration for a channel: delivery mode, traffic direction, and priority criticality.
 #[derive(Clone)]
 pub struct ChannelSettings {
+    /// Delivery semantics (ordered/unordered, reliable/unreliable, or tick-buffered).
     pub mode: ChannelMode,
+    /// Which endpoint(s) may send on this channel.
     pub direction: ChannelDirection,
     /// Priority tier used by the unified priority-sort send loop. Contributes
     /// `base_gain()` per tick of message age to each message's on-the-fly
@@ -15,6 +17,7 @@ pub struct ChannelSettings {
 }
 
 impl ChannelSettings {
+    /// Creates a `ChannelSettings` with the given mode and direction, deriving default criticality from the mode.
     pub fn new(mode: ChannelMode, direction: ChannelDirection) -> Self {
         if mode.tick_buffered() && direction != ChannelDirection::ClientToServer {
             panic!("TickBuffered Messages are only allowed to be sent from Client to Server");
@@ -34,6 +37,7 @@ impl ChannelSettings {
         self
     }
 
+    /// Returns `true` if this channel guarantees delivery (all reliable modes).
     pub fn reliable(&self) -> bool {
         match &self.mode {
             ChannelMode::UnorderedUnreliable => false,
@@ -45,10 +49,12 @@ impl ChannelSettings {
         }
     }
 
+    /// Returns `true` if this channel uses tick-buffered delivery.
     pub fn tick_buffered(&self) -> bool {
         self.mode.tick_buffered()
     }
 
+    /// Returns `true` if the client may send on this channel.
     pub fn can_send_to_server(&self) -> bool {
         match &self.direction {
             ChannelDirection::ClientToServer => true,
@@ -57,6 +63,7 @@ impl ChannelSettings {
         }
     }
 
+    /// Returns `true` if the server may send on this channel.
     pub fn can_send_to_client(&self) -> bool {
         match &self.direction {
             ChannelDirection::ClientToServer => false,
@@ -65,19 +72,22 @@ impl ChannelSettings {
         }
     }
 
+    /// Returns `true` if this channel supports bidirectional reliable request/response messaging.
     pub fn can_request_and_respond(&self) -> bool {
         self.reliable() && self.can_send_to_server() && self.can_send_to_client()
     }
 }
 
+/// Tuning parameters for reliable channel delivery and backpressure.
 #[derive(Clone)]
 pub struct ReliableSettings {
+    /// Multiplier on the current RTT that sets the retransmit timeout.
     pub rtt_resend_factor: f32,
     /// Maximum messages to deliver per tick per connection. `None` = unlimited.
     pub max_messages_per_tick: Option<u16>,
     /// Maximum number of unacknowledged messages buffered per connection on
-    /// this channel. When the queue is full, [`Server::send_message`] /
-    /// [`Client::send_message`] returns
+    /// this channel. When the queue is full, `Server::send_message` /
+    /// `Client::send_message` returns
     /// `Err(NaiaServerError::MessageQueueFull)` /
     /// `Err(NaiaClientError::MessageQueueFull)` and the caller must decide
     /// whether to retry or discard. `None` = unlimited (not recommended for
@@ -86,6 +96,7 @@ pub struct ReliableSettings {
 }
 
 impl ReliableSettings {
+    /// Returns the default `ReliableSettings` (RTT factor 1.5, unlimited throughput, queue cap 1 024).
     pub const fn default() -> Self {
         Self {
             rtt_resend_factor: 1.5,
@@ -95,6 +106,7 @@ impl ReliableSettings {
     }
 }
 
+/// Capacity settings for a tick-buffered channel.
 #[derive(Clone)]
 pub struct TickBufferSettings {
     /// Describes a maximum of messages that may be kept in the buffer.
@@ -103,6 +115,7 @@ pub struct TickBufferSettings {
 }
 
 impl TickBufferSettings {
+    /// Returns the default `TickBufferSettings` with a message capacity of 64.
     pub const fn default() -> Self {
         Self {
             message_capacity: 64,
@@ -110,28 +123,38 @@ impl TickBufferSettings {
     }
 }
 
-// ChannelMode
+/// Delivery semantics for a channel.
 #[derive(Clone)]
 pub enum ChannelMode {
+    /// Messages are delivered at most once with no ordering guarantee.
     UnorderedUnreliable,
+    /// Only the latest message per sequence slot is delivered; older ones are silently dropped.
     SequencedUnreliable,
+    /// Every message is delivered exactly once; arrival order is not guaranteed.
     UnorderedReliable(ReliableSettings),
+    /// Every message is delivered exactly once; only the latest-sequenced message is surfaced.
     SequencedReliable(ReliableSettings),
+    /// Every message is delivered exactly once in the original send order.
     OrderedReliable(ReliableSettings),
+    /// Messages are held in a fixed-capacity buffer tied to a specific server tick.
     TickBuffered(TickBufferSettings),
 }
 
 impl ChannelMode {
+    /// Returns `true` if this mode is `TickBuffered`.
     pub fn tick_buffered(&self) -> bool {
         matches!(self, ChannelMode::TickBuffered(_))
     }
 }
 
-// ChannelDirection
+/// Permitted send direction(s) for a channel.
 #[derive(Clone, Eq, PartialEq)]
 pub enum ChannelDirection {
+    /// Only the client may send on this channel.
     ClientToServer,
+    /// Only the server may send on this channel.
     ServerToClient,
+    /// Both endpoints may send on this channel.
     Bidirectional,
 }
 

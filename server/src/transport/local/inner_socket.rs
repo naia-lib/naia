@@ -6,15 +6,18 @@ use naia_shared::transport::local::LocalTransportHub;
 use super::auth::{LocalServerAuthReceiver, LocalServerAuthSender, ServerAuthIo};
 use super::data::{LocalServerReceiver, LocalServerSender};
 
+#[doc(hidden)]
 pub struct LocalServerSocket {
     hub: LocalTransportHub,
 }
 
 impl LocalServerSocket {
+    #[doc(hidden)]
     pub fn new(hub: LocalTransportHub) -> Self {
         Self { hub }
     }
 
+    #[doc(hidden)]
     pub fn listen_with_auth(
         self,
     ) -> (

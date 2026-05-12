@@ -33,6 +33,7 @@ pub struct GlobalPriorityState<E: Copy + Eq + Hash> {
 }
 
 impl<E: Copy + Eq + Hash> GlobalPriorityState<E> {
+    /// Creates an empty `GlobalPriorityState`.
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
@@ -81,12 +82,14 @@ pub struct UserPriorityState<E: Copy + Eq + Hash> {
 }
 
 impl<E: Copy + Eq + Hash> UserPriorityState<E> {
+    /// Creates an empty `UserPriorityState`.
     pub fn new() -> Self {
         Self {
             entries: HashMap::new(),
         }
     }
 
+    /// Returns a read-only priority handle for `entity` in this user's layer.
     pub fn get_ref(&self, entity: E) -> EntityPriorityRef<'_, E> {
         EntityPriorityRef {
             state: self.entries.get(&entity),
@@ -94,6 +97,7 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
         }
     }
 
+    /// Returns a mutable priority handle for `entity` in this user's layer.
     pub fn get_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
         EntityPriorityMut {
             entries: &mut self.entries,

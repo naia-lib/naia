@@ -36,10 +36,11 @@ cfg_if! {
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_send_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    pub static NS_COLLECT_MESSAGES: AtomicU64 = AtomicU64::new(0);
-    pub static NS_TAKE_OUTGOING_EVENTS: AtomicU64 = AtomicU64::new(0);
-    pub static NS_SEND_PACKET_LOOP: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_COLLECT_MESSAGES: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_TAKE_OUTGOING_EVENTS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_SEND_PACKET_LOOP: AtomicU64 = AtomicU64::new(0);
 
+    /// Resets all counters to zero.
     pub fn reset() {
         NS_COLLECT_MESSAGES.store(0, Ordering::Relaxed);
         NS_TAKE_OUTGOING_EVENTS.store(0, Ordering::Relaxed);
@@ -49,6 +50,7 @@ pub mod bench_send_counters {
         // inside LocalWorldManager.
         naia_shared::bench_take_events_counters::reset();
     }
+    /// Returns a snapshot of all counters as a tuple.
     pub fn snapshot() -> (u64, u64, u64) {
         (
             NS_COLLECT_MESSAGES.load(Ordering::Relaxed),

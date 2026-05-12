@@ -300,12 +300,14 @@ impl EntityRelation {
     }
 }
 
+/// A component field that stores an optional reference to another entity, with lifecycle tracking across host/remote/delegated states.
 #[derive(Clone)]
 pub struct EntityProperty {
     inner: EntityRelation,
 }
 
 impl EntityProperty {
+    /// Creates an `EntityProperty` initialized for use inside a `Message` (no mutator).
     // Should only be used by Messages
     pub fn new_for_message() -> Self {
         Self {
@@ -313,6 +315,7 @@ impl EntityProperty {
         }
     }
 
+    /// Creates an `EntityProperty` initialized for use inside a `Component` at the given property index.
     // Should only be used by Components
     pub fn new_for_component(mutator_index: u8) -> Self {
         Self {
@@ -320,6 +323,7 @@ impl EntityProperty {
         }
     }
 
+    /// Deserializes a new `EntityProperty` from the remote host's bit stream.
     // Read and create from Remote host
     pub fn new_read(
         reader: &mut BitReader,
@@ -371,6 +375,7 @@ impl EntityProperty {
         }
     }
 
+    /// Passes through an entity-property bit field from `reader` to `writer` without resolving entities.
     pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
         let exists = bool::de(reader)?;
         exists.ser(writer);
@@ -380,6 +385,7 @@ impl EntityProperty {
         Ok(())
     }
 
+    /// Updates this property's inner relation from the remote host's bit stream.
     pub fn read(
         &mut self,
         reader: &mut BitReader,
@@ -451,6 +457,7 @@ impl EntityProperty {
         Ok(())
     }
 
+    /// Resolves a waiting entity relation now that its target entity has arrived.
     pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
         match &mut self.inner {
             EntityRelation::RemoteCreated(_)
@@ -670,16 +677,19 @@ impl EntityProperty {
 
     // Pass-through
 
+    /// Sets the property mutator used to mark this field dirty on value changes.
     pub fn set_mutator(&mut self, mutator: &PropertyMutator) {
         self.inner.set_mutator(mutator);
     }
 
     // Serialization / deserialization
 
+    /// Returns the serialized bit length of this property given `converter`.
     pub fn bit_length(&self, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) -> u32 {
         self.inner.bit_length(converter)
     }
 
+    /// Writes this property's entity reference bits into `writer`.
     pub fn write(
         &self,
         writer: &mut dyn BitWrite,
@@ -688,6 +698,7 @@ impl EntityProperty {
         self.inner.write(writer, converter);
     }
 
+    /// Returns the world entity referenced by this property, translated via `converter`, or `None`.
     pub fn get<E: Copy + Eq + Hash + Sync + Send>(
         &self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -695,10 +706,12 @@ impl EntityProperty {
         self.inner.get(converter)
     }
 
+    /// Returns the raw `GlobalEntity` stored in this property, or `None`.
     pub fn get_inner(&self) -> Option<GlobalEntity> {
         self.inner.get_global_entity()
     }
 
+    /// Sets this property to point at `entity`, converting it to a `GlobalEntity` via `converter`.
     pub fn set<E: Copy + Eq + Hash + Sync + Send>(
         &mut self,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
@@ -707,18 +720,22 @@ impl EntityProperty {
         self.inner.set(converter, entity);
     }
 
+    /// Clears this property so it no longer references any entity.
     pub fn set_to_none(&mut self) {
         self.inner.set_to_none();
     }
 
+    /// Copies the referenced entity from `other` into `self`, preserving `self`'s relation type.
     pub fn mirror(&mut self, other: &EntityProperty) {
         self.inner.mirror(other);
     }
 
+    /// Returns the `RemoteEntity` this property is still waiting to resolve, or `None` if already resolved.
     pub fn waiting_remote_entity(&self) -> Option<RemoteEntity> {
         self.inner.waiting_remote_entity()
     }
 
+    /// Writes the resolved local entity value; used when splitting component updates on the receive side.
     // used for writing out ready local entity value when splitting component updates
     pub fn write_local_entity(
         &self,

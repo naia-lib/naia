@@ -6,30 +6,45 @@ use crate::{
     EntityMessageType, HostEntity, LocalEntityMap, RemoteEntity,
 };
 
-// Raw entity sync messages sent over the wire
+/// Per-entity ordered wire message carrying a single entity lifecycle or authority event.
 #[derive(PartialEq, Eq, Debug, Clone)]
 pub enum EntityMessage<E: Copy + Eq + PartialEq> {
+    /// Spawn entity `E` with no initial components.
     Spawn(E),
+    /// Spawn entity `E` pre-loaded with the listed component kinds.
     SpawnWithComponents(E, Vec<ComponentKind>),
+    /// Despawn entity `E`.
     Despawn(E),
+    /// Insert a component onto entity `E`.
     InsertComponent(E, ComponentKind),
+    /// Remove a component from entity `E`.
     RemoveComponent(E, ComponentKind),
+    /// Publish entity `E` (make it visible to other users).
     Publish(SubCommandId, E),
+    /// Retract the publication of entity `E`.
     Unpublish(SubCommandId, E),
+    /// Enable authority delegation for entity `E`.
     EnableDelegation(SubCommandId, E),
+    /// Revoke authority delegation for entity `E` (server only).
     DisableDelegation(SubCommandId, E),
+    /// Update authority status for entity `E` (server only).
     SetAuthority(SubCommandId, E, EntityAuthStatus),
 
-    // These are not commands, they are something else
+    /// Client requests authority over entity `E`.
     RequestAuthority(SubCommandId, E),
+    /// Client releases authority over entity `E`.
     ReleaseAuthority(SubCommandId, E),
+    /// Client acknowledges that delegation has been enabled for entity `E`.
     EnableDelegationResponse(SubCommandId, E),
+    /// Entity `E` has migrated; carries the old remote entity for reconciliation.
     MigrateResponse(SubCommandId, E, RemoteEntity),
 
+    /// Placeholder that carries no payload.
     Noop,
 }
 
 impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
+    /// Returns the entity carried by this message, or `None` for `Noop`.
     pub fn entity(&self) -> Option<E> {
         match self {
             Self::Spawn(entity) => Some(*entity),
@@ -50,10 +65,12 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    /// Returns `true` if this is a `Noop` message.
     pub fn is_noop(&self) -> bool {
         matches!(self, Self::Noop)
     }
 
+    /// Returns the `ComponentKind` for insert/remove messages, or `None` otherwise.
     pub fn component_kind(&self) -> Option<ComponentKind> {
         match self {
             Self::InsertComponent(_, component_kind) => Some(*component_kind),
@@ -62,6 +79,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    /// Returns a copy of this message with the entity replaced by `()`, preserving all other fields.
     pub fn strip_entity(self) -> EntityMessage<()> {
         match self {
             Self::Spawn(_) => EntityMessage::Spawn(()),
@@ -92,6 +110,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    /// Returns this message re-typed with `entity` replacing the original entity field.
     pub fn with_entity<O: Copy + Eq + PartialEq>(self, entity: O) -> EntityMessage<O> {
         match self {
             EntityMessage::Spawn(_) => EntityMessage::Spawn(entity),
@@ -130,6 +149,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    /// Returns the `EntityMessageType` discriminant for this message.
     pub fn get_type(&self) -> EntityMessageType {
         match self {
             Self::Spawn(_) => EntityMessageType::Spawn,
@@ -150,6 +170,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    /// Returns the `SubCommandId` for messages that carry one, or `None` for plain commands.
     pub fn subcommand_id(&self) -> Option<SubCommandId> {
         match self {
             Self::Publish(sub_id, _) => Some(*sub_id),
@@ -165,6 +186,7 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
         }
     }
 
+    /// Returns `self` with `new_entity` substituted wherever `old_entity` matches the message's entity field.
     pub fn apply_entity_redirect<O: Copy + Eq + PartialEq>(
         self,
         old_entity: &E,
@@ -200,6 +222,7 @@ impl EntityMessage<RemoteEntity> {
     //         }
     //     }
     //
+    /// Converts this remote-entity message into an `EntityEvent`, resolving the entity via `local_entity_map`.
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
         let remote_entity = self.entity().unwrap();
         let global_entity = match local_entity_map.global_entity_from_remote(&remote_entity) {
@@ -239,6 +262,7 @@ impl EntityMessage<RemoteEntity> {
 }
 //
 impl EntityMessage<HostEntity> {
+    /// Converts this host-entity message into an `EntityEvent`, or `None` if the entity is not found in the map.
     pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let host_entity = self.entity().unwrap();
         let global_entity = match local_entity_map.global_entity_from_host(&host_entity) {

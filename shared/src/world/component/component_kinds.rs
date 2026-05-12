@@ -62,12 +62,14 @@ impl From<ComponentKind> for TypeId {
 }
 
 impl ComponentKind {
+    /// Returns the `ComponentKind` corresponding to the type `C`.
     pub fn of<C: Replicate>() -> Self {
         Self {
             type_id: TypeId::of::<C>(),
         }
     }
 
+    /// Serializes this kind's compact net-ID into `writer` using the bit-width in `component_kinds`.
     pub fn ser(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite) {
         let net_id = component_kinds.kind_to_net_id(self);
         let bits = component_kinds.kind_bit_width;
@@ -76,6 +78,7 @@ impl ComponentKind {
         }
     }
 
+    /// Deserializes a `ComponentKind` from `reader` using the bit-width in `component_kinds`.
     pub fn de(component_kinds: &ComponentKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let bits = component_kinds.kind_bit_width;
         let mut net_id: NetId = 0;
@@ -126,6 +129,7 @@ impl Default for ComponentKinds {
 }
 
 impl ComponentKinds {
+    /// Creates an empty `ComponentKinds` registry.
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
@@ -135,6 +139,7 @@ impl ComponentKinds {
         }
     }
 
+    /// Registers replicated component type `C`, assigning it the next sequential net-ID.
     pub fn add_component<C: Replicate>(&mut self) {
         let component_kind = ComponentKind::of::<C>();
 
@@ -162,6 +167,7 @@ impl ComponentKinds {
         self.current_net_id
     }
 
+    /// Reads a component kind tag then deserializes and returns the component from `reader`.
     pub fn read(
         &self,
         reader: &mut BitReader,
@@ -173,6 +179,7 @@ impl ComponentKinds {
             .read(reader, converter)
     }
 
+    /// Reads a component kind tag then deserializes an initial-create update payload from `reader`.
     pub fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
         self
@@ -180,6 +187,7 @@ impl ComponentKinds {
             .read_create_update(reader)
     }
 
+    /// Splits a full-component update into a waiting portion and a ready-to-apply portion.
     pub fn split_update(
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -191,6 +199,7 @@ impl ComponentKinds {
             .split_update(converter, update)
     }
 
+    /// Returns the protocol name for `component_kind`. Panics if not registered.
     pub fn kind_to_name(&self, component_kind: &ComponentKind) -> String {
         self
             .kind_map
@@ -236,6 +245,7 @@ impl ComponentKinds {
             .as_ref()
     }
 
+    /// Returns `true` if the given kind was registered as an immutable component.
     pub fn kind_is_immutable(&self, component_kind: &ComponentKind) -> bool {
         self.kind_map
             .get(component_kind)
@@ -243,6 +253,7 @@ impl ComponentKinds {
             .unwrap_or(false)
     }
 
+    /// Returns a sorted list of all registered component protocol names.
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, _, name) in self.kind_map.values() {

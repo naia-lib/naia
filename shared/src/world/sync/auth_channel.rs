@@ -9,10 +9,14 @@ use crate::{
     EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageType, HostType, MessageIndex,
 };
 
+/// Publication/delegation lifecycle state of an entity's authority channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum EntityAuthChannelState {
+    /// Entity has not yet been published (client default).
     Unpublished,
+    /// Entity is published and visible to other users but not yet delegated.
     Published,
+    /// Authority delegation is active for this entity.
     Delegated,
 }
 

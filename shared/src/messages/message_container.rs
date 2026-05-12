@@ -31,16 +31,19 @@ pub struct MessageContainer {
 }
 
 impl MessageContainer {
+    /// Wraps `message` in an `Arc` so it can be cheaply shared across broadcast targets.
     pub fn new(message: Box<dyn Message>) -> Self {
         Self {
             inner: Arc::new(message),
         }
     }
 
+    /// Returns the protocol name of the contained message type.
     pub fn name(&self) -> String {
         self.inner.name()
     }
 
+    /// Returns the serialized bit length of this message given `converter` for entity references.
     pub fn bit_length(
         &self,
         message_kinds: &MessageKinds,
@@ -49,6 +52,7 @@ impl MessageContainer {
         self.inner.bit_length(message_kinds, converter)
     }
 
+    /// Writes the message's kind tag and payload bits into `writer`.
     pub fn write(
         &self,
         message_kinds: &MessageKinds,
@@ -62,14 +66,17 @@ impl MessageContainer {
         self.inner.write(message_kinds, writer, converter);
     }
 
+    /// Returns `true` if this message is a fragment of a larger logical message.
     pub fn is_fragment(&self) -> bool {
         self.inner.is_fragment()
     }
 
+    /// Returns `true` if this message envelope carries a request or response (not a plain message).
     pub fn is_request_or_response(&self) -> bool {
         self.inner.is_request()
     }
 
+    /// Converts this container into a `Box<dyn Any>` for downcasting to the concrete message type.
     pub fn to_boxed_any(self) -> Box<dyn Any> {
         // Fast path: if this is the only Arc reference (always true after the
         // message is dequeued from a connection's send buffer), extract without
@@ -82,14 +89,17 @@ impl MessageContainer {
         }
     }
 
+    /// Returns the `MessageKind` identifying the concrete message type inside this container.
     pub fn kind(&self) -> MessageKind {
         self.inner.kind()
     }
 
+    /// Returns the set of remote entities this message is still waiting on, or `None` if ready.
     pub fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
         self.inner.relations_waiting()
     }
 
+    /// Notifies the inner message that all awaited entity relations have been resolved.
     pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
         // relations_complete requires &mut self on the inner message.
         // Since we hold an Arc, we must have exclusive ownership to mutate.

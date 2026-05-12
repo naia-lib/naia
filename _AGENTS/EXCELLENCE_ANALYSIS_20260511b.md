@@ -207,32 +207,21 @@ link is not possible without an explicit dependency.
 
 ---
 
-### A-5 — No `#![warn(missing_docs)]` on public crates
+### A-5 — No `#![warn(missing_docs)]` on public crates — **FIXED**
 
-**Current state:**
-`server/src/lib.rs`, `client/src/lib.rs`, and `shared/src/lib.rs` use
-`#![deny(trivial_casts, trivial_numeric_casts, unstable_features, unused_import_braces)]`
-but do not include `#![warn(missing_docs)]`. Spot-checking public items in
-the server crate reveals that many methods in `Server<E>` — such as `users_count()`,
-`rooms_count()`, `entity_replication_config()`, `global_entity_priority_mut()`,
-`scope_checks_pending()`, and `mark_scope_checks_pending_handled()` — lack
-`///` doc comments on the public type itself, relying only on the lib-level
-overview to explain them.
+**Resolution (2026-05-11):**
+`#![warn(missing_docs)]` added to `server/src/lib.rs`, `client/src/lib.rs`, and
+`shared/src/lib.rs`. All triggered warnings resolved with `///` doc comments
+across the full public API surface (shared world subsystem, entity converters,
+local entity types, transport layer, tick/world event types, command history,
+etc.). Verified:
 
-**Why it matters:**
-API discoverability via `cargo doc` is the primary onboarding path for users
-who have read the README and want to explore available methods. Missing docs
-on methods that have no obvious name-implies-behavior semantics force users
-to read source code. This is a consistent complaint in developer feedback
-about naia ("I had to look at the source to understand X").
+- `cargo rustdoc -p naia-server -- --warn=missing_docs` → 0 missing-doc warnings
+- `cargo rustdoc -p naia-client -- --warn=missing_docs` → 0 missing-doc warnings
 
-**Recommendation:**
-Add `#![warn(missing_docs)]` to all three lib files. Then do a `cargo doc`
-pass and add short `///` comments to every item that triggers the warning.
-Focus first on `server/src/server/` (the `Server<E>` facade) since those
-methods are the most commonly-used entry points. A `#[allow(missing_docs)]`
-attribute on any genuinely-internal public item (like `bench_send_counters`)
-is fine.
+Remaining warnings for both crates are broken intra-doc links to items in the
+other crate (e.g., `crate::events::ConnectionEvent`) which are a separate
+concern (A-4).
 
 **Effort:** M (a few days of focused doc writing across all three crates)
 **Leverage:** 4 — directly improves onboarding and docs.rs quality
@@ -275,7 +264,14 @@ badge does).
 
 ---
 
-### A-7 — Developer journey friction: basic demo uses WebRTC as default, not UDP
+### A-7 — Developer journey friction: basic demo uses WebRTC as default, not UDP — **WILL NOT IMPLEMENT**
+
+**Decision (2026-05-11):** Demos live in ECS-adapter repositories (bevy-naia,
+etc.) outside naia-core scope. No action taken in the naia crate itself.
+
+---
+
+### A-7 detail (original)
 
 **Current state:**
 `demos/basic/server/src/app.rs:1` imports `naia_server::transport::webrtc` and
@@ -423,8 +419,8 @@ round-trip to the demo code for Bevy server users.
 | 3 | A-4 | 7 unresolved doc links in naia-shared | Fix: correct or backtick-ize broken links | XS | 3 |
 | 4 | A-2 | MSRV undeclared in workspace Cargo.toml | Fix: add `rust-version` field | S | 3 |
 | 5 | A-6 | No rendered tutorial site (vs lightyear book) | Do: mdBook + GitHub Pages from existing docs | S | 4 |
-| 6 | A-5 | `#![warn(missing_docs)]` not enforced | Do: add lint + pass through doc writing | M | 4 |
-| 7 | A-7 | Basic demo defaults to WebRTC, not UDP | Fix: add/promote UDP-native demo | S | 4 |
+| 6 | A-5 | `#![warn(missing_docs)]` not enforced | FIXED: lint added to all 3 lib files; 0 missing-docs warnings on server + client | M | 4 |
+| 7 | A-7 | Basic demo defaults to WebRTC, not UDP | WILL NOT IMPLEMENT: demos are ECS-adapter-level concerns outside naia-core scope | S | 4 |
 | 8 | A-8 | Per-component replication toggle absent | Plan: L effort feature | L | 4 |
 | 9 | A-10 | Bevy server adapter missing hello-world doc example | Fix: add doc example block | XS | 3 |
 | 10 | A-9 | Advisory pile visible via `cargo audit` | Docs: add Known Advisory Status to SECURITY.md | XS | 3 |

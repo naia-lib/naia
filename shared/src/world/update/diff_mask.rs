@@ -1,9 +1,6 @@
 use std::fmt;
 
-// The DiffMask is a variable-length byte array, where each bit represents
-// the current state of a Property owned by a Replica.
-// The Property tracks whether it has been updated and needs to be synced
-// with the remote Client
+/// Variable-length bitmask where each bit tracks whether the corresponding property on a replicated component has been mutated and needs to be sent to the remote peer.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct DiffMask {
     mask: Vec<u8>,

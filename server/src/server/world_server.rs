@@ -246,10 +246,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         &self.global_entity_map
     }
 
+    /// Attaches external sender/receiver I/O handles (used by adapter crates and test harnesses).
     pub fn io_load(&mut self, sender: Box<dyn PacketSender>, receiver: Box<dyn PacketReceiver>) {
         self.io.load(sender, receiver);
     }
 
+    /// Registers a newly-accepted user so the world server can track their scope (adapter use only).
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
         self.user_store.insert(user_key, WorldUser::new(user_addr));
         self.user_store.register_disconnected(user_addr, user_key);
@@ -427,6 +429,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
+    /// Decodes and applies all buffered incoming packets for this frame.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         self.process_disconnects(&mut world);
 
@@ -436,10 +439,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
+    /// Drains and returns all pending world events for this frame.
     pub fn take_world_events(&mut self) -> WorldEvents<E> {
         std::mem::replace(&mut self.incoming_world_events, WorldEvents::<E>::new())
     }
 
+    /// Advances the tick clock and returns any new tick events for this frame.
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         // tick event
         if self.time_manager.recv_server_tick(now) {
@@ -517,7 +522,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    //
+    /// Sends a typed request to the given user and returns a key for receiving the response.
     pub fn send_request<C: Channel, Q: Request>(
         &mut self,
         user_key: &UserKey,
@@ -615,6 +620,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         true
     }
 
+    /// Polls for a response to a previously sent request; returns `None` if not yet received.
     pub fn receive_response<S: Response>(
         &mut self,
         response_key: &ResponseReceiveKey<S>,
@@ -627,8 +633,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .unwrap();
         Some((user_key, response))
     }
-    //
-
+    /// Drains and returns all tick-buffered messages sent by clients for the given tick.
     pub fn receive_tick_buffer_messages(&mut self, tick: &Tick) -> TickBufferMessages {
         let mut tick_buffer_messages = TickBufferMessages::new();
         for (_user_address, connection) in self.user_connections.iter_mut() {
@@ -826,12 +831,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     #[cfg(feature = "test_utils")]
+    #[doc(hidden)]
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
         self.global_entity_map
             .set_global_entity_counter_for_test(value);
     }
 
     #[cfg(feature = "test_utils")]
+    #[doc(hidden)]
     pub fn inject_tick_buffer_message<C: Channel, M: Message>(
         &mut self,
         user_key: &UserKey,
@@ -854,6 +861,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         connection.inject_tick_buffer_message(&channel_kind, host_tick, message_tick, container)
     }
 
+    /// Returns `true` if the entity has been marked as static (never re-sent after initial spawn).
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
         let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
             return false;
@@ -861,6 +869,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.global_world_manager.entity_is_static(&global_entity)
     }
 
+    /// Marks an entity as static; its component data will not be re-sent after the initial spawn packet.
     pub fn mark_entity_as_static(&mut self, world_entity: &E) {
         let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
             panic!("entity not found in global map");
@@ -868,6 +877,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.global_world_manager.mark_entity_as_static(&global_entity);
     }
 
+    /// Returns `true` if the entity is currently in `Delegated` replication mode.
     pub fn entity_is_delegated(&self, world_entity: &E) -> bool {
         let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
             return false;
@@ -1155,6 +1165,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
+    /// Applies a new [`ReplicationConfig`] to an entity, changing its visibility and authority model.
     pub fn configure_entity_replication<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -1602,10 +1613,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.user_store.len()
     }
 
+    /// Returns the number of users that have fully connected (handshake complete).
     pub fn user_count(&self) -> usize {
         self.user_keys().len()
     }
 
+    /// Returns the total number of replicated entities currently tracked by the server.
     pub fn entity_count(&self) -> usize {
         self.global_entity_map.entity_count()
     }
@@ -1736,11 +1749,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.room_store.len()
     }
 
+    /// Returns the total number of rooms that currently exist.
     pub fn room_count(&self) -> usize {
         self.room_keys().len()
     }
 
     // Bandwidth monitoring
+    /// Total outgoing bandwidth averaged over the monitor window (bytes/sec).
     pub fn outgoing_bandwidth_total(&self) -> f32 {
         self.io.outgoing_bandwidth_total()
     }
@@ -1752,14 +1767,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.io.outgoing_bytes_last_tick()
     }
 
+    /// Total incoming bandwidth averaged over the monitor window (bytes/sec).
     pub fn incoming_bandwidth_total(&self) -> f32 {
         self.io.incoming_bandwidth_total()
     }
 
+    /// Outgoing bandwidth to a specific client address, averaged over the monitor window (bytes/sec).
     pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
         self.io.outgoing_bandwidth_to_client(address)
     }
 
+    /// Incoming bandwidth from a specific client address, averaged over the monitor window (bytes/sec).
     pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
         self.io.incoming_bandwidth_from_client(address)
     }
@@ -1868,7 +1886,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.despawn_entity_worldless(world_entity);
     }
 
-    // Used by adapter crates only!
+    /// Removes an entity from all replication state without touching the world (adapter use only).
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
         let global_entity = self
             .global_entity_map
@@ -2107,7 +2125,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    // This intended to be used by adapter crates, do not use this as it will not update the world
+    /// Registers a component insertion in the replication layer without touching the world (adapter use only).
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
 
@@ -2203,7 +2221,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         world.remove_component::<R>(world_entity)
     }
 
-    // This intended to be used by adapter crates, do not use this as it will not update the world
+    /// Removes a component from the replication layer without touching the world (adapter use only).
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         let global_entity = self
             .global_entity_map
@@ -3649,16 +3667,19 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Wo
 cfg_if! {
     if #[cfg(feature = "test_utils")] {
         impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
+            #[doc(hidden)]
             pub fn diff_handler_global_count(&self) -> usize {
                 self.global_world_manager.global_diff_handler_count()
             }
 
+            #[doc(hidden)]
             pub fn diff_handler_global_count_by_kind(
                 &self,
             ) -> HashMap<naia_shared::ComponentKind, usize> {
                 self.global_world_manager.global_diff_handler_count_by_kind()
             }
 
+            #[doc(hidden)]
             pub fn diff_handler_user_counts(&self) -> HashMap<UserKey, usize> {
                 self.user_connections
                     .values()
@@ -3666,10 +3687,12 @@ cfg_if! {
                     .collect()
             }
 
+            #[doc(hidden)]
             pub fn scope_change_queue_len(&self) -> usize {
                 self.scope_change_queue.len()
             }
 
+            #[doc(hidden)]
             pub fn total_dirty_update_count(&self) -> usize {
                 self.user_connections
                     .values()

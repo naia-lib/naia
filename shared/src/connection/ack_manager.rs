@@ -35,6 +35,7 @@ impl Default for AckManager {
 }
 
 impl AckManager {
+    /// Creates a new `AckManager` with default capacities.
     pub fn new() -> Self {
         Self {
             next_packet_index: 0,
@@ -46,18 +47,22 @@ impl AckManager {
         }
     }
 
+    /// Returns the recent packet loss percentage (0.0–100.0) measured by the loss monitor.
     pub fn packet_loss_pct(&self) -> f32 {
         self.loss_monitor.packet_loss_pct()
     }
 
+    /// Returns `true` if an empty ack packet should be sent this tick.
     pub fn should_send_empty_ack(&self) -> bool {
         self.should_send_empty_ack
     }
 
+    /// Sets the flag requesting that an empty ack packet be sent.
     pub fn mark_should_send_empty_ack(&mut self) {
         self.should_send_empty_ack = true;
     }
 
+    /// Clears the empty-ack flag without returning it.
     pub fn clear_should_send_empty_ack(&mut self) {
         self.should_send_empty_ack = false;
     }
@@ -150,6 +155,7 @@ impl AckManager {
         self.next_packet_index = self.next_packet_index.wrapping_add(1);
     }
 
+    /// Builds and returns the standard header for the next outgoing packet, advancing the sequence counter.
     pub fn next_outgoing_packet_header(&mut self, packet_type: PacketType) -> StandardHeader {
         let next_packet_index = self.next_sender_packet_index();
         let last_rx = self.last_received_packet_index();
@@ -177,6 +183,7 @@ impl AckManager {
         }
     }
 
+    /// Returns the sequence index of the most recently received packet.
     pub fn last_received_packet_index(&self) -> PacketIndex {
         self.last_recv_packet_index
     }

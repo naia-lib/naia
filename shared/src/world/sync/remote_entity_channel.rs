@@ -91,13 +91,17 @@ cfg_if! {
     }
 }
 
+/// Spawn/despawn lifecycle state of a remote entity channel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[cfg_attr(feature = "e2e_debug", allow(dead_code))]
 pub enum EntityChannelState {
+    /// Entity has not yet been spawned (or has been despawned).
     Despawned,
+    /// Entity is live; component and authority messages are forwarded immediately.
     Spawned,
 }
 
+/// Per-entity demultiplexer that buffers and reorders incoming messages from an unordered reliable channel into a causal stream.
 pub struct RemoteEntityChannel {
     state: EntityChannelState,
     last_epoch_id: Option<MessageIndex>,
@@ -111,6 +115,7 @@ pub struct RemoteEntityChannel {
 }
 
 impl RemoteEntityChannel {
+    /// Creates a fresh `RemoteEntityChannel` in the `Despawned` state for `host_type`.
     pub fn new(host_type: HostType) -> Self {
         Self {
             state: EntityChannelState::Despawned,
@@ -135,6 +140,7 @@ impl RemoteEntityChannel {
         channel
     }
 
+    /// Configures the auth sub-channel into the `Delegated` state, simulating `Publish → EnableDelegation` transitions.
     pub fn configure_as_delegated(&mut self) {
         // Set up the AuthChannel for a delegated entity
         // This simulates the entity having gone through Publish → EnableDelegation
@@ -144,17 +150,17 @@ impl RemoteEntityChannel {
         self.auth_channel.receiver_set_next_subcommand_id(1);
     }
 
-    /// Update the AuthChannel's authority status (used after migration to sync with global status)
+    /// Overrides the authority status stored in the auth sub-channel to match the global tracker after migration.
     pub fn update_auth_status(&mut self, auth_status: EntityAuthStatus) {
         self.auth_channel.force_set_auth_status(auth_status);
     }
 
-    /// Get current auth status from internal AuthChannel (for testing)
+    /// Returns the current authority status recorded in the auth sub-channel.
     pub fn auth_status(&self) -> Option<EntityAuthStatus> {
         self.auth_channel.auth_status()
     }
 
-    /// Check if AuthChannel is in delegated state (for testing)
+    /// Returns `true` if the auth sub-channel is in the Delegated state.
     pub fn is_delegated(&self) -> bool {
         self.auth_channel.is_delegated()
     }
@@ -176,6 +182,7 @@ impl RemoteEntityChannel {
         self.process_messages();
     }
 
+    /// Enqueues `command` through the authority sub-channel for outbound delivery.
     pub fn send_command(&mut self, command: EntityCommand) {
         self.auth_channel.send_command(command);
         self.auth_channel

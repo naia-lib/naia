@@ -1,15 +1,18 @@
 cfg_if! {
     if #[cfg(feature = "transport_webrtc")] {
+        #[doc(hidden)]
         pub mod webrtc;
     } else {}
 }
 cfg_if! {
     if #[cfg(feature = "transport_udp")] {
+        #[doc(hidden)]
         pub mod udp;
     } else {}
 }
 cfg_if! {
     if #[cfg(feature = "transport_local")] {
+        #[doc(hidden)]
         pub mod local;
     } else {}
 }
@@ -31,6 +34,7 @@ mod inner {
 
     use naia_shared::IdentityToken;
 
+    /// Tuple returned by [`Socket::listen`]: auth sender, auth receiver, packet sender, packet receiver.
     pub type ListenResult = (
         Box<dyn AuthSender>,
         Box<dyn AuthReceiver>,
@@ -38,6 +42,7 @@ mod inner {
         Box<dyn PacketReceiver>,
     );
 
+    /// Error returned when a packet could not be sent to a remote address.
     #[derive(Debug)]
     pub struct SendError;
 
@@ -48,12 +53,15 @@ mod inner {
     #[derive(Debug)]
     pub struct RecvError;
 
+    /// Entry point for a server transport: converts the socket into its four I/O handles.
     pub trait Socket {
+        /// Binds / starts listening and returns the four I/O channel handles.
         fn listen(self: Box<Self>) -> ListenResult;
     }
 
     // Packet
 
+    /// Sends raw UDP/WebRTC packets from the server to a remote client address.
     pub trait PacketSender: PacketSenderClone + Send + Sync {
         /// Sends a packet to the Server Socket
         fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError>;
@@ -77,6 +85,7 @@ mod inner {
         }
     }
 
+    /// Polls for the next incoming packet from any connected client.
     pub trait PacketReceiver: PacketReceiverClone + Send + Sync {
         /// Receives a packet from the Server Socket
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
@@ -102,16 +111,21 @@ mod inner {
 
     // Auth
 
+    /// Accepts or rejects pending client authentication requests.
     pub trait AuthSender: Send + Sync {
+        /// Accept a client's auth request and issue the given identity token.
         fn accept(
             &self,
             address: &SocketAddr,
             identity_token: &IdentityToken,
         ) -> Result<(), SendError>;
+        /// Reject a client's auth request, causing the client to disconnect.
         fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
     }
 
+    /// Receives raw auth payloads from connecting clients before they are handed the session.
     pub trait AuthReceiver: AuthReceiverClone + Send + Sync {
+        /// Poll for the next pending auth payload, returning `Ok(None)` when none are queued.
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
     }
 

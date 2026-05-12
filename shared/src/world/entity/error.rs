@@ -1,5 +1,6 @@
 use std::error::Error;
 
+/// Error returned when an entity look-up fails during entity-to-global conversion.
 #[derive(Debug)]
 pub struct EntityDoesNotExistError;
 impl Error for EntityDoesNotExistError {}

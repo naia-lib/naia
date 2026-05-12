@@ -1,6 +1,7 @@
 use http::Method;
 use log::warn;
 
+#[doc(hidden)]
 pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     let url = request.uri();
 
@@ -36,6 +37,7 @@ pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     request_bytes
 }
 
+#[doc(hidden)]
 pub fn bytes_to_request(request_bytes: &[u8]) -> http::Request<Vec<u8>> {
     let request_str = String::from_utf8_lossy(request_bytes);
 
@@ -51,12 +53,14 @@ pub fn bytes_to_request(request_bytes: &[u8]) -> http::Request<Vec<u8>> {
     request.body(body).unwrap()
 }
 
+#[doc(hidden)]
 pub fn response_to_bytes(response: http::Response<Vec<u8>>) -> Vec<u8> {
     let mut response_bytes = response_header_to_vec(&response);
     response_bytes.extend_from_slice(response.body());
     response_bytes
 }
 
+#[doc(hidden)]
 pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
     let response_str = String::from_utf8_lossy(response_bytes);
 

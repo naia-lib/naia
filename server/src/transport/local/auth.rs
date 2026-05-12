@@ -9,12 +9,14 @@ use naia_shared::IdentityToken;
 use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
 // ServerAuthIo - encapsulates all server auth logic (always uses hub-based multiplexing)
+#[doc(hidden)]
 pub struct ServerAuthIo {
     hub: LocalTransportHub,
     buffer: [u8; 1472],
 }
 
 impl ServerAuthIo {
+    #[doc(hidden)]
     pub fn new(hub: LocalTransportHub) -> Self {
         Self {
             hub,
@@ -84,16 +86,19 @@ impl ServerAuthIo {
 }
 
 // LocalServerAuthSender wraps Arc<Mutex<ServerAuthIo>>
+#[doc(hidden)]
 #[derive(Clone)]
 pub struct LocalServerAuthSender {
     auth_io: Arc<Mutex<ServerAuthIo>>,
 }
 
 impl LocalServerAuthSender {
+    #[doc(hidden)]
     pub fn new(auth_io: Arc<Mutex<ServerAuthIo>>) -> Self {
         Self { auth_io }
     }
 
+    #[doc(hidden)]
     pub fn accept(
         &self,
         address: &SocketAddr,
@@ -102,12 +107,14 @@ impl LocalServerAuthSender {
         self.auth_io.lock().accept(address, identity_token)
     }
 
+    #[doc(hidden)]
     pub fn reject(&self, address: &SocketAddr) -> Result<(), ServerSendError> {
         self.auth_io.lock().reject(address)
     }
 }
 
 // LocalServerAuthReceiver wraps Arc<Mutex<ServerAuthIo>> with its own buffer
+#[doc(hidden)]
 #[derive(Clone)]
 pub struct LocalServerAuthReceiver {
     auth_io: Arc<Mutex<ServerAuthIo>>,
@@ -115,6 +122,7 @@ pub struct LocalServerAuthReceiver {
 }
 
 impl LocalServerAuthReceiver {
+    #[doc(hidden)]
     pub fn new(auth_io: Arc<Mutex<ServerAuthIo>>) -> Self {
         Self {
             auth_io,
@@ -122,6 +130,7 @@ impl LocalServerAuthReceiver {
         }
     }
 
+    #[doc(hidden)]
     pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, ServerRecvError> {
         let mut guard = self.auth_io.lock();
         match guard.receive() {

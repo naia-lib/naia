@@ -1,10 +1,10 @@
 /// Publication visibility of an entity — the shared axis used on both sides
 /// of the connection.
 ///
-/// On the **server**, `Publicity` is embedded in [`ReplicationConfig`] and
+/// On the **server**, `Publicity` is embedded in `ReplicationConfig` and
 /// controls how an entity replicates to clients.
 /// On the **client**, `Publicity` is passed directly to
-/// [`EntityMut::configure_replication`].
+/// `EntityMut::configure_replication`.
 ///
 /// The three variants represent the full lifecycle of a client-authoritative
 /// entity:
@@ -18,9 +18,6 @@
 ///     ↓  client releases or server revokes
 /// Server resumes → Delegated / Public
 /// ```
-///
-/// [`ReplicationConfig`]: naia_server::ReplicationConfig
-/// [`EntityMut::configure_replication`]: naia_client::EntityMut::configure_replication
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum Publicity {
     /// The entity is owned by a client but not yet visible to other peers.
@@ -36,15 +33,11 @@ pub enum Publicity {
     /// The server can delegate authority over this entity to a client.
     ///
     /// When a server entity is configured `Delegated`, clients may call
-    /// [`entity_request_authority`] to request ownership. The server
-    /// grants or denies the request via an [`EntityAuthGrantEvent`] or
-    /// [`EntityAuthDeniedEvent`]. While a client holds authority its
+    /// `Client::entity_request_authority` to request ownership. The server
+    /// grants or denies the request via `EntityAuthGrantedEvent` or
+    /// `EntityAuthDeniedEvent`. While a client holds authority its
     /// mutations replicate back to the server; the server can revoke at
     /// any time.
-    ///
-    /// [`entity_request_authority`]: naia_client::Client::entity_request_authority
-    /// [`EntityAuthGrantEvent`]: naia_client::EntityAuthGrantedEvent
-    /// [`EntityAuthDeniedEvent`]: naia_client::EntityAuthDeniedEvent
     Delegated,
 }
 

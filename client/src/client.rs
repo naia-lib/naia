@@ -1360,6 +1360,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     }
 
     // For debugging purposes only
+    /// Returns the registered name of the component identified by `component_kind`; intended for debug logging.
     pub fn component_name(&self, component_kind: &ComponentKind) -> String {
         self.protocol.component_kinds.kind_to_name(component_kind)
     }

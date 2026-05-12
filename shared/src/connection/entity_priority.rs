@@ -33,6 +33,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityRef<'a, E> {
         }
     }
 
+    /// Returns the entity this handle refers to.
     pub fn entity(&self) -> E {
         self.entity
     }
@@ -49,6 +50,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityRef<'a, E> {
         self.state.and_then(|s| s.gain_override)
     }
 
+    /// Returns `true` if a per-tick gain override is currently active.
     pub fn is_overridden(&self) -> bool {
         self.gain().is_some()
     }
@@ -69,10 +71,12 @@ pub struct EntityPriorityMut<'a, E: Copy + Eq + Hash> {
 impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     // --- Reads (mirror Ref) ---
 
+    /// Returns the entity this handle refers to.
     pub fn entity(&self) -> E {
         self.entity
     }
 
+    /// Current accumulated priority value. Higher = more urgent. Returns `0.0` if no entry yet.
     pub fn accumulated(&self) -> f32 {
         self.entries
             .get(&self.entity)
@@ -80,12 +84,14 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
             .unwrap_or(0.0)
     }
 
+    /// Current per-tick gain override. `None` means the default (1.0) applies.
     pub fn gain(&self) -> Option<f32> {
         self.entries
             .get(&self.entity)
             .and_then(|s| s.gain_override)
     }
 
+    /// Returns `true` if a per-tick gain override is currently active.
     pub fn is_overridden(&self) -> bool {
         self.gain().is_some()
     }

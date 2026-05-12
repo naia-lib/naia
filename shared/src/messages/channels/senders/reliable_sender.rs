@@ -4,7 +4,7 @@ use naia_socket_shared::Instant;
 
 use crate::{messages::channels::senders::channel_sender::ChannelSender, types::MessageIndex};
 
-// Sender
+/// Retransmit-on-timeout sender that tracks unacknowledged messages and re-queues them after an RTT-based interval.
 pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
     sending_messages: VecDeque<Option<(MessageIndex, Option<Instant>, P)>>,
@@ -21,6 +21,7 @@ pub struct ReliableSender<P: Send + Sync> {
 }
 
 impl<P: Send + Sync> ReliableSender<P> {
+    /// Creates a `ReliableSender` with the given RTT resend factor and optional queue-depth cap.
     pub fn new(rtt_resend_factor: f32, max_queue_depth: Option<usize>) -> Self {
         Self {
             rtt_resend_factor,
@@ -50,10 +51,12 @@ impl<P: Send + Sync> ReliableSender<P> {
         }
     }
 
+    /// Drains and returns all messages currently staged for transmission this tick.
     pub fn take_next_messages(&mut self) -> VecDeque<(MessageIndex, P)> {
         mem::take(&mut self.outgoing_messages)
     }
 
+    /// Acknowledges delivery of `message_index`, removing it from the retransmit buffer and returning the message.
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there

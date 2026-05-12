@@ -1,10 +1,14 @@
+/// Per-direction zstd compression settings for a connection.
 #[derive(Clone)]
 pub struct CompressionConfig {
+    /// Compression applied to packets flowing from server to client.
     pub server_to_client: Option<CompressionMode>,
+    /// Compression applied to packets flowing from client to server.
     pub client_to_server: Option<CompressionMode>,
 }
 
 impl CompressionConfig {
+    /// Creates a `CompressionConfig` with the given per-direction modes.
     pub fn new(
         server_to_client: Option<CompressionMode>,
         client_to_server: Option<CompressionMode>,
@@ -16,6 +20,7 @@ impl CompressionConfig {
     }
 }
 
+/// Selects the zstd compression strategy applied to a direction of traffic.
 #[derive(Clone, Eq, PartialEq)]
 pub enum CompressionMode {
     /// Compression mode using default zstd dictionary.

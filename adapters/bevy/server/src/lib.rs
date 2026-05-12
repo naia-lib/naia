@@ -27,6 +27,39 @@
 //! [`CommandsExt`] / [`ServerCommandsExt`] on [`Commands`] to spawn entities
 //! and configure replication.
 //!
+//! # Quick start
+//!
+//! ```no_run
+//! use bevy_app::{App, Startup, Update};
+//! use bevy_ecs::prelude::*;
+//! use naia_bevy_server::{
+//!     events::ConnectEvent,
+//!     transport::webrtc,
+//!     Plugin, Server, ServerConfig, UserKey,
+//! };
+//! use naia_bevy_shared::Protocol;
+//!
+//! fn main() {
+//!     App::new()
+//!         .add_plugins(Plugin::new(ServerConfig::default(), Protocol::builder().build()))
+//!         .add_systems(Startup, init)
+//!         .add_systems(Update, on_connect)
+//!         .run();
+//! }
+//!
+//! fn init(mut server: Server) {
+//!     server.listen(webrtc::Socket::new(&server_addrs(), None));
+//! }
+//!
+//! fn on_connect(mut server: Server, mut connect_events: EventReader<ConnectEvent>) {
+//!     for ConnectEvent(user_key) in connect_events.read() {
+//!         server.accept_connection(user_key);
+//!         // server.user_mut(user_key).enter_room(&room_key);
+//!     }
+//! }
+//! # fn server_addrs() -> naia_bevy_server::transport::webrtc::ServerAddrs { todo!() }
+//! ```
+//!
 //! # Key types
 //!
 //! | Type | Purpose |

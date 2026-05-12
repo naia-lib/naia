@@ -22,16 +22,22 @@ use crate::{
     Request, RequestOrResponse,
 };
 
-// Protocol Plugin
+/// Extension point for registering channels, messages, and components into a `Protocol`.
 pub trait ProtocolPlugin {
+    /// Applies this plugin's registrations to `protocol`.
     fn build(&self, protocol: &mut Protocol);
 }
 
-// Protocol
+/// Builder and configuration container for a naia protocol definition.
+///
+/// Collects channels, messages, components, and transport settings before being locked and passed to a server or client.
 #[derive(Clone)]
 pub struct Protocol {
+    /// Registry of all channels registered in this protocol.
     pub channel_kinds: ChannelKinds,
+    /// Registry of all message types registered in this protocol.
     pub message_kinds: MessageKinds,
+    /// Registry of all replicated component types registered in this protocol.
     pub component_kinds: ComponentKinds,
     /// Marker table — which `ComponentKind`s are Replicated Resources.
     /// Receiver side checks this on `SpawnWithComponents` to populate
@@ -74,50 +80,59 @@ impl Default for Protocol {
 }
 
 impl Protocol {
+    /// Returns a default `Protocol` ready for builder-style configuration.
     pub fn builder() -> Self {
         Self::default()
     }
 
+    /// Applies `plugin`'s registrations to this protocol. Builder-style.
     pub fn add_plugin<P: ProtocolPlugin>(&mut self, plugin: P) -> &mut Self {
         self.check_lock();
         plugin.build(self);
         self
     }
 
+    /// Sets the link conditioning configuration (artificial latency/loss). Builder-style.
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.check_lock();
         self.socket.link_condition = Some(config);
         self
     }
 
+    /// Sets the WebRTC signalling endpoint path. Builder-style.
     pub fn rtc_endpoint(&mut self, path: String) -> &mut Self {
         self.check_lock();
         self.socket.rtc_endpoint_path = path;
         self
     }
 
+    /// Returns the configured WebRTC signalling endpoint path.
     pub fn get_rtc_endpoint(&self) -> String {
         self.socket.rtc_endpoint_path.clone()
     }
 
+    /// Sets the server tick interval. Builder-style.
     pub fn tick_interval(&mut self, duration: Duration) -> &mut Self {
         self.check_lock();
         self.tick_interval = duration;
         self
     }
 
+    /// Enables packet compression with the given config. Builder-style.
     pub fn compression(&mut self, config: CompressionConfig) -> &mut Self {
         self.check_lock();
         self.compression = Some(config);
         self
     }
 
+    /// Enables client-authoritative entity mode, allowing clients to own and update replicated entities. Builder-style.
     pub fn enable_client_authoritative_entities(&mut self) -> &mut Self {
         self.check_lock();
         self.client_authoritative_entities = true;
         self
     }
 
+    /// Registers the six built-in default channels. Builder-style.
     pub fn add_default_channels(&mut self) -> &mut Self {
         self.check_lock();
         let plugin = DefaultChannelsPlugin;
@@ -125,6 +140,7 @@ impl Protocol {
         self
     }
 
+    /// Registers channel type `C` with the given direction and mode. Builder-style.
     pub fn add_channel<C: Channel>(
         &mut self,
         direction: ChannelDirection,
@@ -145,12 +161,14 @@ impl Protocol {
         self
     }
 
+    /// Registers message type `M`. Builder-style.
     pub fn add_message<M: Message>(&mut self) -> &mut Self {
         self.check_lock();
         self.message_kinds.add_message::<M>();
         self
     }
 
+    /// Registers request type `Q` and its associated response type. Builder-style.
     pub fn add_request<Q: Request>(&mut self) -> &mut Self {
         self.check_lock();
         // Requests and Responses are handled just like Messages
@@ -159,6 +177,7 @@ impl Protocol {
         self
     }
 
+    /// Registers replicated component type `C`. Builder-style.
     pub fn add_component<C: Replicate>(&mut self) -> &mut Self {
         self.check_lock();
         self.component_kinds.add_component::<C>();
@@ -189,18 +208,21 @@ impl Protocol {
         self
     }
 
+    /// Freezes the protocol, computes and caches the protocol ID. Must be called before use.
     pub fn lock(&mut self) {
         self.check_lock();
         self.cached_protocol_id = Some(self.compute_protocol_id());
         self.locked = true;
     }
 
+    /// Panics if the protocol has already been locked.
     pub fn check_lock(&self) {
         if self.locked {
             panic!("Protocol already locked!");
         }
     }
 
+    /// Moves out of the builder and returns the owned `Protocol`.
     pub fn build(&mut self) -> Self {
         std::mem::take(self)
     }

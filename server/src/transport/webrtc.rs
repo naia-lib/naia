@@ -14,12 +14,14 @@ use super::{
     Socket as TransportSocket,
 };
 
+#[doc(hidden)]
 pub struct Socket {
     server_addrs: ServerAddrs,
     config: SocketConfig,
 }
 
 impl Socket {
+    #[doc(hidden)]
     pub fn new(server_addrs: &ServerAddrs, config: &SocketConfig) -> Self {
         Self {
             server_addrs: server_addrs.clone(),

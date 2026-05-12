@@ -60,6 +60,7 @@ pub struct LocalTransportHub {
 }
 
 impl LocalTransportHub {
+    /// Creates a new `LocalTransportHub` bound to the given server address.
     pub fn new(server_addr: SocketAddr) -> Self {
         Self {
             // shared,

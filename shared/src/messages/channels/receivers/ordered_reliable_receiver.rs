@@ -8,10 +8,11 @@ use crate::{
     MessageContainer,
 };
 
-// OrderedReliableReceiver
+/// Reliable receiver that delivers messages to callers strictly in send order.
 pub type OrderedReliableReceiver = ReliableMessageReceiver<OrderedArranger>;
 
 impl OrderedReliableReceiver {
+    /// Creates a new `OrderedReliableReceiver` with no throughput cap.
     pub fn new() -> Self {
         Self::with_arranger(OrderedArranger {
             messages_received: 0,
@@ -19,6 +20,7 @@ impl OrderedReliableReceiver {
         })
     }
 
+    /// Creates a new `OrderedReliableReceiver` capped at `max_messages_per_tick` deliveries per tick.
     pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
         Self::with_arranger_and_cap(
             OrderedArranger { messages_received: 0, buffer: VecDeque::new() },
@@ -39,7 +41,7 @@ impl MessageSlot {
     }
 }
 
-// OrderedArranger
+/// Arranger that buffers out-of-order messages and releases them in strict send order.
 pub struct OrderedArranger {
     buffer: VecDeque<(MessageIndex, MessageSlot)>,
     messages_received: MessageIndex,

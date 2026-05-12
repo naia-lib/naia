@@ -38,6 +38,7 @@ impl std::fmt::Display for ResourceAlreadyExists {
 impl std::error::Error for ResourceAlreadyExists {}
 
 impl ResourceRegistry {
+    /// Creates an empty `ResourceRegistry`.
     pub fn new() -> Self {
         Self::default()
     }
@@ -116,10 +117,12 @@ impl ResourceRegistry {
         self.by_entity.contains_key(entity)
     }
 
+    /// Returns the number of registered resources.
     pub fn len(&self) -> usize {
         self.by_type.len()
     }
 
+    /// Returns `true` if no resources have been registered.
     pub fn is_empty(&self) -> bool {
         self.by_type.is_empty()
     }

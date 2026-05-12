@@ -6,6 +6,7 @@ use crate::{
     MessageIndex,
 };
 
+/// Outbound state machine for a single host-owned entity, tracking its component set and authority sub-channel.
 pub struct HostEntityChannel {
     component_channels: HashSet<ComponentKind>,
     auth_channel: AuthChannel,
@@ -16,6 +17,7 @@ pub struct HostEntityChannel {
 }
 
 impl HostEntityChannel {
+    /// Creates a fresh `HostEntityChannel` with no components and default auth state for `host_type`.
     pub fn new(host_type: HostType) -> Self {
         Self {
             component_channels: HashSet::new(),
@@ -31,6 +33,7 @@ impl HostEntityChannel {
         &self.component_channels
     }
 
+    /// Validates and routes `command` to the component set or authority sub-channel, queuing it for outbound delivery.
     pub fn send_command(&mut self, command: EntityCommand) {
         match command.get_type() {
             EntityMessageType::Spawn
@@ -141,6 +144,7 @@ impl HostEntityChannel {
         }
     }
 
+    /// Drains and returns all queued outbound [`EntityCommand`]s.
     pub fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         std::mem::take(&mut self.outgoing_commands)
     }
@@ -154,12 +158,12 @@ impl HostEntityChannel {
         self.auth_channel.force_enable_delegation();
     }
 
-    /// Check if this channel is in Delegated state (for testing)
+    /// Returns `true` if this channel's authority sub-channel is in the Delegated state.
     pub fn is_delegated(&self) -> bool {
         self.auth_channel.is_delegated()
     }
 
-    /// Get the AuthChannel state (for testing)
+    /// Returns the current publication/delegation state of this channel's authority sub-channel.
     pub fn auth_channel_state(&self) -> crate::world::sync::auth_channel::EntityAuthChannelState {
         self.auth_channel.state()
     }

@@ -2,6 +2,7 @@ use std::vec::IntoIter;
 
 use naia_shared::Tick;
 
+/// Collects client and server tick events emitted during a single frame for typed iteration.
 pub struct TickEvents {
     client_ticks: Vec<Tick>,
     server_ticks: Vec<Tick>,
@@ -23,14 +24,17 @@ impl TickEvents {
         }
     }
 
+    /// Returns `true` if no tick events have been queued this frame.
     pub fn is_empty(&self) -> bool {
         self.empty
     }
 
+    /// Drains and returns an iterator over tick events of type `V`.
     pub fn read<V: TickEvent>(&mut self) -> V::Iter {
         V::iter(self)
     }
 
+    /// Returns `true` if at least one tick event of type `V` is queued.
     pub fn has<V: TickEvent>(&self) -> bool {
         V::has(self)
     }
@@ -52,16 +56,19 @@ impl TickEvents {
     }
 }
 
-// Event Trait
+/// Type-indexed tick event; implemented by [`ClientTickEvent`] and [`ServerTickEvent`].
 pub trait TickEvent {
+    /// Iterator type returned from [`TickEvents::read`].
     type Iter;
 
+    /// Drains tick events of this variant out of `events` and returns an iterator over them.
     fn iter(events: &mut TickEvents) -> Self::Iter;
 
+    /// Returns `true` if `events` contains at least one event of this variant.
     fn has(events: &TickEvents) -> bool;
 }
 
-// Client Tick Event
+/// Fired each client-side simulation tick; iterate via `tick_events.read::<ClientTickEvent>()`.
 pub struct ClientTickEvent;
 impl TickEvent for ClientTickEvent {
     type Iter = IntoIter<Tick>;
@@ -76,7 +83,7 @@ impl TickEvent for ClientTickEvent {
     }
 }
 
-// Server Tick Event
+/// Fired each time the server's authoritative tick advances; iterate via `tick_events.read::<ServerTickEvent>()`.
 pub struct ServerTickEvent;
 impl TickEvent for ServerTickEvent {
     type Iter = IntoIter<Tick>;

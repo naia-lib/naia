@@ -4,9 +4,11 @@ use crate::{
     EntityAndGlobalEntityConverter, EntityEvent, GlobalEntity, GlobalWorldManagerType, WorldMutType,
 };
 
+/// Shared helpers for world-manager implementations that operate on the global entity registry.
 pub struct SharedGlobalWorldManager;
 
 impl SharedGlobalWorldManager {
+    /// Removes all components from and despawns each entity in `entities`, returning one [`EntityEvent`] per removed component and per despawn.
     pub fn despawn_all_entities<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         world: &mut W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,

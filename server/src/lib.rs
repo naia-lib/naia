@@ -48,11 +48,14 @@
     unstable_features,
     unused_import_braces
 )]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate cfg_if;
 
+/// Transport-layer socket abstractions (UDP, WebRTC, local in-process).
 pub mod transport;
+/// Re-exports of commonly-used `naia_shared` types, scoped for server consumers.
 pub mod shared {
     pub use naia_shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
@@ -62,6 +65,7 @@ pub mod shared {
     };
 }
 
+/// Bevy-specific serialization derive support (re-export of [`naia_shared::SerdeBevyServer`]).
 pub use naia_shared::SerdeBevyServer as SerdeBevy;
 pub use naia_shared::{ConnectionStats, DisconnectReason, EntityPriorityMut, EntityPriorityRef};
 
@@ -69,6 +73,7 @@ mod connection;
 mod error;
 mod events;
 mod handshake;
+/// Lag-compensation snapshot buffer that stores per-tick world state for rollback hit detection.
 pub mod historian;
 mod request;
 mod room;

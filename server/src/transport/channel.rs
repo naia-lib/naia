@@ -9,9 +9,11 @@ use super::{
     PacketReceiver as TransportReceiver, PacketSender as TransportSender, RecvError, SendError,
 };
 
+/// In-process MPSC channel bridging a `PacketSender` / `PacketReceiver` pair for local transport.
 pub struct PacketChannel;
 
 impl PacketChannel {
+    /// Creates an unbounded in-process channel and returns the sender/receiver pair.
     pub fn unbounded() -> (Box<dyn TransportSender>, Box<dyn TransportReceiver>) {
         let (packet_sender, packet_receiver) = channel::unbounded();
         let packet_receiver = PacketChannelReceiver::new(packet_receiver);

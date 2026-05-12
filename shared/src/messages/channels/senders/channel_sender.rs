@@ -9,6 +9,7 @@ use crate::{
     LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
 };
 
+/// Core send-side trait implemented by every channel sender variant.
 pub trait ChannelSender<P>: Send + Sync {
     /// Queues a Message to be transmitted to the remote host into an internal
     /// buffer. Returns `true` if the message was accepted, `false` if the
@@ -23,6 +24,7 @@ pub trait ChannelSender<P>: Send + Sync {
     fn notify_message_delivered(&mut self, message_index: &MessageIndex);
 }
 
+/// Extended sender trait for message channels that writes wire bits and supports request/response lifecycle.
 pub trait MessageChannelSender: ChannelSender<MessageContainer> {
     /// Gets Messages from the internal buffer and writes it to the BitWriter
     fn write_messages(

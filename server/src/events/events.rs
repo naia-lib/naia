@@ -18,6 +18,10 @@ use crate::{
     DisconnectEvent,
 };
 
+/// Combined event container returned by [`Server::take_world_events`](crate::Server::take_world_events).
+///
+/// Merges main-connection events (auth, connect) with per-world entity/message
+/// events into a single drain point. Iterate with [`read::<V>()`](Events::read).
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     main_events: MainEvents,
     world_events: WorldEvents<E>,
@@ -50,73 +54,91 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     // Public
 
+    /// Returns `true` if no events of any kind are pending.
     pub fn is_empty(&self) -> bool {
         self.main_events.is_empty() && self.world_events.is_empty()
     }
 
+    /// Drains and returns all events of type `V`.
     pub fn read<V: Event<E>>(&mut self) -> V::Iter {
         V::iter(self)
     }
 
+    /// Returns `true` if at least one event of type `V` is pending without draining it.
     pub fn has<V: Event<E>>(&self) -> bool {
         V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any incoming messages are queued. Prefer `read::<MessageEvent<C,M>>()`.
     pub fn has_messages(&self) -> bool {
         self.world_events.has_messages()
     }
+    /// Drains the raw message map. Prefer `read::<MessageEvent<C,M>>()` over this method.
     pub fn take_messages(&mut self) -> MessagesMap {
         self.world_events.take_messages()
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any incoming requests are queued. Prefer `read::<RequestEvent<C,Q>>()`.
     pub fn has_requests(&self) -> bool {
         self.world_events.has_requests()
     }
+    /// Drains the raw request map. Prefer `read::<RequestEvent<C,Q>>()` over this method.
     pub fn take_requests(&mut self) -> RequestsMap {
         self.world_events.take_requests()
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any auth messages are pending. Prefer `read::<AuthEvent<M>>()`.
     pub fn has_auths(&self) -> bool {
         self.main_events.has_auths()
     }
+    /// Drains the raw auth message map. Prefer `read::<AuthEvent<M>>()` over this method.
     pub fn take_auths(&mut self) -> HashMap<MessageKind, Vec<(UserKey, MessageContainer)>> {
         self.main_events.take_auths()
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any component-insert events are pending. Prefer `read::<InsertComponentEvent<C>>()`.
     pub fn has_inserts(&self) -> bool {
         self.world_events.has_inserts()
     }
+    /// Drains the raw insert map. Prefer `read::<InsertComponentEvent<C>>()` over this method.
     pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<(UserKey, E)>>> {
         self.world_events.take_inserts()
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any component-update events are pending. Prefer `read::<UpdateComponentEvent<C>>()`.
     pub fn has_updates(&self) -> bool {
         self.world_events.has_updates()
     }
+    /// Drains the raw update map. Prefer `read::<UpdateComponentEvent<C>>()` over this method.
     pub fn take_updates(&mut self) -> Option<HashMap<ComponentKind, Vec<(UserKey, E)>>> {
         self.world_events.take_updates()
     }
 
     // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any component-remove events are pending. Prefer `read::<RemoveComponentEvent<C>>()`.
     pub fn has_removes(&self) -> bool {
         self.world_events.has_removes()
     }
+    /// Drains the raw remove map. Prefer `read::<RemoveComponentEvent<C>>()` over this method.
     pub fn take_removes(&mut self) -> Option<RemovesMap<E>> {
         self.world_events.take_removes()
     }
 }
 
-// Event Trait
+/// Marker trait for types that can be read from a combined [`Events<E>`] container.
 pub trait Event<E: Hash + Copy + Eq + Sync + Send> {
+    /// Iterator type yielded by [`Events::read`].
     type Iter;
 
+    /// Drains all events of this type from the container and returns an iterator over them.
     fn iter(events: &mut Events<E>) -> Self::Iter;
 
+    /// Returns `true` if at least one event of this type is pending.
     fn has(events: &Events<E>) -> bool;
 }
 

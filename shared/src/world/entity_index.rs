@@ -46,6 +46,7 @@ pub struct KeyGenerator32<K: From<u32> + Into<u32> + Copy> {
 }
 
 impl<K: From<u32> + Into<u32> + Copy> KeyGenerator32<K> {
+    /// Creates a generator that quarantines recycled keys for at least `recycle_timeout` before reissuing them.
     pub fn new(recycle_timeout: Duration) -> Self {
         Self {
             recycle_timeout,
@@ -56,6 +57,7 @@ impl<K: From<u32> + Into<u32> + Copy> KeyGenerator32<K> {
         }
     }
 
+    /// Issues the next available key, preferring recycled keys whose quarantine period has elapsed.
     pub fn generate(&mut self) -> K {
         let now = Instant::now();
         loop {
@@ -76,6 +78,7 @@ impl<K: From<u32> + Into<u32> + Copy> KeyGenerator32<K> {
         K::from(output)
     }
 
+    /// Marks `key` as available for reuse after the configured quarantine period expires.
     pub fn recycle_key(&mut self, key: &K) {
         let key_u32: u32 = (*key).into();
         self.recycling_keys.push_back((key_u32, Instant::now()));

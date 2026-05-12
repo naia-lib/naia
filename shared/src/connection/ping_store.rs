@@ -2,10 +2,12 @@ use std::collections::VecDeque;
 
 use crate::{sequence_greater_than, GameInstant};
 
+/// Monotone wrapping sequence number used to correlate pings and pongs.
 pub type PingIndex = u16;
 
 const SENT_PINGS_HISTORY_SIZE: u16 = 32;
 
+/// Circular buffer that records the send time of outstanding pings indexed by [`PingIndex`].
 pub struct PingStore {
     ping_index: PingIndex,
     // front big, back small
@@ -20,6 +22,7 @@ impl Default for PingStore {
 }
 
 impl PingStore {
+    /// Creates an empty `PingStore`.
     pub fn new() -> Self {
         PingStore {
             ping_index: 0,
@@ -27,6 +30,7 @@ impl PingStore {
         }
     }
 
+    /// Records a new ping sent at `now` and returns its assigned index.
     pub fn push_new(&mut self, now: GameInstant) -> PingIndex {
         // save current ping index and add a new ping instant associated with it
         let ping_index = self.ping_index;
@@ -41,6 +45,7 @@ impl PingStore {
         ping_index
     }
 
+    /// Removes and returns the send-time for the given `ping_index`, or `None` if not found.
     pub fn remove(&mut self, ping_index: PingIndex) -> Option<GameInstant> {
         let mut vec_index = self.buffer.len();
 
@@ -78,6 +83,7 @@ impl PingStore {
         }
     }
 
+    /// Clears all pending ping records.
     pub fn clear(&mut self) {
         self.buffer.clear();
     }

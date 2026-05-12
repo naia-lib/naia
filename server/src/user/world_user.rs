@@ -4,6 +4,7 @@ use crate::RoomKey;
 
 // User
 
+/// World-layer user record: tracks data address and cached room membership.
 #[derive(Clone)]
 pub struct WorldUser {
     data_addr: SocketAddr,
@@ -11,6 +12,7 @@ pub struct WorldUser {
 }
 
 impl WorldUser {
+    /// Creates a new `WorldUser` registered at the given data-channel address.
     pub fn new(address: SocketAddr) -> Self {
         Self {
             data_addr: address,
@@ -18,6 +20,7 @@ impl WorldUser {
         }
     }
 
+    /// Returns the user's data-channel socket address.
     pub fn address(&self) -> SocketAddr {
         self.data_addr
     }

@@ -142,18 +142,21 @@ cfg_if! {
     {
         use super::compression_config::CompressionMode;
 
+        /// Packet encoder (no-op variant: passes payload through unchanged).
         #[derive(Clone)]
         pub struct Encoder {
             result: Vec<u8>
         }
 
         impl Encoder {
+            /// Creates a no-op encoder (compression mode is ignored in this build variant).
             pub fn new(_: CompressionMode) -> Self {
                 Self {
                     result: Vec::new(),
                 }
             }
 
+            /// Returns the payload unchanged (no-op compression).
             pub fn encode(&mut self, payload: &[u8]) -> &[u8] {
                 self.result = payload.to_vec();
                 &self.result

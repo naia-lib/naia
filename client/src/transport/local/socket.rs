@@ -15,12 +15,14 @@ use crate::transport::{
     Socket as TransportSocket,
 };
 
+#[doc(hidden)]
 pub struct Socket {
     inner: Option<LocalClientSocket>,
     config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
+    #[doc(hidden)]
     pub fn new(local: LocalClientSocket, config: Option<LinkConditionerConfig>) -> Self {
         Self {
             inner: Some(local),

@@ -19,6 +19,7 @@ impl Default for LossMonitor {
 }
 
 impl LossMonitor {
+    /// Creates a new `LossMonitor` with a zeroed sliding window.
     pub fn new() -> Self {
         Self {
             outcomes: [false; WINDOW],
@@ -28,10 +29,12 @@ impl LossMonitor {
         }
     }
 
+    /// Records that a packet was acknowledged (not lost).
     pub fn record_acked(&mut self) {
         self.record(true);
     }
 
+    /// Records that a packet was lost (not acknowledged).
     pub fn record_lost(&mut self) {
         self.record(false);
     }

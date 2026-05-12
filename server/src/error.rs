@@ -29,6 +29,7 @@ pub enum NaiaServerError {
 }
 
 impl NaiaServerError {
+    /// Constructs a [`NaiaServerError::Message`] variant from a string slice.
     pub fn from_message(message: &str) -> Self {
         Self::Message(message.to_string())
     }

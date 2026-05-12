@@ -9,6 +9,7 @@ use crate::world::local::local_entity::{HostEntity, RemoteEntity};
 use crate::world::local::local_entity_map::LocalEntityMap;
 use crate::{GlobalEntity, KeyGenerator};
 
+/// Issues and recycles wire-level [`HostEntity`] identifiers for a single connected user.
 pub struct HostEntityGenerator {
     user_key: u64,
     generator: KeyGenerator<u16>,
@@ -19,6 +20,7 @@ pub struct HostEntityGenerator {
 }
 
 impl HostEntityGenerator {
+    /// Creates a generator bound to `user_key` with fresh entity and static-entity ID pools.
     pub fn new(user_key: u64) -> Self {
         Self {
             user_key,
@@ -32,6 +34,7 @@ impl HostEntityGenerator {
 
     // Host entities
 
+    /// Allocates a [`HostEntity`] for `global_entity` before it has been sent, expiring reservations that have timed out.
     pub fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
@@ -66,6 +69,7 @@ impl HostEntityGenerator {
         }
     }
 
+    /// Removes and returns the reserved [`HostEntity`] for `global_entity`, if one exists.
     pub fn host_remove_reserved_entity(
         &mut self,
         global_entity: &GlobalEntity,
@@ -124,6 +128,7 @@ impl HostEntityGenerator {
         }
     }
 
+    /// Removes the entity identified by `remote_entity` from `entity_map`, recycles its host ID, and returns its [`GlobalEntity`].
     pub fn remove_by_remote_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
@@ -148,6 +153,7 @@ impl HostEntityGenerator {
 
     // Misc
 
+    /// Returns the user key this generator was created for.
     pub fn get_user_key(&self) -> &u64 {
         &self.user_key
     }

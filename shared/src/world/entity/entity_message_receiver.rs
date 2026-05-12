@@ -6,6 +6,7 @@ use crate::{
     EntityMessage, HostEntity, MessageIndex,
 };
 
+/// Stateless helper that routes incoming entity messages into per-entity ordered queues.
 pub struct EntityMessageReceiver;
 
 impl EntityMessageReceiver {
@@ -32,6 +33,7 @@ impl EntityMessageReceiver {
         remote_engine.take_incoming_events()
     }
 
+    /// Feeds `incoming_messages` into `host_engine` and returns all events now ready to apply.
     // TODO: refactor this to use a generic type for the engine
     pub fn host_take_incoming_events(
         host_engine: &mut HostEngine,

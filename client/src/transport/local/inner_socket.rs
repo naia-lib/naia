@@ -15,6 +15,7 @@ use super::{
     data::{LocalClientReceiver, LocalClientSender},
 };
 
+#[doc(hidden)]
 pub struct LocalClientSocket {
     auth_io: Arc<Mutex<ClientAuthIo>>,
     sender: LocalClientSender,
@@ -52,6 +53,7 @@ impl LocalClientSocket {
         }
     }
 
+    #[doc(hidden)]
     pub fn connect(self) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
         // Note: connect() without auth doesn't create a PendingRequest.
         // Only connect_with_auth*() methods create it after sending the auth request.
@@ -66,6 +68,7 @@ impl LocalClientSocket {
         (identity, sender, receiver)
     }
 
+    #[doc(hidden)]
     pub fn connect_with_auth(
         self,
         auth_bytes: Vec<u8>,
@@ -93,6 +96,7 @@ impl LocalClientSocket {
         self.connect()
     }
 
+    #[doc(hidden)]
     pub fn connect_with_auth_headers(
         self,
         auth_headers: Vec<(String, String)>,
@@ -119,6 +123,7 @@ impl LocalClientSocket {
         self.connect()
     }
 
+    #[doc(hidden)]
     pub fn connect_with_auth_and_headers(
         self,
         auth_bytes: Vec<u8>,

@@ -6,12 +6,14 @@ use naia_serde::{BitWriter, SerdeInternal};
 use crate::messages::request::GlobalRequestId;
 use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
 
+/// Manages the lifecycle of outgoing requests and their local-to-global ID mapping.
 pub struct RequestSender {
     local_key_generator: KeyGenerator<LocalRequestId>,
     local_to_global_ids: HashMap<LocalRequestId, GlobalRequestId>,
 }
 
 impl RequestSender {
+    /// Creates a new `RequestSender` with a 60-second local-ID recycle window.
     pub fn new() -> Self {
         Self {
             local_key_generator: KeyGenerator::new(Duration::from_secs(60)),
@@ -60,6 +62,7 @@ impl RequestSender {
     }
 }
 
+/// Wire envelope that carries either a request or a response payload with its local correlation ID.
 #[derive(MessageRequest)]
 pub struct RequestOrResponse {
     id: LocalRequestOrResponseId,
@@ -67,6 +70,7 @@ pub struct RequestOrResponse {
 }
 
 impl RequestOrResponse {
+    /// Wraps `bytes` as a request tagged with `id`.
     pub fn request(id: LocalRequestId, bytes: Box<[u8]>) -> Self {
         Self {
             id: id.to_req_res_id(),
@@ -74,6 +78,7 @@ impl RequestOrResponse {
         }
     }
 
+    /// Wraps `bytes` as a response tagged with `id`.
     pub fn response(id: LocalResponseId, bytes: Box<[u8]>) -> Self {
         Self {
             id: id.to_req_res_id(),
@@ -87,13 +92,17 @@ impl RequestOrResponse {
     }
 }
 
+/// Connection-local discriminated ID that identifies a packet as carrying a request or a response.
 #[derive(Clone, PartialEq, Eq, SerdeInternal)]
 pub enum LocalRequestOrResponseId {
+    /// Packet carries an outgoing request with this local ID.
     Request(LocalRequestId),
+    /// Packet carries a response to the request with this local ID.
     Response(LocalResponseId),
 }
 
 impl LocalRequestOrResponseId {
+    /// Returns `true` if this ID represents a request.
     pub fn is_request(&self) -> bool {
         match self {
             LocalRequestOrResponseId::Request(_) => true,
@@ -101,6 +110,7 @@ impl LocalRequestOrResponseId {
         }
     }
 
+    /// Returns `true` if this ID represents a response.
     pub fn is_response(&self) -> bool {
         match self {
             LocalRequestOrResponseId::Request(_) => false,
@@ -108,6 +118,7 @@ impl LocalRequestOrResponseId {
         }
     }
 
+    /// Returns the inner `LocalRequestId`. Panics if this is a response.
     pub fn to_request_id(&self) -> LocalRequestId {
         match self {
             LocalRequestOrResponseId::Request(id) => *id,
@@ -117,6 +128,7 @@ impl LocalRequestOrResponseId {
         }
     }
 
+    /// Returns the inner `LocalResponseId`. Panics if this is a request.
     pub fn to_response_id(&self) -> LocalResponseId {
         match self {
             LocalRequestOrResponseId::Request(_) => panic!("LocalRequestOrResponseId is a request"),
@@ -125,17 +137,20 @@ impl LocalRequestOrResponseId {
     }
 }
 
+/// Connection-scoped u8 key correlating an outgoing request with its eventual response.
 #[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
 pub struct LocalRequestId {
     id: u8,
 }
 
 impl LocalRequestId {
+    /// Wraps `self` as a `LocalRequestOrResponseId::Request`.
     #[allow(clippy::wrong_self_convention)]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Request(*self)
     }
 
+    /// Returns the `LocalResponseId` that the remote will use when replying to this request.
     pub fn receive_from_remote(&self) -> LocalResponseId {
         LocalResponseId { id: self.id }
     }
@@ -153,17 +168,20 @@ impl From<LocalRequestId> for u16 {
     }
 }
 
+/// Connection-scoped u8 key correlating an incoming response with the original request.
 #[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
 pub struct LocalResponseId {
     id: u8,
 }
 
 impl LocalResponseId {
+    /// Wraps `self` as a `LocalRequestOrResponseId::Response`.
     #[allow(clippy::wrong_self_convention)]
     pub fn to_req_res_id(&self) -> LocalRequestOrResponseId {
         LocalRequestOrResponseId::Response(*self)
     }
 
+    /// Returns the `LocalRequestId` that the remote assigned to the request this response answers.
     pub fn receive_from_remote(&self) -> LocalRequestId {
         LocalRequestId { id: self.id }
     }

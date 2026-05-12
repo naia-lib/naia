@@ -4,6 +4,7 @@ use naia_shared::{Message, MessageContainer, MessageKind};
 
 use crate::{events::world_events, user::UserKey, NaiaServerError};
 
+/// Event container for transport-level events: new connections, auth messages, errors, and queued disconnects.
 pub struct MainEvents {
     auths: HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>,
     connections: Vec<UserKey>,
@@ -31,18 +32,22 @@ impl Default for MainEvents {
 impl MainEvents {
     // Public
 
+    /// Returns `true` if no events are pending.
     pub fn is_empty(&self) -> bool {
         self.empty
     }
 
+    /// Drains and returns all events of type `V`.
     pub fn read<V: MainEvent>(&mut self) -> V::Iter {
         V::iter(self)
     }
 
+    /// Returns `true` if at least one event of type `V` is pending.
     pub fn has<V: MainEvent>(&self) -> bool {
         V::has(self)
     }
 
+    /// Merges all events from `other` into `self`.
     pub fn append(&mut self, other: Self) {
         self.auths.extend(other.auths);
         self.connections.extend(other.connections);
@@ -56,9 +61,11 @@ impl MainEvents {
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any auth messages are pending. Prefer `read::<AuthEvent<M>>()`.
     pub fn has_auths(&self) -> bool {
         !self.auths.is_empty()
     }
+    /// Drains the raw auth message map. Prefer `read::<AuthEvent<M>>()` over this method.
     pub fn take_auths(&mut self) -> HashMap<MessageKind, Vec<(UserKey, MessageContainer)>> {
         mem::take(&mut self.auths)
     }
@@ -98,16 +105,20 @@ impl MainEvents {
     }
 }
 
-// Event Trait
+/// Marker trait for types that can be read from [`MainEvents`].
 pub trait MainEvent {
+    /// Iterator type yielded by [`MainEvents::read`].
     type Iter;
 
+    /// Drains all events of this type and returns an iterator.
     fn iter(events: &mut MainEvents) -> Self::Iter;
 
+    /// Returns `true` if at least one event of this type is pending.
     fn has(events: &MainEvents) -> bool;
 }
 
 // ConnectEvent
+/// Fires when a new client completes the handshake and is ready to receive entities.
 pub struct ConnectEvent;
 impl MainEvent for ConnectEvent {
     type Iter = IntoIter<UserKey>;
@@ -123,6 +134,7 @@ impl MainEvent for ConnectEvent {
 }
 
 // Error Event
+/// Fires when a transport or protocol error occurs; carries a [`NaiaServerError`].
 pub struct ErrorEvent;
 impl MainEvent for ErrorEvent {
     type Iter = IntoIter<NaiaServerError>;
@@ -138,6 +150,7 @@ impl MainEvent for ErrorEvent {
 }
 
 // Auth Event
+/// Fires when a client sends an auth message during the handshake; yields `(UserKey, M)` pairs.
 pub struct AuthEvent<M: Message> {
     phantom_m: PhantomData<M>,
 }
@@ -160,6 +173,7 @@ impl<M: Message> MainEvent for AuthEvent<M> {
 }
 
 // QueuedDisconnectEvent
+/// Fires when the server has scheduled a user disconnect; the disconnect completes on the next tick.
 pub struct QueuedDisconnectEvent;
 impl MainEvent for QueuedDisconnectEvent {
     type Iter = IntoIter<UserKey>;
@@ -175,6 +189,7 @@ impl MainEvent for QueuedDisconnectEvent {
 }
 
 // WorldPacketEvent
+/// Fires when a raw world-server packet is received from a client; used by adapter crates only.
 pub struct WorldPacketEvent;
 impl MainEvent for WorldPacketEvent {
     type Iter = IntoIter<(UserKey, SocketAddr, Box<[u8]>)>;

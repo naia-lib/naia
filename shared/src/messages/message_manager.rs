@@ -232,6 +232,7 @@ impl MessageManager {
         }
     }
 
+    /// Queues a request with `global_request_id` into the given channel's send buffer.
     pub fn send_request(
         &mut self,
         message_kinds: &MessageKinds,
@@ -246,6 +247,7 @@ impl MessageManager {
         channel.send_outgoing_request(message_kinds, converter, global_request_id, request);
     }
 
+    /// Queues a response keyed by `local_response_id` into the given channel's send buffer.
     pub fn send_response(
         &mut self,
         message_kinds: &MessageKinds,
@@ -260,6 +262,7 @@ impl MessageManager {
         channel.send_outgoing_response(message_kinds, converter, local_response_id, response);
     }
 
+    /// Advances all channel senders, re-queuing any messages due for retransmission given current RTT.
     pub fn collect_outgoing_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         for channel in self.channel_senders.values_mut() {
             channel.collect_messages(now, rtt_millis);
@@ -277,6 +280,7 @@ impl MessageManager {
         false
     }
 
+    /// Encodes all pending outgoing messages across all channels into `writer`, ordered by channel criticality.
     pub fn write_messages(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -355,6 +359,7 @@ impl MessageManager {
 
     // Incoming Messages
 
+    /// Parses an incoming message packet, routing each message to its channel's receiver buffer.
     pub fn read_messages(
         &mut self,
         channel_kinds: &ChannelKinds,

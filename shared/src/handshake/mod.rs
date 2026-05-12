@@ -6,6 +6,7 @@ cfg_if! {
         pub mod advanced;
         pub use advanced::*;
     } else {
+        /// Standard handshake protocol for identifying clients and exchanging timing information.
         pub mod simple;
         pub use simple::*;
     }

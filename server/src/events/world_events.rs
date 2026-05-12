@@ -16,6 +16,10 @@ pub(crate) type MessagesMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(Use
 pub(crate) type RequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
 pub(crate) type RemovesMap<E> = HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>;
 
+/// Per-tick event container carrying all entity-lifecycle, message, and component events.
+///
+/// Returned by [`Server::take_world_events`](crate::Server::take_world_events).
+/// Prefer iterating via `read::<SomeEvent>()`.
 pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<UserKey>,
     disconnections: Vec<(UserKey, SocketAddr, DisconnectReason)>,
@@ -61,38 +65,47 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
     // Public
 
+    /// Returns `true` if no world events are pending.
     pub fn is_empty(&self) -> bool {
         self.empty
     }
 
+    /// Drains and returns all events of type `V`.
     pub fn read<V: WorldEvent<E>>(&mut self) -> V::Iter {
         V::iter(self)
     }
 
+    /// Returns `true` if at least one event of type `V` is pending.
     pub fn has<V: WorldEvent<E>>(&self) -> bool {
         V::has(self)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any incoming messages are queued. Prefer `read::<MessageEvent<C,M>>()`.
     pub fn has_messages(&self) -> bool {
         !self.messages.is_empty()
     }
+    /// Drains the raw message map. Prefer `read::<MessageEvent<C,M>>()` over this method.
     pub fn take_messages(&mut self) -> MessagesMap {
         mem::take(&mut self.messages)
     }
 
     // This method is exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any incoming requests are queued. Prefer `read::<RequestEvent<C,Q>>()`.
     pub fn has_requests(&self) -> bool {
         !self.requests.is_empty()
     }
+    /// Drains the raw request map. Prefer `read::<RequestEvent<C,Q>>()` over this method.
     pub fn take_requests(&mut self) -> RequestsMap {
         mem::take(&mut self.requests)
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any component-insert events are pending. Prefer `read::<InsertComponentEvent<C>>()`.
     pub fn has_inserts(&self) -> bool {
         !self.inserts.is_empty()
     }
+    /// Drains the raw insert map. Prefer `read::<InsertComponentEvent<C>>()` over this method.
     pub fn take_inserts(&mut self) -> Option<HashMap<ComponentKind, Vec<(UserKey, E)>>> {
         if self.inserts.is_empty() {
             None
@@ -102,9 +115,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     // These methods are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any component-update events are pending. Prefer `read::<UpdateComponentEvent<C>>()`.
     pub fn has_updates(&self) -> bool {
         !self.updates.is_empty()
     }
+    /// Drains the raw update map. Prefer `read::<UpdateComponentEvent<C>>()` over this method.
     pub fn take_updates(&mut self) -> Option<HashMap<ComponentKind, Vec<(UserKey, E)>>> {
         if self.updates.is_empty() {
             None
@@ -114,9 +129,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     }
 
     // These method are exposed for adapter crates ... prefer using Events.read::<SomeEvent>() instead.
+    /// Returns `true` if any component-remove events are pending. Prefer `read::<RemoveComponentEvent<C>>()`.
     pub fn has_removes(&self) -> bool {
         !self.removes.is_empty()
     }
+    /// Drains the raw remove map. Prefer `read::<RemoveComponentEvent<C>>()` over this method.
     pub fn take_removes(&mut self) -> Option<RemovesMap<E>> {
         if self.removes.is_empty() {
             None
@@ -278,12 +295,15 @@ impl<E: Hash + Copy + Eq + Sync + Send> Drop for WorldEvents<E> {
     }
 }
 
-// Event Trait
+/// Marker trait for types that can be read from [`WorldEvents<E>`].
 pub trait WorldEvent<E: Hash + Copy + Eq + Sync + Send> {
+    /// Iterator type yielded by [`WorldEvents::read`].
     type Iter;
 
+    /// Drains all events of this type and returns an iterator.
     fn iter(events: &mut WorldEvents<E>) -> Self::Iter;
 
+    /// Returns `true` if at least one event of this type is pending.
     fn has(events: &WorldEvents<E>) -> bool;
 }
 
@@ -302,6 +322,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 }
 
 // DisconnectEvent
+/// Fires when a client disconnects or times out; yields `(UserKey, SocketAddr, DisconnectReason)`.
 pub struct DisconnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
     type Iter = IntoIter<(UserKey, SocketAddr, DisconnectReason)>;
@@ -331,6 +352,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ErrorEvent {
 }
 
 // Message Event
+/// Fires when a client sends a message `M` over channel `C`; yields `(UserKey, M)` pairs.
 pub struct MessageEvent<C: Channel, M: Message> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<M>,
@@ -401,6 +423,7 @@ pub(crate) fn push_message_impl(
 }
 
 // Request Event
+/// Fires when a client sends a request `Q` over channel `C`; yields `(UserKey, ResponseSendKey<Q::Response>, Q)`.
 pub struct RequestEvent<C: Channel, Q: Request> {
     phantom_c: PhantomData<C>,
     phantom_m: PhantomData<Q>,
@@ -445,6 +468,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Channel, Q: Request> WorldEvent<E>
 }
 
 // Spawn Entity Event
+/// Fires when a client-authoritative entity enters the server's scope; yields `(UserKey, E)`.
 pub struct SpawnEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for SpawnEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -460,6 +484,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for SpawnEntityEvent {
 }
 
 // Despawn Entity Event
+/// Fires when an entity is removed from the server's world; yields `(UserKey, E)`.
 pub struct DespawnEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DespawnEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -475,6 +500,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DespawnEntityEvent {
 }
 
 // Publish Entity Event
+/// Fires when a private entity is published (made visible to in-scope clients); yields `(UserKey, E)`.
 pub struct PublishEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for PublishEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -490,6 +516,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for PublishEntityEvent {
 }
 
 // Unpublish Entity Event
+/// Fires when a public entity is unpublished (hidden from all clients); yields `(UserKey, E)`.
 pub struct UnpublishEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for UnpublishEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -505,6 +532,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for UnpublishEntityEvent {
 }
 
 // Delegate Entity Event
+/// Fires when an entity's replication mode is switched to `Delegated`; yields `(UserKey, E)`.
 pub struct DelegateEntityEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DelegateEntityEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -520,6 +548,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DelegateEntityEvent {
 }
 
 // Entity Auth Given Event
+/// Fires when the server grants a client authority over a delegated entity; yields `(UserKey, E)`.
 pub struct EntityAuthGrantEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthGrantEvent {
     type Iter = IntoIter<(UserKey, E)>;
@@ -552,6 +581,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthDeniedEvent 
 }
 
 // Entity Auth Reset Event
+/// Fires when entity authority is released back to the server; yields the entity `E`.
 pub struct EntityAuthResetEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthResetEvent {
     type Iter = IntoIter<E>;
@@ -567,6 +597,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for EntityAuthResetEvent {
 }
 
 // Insert Component Event
+/// Fires when component `C` is inserted on an in-scope entity; yields `(UserKey, E)`.
 pub struct InsertComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -589,6 +620,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for InsertCo
 }
 
 // Update Component Event
+/// Fires when component `C` is mutated on an in-scope entity; yields `(UserKey, E)`.
 pub struct UpdateComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }
@@ -611,6 +643,7 @@ impl<E: Hash + Copy + Eq + Sync + Send, C: Replicate> WorldEvent<E> for UpdateCo
 }
 
 // Remove Component Event
+/// Fires when component `C` is removed from an entity; yields `(UserKey, E, C)` with the removed value.
 pub struct RemoveComponentEvent<C: Replicate> {
     phantom_c: PhantomData<C>,
 }

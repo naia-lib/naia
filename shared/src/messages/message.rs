@@ -9,7 +9,7 @@ use crate::{
     LocalEntityAndGlobalEntityConverter, MessageContainer, RemoteEntity,
 };
 
-// MessageBuilder
+/// Factory trait that deserializes a concrete `Message` from raw bits.
 pub trait MessageBuilder: Send + Sync {
     /// Create new Message from incoming bit stream
     fn read(
@@ -18,23 +18,29 @@ pub trait MessageBuilder: Send + Sync {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<MessageContainer, SerdeErr>;
 
+    /// Returns a heap-allocated clone of this builder.
     fn box_clone(&self) -> Box<dyn MessageBuilder>;
 }
 
-// Message
+/// Core trait for all naia message types — provides serialization, kind lookup, and entity-relation hooks.
 pub trait Message: Send + Sync + Named + MessageClone + Any {
     /// Gets the MessageKind of this type
     fn kind(&self) -> MessageKind;
+    /// Converts this boxed message into a `Box<dyn Any>` for downcasting.
     fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
+    /// Creates the `MessageBuilder` used to deserialize instances of this type.
     fn create_builder() -> Box<dyn MessageBuilder>
     where
         Self: Sized;
+    /// Returns the bit length of this message when serialized with `converter`.
     fn bit_length(
         &self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     ) -> u32;
+    /// Returns `true` if this message is a fragment of a larger logical message.
     fn is_fragment(&self) -> bool;
+    /// Returns `true` if this message envelope carries a request or response payload.
     fn is_request(&self) -> bool;
     /// Writes data into an outgoing byte stream
     fn write(
@@ -68,8 +74,9 @@ impl Named for Box<dyn Message> {
     }
 }
 
-// MessageClone
+/// Helper trait enabling `Box<dyn Message>` to be cloned without knowing the concrete type.
 pub trait MessageClone {
+    /// Returns a heap-allocated clone of `self` as a `Box<dyn Message>`.
     fn clone_box(&self) -> Box<dyn Message>;
 }
 

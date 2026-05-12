@@ -4,6 +4,7 @@ use crate::{ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType}
 
 use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
+/// Global registry of mutation channels for every (entity, component) pair, used to fan out property changes to per-user dirty queues.
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
     /// `ComponentKind` → NetId (== bit position in the per-user
@@ -23,10 +24,12 @@ pub struct GlobalDiffHandler {
 
 #[cfg(feature = "test_utils")]
 impl GlobalDiffHandler {
+    #[doc(hidden)]
     pub fn receiver_count(&self) -> usize {
         self.mut_receiver_builders.len()
     }
 
+    #[doc(hidden)]
     pub fn receiver_count_by_kind(&self) -> HashMap<ComponentKind, usize> {
         let mut map = HashMap::new();
         for &(_, kind) in self.mut_receiver_builders.keys() {
@@ -43,6 +46,7 @@ impl Default for GlobalDiffHandler {
 }
 
 impl GlobalDiffHandler {
+    /// Creates an empty `GlobalDiffHandler`.
     pub fn new() -> Self {
         Self {
             mut_receiver_builders: HashMap::new(),
@@ -65,10 +69,12 @@ impl GlobalDiffHandler {
         self.max_kind_count
     }
 
+    /// Returns `true` if a mutation channel is registered for `(global_entity, component_kind)`.
     pub fn has_component(&self, global_entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
         self.mut_receiver_builders.contains_key(&(*global_entity, *component_kind))
     }
 
+    /// Creates a `MutSender`/`MutReceiverBuilder` pair for `(global_entity, component_kind)` and returns the sender.
     pub fn register_component(
         &mut self,
         component_kinds: &ComponentKinds,
@@ -108,11 +114,13 @@ impl GlobalDiffHandler {
         sender
     }
 
+    /// Removes the mutation channel for `(entity, component_kind)`, stopping further dirty notifications.
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.mut_receiver_builders
             .remove(&(*entity, *component_kind));
     }
 
+    /// Builds a `MutReceiver` for `address` from the builder registered for `(entity, component_kind)`, if one exists.
     pub fn receiver(
         &self,
         address: &Option<SocketAddr>,

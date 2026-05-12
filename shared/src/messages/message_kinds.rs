@@ -26,12 +26,14 @@ pub struct MessageKind {
 }
 
 impl MessageKind {
+    /// Returns the `MessageKind` corresponding to the type `M`.
     pub fn of<M: Message>() -> Self {
         Self {
             type_id: TypeId::of::<M>(),
         }
     }
 
+    /// Serializes this kind's compact net-ID into `writer` using the bit-width in `message_kinds`.
     pub fn ser(&self, message_kinds: &MessageKinds, writer: &mut dyn BitWrite) {
         let net_id = message_kinds.kind_to_net_id(self);
         let bits = message_kinds.kind_bit_width;
@@ -40,6 +42,7 @@ impl MessageKind {
         }
     }
 
+    /// Deserializes a `MessageKind` from `reader` using the bit-width in `message_kinds`.
     pub fn de(message_kinds: &MessageKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let bits = message_kinds.kind_bit_width;
         let mut net_id: NetId = 0;
@@ -52,7 +55,7 @@ impl MessageKind {
     }
 }
 
-// MessageKinds
+/// Registry mapping `Message` types to compact wire net-IDs and their deserializers.
 pub struct MessageKinds {
     current_net_id: NetId,
     /// Number of bits needed to encode any registered NetId — recomputed
@@ -90,6 +93,7 @@ impl Default for MessageKinds {
 }
 
 impl MessageKinds {
+    /// Creates an empty `MessageKinds` registry.
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
@@ -99,6 +103,7 @@ impl MessageKinds {
         }
     }
 
+    /// Registers message type `M`, assigning it the next sequential net-ID.
     pub fn add_message<M: Message>(&mut self) {
         let message_kind = MessageKind::of::<M>();
 
@@ -123,6 +128,7 @@ impl MessageKinds {
         self.kind_bit_width as u32
     }
 
+    /// Reads a message kind tag then deserializes and returns the message payload from `reader`.
     pub fn read(
         &self,
         reader: &mut BitReader,
@@ -155,6 +161,7 @@ impl MessageKinds {
             .as_ref()
     }
 
+    /// Returns a sorted list of all registered message protocol names.
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, _, name) in self.kind_map.values() {

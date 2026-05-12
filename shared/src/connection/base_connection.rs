@@ -25,7 +25,9 @@ use crate::{
 /// Represents a connection to a remote host, and provides functionality to
 /// manage the connection and the communications to it
 pub struct BaseConnection {
+    /// Manages channel-routed message send/receive queues for this connection.
     pub message_manager: MessageManager,
+    /// Manages entity-level replication state for this connection.
     pub world_manager: LocalWorldManager,
     ack_manager: AckManager,
     heartbeat_timer: Timer,
@@ -114,14 +116,17 @@ impl BaseConnection {
 
     // Acks & Headers
 
+    /// Sets the flag requesting that an empty ack packet be sent.
     pub fn mark_should_send_empty_ack(&mut self) {
         self.ack_manager.mark_should_send_empty_ack();
     }
 
+    /// Returns `true` if an empty ack should be sent this tick.
     pub fn should_send_empty_ack(&self) -> bool {
         self.ack_manager.should_send_empty_ack()
     }
 
+    /// Returns the empty-ack flag and clears it atomically.
     pub fn take_should_send_empty_ack(&mut self) -> bool {
         self.ack_manager.take_should_send_empty_ack()
     }
@@ -161,6 +166,7 @@ impl BaseConnection {
         self.ack_manager.next_sender_packet_index()
     }
 
+    /// Returns the sequence index of the last received packet from the remote.
     pub fn last_received_packet_index(&self) -> PacketIndex {
         self.ack_manager.last_received_packet_index()
     }
@@ -170,6 +176,7 @@ impl BaseConnection {
         self.ack_manager.packet_loss_pct()
     }
 
+    /// Drains pending world-manager and message-manager outbound queues into writeable packets.
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.world_manager.collect_messages(now, rtt_millis);
         self.message_manager
@@ -198,6 +205,7 @@ impl BaseConnection {
         );
     }
 
+    /// Serializes messages and world events into `writer` for the outgoing packet at `packet_index`.
     #[allow(clippy::too_many_arguments)]
     pub fn write_packet<E: Copy + Eq + Hash + Sync + Send, W: WorldRefType<E>>(
         &mut self,
@@ -245,6 +253,7 @@ impl BaseConnection {
         }
     }
 
+    /// Deserializes an incoming packet, routing messages and world events to their managers.
     pub fn read_packet(
         &mut self,
         channel_kinds: &ChannelKinds,

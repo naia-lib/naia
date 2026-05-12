@@ -8,8 +8,9 @@ pub trait PropertyMutate: PropertyMutateClone + Send + Sync + 'static {
     fn mutate(&mut self, property_index: u8) -> bool;
 }
 
+/// Helper trait enabling `Box<dyn PropertyMutate>` to be cloned without knowing the concrete type.
 pub trait PropertyMutateClone {
-    /// Clone ..
+    /// Returns a heap-allocated clone of this mutator.
     fn clone_box(&self) -> Box<dyn PropertyMutate>;
 }
 
@@ -25,17 +26,20 @@ impl Clone for Box<dyn PropertyMutate> {
     }
 }
 
+/// Owned handle to a heap-allocated [`PropertyMutate`] implementor, used by `EntityProperty` to signal field changes.
 #[derive(Clone)]
 pub struct PropertyMutator {
     inner: Box<dyn PropertyMutate>,
 }
 
 impl PropertyMutator {
+    /// Creates a `PropertyMutator` wrapping the given concrete `PropertyMutate` implementation.
     pub fn new<M: PropertyMutate>(mutator: M) -> Self {
         let inner = Box::new(mutator);
         Self { inner }
     }
 
+    /// Returns a freshly cloned `PropertyMutator` backed by a new heap allocation.
     pub fn clone_new(&self) -> Self {
         //let current_inner: &dyn PropertyMutateClone = self.inner.as_ref() as &dyn
         // PropertyMutateClone;

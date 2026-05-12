@@ -66,7 +66,7 @@ impl EntityAuthData {
     }
 }
 
-// EntityAuthAccessor
+/// Read-only handle to an entity's shared authority state; cloneable and safe to embed in components.
 #[derive(Clone)]
 pub struct EntityAuthAccessor {
     channel: EntityAuthChannel,

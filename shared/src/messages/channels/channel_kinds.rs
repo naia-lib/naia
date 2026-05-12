@@ -26,12 +26,14 @@ pub struct ChannelKind {
 }
 
 impl ChannelKind {
+    /// Returns the `ChannelKind` corresponding to the type `C`.
     pub fn of<C: Channel>() -> Self {
         Self {
             type_id: TypeId::of::<C>(),
         }
     }
 
+    /// Serializes this kind's compact net-ID into `writer` using the bit-width registered in `channel_kinds`.
     pub fn ser(&self, channel_kinds: &ChannelKinds, writer: &mut dyn BitWrite) {
         let net_id = channel_kinds.kind_to_net_id(self);
         let bits = channel_kinds.kind_bit_width;
@@ -40,6 +42,7 @@ impl ChannelKind {
         }
     }
 
+    /// Deserializes a `ChannelKind` from `reader` using the bit-width registered in `channel_kinds`.
     pub fn de(channel_kinds: &ChannelKinds, reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let bits = channel_kinds.kind_bit_width;
         let mut net_id: NetId = 0;
@@ -52,7 +55,7 @@ impl ChannelKind {
     }
 }
 
-// ChannelKinds
+/// Registry mapping `Channel` types to compact wire net-IDs and their `ChannelSettings`.
 #[derive(Clone)]
 pub struct ChannelKinds {
     current_net_id: NetId,
@@ -71,6 +74,7 @@ impl Default for ChannelKinds {
 }
 
 impl ChannelKinds {
+    /// Creates an empty `ChannelKinds` registry.
     pub fn new() -> Self {
         Self {
             current_net_id: 0,
@@ -80,6 +84,7 @@ impl ChannelKinds {
         }
     }
 
+    /// Registers channel type `C` with the given settings, assigning it the next sequential net-ID.
     pub fn add_channel<C: Channel>(&mut self, settings: ChannelSettings) {
         let channel_kind = ChannelKind::of::<C>();
         //info!("ChannelKinds adding channel: {:?}", channel_kind);
@@ -98,6 +103,7 @@ impl ChannelKinds {
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
     }
 
+    /// Returns all registered `(ChannelKind, ChannelSettings)` pairs.
     pub fn channels(&self) -> Vec<(ChannelKind, ChannelSettings)> {
         // TODO: is there a better way to do this without copying + cloning?
         // How to return a reference here (behind a Mutex ..)
@@ -108,6 +114,7 @@ impl ChannelKinds {
         output
     }
 
+    /// Returns the `ChannelSettings` for the given kind. Panics if the kind was not registered.
     pub fn channel(&self, kind: &ChannelKind) -> ChannelSettings {
         let (_, settings, _) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
         settings.clone()
@@ -129,6 +136,7 @@ impl ChannelKinds {
             .0
     }
 
+    /// Returns a sorted list of all registered channel protocol names.
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();
         for (_, _, name) in self.kind_map.values() {
@@ -138,10 +146,12 @@ impl ChannelKinds {
         output
     }
 
+    /// Returns the protocol name for `kind`, or `None` if not registered.
     pub fn channel_name(&self, kind: &ChannelKind) -> Option<&str> {
         self.kind_map.get(kind).map(|(_, _, name)| name.as_str())
     }
 
+    /// Returns all `(ChannelKind, protocol_name)` pairs registered in this registry.
     pub fn channel_names(&self) -> Vec<(ChannelKind, String)> {
         self.kind_map
             .iter()

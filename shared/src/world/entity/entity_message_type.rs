@@ -2,45 +2,45 @@ use naia_serde::SerdeInternal;
 
 use crate::{ComponentKind, EntityMessage};
 
-// Enum used as a shared network protocol, representing various message types
-// related to Entities/Components
+/// Wire discriminant identifying the kind of entity/component event carried in an `EntityMessage`.
 #[derive(Copy, PartialEq, Clone, SerdeInternal, Debug)]
 pub enum EntityMessageType {
-    // Action indicating an Entity to be created
+    /// Entity is to be created.
     Spawn,
-    // Action indicating an Entity to be created with initial components (coalesced spawn)
+    /// Entity is to be created with an initial set of components (coalesced spawn).
     SpawnWithComponents,
-    // Action indicating an Entity to be deleted
+    /// Entity is to be deleted.
     Despawn,
-    // Action indicating a Component to be added to an Entity
+    /// A component is to be added to an entity.
     InsertComponent,
-    // Action indicating a Component to be deleted
+    /// A component is to be removed from an entity.
     RemoveComponent,
-    // Action indicating an Entity to be published
+    /// Entity is to be published (made visible to other users).
     Publish,
-    // Action indicating an Entity to be unpublished
+    /// Entity publication is to be retracted.
     Unpublish,
-    // Action indicating delegation to be enabled for an Entity
+    /// Authority delegation is to be enabled for an entity.
     EnableDelegation,
-    // Action indicating delegation to be disabled for an Entity
+    /// Authority delegation is to be disabled for an entity.
     DisableDelegation,
-    // Action updating authority status for an Entity
+    /// Authority status for an entity is being updated.
     SetAuthority,
 
-    // Action indicating a non-operation
+    /// No-operation placeholder.
     Noop,
 
-    // Action requesting authority for an Entity
+    /// Client requests authority over an entity.
     RequestAuthority,
-    // Action releasing authority for an Entity
+    /// Client releases authority over an entity.
     ReleaseAuthority,
-    // Action indicating delegation enable response
+    /// Client acknowledges that delegation has been enabled.
     EnableDelegationResponse,
-    // Action responding to entity migration
+    /// Server notifies that an entity has migrated.
     MigrateResponse,
 }
 
 impl EntityMessageType {
+    /// Builds an `EntityMessage<()>` for component-bearing types, attaching `component_kind`. Panics for other variants.
     pub fn with_component_kind(&self, component_kind: &ComponentKind) -> EntityMessage<()> {
         match self {
             Self::InsertComponent => EntityMessage::InsertComponent((), *component_kind),

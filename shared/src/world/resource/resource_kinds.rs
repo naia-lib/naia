@@ -30,6 +30,7 @@ pub struct ResourceKinds {
 }
 
 impl ResourceKinds {
+    /// Creates an empty `ResourceKinds` table.
     pub fn new() -> Self {
         Self::default()
     }
@@ -71,6 +72,7 @@ impl ResourceKinds {
         self.kinds.len()
     }
 
+    /// Returns `true` if no resource kinds have been registered.
     pub fn is_empty(&self) -> bool {
         self.kinds.is_empty()
     }

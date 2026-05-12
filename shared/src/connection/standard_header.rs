@@ -2,9 +2,10 @@ use naia_serde::SerdeInternal;
 
 use crate::{connection::packet_type::PacketType, types::PacketIndex};
 
-// This header provides reliability information.
+/// Reliability header prepended to every naia packet carrying sequence and ack information.
 #[derive(Copy, Debug, PartialEq, Clone, SerdeInternal)]
 pub struct StandardHeader {
+    /// Classifies the packet as data, heartbeat, handshake, ping, or pong.
     pub packet_type: PacketType,
     /// Packet index identifying this packet
     pub sender_packet_index: PacketIndex,

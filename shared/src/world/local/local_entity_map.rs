@@ -8,6 +8,7 @@ use crate::{
     EntityDoesNotExistError, GlobalEntity, HostType, Instant, LocalEntityAndGlobalEntityConverter,
 };
 
+/// Bidirectional lookup table between [`GlobalEntity`] identifiers and their connection-local [`HostEntity`] or [`RemoteEntity`] counterparts.
 pub struct LocalEntityMap {
     host_type: HostType,
     global_to_local: HashMap<GlobalEntity, LocalEntityRecord>,
@@ -94,6 +95,7 @@ impl LocalEntityAndGlobalEntityConverter for LocalEntityMap {
 }
 
 impl LocalEntityMap {
+    /// Creates an empty map for the given `host_type` side of a connection.
     pub fn new(host_type: HostType) -> Self {
         Self {
             host_type,
@@ -104,10 +106,12 @@ impl LocalEntityMap {
         }
     }
 
+    /// Returns whether this map belongs to a server or client side.
     pub fn host_type(&self) -> HostType {
         self.host_type
     }
 
+    /// Registers a host-owned mapping from `global_entity` to `host_entity`, panicking on duplicate keys.
     pub fn insert_with_host_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -131,6 +135,7 @@ impl LocalEntityMap {
         self.host_to_global.insert(host_entity, global_entity);
     }
 
+    /// Registers a static host-owned mapping from `global_entity` to `host_entity`, panicking on duplicate keys.
     pub fn insert_with_static_host_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -154,6 +159,7 @@ impl LocalEntityMap {
         self.host_to_global.insert(host_entity, global_entity);
     }
 
+    /// Registers a remote-owned mapping from `global_entity` to `remote_entity`, panicking on duplicate keys.
     pub fn insert_with_remote_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -179,15 +185,18 @@ impl LocalEntityMap {
         self.remote_to_global.insert(remote_entity, global_entity);
     }
 
+    /// Returns the [`GlobalEntity`] mapped from `remote_entity`, if one exists.
     pub fn global_entity_from_remote(&self, remote_entity: &RemoteEntity) -> Option<&GlobalEntity> {
         self.remote_to_global.get(remote_entity)
     }
 
+    /// Returns the [`GlobalEntity`] mapped from `host_entity`, if one exists.
     pub fn global_entity_from_host(&self, host_entity: &HostEntity) -> Option<&GlobalEntity> {
         self.host_to_global.get(host_entity)
     }
 
-pub fn remove_by_global_entity(
+/// Removes the record for `global_entity` and cleans up the reverse index, returning the record if it existed.
+    pub fn remove_by_global_entity(
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<LocalEntityRecord> {
@@ -230,18 +239,22 @@ pub fn remove_by_global_entity(
         }
     }
 
+    /// Returns `true` if `global_entity` is currently registered in the map.
     pub fn contains_global_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.global_to_local.contains_key(global_entity)
     }
 
+    /// Returns `true` if `host_entity` is currently registered in the map.
     pub fn contains_host_entity(&self, host_entity: &HostEntity) -> bool {
         self.host_to_global.contains_key(host_entity)
     }
 
+    /// Returns `true` if `remote_entity` is currently registered in the map.
     pub fn contains_remote_entity(&self, remote_entity: &RemoteEntity) -> bool {
         self.remote_to_global.contains_key(remote_entity)
     }
 
+    /// Iterates over all `(GlobalEntity, LocalEntityRecord)` pairs currently in the map.
     pub fn iter(&self) -> impl Iterator<Item = (&GlobalEntity, &LocalEntityRecord)> {
         self.global_to_local.iter()
     }
@@ -260,10 +273,12 @@ pub fn remove_by_global_entity(
     //     false
     // }
 
+    /// Returns `self` as a read-only [`LocalEntityAndGlobalEntityConverter`] reference.
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
         self
     }
 
+    /// Installs a redirect so that lookups of `old_entity` transparently return `new_entity` for a TTL period.
     pub fn install_entity_redirect(
         &mut self,
         old_entity: OwnedLocalEntity,

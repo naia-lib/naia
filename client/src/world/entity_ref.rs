@@ -17,6 +17,7 @@ pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> 
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
+    /// Creates a new `EntityRef` pointing at `entity` within `world`, backed by `client` for replication queries.
     pub fn new(client: &'s Client<E>, world: W, entity: &E) -> Self {
         Self {
             client,

@@ -4,6 +4,7 @@ use crate::{
     BigMap, EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity, RemoteEntity,
 };
 
+/// Bidirectional map between world-local entities and their stable [`GlobalEntity`] identifiers.
 pub struct GlobalEntityMap<E: Copy + Eq + Hash + Send + Sync> {
     entity_to_global_map: HashMap<E, GlobalEntity>,
     global_to_entity_map: BigMap<GlobalEntity, Option<E>>,
@@ -17,6 +18,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Default for GlobalEntityMap<E> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
+    /// Creates an empty map with no entity registrations.
     pub fn new() -> Self {
         Self {
             entity_to_global_map: HashMap::new(),
@@ -25,11 +27,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntityMap<E> {
         }
     }
 
+    /// Returns the number of world entities currently registered in the map.
     pub fn entity_count(&self) -> usize {
         self.entity_to_global_map.len()
     }
 
     #[cfg(feature = "test_utils")]
+    #[doc(hidden)]
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
         self.global_to_entity_map.set_current_index_for_test(value);
     }
@@ -66,13 +70,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Gl
     }
 }
 
+/// Extends [`EntityAndGlobalEntityConverter`] with the ability to create, reserve, and destroy entity mappings.
 pub trait GlobalEntitySpawner<E: Copy + Eq + Hash + Send + Sync>:
     EntityAndGlobalEntityConverter<E>
 {
+    /// Registers `world_entity` in the map, reusing a reserved [`GlobalEntity`] for `remote_entity_opt` if one exists.
     fn spawn(&mut self, world_entity: E, remote_entity_opt: Option<RemoteEntity>) -> GlobalEntity;
+    /// Pre-allocates a [`GlobalEntity`] slot for `remote_entity` before the local world entity is spawned.
     fn reserve_global_entity(&mut self, remote_entity: RemoteEntity) -> GlobalEntity;
+    /// Removes the mapping keyed by `global_entity`, panicking if it does not exist.
     fn despawn_by_global(&mut self, global_entity: &GlobalEntity);
+    /// Removes the mapping keyed by `world_entity`, panicking if it does not exist.
     fn despawn_by_world(&mut self, world_entity: &E);
+    /// Returns `self` as an [`EntityAndGlobalEntityConverter`] reference for read-only lookups.
     fn to_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E>;
 }
 

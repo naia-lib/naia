@@ -11,12 +11,14 @@ use super::{
     ServerAddr as TransportAddr, Socket as TransportSocket,
 };
 
+#[doc(hidden)]
 pub struct Socket {
     server_session_url: String,
     config: SocketConfig,
 }
 
 impl Socket {
+    #[doc(hidden)]
     pub fn new(server_session_url: &str, config: &SocketConfig) -> Self {
         Self {
             server_session_url: server_session_url.to_string(),

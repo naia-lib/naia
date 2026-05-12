@@ -7,6 +7,7 @@ use crate::{
     Serde, SerdeErr, Tick,
 };
 
+/// Stateless helper that deserializes entity update and message payloads from a bit stream into a [`LocalWorldManager`].
 pub struct WorldReader;
 
 impl WorldReader {
@@ -24,6 +25,7 @@ impl WorldReader {
         Ok(current_index)
     }
 
+    /// Deserializes both component updates and entity messages from `reader` into `world_manager`.
     pub fn read_world_events(
         world_manager: &mut LocalWorldManager,
         component_kinds: &ComponentKinds,

@@ -11,15 +11,17 @@ use std::{
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_take_events_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    pub static NS_HOST_REMOTE_COMMANDS: AtomicU64 = AtomicU64::new(0);
-    pub static NS_SENDER_COLLECT: AtomicU64 = AtomicU64::new(0);
-    pub static NS_TAKE_UPDATE_EVENTS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_HOST_REMOTE_COMMANDS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_SENDER_COLLECT: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_TAKE_UPDATE_EVENTS: AtomicU64 = AtomicU64::new(0);
 
+    /// Resets all counters to zero.
     pub fn reset() {
         NS_HOST_REMOTE_COMMANDS.store(0, Ordering::Relaxed);
         NS_SENDER_COLLECT.store(0, Ordering::Relaxed);
         NS_TAKE_UPDATE_EVENTS.store(0, Ordering::Relaxed);
     }
+    /// Returns a snapshot of all counters as a tuple.
     pub fn snapshot() -> (u64, u64, u64) {
         (
             NS_HOST_REMOTE_COMMANDS.load(Ordering::Relaxed),
@@ -39,13 +41,13 @@ pub mod bench_take_events_counters {
 pub mod cmd_emission_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
 
-    pub static SPAWN: AtomicU64 = AtomicU64::new(0);
-    pub static SPAWN_WITH_COMPONENTS: AtomicU64 = AtomicU64::new(0);
-    pub static DESPAWN: AtomicU64 = AtomicU64::new(0);
-    pub static INSERT_COMPONENT: AtomicU64 = AtomicU64::new(0);
-    pub static REMOVE_COMPONENT: AtomicU64 = AtomicU64::new(0);
-    pub static NOOP: AtomicU64 = AtomicU64::new(0);
-    pub static OTHER: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static SPAWN: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static SPAWN_WITH_COMPONENTS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static DESPAWN: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static INSERT_COMPONENT: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static REMOVE_COMPONENT: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NOOP: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static OTHER: AtomicU64 = AtomicU64::new(0);
 
     /// `SpawnWithComponents` payload total — sum of `Vec<ComponentKind>.len()`
     /// across emissions. Cross-checks N×K accounting against the spawn-count
@@ -53,6 +55,7 @@ pub mod cmd_emission_counters {
     /// emit `spawn_with_components == N` AND `payload_components == N*K`).
     pub static PAYLOAD_COMPONENTS: AtomicU64 = AtomicU64::new(0);
 
+    /// Resets all emission counters to zero.
     pub fn reset() {
         SPAWN.store(0, Ordering::Relaxed);
         SPAWN_WITH_COMPONENTS.store(0, Ordering::Relaxed);
@@ -64,18 +67,28 @@ pub mod cmd_emission_counters {
         PAYLOAD_COMPONENTS.store(0, Ordering::Relaxed);
     }
 
+    /// Snapshot of all per-command-type emission counters.
     #[derive(Debug, Clone, Copy)]
     pub struct CmdEmissionSnapshot {
+        /// Number of `Spawn` commands emitted.
         pub spawn: u64,
+        /// Number of `SpawnWithComponents` commands emitted.
         pub spawn_with_components: u64,
+        /// Number of `Despawn` commands emitted.
         pub despawn: u64,
+        /// Number of `InsertComponent` commands emitted.
         pub insert_component: u64,
+        /// Number of `RemoveComponent` commands emitted.
         pub remove_component: u64,
+        /// Number of no-op commands emitted.
         pub noop: u64,
+        /// Number of other commands emitted.
         pub other: u64,
+        /// Total component payloads across all `SpawnWithComponents` commands.
         pub payload_components: u64,
     }
 
+    /// Returns a snapshot of all emission counters.
     pub fn snapshot() -> CmdEmissionSnapshot {
         CmdEmissionSnapshot {
             spawn: SPAWN.load(Ordering::Relaxed),
@@ -128,6 +141,7 @@ const COMMAND_RECORD_TTL: Duration = Duration::from_secs(60);
 type SentCommandPackets = SequenceList<(Instant, Vec<(CommandId, EntityMessage<OwnedLocalEntity>)>)>;
 type OutgoingEvents = (VecDeque<(CommandId, EntityCommand)>, HashMap<GlobalEntity, HashSet<ComponentKind>>);
 
+/// Unified manager for one connection's host-side and remote-side entity state, routing commands and events between them.
 pub struct LocalWorldManager {
     entity_map: LocalEntityMap,
     sender: ReliableSender<EntityCommand>,
@@ -150,6 +164,7 @@ pub struct LocalWorldManager {
 }
 
 impl LocalWorldManager {
+    /// Creates a `LocalWorldManager` for the given address, host type, user key, and global world manager reference.
     pub fn new(
         address: &Option<SocketAddr>,
         host_type: HostType,
@@ -185,10 +200,12 @@ impl LocalWorldManager {
 
     // EntityMap-focused
 
+    /// Returns a read-only entity converter backed by the internal entity map.
     pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
         self.entity_map.entity_converter()
     }
 
+    /// Returns a mutable entity converter that can also allocate new host entity IDs.
     pub fn entity_converter_mut<'a, 'b>(
         &'b mut self,
         global_world_manager: &'a dyn GlobalWorldManagerType,
@@ -197,6 +214,7 @@ impl LocalWorldManager {
             .entity_converter_mut(global_world_manager, &mut self.entity_map)
     }
 
+    /// Returns `true` if `global_entity` is currently tracked by either the host or remote engine.
     pub fn has_global_entity(&self, global_entity: &GlobalEntity) -> bool {
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             return false;
@@ -204,6 +222,7 @@ impl LocalWorldManager {
         self.has_local_entity(&local_entity)
     }
 
+    /// Returns `true` if `local_entity` is currently registered in its respective engine.
     pub fn has_local_entity(&self, local_entity: &OwnedLocalEntity) -> bool {
         match local_entity {
             OwnedLocalEntity::Host { id, is_static: true } => {
@@ -237,10 +256,12 @@ impl LocalWorldManager {
 
     // Host-focused
 
+    /// Returns `true` if `host_entity` is currently tracked by the host engine.
     pub fn has_host_entity(&self, host_entity: &HostEntity) -> bool {
         self.host.has_entity(host_entity)
     }
 
+    /// Allocates a host entity ID and enqueues the initial spawn command(s) when `global_entity` enters connection scope.
     pub fn host_init_entity(
         &mut self,
         global_entity: &GlobalEntity,
@@ -411,14 +432,13 @@ impl LocalWorldManager {
         Ok(new_host_entity)
     }
 
-    // only server sends this
+    /// Sends an `EnableDelegation` command to the remote peer via the host engine.
     pub fn host_send_enable_delegation(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::EnableDelegation(None, *global_entity);
         self.host.send_command(&self.entity_map, command);
     }
 
-    // Force the HostEntityChannel into Delegated state without sending a message
-    // Used by server after migration to prepare channel for MigrateResponse
+    /// Forces the `HostEntityChannel` for `host_entity` into the Delegated state locally without sending a wire message.
     pub fn host_local_enable_delegation(&mut self, host_entity: &HostEntity) {
         let Some(channel) = self.host.get_entity_channel_mut(host_entity) else {
             panic!(
@@ -429,7 +449,7 @@ impl LocalWorldManager {
         channel.local_enable_delegation();
     }
 
-    // only server sends this
+    /// Sends a `MigrateResponse` command to notify the peer that an entity has migrated to the server's control.
     pub fn host_send_migrate_response(
         &mut self,
         global_entity: &GlobalEntity,
@@ -448,6 +468,7 @@ impl LocalWorldManager {
     }
 
     #[track_caller]
+    /// Sends a `SetAuthority` command for `global_entity` with the given `auth_status`.
     pub fn host_send_set_auth(
         &mut self,
         global_entity: &GlobalEntity,
@@ -475,11 +496,13 @@ impl LocalWorldManager {
         }
     }
 
+    /// Pre-allocates a `HostEntity` slot for `global_entity` before it is sent to the peer.
     pub fn host_reserve_entity(&mut self, global_entity: &GlobalEntity) -> HostEntity {
         self.host
             .host_reserve_entity(&mut self.entity_map, global_entity)
     }
 
+    /// Removes and returns any previously reserved `HostEntity` for `global_entity`, if one exists.
     pub fn host_remove_reserved_entity(
         &mut self,
         global_entity: &GlobalEntity,
@@ -543,6 +566,7 @@ impl LocalWorldManager {
 
     // Remote-focused
 
+    /// Returns the [`GlobalEntity`] list for all entities currently tracked as remote-owned.
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
         self.entity_map.remote_entities()
     }
@@ -572,12 +596,13 @@ impl LocalWorldManager {
         self.remote.debug_channel_snapshot(remote_entity)
     }
 
-    // only client sends this, after receiving enabledelegation message from server
+    /// Sends an `EnableDelegationResponse` acknowledgement to the server after receiving an `EnableDelegation` message.
     pub fn send_enable_delegation_response(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::EnableDelegationResponse(None, *global_entity);
         self.remote.send_auth_command(&self.entity_map, command);
     }
 
+    /// Sends a `RequestAuthority` command for `global_entity` via the remote engine.
     pub fn remote_send_request_auth(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::RequestAuthority(None, *global_entity);
         self.remote.send_auth_command(&self.entity_map, command);
@@ -613,11 +638,12 @@ impl LocalWorldManager {
             .get_entity_auth_status(&owned.take_remote())
     }
 
+    /// Returns a mutable reference to the entity waitlist managed by the remote engine.
     pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
         self.remote.entity_waitlist_mut()
     }
 
-    /// Buffer an incoming message for processing (exposed for testing)
+    /// Buffers an incoming entity message at the given sequence `id` for ordered delivery.
     pub fn receiver_buffer_message(
         &mut self,
         id: MessageIndex,
@@ -655,6 +681,7 @@ impl LocalWorldManager {
             .push((tick, *local_entity, component_update));
     }
 
+    /// Drains all buffered incoming messages and update events, applies them to `world`, and returns the resulting [`EntityEvent`]s.
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
@@ -737,6 +764,7 @@ impl LocalWorldManager {
         incoming_events
     }
 
+    /// Registers `global_entity` as authority-granted, enabling update tracking for its components.
     pub fn register_authed_entity(
         &mut self,
         global_manager: &dyn GlobalWorldManagerType,
@@ -762,6 +790,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Deregisters `global_entity` from authority, stopping update tracking for its components.
     pub fn deregister_authed_entity(
         &mut self,
         global_manager: &dyn GlobalWorldManagerType,
@@ -787,6 +816,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Notifies the remote waitlist that `global_entity`'s remote entity has been spawned.
     pub fn remote_spawn_entity(&mut self, global_entity: &GlobalEntity) {
         let remote_entity = self
             .entity_map
@@ -795,6 +825,7 @@ impl LocalWorldManager {
         self.remote.spawn_entity(&remote_entity);
     }
 
+    /// Despawns the remote entity mapped from `global_entity` and cleans up the entity map.
     pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
         let remote_entity = self
             .entity_map
@@ -828,6 +859,7 @@ impl LocalWorldManager {
 
     // Joint router
 
+    /// Sends a `Despawn` command for `global_entity` through whichever engine owns it.
     pub fn despawn_entity(&mut self, global_entity: &GlobalEntity) {
         // Clean up pause state if entity was Paused (ScopeExit::Persist)
         self.paused_entities.remove(global_entity);
@@ -860,10 +892,12 @@ impl LocalWorldManager {
         self.paused_entities.remove(global_entity);
     }
 
+    /// Returns `true` if `global_entity` is currently paused (scope-exited with `ScopeExit::Persist`).
     pub fn is_entity_paused(&self, global_entity: &GlobalEntity) -> bool {
         self.paused_entities.contains(global_entity)
     }
 
+    /// Sends an `InsertComponent` command for `global_entity`, routing through host or remote engine as appropriate.
     pub fn insert_component(
         &mut self,
         global_entity: &GlobalEntity,
@@ -889,6 +923,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Sends a `RemoveComponent` command for `global_entity`, routing through host or remote engine as appropriate.
     pub fn remove_component(
         &mut self,
         global_entity: &GlobalEntity,
@@ -910,6 +945,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Sends a `Publish` command for `global_entity`, routing through host or remote engine based on ownership.
     pub fn send_publish(&mut self, host_type: HostType, global_entity: &GlobalEntity) {
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             panic!(
@@ -937,6 +973,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Sends an `Unpublish` command for `global_entity`, routing through host or remote engine based on ownership.
     pub fn send_unpublish(&mut self, host_type: HostType, global_entity: &GlobalEntity) {
         let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
             panic!(
@@ -959,6 +996,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Sends an `EnableDelegation` command (with optional preceding `Publish`) for `global_entity`.
     pub fn send_enable_delegation(
         &mut self,
         host_type: HostType,
@@ -1030,6 +1068,7 @@ impl LocalWorldManager {
     }
 
     #[track_caller]
+    /// Sends a `DisableDelegation` command for `global_entity` via the host engine.
     pub fn send_disable_delegation(&mut self, global_entity: &GlobalEntity) {
         #[cfg(feature = "e2e_debug")]
         {
@@ -1046,6 +1085,7 @@ impl LocalWorldManager {
         self.host.send_command(&self.entity_map, command);
     }
 
+    /// Sends a `ReleaseAuthority` command for `global_entity`, routing through whichever engine owns it.
     pub fn remote_send_release_auth(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::ReleaseAuthority(None, *global_entity);
 
@@ -1064,6 +1104,7 @@ impl LocalWorldManager {
 
     // Joint
 
+    /// Processes dropped packet TTLs and handles update-packet retransmit logic for the current tick.
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.handle_dropped_command_packets(now);
         self.updater.handle_dropped_update_packets(now, rtt_millis);
@@ -1082,6 +1123,7 @@ impl LocalWorldManager {
         self.entity_map.cleanup_old_redirects(now, 60);
     }
 
+    /// Collects pending outbound commands and component-update events, returning them as a pair of command queue and dirty-component map.
     pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         now: &Instant,
@@ -1133,11 +1175,13 @@ impl LocalWorldManager {
         (world_commands, update_events)
     }
 
+    /// Advances the delivery state machine, applying any newly acknowledged host-side commands to the delivered engine.
     pub fn process_delivered_commands(&mut self) {
         self.host
             .process_delivered_commands(&mut self.entity_map, &mut self.updater);
     }
 
+    /// Builds the dirty-component map for the current tick from mutation receivers and the world state.
     pub fn take_update_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         world: &W,
@@ -1172,6 +1216,7 @@ impl LocalWorldManager {
     //     (reserver, remote.entity_waitlist_mut())
     // }
 
+    /// Returns the entity converter and entity waitlist as a pair, used during message deserialization.
     pub fn get_message_processor_helpers(
         &mut self,
     ) -> (
@@ -1218,6 +1263,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Patches all in-flight command packets to replace `old_entity` references with `new_entity`.
     pub fn update_sent_command_entity_refs(
         &mut self,
         _global_entity: &GlobalEntity,
@@ -1236,6 +1282,7 @@ impl LocalWorldManager {
         }
     }
 
+    /// Extracts and returns all pending [`EntityCommand`]s from the host engine channel for `global_entity`.
     pub fn extract_host_entity_commands(
         &mut self,
         global_entity: &GlobalEntity,
@@ -1249,6 +1296,7 @@ impl LocalWorldManager {
         self.host.extract_entity_commands(&host_entity)
     }
 
+    /// Returns the set of component kinds currently registered on the host engine channel for `global_entity`.
     pub fn extract_host_component_kinds(
         &self,
         global_entity: &GlobalEntity,
@@ -1264,6 +1312,7 @@ impl LocalWorldManager {
         channel.component_kinds().clone()
     }
 
+    /// Removes the host engine channel and entity map entry for `global_entity`.
     pub fn remove_host_entity(&mut self, global_entity: &GlobalEntity) {
         // Lookup host_entity FIRST before removing from entity_map
         let host_entity = self
@@ -1276,6 +1325,7 @@ impl LocalWorldManager {
         self.entity_map.remove_by_global_entity(global_entity);
     }
 
+    /// Registers a remote entity migrated from the host side into the remote engine with an initial component set.
     pub fn insert_remote_entity(
         &mut self,
         global_entity: &GlobalEntity,
@@ -1323,14 +1373,17 @@ impl LocalWorldManager {
         }
     }
 
+    /// Installs a redirect so lookups of `old` transparently resolve to `new` for a TTL period.
     pub fn install_entity_redirect(&mut self, old: OwnedLocalEntity, new: OwnedLocalEntity) {
         self.entity_map.install_entity_redirect(old, new);
     }
 
+    /// Returns the redirected entity for `entity` if a redirect is installed, otherwise returns `entity` unchanged.
     pub fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
         self.entity_map.apply_entity_redirect(&entity)
     }
 
+    /// Re-submits `command` for `global_entity` through the remote engine after a migration.
     pub fn replay_entity_command(&mut self, global_entity: &GlobalEntity, command: EntityCommand) {
         // Send command through appropriate channel (should be remote after migration)
         let _remote_entity = self
@@ -1355,6 +1408,7 @@ cfg_if! {
 
         impl LocalWorldManager {
 
+            /// Returns all local entities currently tracked by the entity map.
             pub fn local_entities(&self) -> Vec<LocalEntity> {
                 self.entity_map
                 .iter()
@@ -1367,10 +1421,12 @@ cfg_if! {
 
 #[cfg(feature = "test_utils")]
 impl LocalWorldManager {
+    #[doc(hidden)]
     pub fn diff_handler_receiver_count(&self) -> usize {
         self.updater.diff_handler_receiver_count()
     }
 
+    #[doc(hidden)]
     pub fn dirty_update_count(&self) -> usize {
         self.updater.dirty_candidates_len()
     }

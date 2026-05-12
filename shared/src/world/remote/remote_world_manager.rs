@@ -35,6 +35,7 @@ cfg_if! {
     }
 }
 
+/// Manages the inbound side of entity replication — entities whose authoritative state comes from the remote peer.
 pub struct RemoteWorldManager {
     // For Server, this contains the Entities that have been received from the Client, that the Client has authority over.
     // For Client, this contains the Entities that have been received from the Server, that the Server has authority over.
@@ -51,6 +52,7 @@ pub struct RemoteWorldManager {
 }
 
 impl RemoteWorldManager {
+    /// Creates a `RemoteWorldManager` for the given `host_type` side of a connection.
     pub fn new(host_type: HostType) -> Self {
         let delegated_world_opt = if host_type == HostType::Client {
             Some(HashSet::new())
@@ -87,10 +89,12 @@ impl RemoteWorldManager {
         );
     }
 
+    /// Returns a shared reference to the entity waitlist.
     pub fn entity_waitlist(&self) -> &RemoteEntityWaitlist {
         self.waitlist.entity_waitlist()
     }
 
+    /// Returns a mutable reference to the entity waitlist.
     pub fn entity_waitlist_mut(&mut self) -> &mut RemoteEntityWaitlist {
         self.waitlist.entity_waitlist_mut()
     }
@@ -163,10 +167,12 @@ impl RemoteWorldManager {
         remote_channel.has_component_kind(kind)
     }
 
+    /// Drains and returns all pending outbound [`EntityCommand`]s from the remote engine.
     pub fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         self.remote_engine.take_outgoing_commands()
     }
 
+    /// Enqueues `command` for the entity identified in `command` via the remote engine, silently skipping if the entity no longer exists.
     pub fn send_entity_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -214,6 +220,7 @@ impl RemoteWorldManager {
             .receive_set_auth_status(remote_entity, auth_status);
     }
 
+    /// Notifies the waitlist that `entity` has been spawned, unblocking any queued operations.
     pub fn spawn_entity(
         &mut self,
         // converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -222,6 +229,7 @@ impl RemoteWorldManager {
         self.waitlist.spawn_entity(&self.remote_engine, entity);
     }
 
+    /// Removes `entity` from the waitlist tracking structures.
     pub fn despawn_entity(
         &mut self,
         _local_entity_map: &mut LocalEntityMap,
@@ -230,6 +238,7 @@ impl RemoteWorldManager {
         self.waitlist.despawn_entity(entity);
     }
 
+    /// Processes all buffered incoming messages and updates, applying them to `world` and returning the resulting [`EntityEvent`]s.
     #[allow(clippy::too_many_arguments)]
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
@@ -621,7 +630,7 @@ impl RemoteWorldManager {
         self.remote_engine.get_entity_channel_mut(remote_entity)
     }
 
-    /// Get auth status of a remote entity's channel (for testing)
+    /// Returns the current authority status for `entity`'s remote channel, if one exists.
     pub fn get_entity_auth_status(&self, entity: &RemoteEntity) -> Option<EntityAuthStatus> {
         self.remote_engine.get_entity_auth_status(entity)
     }

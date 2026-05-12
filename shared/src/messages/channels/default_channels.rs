@@ -7,16 +7,22 @@ use crate::{
 
 use naia_derive::ChannelInternal;
 
+/// Built-in bidirectional unordered-unreliable channel.
 #[derive(ChannelInternal)]
 pub struct UnorderedUnreliableChannel;
+/// Built-in bidirectional sequenced-unreliable channel.
 #[derive(ChannelInternal)]
 pub struct SequencedUnreliableChannel;
+/// Built-in bidirectional unordered-reliable channel.
 #[derive(ChannelInternal)]
 pub struct UnorderedReliableChannel;
+/// Built-in bidirectional sequenced-reliable channel.
 #[derive(ChannelInternal)]
 pub struct SequencedReliableChannel;
+/// Built-in bidirectional ordered-reliable channel.
 #[derive(ChannelInternal)]
 pub struct OrderedReliableChannel;
+/// Built-in client-to-server tick-buffered channel.
 #[derive(ChannelInternal)]
 pub struct TickBufferedChannel;
 

@@ -13,12 +13,14 @@ use super::{
     LocalServerSocket,
 };
 
+#[doc(hidden)]
 pub struct Socket {
     inner: Option<LocalServerSocket>,
     config: Option<LinkConditionerConfig>,
 }
 
 impl Socket {
+    #[doc(hidden)]
     pub fn new(local: LocalServerSocket, config: Option<LinkConditionerConfig>) -> Self {
         Self {
             inner: Some(local),

@@ -211,6 +211,7 @@ impl DirtyQueue {
         out
     }
 
+    /// Returns `true` if no entity indices are currently queued for draining.
     pub fn is_empty(&self) -> bool {
         self.indices.lock().is_empty()
     }
@@ -229,6 +230,7 @@ pub type DirtySet = DirtyQueue;
 /// `EntityIndex` and the protocol-wide `kind_bit` (= ComponentKind's NetId)
 /// — both resolved once at registration time, so notify is a Vec OR, not a
 /// hash.
+/// Lightweight handle installed in a [`MutReceiver`] to push dirty notifications into a [`DirtySet`] on mutation.
 pub struct DirtyNotifier {
     entity_idx: EntityIndex,
     kind_bit: u16,
@@ -236,6 +238,7 @@ pub struct DirtyNotifier {
 }
 
 impl DirtyNotifier {
+    /// Creates a `DirtyNotifier` that marks `(entity_idx, kind_bit)` dirty in `set` on mutation.
     pub fn new(
         entity_idx: EntityIndex,
         kind_bit: u16,
@@ -257,18 +260,22 @@ impl DirtyNotifier {
     }
 }
 
+/// Internal trait implemented by the concrete mutation channel; produces receivers and propagates property-index notifications.
 pub trait MutChannelType: Send + Sync {
+    /// Creates and returns a new [`MutReceiver`] bound to `address`, or `None` if the address is excluded.
     fn new_receiver(&mut self, address: &Option<SocketAddr>) -> Option<MutReceiver>;
+    /// Notifies all receivers that property `diff` has changed.
     fn send(&self, diff: u8);
 }
 
-// MutChannel
+/// Shared mutation channel that connects a component's property mutator to all interested receivers.
 #[derive(Clone)]
 pub struct MutChannel {
     data: Arc<RwLock<dyn MutChannelType>>,
 }
 
 impl MutChannel {
+    /// Creates a new `(MutSender, MutReceiverBuilder)` pair backed by a channel allocated through `global_world_manager`.
     pub fn new_channel(
         global_world_manager: &dyn GlobalWorldManagerType,
         diff_mask_length: u8,
@@ -284,10 +291,12 @@ impl MutChannel {
         (sender, builder)
     }
 
+    /// Returns a new [`MutSender`] that forwards property-index notifications into this channel.
     pub fn new_sender(&self) -> MutSender {
         MutSender::new(self)
     }
 
+    /// Creates a new [`MutReceiver`] for `address`, or `None` if the channel excludes this address.
     pub fn new_receiver(&self, address: &Option<SocketAddr>) -> Option<MutReceiver> {
         if let Ok(mut data) = self.data.as_ref().write() {
             return data.new_receiver(address);
@@ -295,6 +304,7 @@ impl MutChannel {
         None
     }
 
+    /// Propagates a property-index notification to all receivers; returns `false` if the channel lock is poisoned.
     pub fn send(&self, property_index: u8) -> bool {
         if let Ok(data) = self.data.as_ref().read() {
             data.send(property_index);
@@ -317,6 +327,7 @@ impl MutChannel {
 // `Arc` is retained only because each user clones the same receiver via
 // `MutChannelData::new_receiver`, so the inner mask must be shared. The
 // notifier is `Arc<OnceLock<...>>` for the same reason.
+/// Per-user receiver that accumulates dirty bits for a single component and notifies the user's [`DirtySet`] on first mutation.
 #[derive(Clone)]
 pub struct MutReceiver {
     mask: Arc<AtomicDiffMask>,
@@ -324,6 +335,7 @@ pub struct MutReceiver {
 }
 
 impl MutReceiver {
+    /// Creates a `MutReceiver` with an atomic diff mask of `diff_mask_length` bytes.
     pub fn new(diff_mask_length: u8) -> Self {
         Self {
             mask: Arc::new(AtomicDiffMask::new(diff_mask_length)),
@@ -353,10 +365,12 @@ impl MutReceiver {
         self.mask.byte(index)
     }
 
+    /// Returns `true` if no property bits are currently set in this receiver's diff mask.
     pub fn diff_mask_is_clear(&self) -> bool {
         self.mask.is_clear()
     }
 
+    /// Marks `property_index` dirty in the diff mask, notifying the dirty queue if the mask transitions from clean to dirty.
     pub fn mutate(&self, property_index: u8) {
         let was_clear = self.mask.set_bit(property_index);
         if was_clear {
@@ -366,6 +380,7 @@ impl MutReceiver {
         }
     }
 
+    /// ORs `other_mask` into the diff mask, notifying the dirty queue if the mask transitions from clean to dirty.
     pub fn or_mask(&self, other_mask: &DiffMask) {
         let was_clear_now_dirty = self.mask.or_with(other_mask);
         if was_clear_now_dirty {
@@ -375,6 +390,7 @@ impl MutReceiver {
         }
     }
 
+    /// Clears all bits in the diff mask and notifies the dirty queue if the mask was dirty.
     pub fn clear_mask(&self) {
         let was_dirty = self.mask.clear();
         if was_dirty {
@@ -385,13 +401,14 @@ impl MutReceiver {
     }
 }
 
-// MutSender
+/// Write-only handle that forwards property-mutation notifications into a [`MutChannel`].
 #[derive(Clone)]
 pub struct MutSender {
     channel: MutChannel,
 }
 
 impl MutSender {
+    /// Creates a `MutSender` backed by `channel`.
     pub fn new(channel: &MutChannel) -> Self {
         Self {
             channel: channel.clone(),
@@ -406,18 +423,20 @@ impl PropertyMutate for MutSender {
     }
 }
 
-// MutReceiverBuilder
+/// Factory that produces per-user [`MutReceiver`]s from a shared [`MutChannel`].
 pub struct MutReceiverBuilder {
     channel: MutChannel,
 }
 
 impl MutReceiverBuilder {
+    /// Creates a `MutReceiverBuilder` backed by `channel`.
     pub fn new(channel: &MutChannel) -> Self {
         Self {
             channel: channel.clone(),
         }
     }
 
+    /// Builds a new [`MutReceiver`] for `address`, or `None` if the channel excludes this address.
     pub fn build(&self, address: &Option<SocketAddr>) -> Option<MutReceiver> {
         self.channel.new_receiver(address)
     }

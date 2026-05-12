@@ -45,6 +45,7 @@ impl MainServer {
         Self::new_with_protocol_id(server_config, protocol, protocol_id)
     }
 
+    /// Creates a new `MainServer` using a pre-computed protocol ID (used by adapters sharing a protocol).
     pub fn new_with_protocol_id(
         server_config: ServerConfig,
         protocol: Protocol,
@@ -90,10 +91,12 @@ impl MainServer {
         self.auth_io = Some((auth_sender, auth_receiver));
     }
 
+    /// Returns a cloned handle to the underlying packet sender.
     pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
         self.io.sender_cloned()
     }
 
+    /// Resets all handshake state, user connections, and pending events back to defaults.
     pub fn reset_all(&mut self) {
         self.handshake_manager.reset();
         self.users = BigMap::new();
@@ -247,6 +250,7 @@ impl MainServer {
         None
     }
 
+    /// Sends disconnect packets to the user and removes them from all internal state.
     pub fn disconnect_user(&mut self, user_key: &UserKey) {
         // Send disconnect packets to the client before removing them
         // This mirrors the client-initiated disconnect flow

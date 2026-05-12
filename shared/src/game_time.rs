@@ -2,20 +2,21 @@ use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedI
 use naia_socket_shared::Instant;
 
 const GAME_INSANT_BITS: u8 = 22;
+/// Wrapping period of [`GameInstant`] in milliseconds (2^22 ≈ 70 minutes).
 pub const GAME_TIME_LIMIT: u32 = 4194304; // 2^22
 const GAME_TIME_LIMIT_U128: u128 = 4194304;
 const GAME_TIME_MAX: u32 = 4194303; // 2^22 - 1
 const TIME_OFFSET_MAX: i32 = 2097151; // 2^21 - 1
 const TIME_OFFSET_MIN: i32 = -2097152; // 2^21 * -1
 
-// GameInstant measures the # of milliseconds since the start of the Server
-// GameInstant wraps around at 2^22 milliseconds (around one hour)
+/// Server-relative millisecond timestamp that wraps at 2^22 ms (~70 minutes).
 #[derive(PartialEq, Debug, Clone, Copy)]
 pub struct GameInstant {
     millis: u32,
 }
 
 impl GameInstant {
+    /// Creates a `GameInstant` representing the current time relative to `start_instant`.
     pub fn new(start_instant: &Instant) -> Self {
         let now = Instant::now();
         let millis = (start_instant.elapsed(&now).as_millis() % GAME_TIME_LIMIT_U128) as u32;
@@ -24,7 +25,7 @@ impl GameInstant {
         Self { millis }
     }
 
-    // This method assumes that `previous_instant` is known to be from the past
+    /// Returns the duration elapsed since `previous_instant` (assumed to be in the past).
     pub fn time_since(&self, previous_instant: &GameInstant) -> GameDuration {
         let previous_millis = previous_instant.millis;
         let current_millis = self.millis;
@@ -40,9 +41,7 @@ impl GameInstant {
         }
     }
 
-    // Returns offset to target time, in milliseconds (possibly negative)
-    // 10.offset_from(12) = 2
-    // 12.offset_from(10) = -2
+    /// Signed millisecond offset to `other` (positive = `other` is later). Wraps correctly at 2^22.
     pub fn offset_from(&self, other: &GameInstant) -> i32 {
         const MAX: i32 = TIME_OFFSET_MAX;
         const MIN: i32 = TIME_OFFSET_MIN;
@@ -71,20 +70,25 @@ impl GameInstant {
         }
     }
 
+    /// Returns `true` if `self` is strictly later than `other` (wrapping-aware).
+    /// Returns `true` if `self` is strictly later than `other` (wrapping-aware).
     pub fn is_more_than(&self, other: &GameInstant) -> bool {
         self.offset_from(other) < 0
     }
 
+    /// Returns the raw millisecond value (in `[0, GAME_TIME_LIMIT)`).
     pub fn as_millis(&self) -> u32 {
         self.millis
     }
 
+    /// Returns a new `GameInstant` `millis` milliseconds in the future (wrapping).
     pub fn add_millis(&self, millis: u32) -> Self {
         Self {
             millis: (self.millis + millis) % GAME_TIME_LIMIT,
         }
     }
 
+    /// Returns a new `GameInstant` `millis` milliseconds in the past (wrapping).
     pub fn sub_millis(&self, millis: u32) -> Self {
         let millis = millis % GAME_TIME_LIMIT;
         if self.millis >= millis {
@@ -100,6 +104,7 @@ impl GameInstant {
         }
     }
 
+    /// Returns a new `GameInstant` offset by `millis` (positive = future, negative = past).
     pub fn add_signed_millis(&self, millis: i32) -> Self {
         if millis >= 0 {
             self.add_millis(millis as u32)
@@ -132,27 +137,31 @@ impl ConstBitLength for GameInstant {
     }
 }
 
-// GameDuration measures the duration between two GameInstants, in milliseconds
+/// Unsigned millisecond duration between two [`GameInstant`] values.
 #[derive(PartialEq, PartialOrd, Eq, Clone)]
 pub struct GameDuration {
     millis: u32,
 }
 
 impl GameDuration {
+    /// Creates a `GameDuration` of `millis` milliseconds.
     pub fn from_millis(millis: u32) -> Self {
         Self { millis }
     }
 
+    /// Returns the duration in milliseconds.
     pub fn as_millis(&self) -> u32 {
         self.millis
     }
 
+    /// Returns a new duration extended by `millis` milliseconds.
     pub fn add_millis(&self, millis: u32) -> Self {
         Self {
             millis: self.millis + millis,
         }
     }
 
+    /// Returns a new duration reduced by `millis` milliseconds.
     pub fn sub_millis(&self, millis: u32) -> Self {
         Self {
             millis: self.millis - millis,

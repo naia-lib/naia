@@ -66,6 +66,7 @@ pub struct Historian {
 }
 
 impl Historian {
+    /// Creates a historian that retains at most `max_ticks` snapshots before evicting the oldest.
     pub fn new(max_ticks: u16) -> Self {
         Self {
             max_ticks,
@@ -197,6 +198,7 @@ impl Historian {
         self.snapshots.len()
     }
 
+    /// Returns `true` if no snapshots are currently stored.
     pub fn is_empty(&self) -> bool {
         self.snapshots.is_empty()
     }

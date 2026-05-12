@@ -63,11 +63,14 @@
     unstable_features,
     unused_import_braces
 )]
+#![warn(missing_docs)]
 
 #[macro_use]
 extern crate cfg_if;
 
+/// Transport-layer socket abstractions (UDP, WebRTC, local in-process).
 pub mod transport;
+/// Re-exports of commonly-used `naia_shared` types, scoped for client consumers.
 pub mod shared {
     pub use naia_shared::{
         default_channels, sequence_greater_than, GameInstant, GlobalRequestId, GlobalResponseId,
@@ -82,6 +85,7 @@ mod client;
 mod client_config;
 mod command_history;
 mod connection;
+/// Internal e2e-debug atomic counters used by the test harness.
 pub mod counters;
 mod error;
 

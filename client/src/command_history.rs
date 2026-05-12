@@ -2,6 +2,7 @@ use std::collections::VecDeque;
 
 use naia_shared::{sequence_greater_than, Tick};
 
+/// Ring buffer of (tick, command) pairs for client-prediction rollback; old entries are pruned when the server acknowledges a tick.
 pub struct CommandHistory<T: Clone> {
     buffer: VecDeque<(Tick, T)>,
 }
@@ -15,6 +16,7 @@ impl<T: Clone> Default for CommandHistory<T> {
 }
 
 impl<T: Clone> CommandHistory<T> {
+    /// Drops all history up to and including `start_tick`, then returns all remaining (tick, command) pairs for replay.
     pub fn replays(&mut self, start_tick: &Tick) -> Vec<(Tick, T)> {
         // Remove history of commands until current received tick
         self.remove_to_and_including(*start_tick);
@@ -29,6 +31,7 @@ impl<T: Clone> CommandHistory<T> {
         output
     }
 
+    /// Appends `new_command` at `command_tick`; panics if `command_tick` is not strictly later than the last inserted tick.
     // this only goes forward
     pub fn insert(&mut self, command_tick: Tick, new_command: T) {
         if let Some((last_most_recent_command_tick, _)) = self.buffer.back() {
@@ -56,6 +59,7 @@ impl<T: Clone> CommandHistory<T> {
         }
     }
 
+    /// Returns `true` if `tick` is strictly later than the most-recently inserted tick, meaning a new command can be appended.
     pub fn can_insert(&self, tick: &Tick) -> bool {
         if let Some((last_most_recent_command_tick, _)) = self.buffer.back() {
             if !sequence_greater_than(*tick, *last_most_recent_command_tick) {
@@ -65,6 +69,7 @@ impl<T: Clone> CommandHistory<T> {
         true
     }
 
+    /// Returns the tick of the most-recently buffered command, or `None` if the buffer is empty.
     pub fn most_recent_tick(&self) -> Option<Tick> {
         self.buffer.back().map(|(tick, _)| *tick)
     }

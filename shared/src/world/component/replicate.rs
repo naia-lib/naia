@@ -18,6 +18,7 @@ use crate::{
     ComponentFieldUpdate, LocalEntityAndGlobalEntityConverterMut, RemoteEntity,
 };
 
+/// Result of splitting a component update into a waiting set (unresolved entity refs) and a ready payload.
 pub type SplitUpdateResult = Result<
     (
         Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
@@ -26,6 +27,7 @@ pub type SplitUpdateResult = Result<
     SerdeErr,
 >;
 
+/// Factory trait for deserializing a concrete `Replicate` component or its partial updates from raw bits.
 pub trait ReplicateBuilder: Send + Sync + Named {
     /// Returns true if the component type is marked `#[replicate(immutable)]`.
     fn is_immutable(&self) -> bool {
@@ -46,6 +48,7 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         update: ComponentUpdate,
     ) -> SplitUpdateResult;
 
+    /// Returns a heap-allocated clone of this builder.
     fn box_clone(&self) -> Box<dyn ReplicateBuilder>;
 }
 
@@ -61,10 +64,15 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     }
     /// Gets the ComponentKind of this type
     fn kind(&self) -> ComponentKind;
+    /// Returns a shared `Any` reference for downcasting.
     fn to_any(&self) -> &dyn Any;
+    /// Returns a mutable `Any` reference for downcasting.
     fn to_any_mut(&mut self) -> &mut dyn Any;
+    /// Converts this boxed component into a `Box<dyn Any>` for downcasting.
     fn to_boxed_any(self: Box<Self>) -> Box<dyn Any>;
+    /// Returns a heap-allocated clone of this component as a trait object.
     fn copy_to_box(&self) -> Box<dyn Replicate>;
+    /// Creates the `ReplicateBuilder` used to deserialize instances of this type.
     fn create_builder() -> Box<dyn ReplicateBuilder>
     where
         Self: Sized;
@@ -123,6 +131,7 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         update: ComponentUpdate,
     ) -> Result<(), SerdeErr>;
+    /// Applies a single-field update from the network, updating the corresponding property in-place.
     fn read_apply_field_update(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -154,11 +163,13 @@ cfg_if! {
         // Require that Bevy Component to be implemented
         use bevy_ecs::component::{Component, Mutable};
 
+        /// Marker trait combining `Replicate` with the Bevy `Component` bound; auto-implemented.
         pub trait ReplicatedComponent: Replicate + Component<Mutability = Mutable> {}
         impl<T: Replicate + Component<Mutability = Mutable>> ReplicatedComponent for T {}
     }
     else
     {
+        /// Marker trait equivalent to `Replicate`; auto-implemented for all `Replicate` types when Bevy is not in use.
         pub trait ReplicatedComponent: Replicate {}
         impl<T: Replicate> ReplicatedComponent for T {}
     }

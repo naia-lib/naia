@@ -1,5 +1,6 @@
 use naia_socket_shared::TestClock;
 
+#[doc(hidden)]
 pub struct Timestamp;
 
 impl Timestamp {

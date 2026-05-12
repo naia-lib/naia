@@ -15,13 +15,12 @@ use crate::{
     MessageIndex, ShortMessageIndex, WorldMutType,
 };
 
+/// Sequence number identifying a top-level entity command sent over the reliable channel.
 pub type CommandId = MessageIndex;
+/// Sequence number identifying a sub-command within a top-level entity command.
 pub type SubCommandId = ShortMessageIndex;
 
-/// Channel to perform ECS replication between server and client
-/// Only handles entity commands (Spawn/despawn entity and insert/remove components)
-/// Will use a reliable sender.
-/// Will wait for acks from the client to know the state of the client's ECS world ("remote")
+/// Drives outbound entity-lifecycle replication for one side of a connection, tracking delivery state and processing inbound authority responses.
 pub struct HostWorldManager {
     // host entity generator
     entity_generator: HostEntityGenerator,
@@ -38,6 +37,7 @@ pub struct HostWorldManager {
 }
 
 impl HostWorldManager {
+    /// Creates a `HostWorldManager` for the given `host_type` side and `user_key`.
     pub fn new(host_type: HostType, user_key: u64) -> Self {
         Self {
             entity_generator: HostEntityGenerator::new(user_key),
@@ -58,6 +58,7 @@ impl HostWorldManager {
 
     // Collect
 
+    /// Processes `incoming_messages` through the host engine and returns all resulting [`EntityEvent`]s.
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,
         spawner: &mut dyn GlobalEntitySpawner<E>,
@@ -82,6 +83,7 @@ impl HostWorldManager {
         std::mem::take(&mut self.incoming_events)
     }
 
+    /// Drains and returns all pending outbound [`EntityCommand`]s queued by the host engine.
     pub fn take_outgoing_commands(&mut self) -> Vec<EntityCommand> {
         self.host_engine.take_outgoing_commands()
     }
@@ -94,6 +96,7 @@ impl HostWorldManager {
         self.entity_generator.generate_static_host_entity()
     }
 
+    /// Sends the initial spawn command(s) for a static entity, coalescing components into a single message when present.
     pub fn init_static_entity_send_host_commands(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -133,7 +136,7 @@ impl HostWorldManager {
         self.get_host_world().contains_key(host_entity)
     }
 
-    // used when Entity first comes into Connection's scope
+    /// Registers components for diff-tracking and sends initial spawn command(s) when an entity first enters connection scope.
     pub fn init_entity_send_host_commands(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -164,6 +167,7 @@ impl HostWorldManager {
             .send_command(converter, EntityCommand::Spawn(*global_entity));
     }
 
+    /// Enqueues `command` for reliable delivery to the remote peer.
     pub fn send_command(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -354,6 +358,7 @@ impl HostWorldManager {
         metrics::counter!(crate::SERVER_SPAWNS_TOTAL).increment(1);
     }
 
+    /// Handles confirmed delivery of a despawn command, recycling the host entity ID and updating metrics.
     pub fn on_delivered_despawn_entity(
         &mut self,
         local_entity_map: &mut LocalEntityMap,
