@@ -48,6 +48,7 @@ pub struct OrderedArranger {
     messages_received: MessageIndex,
 }
 
+#[cfg(test)]
 impl OrderedArranger {
     pub(crate) fn new() -> Self {
         Self { buffer: VecDeque::new(), messages_received: 0 }

@@ -29,6 +29,7 @@ pub struct SequencedArranger {
     newest_received_message_index: MessageIndex,
 }
 
+#[cfg(test)]
 impl SequencedArranger {
     pub(crate) fn new() -> Self {
         Self { newest_received_message_index: 0 }
