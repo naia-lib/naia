@@ -84,8 +84,10 @@ impl GlobalWorldManager {
 
     // Despawn
     pub fn remove_entity_diff_handlers(&mut self, global_entity: &GlobalEntity) {
-        // Clean up associated components
-        for component_kind in self.component_kinds(global_entity).unwrap() {
+        let Some(kinds) = self.component_kinds(global_entity) else {
+            return;
+        };
+        for component_kind in kinds {
             self.remove_component_diff_handler(global_entity, &component_kind);
         }
     }
@@ -252,7 +254,7 @@ impl GlobalWorldManager {
 
     pub(crate) fn entity_is_public_and_client_owned(&self, global_entity: &GlobalEntity) -> bool {
         let Some(record) = self.entity_records.get(global_entity) else {
-            panic!("entity record does not exist!");
+            return false;
         };
         matches!(record.owner, EntityOwner::ClientPublic(_))
     }
@@ -263,7 +265,7 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
     ) -> bool {
         let Some(record) = self.entity_records.get(global_entity) else {
-            panic!("entity record does not exist!");
+            return false;
         };
         match &record.owner {
             EntityOwner::ClientPublic(owning_user_key) => owning_user_key == user_key,
@@ -418,14 +420,16 @@ impl GlobalWorldManager {
 
     pub(crate) fn pause_entity_replication(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
-            panic!("entity record does not exist!");
+            warn!("pause_entity_replication: entity record does not exist; entity may have been despawned");
+            return;
         };
         record.is_replicating = false;
     }
 
     pub(crate) fn resume_entity_replication(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
-            panic!("entity record does not exist!");
+            warn!("resume_entity_replication: entity record does not exist; entity may have been despawned");
+            return;
         };
         record.is_replicating = true;
     }
@@ -493,7 +497,7 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 
     fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool {
         let Some(record) = self.entity_records.get(global_entity) else {
-            panic!("entity record does not exist!");
+            return false;
         };
         record.is_replicating
     }

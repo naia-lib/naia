@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::warn;
+
 use naia_shared::{
     ChannelKind, GlobalRequestId, GlobalResponseId, LocalResponseId, MessageContainer,
 };
@@ -46,8 +48,11 @@ impl GlobalRequestManager {
         request_id: &GlobalRequestId,
         response: MessageContainer,
     ) {
-        let (_, response_opt) = self.map.get_mut(request_id).unwrap();
-        *response_opt = Some(response);
+        if let Some((_, response_opt)) = self.map.get_mut(request_id) {
+            *response_opt = Some(response);
+        } else {
+            warn!("receive_response: dropping response for unknown request_id {:?}; request was likely cancelled or the user disconnected", request_id);
+        }
     }
 
     /// Remove all outstanding request entries for a user that has disconnected.

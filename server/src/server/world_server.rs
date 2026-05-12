@@ -808,10 +808,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///
     /// # Adapter use only
     pub fn pause_entity_replication(&mut self, world_entity: &E) {
-        let global_entity = self
+        let Ok(global_entity) = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
-            .unwrap();
+        else {
+            warn!("pause_entity_replication: entity not found in global map");
+            return;
+        };
         self.global_world_manager
             .pause_entity_replication(&global_entity);
     }
@@ -822,10 +825,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///
     /// # Adapter use only
     pub fn resume_entity_replication(&mut self, world_entity: &E) {
-        let global_entity = self
+        let Ok(global_entity) = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
-            .unwrap();
+        else {
+            warn!("resume_entity_replication: entity not found in global map");
+            return;
+        };
         self.global_world_manager
             .resume_entity_replication(&global_entity);
     }

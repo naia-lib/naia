@@ -56,7 +56,7 @@ impl<S: Response> ResponseReceiveKey<S> {
 }
 
 /// Globally-unique identifier for an outgoing request, spanning all connections.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct GlobalRequestId {
     id: u64,
 }

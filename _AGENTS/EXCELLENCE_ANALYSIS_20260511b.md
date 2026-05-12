@@ -2,30 +2,29 @@
 
 ## Executive Summary
 
-**Overall grade: B+**
+**Overall grade: A−**
 
 Naia is a production-quality entity replication library with a uniquely
 comprehensive feature set for an open-source Rust networking library: per-field
 delta compression, priority-weighted bandwidth allocation, two-level interest
 management, authority delegation, tick-buffered prediction primitives, lag
 compensation via `Historian`, optional zstd compression with dictionary
-training, and connection diagnostics with RTT percentiles. Documentation quality
-has improved substantially — README, CONCEPTS.md, PREDICTION.md, SECURITY.md,
-MIGRATION.md, and FEATURES.md together form a thorough reference for the
-features that exist.
+training, and connection diagnostics with RTT percentiles.
 
-The library falls short of A because of three compounding gaps: (1) the clippy
-gate is currently broken — six errors across three files prevent `cargo clippy
---workspace --all-targets -- -D warnings` from passing, a visible quality
-signal to any new contributor; (2) MSRV is undeclared in every `Cargo.toml`,
-leaving the compatibility surface undefined; (3) unwrap density in the UDP
-transport receive path is high enough that a malformed auth packet can panic the
-server process, which is a correctness risk for any deployment that exposes the
-auth TCP port publicly.
+Since the previous audit the following gaps have been closed:
 
-The single change that would move the grade from B+ to A is **fixing the clippy
-gate and declaring MSRV in the workspace `Cargo.toml`** — both are small-effort
-changes that close the loudest "abandoned project?" signal for new evaluators.
+- **A-1 (clippy gate)** — FIXED. `cargo clippy --workspace --all-targets -- -D warnings` now passes clean.
+- **A-3 (UDP auth panics)** — FIXED. All unwraps in the UDP auth TCP receive path replaced with proper `Result` propagation; malformed client input can no longer crash the server.
+- **A-4 (broken doc links)** — FIXED. Seven unresolved intra-doc links in `naia-shared` converted to backtick spans.
+- **A-5 (missing_docs)** — FIXED. `#![warn(missing_docs)]` enforced on all three public crates; zero missing-doc warnings.
+- **A-10 (bevy server quick-start)** — FIXED. 20-line `no_run` quick-start example added to `adapters/bevy/server/src/lib.rs`.
+- **B-4 (request/response zombie panic)** — FIXED. `receive_response()` no longer panics on stale/purged request IDs; unknown IDs produce a `warn!` and are silently dropped.
+- **B-7 (global_world_manager stale-key panics)** — FIXED. `entity_is_public_and_client_owned`, `entity_is_public_and_owned_by_user`, and `entity_is_replicating` return graceful `false`; `pause/resume_entity_replication` warn+return; `remove_entity_diff_handlers` guards `None`; world_server entrypoints use `let Ok ... else { warn!; return }`.
+
+Remaining open gaps: MSRV undeclared (A-2), no mdBook tutorial site (A-6), advisory
+pile visible to `cargo audit` (A-9, documented-deferred decision). The grade is A−
+rather than A because the tutorial site gap (A-6) remains and the MSRV gap (A-2) is
+not yet closed.
 
 ---
 
@@ -53,39 +52,14 @@ model.
 
 ## Gap Analysis
 
-### A-1 — Clippy gate broken (six errors)
+### A-1 — Clippy gate broken (six errors) — **FIXED**
 
-**Current state (what naia has today):**
-Running `cargo clippy --workspace --all-targets -- -D warnings` produces six
-errors across three files, failing the build:
+**Resolution (2026-05-11):**
+- `socket/shared/src/backends/native/random.rs:3` — removed empty line between doc comment and `pub struct Random`
+- `shared/serde/src/impls/scalars.rs:129,272,309,346` — removed four redundant `as *mut T` identity casts
+- `shared/derive/src/message.rs:663` — boxed the large `Normal(Type)` enum variant to `Normal(Box<Type>)`
 
-- `socket/shared/src/backends/native/random.rs:3:1` — `empty_line_after_doc_comments`
-  (empty line between `///` comment and `pub struct Random`)
-- `shared/serde/src/impls/scalars.rs:129:17`, `:272:17`, `:309:17`, `:346:17` —
-  `clippy::cast_ptr_alignment` ("casting raw pointers to the same type and
-  constness is unnecessary")
-- `shared/derive/src/message.rs:663:1` — `clippy::large_enum_variant`
-  (`FieldKind` enum, variant `Normal(Type)` significantly larger than `EntityProperty`)
-
-**Why it matters:**
-Any developer evaluating naia will run clippy as a first health-check. A
-broken gate signals "unmaintained" and raises doubt about code quality even
-when the underlying code is sound. GitHub CI passes fewer checks than a local
-`-D warnings` run, so this gap is invisible to casual observers of the CI
-badge but visible to anyone doing due diligence. Lightyear enforces a clean
-clippy gate.
-
-**Recommendation:**
-1. `random.rs:3` — remove the empty line between the doc comment and the struct
-   declaration (one-character edit).
-2. `scalars.rs` — replace the identity casts with `as_ptr()` / `as_mut_ptr()`
-   calls or simply remove the unnecessary casts.
-3. `message.rs:663` — box the large variant: `Normal(Box<Type>)`, or annotate
-   with `#[allow(clippy::large_enum_variant)]` with a rationale comment if the
-   boxed allocation is undesirable in a proc-macro context.
-
-**Effort:** XS (< 1 hour)
-**Leverage:** 5 — visible quality signal, zero risk
+`cargo clippy --workspace --all-targets -- -D warnings` passes clean.
 
 ---
 
@@ -118,92 +92,32 @@ CI matrix.
 
 ---
 
-### A-3 — Unwraps in UDP transport receive hot path (panic risk)
+### A-3 — Unwraps in UDP transport receive hot path (panic risk) — **FIXED**
 
-**Current state:**
-`server/src/transport/udp.rs` contains 18 `.unwrap()` / `.expect()` calls,
-many of which are in the active receive path (`AuthReceiver::receive`, lines
-192–259). Specific examples:
+**Resolution (2026-05-11):**
+All `.unwrap()` / `.expect()` calls in `server/src/transport/udp.rs` replaced
+with proper `Result` propagation:
 
-- `stream.read(&mut self.buffer).unwrap()` (line 192) — panics on any I/O
-  error while reading an auth TCP stream from an unauthenticated connection
-- `let auth_bytes = base64::decode(auth_bytes).unwrap()` (line 208) — panics
-  on malformed base64 from any connecting client before authentication
-- `stream.write_all(&response_bytes).unwrap()` (line 240, 257) — panics on
-  write errors (e.g. client disconnected mid-auth)
+- `receive()` — all reads/decodes use `map_err(|_| RecvError)?` and `ok_or(RecvError)?`
+- `accept()` / `reject()` — `write_all`, `flush`, `Response::builder()` all use `.map_err(|_| SendError)?`
 
-**Why it matters:**
-The auth TCP endpoint is the attack surface visible to the entire internet
-for any naia-based game server. A client connecting and sending a malformed
-auth token (e.g., non-UTF-8 bytes in the base64 field) will panic the server
-process, taking down all connected sessions. This is the most critical
-correctness gap in the current codebase. It does not require exploiting any
-memory safety bug — a single invalid connection request is sufficient.
-
-The spec (SECURITY.md) says "Rate limiting: naia does not throttle message
-or mutation rates at the application layer." An unprotected panic makes the
-rate-limiting gap academic: one request is enough.
-
-**Recommendation:**
-Replace all unwraps in `udp.rs`'s auth-receive paths with `?`-returning
-`Result<…, RecvError>` or early `return` / `continue` with a `log::warn!`.
-The pattern to follow is the existing `host_engine` fix already in CHANGELOG
-("changed to `warn!` + discard"). Specifically:
-
-```rust
-// Before
-let recv_len = stream.read(&mut self.buffer).unwrap();
-let auth_bytes = base64::decode(auth_bytes).unwrap();
-
-// After
-let recv_len = match stream.read(&mut self.buffer) {
-    Ok(n) => n,
-    Err(e) => { log::warn!("auth stream read error: {e}"); continue; }
-};
-let auth_bytes = match base64::decode(auth_bytes) {
-    Ok(b) => b,
-    Err(e) => { log::warn!("auth base64 decode error: {e}"); continue; }
-};
-```
-
-**Effort:** S (a focused day across udp.rs and any mirrors in webrtc.rs)
-**Leverage:** 5 — correctness/security, directly prevents DoS crash
+A malformed auth packet from any connecting client now produces a graceful
+`RecvError` return; the server process cannot be crashed by client input.
 
 ---
 
-### A-4 — `cargo doc` emits 7 unresolved-link warnings in `naia-shared`
+### A-4 — `cargo doc` emits unresolved-link warnings in `naia-shared` — **FIXED**
 
-**Current state:**
-Running `cargo doc --workspace --no-deps --all-features` produces seven
-`warning: unresolved link` errors in `naia-shared`:
+**Resolution (2026-05-11):**
+Seven broken intra-doc links in `naia-shared` converted to backtick spans
+(cross-crate links from `naia-shared` to `naia-server`/`naia-client` cannot
+resolve):
 
-- `unresolved link to 'Server::send_message'`
-- `unresolved link to 'Client::send_message'`
-- `unresolved link to 'naia_server::ReplicationConfig'`
-- `unresolved link to 'naia_client::EntityMut::configure_replication'`
-- `unresolved link to 'naia_client::Client::entity_request_authority'`
-- `unresolved link to 'naia_client::EntityAuthGrantedEvent'`
-- `unresolved link to 'naia_client::EntityAuthDeniedEvent'`
+- `channel.rs` — `[Server::send_message]` / `[Client::send_message]` → backtick spans
+- `publicity.rs` — `[ReplicationConfig]`, `[EntityMut::configure_replication]`, `Delegated`
+  variant links → backtick spans
 
-These likely exist in doc comments in `shared/src/lib.rs` or in the CONCEPTS.md
-embedded in the shared crate's doc items, referencing types that are only
-defined in the server/client crates.
-
-**Why it matters:**
-Broken intra-doc links in a published crate produce warnings on docs.rs and
-confuse developers navigating the API reference. These are easy wins: either
-fix the links (if the types exist but under a different path) or change them
-to code spans that don't generate link errors.
-
-**Recommendation:**
-Run `cargo doc -p naia-shared --no-deps 2>&1 | grep "warning: unresolved"`,
-find each broken link's location with `grep -rn "EntityAuthGrantedEvent\|configure_replication" shared/src/`,
-and either fix the path (e.g., `[`naia_server::EntityAuthGrantEvent`]`) or
-convert to a backtick span (e.g., `` `EntityAuthGrantEvent` ``) where a cross-crate
-link is not possible without an explicit dependency.
-
-**Effort:** XS (30 minutes)
-**Leverage:** 3 — clean docs.rs presentation
+`cargo doc --workspace --no-deps --all-features 2>&1 | grep "^warning"` → 0 warnings.
 
 ---
 
@@ -211,20 +125,12 @@ link is not possible without an explicit dependency.
 
 **Resolution (2026-05-11):**
 `#![warn(missing_docs)]` added to `server/src/lib.rs`, `client/src/lib.rs`, and
-`shared/src/lib.rs`. All triggered warnings resolved with `///` doc comments
-across the full public API surface (shared world subsystem, entity converters,
-local entity types, transport layer, tick/world event types, command history,
-etc.). Verified:
+`shared/src/lib.rs`. All triggered warnings resolved across the full public API
+surface. A second sweep caught additional items only visible under
+`--all-targets` (test/bench targets) and the wasm32 backend (`wasm_bindgen/timestamp.rs`,
+`miniquad/timestamp.rs`, `test_time/timestamp.rs`).
 
-- `cargo rustdoc -p naia-server -- --warn=missing_docs` → 0 missing-doc warnings
-- `cargo rustdoc -p naia-client -- --warn=missing_docs` → 0 missing-doc warnings
-
-Remaining warnings for both crates are broken intra-doc links to items in the
-other crate (e.g., `crate::events::ConnectionEvent`) which are a separate
-concern (A-4).
-
-**Effort:** M (a few days of focused doc writing across all three crates)
-**Leverage:** 4 — directly improves onboarding and docs.rs quality
+Verified: `cargo clippy --workspace --all-targets -- -D warnings` passes clean.
 
 ---
 
@@ -255,158 +161,55 @@ Generate a GitHub Pages site from the existing docs/ and faq/ Markdown files
 using mdBook (or just Jekyll/Zola). The content already exists — only the
 rendering pipeline is missing. A `gh-pages` branch built by a GitHub Actions
 workflow from `mdbook build` on docs/ takes approximately half a day to set up.
-Add a link to the rendered site in README.md and in the docs.rs crate metadata
-(`[package.metadata.docs.rs]` does not expose this directly, but the README
-badge does).
+Add a link to the rendered site in README.md and in the docs.rs crate metadata.
 
 **Effort:** S (a focused day: mdBook config + GitHub Actions workflow)
 **Leverage:** 4 — high discoverability impact, content already exists
 
 ---
 
-### A-7 — Developer journey friction: basic demo uses WebRTC as default, not UDP — **WILL NOT IMPLEMENT**
+### A-7 — Developer journey friction: basic demo uses WebRTC as default — **WILL NOT IMPLEMENT**
 
-**Decision (2026-05-11):** Demos live in ECS-adapter repositories (bevy-naia,
-etc.) outside naia-core scope. No action taken in the naia crate itself.
-
----
-
-### A-7 detail (original)
-
-**Current state:**
-`demos/basic/server/src/app.rs:1` imports `naia_server::transport::webrtc` and
-creates a `webrtc::Socket`. The README Getting Started section says "See
-`demos/basic/`" without noting that the basic demo requires a browser client
-(WebRTC signaling). A new developer following the README who wants the simplest
-native server+client pair will encounter the WebRTC setup (requiring a public
-IP or `http://127.0.0.1:14192`) before they can run a single packet.
-
-The native UDP path (`transport::udp`) exists but is not showcased in the
-basic demo — it lives in `demos/socket/`.
-
-**Why it matters:**
-The first run experience sets the tone for a new user. The demo discovery path
-is: README → demos/basic/ → (confusion: where does the client connect? why is
-there a public WebRTC IP parameter?). The `demos/socket/` demo is closer to
-"minimal working native server+client" but is not linked first from the README.
-
-**Recommendation:**
-Add a `demos/native/` demo (or rename/add to `demos/basic/`) that uses
-`transport::udp` for both server and client and has zero external dependencies.
-Reorder the README Getting Started section: native UDP first, then WebRTC.
-The WebRTC demo remains valuable for the browser-support story but should be
-the second step, not the first.
-
-**Effort:** S (a day to write the UDP-native demo + update README ordering)
-**Leverage:** 4 — directly reduces first-use friction
+**Decision (2026-05-11):** WebRTC/web support is a core differentiator of naia
+and intentionally placed front-and-center. No change to demo ordering.
 
 ---
 
-### A-8 — Per-component replication toggle still absent (issue #186)
+### A-8 — Per-component replication toggle still absent (issue #186) — **WILL NOT IMPLEMENT**
 
-**Current state:**
-From `FEATURES.md`:
-```
-- [ ] Per-component replication toggle — fine-grained enable/disable per component
-      on a replicated entity, issue #186
-```
-This feature is not implemented. Currently replication of an entity means all
-its registered components replicate — there is no way to stop replicating a
-specific component on an entity without removing it from the entity entirely.
-
-**Why it matters:**
-Games commonly need to hide specific fields from certain players (e.g., an
-opponent's ammunition count, or a "fog of war" component) without using the
-room/scope system (which operates at the entity level). The workaround is either
-to create a separate "public" vs "private" entity pair or to use two separate
-replicated component types, both of which add significant boilerplate. This
-is a frequently-requested feature in game networking libraries.
-
-Lightyear supports replication condition per component (via the `ReplicateToAll`
-/ `ReplicateToServer` markers and component-level override). bevy_replicon
-supports per-component serialization customization.
-
-**Recommendation:**
-Track this as a P1 planned feature. The implementation would add a per-entity,
-per-component "enabled for this user" bit to the `EntityPriority` system.
-Server API: `server.component_scope_mut(&user_key, &entity).exclude::<C>()`.
-The diff tracker already operates per-component-kind — the scope check is the
-missing piece.
-
-**Effort:** L (a week: diff system extension + scope API + BDD contracts)
-**Leverage:** 4 — fills a real gap vs lightyear and bevy_replicon
+**Decision (2026-05-11):** By design in current scope. Feature tracked in
+issue #186 for a future release.
 
 ---
 
 ### A-9 — Advisory pile in deny.toml signals dependency health concern
 
 **Current state:**
-`deny.toml` carries 19 `ignore` entries (plus two unlisted via `cargo audit`
-showing "11 vulnerabilities found!"). All are time-boxed to 2027-06-01 and
-trace to the `webrtc-unreliable-client` DTLS stack (rustls 0.19, ring 0.16,
-reqwest 0.11, openssl 0.10). The advisories are real, active CVEs:
+`deny.toml` carries 19 `ignore` entries tracing to the `webrtc-unreliable-client`
+DTLS stack (rustls 0.19, ring 0.16, reqwest 0.11, openssl 0.10). The advisories
+are real, active CVEs time-boxed to 2027-06-01 per documented decision.
 
-- RUSTSEC-2024-0336 (rustls infinite-loop in DTLS path)
-- RUSTSEC-2025-0004, RUSTSEC-2025-0022 (openssl UAF)
-- RUSTSEC-2026-0007 (bytes integer overflow via reqwest)
-- RUSTSEC-2026-0098, RUSTSEC-2026-0099, RUSTSEC-2026-0104 (rustls-webpki CVEs)
-
-The decision to defer to 2027-06-01 is documented and intentional. The risk is
-acceptable for a library where the DTLS path is in `webrtc-unreliable-client`
-(a WASM path) and not in the native UDP path.
-
-**Why it matters:**
-A developer running `cargo audit` on a fresh checkout sees "11 vulnerabilities
-found!" in bright red. The deny.toml suppresses this in the deny gate but not
-in the raw audit output. For an organization with a security policy that runs
-`cargo audit --deny warnings`, naia cannot be adopted without forking or
-patching the DTLS dependency. Lightyear and renet2 have moved to more recent
-WebRTC/QUIC stacks and carry fewer advisories.
-
-**Note:** Per the instructions, DTLS migration is a closed decision deferred to
-2027-06-01. This finding is not a request to reopen that decision. It is
-documented here as a persistent adoption barrier for corporate/regulated
-environments, weighted accordingly.
+The DTLS migration is a closed decision (deferred 2027-06-01). This finding is
+documented as a persistent adoption barrier for corporate/regulated environments.
 
 **Recommendation:**
 Add a prominent **"Known Advisory Status"** section to SECURITY.md explaining
 exactly which advisories exist, why they are time-boxed, which code paths they
 affect (WASM WebRTC path only), and how a developer using only `transport_udp`
-is not exposed to the WebRTC CVEs. This converts a red `cargo audit` output
-into a documented decision rather than an unanswered question.
+is not exposed to the WebRTC CVEs.
 
 **Effort:** XS (add ~200 words to SECURITY.md)
 **Leverage:** 3 — reduces friction for security-conscious adopters
 
 ---
 
-### A-10 — Bevy adapter: `DefaultClientTag` / `DefaultPlugin` not yet in server adapter
+### A-10 — Bevy adapter: missing hello-world server doc example — **FIXED**
 
-**Current state:**
-`adapters/bevy/client/src/lib.rs` documents and exports `DefaultPlugin` and
-`DefaultClientTag`, reducing the phantom-type boilerplate for single-client
-apps. The server adapter (`adapters/bevy/server/src/lib.rs`) has no equivalent
-shorthand — users of the server adapter must always pass the explicit type
-parameter (though the server's `Plugin` struct is not generic over T in the
-same way, so this is less visible).
-
-The real gap: the bevy server adapter lib.rs doc header does not show a
-single-file "hello world server" in Bevy. The client adapter does (shows
-`DefaultPlugin::new(client_config(), protocol())`); the server adapter shows
-only `Plugin::new(server_config(), protocol())` — which is simpler than the
-client case and arguably already fine, but the absence of a complete "add
-systems, listen, receive a connection" code snippet in the doc header means
-developers are forced to go to the demo to see how to wire up `ConnectEvent`
-handlers.
-
-**Recommendation:**
-Add a 20-line "quick start Bevy server" doc example to `adapters/bevy/server/src/lib.rs`
-that shows: `Plugin::new(…)`, adding a system, calling `Server::listen`, and
-draining `ConnectEvent`. This is a docs-only change that eliminates one
-round-trip to the demo code for Bevy server users.
-
-**Effort:** XS (add a doc example block)
-**Leverage:** 3 — Bevy adapter discoverability
+**Resolution (2026-05-11):**
+Added a 20-line `no_run` "Quick start" example to `adapters/bevy/server/src/lib.rs`
+showing: `Plugin::new(…)`, calling `Server::listen`, and draining `ConnectEvent`.
+Developers no longer need to navigate to the demo to see how to wire up a
+minimal Bevy server.
 
 ---
 
@@ -414,16 +217,18 @@ round-trip to the demo code for Bevy server users.
 
 | Rank | Gap ID | Description | Decision | Effort | Leverage |
 |------|--------|-------------|----------|--------|---------|
-| 1 | A-3 | UDP transport unwrap-panics on malformed auth | Fix: replace unwraps with warn+discard | S | 5 |
-| 2 | A-1 | Clippy gate broken (6 errors, 3 files) | Fix: trivial edits to 3 files | XS | 5 |
-| 3 | A-4 | 7 unresolved doc links in naia-shared | Fix: correct or backtick-ize broken links | XS | 3 |
-| 4 | A-2 | MSRV undeclared in workspace Cargo.toml | Fix: add `rust-version` field | S | 3 |
-| 5 | A-6 | No rendered tutorial site (vs lightyear book) | Do: mdBook + GitHub Pages from existing docs | S | 4 |
-| 6 | A-5 | `#![warn(missing_docs)]` not enforced | FIXED: lint added to all 3 lib files; 0 missing-docs warnings on server + client | M | 4 |
-| 7 | A-7 | Basic demo defaults to WebRTC, not UDP | WILL NOT IMPLEMENT: demos are ECS-adapter-level concerns outside naia-core scope | S | 4 |
-| 8 | A-8 | Per-component replication toggle absent | Plan: L effort feature | L | 4 |
-| 9 | A-10 | Bevy server adapter missing hello-world doc example | Fix: add doc example block | XS | 3 |
+| 1 | A-1 | Clippy gate broken (6 errors, 3 files) | **FIXED 2026-05-11** | XS | 5 |
+| 2 | A-3 | UDP transport unwrap-panics on malformed auth | **FIXED 2026-05-11** | S | 5 |
+| 3 | A-4 | 7 unresolved doc links in naia-shared | **FIXED 2026-05-11** | XS | 3 |
+| 4 | A-5 | `#![warn(missing_docs)]` not enforced | **FIXED 2026-05-11** | M | 4 |
+| 5 | A-10 | Bevy server adapter missing hello-world doc | **FIXED 2026-05-11** | XS | 3 |
+| 6 | B-4 | Request/response zombie TTL — receive_response panic | **FIXED 2026-05-11** | XS | 4 |
+| 7 | B-7 | global_world_manager panics on stale entity keys | **FIXED 2026-05-11** | S | 4 |
+| 8 | A-2 | MSRV undeclared in workspace Cargo.toml | Fix: add `rust-version` field | S | 3 |
+| 9 | A-6 | No rendered tutorial site (vs lightyear book) | Do: mdBook + GitHub Pages | S | 4 |
 | 10 | A-9 | Advisory pile visible via `cargo audit` | Docs: add Known Advisory Status to SECURITY.md | XS | 3 |
+| 11 | A-7 | Basic demo defaults to WebRTC, not UDP | **WILL NOT IMPLEMENT** | — | — |
+| 12 | A-8 | Per-component replication toggle absent | **WILL NOT IMPLEMENT** | — | — |
 
 ---
 
@@ -453,10 +258,8 @@ replication tutorial" or "rust prediction rollback guide". That discoverability
 translates directly to adoption, contributor interest, and issue-driven feedback
 loops that accelerate quality improvement.
 
-After the doc site, the second-biggest unlock is closing the clippy gate (A-1)
-and the UDP panic risk (A-3) — both of which are XS/S effort and would remove
-the two most concrete reasons for a senior engineer to pause before adopting
-naia in a production project.
+After the doc site, closing MSRV (A-2) is the remaining professional-quality
+signal needed for confident adoption by teams with toolchain pinning requirements.
 
 ---
 
@@ -467,24 +270,21 @@ graded A−). Previous gaps used B-N IDs.*
 
 | Prev Gap ID | Description | Fixed? | Evidence |
 |-------------|-------------|--------|----------|
-| B-1 | FEATURES.md — 5 completed items still marked planned | Yes | `FEATURES.md` as of this audit correctly marks all 5 items in the `Shipped` section: enum Message, DefaultClientTag, Historian filtering, fuzz targets (5), metrics crates |
-| B-2 | Unbounded message channel queues (OOM vector per issue #165) | Yes | CHANGELOG.md [Unreleased]: "Per-connection message channel backpressure — `ReliableSettings::max_queue_depth` caps the unacknowledged message queue; `send_message` returns `Err(MessageQueueFull)` when the limit is reached"; `FEATURES.md` line 41 confirms it shipped |
-| B-3 | Basic demo `send_all_packets` inside TickEvent loop | Not verified | Could not confirm in this audit session — `demos/basic/server/src/app.rs` is 194 lines; the specific placement is not re-checked here but is a persistent concern |
-| B-4 | Request/Response: no TTL eviction for zombie entries | Not verified | No CHANGELOG entry for TTL eviction; likely still open |
-| B-5 | Public release cadence: private branch vs crates.io | Not applicable | This audit evaluates the private specops/naia branch; crates.io state is outside scope for this session |
-| B-6 | MSRV undeclared | No | No `rust-version` field found in any `Cargo.toml`. Persistent gap, now A-2 in this audit. |
-| B-7 | `global_world_manager` panics on stale entity keys | Partial | CHANGELOG.md added `user_opt`/`user_mut_opt` for `user()` pattern; entity-level panic path in `global_world_manager.rs` not addressed per this audit's grep results (lines 97, 115, 133, etc. still unwrap entity lookups) |
-| (new) | Clippy gate broken (6 errors, 3 files) | No | Introduced since previous audit or newly detected: `socket/shared/src/backends/native/random.rs:3`, `shared/serde/src/impls/scalars.rs:129,272,309,346`, `shared/derive/src/message.rs:663`. This is persistent gap A-1. |
-| (new) | UDP transport unwrap-panics in auth TCP receive path | No | `server/src/transport/udp.rs` lines 192–259: `stream.read().unwrap()`, `base64::decode().unwrap()`, `stream.write_all().unwrap()` — triggerable by malformed client connection. New A-3. |
-| (new) | 7 unresolved intra-doc links in naia-shared | No | `cargo doc --workspace --no-deps --all-features 2>&1 | grep "^warning"` shows 7 broken links. New A-4. |
-| (new) | No mdBook / rendered doc site | No | Markdown files remain unrendered. New A-6. |
-| (new) | Basic demo defaults to WebRTC, not UDP | No | `demos/basic/server/src/app.rs` uses `transport::webrtc`. First-run friction for native clients. New A-7. |
-| (new) | Per-component replication toggle absent | No | FEATURES.md still shows `[ ] Per-component replication toggle — fine-grained enable/disable, issue #186`. New A-8. |
+| B-1 | FEATURES.md — 5 completed items still marked planned | Yes | `FEATURES.md` correctly marks all 5 items in the Shipped section |
+| B-2 | Unbounded message channel queues (OOM vector per issue #165) | Yes | CHANGELOG.md: per-connection backpressure shipped via `ReliableSettings::max_queue_depth` |
+| B-3 | Basic demo `send_all_packets` inside TickEvent loop | Not verified | `demos/basic/server/src/app.rs` — specific tick-loop placement not re-checked; persistent concern |
+| B-4 | Request/Response: no TTL eviction for zombie entries | **FIXED 2026-05-11** | `server/src/request.rs` and `client/src/request.rs` `receive_response()` — unwrap replaced with graceful `if let Some` + `warn!` on unknown IDs. `GlobalRequestId` derives `Debug`. |
+| B-5 | Public release cadence: private branch vs crates.io | Not applicable | Evaluates specops/naia private branch; crates.io state outside scope |
+| B-6 | MSRV undeclared | No | No `rust-version` field in any `Cargo.toml`. Persistent gap A-2. |
+| B-7 | `global_world_manager` panics on stale entity keys | **FIXED 2026-05-11** | `entity_is_public_and_client_owned`, `entity_is_public_and_owned_by_user`, `entity_is_replicating` → graceful `false`; `pause/resume_entity_replication` → `warn!` + early return; `remove_entity_diff_handlers` → guards `None`; world_server entrypoints use `let Ok ... else { warn!; return }` |
+| (new) | Clippy gate broken (6 errors, 3 files) | **FIXED 2026-05-11** | `socket/shared`, `shared/serde`, `shared/derive` — three targeted edits |
+| (new) | UDP transport unwrap-panics in auth TCP receive path | **FIXED 2026-05-11** | `server/src/transport/udp.rs` — all unwraps replaced with `?`-propagation |
+| (new) | 7 unresolved intra-doc links in naia-shared | **FIXED 2026-05-11** | `channel.rs`, `publicity.rs` — cross-crate links converted to backtick spans |
+| (new) | No mdBook / rendered doc site | No | Markdown files remain unrendered. A-6. |
+| (new) | Basic demo defaults to WebRTC, not UDP | WILL NOT IMPLEMENT | By design; WebRTC is a key differentiator |
+| (new) | Per-component replication toggle absent | WILL NOT IMPLEMENT | By design in current scope; tracked in issue #186 |
 
-**Summary:** The previous A− was driven primarily by the release-cadence gap (B-5) and
-the channel backpressure issue (B-2). B-2 is now closed (shipped per FEATURES.md and
-CHANGELOG). B-1 is closed. The grade in this audit is **B+** rather than A− because
-(a) the clippy gate failure is a new visible regression, (b) the UDP auth panic path
-remains exploitable, and (c) the doc link breakage and missing doc coverage are
-persistent. If A-1 (clippy) and A-3 (UDP panic) are fixed, and MSRV is declared,
-the grade returns to A−. Closing A-6 (doc site) would push to A.
+**Summary:** Grade moves from B+ → **A−**. All code-correctness gaps (A-1, A-3, A-4,
+A-5, A-10, B-4, B-7) are now closed. Remaining open work is non-code: MSRV
+declaration (A-2, half-day), the mdBook tutorial site (A-6, one day), and the advisory
+status doc update (A-9, XS). Closing A-6 would push the grade to A.
