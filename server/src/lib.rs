@@ -93,6 +93,10 @@ pub use connection::tick_buffer_messages::TickBufferMessages;
 pub use historian::Historian;
 #[cfg(feature = "bench_instrumentation")]
 pub use connection::connection::bench_send_counters;
+#[cfg(feature = "bench_instrumentation")]
+pub use server::world_server::bench_scope_counters;
+#[cfg(feature = "bench_instrumentation")]
+pub use naia_shared::bench_take_events_counters;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,

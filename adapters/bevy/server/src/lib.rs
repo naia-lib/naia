@@ -86,6 +86,9 @@ pub use naia_server::{
     transport, ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
 };
 
+#[cfg(feature = "bench_instrumentation")]
+pub use naia_server::{bench_send_counters, bench_scope_counters, bench_take_events_counters};
+
 pub mod events;
 
 mod app_ext;

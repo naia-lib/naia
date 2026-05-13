@@ -48,6 +48,24 @@ cfg_if! {
     }
 }
 
+/// Timing of `update_entity_scopes` — the per-tick scope-diffing pass that
+/// runs at the top of `send_all_packets` before the per-user send loop.
+/// Enabled via `bench_instrumentation`.
+#[cfg(feature = "bench_instrumentation")]
+pub mod bench_scope_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    #[doc(hidden)] pub static NS_UPDATE_ENTITY_SCOPES: AtomicU64 = AtomicU64::new(0);
+
+    /// Resets counter to zero.
+    pub fn reset() {
+        NS_UPDATE_ENTITY_SCOPES.store(0, Ordering::Relaxed);
+    }
+    /// Returns nanoseconds spent in `update_entity_scopes` this tick.
+    pub fn snapshot() -> u64 {
+        NS_UPDATE_ENTITY_SCOPES.load(Ordering::Relaxed)
+    }
+}
+
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
@@ -691,7 +709,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.io.reset_outgoing_bytes_this_tick();
 
         // update entity scopes
+        #[cfg(feature = "bench_instrumentation")]
+        let _scope_t0 = std::time::Instant::now();
         self.update_entity_scopes(&world);
+        #[cfg(feature = "bench_instrumentation")]
+        bench_scope_counters::NS_UPDATE_ENTITY_SCOPES.fetch_add(
+            _scope_t0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         // loop through all connections, send packet
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
