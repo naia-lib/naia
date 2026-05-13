@@ -39,12 +39,14 @@ short speedrun to chaos.
 
 ## Reclaiming authority
 
-The server can revoke a client's authority at any time by calling
-`entity_take_authority`:
+The server can revoke a client's authority at any time with the Bevy server
+`CommandsExt` API:
 
 ```rust
+use naia_bevy_server::CommandsExt;
+
 // Server forcibly reclaims authority over a delegated entity.
-server.entity_take_authority(&mut world, &entity);
+commands.entity(entity).take_authority(&mut server);
 ```
 
 After this call the entity returns to `Available` status. The client that held

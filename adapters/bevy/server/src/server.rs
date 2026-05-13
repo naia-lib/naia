@@ -136,6 +136,13 @@ impl ServerImpl {
         }
     }
 
+    pub(crate) fn enable_static_entity_replication(&mut self, entity: &Entity) {
+        match self {
+            Self::Full(server) => server.enable_static_entity_replication(entity),
+            Self::WorldOnly(server) => server.enable_static_entity_replication(entity),
+        }
+    }
+
     pub(crate) fn insert_component_worldless(
         &mut self,
         entity: &Entity,
@@ -608,13 +615,6 @@ impl<'w> Server<'w> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.enable_entity_replication(entity),
             ServerImpl::Full(server) => server.enable_entity_replication(entity),
-        }
-    }
-
-    pub(crate) fn enable_static_replication(&mut self, entity: &Entity) {
-        match &mut *self.server_impl {
-            ServerImpl::WorldOnly(server) => server.enable_static_entity_replication(entity),
-            ServerImpl::Full(server) => server.enable_static_entity_replication(entity),
         }
     }
 

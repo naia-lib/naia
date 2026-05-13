@@ -71,7 +71,7 @@ fires a `DisconnectEvent` for that user and reclaims all associated resources.
 The timeout is controlled by `ServerConfig` / `ClientConfig`:
 
 ```rust
-use naia_server::ServerConfig;
+use naia_bevy_server::ServerConfig;
 use std::time::Duration;
 
 let mut config = ServerConfig::default();
@@ -91,7 +91,7 @@ testing replication robustness and prediction/rollback in a local dev loop
 without a real bad network.
 
 ```rust
-use naia_shared::LinkConditionerConfig;
+use naia_bevy_shared::LinkConditionerConfig;
 
 // Custom profile:
 let lag = LinkConditionerConfig::new(

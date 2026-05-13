@@ -30,7 +30,8 @@ position.x.set(42.0);
 ## Compact numeric types
 
 `Property<T>` is generic over any `T: Serde`. naia ships a set of compact
-numeric types in `naia_shared` that reduce wire size compared to raw `f32`/`u32`:
+numeric types in `naia_bevy_shared` that reduce wire size compared to raw
+`f32`/`u32`:
 
 | Type | Wire size | Use case |
 |------|-----------|----------|
@@ -50,7 +51,7 @@ precision retained.
 ## Example — a quantized game unit
 
 ```rust
-use naia_shared::{Property, Replicate, SignedVariableFloat, UnsignedInteger};
+use naia_bevy_shared::{Property, Replicate, Serde, SignedVariableFloat, UnsignedInteger};
 
 #[derive(Clone, PartialEq, Serde)]
 pub struct PositionState {

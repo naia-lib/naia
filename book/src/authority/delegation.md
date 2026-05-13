@@ -17,21 +17,21 @@ any other delegated entity.
 ```mermaid
 stateDiagram-v2
     [*] --> Available : server marks entity Delegated
-    Available --> Requested : client calls entity_request_authority()
+    Available --> Requested : client calls request_authority()
     Requested --> Granted : server grants
     Requested --> Denied : server denies
     Denied --> Available : client releases
-    Granted --> Releasing : client calls entity_release_authority()
+    Granted --> Releasing : client calls release_authority()
     Releasing --> Available : server acknowledges
-    Granted --> Available : server calls entity_take_authority()
+    Granted --> Available : server calls take_authority()
 ```
 
 ---
 
 ## Trust model
 
-- The server may **revoke** authority at any time by calling
-  `entity_take_authority`.
+- The server may **revoke** authority at any time by calling `take_authority`
+  through the Bevy `CommandsExt` API.
 - The client **never** holds unrevocable ownership.
 - Mutations from a client-held delegated entity should still be validated
   server-side before applying to authoritative game state. naia replicates what
@@ -47,15 +47,8 @@ stateDiagram-v2
 ## Server setup
 
 ```rust
-// Mark entity as delegatable when spawning:
-server.spawn_entity(&mut world)
-    .insert_component(position)
-    .configure_replication(ReplicationConfig::delegated());
-```
+use naia_bevy_server::{CommandsExt, ReplicationConfig};
 
-With the Bevy adapter, the entity must first be registered with naia:
-
-```rust
 commands
     .spawn_empty()
     .enable_replication(&mut server)
@@ -71,18 +64,27 @@ entity. naia will politely ignore it, as requested.
 ## Client request flow
 
 ```rust
-// Client: request authority
-client.entity_mut(&mut world, &entity)
-    .request_authority();
+use bevy::ecs::message::MessageReader;
+use naia_bevy_client::{
+    events::{EntityAuthDeniedEvent, EntityAuthGrantedEvent},
+    Client, CommandsExt,
+};
 
-// Server event loop — handle grant/deny:
-for (user_key, entity) in events.read::<EntityAuthGrantEvent>() {
-    // The requesting client now has write authority.
-    // The client's mutations will replicate to the server.
-}
+// Client: request authority over a delegated entity.
+commands.entity(entity).request_authority(&mut client);
 
-for (user_key, entity) in events.read::<EntityAuthDenyEvent>() {
-    // Server denied the request; client stays in observer mode.
+// Client: observe the server's grant/deny response.
+fn handle_authority_response(
+    mut granted_reader: MessageReader<EntityAuthGrantedEvent<Main>>,
+    mut denied_reader: MessageReader<EntityAuthDeniedEvent<Main>>,
+) {
+    for event in granted_reader.read() {
+        println!("Authority granted for {:?}", event.entity);
+    }
+
+    for event in denied_reader.read() {
+        println!("Authority denied for {:?}", event.entity);
+    }
 }
 ```
 
@@ -99,12 +101,12 @@ whether the entity is currently in that user's scope before granting.
 
 ## Delegated resources
 
-Resources can also be delegated using `configure_resource` in the core server API
-or `configure_replicated_resource` in Bevy:
+Resources can also be delegated using `configure_replicated_resource` in Bevy:
 
 ```rust
-server.configure_resource::<ScoreBoard, _>(&mut world,
-    ReplicationConfig::delegated());
+use naia_bevy_server::{ReplicationConfig, ServerCommandsExt};
+
+commands.configure_replicated_resource::<ScoreBoard>(ReplicationConfig::delegated());
 ```
 
 This lets a client request authority over singleton state through the same
@@ -120,9 +122,11 @@ On the client side, the `Publicity` enum controls how a locally created entity
 is visible to the server:
 
 ```rust
-use naia_client::Publicity;
-client.entity_mut(&mut world, &entity)
-    .configure_replication(Publicity::Public);
+use naia_bevy_client::{CommandsExt, Publicity};
+
+commands
+    .entity(entity)
+    .configure_replication::<Main>(Publicity::Public);
 ```
 
 `Publicity::Private` and `Publicity::Public` are both client-owned replicated

@@ -140,11 +140,10 @@ lifetime of the session.
 Create a static entity with Bevy:
 
 ```rust
-// Bevy adapter — call as_static() on the EntityCommands before inserting components.
+// Bevy adapter — enable static replication before inserting components.
 commands
     .spawn_empty()
-    .enable_replication(&mut server)
-    .as_static()        // must be called BEFORE insert
+    .as_static()
     .insert(tile);
 ```
 
@@ -163,22 +162,25 @@ as delegated resources so a client can request authority and mutate them through
 the normal authority path.
 
 ```rust
+use naia_bevy_server::ServerCommandsExt;
+
 // Insert a dynamic (diff-tracked) resource:
-server.insert_resource(&mut world, ScoreBoard::new(), false)?;
+commands.replicate_resource(ScoreBoard::new());
 
 // Insert a static (immutable) resource:
-server.insert_resource(&mut world, MapMetadata::new(), true)?;
+commands.replicate_resource_static(MapMetadata::new());
 
 // Remove it later:
-server.remove_resource::<ScoreBoard, _>(&mut world);
+commands.remove_replicated_resource::<ScoreBoard>();
 ```
 
 On the client:
 
 ```rust
-if client.has_resource::<ScoreBoard>() {
-    let entity = client.resource_entity::<ScoreBoard>().unwrap();
-    // read component from world storage using entity
+fn read_scoreboard(scoreboard: Option<Res<ScoreBoard>>) {
+    if let Some(scoreboard) = scoreboard {
+        // Read it like any other Bevy resource.
+    }
 }
 ```
 

@@ -68,7 +68,7 @@ exactly the right simulation step even under jitter.
 ### 2. `CommandHistory` — the replay buffer
 
 ```rust
-use naia_client::CommandHistory;
+use naia_bevy_client::CommandHistory;
 
 // In your client resources:
 pub command_history: CommandHistory<KeyCommand>,

@@ -12,7 +12,7 @@ at connection time via a deterministic hash.
 Conventionally you put `Protocol` construction in a shared crate:
 
 ```rust
-use naia_shared::{Protocol, ChannelMode, ChannelDirection};
+use naia_bevy_shared::{ChannelDirection, ChannelMode, Protocol};
 
 pub fn protocol() -> Protocol {
     Protocol::builder()

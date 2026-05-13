@@ -25,6 +25,14 @@ use crate::{plugin::Singleton, server::ServerImpl, Server};
 ///     commands.spawn_empty()
 ///         .enable_replication(&mut server);
 /// }
+///
+/// # #[derive(bevy_ecs::component::Component)]
+/// # struct Tile;
+/// fn spawn_tile(mut commands: Commands) {
+///     commands.spawn_empty()
+///         .as_static()
+///         .insert(Tile);
+/// }
 /// ```
 pub trait CommandsExt<'a> {
     /// Registers the entity with the naia replication layer.
@@ -39,7 +47,7 @@ pub trait CommandsExt<'a> {
     /// A full component snapshot is sent once when the entity enters a
     /// user's scope. Use for tile entities, level geometry, or any entity
     /// that never mutates after spawning.
-    fn enable_static_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+    fn as_static(&'a mut self) -> &'a mut EntityCommands<'a>;
 
     /// Removes the entity from the naia replication layer.
     ///
@@ -104,9 +112,14 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         self
     }
 
-    fn enable_static_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
-        server.enable_static_replication(&self.id());
+    fn as_static(&'a mut self) -> &'a mut EntityCommands<'a> {
+        let entity = self.id();
         self.insert(HostOwned::new::<Singleton>());
+        self.commands().queue(WorldOpCommand::new(move |world| {
+            world.resource_scope(|_world, mut server: Mut<ServerImpl>| {
+                server.enable_static_entity_replication(&entity);
+            });
+        }));
         self
     }
 

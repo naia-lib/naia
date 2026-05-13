@@ -35,14 +35,20 @@ There is no `ReplicationConfig::Disabled` variant — to stop replicating an ent
 you control scope membership or priority gain (see below).
 
 ```rust
-// Default replication — no explicit call needed.
-server.spawn_entity(&mut world)
-    .insert_component(Position::new(0.0, 0.0));
+use naia_bevy_server::{CommandsExt, ReplicationConfig};
+
+// Default replication.
+commands
+    .spawn_empty()
+    .enable_replication(&mut server)
+    .insert(Position::new(0.0, 0.0));
 
 // Mark as delegatable — client can request write authority.
-server.spawn_entity(&mut world)
-    .insert_component(position)
-    .configure_replication(ReplicationConfig::delegated());
+commands
+    .spawn_empty()
+    .enable_replication(&mut server)
+    .configure_replication(ReplicationConfig::delegated())
+    .insert(position);
 ```
 
 ---
@@ -93,23 +99,24 @@ singleton replicated to connected clients without manually adding a hidden entit
 to rooms or user scopes:
 
 ```rust
+use naia_bevy_server::ServerCommandsExt;
+
 // Dynamic (diff-tracked) resource:
-server.insert_resource(&mut world, ScoreBoard::new(), false)?;
+commands.replicate_resource(ScoreBoard::new());
 
 // Static (immutable, sent once per connection) resource:
-server.insert_resource(&mut world, MapMetadata::new(), true)?;
+commands.replicate_resource_static(MapMetadata::new());
 
 // Remove later:
-server.remove_resource::<ScoreBoard, _>(&mut world);
+commands.remove_replicated_resource::<ScoreBoard>();
 ```
 
-Resources can also be marked delegatable using `configure_resource`:
+Resources can also be marked delegatable using `configure_replicated_resource`:
 
 ```rust
-server.configure_resource::<ScoreBoard, _>(
-    &mut world,
-    ReplicationConfig::delegated(),
-);
+use naia_bevy_server::{ReplicationConfig, ServerCommandsExt};
+
+commands.configure_replicated_resource::<ScoreBoard>(ReplicationConfig::delegated());
 ```
 
 See [Entity Replication — Replicated Resources](../concepts/replication.md#replicated-resources)
@@ -126,9 +133,12 @@ for the full resource API.
 enters scope; no further updates are ever sent:
 
 ```rust
-server.spawn_entity(&mut world)
-    .as_static()              // must be called BEFORE insert_component
-    .insert_component(tile);
+use naia_bevy_server::CommandsExt;
+
+commands
+    .spawn_empty()
+    .as_static() // call before inserting replicated components
+    .insert(tile);
 ```
 
 Use static entities for map geometry, level tiles, or any data that never changes
@@ -146,16 +156,19 @@ On the **client side**, the `Publicity` enum controls whether a locally created
 entity is replicated back to the server:
 
 ```rust
-use naia_client::Publicity;
+use naia_bevy_client::{Client, CommandsExt, Publicity};
 
 // Client creates an entity and publishes it to the server:
-client.entity_mut(&mut world, &entity)
-    .insert_component(MyComponent { value: 42.into() })
-    .configure_replication(Publicity::Public);
+commands
+    .spawn_empty()
+    .enable_replication(&mut client)
+    .configure_replication::<Main>(Publicity::Public)
+    .insert(MyComponent { value: 42.into() });
 
 // Keep the entity private to the server/owner relationship (default):
-client.entity_mut(&mut world, &entity)
-    .configure_replication(Publicity::Private);
+commands
+    .entity(entity)
+    .configure_replication::<Main>(Publicity::Private);
 ```
 
 `Publicity::Private` still lets the entity replicate to the server; it prevents

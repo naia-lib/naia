@@ -9,7 +9,7 @@ can be configured independently for each direction of the connection.
 ## Configuration
 
 ```rust
-use naia_shared::{CompressionConfig, CompressionMode};
+use naia_bevy_shared::{CompressionConfig, CompressionMode};
 
 let compression = CompressionConfig::new(
     Some(CompressionMode::Default(3)),  // server → client, level 3

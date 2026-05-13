@@ -15,13 +15,15 @@ A client can create an entity locally and mark it as `Public`, causing it to
 replicate to the server:
 
 ```rust
-use naia_client::Publicity;
+use naia_bevy_client::{Client, CommandsExt, Publicity};
 
-// Client creates and publishes a local entity:
-let entity = world.spawn();
-client.entity_mut(&mut world, &entity)
-    .insert_component(MyComponent { value: 42.into() })
-    .configure_replication(Publicity::Public);
+fn spawn_public_entity(mut commands: Commands, mut client: Client<Main>) {
+    commands
+        .spawn_empty()
+        .enable_replication(&mut client)
+        .configure_replication::<Main>(Publicity::Public)
+        .insert(MyComponent { value: 42.into() });
+}
 ```
 
 The server receives a `SpawnEntityEvent` for the entity and can read its

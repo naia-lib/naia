@@ -65,7 +65,7 @@ forever.
 `BandwidthConfig` sets the per-connection outbound target:
 
 ```rust
-use naia_shared::BandwidthConfig;
+use naia_bevy_shared::BandwidthConfig;
 
 // In ServerConfig / ClientConfig:
 config.connection.bandwidth = BandwidthConfig {
