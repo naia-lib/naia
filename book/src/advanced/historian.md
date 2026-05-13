@@ -1,18 +1,24 @@
 # Lag Compensation with Historian
 
-In a server-authoritative game each client renders the world a little in the
-past — typically `RTT/2 + interpolation_buffer` milliseconds behind the server.
-When a client fires a weapon it sends the *client* tick at which the shot was
-taken. By the time that packet arrives the server has advanced by another
-`RTT/2` ticks. If the server tests the shot against the *current* world state,
-the target has moved and the shot misses even though it was visually accurate
-on the client.
+In many server-authoritative games, each client has two useful timelines:
+
+- A **confirmed/interpolated** view of remote server state, usually rendered
+  `RTT/2 + interpolation_buffer` behind the server.
+- A **predicted** view for locally controlled entities, often running ahead of
+  the last confirmed server tick.
+
+Lag compensation cares about what the client was seeing when it acted. When a
+client fires a weapon, it sends the tick at which the shot was taken. By the
+time that packet arrives, the server has advanced. If the server tests the shot
+against the current world state, the target may have moved and the shot can miss
+even though it was visually accurate on the client.
 
 The solution is **rewinding the server world** to the tick the client was
 seeing, performing hit detection there, and then fast-forwarding back. naia's
 `Historian` is the rolling per-tick snapshot buffer that makes rewinding
-possible. This is a naia-exclusive feature — no other Rust game networking
-library ships a built-in historian primitive.
+possible. Among Rust game networking libraries, this is one of naia's sharper
+edges: the snapshot buffer is a library primitive instead of a pattern every
+project has to reinvent in a slightly different, slightly haunted way.
 
 ---
 

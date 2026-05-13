@@ -1,29 +1,37 @@
 # Server Authority Model
 
-naia is server-authoritative by design. The server holds all canonical game
-state and is the single source of truth. Clients receive a view of the state
-the server places in their scope.
+naia's default replication model is server-authoritative: the server owns the
+canonical state for ordinary replicated entities and resources, and clients
+receive the subset the server places in their scope.
+
+That default is not the whole authority model. Protocols can opt into
+client-authoritative entities, and server-owned entities/resources can be made
+delegable. Use server authority as the baseline, then opt into the more flexible
+paths where the gameplay actually needs them.
 
 ---
 
 ## What server authority means
 
-- The server spawns, updates, and despawns entities.
-- Clients never write to server-owned entities directly.
+- The server usually spawns, updates, and despawns replicated entities.
+- Clients never write to server-owned undelegated entities directly.
 - All client inputs travel to the server through typed messages or
   `TickBuffered` channels; the server applies them and the resulting state
   update replicates back to clients.
+- If the protocol enables client-authoritative entities, clients may create
+  entities that replicate to the server.
 - The server can grant a client *temporary* write authority over a specific
-  entity via [Authority Delegation](delegation.md), but retains the right to
-  revoke it at any time.
+  entity or resource via [Authority Delegation](delegation.md), but retains the
+  right to revoke it at any time.
 
 ---
 
 ## Why server authority?
 
-Server authority prevents a class of cheats where a client modifies their
-local game state (position, health, score) and expects the server to accept
-it. Without server authority, any client can claim any position.
+Server authority prevents a class of cheats where a client modifies local game
+state (position, health, score) and expects the server to accept it. Without a
+validation point, any client can claim any position, and that makes for a very
+short speedrun to chaos.
 
 > **Warning:** naia does not validate client mutations even when authority is delegated. The
 > server must validate all client-originated state before applying it to

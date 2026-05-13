@@ -16,13 +16,13 @@ naia's core API requires you to run five methods in order every frame. This is
 the loop that the Bevy plugin automates for you:
 
 ```rust
-use naia_server::{transport::udp::NativeSocket, Server, ServerConfig};
+use naia_server::{transport::webrtc, Server, ServerConfig};
 use my_game_shared::protocol;
 
-#[async_std::main]
-async fn main() {
+fn main() {
     let mut server: Server<u32> = Server::new(ServerConfig::default(), protocol());
-    server.listen(NativeSocket::new("0.0.0.0:14191"));
+    let socket = webrtc::Socket::new(&webrtc::ServerAddrs::default(), server.socket_config());
+    server.listen(socket);
 
     let mut world = MyWorld::new();
     let room_key = server.create_room().key();
@@ -60,7 +60,7 @@ async fn main() {
         //    to the next frame.
         server.send_all_packets(&mut world);
 
-        async_std::task::sleep(std::time::Duration::from_millis(1)).await;
+        std::thread::sleep(std::time::Duration::from_millis(1));
     }
 }
 ```
@@ -90,7 +90,7 @@ graph TD
     Client[naia-client] -->|uses| WorldMutType
     Client -->|uses| WorldRefType
     WorldMutType -->|implemented by| BevyWorld[BevyWorldMut<br/>naia-bevy-server]
-    WorldMutType -->|implemented by| MqWorld[MacroquadWorld<br/>naia-macroquad-client]
+    WorldMutType -->|implemented by| MqWorld[Macroquad/custom world<br/>naia-client]
     WorldMutType -->|implemented by| Custom[Your own impl]
 ```
 
@@ -101,7 +101,7 @@ graph TD
 | Adapter | Crate | Notes |
 |---------|-------|-------|
 | Bevy | `naia-bevy-server`, `naia-bevy-client` | Full server + client support; recommended |
-| macroquad | `naia-macroquad-client` | Client only |
+| macroquad | `naia-client` + `mquad` feature | Client via core API |
 | Custom | Implement `WorldMutType` + `WorldRefType` | See [Writing Your Own Adapter](custom.md) |
 
 See also:

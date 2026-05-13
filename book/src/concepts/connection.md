@@ -28,40 +28,37 @@ naia's transport layer is pluggable. Two implementations ship out of the box:
 
 | Target | Implementation | Socket type | Encryption |
 |--------|----------------|-------------|------------|
-| Native (Linux/macOS/Windows) | UDP datagram socket | `transport_udp` | **None** — dev / trusted LAN only |
-| Browser (`wasm32-unknown-unknown`) | WebRTC data channel | `transport_webrtc` | DTLS (WebRTC spec) |
-| iOS / Android (via WebView) | WebRTC in WKWebView / Android WebView | same as browser | DTLS |
+| Native (Linux/macOS/Windows) | WebRTC data channel | `transport_webrtc` | DTLS |
+| Browser (`wasm32-unknown-unknown`) | WebRTC data channel | `transport_webrtc` | DTLS |
+| Native dev / trusted LAN | UDP datagram socket | `transport_udp` | None |
+| Same-process tests | In-process queues | `transport_local` | n/a |
 
 > **Warning:** `transport_udp` sends all packets as **unencrypted plaintext**. Use it for
 > local development and trusted private networks only. See
 > [Security & Trust Model](../reference/security.md) for production guidance.
 
-The `Server` and `Client` APIs are identical for both shipped transports — only
+The `Server` and `Client` APIs are identical for shipped transports — only
 the `Socket` value passed to `listen` / `connect` differs:
 
 ```rust
-use naia_bevy_server::{transport::udp::NativeSocket, Server};
-use naia_bevy_client::{transport::webrtc::WebrtcSocket, Client};
+use naia_bevy_server::{transport::webrtc, Server};
+use naia_bevy_client::Client;
 
-// Bevy startup system — native server:
+// Bevy startup system — native server accepting native and browser clients:
 fn startup_server(mut server: Server) {
-    server.listen(NativeSocket::new("0.0.0.0:14191"));
+    let socket = webrtc::Socket::new(&webrtc::ServerAddrs::default(), server.socket_config());
+    server.listen(socket);
 }
 
-// Bevy startup system — native client:
+// Bevy startup system — native or browser client:
 fn startup_client(mut client: Client) {
-    client.connect(NativeSocket::new("127.0.0.1:14191"));
-}
-
-// Bevy startup system — browser client (wasm32-unknown-unknown):
-fn startup_browser_client(mut client: Client) {
-    client.connect(WebrtcSocket::new("https://myserver.example.com", 14192));
+    let socket = webrtc::Socket::new("http://127.0.0.1:14191", client.socket_config());
+    client.connect(socket);
 }
 ```
 
-For Wasm builds, enable the `wbindgen` feature on the socket crate and build
-with `wasm-pack` or `trunk`. The protocol, channel config, and all game logic
-are identical — only the entry point and socket type change.
+For Wasm builds, add the Rust Wasm target and build with `wasm-pack` or `trunk`.
+The protocol, channel config, and all game logic are identical.
 
 ---
 
@@ -106,11 +103,8 @@ let lag = LinkConditionerConfig::new(
 // Or use a named preset:
 let lag = LinkConditionerConfig::poor_condition();
 
-// Apply to server (conditions inbound packets from clients):
-server.listen(NativeSocket::new(&addrs, Some(lag.clone())));
-
-// Apply to client (conditions inbound packets from the server):
-client.connect(Socket::new(server_url, Some(lag)));
+// Pass the conditioner to a transport socket that accepts it, such as UDP or
+// the local test transport.
 ```
 
 Named presets:
@@ -137,16 +131,21 @@ after receiving the `DisconnectEvent`. naia restarts the full handshake sequence
 and the server fires a new `ConnectEvent` for the user.
 
 ```rust
-use naia_bevy_client::{Client, events::DisconnectEvent};
+use bevy::ecs::message::MessageReader;
+use naia_bevy_client::{
+    transport::webrtc,
+    Client, DefaultClientTag,
+    events::DisconnectEvent,
+};
 
 // Bevy system — handle disconnect and reconnect:
 fn handle_disconnect(
     mut commands: Commands,
-    mut client: Client,
-    mut disconnect_reader: EventReader<DisconnectEvent>,
+    mut client: Client<DefaultClientTag>,
+    mut disconnect_reader: MessageReader<DisconnectEvent<DefaultClientTag>>,
     replicated_entities: Query<Entity, With<ReplicatedMarker>>,
 ) {
-    for DisconnectEvent(_) in disconnect_reader.read() {
+    for _ in disconnect_reader.read() {
         // Clear all server-replicated entities from your local world.
         // naia does NOT do this automatically on disconnect.
         for entity in replicated_entities.iter() {
@@ -154,7 +153,8 @@ fn handle_disconnect(
         }
 
         // Reconnect — naia will re-run the full handshake.
-        client.connect(NativeSocket::new("127.0.0.1:14191"));
+        let socket = webrtc::Socket::new("http://127.0.0.1:14191", client.socket_config());
+        client.connect(socket);
     }
 }
 ```

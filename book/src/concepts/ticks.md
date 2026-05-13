@@ -19,19 +19,20 @@ Protocol::builder()
     .tick_interval(Duration::from_millis(50)) // 20 Hz
 ```
 
-With the Bevy adapter, each elapsed server tick fires a `ServerTickEvent`.
+With the Bevy adapter, each elapsed server tick fires a `TickEvent`.
 Mutate replicated components inside this system:
 
 ```rust
-use naia_bevy_server::{Server, events::ServerTickEvent};
+use bevy::ecs::message::MessageReader;
+use naia_bevy_server::{Server, events::TickEvent};
 use my_game_shared::{InputChannel, PlayerInput, Position};
 
 fn tick_system(
     mut server: Server,
-    mut tick_reader: EventReader<ServerTickEvent>,
+    mut tick_reader: MessageReader<TickEvent>,
     mut positions: Query<&mut Position>,
 ) {
-    for ServerTickEvent(server_tick) in tick_reader.read() {
+    for TickEvent(server_tick) in tick_reader.read() {
         // Drain input for this exact tick.
         let mut messages = server.receive_tick_buffer_messages(server_tick);
         for (_user_key, _input) in messages.read::<InputChannel, PlayerInput>() {
@@ -76,15 +77,16 @@ discrete tick states.
 With the Bevy adapter, use `ClientTickEvent` to send input each tick:
 
 ```rust
-use naia_bevy_client::{Client, events::ClientTickEvent};
+use bevy::ecs::message::MessageReader;
+use naia_bevy_client::{Client, DefaultClientTag, events::ClientTickEvent};
 use my_game_shared::{InputChannel, PlayerInput};
 
 fn client_tick_system(
-    mut client: Client,
-    mut tick_reader: EventReader<ClientTickEvent>,
+    mut client: Client<DefaultClientTag>,
+    mut tick_reader: MessageReader<ClientTickEvent<DefaultClientTag>>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-    for ClientTickEvent(_tick) in tick_reader.read() {
+    for _ in tick_reader.read() {
         let input = PlayerInput {
             up:    keyboard.pressed(KeyCode::KeyW),
             down:  keyboard.pressed(KeyCode::KeyS),

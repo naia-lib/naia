@@ -1,81 +1,91 @@
-# WebRTC (Browser Clients)
+# WebRTC (Native + Browser)
 
-**Crate:** `naia-socket-webrtc` (exposed as `naia_client::transport::webrtc`
-on the client and embedded in `naia_server` for the signaling endpoint)
+`transport_webrtc` is naia's preferred transport for most projects. It supports
+a native server, native clients, and `wasm32-unknown-unknown` browser clients
+from the same server, with DTLS provided by WebRTC.
 
-naia's `transport_webrtc` enables browser clients built with
-`wasm32-unknown-unknown` to connect to a native naia server over WebRTC data
-channels. WebRTC provides DTLS encryption automatically.
+Enable it on the crate you use:
+
+```toml
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
+naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
+```
+
+or, without Bevy:
+
+```toml
+naia-server = { version = "0.25", features = ["transport_webrtc"] }
+naia-client = { version = "0.25", features = ["transport_webrtc"] }
+```
 
 ---
 
-## Connection flow
+## Connection Flow
 
 ```mermaid
 sequenceDiagram
-    participant B as Browser (WASM)
-    participant Sig as Signaling Server
+    participant C as Client (native or Wasm)
+    participant Sig as Signaling endpoint
     participant S as naia Server
 
-    B->>Sig: HTTP POST /session (offer SDP)
-    Sig->>S: forward offer
-    S->>Sig: answer SDP
-    Sig->>B: answer SDP
-    B->>S: ICE candidates (UDP)
-    S->>B: ICE candidates (UDP)
-    Note over B,S: DTLS handshake → data channel open
-    B->>S: naia handshake (ProtocolId)
-    S->>B: Connected
+    C->>Sig: HTTP offer / auth
+    Sig->>S: session setup
+    S->>Sig: answer
+    Sig->>C: answer
+    C->>S: ICE / WebRTC data path
+    S->>C: ICE / WebRTC data path
+    Note over C,S: DTLS handshake, data channel open
+    C->>S: naia ProtocolId handshake
+    S->>C: connected or rejected
 ```
 
 ---
 
-## Server setup
-
-The naia WebRTC server handles the signaling endpoint internally. You provide
-the signaling port (HTTP) and the WebRTC data port (UDP):
+## Server Setup
 
 ```rust
-server.listen(WebrtcSocket::new(
-    "0.0.0.0:14192", // signaling port (HTTP)
-    14193,           // WebRTC data port (UDP, must be publicly reachable)
-));
+use naia_bevy_server::{transport::webrtc, Server};
+
+fn startup(mut server: Server) {
+    let addrs = webrtc::ServerAddrs::new(
+        "0.0.0.0:14191".parse().unwrap(), // signaling/auth HTTP
+        "0.0.0.0:14192".parse().unwrap(), // WebRTC data UDP
+        "https://game.example.com:14192", // public data URL clients can reach
+    );
+
+    let socket = webrtc::Socket::new(&addrs, server.socket_config());
+    server.listen(socket);
+}
 ```
+
+For local development, `webrtc::ServerAddrs::default()` uses localhost ports.
 
 ---
 
-## Browser client setup
-
-In your WASM client, enable the `wbindgen` feature on the socket crate and
-connect with:
+## Client Setup
 
 ```rust
-client.connect(WebrtcSocket::new(
-    "https://myserver.example.com", // signaling URL
-    14192,                          // signaling port
-));
+use naia_bevy_client::{transport::webrtc, Client};
+
+fn startup(mut client: Client) {
+    let socket = webrtc::Socket::new(
+        "https://game.example.com:14191",
+        client.socket_config(),
+    );
+    client.connect(socket);
+}
 ```
 
-Build with `wasm-pack build` or `trunk build --release`. All naia protocol,
-channel, and game logic is identical to the native client — only the entry
-point and socket type change.
+The same code shape works for native and Wasm clients. Browser builds still need
+the normal Rust Wasm target and a web bundler such as Trunk or wasm-pack.
 
 ---
 
-## CORS
+## Deployment Notes
 
-The signaling endpoint is an HTTP server embedded in naia. Ensure your server's
-CORS policy allows requests from the domain serving your WASM file if they
-differ.
-
----
-
-## iOS / Android via WebView
-
-The WASM client build runs inside WKWebView (iOS) or Android WebView using the
-same `transport_webrtc` path as the browser target. Frameworks such as
-Capacitor automate the WebView wrapper.
-
-> **Note:** Native iOS/Android socket support is not yet implemented — blocked on
-> `transport_quic` providing a production-ready encrypted mobile transport. The
-> WebView path is the recommended workaround today.
+- The signaling endpoint is HTTP(S). Put it behind TLS in production.
+- The WebRTC data address must be reachable by clients. NAT/firewall rules still
+  matter; WebRTC is not magic, just very well-dressed networking.
+- Native and browser clients can connect to the same server at the same time.
+- Use the exact same `Protocol` on every target. Transport selection should not
+  change your registered components, messages, channels, or resources.

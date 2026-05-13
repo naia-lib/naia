@@ -1,9 +1,14 @@
 # Authority Delegation
 
-By default the server owns all component state. **Delegation** allows a client
-to take temporary write authority over a specific entity — while it holds
-authority its mutations replicate back to the server instead of the other way
-around.
+By default, server-spawned replicated entities are server-owned. **Delegation**
+allows a client to take temporary write authority over a specific entity or
+resource. While the client holds authority, its mutations replicate back to the
+server instead of the other way around.
+
+Delegation is related to, but separate from, client-authoritative entities. A
+client-owned published entity can be migrated into delegated state; after that
+migration it is server-owned and follows the same grant/deny/revoke rules as
+any other delegated entity.
 
 ---
 
@@ -28,9 +33,9 @@ stateDiagram-v2
 - The server may **revoke** authority at any time by calling
   `entity_take_authority`.
 - The client **never** holds unrevocable ownership.
-- Mutations from a client-authoritative entity should still be validated
-  server-side before applying to authoritative game state. naia replicates
-  what the client sends — it does not validate or clamp values.
+- Mutations from a client-held delegated entity should still be validated
+  server-side before applying to authoritative game state. naia replicates what
+  the client sends; it does not validate or clamp values.
 
 > **Danger:** naia does not validate client mutations. If a client has authority over a
 > `Position` component, it can send any coordinate it likes. Always range-check
@@ -47,6 +52,19 @@ server.spawn_entity(&mut world)
     .insert_component(position)
     .configure_replication(ReplicationConfig::delegated());
 ```
+
+With the Bevy adapter, the entity must first be registered with naia:
+
+```rust
+commands
+    .spawn_empty()
+    .enable_replication(&mut server)
+    .configure_replication(ReplicationConfig::delegated())
+    .insert(position);
+```
+
+If you skip `enable_replication()`, you have created a perfectly normal Bevy
+entity. naia will politely ignore it, as requested.
 
 ---
 
@@ -73,26 +91,26 @@ for (user_key, entity) in events.read::<EntityAuthDenyEvent>() {
 ## Per-user authority
 
 Only one client can hold authority over a given entity at a time. The server
-controls who may request and who is granted authority. Common patterns:
-
-- **Owner lock** — only the entity's owner user key is allowed to hold authority.
-- **Hot-potato** — authority is transferred between clients as turn-taking demands.
-- **Claim-on-proximity** — server auto-grants to the nearest user and revokes
-  when another user comes closer.
+controls who may request and who is granted authority. Treat request handling as
+game logic: check the requesting user, current state, anti-cheat constraints, and
+whether the entity is currently in that user's scope before granting.
 
 ---
 
 ## Delegated resources
 
-Resources can also be delegated using `configure_resource`:
+Resources can also be delegated using `configure_resource` in the core server API
+or `configure_replicated_resource` in Bevy:
 
 ```rust
 server.configure_resource::<ScoreBoard, _>(&mut world,
     ReplicationConfig::delegated());
 ```
 
-This allows a designated admin client (e.g. a headless bot or game master) to
-mutate server-wide state through the normal replication path.
+This lets a client request authority over singleton state through the same
+authority-channel flow used for entities. On Bevy clients, use
+`commands.request_resource_authority::<MyClientTag, ScoreBoard>()` after the
+resource is present locally.
 
 ---
 
@@ -107,6 +125,8 @@ client.entity_mut(&mut world, &entity)
     .configure_replication(Publicity::Public);
 ```
 
-`Publicity::Public` entities are replicated from the client to the server.
-`Publicity::Private` keeps them purely local. This is distinct from authority
-delegation — it controls *client-created* entities, not server-created delegated ones.
+`Publicity::Private` and `Publicity::Public` are both client-owned replicated
+states: private reaches the server only, public may also be fanned out to other
+in-scope clients. `Publicity::Delegated` migrates the entity into the delegated
+authority model, where the server owns the entity and authority can be granted
+or revoked.

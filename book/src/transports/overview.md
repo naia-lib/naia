@@ -1,35 +1,46 @@
 # Transports Overview
 
-naia's transport layer is pluggable via the `Socket` trait. Three
-implementations ship out of the box:
+naia's transport layer is selected with Cargo features and exposed through
+`naia_server::transport::*`, `naia_client::transport::*`, and the matching Bevy
+adapter re-exports.
 
-| Transport | Crate | Target | Encryption | Best for |
-|-----------|-------|--------|------------|---------|
-| `transport_udp` | `naia-socket-native` | Native | **None** | Local dev, trusted LAN |
-| `transport_webrtc` | `naia-socket-webrtc` | Browser WASM | DTLS | Internet browser clients |
-| `transport_local` | `naia-socket-local` | In-process | n/a | Unit tests, AI bots |
+| Feature | Modules | Targets | Encryption | Best for |
+|---------|---------|---------|------------|----------|
+| `transport_webrtc` | `transport::webrtc` | Native server, native clients, Wasm clients | DTLS | Production default; browser support; mixed native/browser populations |
+| `transport_udp` | `transport::udp` | Native only | None | Local dev, trusted LANs, custom secured deployments |
+| `transport_local` | `transport::local` | Same process | n/a | Tests, harnesses, bots |
 
-The `Server` and `Client` APIs are identical for all transports — only the
-`Socket` value passed to `listen` / `connect` differs.
-
----
-
-## When to use each transport
-
-- **UDP** — during development on a local machine or private network. Fast to
-  set up, no encryption overhead.
-- **WebRTC** — whenever you need browser clients. DTLS encryption is provided
-  by the WebRTC spec automatically.
-- **Local** — in your test harness or when running server and client in the same
-  process (e.g. headless bots, determinism checks).
-
-> **Warning:** `transport_udp` is **plaintext**. Never use it on an untrusted public network
-> without a TLS proxy. See [Security & Trust Model](../reference/security.md).
+Use `naia-server`, `naia-client`, or the Bevy adapter crates with the transport
+feature you need; transport selection is feature/module based.
 
 ---
 
-## Planned transport
+## Default Recommendation
 
-- **`transport_quic`** — TLS 1.3 native transport via Quinn. XL effort, no
-  set timeline. When available, this will be the recommended transport for
-  production native deployments.
+Start with **WebRTC** unless you have a specific reason not to. It works for
+native and browser clients, includes the WebRTC handshake and DTLS encryption,
+and keeps one server path for both desktop and Wasm builds.
+
+Use **UDP** when you intentionally want plaintext native datagrams: local
+development, trusted networks, benchmarks, or a deployment where you are adding
+security at another layer and understand the tradeoff.
+
+Use **local** when the network is not the thing being tested. It is how you make
+replication tests deterministic and pleasantly free of port conflicts.
+
+---
+
+## Common Shape
+
+The server and client APIs are the same regardless of transport:
+
+```rust
+// Server
+server.listen(socket);
+
+// Client
+client.connect(socket);
+```
+
+The socket value changes; your protocol, rooms, replicated components, messages,
+authority, and prediction code do not.

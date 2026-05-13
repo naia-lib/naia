@@ -58,7 +58,8 @@ during the handshake.
 **The shared crate** typically contains:
 - `Protocol` construction
 - All `#[derive(Replicate)]` component types
-- All `#[derive(Message)]` / `#[derive(Request, Response)]` types
+- All `#[derive(Message)]` types, including request/response structs that
+  implement the `Request` / `Response` marker traits
 - Custom `#[derive(Channel)]` marker types
 
 ---

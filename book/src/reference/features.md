@@ -1,51 +1,71 @@
 # Feature Matrix
 
-## Shipped
+## Replication
 
 | Feature | Notes |
 |---------|-------|
-| Native (UDP) and browser (WebRTC / WASM) client support | Single codebase for both targets |
-| Pluggable transport layer | `Socket` trait — UDP, WebRTC, and local-test implementations included |
-| Connection / disconnection events with customisable authentication | |
-| Heartbeats and host-timeout detection | |
-| Typed message passing | Unordered-unreliable, sequenced-unreliable, unordered-reliable, ordered-reliable, tick-buffered |
-| Typed request / response pairs | Over reliable channels |
-| Entity replication with per-field delta compression | `Property<T>` change-detection |
-| Static entities | Write-once, no per-tick diff tracking |
-| Replicated resources | Server-side singletons, no room/scope config required |
-| Two-level interest management | Rooms (coarse) + `UserScope` (fine-grained per-user visibility) |
-| Authority delegation | Server grants/revokes client write authority over individual entities |
-| `give_authority` / `take_authority` | Server-initiated authority transfer |
-| Tick synchronisation | Server tick, client tick (leading by RTT/2), sub-tick interpolation fractions |
-| Client-side prediction primitives | `TickBuffered` input delivery, `CommandHistory`, `local_duplicate()` |
-| Lag compensation | `Historian` rolling per-tick world snapshot buffer for server-side rewind hit-detection |
-| Priority-based bandwidth allocation | Per-entity gain, per-user gain, token-bucket send loop |
-| Configurable per-connection bandwidth budget | `BandwidthConfig::target_bytes_per_sec` |
-| Bitwise serialisation | Bit-packing, not byte-packing |
-| Quantized numeric types | `UnsignedInteger<N>`, `SignedVariableFloat<BITS, FRAC>`, etc. |
-| Optional zstd packet compression | Default, custom-dictionary, and dictionary-training modes |
-| Connection diagnostics | RTT (EWMA + P50/P99), jitter, packet loss %, kbps sent/recv |
-| Network condition simulation | `LinkConditionerConfig` (loss, latency, jitter presets) |
-| Handshake flood mitigation | Bounded pending-connection map |
-| Pending-auth timeout | Auto-reject unauthenticated connections |
-| Panic-free stale-key lookup | `user_opt` / `user_mut_opt` |
-| Reconnect correctness | Clients re-receive all in-scope entities and resources on reconnect |
-| Safety comments on all `unsafe` blocks | Local-transport UB transmute eliminated |
-| Bevy adapter | Server + client with multi-client phantom-type disambiguation |
-| macroquad adapter | Client |
-| BDD contract test harness | 215 contracts across 8 feature files |
-| Criterion + iai-callgrind benchmark suite | |
-| Fuzz targets | Five targets: packet header, packet body, quantized serde, replication decoder, handshake state machine |
-| Enum support in `#[derive(Message)]` | Enum message types with proc-macro derived serialization |
-| `DefaultClientTag` and `DefaultPlugin` | Reduces phantom-type boilerplate for single-client Bevy apps |
-| Historian component-kind filtering | `enable_historian_filtered` snapshots only specified components |
-| Optional `metrics` / `tracing` integration | `naia-metrics` and `naia-bevy-metrics` feature-gated crates |
-| Per-connection message channel backpressure | `ReliableSettings::max_queue_depth`; `send_message` returns `Err(MessageQueueFull)` |
+| Entity replication | Per-field deltas through `Property<T>` |
+| Static entities | Full snapshot on scope entry, no per-tick diff tracking |
+| Replicated resources | Singleton values carried by hidden replicated entities |
+| Client-authoritative entities | Opt-in via `Protocol::enable_client_authoritative_entities()` |
+| Entity publication | Client-owned `Private`, `Public`, and `Delegated` states |
+| Reconnect correctness | Re-sends in-scope entities and resources after reconnect |
 
-## Planned
+## Authority
 
-| Feature | Status |
-|---------|--------|
-| `transport_quic` — TLS 1.3 native transport (Quinn-based) | XL effort, no set timeline |
-| Per-component replication toggle | Fine-grained enable/disable per component on a replicated entity (issue #186) |
-| iOS / Android native client socket | Blocked on `transport_quic` |
+| Feature | Notes |
+|---------|-------|
+| Server-owned default model | Ordinary server-spawned entities/resources are server-owned |
+| Authority delegation | Clients can request temporary authority over delegated entities/resources |
+| Server authority control | Server can grant, deny, revoke, and reclaim authority |
+| Scope-aware authority | Authority operations respect scope and delegated status |
+
+## Interest And Bandwidth
+
+| Feature | Notes |
+|---------|-------|
+| Rooms | Coarse interest groups |
+| `UserScope` | Fine-grained per-user visibility |
+| Scope exit policy | Despawn or persist/freeze when leaving scope |
+| Priority-weighted bandwidth | Per-entity/per-user gain with token-bucket send loop |
+| Per-connection bandwidth budgets | Target bytes per second |
+| Message backpressure | Reliable channel queue limits return errors instead of silently growing forever |
+
+## Messaging And Time
+
+| Feature | Notes |
+|---------|-------|
+| Typed messages | Reliable/unreliable, ordered/unordered, sequenced, and tick-buffered modes |
+| Typed request/response | Request trait associates each request with its response |
+| Tick synchronization | Server/client ticks, RTT-aware timing, interpolation fractions |
+| Prediction primitives | `TickBuffered`, `CommandHistory`, local duplicate patterns |
+| Lag compensation | `Historian` snapshot buffer, including component-kind filtering |
+
+## Transports
+
+| Feature | Notes |
+|---------|-------|
+| WebRTC transport | Native and Wasm clients; DTLS; recommended production path |
+| UDP transport | Native plaintext transport for dev/trusted/custom-secured deployments |
+| Local transport | In-process deterministic tests and harnesses |
+| Link conditioning | Loss, latency, and jitter presets for supported transports |
+
+## Adapters And Tooling
+
+| Feature | Notes |
+|---------|-------|
+| Bevy adapter | Server, client, shared protocol helpers, replicated resources |
+| Macroquad/core path | Uses `naia-client` directly with `mquad` support |
+| Custom world integration | Implement `WorldMutType` and `WorldRefType` |
+| Metrics integration | `naia-metrics` and `naia-bevy-metrics` |
+| Contract test harness | Scenario/spec coverage for replication, authority, scope, and transport behavior |
+| Benchmarks and fuzzing | Criterion/iai-callgrind benches and protocol/serde fuzz targets |
+
+## Serialization
+
+| Feature | Notes |
+|---------|-------|
+| Bit-level serialization | Compact bit-packing |
+| Quantized numeric types | Fixed-width and variable-width integer/float helpers |
+| zstd compression | Optional default, custom dictionary, and dictionary-training modes |
+| Enum messages | Supported by `#[derive(Message)]` |

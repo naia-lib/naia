@@ -1,116 +1,122 @@
 # Installation
 
-naia follows a three-crate workspace pattern: a `shared` crate imported by both
-the server and client, a `server` binary, and a `client` binary.
+Most naia applications use a three-crate workspace: a shared crate imported by
+both sides, a server binary, and a client binary. The shared crate is where the
+`Protocol`, replicated components, messages, channels, and request/response
+types live.
 
 ---
 
-## Bevy (recommended)
+## Bevy Projects
+
+For Bevy, use the Bevy adapter crates in all three crates:
 
 ```toml
 # shared/Cargo.toml
 [dependencies]
-naia-shared = "0.24"
+naia-bevy-shared = "0.25"
+bevy_ecs = { version = "0.18", default-features = false }
 
 # server/Cargo.toml
 [dependencies]
-naia-bevy-server = "0.24"
-naia-shared       = { path = "../shared" }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
+my-game-shared = { path = "../shared" }
 
 # client/Cargo.toml
 [dependencies]
-naia-bevy-client = "0.24"
-naia-shared      = { path = "../shared" }
+naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
+my-game-shared = { path = "../shared" }
 ```
+
+`naia-bevy-server` and `naia-bevy-client` re-export the shared primitives most
+application code needs. Your shared crate should depend on `naia-bevy-shared`
+because Bevy replicated components derive both `Component` and `Replicate`.
 
 See [Bevy Quick Start](bevy-quickstart.md) for a complete working example.
 
 ---
 
-## Core (no ECS)
+## Without Bevy
 
-For macroquad or custom engines, use the core crates directly:
+For macroquad or a custom engine, use the core crates directly:
 
 ```toml
 # shared/Cargo.toml
 [dependencies]
-naia-shared = "0.24"
+naia-shared = "0.25"
 
 # server/Cargo.toml
 [dependencies]
-naia-server = "0.24"
-naia-shared = { path = "../shared" }
+naia-server = { version = "0.25", features = ["transport_webrtc"] }
+my-game-shared = { path = "../shared" }
 
 # client/Cargo.toml
 [dependencies]
-naia-client = "0.24"
-naia-shared = { path = "../shared" }
+naia-client = { version = "0.25", features = ["transport_webrtc"] }
+my-game-shared = { path = "../shared" }
 ```
 
-See [Core API Overview](../adapters/overview.md) for the five-step loop.
+There is no separate macroquad adapter crate. Macroquad clients use `naia-client`
+directly and enable the `mquad` feature when building through miniquad/macroquad:
+
+```toml
+naia-client = { version = "0.25", features = ["mquad", "transport_webrtc"] }
+naia-shared = { version = "0.25", features = ["mquad"] }
+```
+
+See [Core API Overview](../adapters/overview.md) and [Macroquad](../adapters/macroquad.md)
+for the non-Bevy path.
 
 ---
 
-## macroquad adapter
+## Browser Clients
+
+The server still runs natively. Browser clients compile to
+`wasm32-unknown-unknown` and use the same `transport_webrtc` protocol path as
+native WebRTC clients.
+
+For a core client wrapper crate:
 
 ```toml
-# client/Cargo.toml
+[features]
+wbindgen = ["naia-client/wbindgen", "my-game-shared/wbindgen"]
+
 [dependencies]
-naia-macroquad-client = "0.24"
-naia-shared           = { path = "../shared" }
+naia-client = { version = "0.25", features = ["transport_webrtc"] }
+my-game-shared = { path = "../shared" }
 ```
 
----
-
-## Browser (WASM) target
-
-For browser clients, enable the `wbindgen` feature and build with `wasm-pack`
-or `trunk`:
-
-```toml
-# client/Cargo.toml — WASM build
-[dependencies]
-naia-client = { version = "0.24", features = ["wbindgen"] }
-naia-shared = { path = "../shared" }
-```
-
-Install the WASM target if you haven't already:
+For a Bevy client, `naia-bevy-client` already enables the underlying wasm-bindgen
+support it needs; the important transport feature is still `transport_webrtc`.
+Add the Wasm target if you have not already:
 
 ```sh
 rustup target add wasm32-unknown-unknown
 ```
 
-Build with trunk:
+Build with whichever frontend tool your app uses:
 
 ```sh
 trunk build --release
-```
-
-Or with wasm-pack:
-
-```sh
 wasm-pack build --target web
 ```
 
-> **Note:** The server always runs natively. Only the client needs the `wbindgen`
-> feature for browser targets. The shared crate requires no feature-flag changes.
+---
+
+## Transport Features
+
+| Crate | Feature | Use when |
+|-------|---------|----------|
+| `naia-server`, `naia-client` | `transport_webrtc` | Preferred native + browser transport; DTLS via WebRTC |
+| `naia-bevy-server`, `naia-bevy-client` | `transport_webrtc` | Same transport through the Bevy adapter |
+| `naia-server`, `naia-client` | `transport_udp` | Native plaintext UDP for local dev/trusted networks |
+| `naia-server`, `naia-client` | `transport_local` | In-process tests and deterministic harnesses |
+| `naia-client`, `naia-shared` | `wbindgen` | Core-client wrapper crates targeting wasm-bindgen |
+| `naia-client`, `naia-shared` | `mquad` | miniquad/macroquad builds |
 
 ---
 
-## Feature flags
-
-| Crate | Flag | Effect |
-|-------|------|--------|
-| `naia-client` | `wbindgen` | Enable WebRTC transport for `wasm32-unknown-unknown` targets |
-| `naia-bevy-client` | `wbindgen` | Same, for the Bevy adapter |
-| `naia-server` | `metrics` | Enable `naia-metrics` integration (opt-in observability) |
-| `naia-bevy-server` | `metrics` | Same, for the Bevy server adapter |
-
----
-
-## Workspace layout
-
-For a real project, a minimal `Cargo.toml` workspace looks like:
+## Workspace Layout
 
 ```toml
 # Cargo.toml (workspace root)
@@ -119,17 +125,13 @@ members = ["shared", "server", "client"]
 resolver = "2"
 ```
 
-Each member crate then has its own `Cargo.toml` as shown above.
-
-> **Tip:** Put the `Protocol` builder, all `#[derive(Replicate)]` component types,
-> all `#[derive(Message)]` types, and all `#[derive(Channel)]` types in the
-> `shared` crate. Import it from both the server and client. This ensures both
-> sides always build the exact same protocol hash — a mismatch causes
-> handshake rejection.
+Keep protocol construction and all registered replicated/message/channel types
+in the shared crate. Both sides must build the exact same `Protocol`; a mismatch
+rejects the handshake, which is correct behavior and also a very efficient way
+to discover that one side forgot to enable a feature flag.
 
 ---
 
-## Rust toolchain
+## Rust Toolchain
 
-naia requires stable Rust. No nightly features are used. The minimum supported
-Rust version (MSRV) is listed in the root `Cargo.toml` of the naia repository.
+naia uses stable Rust. No nightly features are required.

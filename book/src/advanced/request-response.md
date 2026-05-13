@@ -13,7 +13,7 @@ associates it with its response type. The response type derives `Message` and
 implements the `Response` marker trait:
 
 ```rust
-use naia_shared::{Message, Request, Response};
+use naia_bevy_shared::{Message, Request, Response};
 
 /// The request struct — carries the query parameters.
 #[derive(Message)]
@@ -34,6 +34,10 @@ pub struct FetchScoreResponse {
 
 impl Response for FetchScoreResponse {}
 ```
+
+There are public derives for `Message`, `Channel`, and `Replicate`. `Request`
+and `Response` are marker traits: implement them as shown so naia knows which
+response type belongs to which request.
 
 Register the request type in the `Protocol` builder using `add_request`:
 
@@ -69,15 +73,21 @@ with `ChannelDirection::Bidirectional` and `ChannelMode::OrderedReliable`.
 ## Handling the request (server)
 
 ```rust
-// In your request event system:
-for (user_key, response_send_key, request) in
-    events.read::<RequestChannel, FetchScore>()
-{
-    let score = db.lookup_score(request.player_id);
-    server.send_response(
-        &response_send_key,
-        &FetchScoreResponse { score, rank: 1 },
-    );
+use bevy_ecs::message::MessageReader;
+use naia_bevy_server::{events::RequestEvents, Server};
+
+fn handle_requests(mut server: Server, mut request_reader: MessageReader<RequestEvents>) {
+    for events in request_reader.read() {
+        for (_user_key, response_send_key, request) in
+            events.read::<RequestChannel, FetchScore>()
+        {
+            let score = db.lookup_score(request.player_id);
+            server.send_response(
+                &response_send_key,
+                &FetchScoreResponse { score, rank: 1 },
+            );
+        }
+    }
 }
 ```
 
@@ -89,12 +99,20 @@ to `send_response` to route the reply to the correct client.
 ## Receiving the response (client)
 
 ```rust
-// In your response event system:
-for (response_receive_key, response) in
-    events.read::<RequestChannel, FetchScore>()
-{
-    if let Some(kind) = global.pending_requests.remove(&response_receive_key) {
-        println!("Score: {}, Rank: {}", response.score, response.rank);
+use naia_bevy_client::Client;
+
+fn receive_responses(mut client: Client<Main>, mut global: ResMut<Global>) {
+    let mut finished = Vec::new();
+
+    for (response_key, _pending) in &global.pending_requests {
+        if let Some(response) = client.receive_response(response_key) {
+            println!("Score: {}, Rank: {}", response.score, response.rank);
+            finished.push(response_key.clone());
+        }
+    }
+
+    for response_key in finished {
+        global.pending_requests.remove(&response_key);
     }
 }
 ```

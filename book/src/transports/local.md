@@ -1,8 +1,5 @@
 # Local (In-Process) Transport
 
-**Crate:** `naia-socket-local` (exposed as `naia_server::transport::local` and
-`naia_client::transport::local`)
-
 `transport_local` runs the server and client in the same process with no real
 network sockets. It is used by naia's test harness and is ideal for:
 
@@ -14,28 +11,25 @@ network sockets. It is used by naia's test harness and is ideal for:
 
 ## Setup
 
-```rust
-use naia_server::transport::local::{LocalServerSocket, LocalClientSocket};
+The local transport is mostly a test-harness tool. The pieces are:
 
-// Create a shared hub:
-let hub = LocalSocketHub::new();
+- `naia_shared::transport::local::LocalTransportHub`
+- `naia_server::transport::local::{LocalServerSocket, Socket}`
+- `naia_client::transport::local::{LocalClientSocket, LocalAddrCell, Socket}`
 
-// Server side:
-server.listen(LocalServerSocket::new(&hub));
-
-// Client side (same process):
-client.connect(LocalClientSocket::new(&hub));
-```
+The repository's contract harness and Bevy resource tests are the best reference
+for complete setup because they wire the hub, auth queues, and data queues
+directly. See `test/harness/src/harness/scenario.rs` and
+`adapters/bevy/server/tests/replicated_resources_bevy.rs`.
 
 ---
 
 ## Link conditioning
 
-The local transport supports the same `LinkConditionerConfig` as UDP:
+The local transport supports `LinkConditionerConfig`:
 
-```rust
-hub.configure_link_conditioner(LinkConditionerConfig::poor_condition());
-```
+Pass `Some(LinkConditionerConfig::poor_condition())` to the local client/server
+socket wrapper to inject loss, latency, and jitter into in-process delivery.
 
 This injects loss, latency, and jitter into the in-process message delivery —
 useful for testing your prediction and rollback logic without a real bad network.

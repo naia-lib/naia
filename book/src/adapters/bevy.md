@@ -1,9 +1,9 @@
 # Bevy Adapter
 
-**Crates:** `naia-bevy-server` (server), `naia-bevy-client` (client)
+**Crates:** `naia-bevy-shared`, `naia-bevy-server`, `naia-bevy-client`
 
 The Bevy adapter wraps naia's core crates and exposes `Server` / `Client` as
-Bevy resources, routes naia events into Bevy's event system, and provides
+Bevy resources, routes naia events into Bevy messages, and provides
 `CommandsExt` extension methods for entity replication. If you are using Bevy,
 use these crates instead of `naia-server` / `naia-client` directly.
 
@@ -11,16 +11,16 @@ use these crates instead of `naia-server` / `naia-client` directly.
 
 ## The `T` phantom type parameter
 
-When using the Bevy adapter, the `Client` SystemParam and `NaiaClientPlugin`
+When using the Bevy client adapter, the `Client` SystemParam and `Plugin<T>`
 carry a generic type parameter `T`:
 
 ```rust
-use naia_bevy_client::{Client, NaiaClientPlugin};
+use naia_bevy_client::{Client, Plugin};
 
 #[derive(Resource)]
 pub struct MyClient;
 
-app.add_plugins(NaiaClientPlugin::<MyClient>::new(client_config, protocol()));
+app.add_plugins(Plugin::<MyClient>::new(client_config, protocol()));
 
 fn my_system(client: Client<MyClient>) { /* … */ }
 ```
@@ -60,17 +60,17 @@ types.
 ### Server
 
 ```rust
-use naia_bevy_server::{NaiaServerPlugin, ServerConfig};
+use naia_bevy_server::{Plugin, ServerConfig};
 
-app.add_plugins(NaiaServerPlugin::new(ServerConfig::default(), protocol()));
+app.add_plugins(Plugin::new(ServerConfig::default(), protocol()));
 ```
 
 ### Client
 
 ```rust
-use naia_bevy_client::{NaiaClientPlugin, ClientConfig, DefaultClientTag};
+use naia_bevy_client::{Plugin, ClientConfig, DefaultClientTag};
 
-app.add_plugins(NaiaClientPlugin::<DefaultClientTag>::new(
+app.add_plugins(Plugin::<DefaultClientTag>::new(
     ClientConfig::default(),
     protocol(),
 ));
@@ -80,61 +80,45 @@ app.add_plugins(NaiaClientPlugin::<DefaultClientTag>::new(
 
 ## System ordering
 
-naia's Bevy plugins register systems internally. You must order your game systems
-relative to naia's system sets to avoid processing stale events:
+naia's Bevy plugins register their packet and world-sync systems internally. In
+most apps you can read naia messages and mutate replicated components in normal
+`Update` systems; the plugin handles receive/process/send ordering around them.
+Advanced apps can order relative to the exported shared system sets when needed.
 
 ```rust
-use naia_bevy_server::SystemSet as NaiaServerSet;
-use naia_bevy_client::SystemSet as NaiaClientSet;
+use naia_bevy_shared::{ProcessPackets, SendPackets};
 
-// Server ordering:
-app.configure_sets(
-    Update,
-    (
-        NaiaServerSet::ReceiveEvents,   // naia drains inbound packets
-        MyGameSet::Logic,               // your simulation step
-        NaiaServerSet::Send,            // naia flushes outbound packets
-    ).chain(),
-);
-
-// Client ordering:
-app.configure_sets(
-    Update,
-    (
-        NaiaClientSet::ReceiveEvents,
-        MyGameSet::Logic,
-        NaiaClientSet::Send,
-    ).chain(),
-);
+app.configure_sets(Update, MyGameSet::Logic.after(ProcessPackets).before(SendPackets));
 ```
 
-> **Warning:** If your simulation systems run before `ReceiveEvents`, they will see
-> last frame's events. If they run after `Send`, mutations made this frame won't
-> be flushed until next frame. Both orderings add one frame of latency.
+> **Warning:** If your simulation systems run before packet processing, they will
+> see old network events. If they run after send, mutations made this frame wait
+> for the next frame.
 
 ---
 
 ## Handling events
 
-naia events are routed into Bevy's `EventReader` system. Each event type carries
-the client tag `T` as a type parameter:
+naia events are exposed through Bevy's message system, so normal systems should
+read them with `MessageReader<T>`. Client-side event types carry the client tag
+`T`; server-side event types do not.
 
 ```rust
-use naia_bevy_server::events::{ConnectEvent, DisconnectEvent, MessageEvent};
+use bevy_ecs::message::MessageReader;
+use naia_bevy_server::{events::{ConnectEvent, DisconnectEvent}, Server};
 
 fn handle_connections(
-    mut server: Server<DefaultClientTag>,
-    mut connect_reader: EventReader<ConnectEvent>,
-    mut disconnect_reader: EventReader<DisconnectEvent>,
+    mut server: Server,
+    mut connect_reader: MessageReader<ConnectEvent>,
+    mut disconnect_reader: MessageReader<DisconnectEvent>,
 ) {
-    for event in connect_reader.read() {
-        let user_key = event.user_key;
+    for ConnectEvent(user_key) in connect_reader.read() {
         println!("User connected: {:?}", user_key);
         // Spawn entities, add to rooms, etc.
     }
 
-    for event in disconnect_reader.read() {
-        println!("User disconnected: {:?}", event.user_key);
+    for DisconnectEvent(user_key, address, reason) in disconnect_reader.read() {
+        println!("User disconnected: {:?} {:?} {:?}", user_key, address, reason);
     }
 }
 ```
@@ -149,7 +133,7 @@ use naia_bevy_client::events::{
     DespawnEntityEvent,
     InsertComponentEvent,
     UpdateComponentEvent,
-    MessageEvent,
+    MessageEvents,
 };
 ```
 
@@ -159,8 +143,8 @@ use naia_bevy_client::events::{
 use naia_bevy_server::events::{
     ConnectEvent,
     DisconnectEvent,
-    AuthEvent,
-    MessageEvent,
+    AuthEvents,
+    MessageEvents,
     TickEvent,
 };
 ```
@@ -221,8 +205,8 @@ pub struct ClientA;
 #[derive(Resource)]
 pub struct ClientB;
 
-app.add_plugins(NaiaClientPlugin::<ClientA>::new(config_a, protocol()))
-   .add_plugins(NaiaClientPlugin::<ClientB>::new(config_b, protocol()));
+app.add_plugins(Plugin::<ClientA>::new(config_a, protocol()))
+   .add_plugins(Plugin::<ClientB>::new(config_b, protocol()));
 
 fn system_a(client: Client<ClientA>) { /* … */ }
 fn system_b(client: Client<ClientB>) { /* … */ }

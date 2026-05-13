@@ -1,20 +1,21 @@
 # Entity Publishing
 
-Entity publishing controls whether and how a server-spawned entity is replicated
-to clients. This chapter covers the full lifecycle: initial scope placement,
-temporary replication pausing, and the relationship between server-side
+Entity publishing controls whether and how a replicated entity is visible beyond
+its owner. This chapter covers initial scope placement, temporary replication
+pausing, replicated resources, and the relationship between server-side
 `ReplicationConfig` and client-side `Publicity`.
 
 ---
 
 ## How replication starts
 
-Entities are **not** replicated by default. An entity reaches a client only when
-all three conditions are true simultaneously:
+In Bevy, an entity is not considered by naia until you call
+`enable_replication()`. After that, a server-owned entity reaches a client only
+when all three conditions are true simultaneously:
 
 1. The entity and the user share at least one **room**.
 2. The entity is **included** in the user's `UserScope`.
-3. The entity has a `ReplicationConfig` that allows replication (the default).
+3. The entity has a `ReplicationConfig` that allows replication.
 
 The first two conditions are managed by rooms and scope (see
 [Rooms & Scoping](../concepts/rooms.md)). The third — `ReplicationConfig` — is
@@ -26,7 +27,8 @@ what this chapter covers.
 
 | Variant | Effect |
 |---------|--------|
-| `ReplicationConfig::default()` | Replicated to in-scope users (default for all spawned entities) |
+| `ReplicationConfig::public()` / default | Replicated to in-scope users |
+| `ReplicationConfig::private()` | Client-owned unpublished state; not used for ordinary server-spawned public entities |
 | `ReplicationConfig::delegated()` | Marked as eligible for client authority requests (still replicated; see [Authority Delegation](delegation.md)) |
 
 There is no `ReplicationConfig::Disabled` variant — to stop replicating an entity
@@ -86,8 +88,9 @@ See [Rooms & Scoping](../concepts/rooms.md) for the scope management API.
 
 ## Replicated resources
 
-Replicated resources bypass the room/scope system entirely — they are always
-visible to every connected user:
+Replicated resources bypass the room/scope system entirely. A resource is a
+singleton replicated to connected clients without manually adding a hidden entity
+to rooms or user scopes:
 
 ```rust
 // Dynamic (diff-tracked) resource:
@@ -150,14 +153,19 @@ client.entity_mut(&mut world, &entity)
     .insert_component(MyComponent { value: 42.into() })
     .configure_replication(Publicity::Public);
 
-// Keep the entity purely client-local (default):
+// Keep the entity private to the server/owner relationship (default):
 client.entity_mut(&mut world, &entity)
     .configure_replication(Publicity::Private);
 ```
 
-`Publicity` is distinct from `ReplicationConfig` — it controls client-created
-entities flowing *to* the server, whereas `ReplicationConfig` controls
-server-created entities flowing *to* clients.
+`Publicity::Private` still lets the entity replicate to the server; it prevents
+the server from also publishing that entity to other clients. For a truly local
+entity, do not enable naia replication for it.
+
+`Publicity` is distinct from `ReplicationConfig`: it controls client-created
+entities flowing *to* the server and possibly out to peers, whereas
+`ReplicationConfig` controls server-owned entities/resources flowing *to*
+clients and whether they are delegable.
 
 See [Client-Owned Entities](client-owned.md) for the full `Publicity` API.
 
