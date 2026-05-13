@@ -879,6 +879,29 @@ impl LocalWorldManager {
         }
     }
 
+    /// Like `despawn_entity`, but for an intentional client-initiated despawn of a
+    /// server-created entity over which the client holds Granted authority.
+    ///
+    /// Before doing local cleanup this method queues a `Despawn` command for reliable
+    /// transmission to the server, so the server actually removes the entity.
+    /// `despawn_entity` alone must NOT be used for this purpose — it is also called
+    /// from `entity_disable_delegation` (local cleanup only, no server notification).
+    pub fn despawn_entity_and_notify_server(&mut self, global_entity: &GlobalEntity) {
+        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+            return;
+        };
+        if !local_entity.is_host() {
+            let remote_entity = local_entity.take_remote();
+            if self.remote.get_entity_auth_status(&remote_entity)
+                == Some(EntityAuthStatus::Granted)
+            {
+                self.remote
+                    .push_outgoing_despawn(EntityCommand::Despawn(*global_entity));
+            }
+        }
+        self.despawn_entity(global_entity);
+    }
+
     /// Pause replication for a `ScopeExit::Persist` entity that has left scope.
     /// The entity stays in the client's entity pool; no further updates are sent
     /// until `resume_entity` is called on re-entry.

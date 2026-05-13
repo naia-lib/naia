@@ -1291,8 +1291,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
 
         if let Some(connection) = &mut self.server_connection {
-            //remove entity from server connection
-            connection.base.world_manager.despawn_entity(&global_entity);
+            connection
+                .base
+                .world_manager
+                .despawn_entity_and_notify_server(&global_entity);
         }
 
         // Remove from ECS Record

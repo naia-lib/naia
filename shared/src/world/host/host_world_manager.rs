@@ -299,8 +299,13 @@ impl HostWorldManager {
                 EntityMessage::Spawn(_) => {
                     unreachable!("Server never sends Spawn to the originating HostWorldManager");
                 }
-                EntityMessage::Despawn(_) => {
-                    unreachable!("Server never sends Despawn to the originating HostWorldManager");
+                EntityMessage::Despawn(host_entity) => {
+                    // A client with Granted authority sent a Despawn for a server-created entity.
+                    if let Some(global_entity) =
+                        local_entity_map.global_entity_from_host(&host_entity)
+                    {
+                        self.incoming_events.push(EntityEvent::Despawn(*global_entity));
+                    }
                 }
                 EntityMessage::InsertComponent(_, _) => {
                     unreachable!("Server never sends InsertComponent to the originating HostWorldManager");
