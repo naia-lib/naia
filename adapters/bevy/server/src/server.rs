@@ -136,13 +136,6 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn enable_static_entity_replication(&mut self, entity: &Entity) {
-        match self {
-            Self::Full(server) => server.enable_static_entity_replication(entity),
-            Self::WorldOnly(server) => server.enable_static_entity_replication(entity),
-        }
-    }
-
     pub(crate) fn mark_entity_as_static(&mut self, entity: &Entity) {
         match self {
             Self::Full(server) => server.mark_entity_as_static(entity),
@@ -625,12 +618,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub(crate) fn mark_entity_as_static(&mut self, entity: &Entity) {
-        match &mut *self.server_impl {
-            ServerImpl::WorldOnly(server) => server.mark_entity_as_static(entity),
-            ServerImpl::Full(server) => server.mark_entity_as_static(entity),
-        }
-    }
+
 
     pub(crate) fn disable_replication(&mut self, entity: &Entity) {
         match &mut *self.server_impl {
