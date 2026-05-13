@@ -1,149 +1,99 @@
 # Security & Trust Model
 
-naia is a networking library, not a security framework. Understanding its trust
-boundaries is essential before deploying in production.
+naia is a networking library, not an anti-cheat or identity platform. It gives
+you transport choices, typed auth payloads, authority boundaries, and the hooks
+to validate client-originated state. Your game still owns trust decisions.
 
 ---
 
-## The server is authoritative
+## Prefer WebRTC For Production
 
-All persistent game state originates on the server. The server decides which
-entities exist, which components they carry, and which values are canonical.
-Clients receive a read-only view of the entities the server places in their scope.
+`transport_webrtc` is the recommended starting point for internet-facing games.
+It works for native and browser clients and gets DTLS from WebRTC. Use it unless
+you have a concrete reason to choose plaintext UDP.
 
-## Authority delegation is bounded
+`transport_udp` sends auth and game packets in plaintext. It is appropriate for
+local development, trusted LANs, controlled benchmarks, or teams intentionally
+wrapping/securing it themselves.
 
-When the server marks an entity `Delegated` and a client requests authority, the
-server explicitly **grants or denies** the request. While a client holds authority
-its mutations travel back to the server. The server can revoke authority at any
-time by calling `entity_take_authority`. Clients never hold unrevocable ownership.
+| Transport | Encryption | Recommended use |
+|-----------|------------|-----------------|
+| `transport_webrtc` | DTLS | Production native/browser clients |
+| `transport_udp` | None | Local dev, trusted LANs, explicit custom security |
+| `transport_local` | n/a | Same-process tests |
 
-> **Danger:** naia replicates what the client sends — it does not validate or clamp values.
-> Mutations from a client-authoritative entity **must** be validated server-side
-> before being applied to authoritative game state.
+---
+
+## Authority Boundaries
+
+Server-owned undelegated entities are only written by the server. Clients affect
+them by sending input/messages, and the server decides what state changes.
+
+Client-authoritative entities are opt-in through
+`Protocol::enable_client_authoritative_entities()`. Once enabled, client-owned
+entities can replicate to the server and, if public, to other scoped clients.
+
+Delegated entities/resources are server-owned, but a client may temporarily hold
+write authority after the server grants it. The server can revoke authority.
+
+> **Danger:** naia replicates client-originated values; it does not decide
+> whether those values are fair. Validate positions, inventory changes, cooldowns,
+> purchases, and every other client-originated mutation before making it game
+> truth.
+
+---
 
 ## Authentication
 
-naia supports application-layer authentication via a typed `Auth` message sent
-during the handshake. Define any `#[derive(Message)]` struct as your auth
-payload:
+naia supports application-layer authentication via a typed `Message` sent during
+the handshake:
 
 ```rust
-// shared/src/messages/auth.rs
+use naia_bevy_shared::Message;
+
 #[derive(Message)]
 pub struct Auth {
     pub username: String,
-    pub token:    String,
+    pub token: String,
 }
 ```
 
-The client sends it before the connection is accepted:
+Client:
 
 ```rust
-client.connect_with_auth(
-    NativeSocket::new("127.0.0.1:14191"),
-    &Auth { username: "alice".into(), token: jwt_token },
-);
+client.auth(Auth {
+    username: "alice".into(),
+    token: jwt_token,
+});
+client.connect(socket);
 ```
 
-The server receives it via an `AuthEvent` (Bevy: `AuthEvents`) before the
-connection is fully established:
+Server:
 
 ```rust
-for (user_key, auth) in auth_events.read::<Auth>() {
-    if validate_token(&auth.token) {
-        server.accept_connection(&user_key);
-    } else {
-        server.reject_connection(&user_key);
+for events in auth_events.read() {
+    for (user_key, auth) in events.read::<Auth>() {
+        if validate_token(&auth.token) {
+            server.accept_connection(&user_key);
+        } else {
+            server.reject_connection(&user_key);
+        }
     }
 }
 ```
 
-> **Danger:** Auth credentials are transmitted in plaintext over UDP. Use
-> `transport_webrtc` (DTLS encrypted) or a TLS proxy in front of UDP for any
-> deployment where credentials must be confidential.
+When credentials matter, use WebRTC or another encrypted deployment path. Do not
+send secrets over plaintext UDP and then act surprised when plaintext behaves
+like plaintext.
 
 ---
 
-## What naia does NOT provide
+## What naia Does Not Provide
 
-- **Packet authentication or encryption.** `AuthEvent` credentials are transmitted
-  in plaintext by default over UDP. Applications requiring confidentiality **must**
-  choose an encrypted transport.
-- **Anti-cheat.** naia does not detect or reject malicious client mutations.
-- **Rate limiting.** naia does not throttle message or mutation rates at the
-  application layer.
-- **Input validation.** naia does not validate or sanitise component values received
-  from client-authoritative entities.
+- Anti-cheat decisions.
+- Rate limiting for application-level spam.
+- Password/session-token storage.
+- Protection against malicious but protocol-valid component values.
+- P2P trust negotiation.
 
----
-
-## Transport encryption by deployment target
-
-| Transport | Encryption | Suitable for |
-|-----------|-----------|--------------|
-| `transport_udp` (native) | **None — plaintext** | Local dev / trusted LAN only |
-| `transport_webrtc` (browser) | DTLS (from WebRTC spec) | Internet browser clients |
-| `transport_quic` (native, planned) | TLS 1.3 (Quinn) | Production native deployments |
-
-**Production recommendation:** for native clients on untrusted networks, use
-`transport_quic` once available. Until then, place `transport_udp` behind a VPN
-or a TLS terminating proxy (e.g. stunnel, NGINX stream proxy) if confidentiality
-is required.
-
----
-
-## Securing native UDP deployments today
-
-### stunnel configuration
-
-Install stunnel (`apt install stunnel4` / `brew install stunnel`), then create
-`/etc/stunnel/naia.conf`:
-
-```ini
-[naia-udp]
-accept  = 0.0.0.0:14192          ; TLS port clients connect to
-connect = 127.0.0.1:14191        ; naia server's plain UDP port
-cert    = /etc/ssl/certs/naia.crt
-key     = /etc/ssl/private/naia.key
-protocol = connect
-```
-
-### docker-compose example
-
-```yaml
-services:
-  game-server:
-    image: your-game-server:latest
-    environment:
-      LISTEN_ADDR: "0.0.0.0:14191"
-    expose:
-      - "14191"
-
-  stunnel:
-    image: dweomer/stunnel
-    ports:
-      - "14192:14192/udp"
-    volumes:
-      - ./stunnel.conf:/etc/stunnel/stunnel.conf:ro
-      - ./certs:/etc/stunnel/certs:ro
-    depends_on:
-      - game-server
-```
-
----
-
-## WebRTC (browser) considerations
-
-Browser clients connect over WebRTC data channels. The WebRTC handshake provides
-DTLS encryption at the transport layer, but the `AuthEvent` payload is still
-application-layer plaintext from naia's perspective. If you transmit sensitive
-credentials in `auth()`, ensure the WebRTC transport is configured for
-end-to-end encryption.
-
----
-
-## Reporting a vulnerability
-
-Please report security issues privately to the maintainers via Discord or email
-before filing a public GitHub issue.
+Those belong in your game server and infrastructure.

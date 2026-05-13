@@ -1,56 +1,60 @@
 # Writing a Custom Transport
 
-**Trait location:** `naia_shared::transport::Socket`
+naia's protocol logic talks to transport traits rather than directly to OS
+sockets. A custom transport can be built by implementing the server-side and
+client-side socket traits exposed from:
 
-naia's transport is defined by the `Socket` trait. Implementing it lets you
-plug in any network layer — Steam networking, QUIC, WebSockets, etc.
+- `naia_server::transport::Socket`
+- `naia_client::transport::Socket`
 
----
-
-## The Socket trait
-
-```rust
-pub trait Socket: Send + Sync + 'static {
-    fn send(&mut self, address: SocketAddr, payload: &[u8]);
-    fn receive(&mut self) -> Option<(SocketAddr, Vec<u8>)>;
-}
-```
-
-`send` delivers a payload to the given address. `receive` polls for the next
-received datagram, returning `None` if no data is available.
+The built-in UDP, WebRTC, and local transports are the practical templates.
 
 ---
 
-## Example: Steam networking stub
+## What a Transport Must Provide
 
-```rust
-pub struct SteamSocket {
-    // Valve SDR networking handle
-}
+The server-side socket is consumed by `server.listen(socket)` and produces four
+handles:
 
-impl Socket for SteamSocket {
-    fn send(&mut self, address: SocketAddr, payload: &[u8]) {
-        // Translate SocketAddr to SteamNetworkingIdentity
-        // Call ISteamNetworkingSockets::SendMessageToConnection
-    }
+- auth sender
+- auth receiver
+- packet sender
+- packet receiver
 
-    fn receive(&mut self) -> Option<(SocketAddr, Vec<u8>)> {
-        // Poll ISteamNetworkingSockets::ReceiveMessagesOnConnection
-        // Return None if queue is empty
-    }
-}
-```
+The client-side socket is consumed by `client.connect(socket)` and produces:
+
+- identity receiver
+- packet sender
+- packet receiver
+
+That split is important. naia has an authentication/identity phase before normal
+packet exchange, so a transport is more than a single `send(bytes)` function.
 
 ---
 
-## Registration
+## Best References
 
-Pass your socket implementation to `server.listen` / `client.connect` just like
-the built-in transports:
+Start with the smallest built-ins:
 
-```rust
-server.listen(SteamSocket::new(connection_handle));
-```
+- `server/src/transport/local/`
+- `client/src/transport/local/`
 
-> **Note:** naia does not ship a Steam transport. The `Socket` trait is the extension point
-> for community crates.
+Then compare the production transports:
+
+- `server/src/transport/webrtc.rs`
+- `client/src/transport/webrtc.rs`
+- `server/src/transport/udp.rs`
+- `client/src/transport/udp/`
+
+Those implementations show how to adapt an underlying network backend into
+naia's auth, identity, sender, and receiver handles.
+
+---
+
+## When to Write One
+
+Custom transports are advanced. Reach for them when you need a network layer
+naia does not ship, such as a platform service, a managed relay, or a proprietary
+transport required by a console or storefront.
+
+For most games, prefer `transport_webrtc` first.

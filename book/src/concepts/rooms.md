@@ -32,13 +32,14 @@ With the Bevy adapter, room operations happen inside a system that takes
 `Server` as a `SystemParam`:
 
 ```rust
+use bevy::ecs::message::MessageReader;
 use naia_bevy_server::{CommandsExt, RoomKey, Server, events::ConnectEvent};
 use my_game_shared::Position;
 
 fn handle_connections(
     mut commands: Commands,
     mut server: Server,
-    mut connect_reader: EventReader<ConnectEvent>,
+    mut connect_reader: MessageReader<ConnectEvent>,
     mut room_key: ResMut<Option<RoomKey>>,
 ) {
     let key = *room_key.get_or_insert_with(|| server.create_room().key());

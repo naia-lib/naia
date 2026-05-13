@@ -40,7 +40,7 @@
 
 - [Overview](transports/overview.md)
 - [Native UDP](transports/udp.md)
-- [WebRTC (Browser Clients)](transports/webrtc.md)
+- [WebRTC (Native + Browser)](transports/webrtc.md)
 - [Local (In-Process)](transports/local.md)
 - [Writing a Custom Transport](transports/custom.md)
 
@@ -57,10 +57,6 @@
 - [Benchmarking](perf/benchmarks.md)
 - [Scaling Considerations](perf/scaling.md)
 
-# 🎮 Live Demo
-
-- [Try It In Your Browser](demo/live.md)
-
 # Reference
 
 - [Feature Matrix](reference/features.md)
@@ -68,7 +64,6 @@
 - [Comparing naia to Alternatives](reference/comparison.md)
 - [Bevy Adapter Deep Dive](adapters/bevy.md)
 - [Glossary](reference/glossary.md)
-- [Migration Guide](reference/migration.md)
 - [API Docs (docs.rs)](reference/api.md)
 - [FAQ](reference/faq.md)
 - [Changelog](reference/changelog.md)

@@ -17,7 +17,7 @@ sequenceDiagram
     participant Server
     participant Client
 
-    Client->>Server: connect (UDP)
+    Client->>Server: connect (WebRTC)
     Server->>Client: SpawnEntity (Position {x:0, y:0})
     loop every tick (20 Hz)
         Server->>Server: x += 0.1
@@ -63,15 +63,16 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-naia-shared = "0.24"
+naia-bevy-shared = "0.25"
+bevy_ecs = { version = "0.18", default-features = false }
 ```
 
 ```rust
 // shared/src/lib.rs
 use std::time::Duration;
-use naia_shared::{
-    ChannelDirection, ChannelMode, Property, Protocol,
-    derive::{Channel, Message, Replicate},
+use bevy_ecs::prelude::Component;
+use naia_bevy_shared::{
+    Channel, ChannelDirection, ChannelMode, Message, Property, Protocol, Replicate,
 };
 
 /// A replicated position component.
@@ -79,7 +80,7 @@ use naia_shared::{
 /// `Property<T>` wraps each field for per-field change detection. Only mutated
 /// fields are included in the outbound diff — naia never sends the full struct
 /// unless all fields changed simultaneously.
-#[derive(Replicate, Clone)]
+#[derive(Component, Replicate, Clone)]
 pub struct Position {
     pub x: Property<f32>,
     pub y: Property<f32>,
@@ -144,8 +145,8 @@ name = "server"
 path = "src/main.rs"
 
 [dependencies]
-bevy            = { version = "0.13", default-features = false, features = ["bevy_core_pipeline"] }
-naia-bevy-server = "0.24"
+bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline", "bevy_log"] }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared  = { path = "../shared" }
 ```
 
@@ -153,11 +154,12 @@ my-game-shared  = { path = "../shared" }
 // server/src/main.rs
 use std::collections::HashMap;
 
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use naia_bevy_server::{
-    transport::udp::NativeSocket,
+    transport::webrtc,
     CommandsExt, Plugin as NaiaServerPlugin, RoomKey, Server, ServerConfig,
-    events::{ConnectEvent, DisconnectEvent, ServerTickEvent},
+    events::{ConnectEvent, DisconnectEvent, TickEvent},
 };
 use my_game_shared::{protocol, InputChannel, PlayerInput, Position};
 
@@ -190,14 +192,20 @@ struct UserEntities(HashMap<u64, Entity>);
 struct GlobalRoom(Option<RoomKey>);
 
 fn startup(mut server: Server) {
-    server.listen(NativeSocket::new("0.0.0.0:14191"));
-    println!("Server listening on 0.0.0.0:14191");
+    let addrs = webrtc::ServerAddrs::new(
+        "0.0.0.0:14191".parse().unwrap(), // signaling/auth HTTP
+        "0.0.0.0:14192".parse().unwrap(), // WebRTC UDP data
+        "http://127.0.0.1:14192",         // public data URL for local dev
+    );
+    let socket = webrtc::Socket::new(&addrs, server.socket_config());
+    server.listen(socket);
+    println!("Server listening on http://127.0.0.1:14191");
 }
 
 fn handle_connections(
     mut commands: Commands,
     mut server: Server,
-    mut connect_reader: EventReader<ConnectEvent>,
+    mut connect_reader: MessageReader<ConnectEvent>,
     mut global_room: ResMut<GlobalRoom>,
     mut user_entities: ResMut<UserEntities>,
 ) {
@@ -226,10 +234,10 @@ fn handle_connections(
 fn handle_disconnections(
     mut commands: Commands,
     mut server: Server,
-    mut disconnect_reader: EventReader<DisconnectEvent>,
+    mut disconnect_reader: MessageReader<DisconnectEvent>,
     mut user_entities: ResMut<UserEntities>,
 ) {
-    for DisconnectEvent(user_key) in disconnect_reader.read() {
+    for DisconnectEvent(user_key, _address, _reason) in disconnect_reader.read() {
         println!("User disconnected: {:?}", user_key);
 
         if let Some(entity) = user_entities.0.remove(&user_key.to_u64()) {
@@ -240,10 +248,10 @@ fn handle_disconnections(
 
 fn handle_tick(
     mut server: Server,
-    mut tick_reader: EventReader<ServerTickEvent>,
+    mut tick_reader: MessageReader<TickEvent>,
     mut positions: Query<&mut Position>,
 ) {
-    for ServerTickEvent(server_tick) in tick_reader.read() {
+    for TickEvent(server_tick) in tick_reader.read() {
         // Drain player input commands that were stamped for this exact tick.
         let mut messages = server.receive_tick_buffer_messages(server_tick);
         for (_user_key, input) in messages.read::<InputChannel, PlayerInput>() {
@@ -280,17 +288,18 @@ name = "client"
 path = "src/main.rs"
 
 [dependencies]
-bevy            = { version = "0.13", default-features = false, features = ["bevy_core_pipeline"] }
-naia-bevy-client = "0.24"
+bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline", "bevy_log"] }
+naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared  = { path = "../shared" }
 ```
 
 ```rust
 // client/src/main.rs
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use naia_bevy_client::{
-    transport::udp::NativeSocket,
-    Client, ClientConfig, Plugin as NaiaClientPlugin,
+    transport::webrtc,
+    Client, ClientConfig, DefaultClientTag, DefaultPlugin as NaiaClientPlugin,
     events::{
         ClientTickEvent, ConnectEvent, DisconnectEvent,
         InsertComponentEvent, SpawnEntityEvent, UpdateComponentEvent,
@@ -317,63 +326,64 @@ fn main() {
         .run();
 }
 
-fn startup(mut client: Client) {
-    client.connect(NativeSocket::new("127.0.0.1:14191"));
-    println!("Connecting to 127.0.0.1:14191 ...");
+fn startup(mut client: Client<DefaultClientTag>) {
+    let socket = webrtc::Socket::new("http://127.0.0.1:14191", client.socket_config());
+    client.connect(socket);
+    println!("Connecting to http://127.0.0.1:14191 ...");
 }
 
-fn handle_connect(mut connect_reader: EventReader<ConnectEvent>) {
-    for ConnectEvent(_) in connect_reader.read() {
+fn handle_connect(mut connect_reader: MessageReader<ConnectEvent<DefaultClientTag>>) {
+    for _ in connect_reader.read() {
         println!("Connected to server!");
     }
 }
 
-fn handle_disconnect(mut disconnect_reader: EventReader<DisconnectEvent>) {
-    for DisconnectEvent(_) in disconnect_reader.read() {
+fn handle_disconnect(mut disconnect_reader: MessageReader<DisconnectEvent<DefaultClientTag>>) {
+    for _ in disconnect_reader.read() {
         println!("Disconnected from server.");
     }
 }
 
-fn handle_spawn(mut spawn_reader: EventReader<SpawnEntityEvent>) {
-    for SpawnEntityEvent(entity) in spawn_reader.read() {
-        println!("Entity spawned by server: {:?}", entity);
+fn handle_spawn(mut spawn_reader: MessageReader<SpawnEntityEvent<DefaultClientTag>>) {
+    for event in spawn_reader.read() {
+        println!("Entity spawned by server: {:?}", event.entity);
     }
 }
 
 fn handle_insert_position(
-    mut insert_reader: EventReader<InsertComponentEvent<Position>>,
+    mut insert_reader: MessageReader<InsertComponentEvent<DefaultClientTag, Position>>,
     positions: Query<&Position>,
 ) {
-    for InsertComponentEvent(entity) in insert_reader.read() {
-        if let Ok(pos) = positions.get(*entity) {
+    for event in insert_reader.read() {
+        if let Ok(pos) = positions.get(event.entity) {
             println!(
                 "Position inserted on {:?}: ({:.2}, {:.2})",
-                entity, *pos.x, *pos.y
+                event.entity, *pos.x, *pos.y
             );
         }
     }
 }
 
 fn handle_update_position(
-    mut update_reader: EventReader<UpdateComponentEvent<Position>>,
+    mut update_reader: MessageReader<UpdateComponentEvent<DefaultClientTag, Position>>,
     positions: Query<&Position>,
 ) {
-    for UpdateComponentEvent(entity) in update_reader.read() {
-        if let Ok(pos) = positions.get(*entity) {
+    for event in update_reader.read() {
+        if let Ok(pos) = positions.get(event.entity) {
             println!(
                 "Position updated on {:?}: ({:.2}, {:.2})",
-                entity, *pos.x, *pos.y
+                event.entity, *pos.x, *pos.y
             );
         }
     }
 }
 
 fn handle_tick(
-    mut client: Client,
-    mut tick_reader: EventReader<ClientTickEvent>,
+    mut client: Client<DefaultClientTag>,
+    mut tick_reader: MessageReader<ClientTickEvent<DefaultClientTag>>,
     keyboard: Res<ButtonInput<KeyCode>>,
 ) {
-    for ClientTickEvent(_tick) in tick_reader.read() {
+    for _ in tick_reader.read() {
         // Send input stamped with the current client tick so the server can
         // match it to the exact simulation step (TickBuffered delivery).
         let input = PlayerInput {
@@ -407,11 +417,11 @@ You should see output similar to:
 
 ```
 # Server terminal
-Server listening on 0.0.0.0:14191
+Server listening on http://127.0.0.1:14191
 User connected: UserKey(1)
 
 # Client terminal
-Connecting to 127.0.0.1:14191 ...
+Connecting to http://127.0.0.1:14191 ...
 Connected to server!
 Entity spawned by server: Entity(0v1)
 Position inserted on Entity(0v1): (0.00, 0.00)
@@ -443,4 +453,4 @@ step via `receive_tick_buffer_messages`.
 - [The Shared Protocol](../concepts/protocol.md) — understand `ProtocolId` and type registration.
 - [Rooms & Scoping](../concepts/rooms.md) — control which entities each client sees.
 - [Client-Side Prediction & Rollback](../advanced/prediction.md) — use `TickBuffered` input for a full prediction loop.
-- [WebRTC (Browser Clients)](../transports/webrtc.md) — build the same client for `wasm32-unknown-unknown`.
+- [WebRTC (Native + Browser)](../transports/webrtc.md) — build native and `wasm32-unknown-unknown` clients against one server.

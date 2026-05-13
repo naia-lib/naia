@@ -1,7 +1,11 @@
 # Client-Owned Entities
 
-In addition to server-side delegated authority, naia supports client-created
+In addition to server-owned and delegated entities, naia supports client-created
 entities that replicate back to the server via the `Publicity` API.
+
+Client-authoritative entities are opt-in. The shared protocol must call
+`enable_client_authoritative_entities()` before clients may spawn, publish, or
+mutate client-owned replicated entities.
 
 ---
 
@@ -21,13 +25,18 @@ client.entity_mut(&mut world, &entity)
 ```
 
 The server receives a `SpawnEntityEvent` for the entity and can read its
-components. This is distinct from authority delegation over a server-spawned
-entity — here the client is the origin.
+components. If other clients share the right room/scope, the server may also
+replicate that public entity onward to them. This is distinct from authority
+delegation over a server-spawned entity: here the client is the origin.
 
 ## `Publicity::Private`
 
-`Publicity::Private` keeps the entity purely client-local — it is never sent to
-the server. This is the default for entities created by the client.
+`Publicity::Private` means the client-owned entity replicates to the server but
+is not published to other clients. This is the default for entities created by
+the client.
+
+Use this for state the server must validate or react to, but that other clients
+do not need to see directly.
 
 ---
 
@@ -35,7 +44,9 @@ the server. This is the default for entities created by the client.
 
 - **Client-owned projectiles** — the client spawns a bullet, marks it public,
   and the server validates the trajectory.
-- **UI / local effects** — spawned as `Private` so they never touch the network.
+- **Private client intent/state** — replicated to the server but not fanned out
+  to other clients.
+- **Pure UI / local effects** — do not enable naia replication at all.
 
 > **Warning:** As with delegated authority, the server must validate all component values
 > received from client-owned public entities. naia replicates what the client

@@ -76,15 +76,16 @@ Protocol::builder()
 ```
 
 With the Bevy adapter, send and receive using `Server` / `Client` SystemParams
-and `EventReader`:
+and `MessageReader`:
 
 ```rust
+use bevy::ecs::message::MessageReader;
 use naia_bevy_server::{Server, events::ConnectEvent};
-use naia_bevy_client::{Client, events::MessageEvent};
+use naia_bevy_client::{Client, DefaultClientTag, events::MessageEvents};
 use my_game_shared::{ChatMessage, GameChannel};
 
 // Server — send to a specific client:
-fn send_welcome(mut server: Server, mut connect_reader: EventReader<ConnectEvent>) {
+fn send_welcome(mut server: Server, mut connect_reader: MessageReader<ConnectEvent>) {
     for ConnectEvent(user_key) in connect_reader.read() {
         let msg = ChatMessage { text: "Welcome!".into(), sender: 0 };
         let _ = server.send_message::<GameChannel, _>(user_key, &msg);
@@ -92,14 +93,16 @@ fn send_welcome(mut server: Server, mut connect_reader: EventReader<ConnectEvent
 }
 
 // Client — receive:
-fn receive_chat(mut chat_reader: EventReader<MessageEvent<GameChannel, ChatMessage>>) {
-    for MessageEvent(msg) in chat_reader.read() {
-        println!("Server: {}", msg.text);
+fn receive_chat(mut chat_reader: MessageReader<MessageEvents<DefaultClientTag>>) {
+    for events in chat_reader.read() {
+        for msg in events.read::<GameChannel, ChatMessage>() {
+            println!("Server: {}", msg.text);
+        }
     }
 }
 
 // Client — send to server:
-fn send_input(mut client: Client) {
+fn send_input(mut client: Client<DefaultClientTag>) {
     let msg = ChatMessage { text: "Hello!".into(), sender: 42 };
     client.send_message::<GameChannel, _>(&msg);
 }
@@ -119,15 +122,16 @@ occurred. The server buffers them and delivers them via
 tick-accurate input replay and is the foundation of client-side prediction.
 
 ```rust
-use naia_bevy_server::{Server, events::ServerTickEvent};
+use bevy::ecs::message::MessageReader;
+use naia_bevy_server::{Server, events::TickEvent};
 use my_game_shared::{PlayerInputChannel, PlayerInput};
 
 // Server tick handler (Bevy system):
 fn handle_tick(
     mut server: Server,
-    mut tick_reader: EventReader<ServerTickEvent>,
+    mut tick_reader: MessageReader<TickEvent>,
 ) {
-    for ServerTickEvent(server_tick) in tick_reader.read() {
+    for TickEvent(server_tick) in tick_reader.read() {
         let mut messages = server.receive_tick_buffer_messages(server_tick);
         for (user_key, command) in messages.read::<PlayerInputChannel, PlayerInput>() {
             // command arrived at exactly the right simulation step

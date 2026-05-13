@@ -14,7 +14,7 @@ plugin works the way it does and how to extend it for a real game.
 
 ```
 my_game/
-  shared/   ← protocol, components, channels  (Cargo.toml: naia-shared)
+  shared/   ← protocol, components, channels  (Cargo.toml: naia-bevy-shared)
   server/   ← naia-bevy-server binary
   client/   ← naia-bevy-client binary         (next chapter)
 ```
@@ -33,8 +33,8 @@ name = "server"
 path = "src/main.rs"
 
 [dependencies]
-bevy             = { version = "0.13", default-features = false, features = ["bevy_core_pipeline"] }
-naia-bevy-server = "0.24"
+bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline"] }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared   = { path = "../shared" }
 ```
 
@@ -91,10 +91,10 @@ The startup system calls `server.listen(...)` once. The `Server` type is a Bevy
 `SystemParam` that gives direct access to naia's server handle.
 
 ```rust
-use naia_bevy_server::{transport::udp::NativeSocket, Server};
+use naia_bevy_server::{transport::webrtc, Server};
 
 fn startup(mut server: Server) {
-    server.listen(NativeSocket::new("0.0.0.0:14191"));
+    server.listen(webrtc::Socket::new(&webrtc::ServerAddrs::default(), server.socket_config()));
     println!("Server listening on 0.0.0.0:14191");
 }
 ```
@@ -114,6 +114,7 @@ completes. This is the right place to create rooms and spawn player entities.
 
 ```rust
 use bevy::prelude::*;
+use bevy::ecs::message::MessageReader;
 use naia_bevy_server::{
     CommandsExt, RoomKey, Server,
     events::{ConnectEvent, DisconnectEvent},
@@ -130,7 +131,7 @@ struct GlobalRoom(Option<RoomKey>);
 fn handle_connections(
     mut commands: Commands,
     mut server: Server,
-    mut connect_reader: EventReader<ConnectEvent>,
+    mut connect_reader: MessageReader<ConnectEvent>,
     mut global_room: ResMut<GlobalRoom>,
     mut user_entities: ResMut<UserEntities>,
 ) {
@@ -162,10 +163,10 @@ fn handle_connections(
 ```rust
 fn handle_disconnections(
     mut commands: Commands,
-    mut disconnect_reader: EventReader<DisconnectEvent>,
+    mut disconnect_reader: MessageReader<DisconnectEvent>,
     mut user_entities: ResMut<UserEntities>,
 ) {
-    for DisconnectEvent(user_key) in disconnect_reader.read() {
+    for DisconnectEvent(user_key, _address, _reason) in disconnect_reader.read() {
         if let Some(entity) = user_entities.0.remove(&user_key.to_u64()) {
             commands.entity(entity).despawn();
             // naia automatically sends DespawnEntity to all in-scope clients.
@@ -178,19 +179,19 @@ fn handle_disconnections(
 
 ## Step 5 — The tick event
 
-`ServerTickEvent` fires once for each elapsed server tick (configured in the
+`TickEvent` fires once for each elapsed server tick (configured in the
 `Protocol` as `tick_interval`). Mutation of replicated components belongs here.
 
 ```rust
-use naia_bevy_server::events::ServerTickEvent;
+use naia_bevy_server::events::TickEvent;
 use my_game_shared::{InputChannel, PlayerInput, Position};
 
 fn handle_tick(
     mut server: Server,
-    mut tick_reader: EventReader<ServerTickEvent>,
+    mut tick_reader: MessageReader<TickEvent>,
     mut positions: Query<&mut Position>,
 ) {
-    for ServerTickEvent(server_tick) in tick_reader.read() {
+    for TickEvent(server_tick) in tick_reader.read() {
         // Deliver TickBuffered input from clients at this exact tick.
         let mut messages = server.receive_tick_buffer_messages(server_tick);
         for (user_key, input) in messages.read::<InputChannel, PlayerInput>() {
@@ -220,11 +221,12 @@ fn handle_tick(
 // server/src/main.rs (complete)
 use std::collections::HashMap;
 
+use bevy::ecs::message::MessageReader;
 use bevy::prelude::*;
 use naia_bevy_server::{
-    transport::udp::NativeSocket,
+    transport::webrtc,
     CommandsExt, Plugin as NaiaServerPlugin, RoomKey, Server, ServerConfig,
-    events::{ConnectEvent, DisconnectEvent, ServerTickEvent},
+    events::{ConnectEvent, DisconnectEvent, TickEvent},
 };
 use my_game_shared::{protocol, InputChannel, PlayerInput, Position};
 
@@ -245,13 +247,13 @@ struct UserEntities(HashMap<u64, Entity>);
 struct GlobalRoom(Option<RoomKey>);
 
 fn startup(mut server: Server) {
-    server.listen(NativeSocket::new("0.0.0.0:14191"));
+    server.listen(webrtc::Socket::new(&webrtc::ServerAddrs::default(), server.socket_config()));
 }
 
 fn handle_connections(
     mut commands: Commands,
     mut server: Server,
-    mut connect_reader: EventReader<ConnectEvent>,
+    mut connect_reader: MessageReader<ConnectEvent>,
     mut global_room: ResMut<GlobalRoom>,
     mut user_entities: ResMut<UserEntities>,
 ) {
@@ -270,10 +272,10 @@ fn handle_connections(
 
 fn handle_disconnections(
     mut commands: Commands,
-    mut disconnect_reader: EventReader<DisconnectEvent>,
+    mut disconnect_reader: MessageReader<DisconnectEvent>,
     mut user_entities: ResMut<UserEntities>,
 ) {
-    for DisconnectEvent(user_key) in disconnect_reader.read() {
+    for DisconnectEvent(user_key, _address, _reason) in disconnect_reader.read() {
         if let Some(entity) = user_entities.0.remove(&user_key.to_u64()) {
             commands.entity(entity).despawn();
         }
@@ -282,10 +284,10 @@ fn handle_disconnections(
 
 fn handle_tick(
     mut server: Server,
-    mut tick_reader: EventReader<ServerTickEvent>,
+    mut tick_reader: MessageReader<TickEvent>,
     mut positions: Query<&mut Position>,
 ) {
-    for ServerTickEvent(server_tick) in tick_reader.read() {
+    for TickEvent(server_tick) in tick_reader.read() {
         let mut messages = server.receive_tick_buffer_messages(server_tick);
         for (_user_key, _input) in messages.read::<InputChannel, PlayerInput>() {}
         for mut pos in positions.iter_mut() {
@@ -299,9 +301,9 @@ fn handle_tick(
 
 ## What happens per frame
 
-1. Plugin: `receive_all_packets` reads UDP datagrams.
-2. Plugin: `process_all_packets` decodes packets into Bevy events.
-3. Your systems: `handle_connections` and `handle_disconnections` drain connection events.
+1. Plugin: `receive_all_packets` reads WebRTC/UDP packets.
+2. Plugin: `process_all_packets` decodes packets into Bevy messages.
+3. Your systems: `handle_connections` and `handle_disconnections` drain connection messages.
 4. Your systems: `handle_tick` advances simulation.
 5. Plugin: `send_all_packets` serializes field diffs and flushes to the network.
 

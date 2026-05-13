@@ -101,14 +101,14 @@ in sync with the server's last known state.
 pub fn tick_events(
     mut client: Client<Main>,
     mut global: ResMut<Global>,
-    mut tick_reader: ResMut<Messages<ClientTickEvent<Main>>>,
+    mut tick_reader: MessageReader<ClientTickEvent<Main>>,
     mut position_query: Query<&mut Position>,
 ) {
     let Some(predicted_entity) = global.owned_entity.as_ref()
         .map(|e| e.predicted) else { return; };
     let Some(command) = global.queued_command.take() else { return; };
 
-    for event in tick_reader.drain() {
+    for event in tick_reader.read() {
         let client_tick = event.tick;
 
         // Guard: don't overflow the history window.
@@ -135,13 +135,13 @@ pub fn tick_events(
 ```rust
 pub fn update_component_events(
     mut global: ResMut<Global>,
-    mut position_event_reader: ResMut<Messages<UpdateComponentEvent<Main, Position>>>,
+    mut position_event_reader: MessageReader<UpdateComponentEvent<Main, Position>>,
     mut position_query: Query<&mut Position>,
 ) {
     let Some(owned) = &global.owned_entity else { return; };
 
     let mut latest_tick: Option<Tick> = None;
-    for event in position_event_reader.drain() {
+    for event in position_event_reader.read() {
         if event.entity == owned.confirmed {
             match latest_tick {
                 Some(t) if sequence_greater_than(event.tick, t) => {}
@@ -240,7 +240,7 @@ Multiple `UpdateComponentEvent`s can arrive in the same frame. Accumulate the
 ```rust
 let mut rollback_tick: Option<Tick> = None;
 
-for event in position_events.drain() {
+for event in position_events.read() {
     if event.entity == owned.confirmed {
         rollback_tick = Some(match rollback_tick {
             Some(t) if sequence_greater_than(t, event.tick) => event.tick,

@@ -23,6 +23,8 @@ jobs:
         run: |
           cargo install mdbook-mermaid mdbook-pagetoc
           mdbook-mermaid install book/
+      - name: Validate Mermaid diagrams
+        run: book/scripts/check-mermaid.sh
       - name: Build book
         run: mdbook build book/
       - name: Check internal links

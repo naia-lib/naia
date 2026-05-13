@@ -1,8 +1,8 @@
 # Entity Replication
 
-Entity replication is the core mechanism by which the server's game state is
-delivered to connected clients. naia tracks which entities are in each user's
-scope and automatically sends only the changed fields each tick.
+Entity replication is the core mechanism by which networked world state moves
+between hosts. The default path is server-owned state replicated to clients, but
+naia also supports opt-in client-owned entities and delegated authority.
 
 > **Core API:** Not using Bevy? The bare `naia-server` / `naia-client` API is
 > identical in concept but uses a direct method-call style instead of Bevy
@@ -17,8 +17,8 @@ Internally naia runs these five steps in order every frame:
 ```
 receive_all_packets     – read UDP/WebRTC datagrams from the OS
 process_all_packets     – decode packets; apply client mutations
-                          (Bevy events are populated here)
-[YOUR SYSTEMS]          – read events, mutate components
+                          (Bevy messages are populated here)
+[YOUR SYSTEMS]          – read messages, mutate components
 send_all_packets        – serialise diffs + messages; flush to network
 ```
 
@@ -69,9 +69,9 @@ detects the despawn and sends `DespawnEntity` to all in-scope clients.
 ```mermaid
 stateDiagram-v2
     [*] --> OutOfScope : entity spawned
-    OutOfScope --> InScope : scope.include(entity)
-    InScope --> OutOfScope : scope.exclude(entity) [ScopeExit::Despawn]
-    InScope --> Frozen : scope.exclude(entity) [ScopeExit::Persist]
+    OutOfScope --> InScope : scope includes entity
+    InScope --> OutOfScope : scope excludes entity / Despawn
+    InScope --> Frozen : scope excludes entity / Persist
     Frozen --> InScope : scope.include(entity)
     InScope --> [*] : server despawns entity
 
@@ -80,40 +80,41 @@ stateDiagram-v2
 
 ---
 
-## Receiving replication events on the client
+## Receiving replication messages on the client
 
-On the client, Bevy events fire as naia processes incoming packets:
+On the client, Bevy messages are emitted as naia processes incoming packets:
 
 ```rust
-use naia_bevy_client::events::{
-    SpawnEntityEvent, DespawnEntityEvent,
-    InsertComponentEvent, UpdateComponentEvent,
+use bevy::ecs::message::MessageReader;
+use naia_bevy_client::{
+    events::{DespawnEntityEvent, InsertComponentEvent, SpawnEntityEvent, UpdateComponentEvent},
+    DefaultClientTag,
 };
 use my_game_shared::Position;
 
 fn handle_replication_events(
-    mut spawn_reader: EventReader<SpawnEntityEvent>,
-    mut despawn_reader: EventReader<DespawnEntityEvent>,
-    mut insert_reader: EventReader<InsertComponentEvent<Position>>,
-    mut update_reader: EventReader<UpdateComponentEvent<Position>>,
+    mut spawn_reader: MessageReader<SpawnEntityEvent<DefaultClientTag>>,
+    mut despawn_reader: MessageReader<DespawnEntityEvent<DefaultClientTag>>,
+    mut insert_reader: MessageReader<InsertComponentEvent<DefaultClientTag, Position>>,
+    mut update_reader: MessageReader<UpdateComponentEvent<DefaultClientTag, Position>>,
     positions: Query<&Position>,
 ) {
-    for SpawnEntityEvent(entity) in spawn_reader.read() {
-        println!("Entity spawned: {:?}", entity);
+    for event in spawn_reader.read() {
+        println!("Entity spawned: {:?}", event.entity);
     }
 
-    for DespawnEntityEvent(entity) in despawn_reader.read() {
-        println!("Entity despawned: {:?}", entity);
+    for event in despawn_reader.read() {
+        println!("Entity despawned: {:?}", event.entity);
     }
 
-    for InsertComponentEvent(entity) in insert_reader.read() {
-        if let Ok(pos) = positions.get(*entity) {
+    for event in insert_reader.read() {
+        if let Ok(pos) = positions.get(event.entity) {
             println!("Position inserted: ({:.2}, {:.2})", *pos.x, *pos.y);
         }
     }
 
-    for UpdateComponentEvent(entity) in update_reader.read() {
-        if let Ok(pos) = positions.get(*entity) {
+    for event in update_reader.read() {
+        if let Ok(pos) = positions.get(event.entity) {
             println!("Position updated: ({:.2}, {:.2})", *pos.x, *pos.y);
         }
     }
@@ -155,9 +156,11 @@ commands
 
 ## Replicated Resources
 
-A **replicated resource** is a server-side singleton that is automatically
-visible to all connected users, without room membership or scope management.
-Internally naia creates a hidden one-component entity to carry the value.
+A **replicated resource** is a singleton value replicated through the same
+machinery as entities. Internally naia creates a hidden one-component entity to
+carry the value. Resources are usually server-owned, but they can be configured
+as delegated resources so a client can request authority and mutate them through
+the normal authority path.
 
 ```rust
 // Insert a dynamic (diff-tracked) resource:
@@ -184,7 +187,8 @@ Resources differ from ordinary entities in three ways:
 - No room or scope configuration is needed.
 - At most one resource per type can exist at a time (inserting a duplicate
   returns `Err(ResourceAlreadyExists)`).
-- They can be delegated just like entities by calling `configure_resource`.
+- They can be delegated just like entities by calling `configure_resource` /
+  `configure_replicated_resource`.
 
 ---
 

@@ -60,6 +60,6 @@ impl WorldMutType<u32> for MyWorld {
 
 ---
 
-> **Tip:** The best reference for a minimal adapter implementation is `naia-macroquad-client`
-> in the naia source tree. It is the simplest shipped adapter and demonstrates all
-> required methods without Bevy's complexity.
+> **Tip:** The best references for a minimal custom world are
+> `demos/demo_utils/demo_world` and `demos/demo_utils/empty_world`. They show the
+> core world traits without Bevy's adapter layer.

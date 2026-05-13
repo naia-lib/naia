@@ -43,7 +43,7 @@ the `metrics` and `tracing` ecosystems. Enable via the `metrics` feature flag:
 
 ```toml
 # server/Cargo.toml
-naia-bevy-server = { version = "0.24", features = ["metrics"] }
+naia-bevy-server = { version = "0.25", features = ["metrics"] }
 ```
 
 When `metrics` is enabled, naia emits counters and gauges compatible with any

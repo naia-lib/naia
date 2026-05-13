@@ -1,144 +1,87 @@
 # Comparing naia to Alternatives
 
-An in-depth technical comparison of naia against the major Rust multiplayer
-networking libraries. For a high-level decision guide, see
-[Why naia?](../getting-started/why-naia.md).
+This comparison is intentionally scoped to libraries a Rust multiplayer game
+developer is likely to evaluate near naia: lightyear, bevy_replicon, and
+matchbox. Some tools operate at different layers, so treat this as a decision
+guide, not a courtroom exhibit.
 
-Updated 2026-05. Check each library's changelog for the latest.
+Updated 2026-05.
 
----
-
-## Feature matrix
-
-| | **naia** | **lightyear** | **renet** | **bevy_replicon** | **GGRS** |
-|-|----------|--------------|-----------|------------------|---------|
-| **Entity replication** | ✅ delta-compressed | ✅ | ❌ messages only | ✅ | ❌ |
-| **Browser / WASM client** | ✅ WebRTC | ❌ | ❌ | ❌ | ❌ |
-| **ECS-agnostic** | ✅ | ❌ Bevy-only | ✅ | ❌ Bevy-only | ✅ |
-| **Lag compensation (Historian)** | ✅ built-in | ❌ | ❌ | ❌ | ❌ |
-| **Priority-weighted bandwidth** | ✅ per-entity + per-user | ❌ | ❌ | ❌ | ❌ |
-| **Client-side prediction** | primitives | built-in framework | ❌ | ❌ | ✅ GGPO-style |
-| **Interest management** | rooms + UserScope | rooms | ❌ | visibility filter | ❌ |
-| **Authority delegation** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **P2P / NAT traversal** | ❌ | ❌ | ❌ | ❌ | ✅ (via matchbox) |
-| **zstd compression** | ✅ + dict training | ❌ | ❌ | ❌ | ❌ |
-| **smol / async-std** | ✅ | ❌ (tokio) | ❌ (tokio) | ❌ (tokio) | n/a |
-| **BDD test harness** | ✅ 215 contracts | ❌ | ❌ | ❌ | ❌ |
+External docs checked during this pass:
+[lightyear](https://github.com/cBournhonesque/lightyear),
+[bevy_replicon](https://docs.rs/bevy_replicon),
+and [matchbox_socket](https://docs.rs/matchbox_socket).
 
 ---
 
-## naia vs lightyear — in depth
+## Feature Matrix
 
-### Similarities
-
-Both naia and lightyear provide entity replication with delta compression,
-authority delegation, interest management, and client-side prediction primitives
-built on a tick-synchronized model.
-
-### Key differences
-
-**Browser support.** naia ships `transport_webrtc` — a production WebRTC transport
-that runs in `wasm32-unknown-unknown`. lightyear has no browser transport.
-
-**Prediction model.** lightyear ships a complete prediction/interpolation framework:
-`Predicted` and `Interpolated` entity markers, automatic rollback, and a hook
-for registering custom rollback systems. naia supplies the building blocks
-(`TickBuffered` channels, `CommandHistory`, `local_duplicate()`) and you write
-the prediction loop. naia's approach gives you more control; lightyear's gives
-you a faster start.
-
-**ECS coupling.** naia's core crates are ECS-agnostic — the same `Server<E>` and
-`Client<E>` types work with Bevy, macroquad, or a custom engine. lightyear is
-tightly coupled to Bevy; its API is a set of Bevy plugins and uses Bevy resources
-throughout.
-
-**Async runtime.** naia uses smol / async-std internally. lightyear uses tokio.
-This matters if your project already has a runtime — mixing tokio and async-std
-requires a compatibility shim.
-
-**Lag compensation.** naia ships the `Historian` — a rolling per-tick world
-snapshot buffer you use to rewind the server to the client's perceived tick for
-hit detection. lightyear has no equivalent built-in primitive.
-
-**Bandwidth control.** naia's priority accumulator lets you set gain per entity
-per user; entities with gain `0.0` are never sent. lightyear does not ship a
-per-entity priority system.
-
-**Compression.** naia supports optional zstd packet compression with default,
-custom-dictionary, and dictionary-training modes. A game-specific dictionary
-typically achieves 40–60% better compression than the default on real packet data.
-lightyear does not ship zstd support.
+| Capability | **naia** | **lightyear** | **bevy_replicon** | **matchbox** |
+|------------|----------|---------------|-------------------|--------------|
+| Entity replication | Yes, ECS-agnostic core + Bevy adapter | Yes, Bevy-focused | Yes, Bevy-focused | No |
+| Native + browser clients | WebRTC transport supports both | Wasm supported via WebTransport path | Depends on chosen transport | WebRTC sockets for browser/native use cases |
+| Bevy integration | Yes | Yes | Yes | Via ecosystem glue |
+| Non-Bevy integration | Core API + custom world traits | Not the focus | Not the focus | Yes, socket-level |
+| Server-authoritative model | Yes | Yes | Yes | No, lower-level/P2P-oriented |
+| Client-authoritative entities | Yes, opt-in | Varies by model | Not a direct equivalent | n/a |
+| Authority delegation | Entities and resources | Entity authority model | Not a primary feature | n/a |
+| Lag compensation primitive | `Historian` | Not a direct built-in equivalent | Not a direct built-in equivalent | n/a |
+| Priority bandwidth allocation | Per-entity/per-user gain | Not a direct equivalent | Not a direct equivalent | n/a |
+| Replicated resources | Yes | Bevy resource patterns differ | Yes, Bevy resources | n/a |
+| Compression | Optional zstd + dictionary training | Check current feature set | Transport-dependent | Transport/socket-level |
 
 ---
 
-## naia vs renet — in depth
+## naia vs lightyear
 
-renet is a **message-passing library**, not an entity replication library. It
-provides reliable and unreliable channels over UDP, connection management, and
-typed message serialization. It does not replicate ECS state — you must serialize
-and deserialize your entire game state manually.
+Both projects cover server-authoritative replication, authority, prediction
+building blocks, and Bevy users. lightyear has a polished Bevy-first prediction
+and interpolation framework. naia is stronger when you want:
 
-**naia automates the diff-and-send loop.** With naia, mark a component field as
-`Property<T>` and naia automatically:
-- Detects which fields changed each tick.
-- Sends only changed fields to each in-scope user.
-- Handles spawn, despawn, and scope entry/exit events.
-- Manages per-user interest (rooms, UserScope).
+- WebRTC as a built-in naia transport for both native and Wasm clients.
+- An ECS-agnostic core that can support Bevy, macroquad, or a custom world.
+- Explicit client-authoritative entity publication.
+- Delegated replicated resources.
+- Historian-based lag compensation as a library primitive.
+- Priority-weighted bandwidth allocation.
+- Optional zstd compression and dictionary training.
 
-With renet you write all of that manually. This gives you full control over
-the wire format, but it is significantly more code.
-
-**When renet is the right choice:**
-- Your game state does not map cleanly to ECS components.
-- You want the smallest possible dependency footprint.
-- You need full control over serialization for an unusual wire format.
+Choose lightyear when you want a Bevy-native stack with more prediction framework
+provided for you. Choose naia when transport flexibility, authority flexibility,
+and bandwidth/lag-compensation primitives matter more than having a batteries-
+included interpolation layer.
 
 ---
 
-## naia vs bevy_replicon — in depth
+## naia vs bevy_replicon
 
-bevy_replicon is a simpler Bevy-only replication library. Its API surface is
-smaller and it has less to configure.
+bevy_replicon is a narrower Bevy replication library. It can be a good fit when
+you want straightforward Bevy state replication and prefer to bring your own
+transport and higher-level networking policy.
 
-**Gaps vs naia:**
-- No browser / WASM transport.
-- No per-entity bandwidth control or priority accumulator.
-- No lag compensation (no Historian).
-- No zstd compression.
-- Interest management via a single `VisibilityFilter` — less granular than
-  naia's two-level rooms + UserScope model.
+naia brings more machinery:
 
-**When bevy_replicon is the right choice:**
-- You are building a simple Bevy game and none of the above features are required.
-- You want to minimize the amount of configuration to get replication working.
+- Built-in transports, with WebRTC as the recommended path.
+- Rooms plus per-user scope.
+- Client-owned entities and publication states.
+- Delegated entities/resources.
+- Historian, prediction primitives, and priority bandwidth.
+- A non-Bevy core API.
 
----
-
-## naia vs GGRS — in depth
-
-GGRS is a rollback-netcode library for **peer-to-peer deterministic simulations**.
-It is not an entity replication library. GGRS assumes a fixed roster of peers
-all running the exact same deterministic simulation, and uses rollback to reconcile
-divergences when inputs arrive late.
-
-naia is server-authoritative. A server holds all canonical state; clients receive
-a replicated view. These are fundamentally different architectures for different
-genres:
-
-| Use case | Architecture | Library |
-|----------|-------------|---------|
-| Fighting game (2 players, P2P) | Deterministic rollback | GGRS + matchbox |
-| MMO / open world (N players, server-auth) | Server replication | naia |
-| MOBA / shooter with server-side hit detection | Server-auth + lag comp | naia + Historian |
-
-**GGRS and naia are complementary.** A game can use naia for the lobby, world
-state, and matchmaking layer, and GGRS for the fast-path P2P match simulation —
-the two libraries operate on independent connections.
+That machinery is valuable for larger or more network-sensitive games. For a
+small Bevy-only project, bevy_replicon may be less to learn.
 
 ---
 
-## Updating this page
+## naia vs matchbox
 
-This page reflects the state of these libraries as of 2026-05. If you notice
-an inaccuracy, please
-[open a PR](https://github.com/naia-lib/naia/edit/main/book/src/reference/comparison.md).
+matchbox is primarily a WebRTC socket/signaling toolkit, often used for P2P and
+rollback architectures. It is closer to a transport/session layer than a full
+entity replication library.
+
+Use matchbox when you want WebRTC sockets and plan to build your own replication
+or deterministic rollback layer. Use naia when you want replicated entities,
+messages, authority, scopes, and bandwidth management above the transport.
+
+They can also be complementary conceptually: matchbox-style tooling is a good
+fit for P2P rollback games, while naia is built around a server-mediated world.
