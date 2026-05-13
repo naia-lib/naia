@@ -42,4 +42,4 @@
 
 ## Planned
 
-- [ ] Client-side static entities — `enable_replication().as_static()` for client-authoritative entities that are write-once after spawn; requires `mark_entity_as_static` wired through `naia-client` and `naia-bevy-client` `CommandsExt` (server-side implementation landed 2026-05-13 as the reference)
+- [x] Client-side static entities — `spawn_static_entity()` / `entity_mut.as_static()` in `naia-client`; `CommandsExt::as_static<T>()` in `naia-bevy-client`; mirrors the server-side API exactly

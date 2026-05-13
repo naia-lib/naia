@@ -50,6 +50,13 @@ impl GlobalWorldManager {
         self.entity_records.contains_key(global_entity)
     }
 
+    pub fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {
+        self.entity_records
+            .get(global_entity)
+            .map(|r| r.is_static)
+            .unwrap_or(false)
+    }
+
     pub fn entity_owner(&self, global_entity: &GlobalEntity) -> Option<EntityOwner> {
         if let Some(record) = self.entity_records.get(global_entity) {
             return Some(record.owner());
@@ -62,9 +69,23 @@ impl GlobalWorldManager {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
-        // info!("Inserting entity record for {:?}", global_entity);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
+    }
+
+    pub fn host_spawn_static_entity(&mut self, global_entity: &GlobalEntity) {
+        if self.entity_records.contains_key(global_entity) {
+            panic!("entity already initialized!");
+        }
+        self.entity_records
+            .insert(*global_entity, GlobalEntityRecord::new_static(EntityOwner::Client));
+    }
+
+    pub fn mark_entity_as_static(&mut self, global_entity: &GlobalEntity) {
+        let Some(record) = self.entity_records.get_mut(global_entity) else {
+            panic!("entity record does not exist!");
+        };
+        record.is_static = true;
     }
 
     // Despawn
@@ -430,9 +451,8 @@ impl GlobalWorldManagerType for GlobalWorldManager {
         record.is_replicating()
     }
 
-    fn entity_is_static(&self, _global_entity: &GlobalEntity) -> bool {
-        // Client entities are never static in the static-entity sense
-        false
+    fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool {
+        Self::entity_is_static(self, global_entity)
     }
 }
 

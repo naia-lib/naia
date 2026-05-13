@@ -10,6 +10,7 @@ pub struct GlobalEntityRecord {
     owner: EntityOwner,
     replication_config: Publicity,
     is_replicating: bool,
+    pub(crate) is_static: bool,
 }
 
 impl GlobalEntityRecord {
@@ -30,7 +31,14 @@ impl GlobalEntityRecord {
             owner,
             replication_config,
             is_replicating: true,
+            is_static: false,
         }
+    }
+
+    pub fn new_static(owner: EntityOwner) -> Self {
+        let mut record = Self::new(owner);
+        record.is_static = true;
+        record
     }
 
     pub fn owner(&self) -> EntityOwner {

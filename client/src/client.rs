@@ -745,11 +745,46 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         EntityMut::new(self, world, &world_entity)
     }
 
+    /// Creates a new static entity.
+    ///
+    /// A full component snapshot is sent once when the entity enters the server's scope;
+    /// no diff-tracking occurs thereafter. Use for client-owned entities that are
+    /// write-once after spawn (e.g. tiles, level geometry sent to the server).
+    ///
+    /// Equivalent to `spawn_entity(world).as_static()`, but avoids registering
+    /// in the dynamic pool first.
+    pub fn spawn_static_entity<W: WorldMutType<E>>(
+        &'_ mut self,
+        mut world: W,
+    ) -> EntityMut<'_, E, W> {
+        self.check_client_authoritative_allowed();
+
+        let world_entity = world.spawn_entity();
+
+        self.spawn_static_entity_inner(&world_entity);
+
+        let mut entity_mut = EntityMut::new(self, world, &world_entity);
+        entity_mut.allow_static_insert = true;
+        entity_mut
+    }
+
     /// Creates a new Entity with a specific id
     fn spawn_entity_inner(&mut self, world_entity: &E) {
+        self.spawn_entity_inner_with_static(world_entity, false);
+    }
+
+    fn spawn_static_entity_inner(&mut self, world_entity: &E) {
+        self.spawn_entity_inner_with_static(world_entity, true);
+    }
+
+    fn spawn_entity_inner_with_static(&mut self, world_entity: &E, is_static: bool) {
         let global_entity = self.global_entity_map.spawn(*world_entity, None);
 
-        self.global_world_manager.host_spawn_entity(&global_entity);
+        if is_static {
+            self.global_world_manager.host_spawn_static_entity(&global_entity);
+        } else {
+            self.global_world_manager.host_spawn_entity(&global_entity);
+        }
 
         let Some(connection) = &mut self.server_connection else {
             return;
@@ -761,7 +796,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         connection
             .base
             .world_manager
-            .host_init_entity(&global_entity, component_kinds, &self.protocol.component_kinds, false);
+            .host_init_entity(&global_entity, component_kinds, &self.protocol.component_kinds, is_static);
     }
 
     // Replicated Resources (client-side mirror) ─────────────────────────────
@@ -872,6 +907,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.spawn_entity_inner(entity);
     }
 
+    /// Registers the entity as static with the replication layer.
+    ///
+    /// # Adapter use only
+    ///
+    /// Called by the Bevy adapter's `as_static()` command. Use
+    /// [`spawn_static_entity`](Client::spawn_static_entity) in application code.
+    pub fn enable_static_entity_replication(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+        self.spawn_static_entity_inner(entity);
+    }
+
+    /// Converts an already-registered dynamic entity to static.
+    ///
+    /// Only safe to call before the server connection is established; after that
+    /// the entity has already been initialized in the dynamic ID pool.
+    ///
+    /// # Adapter use only
+    ///
+    /// Use [`spawn_static_entity`](Client::spawn_static_entity) in application code.
+    pub fn mark_entity_as_static(&mut self, entity: &E) {
+        self.check_client_authoritative_allowed();
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(entity) else {
+            panic!("entity not found in global map");
+        };
+        self.global_world_manager.mark_entity_as_static(&global_entity);
+    }
+
     /// Unregisters the entity from the replication layer.
     ///
     /// # Adapter use only
@@ -900,6 +962,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .unwrap();
         self.global_world_manager
             .entity_replication_config(&global_entity)
+    }
+
+    /// Returns `true` if the entity is registered as static.
+    pub(crate) fn entity_is_static(&self, world_entity: &E) -> bool {
+        let Ok(global_entity) = self.global_entity_map.entity_to_global_entity(world_entity) else {
+            return false;
+        };
+        self.global_world_manager.entity_is_static(&global_entity)
     }
 
     /// Updates the replication config for a client-owned entity.

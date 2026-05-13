@@ -45,6 +45,16 @@ pub trait CommandsExt<'a> {
         client: &mut Client<T>,
     ) -> &'a mut EntityCommands<'a>;
 
+    /// Registers this entity as static with the naia replication layer.
+    ///
+    /// A full component snapshot is sent once when the entity enters the
+    /// server's scope. No diff-tracking occurs afterward. Use for
+    /// client-authoritative entities that are write-once after spawn
+    /// (e.g. tiles or level geometry sent from client to server).
+    ///
+    /// Does not require a `&mut Client` — queued as a Bevy command.
+    fn as_static<T: Send + Sync + 'static>(&'a mut self) -> &'a mut EntityCommands<'a>;
+
     /// Removes this entity from the naia replication layer.
     fn disable_replication<T: Send + Sync + 'static>(
         &'a mut self,
@@ -102,6 +112,17 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     ) -> &'a mut EntityCommands<'a> {
         client.enable_replication(&self.id());
         self.insert(HostOwned::new::<T>());
+        self
+    }
+
+    fn as_static<T: Send + Sync + 'static>(&'a mut self) -> &'a mut EntityCommands<'a> {
+        let entity = self.id();
+        self.insert(HostOwned::new::<T>());
+        self.commands().queue(WorldOpCommand::new(move |world| {
+            world.resource_scope(|_world, mut client: Mut<ClientWrapper<T>>| {
+                client.client.enable_static_entity_replication(&entity);
+            });
+        }));
         self
     }
 

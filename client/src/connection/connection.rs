@@ -64,10 +64,11 @@ impl Connection {
         let existing_entities = global_world_manager.entities();
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
+            let is_static = global_world_manager.entity_is_static(&entity);
             connection
                 .base
                 .world_manager
-                .host_init_entity(&entity, component_kinds, component_kinds_map, false);
+                .host_init_entity(&entity, component_kinds, component_kinds_map, is_static);
         }
 
         connection
