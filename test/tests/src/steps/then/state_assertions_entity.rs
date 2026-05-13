@@ -297,6 +297,23 @@ fn then_entity_owner_is_server(
     })
 }
 
+/// Then the server has the entity.
+///
+/// Polls until the server's world contains the entity.
+/// Used by [client-static-*] scenarios to verify client→server replication.
+#[then("the server has the entity")]
+fn then_server_has_the_entity(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let entity_key = last_entity_ref(ctx);
+    ctx.server(|server| {
+        if server.has_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+
 /// Then the server no longer has the entity.
 ///
 /// Covers [entity-ownership-08.t1] (owner disconnect despawns).

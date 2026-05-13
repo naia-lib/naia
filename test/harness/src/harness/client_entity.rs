@@ -108,6 +108,15 @@ impl<'a, W: WorldMutType<TestEntity>> ClientEntityMut<'a, W> {
         self.entity_mut.despawn();
     }
 
+    /// Marks this entity as static: a full snapshot is sent once to the
+    /// server; no diff-tracking occurs afterward.
+    ///
+    /// Must be called before `insert_component`.
+    pub fn as_static(&mut self) -> &mut Self {
+        self.entity_mut.as_static();
+        self
+    }
+
     /// Check if this entity has a component
     pub fn has_component<R: ReplicatedComponent>(&self) -> bool {
         self.entity_mut.has_component::<R>()

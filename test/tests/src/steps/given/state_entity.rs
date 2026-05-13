@@ -274,3 +274,28 @@ fn given_static_entity_exists_with_replicated_component(ctx: &mut TestWorldMut) 
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     scenario.bdd_store(INITIAL_ENTITY_KEY, entity_key);
 }
+
+// ──────────────────────────────────────────────────────────────────────
+// Client-owned static entity preconditions
+// ──────────────────────────────────────────────────────────────────────
+
+/// Given a client-owned static entity exists.
+///
+/// Spawns a `Public` static client entity (no components).  Waits for the
+/// server to register the spawn before returning.
+#[given("a client-owned static entity exists")]
+fn given_client_static_entity_exists(ctx: &mut TestWorldMut) {
+    use naia_client::Publicity;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key = scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            client.spawn_static(|mut entity| {
+                entity.configure_replication(Publicity::Public);
+            })
+        })
+    });
+    scenario.expect(|ectx| ectx.server(|s| s.has_entity(&entity_key).then_some(())));
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+}
+

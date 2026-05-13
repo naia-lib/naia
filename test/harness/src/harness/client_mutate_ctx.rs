@@ -70,6 +70,47 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         entity_key
     }
 
+    /// Spawn a static client entity, configure it, wait for server registration,
+    /// return EntityKey.
+    ///
+    /// Marks the entity as static via `spawn_static_entity` so no diff-tracking
+    /// occurs after construction. Components must be inserted inside the closure
+    /// `f`; inserting after this method returns panics.
+    pub fn spawn_static<F>(&mut self, f: F) -> EntityKey
+    where
+        F: for<'b> FnOnce(ClientEntityMut<'b, WorldMut<'b>>),
+    {
+        let scenario = self.ctx.scenario_mut();
+        let (state, registry) = scenario
+            .split_for_client_mut(&self.client_key)
+            .expect("client state not found");
+
+        let (client_mut, world_mut) = state.client_and_world_mut();
+        let world_mut_proxy = world_mut.proxy_mut();
+        let entity_mut = client_mut.spawn_static_entity(world_mut_proxy);
+
+        let client_entity = entity_mut.id();
+        let local_entity = entity_mut
+            .local_entity()
+            .expect("Client-spawned entity should have LocalEntity immediately");
+
+        let client_entity_mut = ClientEntityMut::new(entity_mut, &*registry, self.client_key);
+        f(client_entity_mut);
+
+        let entity_key = self
+            .ctx
+            .scenario_mut()
+            .entity_registry_mut()
+            .allocate_entity_key();
+
+        self.ctx
+            .scenario_mut()
+            .entity_registry_mut()
+            .register_client_entity(&entity_key, &self.client_key, &client_entity, &local_entity);
+
+        entity_key
+    }
+
     /// Get read-only entity access by EntityKey
     /// Uses method lifetime 'b, not struct lifetime 'scenario
     pub fn entity(&'_ self, entity: &EntityKey) -> Option<ClientEntityRef<'_, WorldRef<'_>>> {

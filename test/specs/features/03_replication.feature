@@ -274,6 +274,38 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       Then the entity spawns on the client as a new lifetime
 
   # ──────────────────────────────────────────────────────────────────────
+  # Client-owned static entity replication
+  # ──────────────────────────────────────────────────────────────────────
+
+  @Rule(10)
+  Rule: Client-owned static entity replication
+
+    @Scenario(01)
+    Scenario: [client-static-01] Client-owned static entity spawns on server
+      Given a server is running
+      And a client connects
+      And a client-owned static entity exists
+      Then the server has the entity
+
+    # [client-static-02] — Client-owned static entity component value appears on server.
+    # Currently a known limitation: client-side `spawn_static_entity` calls
+    # `host_init_entity` BEFORE the closure runs (with empty component_kinds),
+    # so the entity is sent as a bare `Spawn` rather than `SpawnWithComponents`.
+    # Subsequent `InsertComponent` messages may race the entity registration.
+    # Fixing this requires deferring `host_init_entity` until the EntityMut is
+    # dropped (after the closure inserts components), mirroring the server-side
+    # pattern where `host_init_entity` is deferred until scope entry.
+    @PolicyOnly
+    @Scenario(02)
+    Scenario: [client-static-02] Client-owned static entity component value appears on server
+
+    # [client-static-03] — Post-construction component insert panics on client-owned static entity.
+    # Covered by integration test in test/harness/contract_tests/integration_only/02_static_entities.rs.
+    @PolicyOnly
+    @Scenario(03)
+    Scenario: [client-static-03] Post-construction insert on client-owned static entity is rejected
+
+  # ──────────────────────────────────────────────────────────────────────
   # Component mutation with scope transitions
   # ──────────────────────────────────────────────────────────────────────
 
@@ -403,10 +435,10 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
 
 
   # ==========================================================================
-  # Rule 10 — Replication under adverse transport
+  # Rule 11 — Replication under adverse transport
   # ==========================================================================
 
-  @Rule(10)
+  @Rule(11)
   Rule: Replication converges under packet loss
 
     @Scenario(01)

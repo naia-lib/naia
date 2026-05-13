@@ -46,6 +46,10 @@ name = "integration_only_01_connection_lifecycle"
 path = "contract_tests/integration_only/01_connection_lifecycle.rs"
 
 [[test]]
+name = "integration_only_02_static_entities"
+path = "contract_tests/integration_only/02_static_entities.rs"
+
+[[test]]
 name = "integration_only_03_messaging"
 path = "contract_tests/integration_only/03_messaging.rs"
 

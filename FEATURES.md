@@ -42,4 +42,4 @@
 
 ## Planned
 
-- [x] Client-side static entities — `spawn_static_entity()` / `entity_mut.as_static()` in `naia-client`; `CommandsExt::as_static<T>()` in `naia-bevy-client`; mirrors the server-side API exactly
+- [x] Client-side static entities — `spawn_static_entity()` / `entity_mut.as_static()` in `naia-client`; `CommandsExt::as_static<T>()` in `naia-bevy-client`; mirrors the server-side API. Known limitation: components inserted inside the `spawn_static` closure are sent as separate `InsertComponent` messages rather than coalesced into a single `SpawnWithComponents`, because `host_init_entity` fires before the closure runs (with empty component_kinds). Server eventually receives entity + components, but `[client-static-02]` is `@PolicyOnly` pending an architectural fix to defer `host_init_entity` until `EntityMut` is dropped.
