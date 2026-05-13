@@ -29,7 +29,7 @@
 //!
 //! # Quick start
 //!
-//! ```no_run
+//! ```ignore
 //! use bevy_app::{App, Startup, Update};
 //! use bevy_ecs::prelude::*;
 //! use naia_bevy_server::{
