@@ -9,7 +9,7 @@
 - [x] Typed message passing: unordered-unreliable, sequenced-unreliable, unordered-reliable, ordered-reliable, tick-buffered
 - [x] Typed request / response pairs over reliable channels
 - [x] Entity replication with per-field delta compression (`Property<T>`)
-- [x] Static entities (write-once, no per-tick diff tracking)
+- [x] Static entities (write-once, no per-tick diff tracking) — **server-side only**; see Planned for client-side
 - [x] Replicated resources (server-side singletons, no room/scope config required)
 - [x] Two-level interest management: rooms (coarse) + `UserScope` (fine-grained per-user visibility)
 - [x] Authority delegation: server grants/revokes client write authority over individual entities
@@ -42,6 +42,7 @@
 
 ## Planned
 
+- [ ] Client-side static entities — `enable_replication().as_static()` for client-authoritative entities that are write-once after spawn; requires `mark_entity_as_static` wired through `naia-client` and `naia-bevy-client` `CommandsExt` (server-side implementation landed 2026-05-13 as the reference)
 - [ ] `transport_quic` — TLS 1.3 native transport (Quinn-based); XL effort, no set timeline
 - [ ] Per-component replication toggle — fine-grained enable/disable per component on a replicated entity, issue #186
 - [ ] iOS / Android native client socket (blocked on `transport_quic`)
