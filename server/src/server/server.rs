@@ -561,6 +561,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.enable_static_entity_replication(entity);
     }
 
+    /// Converts an already-registered dynamic entity to static.
+    /// Called by the Bevy adapter's `as_static()` command after `enable_replication`.
+    pub fn mark_entity_as_static(&mut self, entity: &E) {
+        self.world_server.mark_entity_as_static(entity);
+    }
+
     /// Unregisters the entity from the replication layer and despawns it on
     /// all clients.
     ///

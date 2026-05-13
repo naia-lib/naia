@@ -42,11 +42,16 @@ pub trait CommandsExt<'a> {
     /// clients.
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
 
-    /// Registers the entity as static — no diff-tracking after spawn.
+    /// Marks the entity as static — no diff-tracking after initial replication.
     ///
-    /// A full component snapshot is sent once when the entity enters a
-    /// user's scope. Use for tile entities, level geometry, or any entity
-    /// that never mutates after spawning.
+    /// Must be called after [`enable_replication`] on the same entity.
+    /// `enable_replication` registers the entity synchronously; `as_static`
+    /// queues a deferred command that converts the record to static before
+    /// the first game tick runs.
+    ///
+    /// A full component snapshot is sent once when the entity enters a user's
+    /// scope. Use for tile entities, level geometry, or any entity that never
+    /// mutates after spawning.
     fn as_static(&'a mut self) -> &'a mut EntityCommands<'a>;
 
     /// Removes the entity from the naia replication layer.
@@ -114,10 +119,9 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 
     fn as_static(&'a mut self) -> &'a mut EntityCommands<'a> {
         let entity = self.id();
-        self.insert(HostOwned::new::<Singleton>());
         self.commands().queue(WorldOpCommand::new(move |world| {
             world.resource_scope(|_world, mut server: Mut<ServerImpl>| {
-                server.enable_static_entity_replication(&entity);
+                server.mark_entity_as_static(&entity);
             });
         }));
         self
