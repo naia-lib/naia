@@ -29,13 +29,12 @@
 //!
 //! # Quick start
 //!
-//! ```ignore
+//! ```no_run
 //! use bevy_app::{App, Startup, Update};
-//! use bevy_ecs::prelude::*;
+//! use bevy_ecs::message::MessageReader;
 //! use naia_bevy_server::{
 //!     events::ConnectEvent,
-//!     transport::webrtc,
-//!     Plugin, Server, ServerConfig, UserKey,
+//!     transport, Plugin, Server, ServerConfig, UserKey,
 //! };
 //! use naia_bevy_shared::Protocol;
 //!
@@ -48,16 +47,17 @@
 //! }
 //!
 //! fn init(mut server: Server) {
-//!     server.listen(webrtc::Socket::new(&server_addrs(), None));
+//!     // pick a concrete transport: transport::webrtc, transport::udp, transport::local
+//!     let socket: Box<dyn transport::Socket> = todo!();
+//!     server.listen(socket);
 //! }
 //!
-//! fn on_connect(mut server: Server, mut connect_events: EventReader<ConnectEvent>) {
-//!     for ConnectEvent(user_key) in connect_events.read() {
-//!         server.accept_connection(user_key);
-//!         // server.user_mut(user_key).enter_room(&room_key);
+//! fn on_connect(mut server: Server, mut events: MessageReader<ConnectEvent>) {
+//!     for ConnectEvent(user_key) in events.read() {
+//!         server.accept_connection(&user_key);
+//!         // server.user_mut(&user_key).enter_room(&room_key);
 //!     }
 //! }
-//! # fn server_addrs() -> naia_bevy_server::transport::webrtc::ServerAddrs { todo!() }
 //! ```
 //!
 //! # Key types

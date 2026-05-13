@@ -1005,20 +1005,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ///
     /// ```no_run
     /// # use naia_server::Server;
-    /// # use naia_shared::ComponentKind;
-    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync>(server: &mut Server<E>) {
+    /// # use naia_shared::{ComponentKind, Replicate};
+    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync,
+    /// #            Position: Replicate, Health: Replicate>(server: &mut Server<E>) {
     /// server.enable_historian_filtered(
     ///     64,
     ///     [ComponentKind::of::<Position>(), ComponentKind::of::<Health>()],
     /// );
-    /// # }
-    /// # struct Position; impl naia_shared::Replicate for Position {
-    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
-    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
-    /// # }
-    /// # struct Health; impl naia_shared::Replicate for Health {
-    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
-    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
     /// # }
     /// ```
     pub fn enable_historian_filtered(

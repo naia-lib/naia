@@ -29,7 +29,7 @@ pub type EntitySnapshot = HashMap<ComponentKind, Box<dyn Replicate>>;
 /// # use naia_server::{Server, UserKey};
 /// # use naia_shared::{Tick, WorldRefType};
 /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync, W: WorldRefType<E>>(
-/// #     server: &mut Server<E>, world: &W, current_tick: Tick, fire_tick: Tick
+/// #     server: &mut Server<E>, world: W, current_tick: Tick, fire_tick: Tick
 /// # ) {
 /// // Opt-in once at startup:
 /// server.enable_historian(64);
@@ -82,20 +82,13 @@ impl Historian {
     ///
     /// ```no_run
     /// # use naia_server::Server;
-    /// # use naia_shared::ComponentKind;
-    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync>(server: &mut Server<E>) {
+    /// # use naia_shared::{ComponentKind, Replicate};
+    /// # fn example<E: Copy + Eq + std::hash::Hash + Send + Sync,
+    /// #            Position: Replicate, Health: Replicate>(server: &mut Server<E>) {
     /// server.enable_historian_filtered(
     ///     64,
     ///     [ComponentKind::of::<Position>(), ComponentKind::of::<Health>()],
     /// );
-    /// # }
-    /// # struct Position; impl naia_shared::Replicate for Position {
-    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
-    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
-    /// # }
-    /// # struct Health; impl naia_shared::Replicate for Health {
-    /// #     fn copy_to_box(&self) -> Box<dyn naia_shared::Replicate> { unimplemented!() }
-    /// #     fn mirror(&mut self, _: &dyn naia_shared::Replicate) {}
     /// # }
     /// ```
     pub fn new_filtered(max_ticks: u16, filter: impl IntoIterator<Item = ComponentKind>) -> Self {
