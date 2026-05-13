@@ -215,6 +215,77 @@ impl DirtyQueue {
     pub fn is_empty(&self) -> bool {
         self.indices.lock().is_empty()
     }
+
+    /// Build dirty candidates without consuming the dirty bits (Phase 3 / C.4).
+    ///
+    /// Unlike `drain()`, which atomically zeroes the bits, this method reads
+    /// the bits with a Relaxed load and leaves them intact. Entities that are
+    /// still dirty (bits ≠ 0) are refeeded to the index list so they appear
+    /// in the next call. Entities whose bits were cleared by `cancel()` are
+    /// dropped from tracking — they leave the index list naturally.
+    ///
+    /// This replaces the old drain-then-re-push loop in
+    /// `UserDiffHandler::dirty_receiver_candidates`, turning an O(ever-dirty)
+    /// per-tick scan into O(currently-dirty).
+    pub fn build_candidates(&self) -> Vec<(EntityIndex, Vec<u64>)> {
+        let raw_indices: Vec<EntityIndex> = std::mem::take(&mut *self.indices.lock());
+        if raw_indices.is_empty() {
+            return Vec::new();
+        }
+
+        let mut out: Vec<(EntityIndex, Vec<u64>)> = Vec::with_capacity(raw_indices.len());
+        let mut refeed: Vec<EntityIndex> = Vec::with_capacity(raw_indices.len());
+        // Deduplicate: duplicates arise when refeed from the prior call and a
+        // fresh push() both add the same entity_idx before this call runs.
+        let mut dedup: std::collections::HashSet<EntityIndex> =
+            std::collections::HashSet::with_capacity(raw_indices.len());
+
+        {
+            let bits = self.bits.read();
+            for idx in raw_indices {
+                if !dedup.insert(idx) {
+                    continue; // already processed this entity_idx
+                }
+                let entity_base = (idx.0 as usize) * self.stride;
+                let mut words: Vec<u64> = Vec::with_capacity(self.stride);
+                let mut any = false;
+                for w in 0..self.stride {
+                    let v = bits
+                        .get(entity_base + w)
+                        .map(|slot| slot.load(Ordering::Relaxed))
+                        .unwrap_or(0);
+                    if v != 0 {
+                        any = true;
+                    }
+                    words.push(v);
+                }
+                if any {
+                    // Still dirty — keep in tracking for the next call.
+                    refeed.push(idx);
+                    out.push((idx, words));
+                }
+                // else: bits are 0 (delivered via cancel()) — don't refeed;
+                // entity naturally exits dirty tracking.
+            }
+        } // release bits read-guard
+
+        // Merge refeed back. Between our std::mem::take and now, push() may
+        // have added new entries for fresh mutations. Extend without creating
+        // duplicates with those new entries.
+        if !refeed.is_empty() {
+            let mut lock = self.indices.lock();
+            // New-push entries since our take — collect once to skip O(n²) scan.
+            let new_pushes: std::collections::HashSet<EntityIndex> =
+                lock.iter().copied().collect();
+            for idx in refeed {
+                if !new_pushes.contains(&idx) {
+                    lock.push(idx);
+                }
+            }
+        }
+
+        out
+    }
 }
 
 /// Shared dirty queue owned by a `UserDiffHandler`. MutReceivers hold a

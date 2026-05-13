@@ -18,10 +18,9 @@ use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
 const ENTITY_INDEX_RECYCLE_TIMEOUT: Duration = Duration::from_secs(2);
 
 // Diagnostic counters for the perf-upgrade project. These measure how much
-// work `dirty_receiver_candidates` does per invocation. On idle ticks today
-// the scan is O(receivers), which multiplied by users is the O(U·N) cost the
-// matrix shows. After Phase 3 lands a dirty-push model, `receivers_visited`
-// per idle tick should drop to zero. Enabled via `bench_instrumentation`.
+// work `dirty_receiver_candidates` does per invocation. Phase 3 / C.4 landed
+// the dirty-push model via `DirtySet::build_candidates`; `receivers_visited`
+// on idle ticks (no component mutations) is now zero. Enabled via `bench_instrumentation`.
 /// Diagnostic counters for the `dirty_receiver_candidates` scan.
 #[cfg(feature = "bench_instrumentation")]
 pub mod dirty_scan_counters {
@@ -273,34 +272,22 @@ impl UserDiffHandler {
     }
 
     pub fn dirty_receiver_candidates(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
-        // Lock-free drain. `drain()` atomically swap-zeroes every word
-        // of each indexed entity and returns owned
-        // `(EntityIndex, dirty_words)` pairs where `dirty_words` is
-        // `Vec<u64>` of length `stride` (= `ceil(kind_count / 64)`).
-        // Each set bit at word `w`, position `b` corresponds to
-        // `kind_bit = w * 64 + b`.
-        let drained: Vec<(EntityIndex, Vec<u64>)> = self.dirty_set.drain();
-
-        // Re-mark the drained entries: this method is read-only by contract,
-        // so the bits must persist for downstream callers / next call.
-        // Each `push` is lock-free (atomic fetch_or under a read guard);
-        // the cold-path indices mutex is acquired once per first-bit-set
-        // per entity, which is the same number of pushes as before.
-        for (idx, words) in &drained {
-            for (word_idx, &word) in words.iter().enumerate() {
-                let mut remaining = word;
-                while remaining != 0 {
-                    let bit = remaining.trailing_zeros() as u16;
-                    let kind_bit = (word_idx as u16) * 64 + bit;
-                    self.dirty_set.push(*idx, kind_bit);
-                    remaining &= remaining - 1;
-                }
-            }
-        }
+        // Phase 3 / C.4 dirty-push model.
+        //
+        // `build_candidates()` reads dirty bits without zeroing them, and
+        // refeeds entities that are still dirty so they appear next tick too.
+        // Entities are removed from tracking only when `cancel()` clears their
+        // bits — which happens in `clear_diff_mask()` → `record_update()` after
+        // a component update is serialised into a packet.
+        //
+        // Entities that are not sent (bandwidth-deferred or out-of-scope) keep
+        // their bits set and stay in the refeed list automatically — no O(U·N)
+        // re-push loop needed.
+        let candidates: Vec<(EntityIndex, Vec<u64>)> = self.dirty_set.build_candidates();
 
         let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> =
-            HashMap::with_capacity(drained.len());
-        for (idx, words) in drained {
+            HashMap::with_capacity(candidates.len());
+        for (idx, words) in candidates {
             let Some(Some(entity)) = self.index_to_entity.get(idx.0 as usize) else {
                 continue;
             };
