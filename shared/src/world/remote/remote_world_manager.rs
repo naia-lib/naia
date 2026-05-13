@@ -634,6 +634,13 @@ impl RemoteWorldManager {
     pub fn get_entity_auth_status(&self, entity: &RemoteEntity) -> Option<EntityAuthStatus> {
         self.remote_engine.get_entity_auth_status(entity)
     }
+
+    /// Queues `command` directly onto the remote engine's outgoing command buffer for reliable
+    /// transmission to the server.  Only call this for intentional client-initiated despawns of
+    /// server-created entities where the client holds Granted authority.
+    pub fn push_outgoing_despawn(&mut self, command: EntityCommand) {
+        self.remote_engine.push_outgoing_despawn(command);
+    }
 }
 
 impl InScopeEntities<RemoteEntity> for RemoteWorldManager {

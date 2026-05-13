@@ -45,13 +45,23 @@ impl HostEngine {
         match msg.get_type() {
             EntityMessageType::Spawn
             | EntityMessageType::SpawnWithComponents
-            | EntityMessageType::Despawn
             | EntityMessageType::InsertComponent
             | EntityMessageType::RemoveComponent => {
                 panic!(
                     "Host should not receive messages of this type: {:?}",
                     msg.get_type()
                 );
+            }
+            EntityMessageType::Despawn => {
+                // A client with Granted authority may send a Despawn for a server-created entity.
+                // Despawn is terminal — no per-entity channel ordering needed; push directly.
+                let host_entity = msg.entity().unwrap();
+                if self.entity_channels.remove(&host_entity).is_some() {
+                    self.incoming_events.push(msg);
+                } else {
+                    warn!("host_engine: Despawn for unknown entity {:?}, discarding", host_entity);
+                }
+                return;
             }
             EntityMessageType::Noop => {
                 return;

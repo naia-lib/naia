@@ -139,7 +139,6 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         // Handle entity commands for RemoteEngine
         match command {
             EntityCommand::Despawn(_) => {
-                // Remove the entity channel
                 self.entity_channels.remove(&entity);
             }
             EntityCommand::InsertComponent(_, component_kind) => {
@@ -159,6 +158,13 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
                 // to RemoteEngine (like Publish, Unpublish, etc.)
             }
         }
+    }
+
+    /// Queues a `Despawn` command for transmission to the server — called only from the
+    /// intentional authority-held despawn path. MUST NOT be called during connection cleanup
+    /// (e.g. disable_delegation), which uses `send_entity_command` for local-only teardown.
+    pub(crate) fn push_outgoing_despawn(&mut self, command: EntityCommand) {
+        self.outgoing_commands.push(command);
     }
 
     pub(crate) fn remove_entity_channel(&mut self, entity: &E) -> RemoteEntityChannel {

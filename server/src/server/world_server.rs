@@ -3195,14 +3195,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .unwrap();
                     self.incoming_world_events
                         .push_despawn(user_key, &world_entity);
+                    let owner = self.global_world_manager.entity_owner(&global_entity);
                     if self
                         .global_world_manager
                         .entity_is_public_and_client_owned(&global_entity)
-                        || self
+                        || (self
                             .global_world_manager
                             .entity_is_delegated(&global_entity)
+                            && matches!(
+                                owner,
+                                Some(
+                                    EntityOwner::Client(_)
+                                        | EntityOwner::ClientPublic(_)
+                                        | EntityOwner::ClientWaiting(_)
+                                )
+                            ))
                     {
-                        // remove from host connection
+                        // Client-created delegated entity: remove from this connection's remote
+                        // world manager, then tear down the server-side entity record entirely.
                         let user = self.user_store.get(user_key).unwrap();
                         let connection = self.user_connections.get_mut(&user.address()).unwrap();
                         connection
@@ -3210,6 +3220,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .world_manager
                             .remote_despawn_entity(&global_entity);
 
+                        self.despawn_entity_worldless(&world_entity);
+                    } else if self
+                        .global_world_manager
+                        .entity_is_delegated(&global_entity)
+                    {
+                        // Server-created delegated entity despawned by the authority-holding client.
+                        // The entity lives in the server's host world manager, not in any remote
+                        // world manager, so skip remote_despawn_entity and go straight to full teardown.
                         self.despawn_entity_worldless(&world_entity);
                     } else {
                         self.global_world_manager
