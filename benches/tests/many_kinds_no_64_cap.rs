@@ -15,7 +15,7 @@
 //! assertion was originally protecting.
 
 use naia_shared::{
-    BitCounter, BitReader, BitWriter, ComponentKind, ComponentKinds, LocalEntityIndex, Property,
+    BitCounter, BitReader, BitWriter, ComponentKind, ComponentKinds, GlobalEntityIndex, Property,
     Replicate,
 };
 
@@ -114,16 +114,16 @@ fn dirty_queue_handles_kind_bits_past_64() {
     // 70 kinds → stride == ceil(70/64) == 2 (two AtomicU64 words per entity).
     let q = DirtyQueue::new(70);
     assert_eq!(q.stride(), 2, "70 kinds requires 2 words per entity");
-    q.ensure_capacity(0);
+    q.ensure_capacity(1);
     // Push bits straddling the 64-bit word boundary — these would have
     // overflowed the historical single-u64 storage.
     for kb in [0u16, 63, 64, 65, 69] {
-        q.push(LocalEntityIndex(0), kb);
+        q.push(GlobalEntityIndex(1), kb);
     }
     let drained = q.drain();
     assert_eq!(drained.len(), 1, "single entity, single drained entry");
     let (idx, words) = &drained[0];
-    assert_eq!(*idx, LocalEntityIndex(0));
+    assert_eq!(*idx, GlobalEntityIndex(1));
     assert_eq!(words.len(), 2);
     // word 0 has bits 0 and 63
     assert_eq!(words[0], (1u64 << 0) | (1u64 << 63));

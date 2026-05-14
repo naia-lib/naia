@@ -8,7 +8,7 @@ use std::{
 
 use parking_lot::{Mutex as PlMutex, RwLock as PlRwLock};
 
-use crate::world::entity_index::LocalEntityIndex;
+use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{CachedComponentUpdate, DiffMask, GlobalWorldManagerType, PropertyMutate};
 
@@ -70,7 +70,7 @@ pub struct DirtyQueue {
     /// Cold-path-only mutex: locked at first-bit-set-per-entity push
     /// and at drain. Tolerates duplicate entries — drain dedupes via
     /// `bits`.
-    indices: PlMutex<Vec<LocalEntityIndex>>,
+    indices: PlMutex<Vec<GlobalEntityIndex>>,
 }
 
 impl DirtyQueue {
@@ -116,7 +116,7 @@ impl DirtyQueue {
     /// for this entity. `kind_bit` widened to `u16` (was `u8`) to
     /// support arbitrary protocol kind counts.
     #[inline]
-    pub fn push(&self, entity_idx: LocalEntityIndex, kind_bit: u16) {
+    pub fn push(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let word_idx = (kind_bit as usize) / 64;
         let bit_in_word = (kind_bit as u32) % 64;
         let kind_mask = 1u64 << bit_in_word;
@@ -130,7 +130,7 @@ impl DirtyQueue {
             } else {
                 drop(bits);
                 // Defensive: ensure capacity then retry. Should not
-                // happen in production — `allocate_entity_index`
+                // happen in production — `alloc_entity`
                 // pre-grows. Cost: one extra read + write lock pair,
                 // only on misconfigured callers.
                 self.ensure_capacity(entity_idx.0 as usize);
@@ -169,7 +169,7 @@ impl DirtyQueue {
     /// side; never touches the indices mutex (drain dedupes stale
     /// entries). Tolerates out-of-range slots (returns silently).
     #[inline]
-    pub fn cancel(&self, entity_idx: LocalEntityIndex, kind_bit: u16) {
+    pub fn cancel(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let word_idx = (kind_bit as usize) / 64;
         let bit_in_word = (kind_bit as u32) % 64;
         let kind_mask = 1u64 << bit_in_word;
@@ -182,13 +182,13 @@ impl DirtyQueue {
 
     /// Drain: take ownership of the indices list, then atomically
     /// swap-zero every word of each indexed entity. Returns owned
-    /// `(LocalEntityIndex, dirty_words)` pairs where `dirty_words` is a
+    /// `(GlobalEntityIndex, dirty_words)` pairs where `dirty_words` is a
     /// `Vec<u64>` of length `stride` (one word per kind-word). Entries
     /// that ended up zero across all words (cancelled or already
     /// drained) are skipped.
-    pub fn drain(&self) -> Vec<(LocalEntityIndex, Vec<u64>)> {
-        let indices: Vec<LocalEntityIndex> = std::mem::take(&mut *self.indices.lock());
-        let mut out: Vec<(LocalEntityIndex, Vec<u64>)> = Vec::with_capacity(indices.len());
+    pub fn drain(&self) -> Vec<(GlobalEntityIndex, Vec<u64>)> {
+        let indices: Vec<GlobalEntityIndex> = std::mem::take(&mut *self.indices.lock());
+        let mut out: Vec<(GlobalEntityIndex, Vec<u64>)> = Vec::with_capacity(indices.len());
         let bits = self.bits.read();
         for idx in indices {
             let entity_base = (idx.0 as usize) * self.stride;
@@ -227,17 +227,17 @@ impl DirtyQueue {
     /// This replaces the old drain-then-re-push loop in
     /// `UserDiffHandler::dirty_receiver_candidates`, turning an O(ever-dirty)
     /// per-tick scan into O(currently-dirty).
-    pub fn build_candidates(&self) -> Vec<(LocalEntityIndex, Vec<u64>)> {
-        let raw_indices: Vec<LocalEntityIndex> = std::mem::take(&mut *self.indices.lock());
+    pub fn build_candidates(&self) -> Vec<(GlobalEntityIndex, Vec<u64>)> {
+        let raw_indices: Vec<GlobalEntityIndex> = std::mem::take(&mut *self.indices.lock());
         if raw_indices.is_empty() {
             return Vec::new();
         }
 
-        let mut out: Vec<(LocalEntityIndex, Vec<u64>)> = Vec::with_capacity(raw_indices.len());
-        let mut refeed: Vec<LocalEntityIndex> = Vec::with_capacity(raw_indices.len());
+        let mut out: Vec<(GlobalEntityIndex, Vec<u64>)> = Vec::with_capacity(raw_indices.len());
+        let mut refeed: Vec<GlobalEntityIndex> = Vec::with_capacity(raw_indices.len());
         // Deduplicate: duplicates arise when refeed from the prior call and a
         // fresh push() both add the same entity_idx before this call runs.
-        let mut dedup: std::collections::HashSet<LocalEntityIndex> =
+        let mut dedup: std::collections::HashSet<GlobalEntityIndex> =
             std::collections::HashSet::with_capacity(raw_indices.len());
 
         {
@@ -275,7 +275,7 @@ impl DirtyQueue {
         if !refeed.is_empty() {
             let mut lock = self.indices.lock();
             // New-push entries since our take — collect once to skip O(n²) scan.
-            let new_pushes: std::collections::HashSet<LocalEntityIndex> =
+            let new_pushes: std::collections::HashSet<GlobalEntityIndex> =
                 lock.iter().copied().collect();
             for idx in refeed {
                 if !new_pushes.contains(&idx) {
@@ -297,13 +297,13 @@ pub type DirtySet = DirtyQueue;
 
 /// Identifies a MutReceiver's position inside its owning UserDiffHandler's
 /// dirty set. Installed once per receiver via `MutReceiver::attach_notifier`
-/// (OnceLock — all clones share the notifier). Carries the per-user
-/// `LocalEntityIndex` and the protocol-wide `kind_bit` (= ComponentKind's NetId)
+/// (OnceLock — all clones share the notifier). Carries the global
+/// `GlobalEntityIndex` and the protocol-wide `kind_bit` (= ComponentKind's NetId)
 /// — both resolved once at registration time, so notify is a Vec OR, not a
 /// hash.
 /// Lightweight handle installed in a [`MutReceiver`] to push dirty notifications into a [`DirtySet`] on mutation.
 pub struct DirtyNotifier {
-    entity_idx: LocalEntityIndex,
+    entity_idx: GlobalEntityIndex,
     kind_bit: u16,
     set: Weak<DirtySet>,
 }
@@ -311,7 +311,7 @@ pub struct DirtyNotifier {
 impl DirtyNotifier {
     /// Creates a `DirtyNotifier` that marks `(entity_idx, kind_bit)` dirty in `set` on mutation.
     pub fn new(
-        entity_idx: LocalEntityIndex,
+        entity_idx: GlobalEntityIndex,
         kind_bit: u16,
         set: Weak<DirtySet>,
     ) -> Self {
@@ -551,7 +551,7 @@ mod dirty_queue_unlimited_kinds_tests {
     //! `Vec<AtomicU64>` storage scales with `kind_count`, and
     //! `kind_bit` values ≥ 64 round-trip through `push` → `drain`.
     use super::*;
-    use crate::LocalEntityIndex;
+    use crate::world::update::global_entity_index::GlobalEntityIndex;
     use std::sync::Arc;
 
     #[test]
@@ -567,16 +567,16 @@ mod dirty_queue_unlimited_kinds_tests {
     #[test]
     fn kind_bit_above_64_round_trips() {
         let q = Arc::new(DirtyQueue::new(200));
-        q.ensure_capacity(0);
+        q.ensure_capacity(1);
         // Pre-T1.3 these kind_bits were unrepresentable (the assertion
         // in ComponentKinds::add_component capped registration at 64).
         for &kb in &[0u16, 63, 64, 65, 127, 128, 199] {
-            q.push(LocalEntityIndex(0), kb);
+            q.push(GlobalEntityIndex(1), kb);
         }
         let drained = q.drain();
         assert_eq!(drained.len(), 1);
         let (idx, words) = &drained[0];
-        assert_eq!(*idx, LocalEntityIndex(0));
+        assert_eq!(*idx, GlobalEntityIndex(1));
         assert_eq!(words.len(), q.stride());
         // Reconstruct the absolute bit positions.
         let mut bits: Vec<u16> = Vec::new();
@@ -595,9 +595,9 @@ mod dirty_queue_unlimited_kinds_tests {
     #[test]
     fn cancel_clears_high_kind_bit() {
         let q = DirtyQueue::new(200);
-        q.ensure_capacity(0);
-        q.push(LocalEntityIndex(0), 130);
-        q.cancel(LocalEntityIndex(0), 130);
+        q.ensure_capacity(1);
+        q.push(GlobalEntityIndex(1), 130);
+        q.cancel(GlobalEntityIndex(1), 130);
         let drained = q.drain();
         // Cancel zeroes the bit; drain skips entries with all-zero words.
         assert!(drained.is_empty());
@@ -606,12 +606,12 @@ mod dirty_queue_unlimited_kinds_tests {
     #[test]
     fn multi_word_was_clear_fires_index_push_once() {
         let q = DirtyQueue::new(200);
-        q.ensure_capacity(0);
+        q.ensure_capacity(1);
         // Two pushes to different words for the same entity. Race-tolerant
         // was_clear may push the index twice, but drain dedupes via
         // swap-zero — only one drained entry should appear.
-        q.push(LocalEntityIndex(0), 5);
-        q.push(LocalEntityIndex(0), 130);
+        q.push(GlobalEntityIndex(1), 5);
+        q.push(GlobalEntityIndex(1), 130);
         let drained = q.drain();
         assert_eq!(drained.len(), 1, "expected dedup via drain swap-zero");
         let (_, words) = &drained[0];

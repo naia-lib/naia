@@ -2,20 +2,15 @@ use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::{Arc, RwLock},
-    time::Duration,
 };
 
 use log::warn;
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
-use crate::world::entity_index::{LocalEntityIndex, KeyGenerator32};
+use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
-
-/// LocalEntityIndex recycle timeout — long enough to cover packet drop / RTT
-/// retries that may still reference an entity_idx briefly after dereg.
-const ENTITY_INDEX_RECYCLE_TIMEOUT: Duration = Duration::from_secs(2);
 
 // Diagnostic counters for the perf-upgrade project. These measure how much
 // work `dirty_receiver_candidates` does per invocation. Phase 3 / C.4 landed
@@ -47,9 +42,8 @@ pub mod dirty_scan_counters {
 
 /// Per-user diff handler.
 ///
-/// Phase 9.4 / Stage E (2026-04-25): per-user `LocalEntityIndex` issuance lives
-/// here — `entity_to_index` maps `GlobalEntity → LocalEntityIndex`,
-/// `index_to_entity` is the dense reverse table consulted at drain time.
+/// Uses the global `GlobalEntityIndex` from `GlobalDiffHandler` for O(1) entity
+/// lookup instead of per-user `LocalEntityIndex` management.
 /// `kinds_by_bit` records `kind_bit → ComponentKind` so the snapshot can
 /// rebuild the legacy `HashMap<GlobalEntity, HashSet<ComponentKind>>`
 /// shape consumers expect, without needing access to `ComponentKinds` on
@@ -58,16 +52,6 @@ pub mod dirty_scan_counters {
 pub struct UserDiffHandler {
     receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
-    /// Per-user dense indices for entities the handler is tracking.
-    entity_to_index: HashMap<GlobalEntity, LocalEntityIndex>,
-    /// `index_to_entity[idx]` is `Some(entity)` while the entity is
-    /// registered; `None` after deregistration (slot held until recycle).
-    index_to_entity: Vec<Option<GlobalEntity>>,
-    /// Refcount of registered components per entity_idx. When the count
-    /// drops to zero we recycle the index.
-    components_per_entity: HashMap<LocalEntityIndex, u32>,
-    /// LocalEntityIndex allocator (recycling, u32 keyspace).
-    key_gen: KeyGenerator32<LocalEntityIndex>,
     /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
     /// at snapshot time. Bit position == NetId per
     /// `ComponentKinds::add_component`. `None` at indices not yet
@@ -97,32 +81,9 @@ impl UserDiffHandler {
         Self {
             receivers: HashMap::new(),
             global_diff_handler,
-            entity_to_index: HashMap::new(),
-            index_to_entity: Vec::new(),
-            components_per_entity: HashMap::new(),
-            key_gen: KeyGenerator32::new(ENTITY_INDEX_RECYCLE_TIMEOUT),
             kinds_by_bit: vec![None; kind_count as usize],
             dirty_set: Arc::new(DirtySet::new(kind_count)),
         }
-    }
-
-    fn allocate_entity_index(&mut self, entity: &GlobalEntity) -> LocalEntityIndex {
-        if let Some(&idx) = self.entity_to_index.get(entity) {
-            return idx;
-        }
-        let idx = self.key_gen.generate();
-        let slot = idx.0 as usize;
-        if slot >= self.index_to_entity.len() {
-            self.index_to_entity.resize(slot + 1, None);
-        }
-        self.index_to_entity[slot] = Some(*entity);
-        self.entity_to_index.insert(*entity, idx);
-        // B-strict: pre-grow the lock-free DirtyQueue's atomic bits
-        // Vec to cover this slot before any mutation can reference it.
-        // Cold-path RwLock write — never contended on the hot path
-        // because mutations on this entity haven't started yet.
-        self.dirty_set.ensure_capacity(slot);
-        idx
     }
 
     // Component Registration
@@ -151,6 +112,7 @@ impl UserDiffHandler {
         };
 
         let kind_bit = global_handler.kind_bit(component_kind);
+        let entity_idx = global_handler.entity_to_global_idx(entity);
         drop(global_handler);
         // GlobalDiffHandler should always be able to resolve kind_bit at this
         // point (component registration goes through the same ComponentKinds
@@ -159,7 +121,15 @@ impl UserDiffHandler {
             warn!("UserDiffHandler: kind_bit unresolved for {:?}; notifier not attached", component_kind);
             return;
         };
-        let entity_idx = self.allocate_entity_index(entity);
+        let Some(entity_idx) = entity_idx else {
+            #[cfg(feature = "e2e_debug")]
+            warn!(
+                "UserDiffHandler::register_component: entity {:?} not in global registry",
+                entity
+            );
+            return;
+        };
+        self.dirty_set.ensure_capacity(entity_idx.as_usize());
 
         // Cache kind_bit → ComponentKind once for snapshot decode.
         // Defensive grow: if a kind was registered with the
@@ -180,36 +150,21 @@ impl UserDiffHandler {
             Arc::downgrade(&self.dirty_set),
         ));
         self.receivers.insert((*entity, *component_kind), receiver);
-        *self.components_per_entity.entry(entity_idx).or_insert(0) += 1;
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.receivers.remove(&(*entity, *component_kind));
 
-        let Some(&entity_idx) = self.entity_to_index.get(entity) else {
+        let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
             return;
         };
-
-        let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
+        let Some(entity_idx) = global_handler.entity_to_global_idx(entity) else {
             return;
         };
         if let Some(kind_bit) = global_handler.kind_bit(component_kind) {
             self.dirty_set.cancel(entity_idx, kind_bit);
         }
         drop(global_handler);
-
-        // Refcount the entity_idx; recycle when no components remain.
-        if let Some(count) = self.components_per_entity.get_mut(&entity_idx) {
-            *count = count.saturating_sub(1);
-            if *count == 0 {
-                self.components_per_entity.remove(&entity_idx);
-                self.entity_to_index.remove(entity);
-                if let Some(slot) = self.index_to_entity.get_mut(entity_idx.0 as usize) {
-                    *slot = None;
-                }
-                self.key_gen.recycle_key(&entity_idx);
-            }
-        }
     }
 
     pub fn has_component(&self, entity: &GlobalEntity, component: &ComponentKind) -> bool {
@@ -283,12 +238,15 @@ impl UserDiffHandler {
         // Entities that are not sent (bandwidth-deferred or out-of-scope) keep
         // their bits set and stay in the refeed list automatically — no O(U·N)
         // re-push loop needed.
-        let candidates: Vec<(LocalEntityIndex, Vec<u64>)> = self.dirty_set.build_candidates();
+        let candidates: Vec<(GlobalEntityIndex, Vec<u64>)> = self.dirty_set.build_candidates();
 
         let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> =
             HashMap::with_capacity(candidates.len());
+        let Ok(global_handler) = self.global_diff_handler.read() else {
+            return result;
+        };
         for (idx, words) in candidates {
-            let Some(Some(entity)) = self.index_to_entity.get(idx.0 as usize) else {
+            let Some(entity) = global_handler.global_entity_at(idx) else {
                 continue;
             };
             let mut set = HashSet::new();
@@ -304,9 +262,10 @@ impl UserDiffHandler {
                 }
             }
             if !set.is_empty() {
-                result.insert(*entity, set);
+                result.insert(entity, set);
             }
         }
+        drop(global_handler);
 
         #[cfg(feature = "bench_instrumentation")]
         {

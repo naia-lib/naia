@@ -1056,7 +1056,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 - Integration test added to naia harness: send a `UserIndependent` component (no `EntityProperty`) and a `UserDependent` component (with `EntityProperty`) through the new two-path `write_update`; receive on client side; assert deserialized values match the originals. Both paths must be exercised and green before Phase 5 is gated.
 - Run sub-phase bench (command in Phase 10 step 1) and record Phase 5 partial-optimization results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. `GlobalDirtyBitset` and bitset intersection are not yet in place — expect reduction in `send_packet_loop` from PATH A/B, but `take_update_events` reduction does not arrive until Phase 9.
 
-### Phase 6 — GlobalEntityIndex + GlobalDiffHandler Extension
+### Phase 6 — GlobalEntityIndex + GlobalDiffHandler Extension [X]
 
 **Structural refactor. Depends on Phase 5 passing.**
 
