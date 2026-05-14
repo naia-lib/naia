@@ -1,13 +1,14 @@
 use std::{
     collections::{HashMap, HashSet},
     net::SocketAddr,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, Weak},
 };
 
 use log::warn;
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
+use crate::world::update::global_dirty_bitset::GlobalDirtyBitset;
 use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
@@ -63,6 +64,9 @@ pub struct UserDiffHandler {
     // `MutReceiver::mutate` fires `notify_dirty` on clean→dirty
     // transitions; the resulting push is a Vec OR + (cold) push.
     dirty_set: Arc<DirtySet>,
+    // Server-global dirty bitset. `Weak` so it's a no-op on the client side
+    // (where `global_dirty_bitset()` returns `None`).
+    global_dirty: Weak<GlobalDirtyBitset>,
 }
 
 impl UserDiffHandler {
@@ -78,11 +82,16 @@ impl UserDiffHandler {
             .read()
             .map(|h| h.kind_count())
             .unwrap_or(0);
+        let global_dirty = global_world_manager
+            .global_dirty_bitset()
+            .map(|b| Arc::downgrade(&b))
+            .unwrap_or_else(Weak::new);
         Self {
             receivers: HashMap::new(),
             global_diff_handler,
             kinds_by_bit: vec![None; kind_count as usize],
             dirty_set: Arc::new(DirtySet::new(kind_count)),
+            global_dirty,
         }
     }
 
@@ -148,6 +157,7 @@ impl UserDiffHandler {
             entity_idx,
             kind_bit,
             Arc::downgrade(&self.dirty_set),
+            self.global_dirty.clone(),
         ));
         self.receivers.insert((*entity, *component_kind), receiver);
     }

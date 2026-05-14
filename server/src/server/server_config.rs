@@ -21,6 +21,9 @@ pub struct ServerConfig {
     /// This prevents unauthenticated clients from holding server memory
     /// indefinitely. Default: 10 seconds.
     pub pending_auth_timeout: Duration,
+    /// Maximum number of replicated entities. Determines the pre-allocated capacity of
+    /// `GlobalDirtyBitset`. Default: 65,536. Must be increased if entity count exceeds this.
+    pub max_replicated_entities: u32,
 }
 
 impl Default for ServerConfig {
@@ -30,6 +33,7 @@ impl Default for ServerConfig {
             connection: ConnectionConfig::default(),
             ping: PingConfig::default(),
             pending_auth_timeout: Duration::from_secs(10),
+            max_replicated_entities: 65_536,
         }
     }
 }

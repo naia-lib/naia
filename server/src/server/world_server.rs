@@ -4,6 +4,7 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
+    sync::Arc,
     time::Duration,
 };
 
@@ -13,9 +14,9 @@ use naia_shared::{
     handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
     ConnectionStats, DisconnectReason,
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
-    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
-    OutgoingPriorityHook, SnapshotMap, UserPriorityState,
+    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
+    GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
+    GlobalResponseId, OutgoingPriorityHook, SnapshotMap, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
     Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
     Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
@@ -151,6 +152,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     entity_scope_map: EntityScopeMap,
     global_world_manager: GlobalWorldManager,
     global_entity_map: GlobalEntityMap<E>,
+    // Held to keep the GlobalDirtyBitset alive; consumers access it via GlobalWorldManager.
+    // Will be read directly in a later phase.
+    #[allow(dead_code)]
+    global_dirty: Arc<GlobalDirtyBitset>,
     // Events
     addrs_with_new_packets: HashSet<SocketAddr>,
     outstanding_disconnects: Vec<(UserKey, DisconnectReason)>,
@@ -211,7 +216,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         let time_manager = TimeManager::new(tick_interval);
 
-        // Print protocol ID for SetAuthority at startup
+        // Create GlobalDirtyBitset: capacity = max entity slots (including slot 0 = INVALID),
+        // component_count = total registered component kinds from the protocol.
+        let global_dirty = {
+            let capacity = (server_config.max_replicated_entities as usize) + 1; // +1 for INVALID slot 0
+            let component_count = component_kinds.kind_count() as usize;
+            Arc::new(GlobalDirtyBitset::new(capacity, component_count))
+        };
+
+        let mut global_world_manager = GlobalWorldManager::new();
+        global_world_manager.set_global_dirty(Arc::clone(&global_dirty));
 
         Self {
             // Config
@@ -232,8 +246,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Entities
             entity_room_map: EntityRoomMap::new(),
             entity_scope_map: EntityScopeMap::new(),
-            global_world_manager: GlobalWorldManager::new(),
+            global_world_manager,
             global_entity_map: GlobalEntityMap::new(),
+            global_dirty,
             // Events
             addrs_with_new_packets: HashSet::new(),
             outstanding_disconnects: Vec::new(), // (UserKey, DisconnectReason)

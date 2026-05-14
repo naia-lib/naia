@@ -1071,7 +1071,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** `cargo check` warning-clean; `cargo test --workspace` green; namako gate green.
 
-### Phase 7 — GlobalDirtyBitset
+### Phase 7 — GlobalDirtyBitset [X]
 
 **Depends on Phase 6.**
 

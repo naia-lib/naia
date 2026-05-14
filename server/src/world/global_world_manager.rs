@@ -7,8 +7,8 @@ use log::warn;
 
 use naia_shared::{
     AuthorityError, BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, InScopeEntities, MutChannelType,
-    PropertyMutator, Replicate,
+    GlobalDiffHandler, GlobalDirtyBitset, GlobalEntity, GlobalWorldManagerType, InScopeEntities,
+    MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -27,6 +27,8 @@ pub struct GlobalWorldManager {
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Information about entities in the internal ECS World
     entity_records: HashMap<GlobalEntity, GlobalEntityRecord>,
+    /// Server-global dirty bitset; set after construction via `set_global_dirty`.
+    global_dirty: Option<Arc<GlobalDirtyBitset>>,
 }
 
 impl GlobalWorldManager {
@@ -35,7 +37,14 @@ impl GlobalWorldManager {
             auth_handler: ServerAuthHandler::new(),
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             entity_records: HashMap::new(),
+            global_dirty: None,
         }
+    }
+
+    /// Stores the server-global dirty bitset so it can be handed out to
+    /// `UserDiffHandler` instances via `GlobalWorldManagerType::global_dirty_bitset`.
+    pub fn set_global_dirty(&mut self, bitset: Arc<GlobalDirtyBitset>) {
+        self.global_dirty = Some(bitset);
     }
 
     pub fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -519,6 +528,10 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             .get(global_entity)
             .map(|r| r.is_static)
             .unwrap_or(false)
+    }
+
+    fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+        self.global_dirty.clone()
     }
 }
 

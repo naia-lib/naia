@@ -8,6 +8,7 @@ use std::{
 
 use parking_lot::{Mutex as PlMutex, RwLock as PlRwLock};
 
+use crate::world::update::global_dirty_bitset::GlobalDirtyBitset;
 use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{CachedComponentUpdate, DiffMask, GlobalWorldManagerType, PropertyMutate};
@@ -301,11 +302,13 @@ pub type DirtySet = DirtyQueue;
 /// `GlobalEntityIndex` and the protocol-wide `kind_bit` (= ComponentKind's NetId)
 /// — both resolved once at registration time, so notify is a Vec OR, not a
 /// hash.
-/// Lightweight handle installed in a [`MutReceiver`] to push dirty notifications into a [`DirtySet`] on mutation.
+/// Lightweight handle installed in a [`MutReceiver`] to push dirty notifications into a [`DirtySet`]
+/// on mutation, and also into the server-global [`GlobalDirtyBitset`] for cross-user tracking.
 pub struct DirtyNotifier {
     entity_idx: GlobalEntityIndex,
     kind_bit: u16,
     set: Weak<DirtySet>,
+    global: Weak<GlobalDirtyBitset>,
 }
 
 impl DirtyNotifier {
@@ -314,19 +317,26 @@ impl DirtyNotifier {
         entity_idx: GlobalEntityIndex,
         kind_bit: u16,
         set: Weak<DirtySet>,
+        global: Weak<GlobalDirtyBitset>,
     ) -> Self {
-        Self { entity_idx, kind_bit, set }
+        Self { entity_idx, kind_bit, set, global }
     }
 
     fn notify_dirty(&self) {
         if let Some(set) = self.set.upgrade() {
             set.push(self.entity_idx, self.kind_bit);
         }
+        if let Some(g) = self.global.upgrade() {
+            g.increment(self.entity_idx, self.kind_bit);
+        }
     }
 
     fn notify_clean(&self) {
         if let Some(set) = self.set.upgrade() {
             set.cancel(self.entity_idx, self.kind_bit);
+        }
+        if let Some(g) = self.global.upgrade() {
+            g.decrement(self.entity_idx, self.kind_bit);
         }
     }
 }
