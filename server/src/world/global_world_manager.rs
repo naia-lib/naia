@@ -7,8 +7,8 @@ use log::warn;
 
 use naia_shared::{
     AuthorityError, BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, InScopeEntities, MutChannelType,
-    PropertyMutator, Replicate,
+    GlobalDiffHandler, GlobalDirtyBitset, GlobalEntity, GlobalWorldManagerType, InScopeEntities,
+    MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -27,6 +27,8 @@ pub struct GlobalWorldManager {
     diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Information about entities in the internal ECS World
     entity_records: HashMap<GlobalEntity, GlobalEntityRecord>,
+    /// Server-global dirty bitset; set after construction via `set_global_dirty`.
+    global_dirty: Option<Arc<GlobalDirtyBitset>>,
 }
 
 impl GlobalWorldManager {
@@ -35,7 +37,14 @@ impl GlobalWorldManager {
             auth_handler: ServerAuthHandler::new(),
             diff_handler: Arc::new(RwLock::new(GlobalDiffHandler::new())),
             entity_records: HashMap::new(),
+            global_dirty: None,
         }
+    }
+
+    /// Stores the server-global dirty bitset so it can be handed out to
+    /// `UserDiffHandler` instances via `GlobalWorldManagerType::global_dirty_bitset`.
+    pub fn set_global_dirty(&mut self, bitset: Arc<GlobalDirtyBitset>) {
+        self.global_dirty = Some(bitset);
     }
 
     pub fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
@@ -61,6 +70,10 @@ impl GlobalWorldManager {
         // info!("Spawning Entity: {:?} with Owner: {:?}", global_entity, entity_owner);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(entity_owner));
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .alloc_entity(*global_entity);
     }
 
     pub fn insert_static_entity_record(
@@ -73,6 +86,10 @@ impl GlobalWorldManager {
         }
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new_static(entity_owner));
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .alloc_entity(*global_entity);
     }
 
     pub fn mark_entity_as_static(&mut self, global_entity: &GlobalEntity) {
@@ -94,6 +111,10 @@ impl GlobalWorldManager {
 
     pub fn remove_entity_record(&mut self, global_entity: &GlobalEntity) {
         // info!("Despawning Entity: {:?}", global_entity);
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .free_entity(global_entity);
         self.entity_records
             .remove(global_entity)
             .expect("Cannot despawn non-existant entity!");
@@ -507,6 +528,10 @@ impl GlobalWorldManagerType for GlobalWorldManager {
             .get(global_entity)
             .map(|r| r.is_static)
             .unwrap_or(false)
+    }
+
+    fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+        self.global_dirty.clone()
     }
 }
 

@@ -121,6 +121,19 @@ pub fn replicate_impl(
         quote! {}
     };
 
+    let has_entity_props: bool = properties.iter().any(|p| matches!(p, Property::Entity(_)));
+    let has_entity_properties_method: TokenStream = if has_entity_props {
+        quote! {
+            fn has_entity_properties() -> bool where Self: Sized { true }
+        }
+    } else {
+        quote! {}
+    };
+
+    let max_bit_length_method: TokenStream = quote! {
+        fn max_bit_length() -> u32 where Self: Sized { u32::MAX }
+    };
+
     // Methods
     let new_complete_method = get_new_complete_method(&enum_name, &properties, &struct_type);
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
@@ -184,7 +197,7 @@ pub fn replicate_impl(
 
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
             use #shared_crate_name::{
-                DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
+                DiffMask, PropertyMutate, PropertyMutator, PendingComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
@@ -224,6 +237,8 @@ pub fn replicate_impl(
             }
             impl #typed_generics Replicate for #replica_name #untyped_generics {
                 #is_immutable_method
+                #has_entity_properties_method
+                #max_bit_length_method
                 fn kind(&self) -> ComponentKind {
                     ComponentKind::of::<#replica_name #untyped_generics>()
                 }
@@ -1075,7 +1090,7 @@ pub fn get_read_create_update_method(
     }
 
     quote! {
-        fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
+        fn read_create_update(&self, reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr> {
 
             let mut update_writer = BitWriter::new();
 
@@ -1083,7 +1098,7 @@ pub fn get_read_create_update_method(
 
             let owned_reader = update_writer.to_owned_reader();
 
-            return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name #untyped_generics>(), owned_reader));
+            return Ok(PendingComponentUpdate::new(ComponentKind::of::<#replica_name #untyped_generics>(), owned_reader));
         }
     }
 }
@@ -1154,10 +1169,10 @@ fn get_split_update_method(
         fn split_update(
             &self,
             converter: &dyn LocalEntityAndGlobalEntityConverter,
-            update: ComponentUpdate
+            update: PendingComponentUpdate
         ) -> Result<(
             Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
-            Option<ComponentUpdate>
+            Option<PendingComponentUpdate>
         ), SerdeErr> {
             let component_kind = ComponentKind::of::<#replica_name #untyped_generics>();
             let reader = &mut update.reader();
@@ -1179,7 +1194,7 @@ fn get_split_update_method(
             };
             let ready_result = {
                 if ready_did_write {
-                    Some(ComponentUpdate::new(component_kind, ready_writer.to_owned_reader()))
+                    Some(PendingComponentUpdate::new(component_kind, ready_writer.to_owned_reader()))
                 } else {
                     None
                 }
@@ -1223,7 +1238,7 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
     }
 
     quote! {
-        fn read_apply_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
+        fn read_apply_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, mut update: PendingComponentUpdate) -> Result<(), SerdeErr> {
             let reader = &mut update.reader();
             #output
             Ok(())

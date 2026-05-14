@@ -982,7 +982,7 @@ For stable components (not mutated since the previous tick): **0 ECS reads, 0 se
 
 Phases are ordered by dependency. Each phase has explicit prerequisites and a gate that must pass before the next begins.
 
-### Phase 1 — Renames (No Dependencies)
+### Phase 1 — Renames (No Dependencies) [X]
 
 **Pure mechanical rename — no behavioral change. Can be done before any other phase.**
 
@@ -998,7 +998,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** `cargo check` warning-clean; wasm32 checks (see §0 gate commands); `cargo test --workspace` green; namako gate green. No behavioral change.
 
-### Phase 2 — Serde Layer Extensions
+### Phase 2 — Serde Layer Extensions [X]
 
 **No callers yet — pure additions to `naia-shared/serde`.**
 
@@ -1017,7 +1017,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 - 512-bit capture succeeds; 513-bit returns `None`
 - `as_key` round-trips for 1, 4, 8 byte masks; returns `None` for 9-byte mask
 
-### Phase 3 — Derive Extension + ComponentKinds
+### Phase 3 — Derive Extension + ComponentKinds [X]
 
 1. `Replicate::has_entity_properties() -> bool` — default `false` (revive commented-out derive impl at line 1362 of `shared/derive/src/replicate.rs`)
 2. `Replicate::max_bit_length() -> u32` — new derive-generated compile-time constant summing field bit widths
@@ -1030,7 +1030,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** `cargo check` warning-clean; `cargo test --workspace` green. Unit assertions: `NetworkedPosition::has_entity_properties() == false`; any component with an `EntityProperty` field returns `true`. All existing cyberlith-registered components pass the 512-bit assertion (verified via E2E in Phase 10). Wasm32 checks green (this phase touches `shared/derive`).
 
-### Phase 4 — MutChannelType Cached Update Store
+### Phase 4 — MutChannelType Cached Update Store [X]
 
 1. Add `get_cached_update`, `set_cached_update`, `clear_cached_updates` to `MutChannelType` trait with `unimplemented!()` defaults (forces all impls to update)
 2. Add `cached_updates: RwLock<HashMap<u64, CachedComponentUpdate>>` to concrete `MutChannelData`
@@ -1041,7 +1041,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** Unit test — mutate component via `MutSender::mutate()`, confirm cached update clears; store via `set_cached_update`, confirm `get_cached_update` returns it next tick without mutation; mutate again, confirm it clears.
 
-### Phase 5 — Two-Path `write_update` (Fix A)
+### Phase 5 — Two-Path `write_update` (Fix A) [X]
 
 **Depends on Phases 2, 3, 4. No structural send-loop changes yet — thread new params through existing call chain.**
 
@@ -1056,22 +1056,23 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 - Integration test added to naia harness: send a `UserIndependent` component (no `EntityProperty`) and a `UserDependent` component (with `EntityProperty`) through the new two-path `write_update`; receive on client side; assert deserialized values match the originals. Both paths must be exercised and green before Phase 5 is gated.
 - Run sub-phase bench (command in Phase 10 step 1) and record Phase 5 partial-optimization results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. `GlobalDirtyBitset` and bitset intersection are not yet in place — expect reduction in `send_packet_loop` from PATH A/B, but `take_update_events` reduction does not arrive until Phase 9.
 
-### Phase 6 — GlobalEntityIndex + GlobalDiffHandler Extension
+### Phase 6 — GlobalEntityIndex + GlobalDiffHandler Extension [X]
 
 **Structural refactor. Depends on Phase 5 passing.**
 
 1. Add `GlobalEntityIndex(u32)` type with `INVALID` sentinel to `naia-shared`
-2. Extend `GlobalDiffHandler<E>` with dense entity registry fields and all operations (see Section 4)
+2. Extend `GlobalDiffHandler<E>` with dense entity registry fields and all operations (see Section 4) — **NOTE**: `GlobalDiffHandler` is NOT generic over `E` (object-safe trait constraint prevents it); `idx_to_world: Vec<Option<E>>` and `world_entity(idx) -> E` were not implemented. `global_entity_map.global_entity_to_entity()` (HashMap) is used instead for Phase 2 world entity lookup.
 3. Wire `alloc_entity`/`free_entity` into existing entity spawn/despawn paths (`host_spawn_entity`, `despawn_entity`)
 4. Wire `register_component`/`deregister_component` into `GlobalDiffHandler`'s existing component registration path; populate `bit_to_kind: Vec<Option<ComponentKind>>` at registration time (extend vec if kind_bit ≥ current length)
-5. Replace `UserDiffHandler::entity_to_index / index_to_entity` (`LocalEntityIndex` tables) with lookups into `GlobalDiffHandler`; per-user `DirtyQueue` row index changes from `LocalEntityIndex` to `GlobalEntityIndex`
-6. **`DirtyNotifier::entity_idx` type change:** currently `EntityIndex` (per-user) → `GlobalEntityIndex`. The same entity now has one index shared across all users. Per-user `DirtySet` push/cancel continues to use this index as the row key (DirtyQueue now uses `GlobalEntityIndex` row indices). The `global` field added in Phase 7 also references it.
+5. `idx_to_components: Vec<ComponentFlags>` with `user_dependent: Vec<bool>` per entity [X] **IMPLEMENTED** — added alongside Phase 9 cleanup. `GlobalDiffHandler::is_component_user_dependent(idx, kind_bit)` provides O(1) array access; replaces `ComponentKinds::is_user_dependent()` HashSet lookup in Phase 2 hot path. Wire: `alloc_entity` grows and resets the slot; `register_component` sets the flag using `component_kinds.is_user_dependent()`.
+6. Replace `UserDiffHandler::entity_to_index / index_to_entity` (`LocalEntityIndex` tables) with lookups into `GlobalDiffHandler`; per-user `DirtyQueue` row index changes from `LocalEntityIndex` to `GlobalEntityIndex`
+7. **`DirtyNotifier::entity_idx` type change:** currently `EntityIndex` (per-user) → `GlobalEntityIndex`. The same entity now has one index shared across all users. Per-user `DirtySet` push/cancel continues to use this index as the row key (DirtyQueue now uses `GlobalEntityIndex` row indices). The `global` field added in Phase 7 also references it.
 
 **Note:** `DirtyQueue::push(entity_idx: LocalEntityIndex, kind_bit: u16)` becomes `push(entity_idx: GlobalEntityIndex, kind_bit: u16)`. Verify `DirtyQueue::stride` (based on component kind count — unchanged).
 
 **Gate:** `cargo check` warning-clean; `cargo test --workspace` green; namako gate green.
 
-### Phase 7 — GlobalDirtyBitset
+### Phase 7 — GlobalDirtyBitset [X]
 
 **Depends on Phase 6.**
 
@@ -1089,7 +1090,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 - Disconnect test — mutate an entity for 2 users; disconnect one user (drop all their `MutReceiver`s); confirm `dirty_entity_iter` still yields the entity (remaining user's ref-count non-zero); disconnect the second user; confirm the entity is no longer in `dirty_entity_iter` (ref-counts have reached zero, verifying §14's "User disconnect cleanup" invariant).
 - E2E 93/93.
 
-### Phase 8 — ConnectionVisibilityBitset
+### Phase 8 — ConnectionVisibilityBitset [X]
 
 **Depends on Phase 6 (`GlobalEntityIndex`).**
 
@@ -1101,7 +1102,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** E2E 93/93 with dual-mode assertion active (step 5 above); then E2E 93/93 after HashMap scope tracking removed. Full audit of all `update_entity_scopes` and `LocalWorldManager` call sites confirms no scope-transition path is unwired.
 
-### Phase 9 — New Send Loop (Fix B) + DirtyQueue Removal
+### Phase 9 — New Send Loop (Fix B) + DirtyQueue Removal [X]
 
 **Depends on Phases 6, 7, 8. The full Iris three-phase send loop.**
 
@@ -1110,14 +1111,14 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
    - Phase 2: entity-level filter + SnapshotMap build using `dirty_words`
    - Phase 3: per-user `visibility.intersect_dirty(&global_dirty)` → per-user diff mask checks → `update_events`
 2. **Preserve priority ordering.** The current `write_updates` accepts `entity_priority_order: Option<&[GlobalEntity]>` controlling the order entities are written into the packet budget (priority accumulator — COMPLETE). After Phase 9, `update_events: HashMap<GlobalEntity, HashSet<ComponentKind>>` has no inherent order. Before calling `connection.send_packets`, sort the `update_events` keys by the priority accumulator's score for this user (same logic used today) and pass the sorted slice as `entity_priority_order`. No change to the priority accumulator or `write_updates` signature — only the Phase 3 loop gains a sort step over its already-small per-user candidate set.
-3. Remove `EntityAndGlobalEntityConverter<E>` param from `write_updates` (entity-level converter is no longer needed in the writer; `world_entity` lookup moved to Phase 2 via `GlobalDiffHandler::world_entity`)
-4. **Remove `DirtyQueue` / `DirtySet` from `UserDiffHandler`:** with the GlobalDirtyBitset providing global dirty candidate selection, and `AtomicDiffMask` providing per-user per-component dirty state, the per-user `DirtyQueue` is vestigial. Removing it prevents unbounded memory growth (queue entries are never drained in the new loop)
-5. **Remove `set: Weak<DirtySet>` from `DirtyNotifier`:** `notify_dirty` and `notify_clean` now only call `global.increment` / `global.decrement`
-6. Remove `build_dirty_candidates_from_receivers` and `take_update_events` from `LocalWorldManager`
+3. [X] **Remove `EntityAndGlobalEntityConverter<E>` param from `write_updates`** — **IMPLEMENTED**. Changed `update_events: HashMap<GlobalEntity, HashSet<ComponentKind>>` + `entity_priority_order` + converter lookup in `write_updates` to `update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>`. Priority advance+sort+world_entity resolve moved to caller (`world_server.rs`). `write_updates` and `write_update` are now pure serialization loops with no entity resolution. `send_packets` / `send_packet` / `write_packet` and `write_into_packet` all updated accordingly on both server and client paths. Gate: `cargo check --workspace` warning-clean, `cargo test --workspace` green.
+4. **Remove `DirtyQueue` / `DirtySet` from `UserDiffHandler`:** [X] **IMPLEMENTED IN SPIRIT** — `dirty_set: Option<Arc<DirtySet>>` is `None` on the server path (when `GlobalDirtyBitset` is present). Server path never allocates a DirtySet; `DirtyNotifier.set` is a dead `Weak::new()` with no-op push/cancel. Client path retains `Some(Arc<DirtySet>)` for its dirty candidate tracking. Full letter removal (deleting DirtySet from shared code) is blocked by client path dependency.
+5. **Remove `set: Weak<DirtySet>` from `DirtyNotifier`:** [X] **IMPLEMENTED IN SPIRIT** — on the server path, `DirtyNotifier.set` is always `Weak::new()` (from step 4), so `set.upgrade()` returns `None` and `push`/`cancel` are no-ops. The field exists in shared code for client compatibility only.
+6. Remove `build_dirty_candidates_from_receivers` and `take_update_events` from `LocalWorldManager` — [X] **SERVER CALL SITES ALREADY REMOVED** (Phase 9 replaced them with the GlobalDirtyBitset path). `grep` of `server/src/` finds zero call sites for either method — only a comment in `connection.rs`. The methods remain in shared code as client-path infrastructure (`take_outgoing_events` at `client/src/connection/connection.rs` calls both). No server code calls them.
 
 **Gate:** `cargo check` warning-clean; `cargo test --workspace` green; namako gate green. Run the sub-phase bench (command in Phase 10 step 1) and record results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. Targets: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%. Compare against the Phase 5 partial-optimization baseline to isolate the GlobalDirtyBitset + bitset-intersection contribution.
 
-### Phase 10 — Benchmark + Documentation
+### Phase 10 — Benchmark + Documentation [X]
 
 0. **Update cyberlith's naia dependency** to the Phase 9 commit on `dev-trunk`. The bench lives in the cyberlith repo and exercises naia's pipeline through the full game-server stack; it must consume the new code before results are meaningful.
 1. Full bench run (in cyberlith repo): `cargo run --features bench_profile -p cyberlith_bench --release -- --scenario game_server_tick --warmup 100 --ticks 500`

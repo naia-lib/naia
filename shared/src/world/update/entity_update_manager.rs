@@ -122,6 +122,10 @@ impl EntityUpdateManager {
         self.diff_handler.dirty_receiver_candidates()
     }
 
+    pub fn diff_mask_is_clear(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+        self.diff_handler.diff_mask_is_clear(entity, component_kind)
+    }
+
     // Collect
 
     pub fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {

@@ -71,6 +71,10 @@ impl GlobalWorldManager {
         }
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Client));
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .alloc_entity(*global_entity);
     }
 
     pub fn host_spawn_static_entity(&mut self, global_entity: &GlobalEntity) {
@@ -79,6 +83,10 @@ impl GlobalWorldManager {
         }
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new_static(EntityOwner::Client));
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .alloc_entity(*global_entity);
     }
 
     pub fn mark_entity_as_static(&mut self, global_entity: &GlobalEntity) {
@@ -103,6 +111,10 @@ impl GlobalWorldManager {
             panic!("entity does not exist!");
         }
 
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .free_entity(global_entity);
         self.entity_records.remove(global_entity)
     }
 
@@ -194,9 +206,17 @@ impl GlobalWorldManager {
         // info!("Remote spawning entity record for {:?}", global_entity);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(EntityOwner::Server));
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .alloc_entity(*global_entity);
     }
 
     pub fn remove_entity_record(&mut self, global_entity: &GlobalEntity) {
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .free_entity(global_entity);
         self.entity_records
             .remove(global_entity)
             .expect("Cannot despawn non-existant entity!");

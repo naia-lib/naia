@@ -8,14 +8,14 @@ use crate::{
 };
 
 /// A serialised component-field update payload together with its [`ComponentKind`] tag.
-pub struct ComponentUpdate {
+pub struct PendingComponentUpdate {
     /// The kind of component this update applies to.
     pub kind: ComponentKind,
     buffer: OwnedBitReader,
 }
 
-impl ComponentUpdate {
-    /// Creates a new `ComponentUpdate` wrapping `buffer` for the given `kind`.
+impl PendingComponentUpdate {
+    /// Creates a new `PendingComponentUpdate` wrapping `buffer` for the given `kind`.
     pub fn new(kind: ComponentKind, buffer: OwnedBitReader) -> Self {
         Self { kind, buffer }
     }

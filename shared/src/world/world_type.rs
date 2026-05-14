@@ -1,6 +1,6 @@
 use naia_serde::SerdeErr;
 
-use crate::world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};
+use crate::world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
 use crate::{
     world::{
         component::{
@@ -77,7 +77,7 @@ pub trait WorldMutType<E>: WorldRefType<E> {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         world_entity: &E,
         component_kind: &ComponentKind,
-        update: ComponentUpdate,
+        update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr>;
     /// reads an incoming stream into a component
     fn component_apply_field_update(

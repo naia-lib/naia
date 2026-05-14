@@ -4,6 +4,7 @@ use std::{
     hash::Hash,
     net::SocketAddr,
     panic,
+    sync::Arc,
     time::Duration,
 };
 
@@ -13,9 +14,9 @@ use naia_shared::{
     handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
     ConnectionStats, DisconnectReason,
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
-    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
-    OutgoingPriorityHook, UserPriorityState,
+    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
+    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
+    GlobalRequestId, GlobalResponseId, OutgoingPriorityHook, SnapshotMap, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
     Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
     Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
@@ -151,6 +152,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     entity_scope_map: EntityScopeMap,
     global_world_manager: GlobalWorldManager,
     global_entity_map: GlobalEntityMap<E>,
+    // Held to keep the GlobalDirtyBitset alive; consumers access it via GlobalWorldManager.
+    // Will be read directly in a later phase.
+    #[allow(dead_code)]
+    global_dirty: Arc<GlobalDirtyBitset>,
     // Events
     addrs_with_new_packets: HashSet<SocketAddr>,
     outstanding_disconnects: Vec<(UserKey, DisconnectReason)>,
@@ -211,7 +216,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         let time_manager = TimeManager::new(tick_interval);
 
-        // Print protocol ID for SetAuthority at startup
+        // Create GlobalDirtyBitset: capacity = max entity slots (including slot 0 = INVALID),
+        // component_count = total registered component kinds from the protocol.
+        let global_dirty = {
+            let capacity = (server_config.max_replicated_entities as usize) + 1; // +1 for INVALID slot 0
+            let component_count = component_kinds.kind_count() as usize;
+            Arc::new(GlobalDirtyBitset::new(capacity, component_count))
+        };
+
+        let mut global_world_manager = GlobalWorldManager::new();
+        global_world_manager.set_global_dirty(Arc::clone(&global_dirty));
 
         Self {
             // Config
@@ -232,8 +246,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Entities
             entity_room_map: EntityRoomMap::new(),
             entity_scope_map: EntityScopeMap::new(),
-            global_world_manager: GlobalWorldManager::new(),
+            global_world_manager,
             global_entity_map: GlobalEntityMap::new(),
+            global_dirty,
             // Events
             addrs_with_new_packets: HashSet::new(),
             outstanding_disconnects: Vec::new(), // (UserKey, DisconnectReason)
@@ -293,6 +308,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             user_key,
             &self.channel_kinds,
             &self.global_world_manager,
+            self.server_config.max_replicated_entities as usize,
         );
 
         match self.user_connections.entry(*user_address) {
@@ -718,18 +734,92 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             std::sync::atomic::Ordering::Relaxed,
         );
 
-        // loop through all connections, send packet
+        // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
-        // shuffle order of connections in order to avoid priority among users
         fastrand::shuffle(&mut user_addresses);
 
-        for user_address in user_addresses {
-            let connection = self.user_connections.get_mut(&user_address).unwrap();
-            // Build a per-user priority hook over the (global, user) layers.
-            // `global` provides the read-only `gain_override`; `user` is
-            // mutated by `advance` / `reset_after_send`. Split-borrow is safe
-            // because `user_priorities` and `global_priority` are disjoint
-            // fields on `WorldServer`.
+        // ── Iris Phase 1+2: Global dirty scan + UserDependent snapshot ──────────
+        // Iterate dirty entities once for all users. Build SnapshotMap for
+        // UserDependent (EntityProperty) components so Phase 3 reads the snapshot,
+        // not ECS, achieving O(1) ECS reads per dirty component per tick.
+        let mut snapshot_map: SnapshotMap = SnapshotMap::new();
+        {
+            let handler = self.global_world_manager.diff_handler();
+            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+            for global_idx in self.global_dirty.dirty_entity_iter() {
+                let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+                if !self.global_world_manager.entity_is_replicating(&global_entity) { continue; }
+                let Ok(world_entity) = self.global_entity_map.global_entity_to_entity(&global_entity) else { continue; };
+                if !world.has_entity(&world_entity) { continue; }
+
+                for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
+                    let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
+                    while word != 0 {
+                        let bit_pos = word.trailing_zeros() as usize;
+                        word &= word - 1;
+                        let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                        let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+                        if !world.has_component_of_kind(&world_entity, &component_kind) { continue; }
+
+                        // O(1) array access via per-entity ComponentFlags —
+                        // replaces the ComponentKinds HashSet lookup.
+                        if guard.is_component_user_dependent(global_idx, kind_bit).unwrap_or(false) {
+                            let snap = world
+                                .component_of_kind(&world_entity, &component_kind)
+                                .expect("component verified above")
+                                .copy_to_box();
+                            snapshot_map.insert((global_entity, component_kind), snap);
+                        }
+                    }
+                }
+            }
+        } // guard and handler Arc drop here, releasing the read lock
+
+        // ── Iris Phase 3: Per-user send loop ─────────────────────────────────────
+        // For each user, bitwise-AND the global dirty bitset with this user's
+        // visibility bitset — O(capacity/64) — to get the candidate entity set.
+        // Then apply per-user component checks (diff mask, auth) to build
+        // update_events. No ECS reads; all information comes from the bitsets and
+        // per-user diff masks.
+        for user_address in &user_addresses {
+            // Build per-user update_events with immutable borrows only.
+            let update_events: HashMap<GlobalEntity, HashSet<ComponentKind>> = {
+                let connection = self.user_connections.get(user_address).unwrap();
+                let handler = self.global_world_manager.diff_handler();
+                let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+                let mut events: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
+
+                for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
+                    let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+
+                    for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
+                        let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
+                        while word != 0 {
+                            let bit_pos = word.trailing_zeros() as usize;
+                            word &= word - 1;
+                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+
+                            // Per-user diff mask: skip if no pending bits for this user
+                            if connection.base.world_manager.diff_mask_is_clear_for_entity(&global_entity, &component_kind) {
+                                continue;
+                            }
+                            // Per-user auth: skip if authority prevents this update
+                            if !connection.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                                continue;
+                            }
+
+                            events.entry(global_entity).or_default().insert(component_kind);
+                        }
+                    }
+                }
+                events
+            }; // connection (immutable), guard, handler Arc all drop here
+
+            // Exclusive mutable borrows for the actual packet send.
+            let connection = self.user_connections.get_mut(user_address).unwrap();
+            // Build priority hook over the (global, user) layers. Split-borrow is safe
+            // because `user_priorities` and `global_priority` are disjoint fields.
             let user_layer = self
                 .user_priorities
                 .entry(connection.user_key)
@@ -739,6 +829,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 user: user_layer,
                 converter: &self.global_entity_map,
             };
+
+            // Build pre-sorted update_list: advance priority, sort descending, resolve world_entity.
+            let initial_update_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
+            let mut scored: Vec<(GlobalEntity, f32, HashSet<ComponentKind>)> = update_events
+                .into_iter()
+                .map(|(ge, kinds)| (ge, hook.advance(&ge), kinds))
+                .collect();
+            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            let mut update_list: Vec<(GlobalEntity, E, HashSet<ComponentKind>)> = scored
+                .into_iter()
+                .filter_map(|(ge, _, kinds)| {
+                    self.global_entity_map
+                        .global_entity_to_entity(&ge)
+                        .ok()
+                        .map(|we| (ge, we, kinds))
+                })
+                .collect();
+
             connection.send_packets(
                 &self.channel_kinds,
                 &self.message_kinds,
@@ -749,8 +857,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_entity_map,
                 &self.global_world_manager,
                 &self.time_manager,
-                &mut hook,
+                &mut update_list,
+                &mut snapshot_map,
             );
+
+            // Priority reset for fully-sent entities.
+            let current_tick = self.time_manager.current_tick();
+            let remaining: std::collections::HashSet<GlobalEntity> =
+                update_list.iter().map(|(ge, _, _)| *ge).collect();
+            for ge in &initial_update_entities {
+                if !remaining.contains(ge) {
+                    hook.reset_after_send(ge, current_tick as u32);
+                }
+            }
         }
 
         // Flush deferred auth grants (one-tick delay ensures entity registration on client)
@@ -1966,7 +2085,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn despawn_entity_from_all_connections(&mut self, global_entity: &GlobalEntity) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for connection in self.user_connections.values_mut() {
+        let entity_idx = self.entity_global_idx(global_entity);
+        for (_, connection) in self.user_connections.iter_mut() {
             if !connection
                 .base
                 .world_manager
@@ -1976,6 +2096,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
             // remove entity from user connection
             connection.base.world_manager.despawn_entity(global_entity);
+            connection.clear_entity_visible(entity_idx);
         }
     }
 
@@ -2385,12 +2506,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Despawn from non-owner connections only.  Scope map entries and room
         // membership are preserved so a subsequent publish_entity call restores
         // non-owner visibility via room-based scope (entity-publication-11).
+        let entity_idx = self.entity_global_idx(global_entity);
         for (addr, connection) in self.user_connections.iter_mut() {
             if owner_addr == Some(*addr) {
                 continue;
             }
             if connection.base.world_manager.has_global_entity(global_entity) {
                 connection.base.world_manager.despawn_entity(global_entity);
+                connection.clear_entity_visible(entity_idx);
             }
         }
     }
@@ -3389,6 +3512,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         // Loop 1 (both paths): drain per-room entity-removal queues.
         // This handles entities removed from a room via room_remove_entity.
+        // Clone the diff_handler Arc once for the entire loop.
+        let diff_handler_arc = self.global_world_manager.diff_handler();
         for (_, room) in self.room_store.iter_mut() {
             while let Some((removed_user, removed_global_entity)) = room.pop_entity_removal_queue()
             {
@@ -3422,11 +3547,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     continue;
                 }
 
+                let entity_idx = {
+                    let guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+                    guard.entity_to_global_idx(&removed_global_entity).unwrap_or(GlobalEntityIndex::INVALID)
+                };
+
                 // remove entity from user connection
                 connection
                     .base
                     .world_manager
                     .despawn_entity(&removed_global_entity);
+                connection.clear_entity_visible(entity_idx);
                 #[cfg(feature = "e2e_debug")]
                 {
                     SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -3463,6 +3594,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         continue;
                     };
                     let user_rooms = user.room_keys().clone();
+                    // Clone the diff_handler Arc so we can read it inside the entity loop
+                    // without conflicting with the mutable connection borrow below.
+                    let diff_handler_arc = self.global_world_manager.diff_handler();
                     let Some(connection) =
                         self.user_connections.get_mut(&user.address().clone())
                     else {
@@ -3480,6 +3614,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         if !connection.base.world_manager.has_global_entity(global_entity) {
                             continue;
                         }
+                        let entity_idx = {
+                            let guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+                            guard.entity_to_global_idx(global_entity).unwrap_or(GlobalEntityIndex::INVALID)
+                        };
                         let scope_exit = self
                             .global_world_manager
                             .entity_replication_config(global_entity)
@@ -3488,9 +3626,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         match scope_exit {
                             ScopeExit::Persist => {
                                 connection.base.world_manager.pause_entity(global_entity);
+                                connection.clear_entity_visible(entity_idx);
                             }
                             ScopeExit::Despawn => {
                                 connection.base.world_manager.despawn_entity(global_entity);
+                                connection.clear_entity_visible(entity_idx);
                             }
                         }
                         #[cfg(feature = "e2e_debug")]
@@ -3523,6 +3663,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         user_key: &UserKey,
         global_entity: &GlobalEntity,
     ) {
+        // Resolve GlobalEntityIndex before any mutable borrows on self.
+        let entity_idx = self.entity_global_idx(global_entity);
+
         let Some(user) = self.user_store.get(user_key) else {
             return;
         };
@@ -3559,10 +3702,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return;
         }
 
-        let currently_in_scope = connection
-            .base
-            .world_manager
-            .has_global_entity(global_entity);
+        // Visibility-based scope state:
+        //   currently_visible = entity is actively in scope (tracked AND not paused)
+        //   is_tracked         = entity is in entity_map (active OR paused)
+        //   currently_paused   = tracked but not active
+        let currently_visible = connection.visibility.is_set(entity_idx);
+        let is_tracked = connection.base.world_manager.has_global_entity(global_entity);
+        let currently_paused = is_tracked && !currently_visible;
 
         // Decide scope membership. Per contract [entity-scopes-06] /
         // [entity-scopes-12]: an explicit user-scope override wins
@@ -3610,13 +3756,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             None => is_resource || in_common_room,
         };
         if should_be_in_scope {
-            if currently_in_scope {
-                // Entity already present — resume if paused (ScopeExit::Persist re-entry)
-                if connection.base.world_manager.is_entity_paused(global_entity) {
-                    connection.base.world_manager.resume_entity(global_entity);
-                }
+            if currently_visible {
+                // Entity already active — no change needed.
                 return;
             }
+            if currently_paused {
+                // Re-entering scope on a paused (ScopeExit::Persist) entity.
+                connection.base.world_manager.resume_entity(global_entity);
+                connection.set_entity_visible(entity_idx);
+                return;
+            }
+            // Entity not yet tracked for this connection — enter scope.
             let component_kinds = self
                 .global_world_manager
                 .component_kinds(global_entity)
@@ -3625,6 +3775,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .base
                 .world_manager
                 .host_init_entity(global_entity, component_kinds, &self.component_kinds, self.global_world_manager.entity_is_static(global_entity));
+            connection.set_entity_visible(entity_idx);
             #[cfg(feature = "e2e_debug")]
             {
                 SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -3658,8 +3809,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     .world_manager
                     .host_send_set_auth(global_entity, new_status);
             }
-        } else if currently_in_scope {
-            // Entity leaving scope — check ScopeExit policy
+        } else if currently_visible {
+            // Entity leaving active scope — check ScopeExit policy.
             let scope_exit = self
                 .global_world_manager
                 .entity_replication_config(global_entity)
@@ -3668,9 +3819,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             match scope_exit {
                 ScopeExit::Persist => {
                     connection.base.world_manager.pause_entity(global_entity);
+                    connection.clear_entity_visible(entity_idx);
                 }
                 ScopeExit::Despawn => {
                     connection.base.world_manager.despawn_entity(global_entity);
+                    connection.clear_entity_visible(entity_idx);
                 }
             }
             #[cfg(feature = "e2e_debug")]
@@ -3685,6 +3838,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 layer.on_scope_exit(&world_entity);
             }
         }
+    }
+
+    /// Look up the dense `GlobalEntityIndex` for `global_entity` from the diff handler.
+    /// Returns `GlobalEntityIndex::INVALID` if the entity is not yet registered.
+    fn entity_global_idx(&self, global_entity: &GlobalEntity) -> GlobalEntityIndex {
+        let handler = self.global_world_manager.diff_handler();
+        let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+        guard.entity_to_global_idx(global_entity).unwrap_or(GlobalEntityIndex::INVALID)
     }
 
     fn handle_disconnects(&mut self) {

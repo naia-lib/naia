@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
 };
@@ -9,8 +9,9 @@ use naia_socket_shared::Instant;
 
 use crate::connection::bandwidth_accumulator::BandwidthAccumulator;
 use crate::world::local::local_world_manager::LocalWorldManager;
+use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::world_reader::WorldReader;
-use crate::world::world_writer::WorldWriter;
+use crate::world::world_writer::{SnapshotMap, WorldWriter};
 use crate::{
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
@@ -221,8 +222,9 @@ impl BaseConnection {
         has_written: &mut bool,
         write_world_events: bool,
         host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
-        entity_priority_order: Option<&[GlobalEntity]>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        global_diff_handler: Option<&GlobalDiffHandler>,
+        snapshot_map: Option<&mut SnapshotMap>,
     ) {
         // write messages
         self.write_messages(
@@ -244,11 +246,12 @@ impl BaseConnection {
                 world,
                 entity_converter,
                 global_world_manager,
+                global_diff_handler,
                 &mut self.world_manager,
                 has_written,
                 host_world_events,
-                update_events,
-                entity_priority_order,
+                update_list,
+                snapshot_map,
             );
         }
     }

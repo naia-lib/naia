@@ -19,7 +19,7 @@ use crate::{
         },
         sync::{RemoteEngine, RemoteEntityChannel},
     },
-    ComponentKind, ComponentKinds, ComponentUpdate, EntityAndGlobalEntityConverter,
+    ComponentKind, ComponentKinds, PendingComponentUpdate, EntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity,
     GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter,
     LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType,
@@ -249,7 +249,7 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
         incoming_components: &mut HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
-        incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
+        incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
         incoming_messages: Vec<(MessageIndex, EntityMessage<RemoteEntity>)>,
     ) -> Vec<EntityEvent> {
         let incoming_messages = EntityMessageReceiver::remote_take_incoming_messages(
@@ -525,7 +525,7 @@ impl RemoteWorldManager {
         component_kinds: &ComponentKinds,
         world: &mut W,
         now: &Instant,
-        incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
+        incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
     ) {
         self.process_ready_updates(
             local_converter,
@@ -544,7 +544,7 @@ impl RemoteWorldManager {
         world_converter: &dyn EntityAndGlobalEntityConverter<WE>,
         component_kinds: &ComponentKinds,
         world: &mut W,
-        incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
+        incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
     ) {
         for (tick, local_entity, component_kind) in self.waitlist.process_ready_updates(
             &self.remote_engine,

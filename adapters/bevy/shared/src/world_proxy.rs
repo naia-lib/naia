@@ -6,7 +6,7 @@ use bevy_ecs::{
 };
 
 use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, PendingComponentUpdate,
     EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
     ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
     ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
@@ -221,7 +221,7 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         entity: &Entity,
         component_kind: &ComponentKind,
-        update: ComponentUpdate,
+        update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr> {
         self.world
             .resource_scope(|world: &mut World, data: Mut<WorldData>| {

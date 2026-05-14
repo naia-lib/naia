@@ -23,7 +23,7 @@ cfg_if! {
 
 pub use naia_derive::{Channel, Message, MessageBevy, Replicate, ReplicateBevy};
 pub use naia_serde::{
-    BitCounter, BitReader, BitWrite, BitWriter, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
+    BitCounter, BitReader, BitWrite, BitWriter, CachedComponentUpdate, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
     Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger, SignedVariableFloat,
     SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
@@ -193,7 +193,7 @@ pub use protocol_id::ProtocolId;
 pub use types::{DisconnectReason, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
 pub use world::publicity::Publicity;
-pub use world::entity_index::{EntityIndex, KeyGenerator32};
+pub use world::entity_index::{LocalEntityIndex, KeyGenerator32};
 pub use world::entity_event::EntityEvent;
 pub use world::host::host_entity_generator::HostEntityGenerator;
 pub use world::host::host_world_manager::SubCommandId;
@@ -201,15 +201,19 @@ pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
 pub use world::local::local_entity_map::LocalEntityMap;
 pub use world::local::local_world_manager::LocalWorldManager;
 pub use world::world_reader::WorldReader;
+pub use world::world_writer::SnapshotMap;
 pub use world::sync::auth_channel::EntityAuthChannelState;
 pub use world::sync::authority_error::AuthorityError;
 pub use world::sync::host_entity_channel::HostEntityChannel;
 #[cfg(feature = "e2e_debug")]
 pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
-pub use world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};
+pub use world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
 pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;
+pub use world::update::global_dirty_bitset::GlobalDirtyBitset;
+pub use world::update::connection_visibility_bitset::ConnectionVisibilityBitset;
+pub use world::update::global_entity_index::GlobalEntityIndex;
 pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
 pub use world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet};

@@ -1,5 +1,5 @@
 use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, PendingComponentUpdate,
     EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
     ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
     ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
@@ -132,7 +132,7 @@ impl WorldMutType<EmptyEntity> for EmptyWorldMut {
         _converter: &dyn LocalEntityAndGlobalEntityConverter,
         _world_entity: &EmptyEntity,
         _component_kind: &ComponentKind,
-        _update: ComponentUpdate,
+        _update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr> {
         unimplemented!()
     }

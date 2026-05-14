@@ -1,13 +1,14 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook,
-    PacketType, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    ConnectionConfig, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
+    EntityEvent, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType,
+    HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
+    SerdeErr, SnapshotMap, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -68,6 +69,9 @@ pub struct Connection {
     tick_buffer: TickBufferReceiver,
     pub manual_disconnect: bool,
     timeout_timer: Timer,
+    /// Per-connection entity visibility bitset. One bit per `GlobalEntityIndex`.
+    /// Set when an entity enters scope; cleared on despawn or pause.
+    pub visibility: ConnectionVisibilityBitset,
 }
 
 impl Connection {
@@ -78,6 +82,7 @@ impl Connection {
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
         global_world_manager: &GlobalWorldManager,
+        max_replicated_entities: usize,
     ) -> Self {
         Self {
             address: *user_address,
@@ -94,7 +99,19 @@ impl Connection {
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             manual_disconnect: false,
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
+            // capacity = max_replicated_entities + 1 (slot 0 = INVALID sentinel)
+            visibility: ConnectionVisibilityBitset::new(max_replicated_entities + 1),
         }
+    }
+
+    /// Set entity `idx` as visible for this connection (scope entry or resume).
+    pub fn set_entity_visible(&mut self, idx: GlobalEntityIndex) {
+        self.visibility.set(idx);
+    }
+
+    /// Clear entity `idx` as not visible for this connection (scope exit or pause).
+    pub fn clear_entity_visible(&mut self, idx: GlobalEntityIndex) {
+        self.visibility.clear(idx);
     }
 
     /// Returns true when no packet has been received for longer than the
@@ -252,7 +269,8 @@ impl Connection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
-        priority_hook: &mut dyn OutgoingPriorityHook,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        snapshot_map: &mut SnapshotMap,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
 
@@ -263,12 +281,14 @@ impl Connection {
         bench_send_counters::NS_COLLECT_MESSAGES
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
 
+        // Collect outgoing entity commands only. Update events are pre-built by the
+        // three-phase Iris loop in WorldServer::send_all_packets and passed in directly.
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
-        let (mut host_world_events, mut update_events) = self
+        let mut host_world_events = self
             .base
             .world_manager
-            .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+            .take_outgoing_commands(now, &rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_TAKE_OUTGOING_EVENTS
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
@@ -289,22 +309,6 @@ impl Connection {
         // before the send cycle. Refreshes budget + one-packet overshoot.
         self.base.accumulate_bandwidth(now);
 
-        // Phase B: advance the per-user priority accumulator for every dirty
-        // entity bundle this tick (canonical `accumulator += effective_gain`
-        // rule from PRIORITY_ACCUMULATOR_PLAN.md III.7.1), then sort entities
-        // descending by accumulated priority. The k-way merge inside
-        // `write_updates` consumes this order to emit highest-priority bundles
-        // first. Captured `initial_dirty` is diffed against `update_events`
-        // after the loop to detect drained bundles for reset.
-        let initial_dirty: Vec<GlobalEntity> = update_events.keys().copied().collect();
-        let mut prioritized: Vec<(GlobalEntity, f32)> = initial_dirty
-            .iter()
-            .map(|e| (*e, priority_hook.advance(e)))
-            .collect();
-        prioritized.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
-        let entity_priority_order: Vec<GlobalEntity> =
-            prioritized.into_iter().map(|(e, _)| e).collect();
-
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
         let mut any_sent = false;
@@ -320,8 +324,8 @@ impl Connection {
                 global_world_manager,
                 time_manager,
                 &mut host_world_events,
-                &mut update_events,
-                Some(&entity_priority_order),
+                update_list,
+                snapshot_map,
             ) {
                 any_sent = true;
             } else {
@@ -330,16 +334,6 @@ impl Connection {
         }
         if any_sent {
             self.base.mark_sent();
-        }
-
-        // Phase B (reset): any entity that was dirty entering the loop but is
-        // no longer in `update_events` had its bundle fully drained onto the
-        // wire — apply the canonical reset-on-send rule (III.7.5).
-        let current_tick = time_manager.current_tick();
-        for entity in &initial_dirty {
-            if !update_events.contains_key(entity) {
-                priority_hook.reset_after_send(entity, current_tick as u32);
-            }
         }
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_SEND_PACKET_LOOP
@@ -361,11 +355,11 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
-        entity_priority_order: Option<&[GlobalEntity]>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        snapshot_map: &mut SnapshotMap,
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
-        let has_events = !host_world_events.is_empty() || !update_events.is_empty();
+        let has_events = !host_world_events.is_empty() || !update_list.is_empty();
 
         // Check one-shot ACK flag (edge-triggered, consumed here)
         let needs_ack_only = self.base.take_should_send_empty_ack();
@@ -428,8 +422,8 @@ impl Connection {
                 global_world_manager,
                 time_manager,
                 host_world_events,
-                update_events,
-                entity_priority_order,
+                update_list,
+                snapshot_map,
             );
 
             // send packet, measuring actual size before the move so we can
@@ -466,8 +460,8 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
-        entity_priority_order: Option<&[GlobalEntity]>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        snapshot_map: &mut SnapshotMap,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -505,6 +499,8 @@ impl Connection {
             })
             .count();
 
+        let diff_handler_arc = global_world_manager.diff_handler();
+        let diff_handler_guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
         self.base.write_packet(
             channel_kinds,
             message_kinds,
@@ -518,8 +514,9 @@ impl Connection {
             &mut has_written,
             true,
             host_world_events,
-            update_events,
-            entity_priority_order,
+            update_list,
+            Some(&*diff_handler_guard),
+            Some(snapshot_map),
         );
 
         #[cfg(feature = "e2e_debug")]

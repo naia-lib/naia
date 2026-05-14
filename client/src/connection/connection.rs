@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashSet, VecDeque};
 use std::hash::Hash;
 
 use log::{debug, warn};
@@ -222,10 +222,16 @@ impl Connection {
             &self.time_manager.client_sending_tick,
             &self.time_manager.server_receivable_tick,
         );
-        let (mut host_world_events, mut update_events) = self
+        let (mut host_world_events, update_events_map) = self
             .base
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+        let mut update_list: Vec<(GlobalEntity, E, HashSet<ComponentKind>)> = update_events_map
+            .into_iter()
+            .filter_map(|(ge, kinds)| {
+                converter.global_entity_to_entity(&ge).ok().map(|we| (ge, we, kinds))
+            })
+            .collect();
 
         // Phase A: tick the outbound token-bucket bandwidth accumulator
         // before the send cycle. Refreshes budget + one-packet overshoot.
@@ -242,7 +248,7 @@ impl Connection {
                 converter,
                 global_world_manager,
                 &mut host_world_events,
-                &mut update_events,
+                &mut update_list,
             ) {
                 any_sent = true;
             } else {
@@ -269,10 +275,10 @@ impl Connection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
     ) -> bool {
         if !host_world_events.is_empty()
-            || !update_events.is_empty()
+            || !update_list.is_empty()
             || self.base.message_manager.has_outgoing_messages()
             || self.tick_buffer.has_messages()
         {
@@ -291,7 +297,7 @@ impl Connection {
                 converter,
                 global_world_manager,
                 host_world_events,
-                update_events,
+                update_list,
             );
 
             // send packet, measuring actual size before the move so we can
@@ -322,7 +328,7 @@ impl Connection {
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -357,7 +363,8 @@ impl Connection {
 
         // write common parts of packet (messages & world events).
         // Client has only one connection — no priority arbitration needed,
-        // so we pass `None` and `write_updates` falls back to HashMap order.
+        // and `None, None` for the server-only PATH A/B optimization context
+        // (diff_handler + snapshot_map).
         self.base.write_packet(
             &protocol.channel_kinds,
             &protocol.message_kinds,
@@ -371,7 +378,8 @@ impl Connection {
             &mut has_written,
             protocol.client_authoritative_entities,
             host_world_events,
-            update_events,
+            update_list,
+            None,
             None,
         );
 

@@ -4,6 +4,7 @@ use std::{
 };
 
 use crate::world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
+use crate::world::update::global_dirty_bitset::GlobalDirtyBitset;
 use crate::world::update::mut_channel::MutChannelType;
 use crate::{
     bigmap::BigMapKey,
@@ -41,6 +42,10 @@ pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool;
     /// Returns `true` if `global_entity` was spawned as a static entity.
     fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool;
+    /// Returns the global dirty bitset for mutation tracking, or `None` on the client side.
+    fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+        None
+    }
 }
 
 /// Bidirectional conversion between a world-type entity `E` and a `GlobalEntity`.

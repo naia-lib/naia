@@ -95,6 +95,19 @@ impl DiffMask {
         }
     }
 
+    /// Packs the mask into a u64 for use as a HashMap key in the cached update store.
+    /// Returns None for masks > 8 bytes (unreachable for all current registered components).
+    pub fn as_key(&self) -> Option<u64> {
+        if self.mask.len() > 8 {
+            return None;
+        }
+        let mut key = 0u64;
+        for (i, &byte) in self.mask.iter().enumerate() {
+            key |= (byte as u64) << (i * 8);
+        }
+        Some(key)
+    }
+
     /// Copies the DiffMask into another DiffMask
     pub fn copy_contents(&mut self, other: &DiffMask) {
         //if other diff mask has different capacity, do nothing
@@ -124,6 +137,45 @@ impl fmt::Display for DiffMask {
             }
         }
         write!(f, "{}", out_string)
+    }
+}
+
+#[cfg(test)]
+mod as_key_tests {
+    use crate::DiffMask;
+
+    #[test]
+    fn as_key_1_byte() {
+        let mut mask = DiffMask::new(1);
+        mask.set_bit(0, true);
+        mask.set_bit(2, true);
+        let key = mask.as_key().unwrap();
+        assert_eq!(key, 0b00000101u64);
+    }
+
+    #[test]
+    fn as_key_4_bytes() {
+        let mut mask = DiffMask::new(4);
+        mask.set_bit(0, true);
+        mask.set_bit(8, true);
+        mask.set_bit(16, true);
+        mask.set_bit(24, true);
+        let key = mask.as_key().unwrap();
+        assert_eq!(key, 0x01_01_01_01u64);
+    }
+
+    #[test]
+    fn as_key_8_bytes() {
+        let mut mask = DiffMask::new(8);
+        mask.set_bit(63, true);
+        let key = mask.as_key().unwrap();
+        assert_eq!(key, 1u64 << 63);
+    }
+
+    #[test]
+    fn as_key_9_bytes_returns_none() {
+        let mask = DiffMask::new(9);
+        assert!(mask.as_key().is_none());
     }
 }
 

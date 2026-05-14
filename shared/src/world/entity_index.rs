@@ -6,7 +6,7 @@ use naia_socket_shared::Instant;
 ///
 /// Phase 8.1 Stage A introduces this newtype as the in-process key for
 /// dirty-set tracking and (eventually) packed mask storage. Each user's
-/// `UserDiffHandler` issues one `EntityIndex` per `GlobalEntity` it
+/// `UserDiffHandler` issues one `LocalEntityIndex` per `GlobalEntity` it
 /// observes via [`crate::KeyGenerator32`], recycling on
 /// `deregister_component` once the entity has no remaining components in
 /// the user's receiver map. `u32` instead of `u16` because the index space
@@ -19,16 +19,16 @@ use naia_socket_shared::Instant;
 /// membership tests can use Vec-indexed operations instead of HashMap
 /// probes.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct EntityIndex(pub u32);
+pub struct LocalEntityIndex(pub u32);
 
-impl From<u32> for EntityIndex {
+impl From<u32> for LocalEntityIndex {
     fn from(value: u32) -> Self {
         Self(value)
     }
 }
 
-impl From<EntityIndex> for u32 {
-    fn from(value: EntityIndex) -> Self {
+impl From<LocalEntityIndex> for u32 {
+    fn from(value: LocalEntityIndex) -> Self {
         value.0
     }
 }
@@ -96,7 +96,7 @@ mod tests {
 
     #[test]
     fn generates_sequential_keys() {
-        let mut g: KeyGenerator32<EntityIndex> = KeyGenerator32::new(Duration::from_secs(60));
+        let mut g: KeyGenerator32<LocalEntityIndex> = KeyGenerator32::new(Duration::from_secs(60));
         assert_eq!(g.generate().0, 0);
         assert_eq!(g.generate().0, 1);
         assert_eq!(g.generate().0, 2);
@@ -104,7 +104,7 @@ mod tests {
 
     #[test]
     fn capacity_hint_matches_next_new_key() {
-        let mut g: KeyGenerator32<EntityIndex> = KeyGenerator32::new(Duration::from_secs(60));
+        let mut g: KeyGenerator32<LocalEntityIndex> = KeyGenerator32::new(Duration::from_secs(60));
         assert_eq!(g.capacity_hint(), 0);
         let _ = g.generate();
         let _ = g.generate();
@@ -113,7 +113,7 @@ mod tests {
 
     #[test]
     fn recycle_keeps_key_quarantined_until_timeout() {
-        let mut g: KeyGenerator32<EntityIndex> = KeyGenerator32::new(Duration::from_secs(60));
+        let mut g: KeyGenerator32<LocalEntityIndex> = KeyGenerator32::new(Duration::from_secs(60));
         let k = g.generate();
         g.recycle_key(&k);
         let next = g.generate();
@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn recycle_returns_after_timeout() {
-        let mut g: KeyGenerator32<EntityIndex> = KeyGenerator32::new(Duration::from_millis(0));
+        let mut g: KeyGenerator32<LocalEntityIndex> = KeyGenerator32::new(Duration::from_millis(0));
         let k = g.generate();
         g.recycle_key(&k);
         // Spin briefly to ensure elapsed > 0
