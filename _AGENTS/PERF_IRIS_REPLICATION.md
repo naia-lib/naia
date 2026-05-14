@@ -922,6 +922,12 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Pure mechanical rename — no behavioral change. Can be done before any other phase.**
 
+0. **Record pre-implementation baseline.** Before any code changes, run the sub-phase bench in the cyberlith repo:
+   ```
+   cargo run --features bench_profile -p cyberlith_bench --release -- \
+       --scenario game_server_tick --warmup 100 --ticks 500
+   ```
+   Record results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. Known values are `send_packet_loop` 39.1% / `take_update_events` 25.8%; re-confirming on the same machine ensures comparison validity.
 1. Rename `ComponentUpdate` → `PendingComponentUpdate` in `shared/src/world/update/component_update.rs`
 2. Update all usages: `WorldMutType::component_apply_update`, `component_apply_field_update`, `world_writer.rs`, `local_world_manager.rs`, and all other callers
 3. Rename type alias `EntityIndex` → `LocalEntityIndex` throughout `UserDiffHandler` and any other per-user use sites
@@ -981,7 +987,10 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 4. Thread `snapshot_map` and `global_diff_handler` through the call chain: `write_updates` → `write_into_packet` → `Connection::send_packet` → `Connection::send_packets`
 5. In `WorldServer::send_all_packets`: build `snapshot_map` for UserDependent dirty components before the per-user loop (uses existing `take_outgoing_events` result to find dirty entities; `GlobalEntityIndex` not yet needed)
 
-**Gate:** E2E harness 93/93 green. Sub-phase bench: `send_packet_loop` measurably reduced from 39.1% baseline.
+**Gate:**
+- E2E harness 93/93 green.
+- Integration test added to naia harness: send a `UserIndependent` component (no `EntityProperty`) and a `UserDependent` component (with `EntityProperty`) through the new two-path `write_update`; receive on client side; assert deserialized values match the originals. Both paths must be exercised and green before Phase 5 is gated.
+- Run sub-phase bench (command in Phase 10 step 1) and record Phase 5 partial-optimization results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. `GlobalDirtyBitset` and bitset intersection are not yet in place — expect reduction in `send_packet_loop` from PATH A/B, but `take_update_events` reduction does not arrive until Phase 9.
 
 ### Phase 6 — GlobalEntityIndex + GlobalDiffHandler Extension
 
@@ -1011,7 +1020,10 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 7. Update `MutChannel::new_channel` and `GlobalDiffHandler::register_component` to wire `GlobalDirtyBitset` into new `DirtyNotifier`s
 8. Add `max_replicated_entities: u32` to `ServerConfig` (default 65,536); add `global_dirty: Arc<GlobalDirtyBitset>` to `WorldServer` and initialize from that field
 
-**Gate:** Unit test — mutate component for 32 users; confirm `dirty_entity_iter` yields the entity; confirm `is_component_dirty` true; mark all users clean; confirm entity absent from iterator. E2E 93/93.
+**Gate:**
+- Unit test — mutate component for 32 users; confirm `dirty_entity_iter` yields the entity; confirm `is_component_dirty` true; mark all users clean; confirm entity absent from iterator.
+- Disconnect test — mutate an entity for 2 users; disconnect one user (drop all their `MutReceiver`s); confirm `dirty_entity_iter` still yields the entity (remaining user's ref-count non-zero); disconnect the second user; confirm the entity is no longer in `dirty_entity_iter` (ref-counts have reached zero, verifying §14's "User disconnect cleanup" invariant).
+- E2E 93/93.
 
 ### Phase 8 — ConnectionVisibilityBitset
 
@@ -1021,8 +1033,9 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 2. Add `visibility: ConnectionVisibilityBitset` to `Connection`
 3. Wire `set`/`clear` into all scope enter/exit paths in `update_entity_scopes` and `LocalWorldManager`
 4. Wire entity pause state: pausing clears the visibility bit; unpausing sets it
+5. **Dual-mode correctness gate:** temporarily keep the existing HashMap-based scope state alongside `ConnectionVisibilityBitset`, inserting a debug assertion at every scope enter/exit that both agree. Run E2E 93/93 in this dual-mode configuration. Once all 93 tests pass with the assertion active, remove the HashMap-based scope tracking.
 
-**Gate:** E2E 93/93. Verify: for every test, the set of `GlobalEntityIndex`es reported by `ConnectionVisibilityBitset` matches the current HashMap-based scope state.
+**Gate:** E2E 93/93 with dual-mode assertion active (step 5 above); then E2E 93/93 after HashMap scope tracking removed. Full audit of all `update_entity_scopes` and `LocalWorldManager` call sites confirms no scope-transition path is unwired.
 
 ### Phase 9 — New Send Loop (Fix B) + DirtyQueue Removal
 
@@ -1038,14 +1051,15 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 5. **Remove `set: Weak<DirtySet>` from `DirtyNotifier`:** `notify_dirty` and `notify_clean` now only call `global.increment` / `global.decrement`
 6. Remove `build_dirty_candidates_from_receivers` and `take_update_events` from `LocalWorldManager`
 
-**Gate:** E2E 93/93; integration 39/39; naia harness 127/127. Sub-phase bench: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%.
+**Gate:** E2E 93/93; integration 39/39; naia harness 127/127. Run the sub-phase bench (command in Phase 10 step 1) and record results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. Targets: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%. Compare against the Phase 5 partial-optimization baseline to isolate the GlobalDirtyBitset + bitset-intersection contribution.
 
 ### Phase 10 — Benchmark + Documentation
 
-1. Full bench run: `cargo run --features bench_profile -p cyberlith_bench --release -- --scenario game_server_tick --warmup 100 --ticks 500`
+0. **Update cyberlith's naia dependency** to the Phase 9 commit on `dev-trunk`. The bench lives in the cyberlith repo and exercises naia's pipeline through the full game-server stack; it must consume the new code before results are meaningful.
+1. Full bench run (in cyberlith repo): `cargo run --features bench_profile -p cyberlith_bench --release -- --scenario game_server_tick --warmup 100 --ticks 500`
 2. Record sub-phase breakdown in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`
-3. Compare against 32-player baseline (39.1% + 25.8%)
-4. Project to 10,000 CCU from measured scaling
+3. Compare against pre-Phase-1 baseline (39.1% + 25.8%), Phase 5 partial-optimization checkpoint, and Phase 9 final results
+4. Project to 10,000 CCU from measured scaling (reference §12 projection table; note which numbers are now measured vs. estimated)
 
 ---
 
