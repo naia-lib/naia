@@ -998,7 +998,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** `cargo check` warning-clean; wasm32 checks (see §0 gate commands); `cargo test --workspace` green; namako gate green. No behavioral change.
 
-### Phase 2 — Serde Layer Extensions
+### Phase 2 — Serde Layer Extensions [X]
 
 **No callers yet — pure additions to `naia-shared/serde`.**
 

@@ -105,6 +105,23 @@ impl BitWriter {
     pub fn bits_free(&self) -> u32 {
         self.max_bits - self.current_bits
     }
+
+    /// Total bits written so far (flushed words + scratch register).
+    pub fn bits_written(&self) -> u32 {
+        self.current_bits
+    }
+
+    /// Slice of fully-flushed bytes (complete 32-bit words only).
+    /// Does NOT include bits still in the scratch register.
+    pub fn bytes_written_slice(&self) -> &[u8] {
+        &self.buffer[..self.byte_count]
+    }
+
+    /// Returns `(scratch_value, scratch_bit_count)` — bits not yet flushed to buffer.
+    /// `scratch_bit_count` is in [0, 31]. `scratch_value` holds that many valid LSB-first bits.
+    pub fn scratch_bits_pending(&self) -> (u32, u32) {
+        (self.scratch, self.scratch_bits)
+    }
 }
 
 impl BitWrite for BitWriter {
@@ -153,7 +170,64 @@ impl BitWrite for BitWriter {
     }
 }
 
+/// Pre-serialized component body. Inline array, zero heap allocation.
+/// 64 bytes = 512 bits. All registered components must fit within this limit
+/// (enforced at ComponentKinds::add_component time via Replicate::max_bit_length()).
+#[derive(Copy, Clone)]
+pub struct CachedComponentUpdate {
+    pub bytes: [u8; 64],
+    pub bit_count: u32,
+}
+
+impl CachedComponentUpdate {
+    /// Captures a BitWriter's current content into a CachedComponentUpdate.
+    /// Must be called before finalize(). Returns None if total bit_count > 512.
+    pub fn capture(writer: &BitWriter) -> Option<Self> {
+        let bit_count = writer.bits_written();
+        if bit_count > 512 {
+            return None;
+        }
+
+        let flushed = writer.bytes_written_slice();
+        let (scratch, scratch_bits) = writer.scratch_bits_pending();
+
+        let mut bytes = [0u8; 64];
+        bytes[..flushed.len()].copy_from_slice(flushed);
+
+        if scratch_bits > 0 {
+            let scratch_bytes = scratch.to_le_bytes();
+            let n = (scratch_bits as usize).div_ceil(8);
+            bytes[flushed.len()..flushed.len() + n].copy_from_slice(&scratch_bytes[..n]);
+        }
+
+        Some(Self { bytes, bit_count })
+    }
+}
+
+impl BitWriter {
+    /// Appends all bits from a CachedComponentUpdate at the current write position.
+    /// Bit-accurate at any alignment; produces bit-identical output to re-serializing the component.
+    pub fn append_cached_update(&mut self, update: &CachedComponentUpdate) {
+        if update.bit_count == 0 {
+            return;
+        }
+        let full_bytes = (update.bit_count / 8) as usize;
+        let trailing = update.bit_count % 8;
+        for &byte in &update.bytes[..full_bytes] {
+            self.write_byte(byte);
+        }
+        if trailing > 0 {
+            let last = update.bytes[full_bytes];
+            for bit in 0..trailing {
+                self.write_bit((last >> bit) & 1 != 0);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
+    use super::{BitWrite, BitWriter, CachedComponentUpdate};
 
     // ─── word-boundary regression tests (targets for word-aligned optimization) ─
 
@@ -427,5 +501,114 @@ mod tests {
         assert_eq!(62, reader.read_byte().unwrap());
         assert_eq!(34, reader.read_byte().unwrap());
         assert_eq!(2, reader.read_byte().unwrap());
+    }
+
+    // ─── CachedComponentUpdate capture + append tests ─────────────────────────
+
+    fn write_n_known_bits(writer: &mut BitWriter, n: u32) {
+        for i in 0..n {
+            writer.write_bit(i % 3 == 0);
+        }
+    }
+
+    fn read_n_known_bits(reader: &mut crate::bit_reader::BitReader, n: u32) {
+        for i in 0..n {
+            let expected = i % 3 == 0;
+            assert_eq!(
+                reader.read_bit().unwrap(), expected,
+                "bit {i} mismatch"
+            );
+        }
+    }
+
+    /// append_cached_update at ALL destination alignments 0-63
+    #[test]
+    fn cached_update_round_trips_at_all_alignments() {
+        use crate::bit_reader::BitReader;
+        const DATA_BITS: u32 = 37;
+        // Build the source update
+        let mut src = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut src, DATA_BITS);
+        let cached = CachedComponentUpdate::capture(&src).unwrap();
+        assert_eq!(cached.bit_count, DATA_BITS);
+
+        for align in 0u32..64 {
+            let mut dst = BitWriter::with_max_capacity();
+            // Write `align` preamble bits (alternating)
+            for i in 0..align {
+                dst.write_bit(i % 2 == 0);
+            }
+            dst.append_cached_update(&cached);
+            let buf = dst.to_bytes();
+            let mut reader = BitReader::new(&buf);
+            // Read preamble
+            for i in 0..align {
+                assert_eq!(reader.read_bit().unwrap(), i % 2 == 0,
+                    "align={align} preamble bit {i}");
+            }
+            // Read cached data
+            read_n_known_bits(&mut reader, DATA_BITS);
+        }
+    }
+
+    /// capture with pending scratch bits (7 bits — stays in scratch register)
+    #[test]
+    fn capture_with_pending_scratch_bits() {
+        use crate::bit_reader::BitReader;
+        let mut src = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut src, 7);
+        let cached = CachedComponentUpdate::capture(&src).unwrap();
+        assert_eq!(cached.bit_count, 7);
+
+        let mut dst = BitWriter::with_max_capacity();
+        dst.append_cached_update(&cached);
+        let buf = dst.to_bytes();
+        let mut reader = BitReader::new(&buf);
+        read_n_known_bits(&mut reader, 7);
+    }
+
+    /// capture across word boundary (33 bits spans 32-bit flush)
+    #[test]
+    fn capture_across_word_boundary() {
+        use crate::bit_reader::BitReader;
+        let mut src = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut src, 33);
+        let cached = CachedComponentUpdate::capture(&src).unwrap();
+        assert_eq!(cached.bit_count, 33);
+
+        // Append at a non-zero alignment (17 bits)
+        let mut dst = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut dst, 17);
+        dst.append_cached_update(&cached);
+        let buf = dst.to_bytes();
+        let mut reader = BitReader::new(&buf);
+        read_n_known_bits(&mut reader, 17);
+        read_n_known_bits(&mut reader, 33);
+    }
+
+    /// 512-bit capture succeeds; 513-bit returns None
+    #[test]
+    fn capture_512_succeeds_513_fails() {
+        let mut src512 = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut src512, 512);
+        assert!(CachedComponentUpdate::capture(&src512).is_some());
+
+        let mut src513 = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut src513, 513);
+        assert!(CachedComponentUpdate::capture(&src513).is_none());
+    }
+
+    // ─── BitCounter::count_bits behavior test ─────────────────────────────────
+
+    #[test]
+    fn bit_counter_count_bits_accumulates() {
+        use crate::bit_counter::BitCounter;
+        let mut counter = BitCounter::new(0, 0, 1000);
+        counter.count_bits(100);
+        counter.count_bits(200);
+        assert!(!counter.overflowed());
+        assert_eq!(counter.bits_needed(), 300);
+        counter.count_bits(701);
+        assert!(counter.overflowed());
     }
 }
