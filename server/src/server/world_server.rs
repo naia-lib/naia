@@ -67,6 +67,34 @@ pub mod bench_scope_counters {
     }
 }
 
+/// Timing of the three Iris send-path phases inside `send_all_packets`.
+/// Enabled via `bench_instrumentation`.
+///
+/// - `iris_phase12`: one-shot global dirty scan + UserDependent ECS snapshot
+/// - `iris_phase3_build`: per-user intersect_dirty + diff-mask filter → events HashMap (sum)
+/// - `iris_phase3_sort`: per-user priority advance + sort + update_list build (sum)
+#[cfg(feature = "bench_instrumentation")]
+pub mod bench_iris_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    #[doc(hidden)] pub static NS_PHASE12:      AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_PHASE3_BUILD: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_PHASE3_SORT:  AtomicU64 = AtomicU64::new(0);
+
+    pub fn reset() {
+        NS_PHASE12.store(0, Ordering::Relaxed);
+        NS_PHASE3_BUILD.store(0, Ordering::Relaxed);
+        NS_PHASE3_SORT.store(0, Ordering::Relaxed);
+    }
+    /// Returns (phase12_ns, phase3_build_ns, phase3_sort_ns).
+    pub fn snapshot() -> (u64, u64, u64) {
+        (
+            NS_PHASE12.load(Ordering::Relaxed),
+            NS_PHASE3_BUILD.load(Ordering::Relaxed),
+            NS_PHASE3_SORT.load(Ordering::Relaxed),
+        )
+    }
+}
+
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
@@ -749,6 +777,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Iterate dirty entities once for all users. Build SnapshotMap for
         // UserDependent (EntityProperty) components so Phase 3 reads the snapshot,
         // not ECS, achieving O(1) ECS reads per dirty component per tick.
+        #[cfg(feature = "bench_instrumentation")]
+        let _iris_p12_t0 = std::time::Instant::now();
+
         let mut snapshot_map: SnapshotMap = SnapshotMap::new();
         {
             let handler = self.global_world_manager.diff_handler();
@@ -782,6 +813,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         } // guard and handler Arc drop here, releasing the read lock
 
+        #[cfg(feature = "bench_instrumentation")]
+        bench_iris_counters::NS_PHASE12.fetch_add(
+            _iris_p12_t0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
         // ── Iris Phase 3: Per-user send loop ─────────────────────────────────────
         // For each user, bitwise-AND the global dirty bitset with this user's
         // visibility bitset — O(capacity/64) — to get the candidate entity set.
@@ -792,6 +829,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Build per-user update_events with immutable borrows only.
             // Value = (GlobalEntityIndex, component kinds) — index carried to avoid a
             // second HashMap lookup when resolving world_entity in update_list building.
+            #[cfg(feature = "bench_instrumentation")]
+            let _iris_p3_build_t0 = std::time::Instant::now();
+
             let update_events: HashMap<GlobalEntity, (GlobalEntityIndex, HashSet<ComponentKind>)> = {
                 let connection = self.user_connections.get(user_address).unwrap();
                 let handler = self.global_world_manager.diff_handler();
@@ -827,7 +867,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 events
             }; // connection (immutable), guard, handler Arc all drop here
 
+            #[cfg(feature = "bench_instrumentation")]
+            bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
+                _iris_p3_build_t0.elapsed().as_nanos() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
+
             // Exclusive mutable borrows for the actual packet send.
+            #[cfg(feature = "bench_instrumentation")]
+            let _iris_p3_sort_t0 = std::time::Instant::now();
+
             let connection = self.user_connections.get_mut(user_address).unwrap();
             // Build priority hook over the (global, user) layers. Split-borrow is safe
             // because `user_priorities` and `global_priority` are disjoint fields.
@@ -855,6 +904,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.idx_to_world[idx.as_usize()].map(|we| (ge, we, kinds))
                 })
                 .collect();
+
+            #[cfg(feature = "bench_instrumentation")]
+            bench_iris_counters::NS_PHASE3_SORT.fetch_add(
+                _iris_p3_sort_t0.elapsed().as_nanos() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
 
             connection.send_packets(
                 &self.channel_kinds,
