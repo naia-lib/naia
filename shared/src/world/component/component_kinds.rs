@@ -3,7 +3,7 @@ use std::{any::TypeId, collections::HashMap};
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
 use crate::{
-    ComponentUpdate, LocalEntityAndGlobalEntityConverter,
+    PendingComponentUpdate, LocalEntityAndGlobalEntityConverter,
     Replicate, ReplicateBuilder,
 };
 use crate::world::component::replicate::SplitUpdateResult;
@@ -180,7 +180,7 @@ impl ComponentKinds {
     }
 
     /// Reads a component kind tag then deserializes an initial-create update payload from `reader`.
-    pub fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
+    pub fn read_create_update(&self, reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
         self
             .kind_to_builder(&component_kind)
@@ -192,7 +192,7 @@ impl ComponentKinds {
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         component_kind: &ComponentKind,
-        update: ComponentUpdate,
+        update: PendingComponentUpdate,
     ) -> SplitUpdateResult {
         self
             .kind_to_builder(component_kind)

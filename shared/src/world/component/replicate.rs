@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashSet};
 
 use naia_serde::{BitReader, BitWrite, SerdeErr};
 
-use crate::world::update::component_update::ComponentUpdate;
+use crate::world::update::component_update::PendingComponentUpdate;
 use crate::world::update::diff_mask::DiffMask;
 use crate::{
     named::Named,
@@ -22,7 +22,7 @@ use crate::{
 pub type SplitUpdateResult = Result<
     (
         Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
-        Option<ComponentUpdate>,
+        Option<PendingComponentUpdate>,
     ),
     SerdeErr,
 >;
@@ -40,12 +40,12 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr>;
     /// Create new Component Update from incoming bit stream
-    fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr>;
+    fn read_create_update(&self, reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr>;
     /// Split a Component update into Waiting and Ready updates
     fn split_update(
         &self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        update: ComponentUpdate,
+        update: PendingComponentUpdate,
     ) -> SplitUpdateResult;
 
     /// Returns a heap-allocated clone of this builder.
@@ -129,7 +129,7 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     fn read_apply_update(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
-        update: ComponentUpdate,
+        update: PendingComponentUpdate,
     ) -> Result<(), SerdeErr>;
     /// Applies a single-field update from the network, updating the corresponding property in-place.
     fn read_apply_field_update(

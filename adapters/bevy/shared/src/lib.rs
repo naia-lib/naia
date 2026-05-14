@@ -4,7 +4,7 @@ pub use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, AuthorityError, BitReader, BitWrite,
     BitWriter,
     BandwidthConfig, Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate,
-    ComponentKind, ComponentKinds, ComponentUpdate, CompressionConfig, CompressionMode,
+    ComponentKind, ComponentKinds, PendingComponentUpdate, CompressionConfig, CompressionMode,
     ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityAuthAccessor,
     EntityAuthStatus, EntityDoesNotExistError, EntityProperty, FakeEntityConverter, FileBitWriter,
     GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, Instant, LinkConditionerConfig,

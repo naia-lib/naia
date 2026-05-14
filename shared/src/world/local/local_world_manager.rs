@@ -118,7 +118,7 @@ use crate::{
         remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
         sync::HostEntityChannel,
     },
-    ChannelSender, ComponentKind, ComponentKinds, ComponentUpdate, DiffMask,
+    ChannelSender, ComponentKind, ComponentKinds, PendingComponentUpdate, DiffMask,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut,
     EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity,
     InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex,
@@ -160,7 +160,7 @@ pub struct LocalWorldManager {
     incoming_components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>>,
 
     // TODO: this is kind of specific to the updater, put it somewhere else?
-    incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
+    incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
 }
 
 impl LocalWorldManager {
@@ -675,7 +675,7 @@ impl LocalWorldManager {
         &mut self,
         tick: Tick,
         local_entity: &OwnedLocalEntity,
-        component_update: ComponentUpdate,
+        component_update: PendingComponentUpdate,
     ) {
         self.incoming_updates
             .push((tick, *local_entity, component_update));

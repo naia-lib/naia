@@ -193,7 +193,7 @@ pub use protocol_id::ProtocolId;
 pub use types::{DisconnectReason, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
 pub use world::publicity::Publicity;
-pub use world::entity_index::{EntityIndex, KeyGenerator32};
+pub use world::entity_index::{LocalEntityIndex, KeyGenerator32};
 pub use world::entity_event::EntityEvent;
 pub use world::host::host_entity_generator::HostEntityGenerator;
 pub use world::host::host_world_manager::SubCommandId;
@@ -207,7 +207,7 @@ pub use world::sync::host_entity_channel::HostEntityChannel;
 #[cfg(feature = "e2e_debug")]
 pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
-pub use world::update::component_update::{ComponentFieldUpdate, ComponentUpdate};
+pub use world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
 pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;
 pub use world::update::mut_channel::{MutChannelType, MutReceiver};

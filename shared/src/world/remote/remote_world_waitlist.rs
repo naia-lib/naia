@@ -12,7 +12,7 @@ use crate::{
         entity::in_scope_entities::InScopeEntities,
         remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
     },
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, ComponentUpdate,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, PendingComponentUpdate,
     EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity,
     RemoteEntity, Replicate, Tick, WorldMutType,
 };
@@ -139,7 +139,7 @@ impl RemoteWorldWaitlist {
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         component_kinds: &ComponentKinds,
         world: &mut W,
-        mut incoming_updates: Vec<(Tick, OwnedLocalEntity, ComponentUpdate)>,
+        mut incoming_updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
     ) -> Vec<(Tick, OwnedLocalEntity, ComponentKind)> {
         let mut output = Vec::new();
         for (tick, local_entity, component_update) in incoming_updates.drain(..) {

@@ -982,7 +982,7 @@ For stable components (not mutated since the previous tick): **0 ECS reads, 0 se
 
 Phases are ordered by dependency. Each phase has explicit prerequisites and a gate that must pass before the next begins.
 
-### Phase 1 — Renames (No Dependencies)
+### Phase 1 — Renames (No Dependencies) [X]
 
 **Pure mechanical rename — no behavioral change. Can be done before any other phase.**
 

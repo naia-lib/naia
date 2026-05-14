@@ -9,11 +9,11 @@ use log::warn;
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
-use crate::world::entity_index::{EntityIndex, KeyGenerator32};
+use crate::world::entity_index::{LocalEntityIndex, KeyGenerator32};
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
 
-/// EntityIndex recycle timeout — long enough to cover packet drop / RTT
+/// LocalEntityIndex recycle timeout — long enough to cover packet drop / RTT
 /// retries that may still reference an entity_idx briefly after dereg.
 const ENTITY_INDEX_RECYCLE_TIMEOUT: Duration = Duration::from_secs(2);
 
@@ -47,8 +47,8 @@ pub mod dirty_scan_counters {
 
 /// Per-user diff handler.
 ///
-/// Phase 9.4 / Stage E (2026-04-25): per-user `EntityIndex` issuance lives
-/// here — `entity_to_index` maps `GlobalEntity → EntityIndex`,
+/// Phase 9.4 / Stage E (2026-04-25): per-user `LocalEntityIndex` issuance lives
+/// here — `entity_to_index` maps `GlobalEntity → LocalEntityIndex`,
 /// `index_to_entity` is the dense reverse table consulted at drain time.
 /// `kinds_by_bit` records `kind_bit → ComponentKind` so the snapshot can
 /// rebuild the legacy `HashMap<GlobalEntity, HashSet<ComponentKind>>`
@@ -59,15 +59,15 @@ pub struct UserDiffHandler {
     receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Per-user dense indices for entities the handler is tracking.
-    entity_to_index: HashMap<GlobalEntity, EntityIndex>,
+    entity_to_index: HashMap<GlobalEntity, LocalEntityIndex>,
     /// `index_to_entity[idx]` is `Some(entity)` while the entity is
     /// registered; `None` after deregistration (slot held until recycle).
     index_to_entity: Vec<Option<GlobalEntity>>,
     /// Refcount of registered components per entity_idx. When the count
     /// drops to zero we recycle the index.
-    components_per_entity: HashMap<EntityIndex, u32>,
-    /// EntityIndex allocator (recycling, u32 keyspace).
-    key_gen: KeyGenerator32<EntityIndex>,
+    components_per_entity: HashMap<LocalEntityIndex, u32>,
+    /// LocalEntityIndex allocator (recycling, u32 keyspace).
+    key_gen: KeyGenerator32<LocalEntityIndex>,
     /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
     /// at snapshot time. Bit position == NetId per
     /// `ComponentKinds::add_component`. `None` at indices not yet
@@ -106,7 +106,7 @@ impl UserDiffHandler {
         }
     }
 
-    fn allocate_entity_index(&mut self, entity: &GlobalEntity) -> EntityIndex {
+    fn allocate_entity_index(&mut self, entity: &GlobalEntity) -> LocalEntityIndex {
         if let Some(&idx) = self.entity_to_index.get(entity) {
             return idx;
         }
@@ -283,7 +283,7 @@ impl UserDiffHandler {
         // Entities that are not sent (bandwidth-deferred or out-of-scope) keep
         // their bits set and stay in the refeed list automatically — no O(U·N)
         // re-push loop needed.
-        let candidates: Vec<(EntityIndex, Vec<u64>)> = self.dirty_set.build_candidates();
+        let candidates: Vec<(LocalEntityIndex, Vec<u64>)> = self.dirty_set.build_candidates();
 
         let mut result: HashMap<GlobalEntity, HashSet<ComponentKind>> =
             HashMap::with_capacity(candidates.len());

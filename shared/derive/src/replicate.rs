@@ -184,7 +184,7 @@ pub fn replicate_impl(
 
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
             use #shared_crate_name::{
-                DiffMask, PropertyMutate, PropertyMutator, ComponentUpdate,
+                DiffMask, PropertyMutate, PropertyMutator, PendingComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
@@ -1075,7 +1075,7 @@ pub fn get_read_create_update_method(
     }
 
     quote! {
-        fn read_create_update(&self, reader: &mut BitReader) -> Result<ComponentUpdate, SerdeErr> {
+        fn read_create_update(&self, reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr> {
 
             let mut update_writer = BitWriter::new();
 
@@ -1083,7 +1083,7 @@ pub fn get_read_create_update_method(
 
             let owned_reader = update_writer.to_owned_reader();
 
-            return Ok(ComponentUpdate::new(ComponentKind::of::<#replica_name #untyped_generics>(), owned_reader));
+            return Ok(PendingComponentUpdate::new(ComponentKind::of::<#replica_name #untyped_generics>(), owned_reader));
         }
     }
 }
@@ -1154,10 +1154,10 @@ fn get_split_update_method(
         fn split_update(
             &self,
             converter: &dyn LocalEntityAndGlobalEntityConverter,
-            update: ComponentUpdate
+            update: PendingComponentUpdate
         ) -> Result<(
             Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
-            Option<ComponentUpdate>
+            Option<PendingComponentUpdate>
         ), SerdeErr> {
             let component_kind = ComponentKind::of::<#replica_name #untyped_generics>();
             let reader = &mut update.reader();
@@ -1179,7 +1179,7 @@ fn get_split_update_method(
             };
             let ready_result = {
                 if ready_did_write {
-                    Some(ComponentUpdate::new(component_kind, ready_writer.to_owned_reader()))
+                    Some(PendingComponentUpdate::new(component_kind, ready_writer.to_owned_reader()))
                 } else {
                     None
                 }
@@ -1223,7 +1223,7 @@ fn get_read_apply_update_method(properties: &[Property], struct_type: &StructTyp
     }
 
     quote! {
-        fn read_apply_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, mut update: ComponentUpdate) -> Result<(), SerdeErr> {
+        fn read_apply_update(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter, mut update: PendingComponentUpdate) -> Result<(), SerdeErr> {
             let reader = &mut update.reader();
             #output
             Ok(())
