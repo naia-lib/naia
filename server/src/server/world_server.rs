@@ -1968,7 +1968,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn despawn_entity_from_all_connections(&mut self, global_entity: &GlobalEntity) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for (_, connection) in self.user_connections.iter_mut() {
+        for connection in self.user_connections.values_mut() {
             if !connection
                 .base
                 .world_manager
@@ -3237,12 +3237,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     self.incoming_world_events
                         .push_despawn(user_key, &world_entity);
                     let owner = self.global_world_manager.entity_owner(&global_entity);
-                    if self
-                        .global_world_manager
-                        .entity_is_public_and_client_owned(&global_entity)
-                        || (self
-                            .global_world_manager
-                            .entity_is_delegated(&global_entity)
+                    let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
+                    let is_pub_client_owned = self.global_world_manager.entity_is_public_and_client_owned(&global_entity);
+                    if is_pub_client_owned
+                        || (is_delegated
                             && matches!(
                                 owner,
                                 Some(
@@ -3262,9 +3260,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .remote_despawn_entity(&global_entity);
 
                         self.despawn_entity_worldless(&world_entity);
-                    } else if self
-                        .global_world_manager
-                        .entity_is_delegated(&global_entity)
+                    } else if is_delegated
                     {
                         // Server-created delegated entity despawned by the authority-holding client.
                         // The entity lives in the server's host world manager, not in any remote
