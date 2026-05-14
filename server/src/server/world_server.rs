@@ -1919,14 +1919,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Removes an entity from all replication state without touching the world (adapter use only).
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
-        let global_entity = self
+        let Ok(global_entity) = self
             .global_entity_map
             .entity_to_global_entity(world_entity)
-            .unwrap();
-        if !self.global_world_manager.has_entity(&global_entity) {
-            info!("attempting to despawn entity that does not exist, this can happen if a delegated entity is being despawned");
+        else {
             return;
-        }
+        };
         // Priority layer eviction: drop global entry + every user's per-user
         // entry for this entity. Prevents leaks across entity lifetime.
         self.global_priority.on_despawn(world_entity);
