@@ -87,7 +87,7 @@ pub use naia_server::{
 };
 
 #[cfg(feature = "bench_instrumentation")]
-pub use naia_server::{bench_iris_counters, bench_send_counters, bench_scope_counters, bench_take_events_counters};
+pub use naia_server::{bench_iris_counters, bench_send_counters, bench_scope_counters, bench_take_events_counters, bench_write_counters};
 
 pub mod events;
 

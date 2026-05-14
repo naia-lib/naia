@@ -97,6 +97,8 @@ pub use connection::connection::bench_send_counters;
 pub use server::world_server::{bench_iris_counters, bench_scope_counters};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_shared::bench_take_events_counters;
+#[cfg(feature = "bench_instrumentation")]
+pub use naia_shared::bench_write_counters;
 pub use error::NaiaServerError;
 pub use events::{
     AuthEvent, ConnectEvent, DelegateEntityEvent, DespawnEntityEvent, DisconnectEvent,

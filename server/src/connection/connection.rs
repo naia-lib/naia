@@ -52,6 +52,8 @@ pub mod bench_send_counters {
         naia_shared::bench_take_events_counters::reset();
         // Iris send-path phase counters live in world_server.
         crate::server::world_server::bench_iris_counters::reset();
+        // Packet-write counters live in world_writer (shared crate).
+        naia_shared::bench_write_counters::reset();
     }
     /// Returns a snapshot of all counters as a tuple.
     pub fn snapshot() -> (u64, u64, u64) {

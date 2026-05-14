@@ -16,6 +16,25 @@ use crate::{
     Instant, MessageIndex, PacketIndex, Replicate, Serde, WorldRefType,
 };
 
+/// Per-tick counters for the packet-write path.
+/// Enabled via `bench_instrumentation`.
+///
+/// - `N_SCOPE_ENTRY_SPAWNS`: SpawnWithComponents commands actually written (not Noop'd) per tick.
+#[cfg(feature = "bench_instrumentation")]
+pub mod bench_write_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    #[doc(hidden)] pub static N_SCOPE_ENTRY_SPAWNS: AtomicU64 = AtomicU64::new(0);
+
+    /// Resets all write counters to zero.
+    pub fn reset() {
+        N_SCOPE_ENTRY_SPAWNS.store(0, Ordering::Relaxed);
+    }
+    /// Returns the number of SpawnWithComponents commands written this tick.
+    pub fn snapshot_spawns() -> u64 {
+        N_SCOPE_ENTRY_SPAWNS.load(Ordering::Relaxed)
+    }
+}
+
 /// Pre-ECS-snapshot for UserDependent components (those with EntityProperty fields).
 /// Built once per tick per component — keyed by (GlobalEntity, ComponentKind).
 /// First user to write a UserDependent component reads from ECS and populates this map;
@@ -268,6 +287,8 @@ impl WorldWriter {
                             comp_kind_list.clone(),
                         ),
                     );
+                    #[cfg(feature = "bench_instrumentation")]
+                    bench_write_counters::N_SCOPE_ENTRY_SPAWNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             }
             EntityCommand::Despawn(global_entity) => {
