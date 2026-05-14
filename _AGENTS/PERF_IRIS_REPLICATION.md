@@ -1117,7 +1117,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** `cargo check` warning-clean; `cargo test --workspace` green; namako gate green. Run the sub-phase bench (command in Phase 10 step 1) and record results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. Targets: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%. Compare against the Phase 5 partial-optimization baseline to isolate the GlobalDirtyBitset + bitset-intersection contribution.
 
-### Phase 10 — Benchmark + Documentation
+### Phase 10 — Benchmark + Documentation [X]
 
 0. **Update cyberlith's naia dependency** to the Phase 9 commit on `dev-trunk`. The bench lives in the cyberlith repo and exercises naia's pipeline through the full game-server stack; it must consume the new code before results are meaningful.
 1. Full bench run (in cyberlith repo): `cargo run --features bench_profile -p cyberlith_bench --release -- --scenario game_server_tick --warmup 100 --ticks 500`
