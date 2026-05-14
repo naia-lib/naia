@@ -7,8 +7,8 @@ use log::warn;
 
 use naia_shared::{
     AuthorityError, BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
-    GlobalDiffHandler, GlobalDirtyBitset, GlobalEntity, GlobalWorldManagerType, InScopeEntities,
-    MutChannelType, PropertyMutator, Replicate,
+    GlobalDiffHandler, GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalWorldManagerType,
+    InScopeEntities, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -63,24 +63,23 @@ impl GlobalWorldManager {
         &mut self,
         global_entity: &GlobalEntity,
         entity_owner: EntityOwner,
-    ) {
+    ) -> GlobalEntityIndex {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
-        // info!("Spawning Entity: {:?} with Owner: {:?}", global_entity, entity_owner);
         self.entity_records
             .insert(*global_entity, GlobalEntityRecord::new(entity_owner));
         self.diff_handler
             .write()
             .expect("GlobalDiffHandler lock poisoned")
-            .alloc_entity(*global_entity);
+            .alloc_entity(*global_entity)
     }
 
     pub fn insert_static_entity_record(
         &mut self,
         global_entity: &GlobalEntity,
         entity_owner: EntityOwner,
-    ) {
+    ) -> GlobalEntityIndex {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
@@ -89,7 +88,7 @@ impl GlobalWorldManager {
         self.diff_handler
             .write()
             .expect("GlobalDiffHandler lock poisoned")
-            .alloc_entity(*global_entity);
+            .alloc_entity(*global_entity)
     }
 
     pub fn mark_entity_as_static(&mut self, global_entity: &GlobalEntity) {

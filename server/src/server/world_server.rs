@@ -152,6 +152,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     entity_scope_map: EntityScopeMap,
     global_world_manager: GlobalWorldManager,
     global_entity_map: GlobalEntityMap<E>,
+    // O(1) dense-index → world-entity array. Slot 0 (INVALID) is always None.
+    // Maintained on every spawn/despawn; eliminates GlobalEntityMap HashMap lookups
+    // in the hot Phase 2 / Phase 3 send paths.
+    idx_to_world: Vec<Option<E>>,
     // Held to keep the GlobalDirtyBitset alive; consumers access it via GlobalWorldManager.
     // Will be read directly in a later phase.
     #[allow(dead_code)]
@@ -216,10 +220,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         let time_manager = TimeManager::new(tick_interval);
 
+        // +1 for INVALID slot 0; also the size of idx_to_world.
+        let capacity = (server_config.max_replicated_entities as usize) + 1;
+
         // Create GlobalDirtyBitset: capacity = max entity slots (including slot 0 = INVALID),
         // component_count = total registered component kinds from the protocol.
         let global_dirty = {
-            let capacity = (server_config.max_replicated_entities as usize) + 1; // +1 for INVALID slot 0
             let component_count = component_kinds.kind_count() as usize;
             Arc::new(GlobalDirtyBitset::new(capacity, component_count))
         };
@@ -248,6 +254,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             entity_scope_map: EntityScopeMap::new(),
             global_world_manager,
             global_entity_map: GlobalEntityMap::new(),
+            idx_to_world: vec![None; capacity],
             global_dirty,
             // Events
             addrs_with_new_packets: HashSet::new(),
@@ -749,7 +756,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             for global_idx in self.global_dirty.dirty_entity_iter() {
                 let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                 if !self.global_world_manager.entity_is_replicating(&global_entity) { continue; }
-                let Ok(world_entity) = self.global_entity_map.global_entity_to_entity(&global_entity) else { continue; };
+                let Some(world_entity) = self.idx_to_world[global_idx.as_usize()] else { continue; };
                 if !world.has_entity(&world_entity) { continue; }
 
                 for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
@@ -783,11 +790,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // per-user diff masks.
         for user_address in &user_addresses {
             // Build per-user update_events with immutable borrows only.
-            let update_events: HashMap<GlobalEntity, HashSet<ComponentKind>> = {
+            // Value = (GlobalEntityIndex, component kinds) — index carried to avoid a
+            // second HashMap lookup when resolving world_entity in update_list building.
+            let update_events: HashMap<GlobalEntity, (GlobalEntityIndex, HashSet<ComponentKind>)> = {
                 let connection = self.user_connections.get(user_address).unwrap();
                 let handler = self.global_world_manager.diff_handler();
                 let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-                let mut events: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
+                let mut events: HashMap<GlobalEntity, (GlobalEntityIndex, HashSet<ComponentKind>)> = HashMap::new();
 
                 for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
@@ -809,7 +818,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                                 continue;
                             }
 
-                            events.entry(global_entity).or_default().insert(component_kind);
+                            events.entry(global_entity)
+                                .or_insert_with(|| (global_idx, HashSet::new()))
+                                .1.insert(component_kind);
                         }
                     }
                 }
@@ -831,19 +842,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             };
 
             // Build pre-sorted update_list: advance priority, sort descending, resolve world_entity.
+            // O(1) idx_to_world array access replaces the GlobalEntityMap HashMap lookup.
             let initial_update_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
-            let mut scored: Vec<(GlobalEntity, f32, HashSet<ComponentKind>)> = update_events
+            let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashSet<ComponentKind>)> = update_events
                 .into_iter()
-                .map(|(ge, kinds)| (ge, hook.advance(&ge), kinds))
+                .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
                 .collect();
-            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
             let mut update_list: Vec<(GlobalEntity, E, HashSet<ComponentKind>)> = scored
                 .into_iter()
-                .filter_map(|(ge, _, kinds)| {
-                    self.global_entity_map
-                        .global_entity_to_entity(&ge)
-                        .ok()
-                        .map(|we| (ge, we, kinds))
+                .filter_map(|(ge, idx, _, kinds)| {
+                    self.idx_to_world[idx.as_usize()].map(|we| (ge, we, kinds))
                 })
                 .collect();
 
@@ -918,14 +927,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Creates a new Entity with a specific id
     fn spawn_entity_inner(&mut self, world_entity: &E) {
         let global_entity = self.global_entity_map.spawn(*world_entity, None);
-        self.global_world_manager
+        let idx = self.global_world_manager
             .insert_entity_record(&global_entity, EntityOwner::Server);
+        if idx.is_valid() {
+            self.idx_to_world[idx.as_usize()] = Some(*world_entity);
+        }
     }
 
     fn spawn_static_entity_inner(&mut self, world_entity: &E) {
         let global_entity = self.global_entity_map.spawn(*world_entity, None);
-        self.global_world_manager
+        let idx = self.global_world_manager
             .insert_static_entity_record(&global_entity, EntityOwner::Server);
+        if idx.is_valid() {
+            self.idx_to_world[idx.as_usize()] = Some(*world_entity);
+        }
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
@@ -2086,6 +2101,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         let entity_idx = self.entity_global_idx(global_entity);
+        if entity_idx.is_valid() {
+            self.idx_to_world[entity_idx.as_usize()] = None;
+        }
         for (_, connection) in self.user_connections.iter_mut() {
             if !connection
                 .base
@@ -3145,8 +3163,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .unwrap();
                     self.incoming_world_events
                         .push_spawn(user_key, &world_entity);
-                    self.global_world_manager
+                    let idx = self.global_world_manager
                         .insert_entity_record(&global_entity, EntityOwner::Client(*user_key));
+                    if idx.is_valid() {
+                        self.idx_to_world[idx.as_usize()] = Some(world_entity);
+                    }
                     let user = self.user_store.get(user_key).unwrap();
                     let connection = self.user_connections.get_mut(&user.address()).unwrap();
                     connection
