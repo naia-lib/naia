@@ -73,18 +73,24 @@ pub mod bench_scope_counters {
 /// - `iris_phase12`: one-shot global dirty scan + UserDependent ECS snapshot
 /// - `iris_phase3_build`: per-user intersect_dirty + diff-mask filter → events HashMap (sum)
 /// - `iris_phase3_sort`: per-user priority advance + sort + update_list build (sum)
+/// - `iris_phase3_entity_visits`: total (user × entity) pairs entering the dirty_words scan
+/// - `iris_phase3_component_visits`: total inner-loop iterations reaching the diff_mask check
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_iris_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
     #[doc(hidden)] pub static NS_PHASE12:      AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_PHASE3_BUILD: AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_PHASE3_SORT:  AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static N_PHASE3_ENTITY_VISITS:    AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static N_PHASE3_COMPONENT_VISITS: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all Iris phase counters to zero.
     pub fn reset() {
         NS_PHASE12.store(0, Ordering::Relaxed);
         NS_PHASE3_BUILD.store(0, Ordering::Relaxed);
         NS_PHASE3_SORT.store(0, Ordering::Relaxed);
+        N_PHASE3_ENTITY_VISITS.store(0, Ordering::Relaxed);
+        N_PHASE3_COMPONENT_VISITS.store(0, Ordering::Relaxed);
     }
     /// Returns `(phase12_ns, phase3_build_ns, phase3_sort_ns)`.
     pub fn snapshot() -> (u64, u64, u64) {
@@ -92,6 +98,13 @@ pub mod bench_iris_counters {
             NS_PHASE12.load(Ordering::Relaxed),
             NS_PHASE3_BUILD.load(Ordering::Relaxed),
             NS_PHASE3_SORT.load(Ordering::Relaxed),
+        )
+    }
+    /// Returns `(entity_visits, component_visits)` — iteration counts for the Phase 3 inner loops.
+    pub fn snapshot_visits() -> (u64, u64) {
+        (
+            N_PHASE3_ENTITY_VISITS.load(Ordering::Relaxed),
+            N_PHASE3_COMPONENT_VISITS.load(Ordering::Relaxed),
         )
     }
 }
@@ -841,6 +854,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                 for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+                    #[cfg(feature = "bench_instrumentation")]
+                    bench_iris_counters::N_PHASE3_ENTITY_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                     for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
                         let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
@@ -849,6 +864,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             word &= word - 1;
                             let kind_bit = (word_idx * 64 + bit_pos) as u16;
                             let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+                            #[cfg(feature = "bench_instrumentation")]
+                            bench_iris_counters::N_PHASE3_COMPONENT_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
                             // Per-user diff mask: skip if no pending bits for this user
                             if connection.base.world_manager.diff_mask_is_clear_for_entity(&global_entity, &component_kind) {
