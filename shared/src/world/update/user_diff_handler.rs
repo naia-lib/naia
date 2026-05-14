@@ -229,6 +229,29 @@ impl UserDiffHandler {
         receiver.diff_mask_is_clear()
     }
 
+    /// Marks the receiver for `(entity, component_kind)` as delivered.
+    /// Called by the delivery-confirmation path when a spawn/insert ACK arrives.
+    pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+        if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
+            receiver.mark_delivered();
+        }
+    }
+
+    /// Fast-path combined check for Phase 3: single HashMap lookup that returns
+    /// `true` iff the component has pending dirty bits AND its spawn was delivered.
+    /// Returns `false` if the receiver is not found (not yet registered) or
+    /// `delivered` is not yet set (pre-ACK window).
+    pub fn is_receiver_dirty_and_delivered(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        self.receivers
+            .get(&(*entity, *component_kind))
+            .map(|r| r.is_dirty_and_delivered())
+            .unwrap_or(false)
+    }
+
     pub fn or_diff_mask(
         &mut self,
         entity: &GlobalEntity,

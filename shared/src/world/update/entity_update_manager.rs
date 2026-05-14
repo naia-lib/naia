@@ -108,6 +108,24 @@ impl EntityUpdateManager {
             .deregister_component(entity, component_kind);
     }
 
+    /// Marks the receiver for `(entity, component_kind)` as delivered.
+    /// Called when the spawn/insert-component ACK arrives, enabling the
+    /// Phase 3 fast-path single-lookup check in `is_receiver_dirty_and_delivered`.
+    pub fn mark_component_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+        self.diff_handler.mark_receiver_delivered(entity, component_kind);
+    }
+
+    /// Phase 3 fast-path: single HashMap lookup that returns `true` iff the
+    /// component has pending dirty bits AND its spawn was delivered. Replaces the
+    /// 6+ HashMap chain of `is_component_updatable_for_entity` in steady state.
+    pub fn is_component_dirty_and_delivered(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        self.diff_handler.is_receiver_dirty_and_delivered(entity, component_kind)
+    }
+
     #[cfg(feature = "test_utils")]
     pub fn diff_handler_receiver_count(&self) -> usize {
         self.diff_handler.receiver_count()

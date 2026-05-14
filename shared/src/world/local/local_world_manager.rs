@@ -1192,6 +1192,21 @@ impl LocalWorldManager {
         self.updater.diff_mask_is_clear(global_entity, component_kind)
     }
 
+    /// Phase 3 fast-path: single HashMap lookup returning `true` iff the component
+    /// has pending dirty bits AND its initial spawn was already delivered (ACKed).
+    /// In the steady state (all spawns delivered) this replaces the two-call sequence
+    /// `!diff_mask_is_clear_for_entity && is_component_updatable_for_entity` —
+    /// 7+ HashMap lookups → 1 HashMap lookup + 2 atomic reads.
+    /// Falls back to `false` if the receiver is absent (not yet registered) or
+    /// `delivered` not yet set (pre-ACK window → caller should check updatability).
+    pub fn is_component_dirty_and_delivered_for_entity(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        self.updater.is_component_dirty_and_delivered(global_entity, component_kind)
+    }
+
     /// Collects pending outbound commands and component-update events, returning them as a pair of command queue and dirty-component map.
     pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,

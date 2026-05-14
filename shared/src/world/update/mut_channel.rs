@@ -1,7 +1,7 @@
 use std::{
     net::SocketAddr,
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, OnceLock, RwLock, Weak,
     },
 };
@@ -439,6 +439,13 @@ impl MutChannel {
 pub struct MutReceiver {
     mask: Arc<AtomicDiffMask>,
     notifier: Arc<OnceLock<DirtyNotifier>>,
+    /// Set to `true` when the server receives delivery confirmation (ACK) for the
+    /// initial spawn or insert-component command that registered this component.
+    /// Phase 3 uses this as a fast-path alternative to the 6+ HashMap lookup
+    /// chain in `is_component_updatable_for_entity`: if the flag is true, the
+    /// component is known-delivered and we skip the slow updatability check.
+    /// Arc-shared so all clones (MutChannelData + UserDiffHandler) see the write.
+    delivered: Arc<AtomicBool>,
 }
 
 impl MutReceiver {
@@ -447,6 +454,7 @@ impl MutReceiver {
         Self {
             mask: Arc::new(AtomicDiffMask::new(diff_mask_length)),
             notifier: Arc::new(OnceLock::new()),
+            delivered: Arc::new(AtomicBool::new(false)),
         }
     }
 
@@ -475,6 +483,25 @@ impl MutReceiver {
     /// Returns `true` if no property bits are currently set in this receiver's diff mask.
     pub fn diff_mask_is_clear(&self) -> bool {
         self.mask.is_clear()
+    }
+
+    /// Marks this receiver as delivered (spawn/insert ACK received from client).
+    /// Called once per component by the delivery confirmation path.
+    pub fn mark_delivered(&self) {
+        self.delivered.store(true, Ordering::Relaxed);
+    }
+
+    /// Returns `true` if the spawn/insert for this component has been delivered to the client.
+    pub fn is_delivered(&self) -> bool {
+        self.delivered.load(Ordering::Relaxed)
+    }
+
+    /// Combined fast-path check for Phase 3: returns `true` iff the component has
+    /// pending dirty bits AND its spawn was already delivered. A single HashMap
+    /// lookup from the caller provides this receiver, avoiding the 6+ HashMap
+    /// chain of `is_component_updatable_for_entity` in the common steady-state case.
+    pub fn is_dirty_and_delivered(&self) -> bool {
+        !self.mask.is_clear() && self.delivered.load(Ordering::Relaxed)
     }
 
     /// Marks `property_index` dirty in the diff mask, notifying the dirty queue if the mask transitions from clean to dirty.

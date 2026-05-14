@@ -377,12 +377,15 @@ impl HostWorldManager {
 
     fn on_delivered_insert_component(
         &mut self,
-        _entity_update_manager: &mut EntityUpdateManager,
-        _global_entity: &GlobalEntity,
-        _component_kind: &ComponentKind,
+        entity_update_manager: &mut EntityUpdateManager,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
     ) {
         // Component is already registered when entity comes into scope (in host_init_entity),
-        // so we don't need to register again here when InsertComponent is delivered
+        // so we don't need to register again here when InsertComponent is delivered.
+        // Mark the receiver delivered so Phase 3 can skip the 6+ HashMap lookup chain
+        // of is_component_updatable_for_entity and use the single-lookup fast path instead.
+        entity_update_manager.mark_component_delivered(global_entity, component_kind);
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_COMPONENT_INSERTS_TOTAL).increment(1);
     }
