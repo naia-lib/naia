@@ -286,7 +286,7 @@ Iris's "Poll and Copy" solution: maintain pre-serialized bytes for each componen
 
 ### MutChannelType Trait Extension
 
-Add three methods to the `MutChannelType` trait:
+Add three methods to the `MutChannelType` trait (takes `&self` — interior mutability required):
 
 ```rust
 pub trait MutChannelType: Send + Sync {
@@ -294,7 +294,7 @@ pub trait MutChannelType: Send + Sync {
     fn new_receiver(&mut self, address: &Option<SocketAddr>) -> Option<MutReceiver>;
     fn send(&self, diff: u8);
 
-    // NEW — blob cache:
+    // NEW — cached update store:
 
     /// Returns the cached pre-serialized update for the given diff mask key, if valid.
     /// Returns None if the cache has been invalidated (component mutated since last build).
@@ -311,9 +311,9 @@ pub trait MutChannelType: Send + Sync {
 }
 ```
 
-### Concrete Implementation
+### Concrete `MutChannelData` Implementation
 
-The default `MutChannelData` struct (the concrete impl of `MutChannelType`) gains:
+The server-side `MutChannelData` struct (the concrete impl of `MutChannelType`, lives in `server/src/world/mut_channel.rs`) gains:
 
 ```rust
 struct MutChannelData {
@@ -326,7 +326,7 @@ impl MutChannelType for MutChannelData {
     fn send(&self, diff: u8) {
         // existing fan-out to receivers...
         for (_, mask) in &self.receivers { mask.mutate(diff); }
-        // NEW: invalidate cached update on any mutation
+        // NEW: invalidate cached update store on any mutation
         self.cached_updates.write().clear();
     }
     fn get_cached_update(&self, key: u64) -> Option<CachedComponentUpdate> {
@@ -341,15 +341,43 @@ impl MutChannelType for MutChannelData {
 }
 ```
 
-**Cache lifecycle:**
-- **Invalidated:** automatically on every `MutChannel::send()` — the instant a property is mutated
-- **Built:** lazily on first access after invalidation, by the first user that needs it for a given `diff_mask_key`
-- **Reused:** by all subsequent users with the same `diff_mask_key` within the same tick AND across future ticks, until the next mutation
-- **Cross-tick persistence:** a stable component (not mutated for T ticks) pays one serialization on the first post-mutation send, then zero serialization for all T-1 subsequent ticks
+**Lock note:** `MutChannel::send()` acquires a READ lock on `self.data: Arc<RwLock<dyn MutChannelType>>` to call `data.send(property_index)`. Inside `MutChannelData::send`, `clear_cached_updates` acquires a WRITE lock on the separate inner `cached_updates: RwLock<…>`. These are two distinct locks — no deadlock risk.
 
-**Cache access in `GlobalDiffHandler`:**
+### `MutChannel` Public Wrapper Methods
 
-The `GlobalDiffHandler` (which already owns the `MutReceiverBuilder`s, each holding a `MutChannel`) exposes the cache through its extended API:
+`MutChannel` (the public struct wrapping `Arc<RwLock<dyn MutChannelType>>`) adds matching public methods that delegate through the outer lock. These are what `GlobalDiffHandler` and `MutReceiverBuilder` call:
+
+```rust
+impl MutChannel {
+    // existing: send(), new_receiver(), new_sender() ...
+
+    pub fn get_cached_update(&self, key: u64) -> Option<CachedComponentUpdate> {
+        self.data.read().ok()?.get_cached_update(key)
+    }
+    pub fn set_cached_update(&self, key: u64, update: CachedComponentUpdate) {
+        if let Ok(data) = self.data.read() {
+            data.set_cached_update(key, update);
+        }
+    }
+    // clear_cached_updates is called internally via send() — no public exposure needed.
+}
+```
+
+Note: `set_cached_update` uses a READ lock on the outer `RwLock<dyn MutChannelType>` (to get the `&dyn MutChannelType` ref), then calls the method which uses interior mutability on `cached_updates: RwLock<…>`. Consistent with how `send()` already works today.
+
+### `MutReceiverBuilder` Channel Accessor
+
+`MutReceiverBuilder` already holds `channel: MutChannel` (private field). Add a public accessor:
+
+```rust
+impl MutReceiverBuilder {
+    pub fn channel(&self) -> &MutChannel { &self.channel }
+}
+```
+
+### Cache Access in `GlobalDiffHandler`
+
+`GlobalDiffHandler` (which already owns the `MutReceiverBuilder`s) exposes the cache through its extended API:
 
 ```rust
 impl<E: Copy> GlobalDiffHandler<E> {
@@ -377,7 +405,11 @@ impl<E: Copy> GlobalDiffHandler<E> {
 }
 ```
 
-(`MutReceiverBuilder` already holds a `MutChannel`; expose a `channel(&self) -> &MutChannel` accessor.)
+**Cache lifecycle:**
+- **Invalidated:** automatically on every `MutChannel::send()` — the instant a property is mutated
+- **Built:** lazily on first access after invalidation, by the first user that needs it for a given `diff_mask_key`
+- **Reused:** by all subsequent users with the same `diff_mask_key` within the same tick AND across future ticks, until the next mutation
+- **Cross-tick persistence:** a stable component (not mutated for T ticks) pays one serialization on the first post-mutation send, then zero serialization for all T-1 subsequent ticks
 
 ---
 
@@ -679,6 +711,7 @@ for addr in &user_addresses {
         &snapshot_map,
         &self.global_diff_handler,
         &world,
+        &*self.global_world_manager,  // retained: needed by entity_converter_mut
         // ... remaining existing params ...
     );
 }
@@ -686,20 +719,21 @@ for addr in &user_addresses {
 
 ### Phase 3 Inner: `write_update` with Two Paths
 
-`write_update` now takes `snapshot_map`, `global_diff_handler`, and retains `world`/`world_entity` for PATH A cache misses only.
+`write_update` now takes `snapshot_map` and `global_diff_handler`; retains `global_world_manager` (required by `entity_converter_mut` in both paths) and `world`/`world_entity` (required for PATH A cache misses).
 
 ```rust
 fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
     component_kinds: &ComponentKinds,
     now: &Instant,
     world: &W,
-    global_diff_handler: &GlobalDiffHandler<E>,
+    global_world_manager: &dyn GlobalWorldManagerType,  // retained: needed by entity_converter_mut
+    global_diff_handler: &GlobalDiffHandler<E>,         // NEW: cached update store access
     world_manager: &mut LocalWorldManager,
     packet_index: &PacketIndex,
     writer: &mut BitWriter,
     global_entity: &GlobalEntity,
     world_entity: &E,
-    snapshot_map: &SnapshotMap,
+    snapshot_map: &SnapshotMap,                         // NEW: UserDependent ECS snapshots
     has_written: &mut bool,
     next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
 ) {
@@ -728,7 +762,7 @@ fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
                 None => {
                     // Cache miss: one ECS read, one serialize, store in MutChannel.
                     // Converter is obtained but never called (UserIndependent invariant).
-                    let mut converter = world_manager.entity_converter_mut(/* global_world_manager */);
+                    let mut converter = world_manager.entity_converter_mut(global_world_manager);
                     let mut temp = BitWriter::with_max_capacity();
                     true.ser(&mut temp);
                     component_kind.ser(component_kinds, &mut temp);
@@ -779,7 +813,7 @@ fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
             // ECS was read once in Phase 2 into snapshot_map.
             let snapshot = snapshot_map.get(&(*global_entity, *component_kind))
                 .expect("UserDependent snapshot built in Phase 2");
-            let mut converter = world_manager.entity_converter_mut(/* global_world_manager */);
+            let mut converter = world_manager.entity_converter_mut(global_world_manager);
 
             // Counter pass
             let mut counter = writer.counter();
@@ -906,7 +940,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 **Depends on Phases 1, 2, 3. No structural send-loop changes yet — thread new params through existing call chain.**
 
 1. Add `SnapshotMap = HashMap<(GlobalEntity, ComponentKind), Box<dyn Replicate>>` type alias
-2. Modify `WorldWriter::write_update` signature — add `snapshot_map: &SnapshotMap`, `global_diff_handler: &GlobalDiffHandler<E>`
+2. Modify `WorldWriter::write_update` signature — add `snapshot_map: &SnapshotMap` and `global_diff_handler: &GlobalDiffHandler<E>`. **Retain `global_world_manager: &dyn GlobalWorldManagerType`** — it is still required by `world_manager.entity_converter_mut(global_world_manager)` in both PATH A cache-miss and PATH B.
 3. Implement PATH A (UserIndependent cached update) and PATH B (UserDependent snapshot) inside `write_update`
 4. Thread `snapshot_map` and `global_diff_handler` through:
    - `WorldWriter::write_updates`
@@ -928,6 +962,8 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 5. Replace `UserDiffHandler::entity_to_index / index_to_entity` (`LocalEntityIndex` tables) with lookups into `GlobalDiffHandler` — per-user `DirtyQueue` row index becomes `GlobalEntityIndex` (global, not per-user)
 
 **Note:** `DirtyQueue::push(entity_idx: LocalEntityIndex, kind_bit: u16)` changes to `push(entity_idx: GlobalEntityIndex, kind_bit: u16)`. Verify `DirtyQueue::stride` remains correct (based on component kind count, unchanged).
+
+**`DirtyNotifier::entity_idx` type change:** `DirtyNotifier` currently holds `entity_idx: EntityIndex` (per-user). In this phase it changes to `GlobalEntityIndex` — the same entity now has one index shared across all users. The `notify_dirty`/`notify_clean` calls to the per-user `DirtySet` continue to use this index as the row key (since the per-user `DirtyQueue` now uses `GlobalEntityIndex` row indices). The `global: Weak<GlobalDirtyBitset>` field added in Phase 7 will also reference it.
 
 **Gate:** E2E harness 93/93; integration tests 39/39; naia harness 127/127.
 
