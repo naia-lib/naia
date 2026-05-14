@@ -734,24 +734,90 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             std::sync::atomic::Ordering::Relaxed,
         );
 
-        // loop through all connections, send packet
+        // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
-        // shuffle order of connections in order to avoid priority among users
         fastrand::shuffle(&mut user_addresses);
 
-        // One SnapshotMap shared across all users this tick.
-        // UserDependent components (EntityProperty fields) are snapshotted from ECS
-        // on first user access and reused for all subsequent users — O(1) ECS reads
-        // per component per tick regardless of user count.
+        // ── Iris Phase 1+2: Global dirty scan + UserDependent snapshot ──────────
+        // Iterate dirty entities once for all users. Build SnapshotMap for
+        // UserDependent (EntityProperty) components so Phase 3 reads the snapshot,
+        // not ECS, achieving O(1) ECS reads per dirty component per tick.
         let mut snapshot_map: SnapshotMap = SnapshotMap::new();
+        {
+            let handler = self.global_world_manager.diff_handler();
+            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+            for global_idx in self.global_dirty.dirty_entity_iter() {
+                let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+                if !self.global_world_manager.entity_is_replicating(&global_entity) { continue; }
+                let Ok(world_entity) = self.global_entity_map.global_entity_to_entity(&global_entity) else { continue; };
+                if !world.has_entity(&world_entity) { continue; }
 
-        for user_address in user_addresses {
-            let connection = self.user_connections.get_mut(&user_address).unwrap();
-            // Build a per-user priority hook over the (global, user) layers.
-            // `global` provides the read-only `gain_override`; `user` is
-            // mutated by `advance` / `reset_after_send`. Split-borrow is safe
-            // because `user_priorities` and `global_priority` are disjoint
-            // fields on `WorldServer`.
+                for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
+                    let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
+                    while word != 0 {
+                        let bit_pos = word.trailing_zeros() as usize;
+                        word &= word - 1;
+                        let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                        let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+                        if !world.has_component_of_kind(&world_entity, &component_kind) { continue; }
+
+                        if self.component_kinds.is_user_dependent(&component_kind) {
+                            let snap = world
+                                .component_of_kind(&world_entity, &component_kind)
+                                .expect("component verified above")
+                                .copy_to_box();
+                            snapshot_map.insert((global_entity, component_kind), snap);
+                        }
+                    }
+                }
+            }
+        } // guard and handler Arc drop here, releasing the read lock
+
+        // ── Iris Phase 3: Per-user send loop ─────────────────────────────────────
+        // For each user, bitwise-AND the global dirty bitset with this user's
+        // visibility bitset — O(capacity/64) — to get the candidate entity set.
+        // Then apply per-user component checks (diff mask, auth) to build
+        // update_events. No ECS reads; all information comes from the bitsets and
+        // per-user diff masks.
+        for user_address in &user_addresses {
+            // Build per-user update_events with immutable borrows only.
+            let update_events: HashMap<GlobalEntity, HashSet<ComponentKind>> = {
+                let connection = self.user_connections.get(user_address).unwrap();
+                let handler = self.global_world_manager.diff_handler();
+                let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+                let mut events: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
+
+                for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
+                    let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+
+                    for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
+                        let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
+                        while word != 0 {
+                            let bit_pos = word.trailing_zeros() as usize;
+                            word &= word - 1;
+                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+
+                            // Per-user diff mask: skip if no pending bits for this user
+                            if connection.base.world_manager.diff_mask_is_clear_for_entity(&global_entity, &component_kind) {
+                                continue;
+                            }
+                            // Per-user auth: skip if authority prevents this update
+                            if !connection.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                                continue;
+                            }
+
+                            events.entry(global_entity).or_default().insert(component_kind);
+                        }
+                    }
+                }
+                events
+            }; // connection (immutable), guard, handler Arc all drop here
+
+            // Exclusive mutable borrows for the actual packet send.
+            let connection = self.user_connections.get_mut(user_address).unwrap();
+            // Build priority hook over the (global, user) layers. Split-borrow is safe
+            // because `user_priorities` and `global_priority` are disjoint fields.
             let user_layer = self
                 .user_priorities
                 .entry(connection.user_key)
@@ -772,6 +838,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_world_manager,
                 &self.time_manager,
                 &mut hook,
+                update_events,
                 &mut snapshot_map,
             );
         }

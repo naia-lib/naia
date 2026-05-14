@@ -1101,7 +1101,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** E2E 93/93 with dual-mode assertion active (step 5 above); then E2E 93/93 after HashMap scope tracking removed. Full audit of all `update_entity_scopes` and `LocalWorldManager` call sites confirms no scope-transition path is unwired.
 
-### Phase 9 — New Send Loop (Fix B) + DirtyQueue Removal
+### Phase 9 — New Send Loop (Fix B) + DirtyQueue Removal [X]
 
 **Depends on Phases 6, 7, 8. The full Iris three-phase send loop.**
 

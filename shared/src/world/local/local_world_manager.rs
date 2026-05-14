@@ -1149,6 +1149,49 @@ impl LocalWorldManager {
         self.entity_map.cleanup_old_redirects(now, 60);
     }
 
+    /// Collects pending outbound entity commands only — no update events.
+    ///
+    /// Used by the server-side Iris three-phase send loop (Phase 9), where
+    /// `update_events` are built externally via `GlobalDirtyBitset` +
+    /// `ConnectionVisibilityBitset` intersection and passed into `send_packets`.
+    pub fn take_outgoing_commands(
+        &mut self,
+        now: &Instant,
+        rtt_millis: &f32,
+    ) -> VecDeque<(CommandId, EntityCommand)> {
+        let host_commands = self.host.take_outgoing_commands();
+        let remote_commands = self.remote.take_outgoing_commands();
+        for commands in [host_commands, remote_commands] {
+            for command in commands {
+                self.sender.send_message(command);
+            }
+        }
+        self.sender.collect_messages(now, rtt_millis);
+        self.sender.take_next_messages()
+    }
+
+    /// Returns `true` if the given component is currently updatable for this connection —
+    /// host or remote authority allows sending updates for this (entity, component) pair.
+    pub fn is_component_updatable_for_entity(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        let local_converter = self.entity_map.entity_converter();
+        self.host.is_component_updatable(local_converter, global_entity, component_kind)
+            || self.remote.is_component_updatable(local_converter, global_entity, component_kind)
+    }
+
+    /// Returns `true` if the per-user diff mask for this (entity, component) is currently clear.
+    /// A clear mask means no pending update bits — skip this component this tick.
+    pub fn diff_mask_is_clear_for_entity(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        self.updater.diff_mask_is_clear(global_entity, component_kind)
+    }
+
     /// Collects pending outbound commands and component-update events, returning them as a pair of command queue and dirty-component map.
     pub fn take_outgoing_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,

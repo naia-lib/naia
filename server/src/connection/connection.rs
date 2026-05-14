@@ -270,6 +270,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         priority_hook: &mut dyn OutgoingPriorityHook,
+        iris_update_events: HashMap<GlobalEntity, HashSet<ComponentKind>>,
         snapshot_map: &mut SnapshotMap,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
@@ -281,12 +282,15 @@ impl Connection {
         bench_send_counters::NS_COLLECT_MESSAGES
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
 
+        // Collect outgoing entity commands only. Update events are pre-built by the
+        // three-phase Iris loop in WorldServer::send_all_packets and passed in directly.
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
-        let (mut host_world_events, mut update_events) = self
+        let mut host_world_events = self
             .base
             .world_manager
-            .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
+            .take_outgoing_commands(now, &rtt_millis);
+        let mut update_events = iris_update_events;
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_TAKE_OUTGOING_EVENTS
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
