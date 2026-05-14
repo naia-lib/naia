@@ -116,6 +116,11 @@ pub struct GlobalDiffHandler<E: Copy> {
     /// Free list for index recycling on entity despawn.
     free_list: Vec<GlobalEntityIndex>,
     next_idx: u32,
+
+    // NEW — inverse kind-bit lookup (hot-path, O(1) array):
+    /// Indexed by kind_bit (== NetId). Populated at register_component time.
+    /// Enables `kind_for_bit(kind_bit) -> ComponentKind` without a HashMap lookup.
+    bit_to_kind: Vec<Option<ComponentKind>>,
 }
 
 /// Per-entity component metadata. Packed bits — one bit per registered ComponentKind.
@@ -134,10 +139,16 @@ pub struct ComponentFlags {
 - `global_to_idx(global: &GlobalEntity) -> Option<GlobalEntityIndex>` — O(1) HashMap
 - `world_entity(idx: GlobalEntityIndex) -> E` — O(1) array
 - `global_entity(idx: GlobalEntityIndex) -> GlobalEntity` — O(1) array
+- `kind_for_bit(kind_bit: u16) -> ComponentKind` — O(1) array; inverse of `kind_bits` map (see below)
 - `register_component(idx, kind, is_user_dependent)` — sets bit in `idx_to_components`
 - `deregister_component(idx, kind)` — clears bit
 - `get_cached_update(entity, kind, key) -> Option<CachedComponentUpdate>` — cached update accessor (see Innovation 4)
 - `set_cached_update(entity, kind, key, update: CachedComponentUpdate)` — cached update write
+
+**`kind_bit` ↔ `ComponentKind` mapping:** `GlobalDiffHandler::kind_bits: HashMap<ComponentKind, u16>` stores the NetId (the same u16 used on the wire) as the bit-index for the dirty bitset. These are the same value — `kind_bit` IS the NetId. The existing `ComponentKinds::net_id_map: HashMap<NetId, ComponentKind>` provides the inverse lookup but is currently accessed only through the private `net_id_to_kind`. Two additions are needed:
+
+1. Expose a public method on `ComponentKinds`: `pub fn kind_for_net_id(&self, net_id: u16) -> Option<ComponentKind>` — a direct lookup into the existing `net_id_map`.
+2. Add `bit_to_kind: Vec<ComponentKind>` to `GlobalDiffHandler` (indexed by kind_bit) for O(1) hot-path lookup without going through `ComponentKinds`. Populated when a component is registered via `register_component`. The send loop uses `self.global_diff_handler.kind_for_bit(kind_bit)` — one array access, no HashMap.
 
 **Migration from `UserDiffHandler::LocalEntityIndex`:** The per-user `entity_to_index` / `index_to_entity` tables in `UserDiffHandler` become unnecessary. Per-user components that previously used `LocalEntityIndex` as a row key in `DirtyQueue` switch to `GlobalEntityIndex`. Since the global registry assigns one index per entity regardless of scope, per-user visibility is tracked separately (Innovation 3).
 
@@ -678,13 +689,13 @@ for global_idx in dirty_entity_iter {
     if !world.has_entity(&world_entity) { continue; }
 
     // Iterate only components that are actually dirty for some user:
-    for dirty_word in self.global_dirty.dirty_words(global_idx) {
+    for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
         let mut word = dirty_word.load(Ordering::Relaxed);
         while word != 0 {
-            let bit_pos = word.trailing_zeros() as usize;
-            word &= word - 1;  // clear lowest set bit
-            let kind_bit = /* word_index * 64 + */ bit_pos as u16;
-            let component_kind = self.component_kinds.kind_for_net_id(kind_bit);
+            let bit_pos  = word.trailing_zeros() as usize;
+            word        &= word - 1;  // clear lowest set bit
+            let kind_bit = (word_idx * 64 + bit_pos) as u16;
+            let component_kind = self.global_diff_handler.kind_for_bit(kind_bit);
             if !world.has_component_of_kind(&world_entity, &component_kind) { continue; }
 
             if comp_flags.user_dependent.get(kind_bit as usize).unwrap_or(false) {
@@ -719,13 +730,13 @@ for addr in &user_addresses {
         let global_entity = self.global_diff_handler.global_entity(global_idx);
         let comp_flags    = self.global_diff_handler.idx_to_components(global_idx);
 
-        for dirty_word in self.global_dirty.dirty_words(global_idx) {
+        for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
             let mut word = dirty_word.load(Ordering::Relaxed);
             while word != 0 {
-                let bit_pos = word.trailing_zeros() as usize;
-                word &= word - 1;
-                let kind_bit = /* word_index * 64 + */ bit_pos as u16;
-                let component_kind = self.component_kinds.kind_for_net_id(kind_bit);
+                let bit_pos  = word.trailing_zeros() as usize;
+                word        &= word - 1;
+                let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                let component_kind = self.global_diff_handler.kind_for_bit(kind_bit);
                 let local_converter = connection.base.world_manager.entity_converter();
 
                 // Per-user auth checks (cannot be shared):
@@ -945,6 +956,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 5. `ComponentKinds::user_dependent: HashSet<ComponentKind>` field
 6. `ComponentKinds::add_component` — assert `max_bit_length() <= 512`; store `user_dependent` flag
 7. `ComponentKinds::is_user_dependent(kind: &ComponentKind) -> bool`
+8. Expose `pub fn kind_for_net_id(&self, net_id: u16) -> Option<ComponentKind>` on `ComponentKinds` — a direct lookup into the existing private `net_id_map: HashMap<NetId, ComponentKind>`; currently accessed only through the private `net_id_to_kind`
 
 **Gate:** `NetworkedPosition::has_entity_properties() == false`; any component with `EntityProperty` field `== true`. All existing cyberlith-registered components pass the 512-bit assertion. `cargo check --workspace` clean.
 
@@ -978,7 +990,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 1. Add `GlobalEntityIndex(u32)` type with `INVALID` sentinel to `naia-shared`
 2. Extend `GlobalDiffHandler<E>` with dense entity registry fields and all operations (see Section 4)
 3. Wire `alloc_entity`/`free_entity` into existing entity spawn/despawn paths (`host_spawn_entity`, `despawn_entity`)
-4. Wire `register_component`/`deregister_component` into `GlobalDiffHandler`'s existing component registration path
+4. Wire `register_component`/`deregister_component` into `GlobalDiffHandler`'s existing component registration path; populate `bit_to_kind: Vec<Option<ComponentKind>>` at registration time (extend vec if kind_bit ≥ current length)
 5. Replace `UserDiffHandler::entity_to_index / index_to_entity` (`LocalEntityIndex` tables) with lookups into `GlobalDiffHandler`; per-user `DirtyQueue` row index changes from `LocalEntityIndex` to `GlobalEntityIndex`
 6. **`DirtyNotifier::entity_idx` type change:** currently `EntityIndex` (per-user) → `GlobalEntityIndex`. The same entity now has one index shared across all users. Per-user `DirtySet` push/cancel continues to use this index as the row key (DirtyQueue now uses `GlobalEntityIndex` row indices). The `global` field added in Phase 7 also references it.
 
@@ -997,7 +1009,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 5. Extend `DirtyNotifier` — add `global: Weak<GlobalDirtyBitset>`; keep `set: Weak<DirtySet>` until Phase 9
 6. `DirtyNotifier::notify_dirty` calls BOTH `set.push` and `global.increment`; `notify_clean` calls BOTH `set.cancel` and `global.decrement`
 7. Update `MutChannel::new_channel` and `GlobalDiffHandler::register_component` to wire `GlobalDirtyBitset` into new `DirtyNotifier`s
-8. Add `global_dirty: Arc<GlobalDirtyBitset>` to `WorldServer`; initialize from `ServerConfig::max_replicated_entities`
+8. Add `max_replicated_entities: u32` to `ServerConfig` (default 65,536); add `global_dirty: Arc<GlobalDirtyBitset>` to `WorldServer` and initialize from that field
 
 **Gate:** Unit test — mutate component for 32 users; confirm `dirty_entity_iter` yields the entity; confirm `is_component_dirty` true; mark all users clean; confirm entity absent from iterator. E2E 93/93.
 
@@ -1020,10 +1032,11 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
    - Phase 1: `global_dirty.dirty_entity_iter()`
    - Phase 2: entity-level filter + SnapshotMap build using `dirty_words`
    - Phase 3: per-user `visibility.intersect_dirty(&global_dirty)` → per-user diff mask checks → `update_events`
-2. Remove `EntityAndGlobalEntityConverter<E>` param from `write_updates` (entity-level converter is no longer needed in the writer; `world_entity` lookup moved to Phase 2)
-3. **Remove `DirtyQueue` / `DirtySet` from `UserDiffHandler`:** with the GlobalDirtyBitset providing global dirty candidate selection, and `AtomicDiffMask` providing per-user per-component dirty state, the per-user `DirtyQueue` is vestigial. Removing it prevents unbounded memory growth (queue entries are never drained in the new loop)
-4. **Remove `set: Weak<DirtySet>` from `DirtyNotifier`:** `notify_dirty` and `notify_clean` now only call `global.increment` / `global.decrement`
-5. Remove `build_dirty_candidates_from_receivers` and `take_outgoing_events` from `LocalWorldManager`
+2. **Preserve priority ordering.** The current `write_updates` accepts `entity_priority_order: Option<&[GlobalEntity]>` controlling the order entities are written into the packet budget (priority accumulator — COMPLETE). After Phase 9, `update_events: HashMap<GlobalEntity, HashSet<ComponentKind>>` has no inherent order. Before calling `connection.send_packets`, sort the `update_events` keys by the priority accumulator's score for this user (same logic used today) and pass the sorted slice as `entity_priority_order`. No change to the priority accumulator or `write_updates` signature — only the Phase 3 loop gains a sort step over its already-small per-user candidate set.
+3. Remove `EntityAndGlobalEntityConverter<E>` param from `write_updates` (entity-level converter is no longer needed in the writer; `world_entity` lookup moved to Phase 2 via `GlobalDiffHandler::world_entity`)
+4. **Remove `DirtyQueue` / `DirtySet` from `UserDiffHandler`:** with the GlobalDirtyBitset providing global dirty candidate selection, and `AtomicDiffMask` providing per-user per-component dirty state, the per-user `DirtyQueue` is vestigial. Removing it prevents unbounded memory growth (queue entries are never drained in the new loop)
+5. **Remove `set: Weak<DirtySet>` from `DirtyNotifier`:** `notify_dirty` and `notify_clean` now only call `global.increment` / `global.decrement`
+6. Remove `build_dirty_candidates_from_receivers` and `take_update_events` from `LocalWorldManager`
 
 **Gate:** E2E 93/93; integration 39/39; naia harness 127/127. Sub-phase bench: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%.
 
