@@ -9,7 +9,7 @@ use bevy_ecs::{
 use log::warn;
 
 use naia_bevy_shared::{
-    HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut,
+    HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut, WorldRefType,
 };
 use naia_server::EntityOwner;
 
@@ -203,6 +203,10 @@ pub fn translate_world_events(world: &mut World) {
                 let mut client_spawned_entities = Vec::new();
                 for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
                     if server.is_resource_entity(&entity) {
+                        continue;
+                    }
+                    // Entity may have been despawned in the same tick it was spawned
+                    if !world.proxy().has_entity(&entity) {
                         continue;
                     }
                     if let EntityOwner::Client(user_key) =

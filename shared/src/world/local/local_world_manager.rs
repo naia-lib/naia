@@ -818,10 +818,13 @@ impl LocalWorldManager {
 
     /// Notifies the remote waitlist that `global_entity`'s remote entity has been spawned.
     pub fn remote_spawn_entity(&mut self, global_entity: &GlobalEntity) {
-        let remote_entity = self
-            .entity_map
-            .global_entity_to_remote_entity(global_entity)
-            .unwrap();
+        let remote_entity = match self.entity_map.global_entity_to_remote_entity(global_entity) {
+            Ok(e) => e,
+            Err(_) => {
+                // Entity was despawned in the same message batch before spawn was processed; skip.
+                return;
+            }
+        };
         self.remote.spawn_entity(&remote_entity);
     }
 

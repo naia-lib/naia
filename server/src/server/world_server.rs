@@ -3141,6 +3141,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    // Entity may have been despawned in the same message batch before
+                    // this deferred event fires; skip world operations if it's gone.
+                    if !world.has_entity(&world_entity) {
+                        continue;
+                    }
                     self.publish_entity(world, &global_entity, &world_entity, false);
                     self.incoming_world_events
                         .push_publish(user_key, &world_entity);
@@ -3153,6 +3158,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    if !world.has_entity(&world_entity) {
+                        continue;
+                    }
                     self.unpublish_entity(world, &global_entity, &world_entity, false);
                     self.incoming_world_events
                         .push_unpublish(user_key, &world_entity);
@@ -3162,6 +3170,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    // Entity may have been despawned in the same message batch
+                    // (Despawn arrives alongside EnableDelegation but the Bevy
+                    // entity was already removed by process_ready_messages while
+                    // the Despawn event is still deferred).  Skip delegation so
+                    // we don't call component_kinds on a stale entity.
+                    if !world.has_entity(&world_entity) {
+                        continue;
+                    }
                     self.entity_enable_delegation(
                         world,
                         &global_entity,

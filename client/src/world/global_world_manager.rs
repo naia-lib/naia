@@ -331,19 +331,15 @@ impl GlobalWorldManager {
         global_entity: &GlobalEntity,
     ) -> Result<(), AuthorityError> {
         if !self.has_entity(global_entity) {
-            // Entity is not in scope — client has no record of it at all.
             return Err(AuthorityError::NotInScope);
         }
         if !self.entity_is_delegated(global_entity) {
             return Err(AuthorityError::NotDelegated);
         }
         let Some(auth_status) = self.auth_handler.auth_status(global_entity) else {
-            // Entity is delegated in our records but auth tracking hasn't been
-            // initialised yet — treat as not-in-scope (transitional state).
             return Err(AuthorityError::NotInScope);
         };
         if !auth_status.can_request() {
-            // Authority is not Available (e.g. already Requested or Granted).
             return Err(AuthorityError::NotAvailable);
         }
         self.auth_handler

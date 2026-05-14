@@ -325,7 +325,8 @@ impl RemoteWorldManager {
                     // set up entity
                     let world_entity = world.spawn_entity();
                     let global_entity = spawner.spawn(world_entity, Some(remote_entity));
-                    if local_entity_map.contains_remote_entity(&remote_entity) {
+                    let already_mapped = local_entity_map.contains_remote_entity(&remote_entity);
+                    if already_mapped {
                         // mapped remote entity already when reserving global entity
                     } else {
                         local_entity_map.insert_with_remote_entity(global_entity, remote_entity);

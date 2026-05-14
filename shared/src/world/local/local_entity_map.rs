@@ -200,7 +200,6 @@ impl LocalEntityMap {
         &mut self,
         global_entity: &GlobalEntity,
     ) -> Option<LocalEntityRecord> {
-        // info!("Removing global entity: {:?}", global_entity);
         let record_opt = self.global_to_local.remove(global_entity);
         if let Some(record) = &record_opt {
             if record.is_host_owned() {
