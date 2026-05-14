@@ -1,6 +1,6 @@
 # PERF — Naia Iris Replication Architecture
 
-**Status:** SPEC (not yet implemented)
+**Status:** COMPLETE — Phases 1–10 implemented and benchmarked (2026-05-14)
 **Created:** 2026-05-13
 **Supersedes:** `PERF_SHARED_UPDATE_BLOB.md`
 **Context:** Sub-phase profiling in cyberlith benchmark — `cyberlith/_AGENTS/CAPACITY_RESULTS.md`
@@ -65,7 +65,7 @@ cargo run --features bench_profile -p cyberlith_bench --release -- \
 
 ## 1. Problem Statement
 
-Sub-phase profiling at 32 players (release profile, `game_server_tick` bench):
+Sub-phase profiling at 32 players (release profile, `game_server_tick` bench) **before implementation**:
 
 | Phase | % of tick | Root cause |
 |---|---:|---|
@@ -75,6 +75,28 @@ Sub-phase profiling at 32 players (release profile, `game_server_tick` bench):
 At 32 players all moving: **1,024 ECS reads** per tick (2 per component per user — counter pass + writer pass), **~5,120 HashMap lookups** for entity-level facts that are identical for all users, and **1,024 Serde traversals** bitpacking the same component data 32 times.
 
 At **10,000 CCU** these numbers become 320,000 ECS reads and 320,000 serializations per tick — consuming the entire server tick budget before packets even leave the machine.
+
+### Post-Implementation Results (2026-05-14, apples-to-apples on same machine)
+
+| Phase | Before | After | Delta |
+|---|---:|---:|---|
+| `take_update_events` | 25.8% | **0.0% (ELIMINATED)** | GlobalDirtyBitset + bitset intersection |
+| `send_packet_loop` | 39.1% → 31.0% (re-baselined) | **25.6%** | PATH A cached updates −28.6% |
+| `cell::update [total]` p99 | 5,137 µs | 4,278 µs | **−16.7%** |
+| Server RSS | 24.66 MB | 12.98 MB | **−47.3%** (N_ram 33→63 cells) |
+
+**Remaining bottleneck — `write_updates` = 36.8% of tick (2026-05-14 sub-breakdown):**
+
+Post-Iris profiling with `bench_instrumentation` shows:
+- `scope_entry_spawns = 0` in 500-tick steady state — tile serialization hypothesis ruled out
+- `write_updates` (entity/component serialization in `WorldWriter`) = 93% of `write_packet`
+- `write_packet` = 97% of `send_packet_loop` — io_send (transport) is only 1.1%
+- Root: `get_cached_update()` still uses `mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), ...>`
+  (~20–30 ns/lookup × ~1,800 component×user visits/tick)
+
+The `mut_receiver_builders` HashMap → dense 2D array conversion (Innovation 1, specified but not yet
+implemented in Phase 6) is the next optimization target. `GlobalEntityIndex` is live; the array
+indexing design is fully specified in §4 below.
 
 ---
 
@@ -1185,3 +1207,302 @@ If profiling after Phase 10 shows PATH A cache misses are negligible in practice
 **Q3: `RwLock<HashMap<u64, CachedComponentUpdate>>` contention.** Most ticks, cached updates are read-only (Phase 3 per-user path). Write contention occurs only on cache misses (first user after mutation). If Phase 10 profiling shows `RwLock` write contention at high CCU, consider a sharded lock or `DashMap`.
 
 **Q4: Quantization.** `NetworkedPosition` storing raw `f32` bits wastes ~16 bits per component that quantization could recover. This is future work; the `CachedComponentUpdate` infrastructure naturally accommodates quantized components — the cached update stores quantized bytes, same path.
+
+---
+
+## 17. C.7 — write_updates Hot-Path Optimization (spec 2026-05-14)
+
+**Status:** SPEC (not yet implemented)
+**Proposed:** 2026-05-14, based on `send_packet_loop` sub-breakdown bench + full code audit
+**Branch:** `dev` (never commit to `main`)
+
+---
+
+### 17.1 Findings Summary
+
+After Iris Phases 1–10, `write_updates` (entity/component serialization in `WorldWriter`) = 36.8%
+of tick in the adversarial oscillating-player bench. Code audit of the hot path identified:
+
+**Four remaining bottlenecks:**
+
+| # | Location | Type | Calls/tick (32p, 10 dirty ents) |
+|---|---|---|---|
+| A | `UserDiffHandler.receivers` | `HashMap<(GlobalEntity, ComponentKind), MutReceiver>` | ~1,800 Phase 3 + ~1,800 write_update = ~3,600 |
+| B | `GlobalDiffHandler.mut_receiver_builders` | `HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>` | ~1,800 PATH A cache operations |
+| C | `MutChannelData.cached_updates` | `RwLock<HashMap<u64, CachedComponentUpdate>>` (2 lock + 1 HashMap per hit) | ~1,800 PATH A cache hits |
+| D | `component_kinds.is_user_dependent()` | `HashSet<ComponentKind>` lookup in `write_update` | ~1,800 (one per component×user visit) |
+
+**Estimated HashMap contribution to write_updates:** ~1,920 HashMap + lock operations/tick ×
+~35 ns each ≈ **67 µs out of 1,763 µs write_updates (~4%).** Eliminating all of them will not
+close the 36.8% gap — the remaining 96% is actual serialization and memcpy work.
+
+**Critical bench caveat:** The 36.8% figure is adversarial. In the oscillating-player bench,
+all players move every tick → all position/velocity components dirty every tick → PATH A cache
+is invalidated every tick. PATH A's cross-tick amortization provides zero benefit in this case.
+In production (sparse movement, stable terrain), write_updates approaches near-zero between
+player events. The HashMap optimization improves the adversarial floor and minimum per-operation
+latency, but production write_updates overhead is already low without it.
+
+**Pattern 3 — DROPPED from C.7.** Code audit confirms quantization is already fully implemented:
+- `NetworkedPosition` uses `SignedVariableFloat<14, 0>` tile-grid delta encoding
+- `NetworkedVelocity` / `NetworkedAngularVelocity` use `SignedVariableFloat<11, 2>`
+- `NetworkedRotation` uses smallest-three quaternion (21 bits)
+- DiffMask already provides field-level dirty tracking; only changed fields are sent
+
+True frame-to-frame delta encoding (send `current − previous`) would require: a protocol-breaking
+wire format change, server-side previous-state storage, client-side delta accumulation, and version
+negotiation. The bandwidth headroom remaining after variable-length encoding is marginal and does
+not justify this cost. **Do not implement.**
+
+---
+
+### 17.2 What Would Actually Need to Change
+
+The four sub-tasks below are ordered by implementation size and coupling. C.7.A is independent;
+C.7.B/C/D are coupled and should be done together.
+
+---
+
+#### C.7.A — Trivial: replace `is_user_dependent()` HashSet with array call in `write_update`
+
+**Problem:** `write_update` (`world_writer.rs`) calls `component_kinds.is_user_dependent(component_kind)` —
+a `HashSet<ComponentKind>` lookup — to dispatch PATH A vs PATH B. An equivalent O(1) array lookup
+already exists: `GlobalDiffHandler.is_component_user_dependent(entity_idx, kind_bit)` backed by
+`idx_to_components: Vec<ComponentFlags>` (Phase 6, implemented).
+
+**What changes:**
+- `write_update` receives `entity_idx: GlobalEntityIndex` and `kind_bit: u16` from its caller
+  (both are available in `send_all_packets`'s Phase 3 loop where `write_updates` is called)
+- Replace `component_kinds.is_user_dependent(component_kind)` → `global_diff_handler.is_component_user_dependent(entity_idx, kind_bit)`
+- Files: `shared/src/world/world_writer.rs` (write_update signature + call site);
+  `server/src/server/world_server.rs` (thread entity_idx + kind_bit through to write_updates)
+
+**Tradeoffs:**
+- PRO: eliminates one HashSet lookup per component per user per tick; no architectural change
+- CON: widens the `write_update` / `write_updates` signature by two parameters; client path
+  does not have `GlobalEntityIndex` — client's `write_update` must retain the `component_kinds.is_user_dependent()` path or get a dummy `None` for the array lookup
+
+**Risk:** Low. The client path can continue using the HashSet; server path gains the array.
+**Gate:** `cargo check --workspace` warning-clean + `cargo test --workspace` green + namako gate.
+
+---
+
+#### C.7.B — Medium: replace `UserDiffHandler.receivers` HashMap with stride-indexed flat array
+
+**Problem:** `receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>` is the highest-frequency
+hot-path HashMap, accessed in:
+- Phase 3 build: `is_component_dirty_and_delivered_for_entity` → `receivers.get(...)` — one lookup per component per user per dirty entity
+- `write_update`: `get_diff_mask` → `receivers.get(...)` — same rate
+- Hot path total: ~3,600 lookups/tick in the bench
+
+**Target structure:**
+```rust
+// UserDiffHandler — new field
+receivers_dense: Vec<Option<MutReceiver>>,  // flat; stride = kind_count
+kind_count: usize,                           // fixed at construction
+
+// Slot calculation (O(1) multiply + add):
+// fn slot(entity_idx: GlobalEntityIndex, kind_bit: u16) -> usize {
+//     entity_idx.as_usize() * self.kind_count + kind_bit as usize
+// }
+```
+
+**Memory:** At 256 entities × 16 kind_bits × 48 bytes per `Option<MutReceiver>` × 32 users
+≈ 6.3 MB total. 9× increase vs. current HashMap per user; acceptable in absolute terms.
+`Option<MutReceiver>` is 48 bytes (three Arc clones = three pointer-sized fields).
+The dense array improves CPU cache locality vs. HashMap pointer chasing.
+
+**Implementation steps:**
+1. Add `kind_count: usize` and `receivers_dense: Vec<Option<MutReceiver>>` to `UserDiffHandler`
+2. Add `fn ensure_dense_capacity(&mut self, entity_idx: GlobalEntityIndex)` — grows `receivers_dense`
+   to `(entity_idx.as_usize() + 1) * self.kind_count` slots if needed (mirrors `DirtyQueue::ensure_capacity`)
+3. In `register_component(entity_idx, kind_bit, receiver)`:
+   call `ensure_dense_capacity(entity_idx)` then `receivers_dense[slot] = Some(receiver.clone())`
+4. In `deregister_component(entity_idx, kind_bit)`: `receivers_dense[slot] = None`
+5. In all hot-path methods, callers must supply `(GlobalEntityIndex, kind_bit)` — available in
+   Phase 3's dirty_words loop. Fallback: when only `(GlobalEntity, ComponentKind)` is available,
+   resolve via `GlobalDiffHandler.global_to_idx` + `kind_bits` before the call
+6. Keep `receivers: HashMap<...>` for cold-path methods during the transition; remove after all
+   hot paths are migrated and gate passes
+
+**Callers that need updating:**
+- `server/src/server/world_server.rs`: Phase 3 inner loop already has `global_idx: GlobalEntityIndex`
+  and `kind_bit: u16` — these thread directly to `is_component_dirty_and_delivered_for_entity`
+- `shared/src/world/world_writer.rs`: `write_update` needs `entity_idx + kind_bit` (from C.7.A work)
+- `server/src/connection/connection.rs`: any call sites in `send_packet` / `write_packet`
+
+**Key correctness invariant:** When an entity is freed (`free_entity`), all of its dense slots must
+be cleared: `for k in 0..kind_count { receivers_dense[slot(entity_idx, k)] = None; }`. Missing this
+causes stale `MutReceiver` access for a recycled `GlobalEntityIndex`.
+
+**Gate:** E2E 93/93 + namako gate. Add integration test: register 32 entities × 8 components, verify
+correct receiver returned for all (entity, kind) pairs after a random alloc/free/re-alloc sequence
+to exercise the free-list + slot reuse path.
+
+---
+
+#### C.7.C + C.7.D — Coupled: relocate wire cache from `MutChannelData` to `GlobalDiffHandler` dense array
+
+These two sub-tasks are entangled and should be implemented atomically.
+
+**C.7.C Problem:** `MutChannelData.cached_updates: RwLock<HashMap<u64, CachedComponentUpdate>>` stores
+the per-component wire cache inside the `MutChannelType` trait object. Every PATH A cache hit pays:
+- `Arc<RwLock<dyn MutChannelType>>::read()` — lock acquire #1
+- `MutChannelData.cached_updates` RwLock read — lock acquire #2
+- HashMap lookup by `u64` key
+
+The RwLock is not contended today (single-threaded send loop), but the lock acquisition overhead
+and HashMap indirection are still real. The HashMap key space for all Cyberlith components is
+exactly 2 values (single-property components: key `0x01` = property dirty; `0x00` = nothing dirty
+and would not reach the cache). Multi-property components use a larger key space but are rare.
+
+**C.7.D Problem:** `GlobalDiffHandler.mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>`
+is the outer lookup gate for PATH A cache access. Every `get_cached_update` and `set_cached_update`
+call pays one HashMap lookup here before reaching the inner cache.
+
+**Unified solution — move wire cache to GlobalDiffHandler:**
+
+```rust
+// GlobalDiffHandler — new fields
+wire_cache: Vec<Option<(u64, CachedComponentUpdate)>>,  // flat; stride = kind_count
+wire_cache_kind_count: usize,
+
+// Accessors (O(1)):
+pub fn get_wire_cache(&self, entity_idx: GlobalEntityIndex, kind_bit: u16, key: u64)
+    -> Option<CachedComponentUpdate>
+{
+    let slot = entity_idx.as_usize() * self.wire_cache_kind_count + kind_bit as usize;
+    self.wire_cache.get(slot)?.and_then(|(k, v)| if *k == key { Some(*v) } else { None })
+}
+
+pub fn set_wire_cache(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16, key: u64,
+    update: CachedComponentUpdate)
+{
+    let slot = entity_idx.as_usize() * self.wire_cache_kind_count + kind_bit as usize;
+    if let Some(entry) = self.wire_cache.get_mut(slot) {
+        *entry = Some((key, update));
+    }
+}
+
+pub fn clear_wire_cache(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
+    let slot = entity_idx.as_usize() * self.wire_cache_kind_count + kind_bit as usize;
+    if let Some(entry) = self.wire_cache.get_mut(slot) {
+        *entry = None;
+    }
+}
+```
+
+**Cache invalidation wiring:** `MutChannelData.send()` must clear the corresponding slot in
+`GlobalDiffHandler.wire_cache`. Options:
+
+- **Option A (preferred):** Give `DirtyNotifier` a `Weak<Mutex<GlobalCacheStore>>` field where
+  `GlobalCacheStore` is a thin wrapper around `wire_cache` owned by `GlobalDiffHandler` and shared
+  via `Arc`. On `notify_dirty()`, call `cache.clear_slot(entity_idx, kind_bit)`. This is consistent
+  with how `GlobalDirtyBitset` is already wired to `DirtyNotifier` (same `Weak` pattern, Phase 7).
+
+- **Option B (simpler but coarser):** In `world_server::send_all_packets`, at the start of Phase 2,
+  clear all wire_cache slots for every entity in `dirty_entity_iter()`. Since Phase 2 already
+  iterates dirty entities, this is O(dirty_entities × dirty_components) with no additional traversal.
+  Simpler to implement; correct because Phase 2 runs before Phase 3 uses the cache. Downside:
+  clears the cache even for entities that ended up not sending (priority-deferred), forcing a
+  re-build next tick.
+
+**Option A is the architecturally clean choice.** Option B is acceptable as a first pass.
+
+**Cache key:** The single inline entry uses `(u64, CachedComponentUpdate)` — key is the DiffMask
+packed as u64. For dropped-packet recovery (ORed diff mask produces a different key), the entry
+simply misses → re-serialize → correct behavior. No multi-entry needed.
+
+**Memory:** Dynamic Vec growing with entity alloc, same as receivers_dense. At 256 entities ×
+16 kind_bits × 72 bytes per `Option<(u64, CachedComponentUpdate)>` = 295 KB. Acceptable.
+
+**Remove from `MutChannelData`:** Once `GlobalDiffHandler.wire_cache` is the authoritative store:
+- Remove `cached_updates: RwLock<HashMap<u64, CachedComponentUpdate>>` from `MutChannelData`
+- Remove `get_cached_update`, `set_cached_update`, `clear_cached_updates` from `MutChannelType` trait
+- Remove the three wrapper methods from `MutChannel`
+- Remove the three accessor methods from `GlobalDiffHandler` that go through `mut_receiver_builders`
+- `mut_receiver_builders` itself may still be needed for the cold path (`has_component`, `deregister_component`, `receiver`) — keep or migrate those as a follow-up
+
+**Files modified:**
+- `shared/src/world/update/global_diff_handler.rs` — add `wire_cache` field + accessors + `ensure_wire_cache_capacity`
+- `shared/src/world/update/mut_channel.rs` — add `Weak<GlobalCacheStore>` to `DirtyNotifier` (Option A); wire `notify_dirty` → cache clear
+- `server/src/world/mut_channel.rs` — remove `cached_updates` from `MutChannelData`; remove `MutChannelType` cache trait methods
+- `shared/src/world/world_writer.rs` — replace `global_diff_handler.get_cached_update(entity, kind, key)` with `global_diff_handler.get_wire_cache(entity_idx, kind_bit, key)`; same for set
+- `server/src/server/world_server.rs` — thread `&mut global_diff_handler` into write path where needed
+
+**Gate:** Same as C.7.B. Add unit test: mutate component via `MutSender::mutate()`; confirm `get_wire_cache` returns None; set via `set_wire_cache`; confirm hit; mutate again (triggering `notify_dirty`); confirm None again.
+
+---
+
+### 17.3 Tradeoffs and Risks
+
+**Dense array memory vs. HashMap memory:**
+
+| Structure | Current (HashMap) | After C.7 (dense array) |
+|---|---|---|
+| `UserDiffHandler.receivers` per user | ~200 entries × ~80B = 16 KB | 256 ents × 16 kinds × 48B = 196 KB |
+| `GlobalDiffHandler.wire_cache` (global) | via mut_receiver_builders HashMap | 256 ents × 16 kinds × 72B = 295 KB |
+| Total delta | — | ~6.6 MB at 32 users |
+
+6.6 MB is within acceptable bounds (server RSS was 12.98 MB post-Iris). N_ram is not the binding
+constraint.
+
+**Sender-side symmetry:** Naia's design is sender-side symmetric (client uses the same `world_writer.rs`
+path as server). The client does NOT have `GlobalEntityIndex` or `GlobalDiffHandler`. Any change that
+threads `GlobalEntityIndex` through `write_update` must supply a `None`/fallback on the client path
+so both compile cleanly under `#[cfg(feature = "client")]` vs. `#[cfg(feature = "server")]` guards.
+C.7.A's client fallback (keep `component_kinds.is_user_dependent()` for the client path) is the model
+for all C.7 sub-tasks that widen `write_update`'s signature.
+
+**`GlobalDiffHandler` is not `Send + Sync` by itself:** The dense Vec fields are plain `Vec<T>`.
+`GlobalDiffHandler` is accessed exclusively from the single-threaded send loop today. If parallel
+per-user sends are ever introduced, `wire_cache` would need interior mutability. The `Cell` approach
+would work for single-threaded parallel only; an `AtomicCell` or sharded structure would be needed
+for true multi-thread. This is fine for current architecture; document as a known limitation.
+
+**`max_replicated_entities` cap vs. dynamic Vec:** `GlobalDirtyBitset` and `ConnectionVisibilityBitset`
+are pre-allocated to `max_replicated_entities = 65,536` at server startup. The new `wire_cache` and
+`receivers_dense` Vecs grow dynamically with `alloc_entity`. If an entity's `GlobalEntityIndex`
+exceeds the pre-allocated bitset capacity, the dirty/visibility tracking silently fails (existing
+latent bug — not introduced by C.7). Documenting this mismatch is important; fixing it (cap the
+dynamic Vecs to `max_replicated_entities` with a panic on overflow) is a correctness hardening step
+that should accompany C.7.D.
+
+---
+
+### 17.4 What This Actually Buys
+
+Given that HashMaps account for ~4% of write_updates and the adversarial bench misrepresents
+production steady state, the honest projection is:
+
+- **Adversarial bench (all players moving every tick):** ~4–6% reduction in write_updates (67 µs
+  saved out of 1,763 µs). The remaining ~94% is path-A memcpy work (`append_cached_update` byte loop)
+  and ECS reads for first-user cache misses. These are harder to attack without SIMD bulk copy.
+
+- **Production steady state (sparse movement):** write_updates is already near-zero between events.
+  C.7 reduces the per-event cost but this is not the binding constraint.
+
+- **Real value of C.7:** Better cache locality throughout the hot path (dense arrays fit in L1/L2;
+  scattered HashMaps with pointer chains do not). Improved readability and explicit data layout.
+  Enables future SIMD acceleration of the send loop (dense arrays are SIMD-friendly; HashMaps are not).
+  Removes the `RwLock` indirection, making the codebase ready for parallel per-user sends if that
+  ever becomes necessary.
+
+- **`append_cached_update` bulk-copy fast path:** Not part of C.7 but worth profiling post-C.7. For
+  byte-aligned writes (common after the component kind header), replacing the byte-by-byte loop with
+  a `ptr::copy_nonoverlapping` / SIMD unroll would address the remaining ~94% of the adversarial
+  bench cost. This is a naia-serde-level change with no architectural impact.
+
+---
+
+### 17.5 Implementation Order and Gates
+
+| Step | Sub-task | Depends on | Gate |
+|---|---|---|---|
+| 1 | C.7.A — `is_user_dependent` array call | — | `cargo check --workspace` warning-clean + `cargo test --workspace` |
+| 2 | C.7.B — `receivers_dense` flat array | C.7.A (for entity_idx threading) | E2E 93/93 + namako gate + alloc/free integration test |
+| 3 | C.7.C+D — `wire_cache` in `GlobalDiffHandler` | C.7.B (entity_idx + kind_bit available at call sites) | E2E 93/93 + namako gate + cache invalidation unit test |
+
+Run `cargo run --features bench_profile -p cyberlith_bench --release -- --scenario game_server_tick --warmup 100 --ticks 500` before and after each step to confirm no regression and measure actual gain. Record in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`.
+
+All work on `dev` branch. Never commit to `main`. Pre-push check: `cargo check -p naia-client --target wasm32-unknown-unknown` (C.7.A touches world_writer.rs which is shared with client path).
