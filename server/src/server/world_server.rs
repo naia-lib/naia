@@ -80,12 +80,13 @@ pub mod bench_iris_counters {
     #[doc(hidden)] pub static NS_PHASE3_BUILD: AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_PHASE3_SORT:  AtomicU64 = AtomicU64::new(0);
 
+    /// Resets all Iris phase counters to zero.
     pub fn reset() {
         NS_PHASE12.store(0, Ordering::Relaxed);
         NS_PHASE3_BUILD.store(0, Ordering::Relaxed);
         NS_PHASE3_SORT.store(0, Ordering::Relaxed);
     }
-    /// Returns (phase12_ns, phase3_build_ns, phase3_sort_ns).
+    /// Returns `(phase12_ns, phase3_build_ns, phase3_sort_ns)`.
     pub fn snapshot() -> (u64, u64, u64) {
         (
             NS_PHASE12.load(Ordering::Relaxed),
