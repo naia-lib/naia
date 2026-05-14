@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     hash::Hash,
     net::SocketAddr,
 };
@@ -19,8 +19,8 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
     },
     AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
-    EntityCommand, GlobalEntity, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick,
-    Timer, WorldRefType,
+    EntityCommand, GlobalEntity, GlobalEntityIndex, MessageKinds, PacketNotifiable, PacketType,
+    StandardHeader, Tick, Timer, WorldRefType,
 };
 
 /// Represents a connection to a remote host, and provides functionality to
@@ -222,7 +222,7 @@ impl BaseConnection {
         has_written: &mut bool,
         write_world_events: bool,
         host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         global_diff_handler: Option<&GlobalDiffHandler>,
         snapshot_map: Option<&mut SnapshotMap>,
     ) {

@@ -846,11 +846,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             #[cfg(feature = "bench_instrumentation")]
             let _iris_p3_build_t0 = std::time::Instant::now();
 
-            let update_events: HashMap<GlobalEntity, (GlobalEntityIndex, HashSet<ComponentKind>)> = {
+            let update_events: HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)> = {
                 let connection = self.user_connections.get(user_address).unwrap();
                 let handler = self.global_world_manager.diff_handler();
                 let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-                let mut events: HashMap<GlobalEntity, (GlobalEntityIndex, HashSet<ComponentKind>)> = HashMap::new();
+                let mut events: HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)> = HashMap::new();
 
                 for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
@@ -882,8 +882,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             }
 
                             events.entry(global_entity)
-                                .or_insert_with(|| (global_idx, HashSet::new()))
-                                .1.insert(component_kind);
+                                .or_insert_with(|| (global_idx, HashMap::new()))
+                                .1.insert(component_kind, kind_bit);
                         }
                     }
                 }
@@ -916,15 +916,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Build pre-sorted update_list: advance priority, sort descending, resolve world_entity.
             // O(1) idx_to_world array access replaces the GlobalEntityMap HashMap lookup.
             let initial_update_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
-            let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashSet<ComponentKind>)> = update_events
+            let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashMap<ComponentKind, u16>)> = update_events
                 .into_iter()
                 .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
                 .collect();
             scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-            let mut update_list: Vec<(GlobalEntity, E, HashSet<ComponentKind>)> = scored
+            let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> = scored
                 .into_iter()
                 .filter_map(|(ge, idx, _, kinds)| {
-                    self.idx_to_world[idx.as_usize()].map(|we| (ge, we, kinds))
+                    self.idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
                 })
                 .collect();
 
@@ -951,7 +951,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Priority reset for fully-sent entities.
             let current_tick = self.time_manager.current_tick();
             let remaining: std::collections::HashSet<GlobalEntity> =
-                update_list.iter().map(|(ge, _, _)| *ge).collect();
+                update_list.iter().map(|(ge, _, _, _)| *ge).collect();
             for ge in &initial_update_entities {
                 if !remaining.contains(ge) {
                     hook.reset_after_send(ge, current_tick as u32);

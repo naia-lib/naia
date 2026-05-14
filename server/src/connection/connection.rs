@@ -1,4 +1,4 @@
-use std::collections::{HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
@@ -294,7 +294,7 @@ impl Connection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
-        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &mut SnapshotMap,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
@@ -380,7 +380,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &mut SnapshotMap,
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
@@ -498,7 +498,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &mut SnapshotMap,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();

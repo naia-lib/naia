@@ -1,6 +1,6 @@
 use std::{
     clone::Clone,
-    collections::{HashMap, HashSet, VecDeque},
+    collections::{HashMap, VecDeque},
     hash::Hash,
 };
 
@@ -10,6 +10,7 @@ use crate::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
         local::local_world_manager::LocalWorldManager,
         update::global_diff_handler::GlobalDiffHandler,
+        update::global_entity_index::GlobalEntityIndex,
     },
     BitWrite, BitWriter, CachedComponentUpdate, ComponentKind, ComponentKinds,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
@@ -66,7 +67,7 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: Option<&mut SnapshotMap>,
     ) {
         // write entity updates
@@ -788,15 +789,15 @@ impl WorldWriter {
         global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
-        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         mut snapshot_map: Option<&mut SnapshotMap>,
     ) {
         let mut i = 0;
         while i < update_list.len() {
             // Copy the Copy fields before the mutable borrow of kinds
-            let (global_entity, world_entity) = {
-                let (ge, we, _) = &update_list[i];
-                (*ge, *we)
+            let (global_entity, entity_idx, world_entity) = {
+                let (ge, idx, we, _) = &update_list[i];
+                (*ge, *idx, *we)
             };
 
             let local_entity = world_manager
@@ -825,7 +826,7 @@ impl WorldWriter {
             local_entity.ser(writer);
 
             // write Components
-            let kinds = &mut update_list[i].2;
+            let kinds = &mut update_list[i].3;
             Self::write_update(
                 component_kinds,
                 now,
@@ -836,6 +837,7 @@ impl WorldWriter {
                 packet_index,
                 writer,
                 &global_entity,
+                entity_idx,
                 &world_entity,
                 has_written,
                 kinds,
@@ -850,7 +852,7 @@ impl WorldWriter {
         }
 
         // Remove fully-written entries (all component kinds serialized).
-        update_list.retain(|(_, _, kinds)| !kinds.is_empty());
+        update_list.retain(|(_, _, _, kinds)| !kinds.is_empty());
 
         // write EntityContinue finish bit, release
         writer.release_bits(1);
@@ -876,15 +878,17 @@ impl WorldWriter {
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
         global_entity: &GlobalEntity,
+        entity_idx: GlobalEntityIndex,
         world_entity: &E,
         has_written: &mut bool,
-        kinds: &mut HashSet<ComponentKind>,
+        kinds: &mut HashMap<ComponentKind, u16>,
         mut snapshot_map: Option<&mut SnapshotMap>,
     ) {
         let mut written_component_kinds = Vec::new();
-        let component_kind_set = kinds.clone();
+        let component_kind_set: Vec<ComponentKind> = kinds.keys().cloned().collect();
 
         for component_kind in &component_kind_set {
+            let kind_bit = *kinds.get(component_kind).expect("kind_bit in update kinds map");
             let diff_mask = world_manager.get_diff_mask(global_entity, component_kind);
 
             // When `global_diff_handler` is `Some` (server path), attempt PATH A or PATH B.
@@ -894,7 +898,10 @@ impl WorldWriter {
             let mut optimized_write = false;
 
             if let Some(gdh) = global_diff_handler {
-                if !component_kinds.is_user_dependent(component_kind) {
+                let is_user_dep = gdh
+                    .is_component_user_dependent(entity_idx, kind_bit)
+                    .unwrap_or_else(|| component_kinds.is_user_dependent(component_kind));
+                if !is_user_dep {
                     // ── PATH A: UserIndependent ─────────────────────────────────
                     // Bytes are identical for all users with the same DiffMask.
                     // Cache hit: replay stored bytes, zero ECS reads.
