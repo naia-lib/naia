@@ -1,4 +1,4 @@
-use std::{any::TypeId, collections::HashMap};
+use std::{any::TypeId, collections::{HashMap, HashSet}};
 
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
@@ -100,6 +100,9 @@ pub struct ComponentKinds {
     kind_bit_width: u8,
     kind_map: HashMap<ComponentKind, (NetId, Box<dyn ReplicateBuilder>, String)>,
     net_id_map: HashMap<NetId, ComponentKind>,
+    /// Components where `has_entity_properties() == true` — their serialized bytes
+    /// differ per connection and cannot use the shared CachedComponentUpdate cache.
+    user_dependent: HashSet<ComponentKind>,
 }
 
 impl Clone for ComponentKinds {
@@ -107,6 +110,7 @@ impl Clone for ComponentKinds {
         let current_net_id = self.current_net_id;
         let kind_bit_width = self.kind_bit_width;
         let net_id_map = self.net_id_map.clone();
+        let user_dependent = self.user_dependent.clone();
 
         let mut kind_map = HashMap::new();
         for (key, value) in self.kind_map.iter() {
@@ -118,6 +122,7 @@ impl Clone for ComponentKinds {
             kind_bit_width,
             kind_map,
             net_id_map,
+            user_dependent,
         }
     }
 }
@@ -136,6 +141,7 @@ impl ComponentKinds {
             kind_bit_width: 0,
             kind_map: HashMap::new(),
             net_id_map: HashMap::new(),
+            user_dependent: HashSet::new(),
         }
     }
 
@@ -151,6 +157,22 @@ impl ComponentKinds {
         // longer a 64-kind ceiling. The wire-format kind tag is a
         // `u16` NetId (cap 65,535) — that's the real ceiling and well
         // beyond any realistic protocol size.
+
+        // Enforce 512-bit CachedComponentUpdate ceiling. u32::MAX is the sentinel
+        // value returned by components that don't precisely compute their max bit length.
+        let max_bits = C::max_bit_length();
+        if max_bits != u32::MAX {
+            assert!(
+                max_bits <= 512,
+                "Component {} serializes to {} bits, exceeding the 512-bit \
+                 CachedComponentUpdate ceiling. Slim the component before registering.",
+                std::any::type_name::<C>(), max_bits
+            );
+        }
+        if C::has_entity_properties() {
+            self.user_dependent.insert(component_kind);
+        }
+
         self.kind_map.insert(
             component_kind,
             (net_id, C::create_builder(), C::protocol_name().to_string()),
@@ -158,6 +180,18 @@ impl ComponentKinds {
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
+    }
+
+    /// Returns `true` if this component kind has `EntityProperty` fields —
+    /// its serialized bytes differ per connection and cannot use the shared cache.
+    pub fn is_user_dependent(&self, kind: &ComponentKind) -> bool {
+        self.user_dependent.contains(kind)
+    }
+
+    /// Returns the `ComponentKind` for the given `net_id`, or `None` if not registered.
+    /// Provides O(1) inverse lookup from NetId to ComponentKind.
+    pub fn kind_for_net_id(&self, net_id: u16) -> Option<ComponentKind> {
+        self.net_id_map.get(&net_id).copied()
     }
 
     /// Number of component kinds currently registered. Used at

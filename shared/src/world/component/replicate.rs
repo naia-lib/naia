@@ -62,6 +62,15 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     fn is_immutable(&self) -> bool {
         false
     }
+    /// True if this component contains one or more `EntityProperty` fields,
+    /// meaning its serialized bytes differ per connection and cannot be cached
+    /// in a shared `CachedComponentUpdate`. Default: false.
+    /// The derive macro overrides to `true` for any component with ≥1 EntityProperty field.
+    fn has_entity_properties() -> bool where Self: Sized { false }
+    /// Upper bound on this component's serialized bit length (all fields dirty).
+    /// Returns `u32::MAX` if not precisely known (sentinel — skips the 512-bit assertion).
+    /// The derive macro may override with a precise sum via `ConstBitLength` impls.
+    fn max_bit_length() -> u32 where Self: Sized { u32::MAX }
     /// Gets the ComponentKind of this type
     fn kind(&self) -> ComponentKind;
     /// Returns a shared `Any` reference for downcasting.

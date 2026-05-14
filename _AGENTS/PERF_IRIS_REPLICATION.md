@@ -1017,7 +1017,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 - 512-bit capture succeeds; 513-bit returns `None`
 - `as_key` round-trips for 1, 4, 8 byte masks; returns `None` for 9-byte mask
 
-### Phase 3 — Derive Extension + ComponentKinds
+### Phase 3 — Derive Extension + ComponentKinds [X]
 
 1. `Replicate::has_entity_properties() -> bool` — default `false` (revive commented-out derive impl at line 1362 of `shared/derive/src/replicate.rs`)
 2. `Replicate::max_bit_length() -> u32` — new derive-generated compile-time constant summing field bit widths

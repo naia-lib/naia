@@ -277,3 +277,35 @@
 //     assert_eq!(*typed_out_1.string_1, "hello world".to_string());
 //     assert_eq!(*typed_out_1.string_2, "".to_string());
 // }
+
+// ─── has_entity_properties tests (Phase 3 gate) ───────────────────────────
+
+mod has_entity_props_tests {
+    use naia_shared::{EntityProperty, Property, Replicate};
+
+    #[derive(Replicate)]
+    pub struct PureDataComp {
+        pub value: Property<bool>,
+    }
+    impl PureDataComp {
+        pub fn new() -> Self { Self::new_complete(false) }
+    }
+
+    #[derive(Replicate)]
+    pub struct EntityRefComp {
+        pub entity: EntityProperty,
+    }
+    impl EntityRefComp {
+        pub fn new() -> Self { Self::new_complete() }
+    }
+
+    #[test]
+    fn pure_data_has_no_entity_properties() {
+        assert!(!PureDataComp::has_entity_properties());
+    }
+
+    #[test]
+    fn entity_ref_has_entity_properties() {
+        assert!(EntityRefComp::has_entity_properties());
+    }
+}

@@ -121,6 +121,19 @@ pub fn replicate_impl(
         quote! {}
     };
 
+    let has_entity_props: bool = properties.iter().any(|p| matches!(p, Property::Entity(_)));
+    let has_entity_properties_method: TokenStream = if has_entity_props {
+        quote! {
+            fn has_entity_properties() -> bool where Self: Sized { true }
+        }
+    } else {
+        quote! {}
+    };
+
+    let max_bit_length_method: TokenStream = quote! {
+        fn max_bit_length() -> u32 where Self: Sized { u32::MAX }
+    };
+
     // Methods
     let new_complete_method = get_new_complete_method(&enum_name, &properties, &struct_type);
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
@@ -224,6 +237,8 @@ pub fn replicate_impl(
             }
             impl #typed_generics Replicate for #replica_name #untyped_generics {
                 #is_immutable_method
+                #has_entity_properties_method
+                #max_bit_length_method
                 fn kind(&self) -> ComponentKind {
                     ComponentKind::of::<#replica_name #untyped_generics>()
                 }
