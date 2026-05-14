@@ -761,7 +761,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
                         if !world.has_component_of_kind(&world_entity, &component_kind) { continue; }
 
-                        if self.component_kinds.is_user_dependent(&component_kind) {
+                        // O(1) array access via per-entity ComponentFlags —
+                        // replaces the ComponentKinds HashSet lookup.
+                        if guard.is_component_user_dependent(global_idx, kind_bit).unwrap_or(false) {
                             let snap = world
                                 .component_of_kind(&world_entity, &component_kind)
                                 .expect("component verified above")

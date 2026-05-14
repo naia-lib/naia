@@ -5,6 +5,28 @@ use crate::{CachedComponentUpdate, ComponentKind, ComponentKinds, GlobalEntity, 
 use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
+/// Per-entity component metadata. One bool per registered kind_bit.
+/// `user_dependent[kind_bit] == true` iff the component at that bit position
+/// has `EntityProperty` fields and therefore produces per-user-distinct wire bytes.
+/// Indexed by `GlobalEntityIndex`; slot 0 unused (INVALID sentinel).
+pub struct ComponentFlags {
+    user_dependent: Vec<bool>,
+}
+
+impl ComponentFlags {
+    fn new(kind_count: usize) -> Self {
+        Self { user_dependent: vec![false; kind_count] }
+    }
+
+    fn set_user_dependent(&mut self, kind_bit: u16, value: bool) {
+        let idx = kind_bit as usize;
+        if idx >= self.user_dependent.len() {
+            self.user_dependent.resize(idx + 1, false);
+        }
+        self.user_dependent[idx] = value;
+    }
+}
+
 /// Global registry of mutation channels for every (entity, component) pair, used to fan out property changes to per-user dirty queues.
 pub struct GlobalDiffHandler {
     mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), MutReceiverBuilder>,
@@ -25,6 +47,9 @@ pub struct GlobalDiffHandler {
     global_to_idx: HashMap<GlobalEntity, GlobalEntityIndex>,
     /// Dense array: slot = GlobalEntityIndex.as_usize(). Slot 0 unused (INVALID sentinel).
     idx_to_global: Vec<Option<GlobalEntity>>,
+    /// Per-entity component metadata: idx_to_components[slot].user_dependent[kind_bit]
+    /// is true iff that component has EntityProperty fields. O(1) array access in Phase 2.
+    idx_to_components: Vec<ComponentFlags>,
     /// Free list for index recycling on entity despawn.
     free_list: Vec<GlobalEntityIndex>,
     /// Next fresh index to issue (starts at 1; 0 = INVALID).
@@ -66,6 +91,7 @@ impl GlobalDiffHandler {
             max_kind_count: 0,
             global_to_idx: HashMap::new(),
             idx_to_global: Vec::new(),
+            idx_to_components: Vec::new(),
             free_list: Vec::new(),
             next_idx: 1, // 0 is INVALID
             bit_to_kind: Vec::new(),
@@ -117,7 +143,7 @@ impl GlobalDiffHandler {
         self.mut_receiver_builders
             .insert((*global_entity, *component_kind), builder);
 
-        if let std::collections::hash_map::Entry::Vacant(entry) =
+        let kind_bit_opt = if let std::collections::hash_map::Entry::Vacant(entry) =
             self.kind_bits.entry(*component_kind)
         {
             if let Some(net_id) = component_kinds.net_id_of(component_kind) {
@@ -131,6 +157,22 @@ impl GlobalDiffHandler {
                     self.bit_to_kind.resize(bit_idx + 1, None);
                 }
                 self.bit_to_kind[bit_idx] = Some(*component_kind);
+                Some(net_id)
+            } else {
+                None
+            }
+        } else {
+            self.kind_bits.get(component_kind).copied()
+        };
+
+        // Record per-entity user_dependent flag for O(1) Phase-2 path selection.
+        if let Some(kind_bit) = kind_bit_opt {
+            if let Some(&entity_idx) = self.global_to_idx.get(global_entity) {
+                let slot = entity_idx.0 as usize;
+                let is_user_dep = component_kinds.is_user_dependent(component_kind);
+                if let Some(flags) = self.idx_to_components.get_mut(slot) {
+                    flags.set_user_dependent(kind_bit, is_user_dep);
+                }
             }
         }
 
@@ -195,8 +237,17 @@ impl GlobalDiffHandler {
             GlobalEntityIndex(i)
         };
         let slot = idx.0 as usize;
+        let kind_count = self.max_kind_count as usize;
         if slot >= self.idx_to_global.len() {
             self.idx_to_global.resize(slot + 1, None);
+        }
+        if slot >= self.idx_to_components.len() {
+            while self.idx_to_components.len() <= slot {
+                self.idx_to_components.push(ComponentFlags::new(kind_count));
+            }
+        } else {
+            // Reset stale component flags from a previously-freed slot.
+            self.idx_to_components[slot] = ComponentFlags::new(kind_count);
         }
         self.idx_to_global[slot] = Some(global);
         self.global_to_idx.insert(global, idx);
@@ -228,5 +279,16 @@ impl GlobalDiffHandler {
     /// O(1) array access — inverse of `kind_bits` map.
     pub fn kind_for_bit(&self, kind_bit: u16) -> Option<ComponentKind> {
         self.bit_to_kind.get(kind_bit as usize).and_then(|k| *k)
+    }
+
+    /// Returns `true` if the component at `(idx, kind_bit)` has EntityProperty fields,
+    /// `false` if not, or `None` if the entity or kind_bit is out of range.
+    /// O(1) array access — replaces `ComponentKinds::is_user_dependent()` HashSet lookup
+    /// in the Phase-2 dirty scan hot path.
+    pub fn is_component_user_dependent(&self, idx: GlobalEntityIndex, kind_bit: u16) -> Option<bool> {
+        self.idx_to_components
+            .get(idx.0 as usize)
+            .and_then(|flags| flags.user_dependent.get(kind_bit as usize))
+            .copied()
     }
 }
