@@ -40,12 +40,24 @@ pub mod bench_send_counters {
     #[doc(hidden)] pub static NS_COLLECT_MESSAGES: AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_TAKE_OUTGOING_EVENTS: AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_SEND_PACKET_LOOP: AtomicU64 = AtomicU64::new(0);
+    /// Time spent in `write_packet` (serialization) inside the send loop.
+    #[doc(hidden)] pub static NS_WRITE_PACKET: AtomicU64 = AtomicU64::new(0);
+    /// Time spent in `io.send_packet` (transport) inside the send loop.
+    #[doc(hidden)] pub static NS_IO_SEND: AtomicU64 = AtomicU64::new(0);
+    /// Total data packets written across all connections per tick.
+    #[doc(hidden)] pub static N_PACKETS_SENT: AtomicU64 = AtomicU64::new(0);
+    /// Time spent in `WorldWriter::write_into_packet` (entity/component serialization) per tick.
+    #[doc(hidden)] pub static NS_WRITE_UPDATES: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all counters to zero.
     pub fn reset() {
         NS_COLLECT_MESSAGES.store(0, Ordering::Relaxed);
         NS_TAKE_OUTGOING_EVENTS.store(0, Ordering::Relaxed);
         NS_SEND_PACKET_LOOP.store(0, Ordering::Relaxed);
+        NS_WRITE_PACKET.store(0, Ordering::Relaxed);
+        NS_IO_SEND.store(0, Ordering::Relaxed);
+        N_PACKETS_SENT.store(0, Ordering::Relaxed);
+        NS_WRITE_UPDATES.store(0, Ordering::Relaxed);
         // The take_outgoing_events breakdown lives in naia-shared
         // (bench_take_events_counters) because the interesting work is
         // inside LocalWorldManager.
@@ -61,6 +73,15 @@ pub mod bench_send_counters {
             NS_COLLECT_MESSAGES.load(Ordering::Relaxed),
             NS_TAKE_OUTGOING_EVENTS.load(Ordering::Relaxed),
             NS_SEND_PACKET_LOOP.load(Ordering::Relaxed),
+        )
+    }
+    /// Returns `(write_packet_ns, io_send_ns, n_packets_sent, write_updates_ns)` — send-loop sub-breakdown.
+    pub fn snapshot_send_breakdown() -> (u64, u64, u64, u64) {
+        (
+            NS_WRITE_PACKET.load(Ordering::Relaxed),
+            NS_IO_SEND.load(Ordering::Relaxed),
+            N_PACKETS_SENT.load(Ordering::Relaxed),
+            NS_WRITE_UPDATES.load(Ordering::Relaxed),
         )
     }
 }
@@ -416,6 +437,8 @@ impl Connection {
                 return false;
             }
 
+            #[cfg(feature = "bench_instrumentation")]
+            let t_write = std::time::Instant::now();
             let writer = self.write_packet(
                 channel_kinds,
                 message_kinds,
@@ -429,15 +452,23 @@ impl Connection {
                 update_list,
                 snapshot_map,
             );
+            #[cfg(feature = "bench_instrumentation")]
+            bench_send_counters::NS_WRITE_PACKET
+                .fetch_add(t_write.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
 
             // send packet, measuring actual size before the move so we can
             // spend exactly what went on the wire.
             let packet = writer.to_packet();
             let packet_bytes = packet.slice().len() as u32;
+            #[cfg(feature = "bench_instrumentation")]
+            let t_io = std::time::Instant::now();
             if io.send_packet(&self.address, packet).is_err() {
                 warn!("Server Error: Cannot send data packet to {}", &self.address);
             } else {
                 self.base.spend_bandwidth(packet_bytes);
+                #[cfg(feature = "bench_instrumentation")]
+                bench_send_counters::N_PACKETS_SENT
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 #[cfg(feature = "e2e_debug")]
                 {
                     SERVER_TX_FRAMES.fetch_add(1, Ordering::Relaxed);
@@ -445,6 +476,9 @@ impl Connection {
                     SERVER_WORLD_PKTS_SENT.fetch_add(1, Ordering::Relaxed);
                 }
             }
+            #[cfg(feature = "bench_instrumentation")]
+            bench_send_counters::NS_IO_SEND
+                .fetch_add(t_io.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
 
             return true;
         }
@@ -505,6 +539,8 @@ impl Connection {
 
         let diff_handler_arc = global_world_manager.diff_handler();
         let diff_handler_guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+        #[cfg(feature = "bench_instrumentation")]
+        let t_base_write = std::time::Instant::now();
         self.base.write_packet(
             channel_kinds,
             message_kinds,
@@ -522,6 +558,9 @@ impl Connection {
             Some(&*diff_handler_guard),
             Some(snapshot_map),
         );
+        #[cfg(feature = "bench_instrumentation")]
+        bench_send_counters::NS_WRITE_UPDATES
+            .fetch_add(t_base_write.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
 
         #[cfg(feature = "e2e_debug")]
         {
