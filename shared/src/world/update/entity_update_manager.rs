@@ -7,8 +7,8 @@ use std::{
 
 use crate::world::update::user_diff_handler::UserDiffHandler;
 use crate::{
-    ComponentKind, DiffMask, EntityAndGlobalEntityConverter, GlobalEntity, GlobalWorldManagerType,
-    Instant, PacketIndex, WorldRefType,
+    ComponentKind, DiffMask, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntityIndex,
+    GlobalWorldManagerType, Instant, PacketIndex, WorldRefType,
 };
 
 const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
@@ -124,6 +124,30 @@ impl EntityUpdateManager {
         component_kind: &ComponentKind,
     ) -> bool {
         self.diff_handler.is_receiver_dirty_and_delivered(entity, component_kind)
+    }
+
+    /// Hot-path version: no GlobalEntity→idx resolution, no RwLock.
+    /// Called from Phase 3 inner loop which already has entity_idx + kind_bit.
+    pub fn is_component_dirty_and_delivered_fast(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> bool {
+        self.diff_handler.is_receiver_dirty_and_delivered_fast(entity_idx, kind_bit)
+    }
+
+    /// Hot-path diff mask clear check: direct compact-key lookup.
+    pub fn diff_mask_is_clear_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
+        self.diff_handler.diff_mask_is_clear_fast(entity_idx, kind_bit)
+    }
+
+    /// Hot-path mask snapshot: direct compact-key lookup.
+    pub fn get_diff_mask_fast(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> Option<DiffMask> {
+        self.diff_handler.diff_mask_snapshot_fast(entity_idx, kind_bit)
     }
 
     #[cfg(feature = "test_utils")]

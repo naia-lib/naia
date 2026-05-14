@@ -120,7 +120,7 @@ use crate::{
     },
     ChannelSender, ComponentKind, ComponentKinds, PendingComponentUpdate, DiffMask,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut,
-    EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntitySpawner, HostEntity,
+    EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, HostEntity,
     InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex,
     OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager,
     Replicate, Tick, WorldMutType, WorldRefType,
@@ -1205,6 +1205,31 @@ impl LocalWorldManager {
         component_kind: &ComponentKind,
     ) -> bool {
         self.updater.is_component_dirty_and_delivered(global_entity, component_kind)
+    }
+
+    /// Hot-path: no GlobalEntity→idx resolution, no RwLock.
+    /// Phase 3 inner loop calls this with pre-resolved entity_idx + kind_bit.
+    pub fn is_component_dirty_and_delivered_dense(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> bool {
+        self.updater.is_component_dirty_and_delivered_fast(entity_idx, kind_bit)
+    }
+
+    /// Hot-path diff mask clear check with pre-resolved entity_idx + kind_bit.
+    pub fn diff_mask_is_clear_dense(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
+        self.updater.diff_mask_is_clear_fast(entity_idx, kind_bit)
+    }
+
+    /// Hot-path mask snapshot with pre-resolved entity_idx + kind_bit.
+    /// Returns `None` if no receiver found.
+    pub(crate) fn get_diff_mask_dense(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> Option<DiffMask> {
+        self.updater.get_diff_mask_fast(entity_idx, kind_bit)
     }
 
     /// Collects pending outbound commands and component-update events, returning them as a pair of command queue and dirty-component map.

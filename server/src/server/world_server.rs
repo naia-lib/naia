@@ -867,13 +867,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             #[cfg(feature = "bench_instrumentation")]
                             bench_iris_counters::N_PHASE3_COMPONENT_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-                            // Fast path (steady state): single HashMap lookup that checks
-                            // both dirty bits and delivery confirmation together. Falls
-                            // back to the slower two-call path for the pre-delivery window
-                            // and edge cases (delegated / remote-owned entities).
-                            if connection.base.world_manager.is_component_dirty_and_delivered_for_entity(&global_entity, &component_kind) {
+                            // Hot path (steady state): compact-key lookup with pre-resolved
+                            // entity_idx + kind_bit — no RwLock, no (GlobalEntity,ComponentKind)
+                            // hash. Falls back to the slower two-call path for the pre-delivery
+                            // window and edge cases (delegated / remote-owned entities).
+                            if connection.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
                                 // fast path: dirty + delivered — proceed to events.entry below
-                            } else if connection.base.world_manager.diff_mask_is_clear_for_entity(&global_entity, &component_kind) {
+                            } else if connection.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
                                 // slow-path (pre-delivery): diff mask clear — skip
                                 continue;
                             } else if !connection.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {

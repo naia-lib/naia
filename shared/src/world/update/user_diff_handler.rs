@@ -49,9 +49,18 @@ pub mod dirty_scan_counters {
 /// rebuild the legacy `HashMap<GlobalEntity, HashSet<ComponentKind>>`
 /// shape consumers expect, without needing access to `ComponentKinds` on
 /// the read path.
+///
+/// Hot-path methods take `(GlobalEntityIndex, u16)` directly to avoid the
+/// (GlobalEntity, ComponentKind) → compact key resolution cost. The HashMap key
+/// is `(GlobalEntityIndex, u16)` — 6 bytes vs the old ~17-byte tuple — for
+/// better cache behavior and faster hashing on the hot path.
 #[derive(Clone)]
 pub struct UserDiffHandler {
-    receivers: HashMap<(GlobalEntity, ComponentKind), MutReceiver>,
+    receivers: HashMap<(GlobalEntityIndex, u16), MutReceiver>,
+    /// Reverse lookup for deregistration: (GlobalEntity, ComponentKind) → compact key.
+    /// Populated at register_component; lets deregister_component find the key even after
+    /// the entity is removed from GlobalDiffHandler.
+    entity_kind_to_key: HashMap<(GlobalEntity, ComponentKind), (GlobalEntityIndex, u16)>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
     /// at snapshot time. Bit position == NetId per
@@ -104,6 +113,7 @@ impl UserDiffHandler {
         };
         Self {
             receivers: HashMap::new(),
+            entity_kind_to_key: HashMap::new(),
             global_diff_handler,
             kinds_by_bit: vec![None; kind_count as usize],
             dirty_set,
@@ -180,36 +190,49 @@ impl UserDiffHandler {
             dirty_set_weak,
             self.global_dirty.clone(),
         ));
-        self.receivers.insert((*entity, *component_kind), receiver);
+        self.entity_kind_to_key.insert((*entity, *component_kind), (entity_idx, kind_bit));
+        self.receivers.insert((entity_idx, kind_bit), receiver);
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        self.receivers.remove(&(*entity, *component_kind));
+        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.remove(&(*entity, *component_kind)) else {
+            // Never registered (or already deregistered) — nothing to clean up.
+            return;
+        };
+        self.receivers.remove(&(entity_idx, kind_bit));
 
         // Only the client path has a DirtySet to cancel from.
-        let Some(dirty_set) = &self.dirty_set else { return; };
-        let Ok(global_handler) = self.global_diff_handler.as_ref().read() else {
-            return;
-        };
-        let Some(entity_idx) = global_handler.entity_to_global_idx(entity) else {
-            return;
-        };
-        if let Some(kind_bit) = global_handler.kind_bit(component_kind) {
+        if let Some(dirty_set) = &self.dirty_set {
             dirty_set.cancel(entity_idx, kind_bit);
         }
     }
 
     pub fn has_component(&self, entity: &GlobalEntity, component: &ComponentKind) -> bool {
-        self.receivers.contains_key(&(*entity, *component))
+        self.entity_kind_to_key.contains_key(&(*entity, *component))
     }
 
-    // Diff masks
+    // Resolves (GlobalEntity, ComponentKind) → compact key (GlobalEntityIndex, u16).
+    // Used by cold-path methods. Returns None if either lookup fails.
+    fn compact_key(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> Option<(GlobalEntityIndex, u16)> {
+        let guard = self.global_diff_handler.read().ok()?;
+        let idx = guard.entity_to_global_idx(entity)?;
+        let bit = guard.kind_bit(component_kind)?;
+        Some((idx, bit))
+    }
+
+    // Diff masks — cold paths take (&GlobalEntity, &ComponentKind) and resolve internally.
     pub fn diff_mask_snapshot(
         &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> DiffMask {
-        let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
+        let key = self.compact_key(entity, component_kind)
+            .expect("Should not call this unless we're sure there's a receiver");
+        let Some(receiver) = self.receivers.get(&key) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.mask_snapshot()
@@ -220,10 +243,12 @@ impl UserDiffHandler {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) else {
-            warn!(
-                "diff_mask_is_clear(): Should not call this unless we're sure there's a receiver"
-            );
+        let Some(key) = self.compact_key(entity, component_kind) else {
+            warn!("diff_mask_is_clear(): Could not resolve compact key");
+            return true;
+        };
+        let Some(receiver) = self.receivers.get(&key) else {
+            warn!("diff_mask_is_clear(): Should not call this unless we're sure there's a receiver");
             return true;
         };
         receiver.diff_mask_is_clear()
@@ -232,24 +257,55 @@ impl UserDiffHandler {
     /// Marks the receiver for `(entity, component_kind)` as delivered.
     /// Called by the delivery-confirmation path when a spawn/insert ACK arrives.
     pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        if let Some(receiver) = self.receivers.get(&(*entity, *component_kind)) {
-            receiver.mark_delivered();
+        if let Some(key) = self.compact_key(entity, component_kind) {
+            if let Some(receiver) = self.receivers.get(&key) {
+                receiver.mark_delivered();
+            }
         }
     }
 
-    /// Fast-path combined check for Phase 3: single HashMap lookup that returns
-    /// `true` iff the component has pending dirty bits AND its spawn was delivered.
-    /// Returns `false` if the receiver is not found (not yet registered) or
-    /// `delivered` is not yet set (pre-ACK window).
+    /// Cold-path combined check for `(GlobalEntity, ComponentKind)` — resolves compact key via RwLock.
     pub fn is_receiver_dirty_and_delivered(
         &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
+        let Some(key) = self.compact_key(entity, component_kind) else { return false; };
         self.receivers
-            .get(&(*entity, *component_kind))
+            .get(&key)
             .map(|r| r.is_dirty_and_delivered())
             .unwrap_or(false)
+    }
+
+    /// Hot-path combined check for Phase 3: direct compact-key lookup, no RwLock.
+    /// `entity_idx` and `kind_bit` are pre-resolved by the Phase 3 bitset scan.
+    pub fn is_receiver_dirty_and_delivered_fast(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> bool {
+        self.receivers
+            .get(&(entity_idx, kind_bit))
+            .map(|r| r.is_dirty_and_delivered())
+            .unwrap_or(false)
+    }
+
+    /// Hot-path diff mask check for Phase 3: direct compact-key lookup, no RwLock.
+    pub fn diff_mask_is_clear_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
+        self.receivers
+            .get(&(entity_idx, kind_bit))
+            .map(|r| r.diff_mask_is_clear())
+            .unwrap_or(true)
+    }
+
+    /// Hot-path mask snapshot for write_update: direct compact-key lookup, no RwLock.
+    /// Returns `None` if no receiver is registered for this (entity_idx, kind_bit).
+    pub fn diff_mask_snapshot_fast(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> Option<DiffMask> {
+        self.receivers.get(&(entity_idx, kind_bit)).map(|r| r.mask_snapshot())
     }
 
     pub fn or_diff_mask(
@@ -258,14 +314,18 @@ impl UserDiffHandler {
         component_kind: &ComponentKind,
         other_mask: &DiffMask,
     ) {
-        let Some(receiver) = self.receivers.get_mut(&(*entity, *component_kind)) else {
+        let key = self.compact_key(entity, component_kind)
+            .expect("Should not call this unless we're sure there's a receiver");
+        let Some(receiver) = self.receivers.get_mut(&key) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.or_mask(other_mask);
     }
 
     pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        let Some(receiver) = self.receivers.get_mut(&(*entity, *component_kind)) else {
+        let key = self.compact_key(entity, component_kind)
+            .expect("Should not call this unless we're sure there's a receiver");
+        let Some(receiver) = self.receivers.get_mut(&key) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.clear_mask();

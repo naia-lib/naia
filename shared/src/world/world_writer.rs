@@ -889,7 +889,14 @@ impl WorldWriter {
 
         for component_kind in &component_kind_set {
             let kind_bit = *kinds.get(component_kind).expect("kind_bit in update kinds map");
-            let diff_mask = world_manager.get_diff_mask(global_entity, component_kind);
+            // Hot path: use compact-key lookup when entity_idx is valid (server).
+            // Falls back to the old GlobalEntity-keyed path on the client (entity_idx = INVALID).
+            let diff_mask = if entity_idx.is_valid() {
+                world_manager.get_diff_mask_dense(entity_idx, kind_bit)
+                    .unwrap_or_else(|| world_manager.get_diff_mask(global_entity, component_kind))
+            } else {
+                world_manager.get_diff_mask(global_entity, component_kind)
+            };
 
             // When `global_diff_handler` is `Some` (server path), attempt PATH A or PATH B.
             // When `None` (client path or fallback), `optimized_write` stays `false` and
