@@ -5,9 +5,10 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook,
-    PacketType, Serde, SerdeErr, SnapshotMap, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    ConnectionConfig, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
+    EntityEvent, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType,
+    HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook, PacketType, Serde,
+    SerdeErr, SnapshotMap, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -68,6 +69,9 @@ pub struct Connection {
     tick_buffer: TickBufferReceiver,
     pub manual_disconnect: bool,
     timeout_timer: Timer,
+    /// Per-connection entity visibility bitset. One bit per `GlobalEntityIndex`.
+    /// Set when an entity enters scope; cleared on despawn or pause.
+    pub visibility: ConnectionVisibilityBitset,
 }
 
 impl Connection {
@@ -78,6 +82,7 @@ impl Connection {
         user_key: &UserKey,
         channel_kinds: &ChannelKinds,
         global_world_manager: &GlobalWorldManager,
+        max_replicated_entities: usize,
     ) -> Self {
         Self {
             address: *user_address,
@@ -94,7 +99,19 @@ impl Connection {
             tick_buffer: TickBufferReceiver::new(channel_kinds),
             manual_disconnect: false,
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
+            // capacity = max_replicated_entities + 1 (slot 0 = INVALID sentinel)
+            visibility: ConnectionVisibilityBitset::new(max_replicated_entities + 1),
         }
+    }
+
+    /// Set entity `idx` as visible for this connection (scope entry or resume).
+    pub fn set_entity_visible(&mut self, idx: GlobalEntityIndex) {
+        self.visibility.set(idx);
+    }
+
+    /// Clear entity `idx` as not visible for this connection (scope exit or pause).
+    pub fn clear_entity_visible(&mut self, idx: GlobalEntityIndex) {
+        self.visibility.clear(idx);
     }
 
     /// Returns true when no packet has been received for longer than the

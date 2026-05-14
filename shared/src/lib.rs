@@ -212,6 +212,7 @@ pub use world::update::component_update::{ComponentFieldUpdate, PendingComponent
 pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;
 pub use world::update::global_dirty_bitset::GlobalDirtyBitset;
+pub use world::update::connection_visibility_bitset::ConnectionVisibilityBitset;
 pub use world::update::global_entity_index::GlobalEntityIndex;
 pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]

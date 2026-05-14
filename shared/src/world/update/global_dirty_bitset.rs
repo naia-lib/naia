@@ -137,6 +137,13 @@ impl GlobalDirtyBitset {
         let start = entity_idx.as_usize() * self.component_stride;
         &self.dirty_components[start..start + self.component_stride]
     }
+
+    /// Returns the entity-summary dirty word slice (one bit per entity index).
+    /// Word `i` covers entities `i*64 .. i*64+63`.
+    /// Used by `ConnectionVisibilityBitset::intersect_dirty` for word-by-word AND.
+    pub fn dirty_entity_words(&self) -> &[AtomicU64] {
+        &self.dirty_entities
+    }
 }
 
 struct DirtyBitIter {

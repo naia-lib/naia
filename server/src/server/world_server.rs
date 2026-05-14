@@ -15,8 +15,8 @@ use naia_shared::{
     ConnectionStats, DisconnectReason,
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
-    GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
-    GlobalResponseId, OutgoingPriorityHook, SnapshotMap, UserPriorityState,
+    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
+    GlobalRequestId, GlobalResponseId, OutgoingPriorityHook, SnapshotMap, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
     Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
     Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
@@ -308,6 +308,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             user_key,
             &self.channel_kinds,
             &self.global_world_manager,
+            self.server_config.max_replicated_entities as usize,
         );
 
         match self.user_connections.entry(*user_address) {
@@ -1990,6 +1991,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn despawn_entity_from_all_connections(&mut self, global_entity: &GlobalEntity) {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
+        let entity_idx = self.entity_global_idx(global_entity);
         for (_, connection) in self.user_connections.iter_mut() {
             if !connection
                 .base
@@ -2000,6 +2002,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
             // remove entity from user connection
             connection.base.world_manager.despawn_entity(global_entity);
+            connection.clear_entity_visible(entity_idx);
         }
     }
 
@@ -2409,12 +2412,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Despawn from non-owner connections only.  Scope map entries and room
         // membership are preserved so a subsequent publish_entity call restores
         // non-owner visibility via room-based scope (entity-publication-11).
+        let entity_idx = self.entity_global_idx(global_entity);
         for (addr, connection) in self.user_connections.iter_mut() {
             if owner_addr == Some(*addr) {
                 continue;
             }
             if connection.base.world_manager.has_global_entity(global_entity) {
                 connection.base.world_manager.despawn_entity(global_entity);
+                connection.clear_entity_visible(entity_idx);
             }
         }
     }
@@ -3417,6 +3422,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn update_entity_scopes<W: WorldRefType<E>>(&mut self, world: &W) {
         // Loop 1 (both paths): drain per-room entity-removal queues.
         // This handles entities removed from a room via room_remove_entity.
+        // Clone the diff_handler Arc once for the entire loop.
+        let diff_handler_arc = self.global_world_manager.diff_handler();
         for (_, room) in self.room_store.iter_mut() {
             while let Some((removed_user, removed_global_entity)) = room.pop_entity_removal_queue()
             {
@@ -3450,11 +3457,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     continue;
                 }
 
+                let entity_idx = {
+                    let guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+                    guard.entity_to_global_idx(&removed_global_entity).unwrap_or(GlobalEntityIndex::INVALID)
+                };
+
                 // remove entity from user connection
                 connection
                     .base
                     .world_manager
                     .despawn_entity(&removed_global_entity);
+                connection.clear_entity_visible(entity_idx);
                 #[cfg(feature = "e2e_debug")]
                 {
                     SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -3491,6 +3504,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         continue;
                     };
                     let user_rooms = user.room_keys().clone();
+                    // Clone the diff_handler Arc so we can read it inside the entity loop
+                    // without conflicting with the mutable connection borrow below.
+                    let diff_handler_arc = self.global_world_manager.diff_handler();
                     let Some(connection) =
                         self.user_connections.get_mut(&user.address().clone())
                     else {
@@ -3508,6 +3524,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         if !connection.base.world_manager.has_global_entity(global_entity) {
                             continue;
                         }
+                        let entity_idx = {
+                            let guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+                            guard.entity_to_global_idx(global_entity).unwrap_or(GlobalEntityIndex::INVALID)
+                        };
                         let scope_exit = self
                             .global_world_manager
                             .entity_replication_config(global_entity)
@@ -3516,9 +3536,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         match scope_exit {
                             ScopeExit::Persist => {
                                 connection.base.world_manager.pause_entity(global_entity);
+                                connection.clear_entity_visible(entity_idx);
                             }
                             ScopeExit::Despawn => {
                                 connection.base.world_manager.despawn_entity(global_entity);
+                                connection.clear_entity_visible(entity_idx);
                             }
                         }
                         #[cfg(feature = "e2e_debug")]
@@ -3551,6 +3573,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         user_key: &UserKey,
         global_entity: &GlobalEntity,
     ) {
+        // Resolve GlobalEntityIndex before any mutable borrows on self.
+        let entity_idx = self.entity_global_idx(global_entity);
+
         let Some(user) = self.user_store.get(user_key) else {
             return;
         };
@@ -3587,10 +3612,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return;
         }
 
-        let currently_in_scope = connection
-            .base
-            .world_manager
-            .has_global_entity(global_entity);
+        // Visibility-based scope state:
+        //   currently_visible = entity is actively in scope (tracked AND not paused)
+        //   is_tracked         = entity is in entity_map (active OR paused)
+        //   currently_paused   = tracked but not active
+        let currently_visible = connection.visibility.is_set(entity_idx);
+        let is_tracked = connection.base.world_manager.has_global_entity(global_entity);
+        let currently_paused = is_tracked && !currently_visible;
 
         // Decide scope membership. Per contract [entity-scopes-06] /
         // [entity-scopes-12]: an explicit user-scope override wins
@@ -3638,13 +3666,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             None => is_resource || in_common_room,
         };
         if should_be_in_scope {
-            if currently_in_scope {
-                // Entity already present — resume if paused (ScopeExit::Persist re-entry)
-                if connection.base.world_manager.is_entity_paused(global_entity) {
-                    connection.base.world_manager.resume_entity(global_entity);
-                }
+            if currently_visible {
+                // Entity already active — no change needed.
                 return;
             }
+            if currently_paused {
+                // Re-entering scope on a paused (ScopeExit::Persist) entity.
+                connection.base.world_manager.resume_entity(global_entity);
+                connection.set_entity_visible(entity_idx);
+                return;
+            }
+            // Entity not yet tracked for this connection — enter scope.
             let component_kinds = self
                 .global_world_manager
                 .component_kinds(global_entity)
@@ -3653,6 +3685,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .base
                 .world_manager
                 .host_init_entity(global_entity, component_kinds, &self.component_kinds, self.global_world_manager.entity_is_static(global_entity));
+            connection.set_entity_visible(entity_idx);
             #[cfg(feature = "e2e_debug")]
             {
                 SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);
@@ -3686,8 +3719,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     .world_manager
                     .host_send_set_auth(global_entity, new_status);
             }
-        } else if currently_in_scope {
-            // Entity leaving scope — check ScopeExit policy
+        } else if currently_visible {
+            // Entity leaving active scope — check ScopeExit policy.
             let scope_exit = self
                 .global_world_manager
                 .entity_replication_config(global_entity)
@@ -3696,9 +3729,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             match scope_exit {
                 ScopeExit::Persist => {
                     connection.base.world_manager.pause_entity(global_entity);
+                    connection.clear_entity_visible(entity_idx);
                 }
                 ScopeExit::Despawn => {
                     connection.base.world_manager.despawn_entity(global_entity);
+                    connection.clear_entity_visible(entity_idx);
                 }
             }
             #[cfg(feature = "e2e_debug")]
@@ -3713,6 +3748,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 layer.on_scope_exit(&world_entity);
             }
         }
+    }
+
+    /// Look up the dense `GlobalEntityIndex` for `global_entity` from the diff handler.
+    /// Returns `GlobalEntityIndex::INVALID` if the entity is not yet registered.
+    fn entity_global_idx(&self, global_entity: &GlobalEntity) -> GlobalEntityIndex {
+        let handler = self.global_world_manager.diff_handler();
+        let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+        guard.entity_to_global_idx(global_entity).unwrap_or(GlobalEntityIndex::INVALID)
     }
 
     fn handle_disconnects(&mut self) {

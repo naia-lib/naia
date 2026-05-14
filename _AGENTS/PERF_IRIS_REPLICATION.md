@@ -1089,7 +1089,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 - Disconnect test — mutate an entity for 2 users; disconnect one user (drop all their `MutReceiver`s); confirm `dirty_entity_iter` still yields the entity (remaining user's ref-count non-zero); disconnect the second user; confirm the entity is no longer in `dirty_entity_iter` (ref-counts have reached zero, verifying §14's "User disconnect cleanup" invariant).
 - E2E 93/93.
 
-### Phase 8 — ConnectionVisibilityBitset
+### Phase 8 — ConnectionVisibilityBitset [X]
 
 **Depends on Phase 6 (`GlobalEntityIndex`).**
 
