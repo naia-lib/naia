@@ -5,6 +5,61 @@
 **Supersedes:** `PERF_SHARED_UPDATE_BLOB.md`
 **Context:** Sub-phase profiling in cyberlith benchmark — `cyberlith/_AGENTS/CAPACITY_RESULTS.md`
 **Scope:** `naia-shared` (serde, world, update, local), `naia-server` (connection, world_server)
+**Branch:** `dev` (dev-trunk model — NEVER commit to `main`)
+
+---
+
+## 0. Key Files and Gate Commands
+
+### Files Modified by Phase
+
+| Phase | Files modified / created |
+|---|---|
+| 1 (renames) | `shared/src/world/update/component_update.rs`, `shared/src/world/world_writer.rs`, `shared/src/world/local/local_world_manager.rs`, `shared/src/world/update/user_diff_handler.rs` |
+| 2 (serde) | `shared/serde/src/bit_writer.rs`, `shared/serde/src/lib.rs` (new `CachedComponentUpdate`), `shared/src/world/update/diff_mask.rs` |
+| 3 (derive) | `shared/derive/src/replicate.rs` (line 1362 — revive commented impl), `shared/src/world/component/component_kinds.rs` |
+| 4 (cache store) | `shared/src/world/update/mut_channel.rs` (trait + `DirtyNotifier`), `server/src/world/mut_channel.rs` (`MutChannelData`) |
+| 5 (two-path write) | `shared/src/world/world_writer.rs` (major rewrite of `write_update`) |
+| 6 (GlobalEntityIndex) | NEW: `shared/src/world/update/global_entity_index.rs`; `shared/src/world/update/global_diff_handler.rs`; `shared/src/world/update/user_diff_handler.rs`; `shared/src/world/update/mut_channel.rs` |
+| 7 (GlobalDirtyBitset) | NEW: `shared/src/world/update/global_dirty_bitset.rs`; `shared/src/world/update/mut_channel.rs`; `server/src/server/server_config.rs`; `server/src/server/world_server.rs` |
+| 8 (VisibilityBitset) | NEW: `shared/src/world/update/connection_visibility_bitset.rs`; server connection struct; `server/src/server/world_server.rs` |
+| 9 (send loop) | `server/src/server/world_server.rs` (replace `send_all_packets`); `shared/src/world/local/local_world_manager.rs` (remove `take_update_events`); `shared/src/world/update/user_diff_handler.rs` (remove `DirtyQueue`/`DirtySet`); `shared/src/world/update/mut_channel.rs` (remove `DirtySet` from `DirtyNotifier`) |
+
+### Other Key Files (Read Before Editing)
+
+- `shared/src/world/update/global_diff_handler.rs` — `GlobalDiffHandler<E>` (fields to extend in Phases 4, 6, 7)
+- `shared/src/world/update/user_diff_handler.rs` — `UserDiffHandler`, `DirtyQueue`, `DirtySet` (removed in Phase 9)
+- `server/src/server/world_server.rs` — `WorldServer`, `send_all_packets` (primary orchestration site)
+- `shared/src/world/component/replica_ref.rs` — `ReplicaDynRefWrapper` (Deref → `&dyn Replicate`; `copy_to_box()` is accessible via this Deref)
+- `shared/src/world/component/replicate.rs` — `Replicate` trait (has `copy_to_box(&self) -> Box<dyn Replicate>` at line 74 — **no new method needed for snapshotting**)
+
+### Gate Commands
+
+Run these from the naia repo root unless noted:
+
+```bash
+# After every phase — must be warning-clean:
+RUSTFLAGS="-D warnings" cargo check --workspace --all-targets --quiet
+
+# After phases touching shared/serde or shared/derive (Phases 2, 3):
+RUSTFLAGS="-D warnings" cargo check -p naia-shared --target wasm32-unknown-unknown --features wbindgen --quiet
+RUSTFLAGS="-D warnings" cargo check -p naia-client --target wasm32-unknown-unknown --features wbindgen --quiet
+RUSTFLAGS="-D warnings" cargo check -p naia-bevy-client --target wasm32-unknown-unknown --quiet
+
+# Unit + integration tests:
+cargo test --workspace
+
+# Namako BDD gate (332 scenarios as of 2026-05-10; count may grow):
+cargo run --manifest-path /home/connor/Work/specops/namako/Cargo.toml -p namako-cli -- \
+    gate --specs-dir test/specs \
+    --adapter-cmd "cargo run --manifest-path test/npa/Cargo.toml --"
+
+# Cyberlith full-stack bench (Phase 10 only — run in cyberlith repo after updating naia dep):
+cargo run --features bench_profile -p cyberlith_bench --release -- \
+    --scenario game_server_tick --warmup 100 --ticks 500
+```
+
+**What "gate green" means in each phase:** `cargo check` warning-clean + `cargo test --workspace` all pass + namako gate passes. The cyberlith bench is only required at Phase 10.
 
 ---
 
@@ -224,7 +279,16 @@ impl GlobalDirtyBitset {
 
 **Wire-up to `DirtyNotifier`:**
 
-`DirtyNotifier` currently holds `entity_idx: EntityIndex` (per-user) and `set: Weak<DirtySet>` (per-user queue). Phase 6 changes `entity_idx` to `GlobalEntityIndex`. Phase 7 adds `global: Weak<GlobalDirtyBitset>` and Phase 9 removes `set` entirely (the per-user `DirtyQueue` is eliminated — see Section 11 and Phase 9 note):
+**Current form** (in `shared/src/world/update/mut_channel.rs:305`):
+```rust
+pub struct DirtyNotifier {
+    entity_idx: EntityIndex,   // per-user LocalEntityIndex (Phase 6 changes to GlobalEntityIndex)
+    kind_bit:   u16,
+    set:        Weak<DirtySet>, // Phase 9 removes this field entirely
+}
+```
+
+Phase 6 changes `entity_idx` to `GlobalEntityIndex`. Phase 7 adds `global: Weak<GlobalDirtyBitset>` and Phase 9 removes `set` entirely (the per-user `DirtyQueue` is eliminated — see Section 11 and Phase 9 note):
 
 ```rust
 // Final form after Phase 9:
@@ -932,7 +996,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 2. Update all usages: `WorldMutType::component_apply_update`, `component_apply_field_update`, `world_writer.rs`, `local_world_manager.rs`, and all other callers
 3. Rename type alias `EntityIndex` → `LocalEntityIndex` throughout `UserDiffHandler` and any other per-user use sites
 
-**Gate:** `cargo check --workspace`; wasm32 check (`cargo run -p automation_cli -- check-wasm`); E2E 93/93 green. No behavioral change.
+**Gate:** `cargo check` warning-clean; wasm32 checks (see §0 gate commands); `cargo test --workspace` green; namako gate green. No behavioral change.
 
 ### Phase 2 — Serde Layer Extensions
 
@@ -964,7 +1028,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 7. `ComponentKinds::is_user_dependent(kind: &ComponentKind) -> bool`
 8. Expose `pub fn kind_for_net_id(&self, net_id: u16) -> Option<ComponentKind>` on `ComponentKinds` — a direct lookup into the existing private `net_id_map: HashMap<NetId, ComponentKind>`; currently accessed only through the private `net_id_to_kind`
 
-**Gate:** `NetworkedPosition::has_entity_properties() == false`; any component with `EntityProperty` field `== true`. All existing cyberlith-registered components pass the 512-bit assertion. `cargo check --workspace` clean.
+**Gate:** `cargo check` warning-clean; `cargo test --workspace` green. Unit assertions: `NetworkedPosition::has_entity_properties() == false`; any component with an `EntityProperty` field returns `true`. All existing cyberlith-registered components pass the 512-bit assertion (verified via E2E in Phase 10). Wasm32 checks green (this phase touches `shared/derive`).
 
 ### Phase 4 — MutChannelType Cached Update Store
 
@@ -1005,7 +1069,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Note:** `DirtyQueue::push(entity_idx: LocalEntityIndex, kind_bit: u16)` becomes `push(entity_idx: GlobalEntityIndex, kind_bit: u16)`. Verify `DirtyQueue::stride` (based on component kind count — unchanged).
 
-**Gate:** E2E harness 93/93; integration tests 39/39; naia harness 127/127.
+**Gate:** `cargo check` warning-clean; `cargo test --workspace` green; namako gate green.
 
 ### Phase 7 — GlobalDirtyBitset
 
@@ -1051,7 +1115,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 5. **Remove `set: Weak<DirtySet>` from `DirtyNotifier`:** `notify_dirty` and `notify_clean` now only call `global.increment` / `global.decrement`
 6. Remove `build_dirty_candidates_from_receivers` and `take_update_events` from `LocalWorldManager`
 
-**Gate:** E2E 93/93; integration 39/39; naia harness 127/127. Run the sub-phase bench (command in Phase 10 step 1) and record results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. Targets: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%. Compare against the Phase 5 partial-optimization baseline to isolate the GlobalDirtyBitset + bitset-intersection contribution.
+**Gate:** `cargo check` warning-clean; `cargo test --workspace` green; namako gate green. Run the sub-phase bench (command in Phase 10 step 1) and record results in `cyberlith/_AGENTS/CAPACITY_RESULTS.md`. Targets: `take_update_events` from 25.8% → <5%; `send_packet_loop` from 39.1% → <10%. Compare against the Phase 5 partial-optimization baseline to isolate the GlobalDirtyBitset + bitset-intersection contribution.
 
 ### Phase 10 — Benchmark + Documentation
 
@@ -1103,7 +1167,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **`wasm32-unknown-unknown`:** Phase 2 (`naia-serde`) and Phase 3 (`naia-shared/derive`) affect crates used by wasm client builds. Run `cargo run -p automation_cli -- check-wasm` after each of these phases.
 
-**Test suite:** E2E harness (93 tests), integration harness (39 tests), naia harness (127 tests) must stay green throughout. Each phase gate specifies which suites to run.
+**Test suite:** `cargo test --workspace` + namako gate (332 scenarios as of 2026-05-10) must stay green throughout. See §0 for exact gate commands. Cyberlith E2E verification runs only at Phase 10 after updating cyberlith's naia dependency.
 
 ---
 
