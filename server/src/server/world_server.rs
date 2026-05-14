@@ -829,6 +829,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 user: user_layer,
                 converter: &self.global_entity_map,
             };
+
+            // Build pre-sorted update_list: advance priority, sort descending, resolve world_entity.
+            let initial_update_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
+            let mut scored: Vec<(GlobalEntity, f32, HashSet<ComponentKind>)> = update_events
+                .into_iter()
+                .map(|(ge, kinds)| (ge, hook.advance(&ge), kinds))
+                .collect();
+            scored.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
+            let mut update_list: Vec<(GlobalEntity, E, HashSet<ComponentKind>)> = scored
+                .into_iter()
+                .filter_map(|(ge, _, kinds)| {
+                    self.global_entity_map
+                        .global_entity_to_entity(&ge)
+                        .ok()
+                        .map(|we| (ge, we, kinds))
+                })
+                .collect();
+
             connection.send_packets(
                 &self.channel_kinds,
                 &self.message_kinds,
@@ -839,10 +857,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_entity_map,
                 &self.global_world_manager,
                 &self.time_manager,
-                &mut hook,
-                update_events,
+                &mut update_list,
                 &mut snapshot_map,
             );
+
+            // Priority reset for fully-sent entities.
+            let current_tick = self.time_manager.current_tick();
+            let remaining: std::collections::HashSet<GlobalEntity> =
+                update_list.iter().map(|(ge, _, _)| *ge).collect();
+            for ge in &initial_update_entities {
+                if !remaining.contains(ge) {
+                    hook.reset_after_send(ge, current_tick as u32);
+                }
+            }
         }
 
         // Flush deferred auth grants (one-tick delay ensures entity registration on client)

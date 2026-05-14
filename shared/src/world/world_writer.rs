@@ -47,8 +47,7 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
-        entity_priority_order: Option<&[GlobalEntity]>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
         snapshot_map: Option<&mut SnapshotMap>,
     ) {
         // write entity updates
@@ -58,13 +57,11 @@ impl WorldWriter {
             writer,
             packet_index,
             world,
-            entity_converter,
             global_world_manager,
             global_diff_handler,
             world_manager,
             has_written,
-            update_events,
-            entity_priority_order,
+            update_list,
             snapshot_map,
         );
 
@@ -766,37 +763,25 @@ impl WorldWriter {
         writer: &mut BitWriter,
         packet_index: &PacketIndex,
         world: &W,
-        converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
         global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
-        next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
-        entity_priority_order: Option<&[GlobalEntity]>,
+        update_list: &mut Vec<(GlobalEntity, E, HashSet<ComponentKind>)>,
         mut snapshot_map: Option<&mut SnapshotMap>,
     ) {
-        // When a priority order is supplied, iterate entities in that order
-        // (filtered to those with pending updates this cycle). This is the
-        // intra-section k-way merge ordering for priority-sorted entity bundles.
-        // Without priority guidance we fall back to HashMap iteration order.
-        let all_update_entities: Vec<GlobalEntity> = match entity_priority_order {
-            Some(order) => order
-                .iter()
-                .copied()
-                .filter(|e| next_send_updates.contains_key(e))
-                .collect(),
-            None => next_send_updates.keys().copied().collect(),
-        };
+        let mut i = 0;
+        while i < update_list.len() {
+            // Copy the Copy fields before the mutable borrow of kinds
+            let (global_entity, world_entity) = {
+                let (ge, we, _) = &update_list[i];
+                (*ge, *we)
+            };
 
-        for global_entity in all_update_entities {
-            // get LocalEntity
             let local_entity = world_manager
                 .entity_converter()
                 .global_entity_to_owned_entity(&global_entity)
                 .unwrap();
-
-            // get World Entity
-            let world_entity = converter.global_entity_to_entity(&global_entity).unwrap();
 
             // check that we can at least write a LocalEntity and a ComponentContinue bit
             let mut counter = writer.counter();
@@ -818,11 +803,8 @@ impl WorldWriter {
             // write LocalEntity
             local_entity.ser(writer);
 
-            // for component_kind in next_send_updates.get(&global_entity).unwrap() {
-            //     info!("Writing update for global_entity: {:?}, local_entity {:?}, component kind {:?}", global_entity, local_entity, component_kinds.kind_to_name(component_kind));
-            // }
-
             // write Components
+            let kinds = &mut update_list[i].2;
             Self::write_update(
                 component_kinds,
                 now,
@@ -835,14 +817,19 @@ impl WorldWriter {
                 &global_entity,
                 &world_entity,
                 has_written,
-                next_send_updates,
+                kinds,
                 snapshot_map.as_mut().map(|m| &mut **m),
             );
 
             // write ComponentContinue finish bit, release
             writer.release_bits(1);
             false.ser(writer);
+
+            i += 1;
         }
+
+        // Remove fully-written entries (all component kinds serialized).
+        update_list.retain(|(_, _, kinds)| !kinds.is_empty());
 
         // write EntityContinue finish bit, release
         writer.release_bits(1);
@@ -870,11 +857,11 @@ impl WorldWriter {
         global_entity: &GlobalEntity,
         world_entity: &E,
         has_written: &mut bool,
-        next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        kinds: &mut HashSet<ComponentKind>,
         mut snapshot_map: Option<&mut SnapshotMap>,
     ) {
         let mut written_component_kinds = Vec::new();
-        let component_kind_set = next_send_updates.get(global_entity).unwrap().clone();
+        let component_kind_set = kinds.clone();
 
         for component_kind in &component_kind_set {
             let diff_mask = world_manager.get_diff_mask(global_entity, component_kind);
@@ -992,12 +979,8 @@ impl WorldWriter {
             world_manager.record_update(now, packet_index, global_entity, component_kind, diff_mask);
         }
 
-        let update_kinds = next_send_updates.get_mut(global_entity).unwrap();
         for component_kind in &written_component_kinds {
-            update_kinds.remove(component_kind);
-        }
-        if update_kinds.is_empty() {
-            next_send_updates.remove(global_entity);
+            kinds.remove(component_kind);
         }
     }
 
