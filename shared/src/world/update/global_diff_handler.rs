@@ -1,6 +1,6 @@
 use std::{collections::HashMap, net::SocketAddr};
 
-use crate::{ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
+use crate::{CachedComponentUpdate, ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
 
 use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
 
@@ -131,5 +131,30 @@ impl GlobalDiffHandler {
             return builder.build(address);
         }
         None
+    }
+
+    /// Returns the cached pre-serialized update for `(entity, kind, key)`, if one exists and is valid.
+    pub fn get_cached_update(
+        &self,
+        entity: &GlobalEntity,
+        kind: &ComponentKind,
+        key: u64,
+    ) -> Option<CachedComponentUpdate> {
+        self.mut_receiver_builders
+            .get(&(*entity, *kind))
+            .and_then(|b| b.channel().get_cached_update(key))
+    }
+
+    /// Stores a cached pre-serialized update for `(entity, kind, key)`.
+    pub fn set_cached_update(
+        &self,
+        entity: &GlobalEntity,
+        kind: &ComponentKind,
+        key: u64,
+        update: CachedComponentUpdate,
+    ) {
+        if let Some(b) = self.mut_receiver_builders.get(&(*entity, *kind)) {
+            b.channel().set_cached_update(key, update);
+        }
     }
 }

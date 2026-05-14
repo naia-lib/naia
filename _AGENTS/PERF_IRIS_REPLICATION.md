@@ -1030,7 +1030,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** `cargo check` warning-clean; `cargo test --workspace` green. Unit assertions: `NetworkedPosition::has_entity_properties() == false`; any component with an `EntityProperty` field returns `true`. All existing cyberlith-registered components pass the 512-bit assertion (verified via E2E in Phase 10). Wasm32 checks green (this phase touches `shared/derive`).
 
-### Phase 4 — MutChannelType Cached Update Store
+### Phase 4 — MutChannelType Cached Update Store [X]
 
 1. Add `get_cached_update`, `set_cached_update`, `clear_cached_updates` to `MutChannelType` trait with `unimplemented!()` defaults (forces all impls to update)
 2. Add `cached_updates: RwLock<HashMap<u64, CachedComponentUpdate>>` to concrete `MutChannelData`
