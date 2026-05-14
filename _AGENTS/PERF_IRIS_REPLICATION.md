@@ -1041,7 +1041,7 @@ Phases are ordered by dependency. Each phase has explicit prerequisites and a ga
 
 **Gate:** Unit test — mutate component via `MutSender::mutate()`, confirm cached update clears; store via `set_cached_update`, confirm `get_cached_update` returns it next tick without mutation; mutate again, confirm it clears.
 
-### Phase 5 — Two-Path `write_update` (Fix A)
+### Phase 5 — Two-Path `write_update` (Fix A) [X]
 
 **Depends on Phases 2, 3, 4. No structural send-loop changes yet — thread new params through existing call chain.**
 

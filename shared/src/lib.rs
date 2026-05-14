@@ -201,6 +201,7 @@ pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity}
 pub use world::local::local_entity_map::LocalEntityMap;
 pub use world::local::local_world_manager::LocalWorldManager;
 pub use world::world_reader::WorldReader;
+pub use world::world_writer::SnapshotMap;
 pub use world::sync::auth_channel::EntityAuthChannelState;
 pub use world::sync::authority_error::AuthorityError;
 pub use world::sync::host_entity_channel::HostEntityChannel;

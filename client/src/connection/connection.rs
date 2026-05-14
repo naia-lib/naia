@@ -357,7 +357,8 @@ impl Connection {
 
         // write common parts of packet (messages & world events).
         // Client has only one connection — no priority arbitration needed,
-        // so we pass `None` and `write_updates` falls back to HashMap order.
+        // so we pass `None` for priority order, and `None, None` for the
+        // server-only PATH A/B optimization context (diff_handler + snapshot_map).
         self.base.write_packet(
             &protocol.channel_kinds,
             &protocol.message_kinds,
@@ -372,6 +373,8 @@ impl Connection {
             protocol.client_authoritative_entities,
             host_world_events,
             update_events,
+            None,
+            None,
             None,
         );
 

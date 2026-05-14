@@ -9,11 +9,18 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
         local::local_world_manager::LocalWorldManager,
+        update::global_diff_handler::GlobalDiffHandler,
     },
-    BitWrite, BitWriter, ComponentKind, ComponentKinds,
+    BitWrite, BitWriter, CachedComponentUpdate, ComponentKind, ComponentKinds,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
-    Instant, MessageIndex, PacketIndex, Serde, WorldRefType,
+    Instant, MessageIndex, PacketIndex, Replicate, Serde, WorldRefType,
 };
+
+/// Pre-ECS-snapshot for UserDependent components (those with EntityProperty fields).
+/// Built once per tick per component — keyed by (GlobalEntity, ComponentKind).
+/// First user to write a UserDependent component reads from ECS and populates this map;
+/// subsequent users serialize from the snapshot, touching ECS zero times.
+pub type SnapshotMap = HashMap<(GlobalEntity, ComponentKind), Box<dyn Replicate>>;
 
 pub struct WorldWriter;
 
@@ -36,11 +43,13 @@ impl WorldWriter {
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
+        global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
         entity_priority_order: Option<&[GlobalEntity]>,
+        snapshot_map: Option<&mut SnapshotMap>,
     ) {
         // write entity updates
         Self::write_updates(
@@ -51,10 +60,12 @@ impl WorldWriter {
             world,
             entity_converter,
             global_world_manager,
+            global_diff_handler,
             world_manager,
             has_written,
             update_events,
             entity_priority_order,
+            snapshot_map,
         );
 
         // write entity commands
@@ -71,6 +82,7 @@ impl WorldWriter {
             world_events,
         );
     }
+
 
     #[allow(clippy::too_many_arguments)]
     fn write_commands<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -756,10 +768,12 @@ impl WorldWriter {
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &dyn GlobalWorldManagerType,
+        global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
         entity_priority_order: Option<&[GlobalEntity]>,
+        mut snapshot_map: Option<&mut SnapshotMap>,
     ) {
         // When a priority order is supplied, iterate entities in that order
         // (filtered to those with pending updates this cycle). This is the
@@ -814,6 +828,7 @@ impl WorldWriter {
                 now,
                 world,
                 global_world_manager,
+                global_diff_handler,
                 world_manager,
                 packet_index,
                 writer,
@@ -821,6 +836,7 @@ impl WorldWriter {
                 &world_entity,
                 has_written,
                 next_send_updates,
+                snapshot_map.as_mut().map(|m| &mut **m),
             );
 
             // write ComponentContinue finish bit, release
@@ -833,14 +849,21 @@ impl WorldWriter {
         false.ser(writer);
     }
 
-    /// For a given entity, write component value updates into a packet
-    /// Only component values that changed in the internal (naia's) host world will be written
+    /// For a given entity, write component value updates into a packet.
+    /// Implements two principled serialization paths:
+    /// - PATH A (UserIndependent): components without EntityProperty fields share
+    ///   a CachedComponentUpdate keyed by DiffMask. First user after mutation pays
+    ///   one ECS read + serialize; all others replay the cached bytes.
+    /// - PATH B (UserDependent): components with EntityProperty fields serialize
+    ///   per-user local entity IDs. ECS is read once per component per tick into
+    ///   snapshot_map; all users serialize from the snapshot, not ECS.
     #[allow(clippy::too_many_arguments)]
     fn write_update<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         component_kinds: &ComponentKinds,
         now: &Instant,
         world: &W,
         global_world_manager: &dyn GlobalWorldManagerType,
+        global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
         packet_index: &PacketIndex,
         writer: &mut BitWriter,
@@ -848,64 +871,125 @@ impl WorldWriter {
         world_entity: &E,
         has_written: &mut bool,
         next_send_updates: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
+        mut snapshot_map: Option<&mut SnapshotMap>,
     ) {
         let mut written_component_kinds = Vec::new();
-        let component_kind_set = next_send_updates.get(global_entity).unwrap();
-        for component_kind in component_kind_set {
-            // get diff mask
+        let component_kind_set = next_send_updates.get(global_entity).unwrap().clone();
+
+        for component_kind in &component_kind_set {
             let diff_mask = world_manager.get_diff_mask(global_entity, component_kind);
 
-            let mut converter = world_manager.entity_converter_mut(global_world_manager);
+            // When `global_diff_handler` is `Some` (server path), attempt PATH A or PATH B.
+            // When `None` (client path or fallback), `optimized_write` stays `false` and
+            // we fall straight through to the existing two-pass (counter + writer) path —
+            // identical to the current client behavior, zero overhead.
+            let mut optimized_write = false;
 
-            // check that we can write the next component update
-            let mut counter = writer.counter();
-            // write ComponentContinue bit
-            true.ser(&mut counter);
-            // write component kind (variable-length encoding — count the
-            // actual bits this kind will take rather than a const upper
-            // bound)
-            component_kind.ser(component_kinds, &mut counter);
-            // write data
-            world
-                .component_of_kind(world_entity, component_kind)
-                .expect("Component does not exist in World")
-                .write_update(&diff_mask, &mut counter, &mut converter);
-            if counter.overflowed() {
-                // if nothing useful has been written in this packet yet,
-                // send warning about size of component being too big
-                if !*has_written {
-                    let component_name = component_kinds.kind_to_name(component_kind);
-                    Self::warn_overflow_update(
-                        component_name,
-                        counter.bits_needed(),
-                        writer.bits_free(),
-                    );
+            if let Some(gdh) = global_diff_handler {
+                if !component_kinds.is_user_dependent(component_kind) {
+                    // ── PATH A: UserIndependent ─────────────────────────────────
+                    // Bytes are identical for all users with the same DiffMask.
+                    // Cache hit: replay stored bytes, zero ECS reads.
+                    // Cache miss: one ECS read, one serialize, store for future users/ticks.
+                    if let Some(diff_mask_key) = diff_mask.as_key() {
+                        let cached: CachedComponentUpdate = match gdh.get_cached_update(global_entity, component_kind, diff_mask_key) {
+                            Some(c) => c,
+                            None => {
+                                let mut converter = world_manager.entity_converter_mut(global_world_manager);
+                                let mut temp = BitWriter::new();
+                                true.ser(&mut temp);
+                                component_kind.ser(component_kinds, &mut temp);
+                                world.component_of_kind(world_entity, component_kind)
+                                    .expect("Component does not exist in World")
+                                    .write_update(&diff_mask, &mut temp, &mut converter);
+                                let c = CachedComponentUpdate::capture(&temp)
+                                    .expect("component exceeds 512 bits; impossible after registration check");
+                                gdh.set_cached_update(global_entity, component_kind, diff_mask_key, c);
+                                c
+                            }
+                        };
+
+                        let mut counter = writer.counter();
+                        counter.count_bits(cached.bit_count);
+                        if counter.overflowed() {
+                            if !*has_written {
+                                Self::warn_overflow_update(component_kinds.kind_to_name(component_kind), cached.bit_count, writer.bits_free());
+                            }
+                            break;
+                        }
+
+                        *has_written = true;
+                        writer.append_cached_update(&cached);
+                        optimized_write = true;
+                    }
+                    // else: diff mask > 8 bytes (unreachable for all registered components) — fall through to two-pass
+
+                } else if let Some(sm) = snapshot_map.as_mut().map(|m| &mut **m) {
+                    // ── PATH B: UserDependent ───────────────────────────────────
+                    // EntityProperty fields resolve per-user local entity IDs — bytes differ per user.
+                    // ECS is read once per component per tick into snapshot_map; all users
+                    // serialize from the snapshot, never from ECS directly.
+                    let snapshot_entry = sm
+                        .entry((*global_entity, *component_kind))
+                        .or_insert_with(|| {
+                            world.component_of_kind(world_entity, component_kind)
+                                .expect("Component does not exist in World")
+                                .copy_to_box()
+                        });
+                    let snapshot: &dyn Replicate = snapshot_entry.as_ref();
+
+                    let mut converter = world_manager.entity_converter_mut(global_world_manager);
+
+                    // Counter pass
+                    let mut counter = writer.counter();
+                    true.ser(&mut counter);
+                    component_kind.ser(component_kinds, &mut counter);
+                    snapshot.write_update(&diff_mask, &mut counter, &mut converter);
+                    if counter.overflowed() {
+                        if !*has_written {
+                            Self::warn_overflow_update(component_kinds.kind_to_name(component_kind), counter.bits_needed(), writer.bits_free());
+                        }
+                        break;
+                    }
+
+                    *has_written = true;
+
+                    // Writer pass
+                    true.ser(writer);
+                    component_kind.ser(component_kinds, writer);
+                    snapshot.write_update(&diff_mask, writer, &mut converter);
+                    optimized_write = true;
                 }
-
-                break;
+                // else: UserDependent but snapshot_map is None — fall through to two-pass
             }
 
-            *has_written = true;
-
-            // write ComponentContinue bit
-            true.ser(writer);
-            // write component kind
-            component_kind.ser(component_kinds, writer);
-            // write data
-            world
-                .component_of_kind(world_entity, component_kind)
-                .expect("Component does not exist in World")
-                .write_update(&diff_mask, writer, &mut converter);
+            if !optimized_write {
+                // Old two-pass path: used by the client (global_diff_handler = None) and as
+                // fallback for cases not handled by PATH A or PATH B above.
+                let mut converter = world_manager.entity_converter_mut(global_world_manager);
+                let mut counter = writer.counter();
+                true.ser(&mut counter);
+                component_kind.ser(component_kinds, &mut counter);
+                world.component_of_kind(world_entity, component_kind)
+                    .expect("Component does not exist in World")
+                    .write_update(&diff_mask, &mut counter, &mut converter);
+                if counter.overflowed() {
+                    if !*has_written {
+                        let component_name = component_kinds.kind_to_name(component_kind);
+                        Self::warn_overflow_update(component_name, counter.bits_needed(), writer.bits_free());
+                    }
+                    break;
+                }
+                *has_written = true;
+                true.ser(writer);
+                component_kind.ser(component_kinds, writer);
+                world.component_of_kind(world_entity, component_kind)
+                    .expect("Component does not exist in World")
+                    .write_update(&diff_mask, writer, &mut converter);
+            }
 
             written_component_kinds.push(*component_kind);
-
-            world_manager.record_update(
-                now,
-                packet_index,
-                global_entity,
-                component_kind,
-                diff_mask,
-            );
+            world_manager.record_update(now, packet_index, global_entity, component_kind, diff_mask);
         }
 
         let update_kinds = next_send_updates.get_mut(global_entity).unwrap();

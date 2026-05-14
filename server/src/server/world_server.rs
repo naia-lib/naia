@@ -15,7 +15,7 @@ use naia_shared::{
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
-    OutgoingPriorityHook, UserPriorityState,
+    OutgoingPriorityHook, SnapshotMap, UserPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
     Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
     Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
@@ -723,6 +723,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // shuffle order of connections in order to avoid priority among users
         fastrand::shuffle(&mut user_addresses);
 
+        // One SnapshotMap shared across all users this tick.
+        // UserDependent components (EntityProperty fields) are snapshotted from ECS
+        // on first user access and reused for all subsequent users — O(1) ECS reads
+        // per component per tick regardless of user count.
+        let mut snapshot_map: SnapshotMap = SnapshotMap::new();
+
         for user_address in user_addresses {
             let connection = self.user_connections.get_mut(&user_address).unwrap();
             // Build a per-user priority hook over the (global, user) layers.
@@ -750,6 +756,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 &self.global_world_manager,
                 &self.time_manager,
                 &mut hook,
+                &mut snapshot_map,
             );
         }
 

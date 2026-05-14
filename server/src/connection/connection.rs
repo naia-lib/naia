@@ -6,8 +6,8 @@ use log::warn;
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook,
-    PacketType, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, MessageIndex, MessageKinds, OutgoingPriorityHook,
+    PacketType, Serde, SerdeErr, SnapshotMap, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -253,6 +253,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         priority_hook: &mut dyn OutgoingPriorityHook,
+        snapshot_map: &mut SnapshotMap,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
 
@@ -322,6 +323,7 @@ impl Connection {
                 &mut host_world_events,
                 &mut update_events,
                 Some(&entity_priority_order),
+                snapshot_map,
             ) {
                 any_sent = true;
             } else {
@@ -363,6 +365,7 @@ impl Connection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
         entity_priority_order: Option<&[GlobalEntity]>,
+        snapshot_map: &mut SnapshotMap,
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_events.is_empty();
@@ -430,6 +433,7 @@ impl Connection {
                 host_world_events,
                 update_events,
                 entity_priority_order,
+                snapshot_map,
             );
 
             // send packet, measuring actual size before the move so we can
@@ -468,6 +472,7 @@ impl Connection {
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_events: &mut HashMap<GlobalEntity, HashSet<ComponentKind>>,
         entity_priority_order: Option<&[GlobalEntity]>,
+        snapshot_map: &mut SnapshotMap,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -505,6 +510,8 @@ impl Connection {
             })
             .count();
 
+        let diff_handler_arc = global_world_manager.diff_handler();
+        let diff_handler_guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
         self.base.write_packet(
             channel_kinds,
             message_kinds,
@@ -520,6 +527,8 @@ impl Connection {
             host_world_events,
             update_events,
             entity_priority_order,
+            Some(&*diff_handler_guard),
+            Some(snapshot_map),
         );
 
         #[cfg(feature = "e2e_debug")]
