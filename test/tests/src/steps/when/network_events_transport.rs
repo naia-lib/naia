@@ -307,6 +307,58 @@ fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
     reject_named_client(ctx, "RejectedClient", "bad_user");
 }
 
+/// When a client is rejected after being placed in entity scope.
+///
+/// Variant of "a client attempts to connect but is rejected" that additionally
+/// adds the last entity to the client's room in the SAME tick as
+/// reject_connection. This tests [connection-13a]: rejection suppresses
+/// replication even when the server enqueues scope entries before rejecting.
+#[when("a client is rejected after being placed in entity scope")]
+fn when_client_rejected_after_scope_placement(ctx: &mut TestWorldMut) {
+    use std::time::Duration;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{Auth, ClientRejectEvent, EntityKey, TrackedClientEvent};
+    use crate::steps::world_helpers::LAST_ENTITY_KEY;
+    use crate::steps::world_helpers_connect::expect_server_auth_for_key;
+
+    let _entity_key: EntityKey = ctx
+        .scenario_mut()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned before this step");
+    let room_key = ctx.scenario_mut().last_room();
+
+    let scenario = ctx.scenario_mut();
+    let test_protocol = naia_test_harness::protocol();
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..Default::default()
+    };
+    let client_key = scenario.client_start(
+        "RejectedClient",
+        Auth::new("bad_user", "wrong_password"),
+        client_config,
+        test_protocol,
+    );
+    expect_server_auth_for_key(scenario, client_key);
+    // In ONE mutate: add client to room (entity enters scope) then reject.
+    // This replicates the pattern of an auth handler that performs scope setup
+    // before calling reject_connection. The invariant: replication is suppressed.
+    scenario.mutate(|c| {
+        c.server(|s| {
+            s.room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
+            s.reject_connection(&client_key);
+        });
+    });
+    scenario.expect(|c| {
+        c.client(client_key, |client| client.read_event::<ClientRejectEvent>())
+    });
+    scenario.track_client_event(client_key, TrackedClientEvent::Reject);
+    scenario.allow_flexible_next();
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Common — generic When phrasings + reconnect/malformed/duplicate flows
 // ──────────────────────────────────────────────────────────────────────

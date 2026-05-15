@@ -120,6 +120,10 @@ pub fn reject_named_client(
 // Connect-handshake primitives — small bricks for custom flows.
 // ──────────────────────────────────────────────────────────────────────
 
+pub fn expect_server_auth_for_key(scenario: &mut crate::Scenario, client_key: crate::ClientKey) {
+    expect_server_auth_for(scenario, client_key);
+}
+
 fn expect_server_auth_for(scenario: &mut crate::Scenario, client_key: crate::ClientKey) {
     scenario.expect(|c| {
         c.server(|s| {

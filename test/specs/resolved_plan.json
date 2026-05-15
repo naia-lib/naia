@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "1063f886d94a2308f4681dfd8d58a66dc065fff1096315d0a43684db2fafc6b6",
-    "step_registry_hash": "02127451bb20927ac16ed8d41c780a672028d1d9c9965bdd35c8ed0ade484f73",
-    "resolved_plan_hash": "91bdef62db54cc37d1ce64c2385f83d66a655789bdea4bfe45e849d95b1a53d9"
+    "feature_fingerprint_hash": "cdcf5eb72c1e62634051ee6240dc5ea14204785ee813c8cfbb54b600eda810fa",
+    "step_registry_hash": "ab98251f4a326da47bdba3c25b8525667b133b020eb92144a8b53bb117e276ae",
+    "resolved_plan_hash": "88be121c354f765fe0d0836c849e9f88d21814b7a0cccd5e7e7abb22b830e6a8"
   },
   "scenarios": [
     {
@@ -6895,13 +6895,13 @@
           "payload_hash": "9b036f7a7595007a26c1c04cf82c04f6afcf3162eeaab1deef1909078ba22c72"
         },
         {
-          "effective_kind": "Given",
+          "effective_kind": "When",
           "step_text": "the client spawns a client-owned entity with a replicated component",
-          "binding_id": "accff9d724e49e90e397270a7ff4b2c116bb33a746c42a21dbf45e716276a5fd",
+          "binding_id": "39bb602716eb969414ec80befbaa37985400703c2dfd0f111b435a7e33af9013",
           "captures": [],
           "docstring": null,
           "datatable": null,
-          "payload_hash": "981e4fa68e57d249cdebd9ffe840ed3567a44fe6e2462f508d97ad43de68eaf8"
+          "payload_hash": "2a2dc44412537459abe422e785141b331e331e42969c107c5f036c80fdbac4d4"
         },
         {
           "effective_kind": "Then",
@@ -11994,6 +11994,119 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "d2e5ab286817b582fab0846cc8130314ef7d1948cc32c790544f73096b128610"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(14):Scenario(01)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-13a] Rejected client receives zero entity replications — entity not in scope",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running with auth required",
+          "binding_id": "ee6a9194ad58ed465a9949db3b5491f9743cb81c012fb601c39f4432e0017280",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "aca7fb1036ddb74ec231f4561b9813949e1e6420dabd9e5900ae7bd1e15c1835"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with a replicated component",
+          "binding_id": "f20159a328b3a1860cc2107f9c88b0165fc6a8b716aad3396fe35617838cc721",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a807dd4c187b68fa877b0442ad648ac45ad8b79912964c4bd883139920482765"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client attempts to connect but is rejected",
+          "binding_id": "4e9a8e3fe628ab5871b812fd2471be6782a71648ed24b08e5d59bd3aa28736a5",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "5fa495b28182278957ee80147abe3df35ce77deb94dffbb2b4c11aae826d1bc2"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the rejected client has received zero entity replications",
+          "binding_id": "b207dbf5493e49f8ee093acd168b0a804c3f8f56dac58c80c9ef58a8765667cd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0b0504c4279a5b75557dc8ac88863c0fc47d97245b96806c7c19055167eac4dd"
+        }
+      ]
+    },
+    {
+      "scenario_key": "lifecycle:Rule(14):Scenario(02)",
+      "feature_path": "features/01_lifecycle.feature",
+      "scenario_name": "[connection-13a] Rejected client receives zero entity replications — entity added to scope then rejected",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running with auth required",
+          "binding_id": "ee6a9194ad58ed465a9949db3b5491f9743cb81c012fb601c39f4432e0017280",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "aca7fb1036ddb74ec231f4561b9813949e1e6420dabd9e5900ae7bd1e15c1835"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "a server-owned entity exists with a replicated component",
+          "binding_id": "f20159a328b3a1860cc2107f9c88b0165fc6a8b716aad3396fe35617838cc721",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "a807dd4c187b68fa877b0442ad648ac45ad8b79912964c4bd883139920482765"
+        },
+        {
+          "effective_kind": "Given",
+          "step_text": "the entity is placed in the default room",
+          "binding_id": "f12581f1b1b4027fa211100213e9af1e6a41d38bf891ad650b0b7b3de0a20d3c",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "4028ef5f653369fe4b757910addde1507a9bc4a4459604fc9817a67d909717bc"
+        },
+        {
+          "effective_kind": "When",
+          "step_text": "a client is rejected after being placed in entity scope",
+          "binding_id": "65a1a17079f6d143f0456a351a019aa41aee8776a36ff95dba51590c89df315f",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0ec6bed0693ffad25f76ac1b7f1b238d3ed99aa66a1ec77c210fa59e18aa6b95"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "the rejected client has received zero entity replications",
+          "binding_id": "b207dbf5493e49f8ee093acd168b0a804c3f8f56dac58c80c9ef58a8765667cd",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "0b0504c4279a5b75557dc8ac88863c0fc47d97245b96806c7c19055167eac4dd"
         }
       ]
     },

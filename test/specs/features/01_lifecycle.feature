@@ -774,3 +774,32 @@ Feature: Connection Lifecycle, Transport, Time/Ticks, Observability
       When client A disconnects from the server
       And the client reconnects
       Then client ReconnectedClient observes Available authority status for the entity
+
+  # --------------------------------------------------------------------------
+  # Rule: Rejected connections receive no entity replications
+  # --------------------------------------------------------------------------
+  # [connection-13a] A connection rejected by the server MUST NOT receive any
+  # entity replications, regardless of what scope operations the server
+  # performed on the auth-pending user prior to calling reject_connection.
+  # --------------------------------------------------------------------------
+  @Rule(14)
+  Rule: Rejected connections receive no entity replications
+
+    # Guard: entity spawned but never in scope. Rejected client gets 0 entities.
+    @Scenario(01)
+    Scenario: [connection-13a] Rejected client receives zero entity replications — entity not in scope
+      Given a server is running with auth required
+      And a server-owned entity exists with a replicated component
+      When a client attempts to connect but is rejected
+      Then the rejected client has received zero entity replications
+
+    # Deep guard: server adds entity to room AND rejects in the same auth tick.
+    # Verifies reject_connection suppresses replication even for scope entries
+    # queued in the same tick as the rejection.
+    @Scenario(02)
+    Scenario: [connection-13a] Rejected client receives zero entity replications — entity added to scope then rejected
+      Given a server is running with auth required
+      And a server-owned entity exists with a replicated component
+      And the entity is placed in the default room
+      When a client is rejected after being placed in entity scope
+      Then the rejected client has received zero entity replications

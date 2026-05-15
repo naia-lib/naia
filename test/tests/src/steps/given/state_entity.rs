@@ -97,6 +97,26 @@ fn given_server_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
     scenario.bdd_store(LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
 }
 
+/// Given the entity is placed in the default room.
+///
+/// Adds `LAST_ENTITY_KEY` to `last_room`. Used by rejection tests that need
+/// the entity to be in-scope territory (a room) before the client connects.
+#[given("the entity is placed in the default room")]
+fn given_entity_placed_in_default_room(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let entity_key: naia_test_harness::EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned yet");
+    let room_key = scenario.last_room();
+    scenario.mutate(|c| {
+        c.server(|s| {
+            s.room_mut(&room_key)
+                .expect("room exists")
+                .add_entity(&entity_key);
+        });
+    });
+}
+
 /// Given a server-owned entity exists without a replicated component.
 ///
 /// Spawns a bare server-owned entity. Used to test component-insert

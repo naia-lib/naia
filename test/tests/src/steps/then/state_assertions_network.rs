@@ -276,6 +276,23 @@ fn then_client_is_not_connected(
     }
 }
 
+/// Then the rejected client has received zero entity replications.
+///
+/// Verifies [connection-13a]: a rejected connection must not receive any entity
+/// replications, regardless of scope operations performed before rejection.
+#[then("the rejected client has received zero entity replications")]
+fn then_rejected_client_has_zero_entity_replications(ctx: &TestWorldRef) {
+    let client_key = ctx.last_client();
+    ctx.client(client_key, |client| {
+        let entities = client.entities();
+        assert!(
+            entities.is_empty(),
+            "Expected rejected client to have 0 entity replications, got {}",
+            entities.len()
+        );
+    });
+}
+
 // ──────────────────────────────────────────────────────────────────────
 // Common — error-taxonomy + operation-result + tick-availability
 // ──────────────────────────────────────────────────────────────────────
