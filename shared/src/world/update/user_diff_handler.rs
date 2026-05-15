@@ -331,6 +331,13 @@ impl UserDiffHandler {
         receiver.clear_mask();
     }
 
+    /// Hot-path clear: no RwLock, no GlobalEntity key resolution.
+    pub fn clear_diff_mask_fast(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
+        if let Some(receiver) = self.receivers.get_mut(&(entity_idx, kind_bit)) {
+            receiver.clear_mask();
+        }
+    }
+
     #[cfg(feature = "test_utils")]
     pub fn receiver_count(&self) -> usize {
         self.receivers.len()

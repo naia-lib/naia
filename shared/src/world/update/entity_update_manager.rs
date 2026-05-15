@@ -241,4 +241,27 @@ impl EntityUpdateManager {
         // having copied the diff mask for this update, clear the component
         self.clear_diff_mask(global_entity, component_kind);
     }
+
+    /// Hot-path: uses compact key for clear_diff_mask, avoids RwLock.
+    pub fn record_update_dense(
+        &mut self,
+        now: &Instant,
+        packet_index: &PacketIndex,
+        global_entity: &GlobalEntity,
+        entity_idx: GlobalEntityIndex,
+        component_kind: &ComponentKind,
+        kind_bit: u16,
+        diff_mask: DiffMask,
+    ) {
+        self.last_update_packet_index = *packet_index;
+
+        if !self.sent_updates.contains_key(packet_index) {
+            self.sent_updates
+                .insert(*packet_index, (now.clone(), HashMap::new()));
+        }
+        let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
+        sent_updates_map.insert((*global_entity, *component_kind), diff_mask.clone());
+
+        self.diff_handler.clear_diff_mask_fast(entity_idx, kind_bit);
+    }
 }

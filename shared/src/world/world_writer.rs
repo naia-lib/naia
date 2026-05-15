@@ -1011,7 +1011,12 @@ impl WorldWriter {
             }
 
             written_component_kinds.push(*component_kind);
-            world_manager.record_update(now, packet_index, global_entity, component_kind, diff_mask);
+            // Hot path on server (entity_idx.is_valid()): compact-key clear_diff_mask, no RwLock.
+            if entity_idx.is_valid() {
+                world_manager.record_update_dense(now, packet_index, global_entity, entity_idx, component_kind, kind_bit, diff_mask);
+            } else {
+                world_manager.record_update(now, packet_index, global_entity, component_kind, diff_mask);
+            }
         }
 
         for component_kind in &written_component_kinds {

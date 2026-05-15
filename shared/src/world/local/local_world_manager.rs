@@ -860,6 +860,22 @@ impl LocalWorldManager {
             .record_update(now, packet_index, global_entity, component_kind, diff_mask);
     }
 
+    /// Hot-path: uses compact key for clear_diff_mask, avoids RwLock.
+    pub(crate) fn record_update_dense(
+        &mut self,
+        now: &Instant,
+        packet_index: &PacketIndex,
+        global_entity: &GlobalEntity,
+        entity_idx: GlobalEntityIndex,
+        component_kind: &ComponentKind,
+        kind_bit: u16,
+        diff_mask: DiffMask,
+    ) {
+        self.updater.record_update_dense(
+            now, packet_index, global_entity, entity_idx, component_kind, kind_bit, diff_mask,
+        );
+    }
+
     // Joint router
 
     /// Sends a `Despawn` command for `global_entity` through whichever engine owns it.
