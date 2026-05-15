@@ -25,14 +25,27 @@ use crate::{
 pub mod bench_write_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
     #[doc(hidden)] pub static N_SCOPE_ENTRY_SPAWNS: AtomicU64 = AtomicU64::new(0);
+    /// PATH A wire-cache hits: bytes replayed from cache, zero ECS reads.
+    #[doc(hidden)] pub static N_PATH_A_CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+    /// PATH A wire-cache misses: ECS read + serialize + store into cache.
+    #[doc(hidden)] pub static N_PATH_A_CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all write counters to zero.
     pub fn reset() {
         N_SCOPE_ENTRY_SPAWNS.store(0, Ordering::Relaxed);
+        N_PATH_A_CACHE_HITS.store(0, Ordering::Relaxed);
+        N_PATH_A_CACHE_MISSES.store(0, Ordering::Relaxed);
     }
     /// Returns the number of SpawnWithComponents commands written this tick.
     pub fn snapshot_spawns() -> u64 {
         N_SCOPE_ENTRY_SPAWNS.load(Ordering::Relaxed)
+    }
+    /// Returns (hits, misses) for the PATH A wire-cache since last reset.
+    pub fn snapshot_path_a() -> (u64, u64) {
+        (
+            N_PATH_A_CACHE_HITS.load(Ordering::Relaxed),
+            N_PATH_A_CACHE_MISSES.load(Ordering::Relaxed),
+        )
     }
 }
 
@@ -915,8 +928,14 @@ impl WorldWriter {
                     // Cache miss: one ECS read, one serialize, store for future users/ticks.
                     if let Some(diff_mask_key) = diff_mask.as_key() {
                         let cached: CachedComponentUpdate = match gdh.get_wire_cache(entity_idx, kind_bit, diff_mask_key) {
-                            Some(c) => c,
+                            Some(c) => {
+                                #[cfg(feature = "bench_instrumentation")]
+                                bench_write_counters::N_PATH_A_CACHE_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                c
+                            }
                             None => {
+                                #[cfg(feature = "bench_instrumentation")]
+                                bench_write_counters::N_PATH_A_CACHE_MISSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 let mut converter = world_manager.entity_converter_mut(global_world_manager);
                                 let mut temp = BitWriter::new();
                                 true.ser(&mut temp);
