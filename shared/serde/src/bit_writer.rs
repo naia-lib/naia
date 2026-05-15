@@ -204,12 +204,43 @@ impl CachedComponentUpdate {
     }
 }
 
+/// Per-tick alignment counters for `append_cached_update`.
+/// Enabled via `bench_instrumentation` feature.
+#[cfg(feature = "bench_instrumentation")]
+pub mod bench_serde_counters {
+    use std::sync::atomic::{AtomicU64, Ordering};
+    /// Calls where writer scratch_bits == 0 at entry (byte-aligned; memcpy path would apply).
+    pub static N_APPEND_ALIGNED: AtomicU64 = AtomicU64::new(0);
+    /// Calls where writer scratch_bits != 0 at entry (bit-unaligned; must bit-shift).
+    pub static N_APPEND_UNALIGNED: AtomicU64 = AtomicU64::new(0);
+
+    pub fn reset() {
+        N_APPEND_ALIGNED.store(0, Ordering::Relaxed);
+        N_APPEND_UNALIGNED.store(0, Ordering::Relaxed);
+    }
+    /// Returns (aligned_count, unaligned_count) since last reset.
+    pub fn snapshot_alignment() -> (u64, u64) {
+        (
+            N_APPEND_ALIGNED.load(Ordering::Relaxed),
+            N_APPEND_UNALIGNED.load(Ordering::Relaxed),
+        )
+    }
+}
+
 impl BitWriter {
     /// Appends all bits from a CachedComponentUpdate at the current write position.
     /// Bit-accurate at any alignment; produces bit-identical output to re-serializing the component.
     pub fn append_cached_update(&mut self, update: &CachedComponentUpdate) {
         if update.bit_count == 0 {
             return;
+        }
+        #[cfg(feature = "bench_instrumentation")]
+        if self.scratch_bits == 0 {
+            bench_serde_counters::N_APPEND_ALIGNED
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        } else {
+            bench_serde_counters::N_APPEND_UNALIGNED
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         }
         let full_bytes = (update.bit_count / 8) as usize;
         let trailing = update.bit_count % 8;

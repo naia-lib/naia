@@ -29,6 +29,8 @@ pub use naia_serde::{
     SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
     UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
 };
+#[cfg(feature = "bench_instrumentation")]
+pub use naia_serde::bench_serde_counters;
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,
     Random, SocketConfig, TimeQueue,
