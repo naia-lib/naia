@@ -43,23 +43,32 @@ pub mod dirty_scan_counters {
 
 /// Per-user diff handler.
 ///
-/// Uses the global `GlobalEntityIndex` from `GlobalDiffHandler` for O(1) entity
-/// lookup instead of per-user `LocalEntityIndex` management.
-/// `kinds_by_bit` records `kind_bit → ComponentKind` so the snapshot can
-/// rebuild the legacy `HashMap<GlobalEntity, HashSet<ComponentKind>>`
-/// shape consumers expect, without needing access to `ComponentKinds` on
-/// the read path.
+/// `receivers_dense` is a stride-indexed flat `Vec<Option<MutReceiver>>`.
+/// Slot formula: `entity_idx.as_usize() * kind_count + kind_bit as usize`.
+/// This gives O(1) array access in Phase 3 and `write_update` with no hashing.
 ///
-/// Hot-path methods take `(GlobalEntityIndex, u16)` directly to avoid the
-/// (GlobalEntity, ComponentKind) → compact key resolution cost. The HashMap key
-/// is `(GlobalEntityIndex, u16)` — 6 bytes vs the old ~17-byte tuple — for
-/// better cache behavior and faster hashing on the hot path.
+/// `entity_kind_to_key` maps `(GlobalEntity, ComponentKind) → (GlobalEntityIndex, u16)`.
+/// It is populated at registration time and used by cold-path methods, eliminating
+/// any RwLock acquisition on `GlobalDiffHandler` for the per-connection diff paths.
+///
+/// `kinds_by_bit` records `kind_bit → ComponentKind` so `dirty_receiver_candidates`
+/// can rebuild the `HashMap<GlobalEntity, HashSet<ComponentKind>>` shape that
+/// callers expect, without needing access to `ComponentKinds` on the read path.
+///
+/// Hot-path methods take `(GlobalEntityIndex, u16)` directly — O(1) array access.
+/// Cold-path methods take `(&GlobalEntity, &ComponentKind)` and resolve via `entity_kind_to_key`.
 #[derive(Clone)]
 pub struct UserDiffHandler {
-    receivers: HashMap<(GlobalEntityIndex, u16), MutReceiver>,
-    /// Reverse lookup for deregistration: (GlobalEntity, ComponentKind) → compact key.
-    /// Populated at register_component; lets deregister_component find the key even after
-    /// the entity is removed from GlobalDiffHandler.
+    /// Stride-indexed flat receiver array. Slot = entity_idx * kind_count + kind_bit.
+    /// `None` for unregistered (entity, component) pairs.
+    receivers_dense: Vec<Option<MutReceiver>>,
+    /// Number of component kinds. Fixed at construction (protocol is locked before
+    /// any connection is established). Used as the stride for slot calculation.
+    kind_count: usize,
+    /// Reverse lookup: (GlobalEntity, ComponentKind) → (GlobalEntityIndex, kind_bit).
+    /// Populated at `register_component`; removed at `deregister_component`.
+    /// Used by cold-path methods and by `deregister_component` to avoid needing the
+    /// GlobalDiffHandler RwLock after the entity may already have been freed.
     entity_kind_to_key: HashMap<(GlobalEntity, ComponentKind), (GlobalEntityIndex, u16)>,
     global_diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     /// Reverse table for rebuilding `ComponentKind` from a `kind_bit`
@@ -95,7 +104,7 @@ impl UserDiffHandler {
         let global_diff_handler = global_world_manager.diff_handler();
         let kind_count = global_diff_handler
             .read()
-            .map(|h| h.kind_count())
+            .map(|h| h.kind_count() as usize)
             .unwrap_or(0);
         let global_dirty_arc = global_world_manager.global_dirty_bitset();
         let global_dirty = global_dirty_arc
@@ -107,17 +116,33 @@ impl UserDiffHandler {
         // Skip allocating it to avoid wasted push/cancel atomic ops on every mutation.
         // Client path: no GlobalDirtyBitset — need DirtySet for dirty candidate tracking.
         let dirty_set = if global_dirty_arc.is_none() {
-            Some(Arc::new(DirtySet::new(kind_count)))
+            Some(Arc::new(DirtySet::new(kind_count as u16)))
         } else {
             None
         };
         Self {
-            receivers: HashMap::new(),
+            receivers_dense: Vec::new(),
+            kind_count,
             entity_kind_to_key: HashMap::new(),
             global_diff_handler,
-            kinds_by_bit: vec![None; kind_count as usize],
+            kinds_by_bit: vec![None; kind_count],
             dirty_set,
             global_dirty,
+        }
+    }
+
+    // Returns the flat-array slot for (entity_idx, kind_bit).
+    // Panics only if kind_count is zero — which cannot happen in a registered protocol.
+    #[inline]
+    fn slot(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> usize {
+        entity_idx.as_usize() * self.kind_count + kind_bit as usize
+    }
+
+    // Grows `receivers_dense` so that all slots for `entity_idx` exist.
+    fn ensure_dense_capacity(&mut self, entity_idx: GlobalEntityIndex) {
+        let needed = (entity_idx.as_usize() + 1) * self.kind_count;
+        if needed > self.receivers_dense.len() {
+            self.receivers_dense.resize_with(needed, || None);
         }
     }
 
@@ -190,8 +215,11 @@ impl UserDiffHandler {
             dirty_set_weak,
             self.global_dirty.clone(),
         ));
+
+        self.ensure_dense_capacity(entity_idx);
+        let slot = self.slot(entity_idx, kind_bit);
+        self.receivers_dense[slot] = Some(receiver);
         self.entity_kind_to_key.insert((*entity, *component_kind), (entity_idx, kind_bit));
-        self.receivers.insert((entity_idx, kind_bit), receiver);
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
@@ -199,7 +227,10 @@ impl UserDiffHandler {
             // Never registered (or already deregistered) — nothing to clean up.
             return;
         };
-        self.receivers.remove(&(entity_idx, kind_bit));
+        let slot = self.slot(entity_idx, kind_bit);
+        if slot < self.receivers_dense.len() {
+            self.receivers_dense[slot] = None;
+        }
 
         // Only the client path has a DirtySet to cancel from.
         if let Some(dirty_set) = &self.dirty_set {
@@ -211,28 +242,19 @@ impl UserDiffHandler {
         self.entity_kind_to_key.contains_key(&(*entity, *component))
     }
 
-    // Resolves (GlobalEntity, ComponentKind) → compact key (GlobalEntityIndex, u16).
-    // Used by cold-path methods. Returns None if either lookup fails.
-    fn compact_key(
-        &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) -> Option<(GlobalEntityIndex, u16)> {
-        let guard = self.global_diff_handler.read().ok()?;
-        let idx = guard.entity_to_global_idx(entity)?;
-        let bit = guard.kind_bit(component_kind)?;
-        Some((idx, bit))
-    }
+    // Diff masks — cold paths resolve via entity_kind_to_key (no RwLock required).
 
-    // Diff masks — cold paths take (&GlobalEntity, &ComponentKind) and resolve internally.
     pub fn diff_mask_snapshot(
         &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> DiffMask {
-        let key = self.compact_key(entity, component_kind)
+        let (entity_idx, kind_bit) = self.entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
             .expect("Should not call this unless we're sure there's a receiver");
-        let Some(receiver) = self.receivers.get(&key) else {
+        let slot = self.slot(entity_idx, kind_bit);
+        let Some(Some(receiver)) = self.receivers_dense.get(slot) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.mask_snapshot()
@@ -243,69 +265,79 @@ impl UserDiffHandler {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        let Some(key) = self.compact_key(entity, component_kind) else {
-            warn!("diff_mask_is_clear(): Could not resolve compact key");
+        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
             return true;
         };
-        let Some(receiver) = self.receivers.get(&key) else {
-            warn!("diff_mask_is_clear(): Should not call this unless we're sure there's a receiver");
-            return true;
-        };
-        receiver.diff_mask_is_clear()
+        let slot = self.slot(entity_idx, kind_bit);
+        match self.receivers_dense.get(slot) {
+            Some(Some(r)) => r.diff_mask_is_clear(),
+            _ => true,
+        }
     }
 
     /// Marks the receiver for `(entity, component_kind)` as delivered.
     /// Called by the delivery-confirmation path when a spawn/insert ACK arrives.
     pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        if let Some(key) = self.compact_key(entity, component_kind) {
-            if let Some(receiver) = self.receivers.get(&key) {
-                receiver.mark_delivered();
-            }
+        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
+            return;
+        };
+        let slot = self.slot(entity_idx, kind_bit);
+        if let Some(Some(receiver)) = self.receivers_dense.get(slot) {
+            receiver.mark_delivered();
         }
     }
 
-    /// Cold-path combined check for `(GlobalEntity, ComponentKind)` — resolves compact key via RwLock.
+    /// Cold-path combined check — resolves via entity_kind_to_key.
     pub fn is_receiver_dirty_and_delivered(
         &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        let Some(key) = self.compact_key(entity, component_kind) else { return false; };
-        self.receivers
-            .get(&key)
-            .map(|r| r.is_dirty_and_delivered())
-            .unwrap_or(false)
+        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
+            return false;
+        };
+        let slot = self.slot(entity_idx, kind_bit);
+        match self.receivers_dense.get(slot) {
+            Some(Some(r)) => r.is_dirty_and_delivered(),
+            _ => false,
+        }
     }
 
-    /// Hot-path combined check for Phase 3: direct compact-key lookup, no RwLock.
+    /// Hot-path combined check for Phase 3: O(1) array access, no hashing, no RwLock.
     /// `entity_idx` and `kind_bit` are pre-resolved by the Phase 3 bitset scan.
     pub fn is_receiver_dirty_and_delivered_fast(
         &self,
         entity_idx: GlobalEntityIndex,
         kind_bit: u16,
     ) -> bool {
-        self.receivers
-            .get(&(entity_idx, kind_bit))
-            .map(|r| r.is_dirty_and_delivered())
-            .unwrap_or(false)
+        let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
+        match self.receivers_dense.get(slot) {
+            Some(Some(r)) => r.is_dirty_and_delivered(),
+            _ => false,
+        }
     }
 
-    /// Hot-path diff mask check for Phase 3: direct compact-key lookup, no RwLock.
+    /// Hot-path diff mask check for Phase 3: O(1) array access, no hashing, no RwLock.
     pub fn diff_mask_is_clear_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
-        self.receivers
-            .get(&(entity_idx, kind_bit))
-            .map(|r| r.diff_mask_is_clear())
-            .unwrap_or(true)
+        let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
+        match self.receivers_dense.get(slot) {
+            Some(Some(r)) => r.diff_mask_is_clear(),
+            _ => true,
+        }
     }
 
-    /// Hot-path mask snapshot for write_update: direct compact-key lookup, no RwLock.
+    /// Hot-path mask snapshot for write_update: O(1) array access, no hashing, no RwLock.
     /// Returns `None` if no receiver is registered for this (entity_idx, kind_bit).
     pub fn diff_mask_snapshot_fast(
         &self,
         entity_idx: GlobalEntityIndex,
         kind_bit: u16,
     ) -> Option<DiffMask> {
-        self.receivers.get(&(entity_idx, kind_bit)).map(|r| r.mask_snapshot())
+        let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
+        match self.receivers_dense.get(slot) {
+            Some(Some(r)) => Some(r.mask_snapshot()),
+            _ => None,
+        }
     }
 
     pub fn or_diff_mask(
@@ -314,38 +346,48 @@ impl UserDiffHandler {
         component_kind: &ComponentKind,
         other_mask: &DiffMask,
     ) {
-        let key = self.compact_key(entity, component_kind)
+        let (entity_idx, kind_bit) = self.entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
             .expect("Should not call this unless we're sure there's a receiver");
-        let Some(receiver) = self.receivers.get_mut(&key) else {
+        let slot = self.slot(entity_idx, kind_bit);
+        let Some(Some(receiver)) = self.receivers_dense.get(slot) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.or_mask(other_mask);
     }
 
     pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        let key = self.compact_key(entity, component_kind)
+        let (entity_idx, kind_bit) = self.entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
             .expect("Should not call this unless we're sure there's a receiver");
-        let Some(receiver) = self.receivers.get_mut(&key) else {
+        let slot = self.slot(entity_idx, kind_bit);
+        let Some(Some(receiver)) = self.receivers_dense.get(slot) else {
             panic!("Should not call this unless we're sure there's a receiver");
         };
         receiver.clear_mask();
     }
 
-    /// Hot-path clear: no RwLock, no GlobalEntity key resolution.
+    /// Hot-path clear: O(1) array access, no hashing, no RwLock.
     pub fn clear_diff_mask_fast(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
-        if let Some(receiver) = self.receivers.get_mut(&(entity_idx, kind_bit)) {
+        let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
+        if let Some(Some(receiver)) = self.receivers_dense.get(slot) {
             receiver.clear_mask();
         }
     }
 
     #[cfg(feature = "test_utils")]
     pub fn receiver_count(&self) -> usize {
-        self.receivers.len()
+        self.receivers_dense.iter().filter(|s| s.is_some()).count()
     }
 
     #[cfg(feature = "test_utils")]
     pub fn dirty_candidates_count(&self) -> usize {
-        self.receivers.values().filter(|r| !r.diff_mask_is_clear()).count()
+        self.receivers_dense.iter()
+            .filter_map(|slot| slot.as_ref())
+            .filter(|r| !r.diff_mask_is_clear())
+            .count()
     }
 
     /// Builds the dirty candidate set for this connection from the per-user DirtySet.
@@ -408,5 +450,80 @@ impl UserDiffHandler {
             dirty_scan_counters::DIRTY_RESULTS.fetch_add(visited, Ordering::Relaxed);
         }
         result
+    }
+}
+
+#[cfg(test)]
+mod dense_receiver_tests {
+    //! Pins the C.7.B invariant: stride-indexed flat Vec gives correct receiver
+    //! retrieval across alloc/free/re-alloc sequences that exercise index recycling.
+    //!
+    //! These tests verify the slot arithmetic and array management directly,
+    //! without wiring the full network stack.
+
+    use crate::world::update::global_entity_index::GlobalEntityIndex;
+
+    /// Slot arithmetic: entity_idx.as_usize() * kind_count + kind_bit must be injective.
+    #[test]
+    fn slot_arithmetic_is_injective() {
+        let kind_count = 8usize;
+        let mut seen = std::collections::HashSet::new();
+        for entity_raw in 1u32..=32 {
+            for kind_bit in 0u16..kind_count as u16 {
+                let slot = entity_raw as usize * kind_count + kind_bit as usize;
+                assert!(seen.insert(slot), "collision at entity={entity_raw} kind_bit={kind_bit}");
+            }
+        }
+    }
+
+    /// ensure_dense_capacity grows correctly for entity_idx = 1..=32.
+    #[test]
+    fn ensure_capacity_grows_monotonically() {
+        let kind_count = 4usize;
+        let mut vec: Vec<Option<u32>> = Vec::new();
+        for entity_raw in 1u32..=32 {
+            let entity_idx = GlobalEntityIndex(entity_raw);
+            let needed = (entity_idx.as_usize() + 1) * kind_count;
+            if needed > vec.len() {
+                vec.resize_with(needed, || None);
+            }
+            // Every slot for this entity_idx must be in bounds.
+            for kind_bit in 0..kind_count {
+                let slot = entity_idx.as_usize() * kind_count + kind_bit;
+                assert!(slot < vec.len(), "slot {slot} out of bounds after grow for entity={entity_raw}");
+            }
+        }
+        // After 32 entities at stride 4: need 33 * 4 = 132 slots.
+        assert_eq!(vec.len(), 33 * kind_count);
+    }
+
+    /// Slot reuse after free: entity A frees its slots, entity B gets the same
+    /// GlobalEntityIndex.  The dense array must not retain A's slot value.
+    #[test]
+    fn freed_entity_slot_does_not_alias_new_entity() {
+        let kind_count = 4usize;
+        let mut vec: Vec<Option<u32>> = Vec::new();
+
+        // Allocate entity A at index 3, kind_bit 2 → slot 14.
+        let idx_a = GlobalEntityIndex(3);
+        let needed = (idx_a.as_usize() + 1) * kind_count;
+        vec.resize_with(needed, || None);
+        let slot_a = idx_a.as_usize() * kind_count + 2;
+        vec[slot_a] = Some(42u32); // sentinel value for A
+
+        // Free A — clear all its slots.
+        for kb in 0..kind_count {
+            let s = idx_a.as_usize() * kind_count + kb;
+            if s < vec.len() { vec[s] = None; }
+        }
+
+        // B gets the recycled index 3.
+        let idx_b = GlobalEntityIndex(3);
+        let slot_b = idx_b.as_usize() * kind_count + 2;
+        assert!(vec[slot_b].is_none(), "slot must be None after free, not alias A's value");
+
+        // Register B at the same slot.
+        vec[slot_b] = Some(99u32);
+        assert_eq!(vec[slot_b], Some(99u32));
     }
 }

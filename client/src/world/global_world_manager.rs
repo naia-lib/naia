@@ -35,6 +35,15 @@ impl GlobalWorldManager {
         }
     }
 
+    /// Pre-populates the stride from the static protocol `ComponentKinds` total.
+    /// Must be called in `Client::new()` before any connection is accepted.
+    pub fn init_protocol_kind_count(&mut self, count: u16) {
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .set_protocol_kind_count(count);
+    }
+
     // Entities
     pub fn entities(&self) -> Vec<GlobalEntity> {
         let mut output = Vec::new();

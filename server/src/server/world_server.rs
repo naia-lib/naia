@@ -274,6 +274,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         let mut global_world_manager = GlobalWorldManager::new();
         global_world_manager.set_global_dirty(Arc::clone(&global_dirty));
+        global_world_manager.init_protocol_kind_count(component_kinds.kind_count());
 
         Self {
             // Config
@@ -3262,6 +3263,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         .global_entity_map
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
+                    // Fire synthetic remove events for each component before despawn.
+                    // Symmetric to the client-side process_remove ordering: RemoveComponentEvent
+                    // must arrive before DespawnEntityEvent so observers can act on the component.
+                    // The server does not hold component data for client entities, so we emit
+                    // kind-only remove events via push_remove_synthetic.
+                    if let Some(component_kinds) = self.global_world_manager.component_kinds(&global_entity) {
+                        for component_kind in component_kinds {
+                            self.incoming_world_events.push_remove_synthetic(user_key, &world_entity, &component_kind);
+                        }
+                    }
                     self.incoming_world_events
                         .push_despawn(user_key, &world_entity);
                     deferred_events.push(EntityEvent::Despawn(global_entity));
@@ -3459,16 +3470,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     let owner = self.global_world_manager.entity_owner(&global_entity);
                     let is_delegated = self.global_world_manager.entity_is_delegated(&global_entity);
                     let is_pub_client_owned = self.global_world_manager.entity_is_public_and_client_owned(&global_entity);
-                    if is_pub_client_owned
-                        || (is_delegated
-                            && matches!(
-                                owner,
-                                Some(
-                                    EntityOwner::Client(_)
-                                        | EntityOwner::ClientPublic(_)
-                                        | EntityOwner::ClientWaiting(_)
-                                )
-                            ))
+                    if is_pub_client_owned && !is_delegated {
+                        // Non-delegated public client entity: tracked in the host entity map
+                        // (not the remote entity map), so remote_despawn_entity would panic.
+                        // Just do the full teardown directly.
+                        self.despawn_entity_worldless(&world_entity);
+                    } else if is_delegated
+                        && matches!(
+                            owner,
+                            Some(
+                                EntityOwner::Client(_)
+                                    | EntityOwner::ClientPublic(_)
+                                    | EntityOwner::ClientWaiting(_)
+                            )
+                        )
                     {
                         // Client-created delegated entity: remove from this connection's remote
                         // world manager, then tear down the server-side entity record entirely.

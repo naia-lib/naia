@@ -115,6 +115,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let compression_config = protocol.compression.clone();
 
+        let mut global_world_manager = GlobalWorldManager::new();
+        global_world_manager.init_protocol_kind_count(protocol.component_kinds.kind_count());
+
         Self {
             // Config
             client_config: client_config.clone(),
@@ -133,7 +136,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             server_disconnect: false,
             waitlist_messages: VecDeque::new(),
             // World
-            global_world_manager: GlobalWorldManager::new(),
+            global_world_manager,
             global_entity_map: GlobalEntityMap::new(),
             // Events
             incoming_world_events: Events::new(),
@@ -1534,12 +1537,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_to_global_entity(world_entity)
             .unwrap();
 
-        // remove component from server connection
+        // Only relay through the outgoing pipeline if the entity is client-created
+        // (i.e. tracked in the local/host world manager). For server-created entities
+        // that the client merely holds authority over (e.g. delegated resources
+        // removed by the server), the entity is not in the local world manager and
+        // calling remove_component on it would panic.
         if let Some(connection) = &mut self.server_connection {
-            connection
-                .base
-                .world_manager
-                .remove_component(&global_entity, component_kind);
+            if connection.base.world_manager.has_global_entity(&global_entity) {
+                connection
+                    .base
+                    .world_manager
+                    .remove_component(&global_entity, component_kind);
+            }
         }
 
         // cleanup all other loose ends
@@ -2171,7 +2180,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         ));
 
         self.manual_disconnect = false;
-        self.global_world_manager = GlobalWorldManager::new();
+        let mut global_world_manager = GlobalWorldManager::new();
+        global_world_manager.init_protocol_kind_count(self.protocol.component_kinds.kind_count());
+        self.global_world_manager = global_world_manager;
     }
 
     fn server_address_unwrapped(&self) -> SocketAddr {

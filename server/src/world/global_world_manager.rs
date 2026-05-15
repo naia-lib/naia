@@ -47,6 +47,16 @@ impl GlobalWorldManager {
         self.global_dirty = Some(bitset);
     }
 
+    /// Pre-populates the stride from the static protocol `ComponentKinds` total.
+    /// Must be called at startup (after `Protocol::build()`) and before any connection
+    /// is accepted, so that `UserDiffHandler::new()` reads a non-zero kind_count.
+    pub fn init_protocol_kind_count(&mut self, count: u16) {
+        self.diff_handler
+            .write()
+            .expect("GlobalDiffHandler lock poisoned")
+            .set_protocol_kind_count(count);
+    }
+
     pub fn has_entity(&self, global_entity: &GlobalEntity) -> bool {
         self.entity_records.contains_key(global_entity)
     }

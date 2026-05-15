@@ -112,6 +112,16 @@ impl GlobalDiffHandler {
         self.max_kind_count
     }
 
+    /// Pre-populates `max_kind_count` from the static `ComponentKinds` total at
+    /// server/client startup, before any connection is accepted. This ensures
+    /// `UserDiffHandler::new()` reads a non-zero stride even when no entities
+    /// have been registered yet.
+    pub fn set_protocol_kind_count(&mut self, count: u16) {
+        if count > self.max_kind_count {
+            self.max_kind_count = count;
+        }
+    }
+
     /// Returns `true` if a mutation channel is registered for `(global_entity, component_kind)`.
     pub fn has_component(&self, global_entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
         self.mut_receiver_builders.contains_key(&(*global_entity, *component_kind))
