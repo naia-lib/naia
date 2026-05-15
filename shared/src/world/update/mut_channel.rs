@@ -11,7 +11,7 @@ use parking_lot::{Mutex as PlMutex, RwLock as PlRwLock};
 use crate::world::update::global_dirty_bitset::GlobalDirtyBitset;
 use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::atomic_diff_mask::AtomicDiffMask;
-use crate::{CachedComponentUpdate, DiffMask, GlobalWorldManagerType, PropertyMutate};
+use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
 
 /// Per-user dirty queue (Phase 9.4 / Stage E + B-strict + 2026-05-05
 /// unlimited-kind-count refactor).
@@ -348,19 +348,6 @@ pub trait MutChannelType: Send + Sync {
     /// Notifies all receivers that property `diff` has changed.
     fn send(&self, diff: u8);
 
-    /// Returns the cached pre-serialized update for the given diff mask key, if valid.
-    /// Returns `None` if the cache has been invalidated (component mutated since last build).
-    fn get_cached_update(&self, diff_mask_key: u64) -> Option<CachedComponentUpdate> {
-        unimplemented!("MutChannelType impl must override get_cached_update; diff_mask_key={}", diff_mask_key)
-    }
-    /// Stores a newly-built cached update for the given diff mask key.
-    fn set_cached_update(&self, diff_mask_key: u64, update: CachedComponentUpdate) {
-        unimplemented!("MutChannelType impl must override set_cached_update; diff_mask_key={}, bit_count={}", diff_mask_key, update.bit_count)
-    }
-    /// Clears ALL cached updates. Called automatically from `send()` on every mutation.
-    fn clear_cached_updates(&self) {
-        unimplemented!("MutChannelType impl must override clear_cached_updates")
-    }
 }
 
 /// Shared mutation channel that connects a component's property mutator to all interested receivers.
@@ -408,17 +395,6 @@ impl MutChannel {
         false
     }
 
-    /// Returns the cached pre-serialized update for `key`, or `None` if missing or invalidated.
-    pub fn get_cached_update(&self, key: u64) -> Option<CachedComponentUpdate> {
-        self.data.read().ok()?.get_cached_update(key)
-    }
-
-    /// Stores a cached pre-serialized update under `key`.
-    pub fn set_cached_update(&self, key: u64, update: CachedComponentUpdate) {
-        if let Ok(data) = self.data.read() {
-            data.set_cached_update(key, update);
-        }
-    }
 }
 
 // MutReceiver — atomic, lock-free hot path.

@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::{CachedComponentUpdate, MutChannelType, MutReceiver};
+use naia_shared::{MutChannelType, MutReceiver};
 
 pub struct MutChannelData {
     receiver: MutReceiver,
@@ -26,17 +26,5 @@ impl MutChannelType for MutChannelData {
 
     fn send(&self, diff: u8) {
         self.receiver.mutate(diff);
-    }
-
-    fn get_cached_update(&self, _diff_mask_key: u64) -> Option<CachedComponentUpdate> {
-        None
-    }
-
-    fn set_cached_update(&self, _diff_mask_key: u64, _update: CachedComponentUpdate) {
-        // no-op: client does not maintain a send-side cached update store
-    }
-
-    fn clear_cached_updates(&self) {
-        // no-op: client does not maintain a send-side cached update store
     }
 }

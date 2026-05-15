@@ -914,7 +914,7 @@ impl WorldWriter {
                     // Cache hit: replay stored bytes, zero ECS reads.
                     // Cache miss: one ECS read, one serialize, store for future users/ticks.
                     if let Some(diff_mask_key) = diff_mask.as_key() {
-                        let cached: CachedComponentUpdate = match gdh.get_cached_update(global_entity, component_kind, diff_mask_key) {
+                        let cached: CachedComponentUpdate = match gdh.get_wire_cache(entity_idx, kind_bit, diff_mask_key) {
                             Some(c) => c,
                             None => {
                                 let mut converter = world_manager.entity_converter_mut(global_world_manager);
@@ -926,7 +926,7 @@ impl WorldWriter {
                                     .write_update(&diff_mask, &mut temp, &mut converter);
                                 let c = CachedComponentUpdate::capture(&temp)
                                     .expect("component exceeds 512 bits; impossible after registration check");
-                                gdh.set_cached_update(global_entity, component_kind, diff_mask_key, c);
+                                gdh.set_wire_cache(entity_idx, kind_bit, diff_mask_key, c);
                                 c
                             }
                         };

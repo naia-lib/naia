@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr};
+use std::{collections::HashMap, net::SocketAddr, sync::Mutex};
 
 use crate::{CachedComponentUpdate, ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
 
@@ -57,6 +57,20 @@ pub struct GlobalDiffHandler {
     /// Inverse kind-bit lookup: bit_to_kind[kind_bit] = ComponentKind. O(1) hot path.
     /// Populated at register_component time. `None` for unregistered bit positions.
     bit_to_kind: Vec<Option<ComponentKind>>,
+    /// Flat per-(entity, component) wire-cache for PATH A serialization.
+    ///
+    /// Slot formula: `entity_idx.as_usize() * max_kind_count + kind_bit`.
+    /// Entry = `Some((diff_mask_key, CachedComponentUpdate))` when valid.
+    ///
+    /// Written by the single-threaded packet-build path (Phase 3 inner loop).
+    /// Cleared at the start of each send cycle (Phase 1+2) for all dirty entities
+    /// via `clear_wire_cache_for_entity` (Option B invalidation strategy).
+    ///
+    /// `Mutex` provides interior mutability so `get_wire_cache`/`set_wire_cache`
+    /// can be called through an immutable `&GlobalDiffHandler` reference (which
+    /// is what the packet-build path holds via the outer `RwLock::read()` guard).
+    /// The Mutex is never contended — packet building is single-threaded.
+    wire_cache: Mutex<Vec<Option<(u64, CachedComponentUpdate)>>>,
 }
 
 #[cfg(feature = "test_utils")]
@@ -95,6 +109,7 @@ impl GlobalDiffHandler {
             free_list: Vec::new(),
             next_idx: 1, // 0 is INVALID
             bit_to_kind: Vec::new(),
+            wire_cache: Mutex::new(Vec::new()),
         }
     }
 
@@ -208,28 +223,49 @@ impl GlobalDiffHandler {
         None
     }
 
-    /// Returns the cached pre-serialized update for `(entity, kind, key)`, if one exists and is valid.
-    pub fn get_cached_update(
-        &self,
-        entity: &GlobalEntity,
-        kind: &ComponentKind,
-        key: u64,
-    ) -> Option<CachedComponentUpdate> {
-        self.mut_receiver_builders
-            .get(&(*entity, *kind))
-            .and_then(|b| b.channel().get_cached_update(key))
+    // ── Wire-cache (C.7.C+D) ────────────────────────────────────────────────────
+
+    #[inline]
+    fn wire_cache_slot(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> usize {
+        entity_idx.as_usize() * self.max_kind_count as usize + kind_bit as usize
     }
 
-    /// Stores a cached pre-serialized update for `(entity, kind, key)`.
-    pub fn set_cached_update(
-        &self,
-        entity: &GlobalEntity,
-        kind: &ComponentKind,
-        key: u64,
-        update: CachedComponentUpdate,
-    ) {
-        if let Some(b) = self.mut_receiver_builders.get(&(*entity, *kind)) {
-            b.channel().set_cached_update(key, update);
+    /// Returns the cached pre-serialized update for `(entity_idx, kind_bit, key)`, or `None` on miss/invalidation.
+    /// O(1) slot calculation, no HashMap, no double-RwLock. Called by PATH A in `write_update`.
+    pub fn get_wire_cache(&self, entity_idx: GlobalEntityIndex, kind_bit: u16, key: u64) -> Option<CachedComponentUpdate> {
+        if self.max_kind_count == 0 { return None; }
+        let slot = self.wire_cache_slot(entity_idx, kind_bit);
+        let cache = self.wire_cache.lock().ok()?;
+        match cache.get(slot)? {
+            Some((k, v)) if *k == key => Some(*v),
+            _ => None,
+        }
+    }
+
+    /// Stores a cached pre-serialized update for `(entity_idx, kind_bit, key)`.
+    /// O(1). Only called after a PATH A cache miss — single-threaded packet-build path.
+    pub fn set_wire_cache(&self, entity_idx: GlobalEntityIndex, kind_bit: u16, key: u64, update: CachedComponentUpdate) {
+        if self.max_kind_count == 0 { return; }
+        let slot = self.wire_cache_slot(entity_idx, kind_bit);
+        if let Ok(mut cache) = self.wire_cache.lock() {
+            if let Some(entry) = cache.get_mut(slot) {
+                *entry = Some((key, update));
+            }
+        }
+    }
+
+    /// Clears all wire-cache entries for `entity_idx`.
+    /// Called at the start of each send cycle (Phase 1+2) for every dirty entity
+    /// so Phase 3 always re-serializes with the current component values.
+    pub fn clear_wire_cache_for_entity(&self, entity_idx: GlobalEntityIndex) {
+        if self.max_kind_count == 0 { return; }
+        let kind_count = self.max_kind_count as usize;
+        let base = entity_idx.as_usize() * kind_count;
+        if let Ok(mut cache) = self.wire_cache.lock() {
+            let end = (base + kind_count).min(cache.len());
+            for s in base..end {
+                cache[s] = None;
+            }
         }
     }
 
@@ -259,6 +295,15 @@ impl GlobalDiffHandler {
             // Reset stale component flags from a previously-freed slot.
             self.idx_to_components[slot] = ComponentFlags::new(kind_count);
         }
+        // Grow wire_cache to cover all component slots for this entity.
+        if kind_count > 0 {
+            let needed = (slot + 1) * kind_count;
+            if let Ok(mut cache) = self.wire_cache.lock() {
+                if needed > cache.len() {
+                    cache.resize_with(needed, || None);
+                }
+            }
+        }
         self.idx_to_global[slot] = Some(global);
         self.global_to_idx.insert(global, idx);
         idx
@@ -271,6 +316,8 @@ impl GlobalDiffHandler {
             if let Some(slot) = self.idx_to_global.get_mut(idx.0 as usize) {
                 *slot = None;
             }
+            // Clear wire_cache slots so a recycled index never returns stale bytes.
+            self.clear_wire_cache_for_entity(idx);
             self.free_list.push(idx);
         }
     }
@@ -300,5 +347,70 @@ impl GlobalDiffHandler {
             .get(idx.0 as usize)
             .and_then(|flags| flags.user_dependent.get(kind_bit as usize))
             .copied()
+    }
+}
+
+#[cfg(test)]
+mod wire_cache_tests {
+    use super::*;
+    use crate::bigmap::BigMapKey;
+
+    fn make_update(bit_count: u32) -> CachedComponentUpdate {
+        let mut bytes = [0u8; 64];
+        bytes[0] = 0xAB;
+        CachedComponentUpdate { bytes, bit_count }
+    }
+
+    fn make_gdh(kind_count: u16) -> GlobalDiffHandler {
+        let mut gdh = GlobalDiffHandler::new();
+        gdh.set_protocol_kind_count(kind_count);
+        gdh
+    }
+
+    #[test]
+    fn get_after_set_returns_hit() {
+        let mut gdh = make_gdh(4);
+        let entity_idx = gdh.alloc_entity(GlobalEntity::from_u64(1));
+        let update = make_update(8);
+
+        gdh.set_wire_cache(entity_idx, 0, 0x01, update);
+        let got = gdh.get_wire_cache(entity_idx, 0, 0x01).expect("should hit after set");
+        assert_eq!(got.bit_count, 8);
+        assert_eq!(got.bytes[0], 0xAB);
+    }
+
+    #[test]
+    fn wrong_key_returns_miss() {
+        let mut gdh = make_gdh(4);
+        let entity_idx = gdh.alloc_entity(GlobalEntity::from_u64(1));
+        gdh.set_wire_cache(entity_idx, 0, 0x01, make_update(8));
+        assert!(gdh.get_wire_cache(entity_idx, 0, 0x02).is_none(), "different key must miss");
+    }
+
+    #[test]
+    fn clear_for_entity_invalidates_all_slots() {
+        let mut gdh = make_gdh(4);
+        let entity_idx = gdh.alloc_entity(GlobalEntity::from_u64(1));
+        for k in 0..4u16 {
+            gdh.set_wire_cache(entity_idx, k, 0x01, make_update(8));
+        }
+        gdh.clear_wire_cache_for_entity(entity_idx);
+        for k in 0..4u16 {
+            assert!(gdh.get_wire_cache(entity_idx, k, 0x01).is_none(), "slot {k} should be None after clear");
+        }
+    }
+
+    #[test]
+    fn free_entity_clears_wire_cache_for_recycled_index() {
+        let ge_a = GlobalEntity::from_u64(1);
+        let ge_b = GlobalEntity::from_u64(2);
+        let mut gdh = make_gdh(4);
+        let idx_a = gdh.alloc_entity(ge_a);
+        gdh.set_wire_cache(idx_a, 0, 0x01, make_update(8));
+        gdh.free_entity(&ge_a);
+        let idx_b = gdh.alloc_entity(ge_b);
+        // The free-list may recycle idx_a for ge_b (depends on LIFO order).
+        // Either way, the slot must be clear — no stale A data.
+        assert!(gdh.get_wire_cache(idx_b, 0, 0x01).is_none(), "recycled slot must be None");
     }
 }

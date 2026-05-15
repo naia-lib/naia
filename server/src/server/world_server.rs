@@ -800,6 +800,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             let handler = self.global_world_manager.diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
             for global_idx in self.global_dirty.dirty_entity_iter() {
+                // Option B wire-cache invalidation: clear this entity's PATH A cache
+                // before Phase 3 re-serializes, ensuring no stale bytes reach the wire.
+                guard.clear_wire_cache_for_entity(global_idx);
                 let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                 if !self.global_world_manager.entity_is_replicating(&global_entity) { continue; }
                 let Some(world_entity) = self.idx_to_world[global_idx.as_usize()] else { continue; };
