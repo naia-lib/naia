@@ -1,6 +1,6 @@
 # PERF — Naia Iris Replication Architecture
 
-**Status:** COMPLETE — Phases 1–10 implemented and benchmarked (2026-05-14)
+**Status:** COMPLETE — Phases 1–10 + C.7 write_updates hot-path all implemented (2026-05-14)
 **Created:** 2026-05-13
 **Supersedes:** `PERF_SHARED_UPDATE_BLOB.md`
 **Context:** Sub-phase profiling in cyberlith benchmark — `cyberlith/_AGENTS/CAPACITY_RESULTS.md`
@@ -85,18 +85,20 @@ At **10,000 CCU** these numbers become 320,000 ECS reads and 320,000 serializati
 | `cell::update [total]` p99 | 5,137 µs | 4,278 µs | **−16.7%** |
 | Server RSS | 24.66 MB | 12.98 MB | **−47.3%** (N_ram 33→63 cells) |
 
-**Remaining bottleneck — `write_updates` = 36.8% of tick (2026-05-14 sub-breakdown):**
+**Remaining bottleneck — `write_updates` = 36.8% of tick (2026-05-14 sub-breakdown; C.7 now CLOSED):**
 
 Post-Iris profiling with `bench_instrumentation` shows:
 - `scope_entry_spawns = 0` in 500-tick steady state — tile serialization hypothesis ruled out
 - `write_updates` (entity/component serialization in `WorldWriter`) = 93% of `write_packet`
 - `write_packet` = 97% of `send_packet_loop` — io_send (transport) is only 1.1%
-- Root: `get_cached_update()` still uses `mut_receiver_builders: HashMap<(GlobalEntity, ComponentKind), ...>`
-  (~20–30 ns/lookup × ~1,800 component×user visits/tick)
+- After C.7: all four HashMap/RwLock bottlenecks eliminated. Remaining 96% is actual
+  serialization (ECS reads for PATH A misses, `append_cached_update` byte loop for PATH A hits)
+- PATH A cache hit/miss counters now gated on `bench_instrumentation`
+  (`bench_write_counters::snapshot_path_a()`) — see §17 for details
 
-The `mut_receiver_builders` HashMap → dense 2D array conversion (Innovation 1, specified but not yet
-implemented in Phase 6) is the next optimization target. `GlobalEntityIndex` is live; the array
-indexing design is fully specified in §4 below.
+**Next optimization candidate:** `append_cached_update` bulk-copy fast path — replacing the
+byte-by-byte loop with `ptr::copy_nonoverlapping` / SIMD unroll (naia-serde level, no architecture
+change). Not scheduled; requires bench confirmation that PATH A hit rate justifies the work.
 
 ---
 
@@ -1212,7 +1214,7 @@ If profiling after Phase 10 shows PATH A cache misses are negligible in practice
 
 ## 17. C.7 — write_updates Hot-Path Optimization (spec 2026-05-14)
 
-**Status:** COMPLETE — C.7.A ✅ (a9808eed) + C.7.B compact-key ✅ (1859d651) + record_update_dense ✅ (665bb9ec) + C.7.B full-flat-Vec ✅ (0358daa6) + C.7.C+D wire-cache ✅ (04e6d2fc)
+**Status:** COMPLETE — C.7.A ✅ (a9808eed) + C.7.B compact-key ✅ (1859d651) + record_update_dense ✅ (665bb9ec) + C.7.B full-flat-Vec ✅ (0358daa6) + C.7.C+D wire-cache ✅ (04e6d2fc) + PATH A bench counters ✅ (50e39d34)
 **Proposed:** 2026-05-14, based on `send_packet_loop` sub-breakdown bench + full code audit
 **Branch:** `dev` (never commit to `main`)
 
