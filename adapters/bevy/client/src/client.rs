@@ -181,6 +181,24 @@ impl<'w, T: Send + Sync + 'static> Client<'w, T> {
         self.client.client.entity_authority_status(entity)
     }
 
+    /// Queues a despawn notification to the server for `entity` and removes
+    /// the entity record from naia's global tracking (`entity_records`).
+    ///
+    /// Normally callers should just call `commands.entity(entity).despawn()`
+    /// and let the Bevy adapter's `on_despawn` system route the notification
+    /// during the next tick. Use this method directly only when you need to
+    /// emit the despawn notification *before* the Bevy entity is removed —
+    /// for example, to bias the host-channel ordering against an in-flight
+    /// server update for the same entity in tick-locked test harnesses.
+    ///
+    /// The notification itself is still flushed by the next `send_packets`
+    /// pass, so this is an ordering primitive, not a synchronous despawn.
+    /// Calling it again from `on_despawn` is harmless: the second call
+    /// returns early because `entity_records` no longer contains the entity.
+    pub fn despawn_entity_worldless(&mut self, entity: &Entity) {
+        self.client.client.despawn_entity_worldless(entity);
+    }
+
     //// Priority ////
 
     pub fn entity_priority(&self, entity: Entity) -> EntityPriorityRef<'_, Entity> {

@@ -1351,13 +1351,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 if !is_delegated {
                     panic!("attempting to despawn entity that is not yet delegated. Delegation needs some time to be confirmed by the Server, so check that a despawn is possible by calling `commands.entity(..).replication_config(..).is_delegated()` first.");
                 }
-                if self
-                    .global_world_manager
-                    .entity_authority_status(&global_entity)
-                    != Some(EntityAuthStatus::Granted)
-                {
-                    panic!("attempting to despawn entity that we do not have authority over");
-                }
+                // For HOST (client-origin) delegated entities, the host channel
+                // sends the despawn to the server unconditionally — no Granted check
+                // needed. `despawn_entity_and_notify_server` → `despawn_entity` →
+                // `host.send_command(Despawn)` works regardless of auth status.
+                // Server-initiated despawns never reach here: those entities are
+                // deregistered from `global_entity_map` in ProcessPackets, causing
+                // an early return at line 1336.
             }
         } else {
             panic!("attempting to despawn entity that has no owner");
@@ -1787,8 +1787,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     .deregister_authed_entity(&self.global_world_manager, global_entity);
                 self.incoming_world_events.push_auth_reset(*world_entity);
             }
-            // Request denied (only when Requested -> Denied)
-            (EntityAuthStatus::Requested, EntityAuthStatus::Denied) => {
+            // Request denied (Requested -> Denied or Requested -> Available)
+            // Available case: server made entity Available (e.g. cascade despawn) while a
+            // request was in-flight — client never held authority, nothing to deregister.
+            (EntityAuthStatus::Requested, EntityAuthStatus::Denied)
+            | (EntityAuthStatus::Requested, EntityAuthStatus::Available) => {
                 // Emit denied event, but do NOT deregister (never had authority)
                 self.incoming_world_events.push_auth_deny(*world_entity);
             }
