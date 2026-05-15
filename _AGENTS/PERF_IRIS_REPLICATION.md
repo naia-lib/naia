@@ -1212,7 +1212,7 @@ If profiling after Phase 10 shows PATH A cache misses are negligible in practice
 
 ## 17. C.7 — write_updates Hot-Path Optimization (spec 2026-05-14)
 
-**Status:** IN PROGRESS — C.7.A ✅ (a9808eed) + C.7.B compact-key ✅ (1859d651) + record_update_dense ✅ (665bb9ec) + C.7.B full-flat-Vec ✅ (0358daa6); C.7.C+D wire-cache still pending
+**Status:** COMPLETE — C.7.A ✅ (a9808eed) + C.7.B compact-key ✅ (1859d651) + record_update_dense ✅ (665bb9ec) + C.7.B full-flat-Vec ✅ (0358daa6) + C.7.C+D wire-cache ✅ (04e6d2fc)
 **Proposed:** 2026-05-14, based on `send_packet_loop` sub-breakdown bench + full code audit
 **Branch:** `dev` (never commit to `main`)
 
