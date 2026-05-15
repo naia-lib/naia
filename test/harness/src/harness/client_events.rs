@@ -106,6 +106,7 @@ impl ClientEvents {
                 if let Some(entity_key) =
                     register_client_entity_event(scenario, &client_key, &entity)
                 {
+                    scenario.record_client_insert(client_key, entity_key);
                     entity_keys.push(entity_key);
                 }
             }
@@ -118,9 +119,17 @@ impl ClientEvents {
         for (component_kind, entity_data) in world_events.take_removes().unwrap_or_default() {
             let mut entity_keys = Vec::new();
             for (entity, component) in entity_data {
-                if let Some(entity_key) =
-                    register_client_entity_event(scenario, &client_key, &entity)
-                {
+                // For removes that arrive with a despawn, the entity is already gone from the
+                // world by the time we process events. Fall back to a registry-only lookup
+                // (same pattern as DespawnEntityEvent handling above).
+                let entity_key = register_client_entity_event(scenario, &client_key, &entity)
+                    .or_else(|| {
+                        scenario
+                            .entity_registry()
+                            .entity_key_for_client_test_entity(&client_key, &entity)
+                    });
+                if let Some(entity_key) = entity_key {
+                    scenario.record_client_remove(client_key, entity_key);
                     entity_keys.push((entity_key, component));
                 }
             }

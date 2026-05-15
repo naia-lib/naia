@@ -11,6 +11,8 @@ use crate::{ClientKey, Scenario, TestEntity};
 
 type HarnessRequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(ClientKey, GlobalResponseId, MessageContainer)>>>;
 type HarnessRemovesMap = HashMap<ComponentKind, Vec<(ClientKey, EntityKey, Box<dyn Replicate>)>>;
+/// Kind-only removes: fired when the server doesn't hold component data (client entity despawn).
+type HarnessRemovesSyntheticMap = HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>;
 
 pub struct ServerEvents {
     auths: HashMap<MessageKind, Vec<(ClientKey, MessageContainer)>>,
@@ -29,6 +31,7 @@ pub struct ServerEvents {
     auth_resets: Vec<EntityKey>,
     inserts: HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>,
     removes: HarnessRemovesMap,
+    removes_synthetic: HarnessRemovesSyntheticMap,
     updates: HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>,
     ticks: Vec<Tick>,
 }
@@ -120,9 +123,7 @@ impl ServerEvents {
         // Convert world events: spawns (use helper method)
         let mut spawns = Vec::new();
         for (user_key, server_entity) in events.read::<naia_server::SpawnEntityEvent>() {
-            if let Some((client_key, entity_key)) =
-                register_spawn_entity(scenario, user_key, server_entity)
-            {
+            if let Some((client_key, entity_key)) = register_spawn_entity(scenario, user_key, server_entity) {
                 spawns.push((client_key, entity_key));
             }
         }
@@ -212,13 +213,12 @@ impl ServerEvents {
             for (component_kind, entity_data) in inserts_data {
                 let mut client_entities = Vec::new();
                 for (user_key, entity) in entity_data {
-                    if let Some(client_key) = scenario.user_to_client_key(&user_key) {
-                        if let Some(entity_key) = scenario
-                            .entity_registry()
-                            .entity_key_for_server_entity(&entity)
-                        {
-                            client_entities.push((client_key, entity_key));
-                        }
+                    if let (Some(client_key), Some(entity_key)) = (
+                        scenario.user_to_client_key(&user_key),
+                        scenario.entity_registry().entity_key_for_server_entity(&entity),
+                    ) {
+                        scenario.record_server_insert(entity_key);
+                        client_entities.push((client_key, entity_key));
                     }
                 }
                 if !client_entities.is_empty() {
@@ -233,17 +233,36 @@ impl ServerEvents {
             for (component_kind, entity_data) in removes_data {
                 let mut client_entities = Vec::new();
                 for (user_key, entity, component) in entity_data {
-                    if let Some(client_key) = scenario.user_to_client_key(&user_key) {
-                        if let Some(entity_key) = scenario
-                            .entity_registry()
-                            .entity_key_for_server_entity(&entity)
-                        {
-                            client_entities.push((client_key, entity_key, component));
-                        }
+                    if let (Some(client_key), Some(entity_key)) = (
+                        scenario.user_to_client_key(&user_key),
+                        scenario.entity_registry().entity_key_for_server_entity(&entity),
+                    ) {
+                        scenario.record_server_remove(entity_key);
+                        client_entities.push((client_key, entity_key, component));
                     }
                 }
                 if !client_entities.is_empty() {
                     removes.insert(component_kind, client_entities);
+                }
+            }
+        }
+
+        // Convert world events: removes_synthetic (kind-only, from client entity despawn)
+        let mut removes_synthetic = HashMap::new();
+        if let Some(removes_synthetic_data) = events.take_removes_synthetic() {
+            for (component_kind, entity_data) in removes_synthetic_data {
+                let mut client_entities = Vec::new();
+                for (user_key, entity) in entity_data {
+                    if let (Some(client_key), Some(entity_key)) = (
+                        scenario.user_to_client_key(&user_key),
+                        scenario.entity_registry().entity_key_for_server_entity(&entity),
+                    ) {
+                        scenario.record_server_remove(entity_key);
+                        client_entities.push((client_key, entity_key));
+                    }
+                }
+                if !client_entities.is_empty() {
+                    removes_synthetic.insert(component_kind, client_entities);
                 }
             }
         }
@@ -289,6 +308,7 @@ impl ServerEvents {
             auth_resets,
             inserts,
             removes,
+            removes_synthetic,
             updates,
             ticks,
         }
@@ -380,6 +400,15 @@ impl ServerEvents {
             .get_mut(component_kind)
             .map(std::mem::take)
             .unwrap_or_default()
+    }
+
+    pub fn has_insert_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.inserts.values().any(|v| v.iter().any(|(_, ek)| ek == entity_key))
+    }
+
+    pub fn has_remove_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.removes.values().any(|v| v.iter().any(|(_, ek, _)| ek == entity_key))
+            || self.removes_synthetic.values().any(|v| v.iter().any(|(_, ek)| ek == entity_key))
     }
 }
 
@@ -672,7 +701,6 @@ pub(crate) fn register_spawn_entity(
         server_ref.local_entity(&user_key)?
     };
 
-    // Try to match EntityKey:
     // 1. Check if client entity already registered (client-spawned)
     if let Some(entity_key) = scenario
         .entity_registry()

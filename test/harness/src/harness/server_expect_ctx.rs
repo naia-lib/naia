@@ -205,6 +205,16 @@ impl<'a> ServerExpectCtx<'a> {
         self.events.server_inbound_message_count()
     }
 
+    pub fn has_insert_event_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.events.has_insert_for_entity(entity_key)
+            || self.scenario.server_insert_ever_fired(entity_key)
+    }
+
+    pub fn has_remove_event_for_entity(&self, entity_key: &EntityKey) -> bool {
+        self.events.has_remove_for_entity(entity_key)
+            || self.scenario.server_remove_ever_fired(entity_key)
+    }
+
     /// Read messages from a specific channel sent by clients
     /// Returns an iterator over (ClientKey, M) tuples for messages of type M received on channel C
     pub fn read_message<C: naia_shared::Channel, M: naia_shared::Message>(

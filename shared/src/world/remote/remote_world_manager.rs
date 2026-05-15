@@ -335,11 +335,28 @@ impl RemoteWorldManager {
                     self.incoming_events.push(EntityEvent::Spawn(global_entity));
                 }
                 EntityMessage::Despawn(remote_entity) => {
-                    let global_entity = local_entity_map.remove_by_remote_entity(&remote_entity);
+                    // On the client (authed_entities_opt is Some): read the mapping before
+                    // removing it so that process_remove can resolve remote_entity →
+                    // global_entity and emit RemoveComponent events. The client has no relay
+                    // path, so firing EntityEvent::RemoveComponent here is necessary
+                    // for the events API to surface component removals on entity despawn.
+                    //
+                    // On the server (authed_entities_opt is None): remove the mapping first.
+                    // process_remove then silently skips event emission (converter lookup
+                    // fails) because the server already fires push_remove_synthetic in
+                    // world_server.rs before the despawn — firing it again here would cause
+                    // remove_component_worldless to be called for an entity whose component
+                    // records have already been cleaned up.
+                    let is_client = self.authed_entities_opt.is_some();
+                    let global_entity = if is_client {
+                        *local_entity_map
+                            .global_entity_from_remote(&remote_entity)
+                            .unwrap()
+                    } else {
+                        local_entity_map.remove_by_remote_entity(&remote_entity)
+                    };
                     let world_entity = spawner.global_entity_to_entity(&global_entity).unwrap();
 
-                    // Generate event for each component, handing references off just in
-                    // case
                     if let Some(component_kinds) =
                         global_world_manager.component_kinds(&global_entity)
                     {
@@ -354,6 +371,9 @@ impl RemoteWorldManager {
                         }
                     }
 
+                    if is_client {
+                        local_entity_map.remove_by_remote_entity(&remote_entity);
+                    }
                     world.despawn_entity(&world_entity);
 
                     self.incoming_events

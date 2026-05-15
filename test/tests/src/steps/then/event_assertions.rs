@@ -556,3 +556,45 @@ fn then_server_has_received_at_least_one_message(ctx: &TestWorldRef) -> AssertOu
 // Server auth-denied count (server-events-10)
 // ──────────────────────────────────────────────────────────────────────
 
+// ──────────────────────────────────────────────────────────────────────
+// Server-side component lifecycle events (server-events-14/15)
+// ──────────────────────────────────────────────────────────────────────
+
+/// Then the server observes an insert component event for the entity.
+///
+/// Polls until the server receives InsertComponentEvent for the last entity
+/// from any client. Covers [server-events-14.t1].
+#[then("the server observes an insert component event for the entity")]
+fn then_server_observes_insert_component_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.server(|s| {
+        if s.has_insert_event_for_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+
+/// Then the server observes a remove component event for the entity.
+///
+/// Polls until the server receives RemoveComponentEvent for the last entity
+/// from any client. Covers [server-events-15.t1].
+#[then("the server observes a remove component event for the entity")]
+fn then_server_observes_remove_component_event(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let entity_key: EntityKey = ctx
+        .scenario()
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("no entity spawned");
+    ctx.server(|s| {
+        if s.has_remove_event_for_entity(&entity_key) {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
+    })
+}
+

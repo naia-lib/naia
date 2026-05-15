@@ -15,6 +15,9 @@ use crate::{user::UserKey, ConnectEvent, ErrorEvent, NaiaServerError};
 pub(crate) type MessagesMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>;
 pub(crate) type RequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
 pub(crate) type RemovesMap<E> = HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>;
+/// Kind-only remove events — fired when entity component data is not available
+/// (e.g. client-owned entity despawn, where the server does not hold component bytes).
+pub(crate) type RemovesSyntheticMap<E> = HashMap<ComponentKind, Vec<(UserKey, E)>>;
 
 /// Per-tick event container carrying all entity-lifecycle, message, and component events.
 ///
@@ -36,6 +39,7 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     auth_resets: Vec<E>,
     inserts: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     removes: RemovesMap<E>,
+    removes_synthetic: RemovesSyntheticMap<E>,
     updates: HashMap<ComponentKind, Vec<(UserKey, E)>>,
     empty: bool,
 }
@@ -58,6 +62,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
             auth_resets: Vec::new(),
             inserts: HashMap::new(),
             removes: HashMap::new(),
+            removes_synthetic: HashMap::new(),
             updates: HashMap::new(),
             empty: true,
         }
@@ -139,6 +144,17 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
             None
         } else {
             Some(mem::take(&mut self.removes))
+        }
+    }
+
+    /// Drains the kind-only synthetic remove map.
+    /// These are fired when an entity is despawned by the client and the server
+    /// does not hold component data — only the component kind is available.
+    pub fn take_removes_synthetic(&mut self) -> Option<RemovesSyntheticMap<E>> {
+        if self.removes_synthetic.is_empty() {
+            None
+        } else {
+            Some(mem::take(&mut self.removes_synthetic))
         }
     }
 
@@ -257,6 +273,19 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
 
         let list = self.removes.entry(component_kind).or_default();
         list.push((*user_key, *world_entity, component));
+        self.empty = false;
+    }
+
+    /// Fire a kind-only remove event for `component_kind` when the server does not
+    /// hold component data (e.g. when a client-owned entity is despawned by the client).
+    pub(crate) fn push_remove_synthetic(
+        &mut self,
+        user_key: &UserKey,
+        world_entity: &E,
+        component_kind: &ComponentKind,
+    ) {
+        let list = self.removes_synthetic.entry(*component_kind).or_default();
+        list.push((*user_key, *world_entity));
         self.empty = false;
     }
 

@@ -494,3 +494,40 @@ fn when_client_collects_entity_command_messages(ctx: &mut TestWorldMut) {
     );
     scenario.bdd_store(ENTITY_COMMAND_COUNT_KEY, count);
 }
+
+/// When the client spawns a client-owned entity with a replicated component (non-blocking).
+///
+/// Spawns a Public entity with Position(0,0) and stores the entity_key.
+/// Does NOT wait for the server to confirm the entity — the calling test
+/// is responsible for polling until the expected events arrive.
+/// Used by server-events-14 where the spawn tick's InsertComponentEvent
+/// must be observable by the Then assertion.
+#[when("the client spawns a client-owned entity with a replicated component")]
+fn when_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
+    use naia_client::Publicity;
+    use naia_test_harness::Position;
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key = scenario.mutate(|c| c.client(client_key, |cl|
+        cl.spawn(|mut e| { e.configure_replication(Publicity::Public).insert_component(Position::new(0.0, 0.0)); })));
+    scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
+}
+
+/// When the client despawns the entity.
+///
+/// Calls `despawn()` on the last client-owned entity. Used to test
+/// server-side RemoveComponentEvent ordering on client entity despawn.
+#[when("the client despawns the entity")]
+fn when_client_despawns_entity(ctx: &mut TestWorldMut) {
+    let entity_key: EntityKey = last_entity_mut(ctx);
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    scenario.mutate(|mctx| {
+        mctx.client(client_key, |client| {
+            if let Some(mut entity) = client.entity_mut(&entity_key) {
+                entity.despawn();
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}

@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::Arc,
 };
@@ -187,6 +187,18 @@ pub struct Scenario {
     received_messages: Vec<u32>,
     /// Whether wire trace capture is currently enabled on the hub.
     trace_capture_enabled: bool,
+
+    // ---- Persistent entity-event history ----
+    // Accumulates across all ticks and step boundaries. Required because
+    // take_server_events()/take_client_events() drain per-tick events exactly
+    // once, and a prior step's polling can consume events from the same tick
+    // that a later Then step needs to assert. Checking history ensures that
+    // "did event X ever fire for entity Y?" is answerable regardless of which
+    // polling context first saw the tick.
+    server_entity_insert_history: HashSet<EntityKey>,
+    server_entity_remove_history: HashSet<EntityKey>,
+    client_entity_insert_history: HashMap<ClientKey, HashSet<EntityKey>>,
+    client_entity_remove_history: HashMap<ClientKey, HashSet<EntityKey>>,
 }
 
 /// Tracks the outcome of the last operation for BDD assertions.
@@ -235,6 +247,10 @@ impl Scenario {
             bdd_storage: HashMap::new(),
             received_messages: Vec::new(),
             trace_capture_enabled: false,
+            server_entity_insert_history: HashSet::new(),
+            server_entity_remove_history: HashSet::new(),
+            client_entity_insert_history: HashMap::new(),
+            client_entity_remove_history: HashMap::new(),
         }
     }
 
@@ -1217,10 +1233,60 @@ impl Scenario {
         self.server_event_history.contains(&event)
     }
 
-    /// Clear event history (useful when testing multiple connection attempts).
+    /// Clear event history (useful when testing multiple connection attempts or lifecycle cycles).
     pub fn clear_event_history(&mut self) {
         self.server_event_history.clear();
         self.client_event_history.clear();
+        self.server_entity_insert_history.clear();
+        self.server_entity_remove_history.clear();
+        self.client_entity_insert_history.clear();
+        self.client_entity_remove_history.clear();
+    }
+
+    // ---- Persistent entity-event history ----
+
+    pub(crate) fn record_server_insert(&mut self, entity_key: EntityKey) {
+        self.server_entity_insert_history.insert(entity_key);
+    }
+
+    pub(crate) fn record_server_remove(&mut self, entity_key: EntityKey) {
+        self.server_entity_remove_history.insert(entity_key);
+    }
+
+    pub(crate) fn record_client_insert(&mut self, client_key: ClientKey, entity_key: EntityKey) {
+        self.client_entity_insert_history
+            .entry(client_key)
+            .or_default()
+            .insert(entity_key);
+    }
+
+    pub(crate) fn record_client_remove(&mut self, client_key: ClientKey, entity_key: EntityKey) {
+        self.client_entity_remove_history
+            .entry(client_key)
+            .or_default()
+            .insert(entity_key);
+    }
+
+    pub(crate) fn server_insert_ever_fired(&self, entity_key: &EntityKey) -> bool {
+        self.server_entity_insert_history.contains(entity_key)
+    }
+
+    pub(crate) fn server_remove_ever_fired(&self, entity_key: &EntityKey) -> bool {
+        self.server_entity_remove_history.contains(entity_key)
+    }
+
+    pub(crate) fn client_insert_ever_fired(&self, client_key: &ClientKey, entity_key: &EntityKey) -> bool {
+        self.client_entity_insert_history
+            .get(client_key)
+            .map(|s| s.contains(entity_key))
+            .unwrap_or(false)
+    }
+
+    pub(crate) fn client_remove_ever_fired(&self, client_key: &ClientKey, entity_key: &EntityKey) -> bool {
+        self.client_entity_remove_history
+            .get(client_key)
+            .map(|s| s.contains(entity_key))
+            .unwrap_or(false)
     }
 
     // ========================================================================

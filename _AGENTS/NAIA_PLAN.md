@@ -9,13 +9,13 @@
 
 ## Current state snapshot
 
-*Last updated: 2026-05-10 (post V2+V3 audit)*
+*Last updated: 2026-05-15 (post Rule(08) component-event bug fixes)*
 
 | Metric | Value |
 |---|---|
-| Active BDD scenarios | **332** (100% pass, `namako gate` green, recertified 2026-05-10) |
+| Active BDD scenarios | **341** (100% pass, full suite recertified 2026-05-15) |
 | Bevy BDD scenarios | **21** (100% pass) |
-| @PolicyOnly | **84** (all justified) |
+| @PolicyOnly | **86** (all justified) |
 | Plain @Deferred (junk) | **0** ✅ |
 | Build warnings | **0** (`-D warnings`) |
 | `cargo test -p naia-shared --features test_time` | **218 passed**, 0 failures |
@@ -26,6 +26,7 @@
 
 ### What's done (do not re-audit)
 
+- **Rule(08) component-event correctness + harness architecture fix** (2026-05-14/15) — 4 new live scenarios ([client-events-13/14], [server-events-14/15]); 3 bugs fixed: (1) `remote_world_manager.rs` Despawn handler now fires `RemoveComponent` events on the client side before clearing the entity mapping; (2) `client.rs::remove_component_worldless` guarded for server-created delegated entities; (3) harness removes processing falls back to registry-only lookup for despawn-path removes. Harness gained persistent entity-event history (4 HashSets in `Scenario`) so step-boundary event draining can no longer cause false timeouts. `clear_event_history` extended to cover entity history. 341/341 NPA green — uncommitted pending explicit greenlight.
 - Replicated Resources (R1–R9 + Mode B + D13) — `release-0.25.0-e`
 - Perf upgrade (Phases 0–10, 6,356× idle improvement, 29/0/0 bench) — `dev`
 - Priority accumulator (Fiedler pacing, A+B+C) — `dev`

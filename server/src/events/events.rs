@@ -10,8 +10,8 @@ use crate::{
         world_events::{
             DelegateEntityEvent, DespawnEntityEvent, EntityAuthDeniedEvent, EntityAuthGrantEvent,
             EntityAuthResetEvent, InsertComponentEvent, MessageEvent, MessagesMap, PublishEntityEvent,
-            RemoveComponentEvent, RemovesMap, RequestEvent, RequestsMap, SpawnEntityEvent,
-            UnpublishEntityEvent, UpdateComponentEvent, WorldEvent, WorldEvents,
+            RemoveComponentEvent, RemovesMap, RemovesSyntheticMap, RequestEvent, RequestsMap,
+            SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, WorldEvent, WorldEvents,
         },
     },
     user::UserKey,
@@ -127,6 +127,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     /// Drains the raw remove map. Prefer `read::<RemoveComponentEvent<C>>()` over this method.
     pub fn take_removes(&mut self) -> Option<RemovesMap<E>> {
         self.world_events.take_removes()
+    }
+
+    /// Drains the kind-only synthetic remove map for client entity despawns.
+    pub fn take_removes_synthetic(&mut self) -> Option<RemovesSyntheticMap<E>> {
+        self.world_events.take_removes_synthetic()
     }
 }
 

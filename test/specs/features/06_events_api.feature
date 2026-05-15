@@ -473,3 +473,64 @@ Feature: Server/Client Events API, World Integration, Priority Accumulator
     @Scenario(23)
     Scenario: [world-integration-03] Component removal mirrors server remove
 
+
+  # ==========================================================================
+  # === Source: component_event_ordering.feature ===
+  # ==========================================================================
+
+  @Rule(08)
+  Rule: Component events fire on entity lifecycle transitions
+
+    # [client-events-13] — Despawn fires RemoveComponentEvent per component.
+    # When the server despawns an entity that has a replicated component, the
+    # client MUST receive RemoveComponentEvent for each component BEFORE
+    # DespawnEntityEvent. The remote→global entity mapping must still be live
+    # when process_remove runs so the event can include the correct entity key.
+    @Scenario(01)
+    Scenario: [client-events-13] Client receives RemoveComponentEvent for each component when entity is despawned
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server globally despawns the entity
+      Then the client receives a component remove event for the entity
+
+    # [client-events-14] — Scope entry fires InsertComponentEvent per component.
+    # When an entity that already has a replicated component enters client scope,
+    # the client MUST receive InsertComponentEvent for each component in the same
+    # tick as SpawnEntityEvent. The insert event fires from the server's
+    # InsertComponent wire message that always accompanies scope entry.
+    @Scenario(02)
+    Scenario: [client-events-14] Client receives InsertComponentEvent when entity enters scope with component
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with a replicated component
+      And the client and entity share a room
+      When the server includes the entity for the client
+      Then the client receives a component insert event for the entity
+
+    # [server-events-14] — Client entity spawn fires InsertComponentEvent on server.
+    # When a client spawns a client-owned entity with a replicated component and it
+    # replicates to the server, the server MUST receive InsertComponentEvent for
+    # each component alongside SpawnEntityEvent.
+    @Scenario(03)
+    Scenario: [server-events-14] Server observes InsertComponentEvent when client entity replicates with component
+      Given a server is running
+      And a client connects
+      When the client spawns a client-owned entity with a replicated component
+      Then the server observes an insert component event for the entity
+
+    # [server-events-15] — Client entity despawn fires RemoveComponentEvent on server.
+    # When a client despawns a client-owned entity that has a replicated component,
+    # the server MUST receive RemoveComponentEvent for each component BEFORE
+    # DespawnEntityEvent. The server-side ordering is implemented via deferred
+    # despawn processing (EntityEvent::Despawn placed in a second-pass queue).
+    @Scenario(04)
+    Scenario: [server-events-15] Server observes RemoveComponentEvent for each component when client entity is despawned
+      Given a server is running
+      And a client connects
+      And the client spawns a client-owned entity with a replicated component
+      When the client despawns the entity
+      Then the server observes a remove component event for the entity
+
