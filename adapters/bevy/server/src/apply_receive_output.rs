@@ -15,7 +15,7 @@ mod naia_events {
 mod bevy_events {
     pub use crate::events::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvents,
-        PublishEntityEvent, RequestEvents, SpawnEntityEvent, UnpublishEntityEvent,
+        PublishEntityEvent, RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     };
 }
 
@@ -33,12 +33,23 @@ mod bevy_events {
 /// works from a pre-collected `ReceiveOutput` instead of re-locking the server.
 /// Defined here as a building block; the pipeline coordinator is wired up in
 /// Phase 4.
-#[allow(dead_code)] // Phase 3 building block — wired up in Phase 4 pipeline coordinator
-pub(crate) fn apply_receive_output(
+pub fn apply_receive_output(
     world: &mut World,
     server: &mut ServerImpl,
     output: ReceiveOutput<Entity>,
 ) {
+    // Fire one bevy `TickEvent` per server tick that the recv path advanced.
+    // In Phase 4 the `translate_tick_events` system is not in the schedule,
+    // so this is the sole source of `TickEvent` fan-out into Bevy.
+    if !output.pending_ticks.is_empty() {
+        let mut tick_writer = world
+            .get_resource_mut::<Messages<bevy_events::TickEvent>>()
+            .unwrap();
+        for tick in output.pending_ticks {
+            tick_writer.write(bevy_events::TickEvent(tick));
+        }
+    }
+
     // Convert WorldEvents<Entity> → Events<Entity> (which has all the
     // has_messages / has_requests / has_auths helpers and the From impls used
     // by the bevy event types).

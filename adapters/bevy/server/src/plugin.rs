@@ -61,23 +61,52 @@ pub struct Singleton;
 pub struct Plugin {
     config: Mutex<Option<PluginConfig>>,
     world_only: bool,
+    /// Pipeline mode (Phase 4 capacity uplift): when `true`, the coordinator
+    /// drives recv/translate/send phases directly via `RecvHandle`/`SendHandle`
+    /// and `apply_receive_output`. The plugin therefore skips registering
+    /// `receive_packets`, `process_packets`, `translate_world_events`,
+    /// `translate_tick_events`, `send_packets_init`, and `send_packets` in
+    /// `Update`. Naia's sync systems (`world_to_host_sync`,
+    /// `HostSyncOwnedAddedTracking`, `HostSyncChangeTracking`) remain in
+    /// `Update` — the coordinator invokes `run_schedule(Update)` between the
+    /// `PhysicsSyncSchedule` and the send kick.
+    pipeline: bool,
 }
 
 impl Plugin {
     /// Creates the plugin with the given server configuration and protocol.
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, false)
+        Self::new_impl(server_config, protocol, false, false)
     }
 
+    /// World-only variant. Skips full `Server` setup (auth, accept_connection,
+    /// etc.) and registers a `WorldServer` instead. Used by services that
+    /// proxy connections (e.g., the game cell behind a session server).
     pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true)
+        Self::new_impl(server_config, protocol, true, false)
     }
 
-    fn new_impl(server_config: ServerConfig, protocol: Protocol, world_only: bool) -> Self {
+    /// Pipeline + world-only variant (Phase 4 capacity uplift). Builds the
+    /// same `WorldServer` as `world_only`, but skips the recv/translate/send
+    /// `Update` systems — those phases are driven explicitly by the
+    /// pipeline coordinator via `RecvHandle`/`SendHandle`. Naia's host-sync
+    /// systems (`HostSyncOwnedAddedTracking`, `HostSyncChangeTracking`,
+    /// `WorldToHostSync`) remain in `Update`.
+    pub fn world_only_pipeline(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, true, true)
+    }
+
+    fn new_impl(
+        server_config: ServerConfig,
+        protocol: Protocol,
+        world_only: bool,
+        pipeline: bool,
+    ) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
             config: Mutex::new(Some(config)),
             world_only,
+            pipeline,
         }
     }
 }
@@ -135,12 +164,18 @@ impl PluginType for Plugin {
             .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
             .configure_sets(Update, WorldToHostSync.before(SendPackets))
             // SYSTEMS //
-            .add_systems(Update, receive_packets.in_set(ReceivePackets))
-            .add_systems(Update, process_packets.in_set(ProcessPackets))
-            .add_systems(Update, translate_world_events.in_set(TranslateWorldEvents))
-            .add_systems(Update, translate_tick_events.in_set(TranslateTickEvents))
-            .add_systems(Update, world_to_host_sync.in_set(WorldToHostSync))
-            .add_systems(Startup, send_packets_init)
-            .add_systems(Update, send_packets.in_set(SendPackets));
+            .add_systems(Update, world_to_host_sync.in_set(WorldToHostSync));
+
+        // Recv/translate/send systems are driven by the pipeline coordinator
+        // in pipeline mode — skip registering them in `Update`.
+        if !self.pipeline {
+            app
+                .add_systems(Update, receive_packets.in_set(ReceivePackets))
+                .add_systems(Update, process_packets.in_set(ProcessPackets))
+                .add_systems(Update, translate_world_events.in_set(TranslateWorldEvents))
+                .add_systems(Update, translate_tick_events.in_set(TranslateTickEvents))
+                .add_systems(Startup, send_packets_init)
+                .add_systems(Update, send_packets.in_set(SendPackets));
+        }
     }
 }

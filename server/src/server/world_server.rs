@@ -542,7 +542,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub fn receive(&mut self) -> super::receive_output::ReceiveOutput<E> {
         self.receive_all_packets();
         let world_events = self.take_world_events();
-        super::receive_output::ReceiveOutput { world_events }
+        // Advance the tick clock and collect any ticks that fired during this
+        // recv phase. In the pipeline-coordinator architecture (Phase 4), the
+        // bevy adapter's `translate_tick_events` system is removed from
+        // `Update`, so this is the only place that drives `recv_server_tick`.
+        let mut tick_events = self.take_tick_events(&Instant::now());
+        let pending_ticks: Vec<Tick> =
+            tick_events.read::<crate::events::TickEvent>().collect();
+        super::receive_output::ReceiveOutput { world_events, pending_ticks }
     }
 
     /// Consume this `WorldServer` and return a pair of pipeline handles.
