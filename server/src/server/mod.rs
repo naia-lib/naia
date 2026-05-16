@@ -25,6 +25,9 @@ pub use pipeline_handles::{RecvHandle, SendHandle};
 pub mod recv_state;
 pub use recv_state::RecvState;
 
+pub mod send_state;
+pub use send_state::SendState;
+
 mod scope_checks_cache;
 mod scope_change;
 mod room_store;

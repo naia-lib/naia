@@ -6,11 +6,16 @@
 //! `recv_user_connections` + `recv_io` once the symmetric `SendState`
 //! extraction lifts the matching pieces out of `WorldServer`).
 
-use std::{collections::HashSet, net::SocketAddr, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    sync::Arc,
+};
 
 use naia_shared::{DisconnectReason, Timer};
 
 use crate::{
+    connection::RecvConnection,
     events::{TickEvents, WorldEvents},
     server::ServerShared,
     user::UserKey,
@@ -47,6 +52,16 @@ pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
     /// access to init-only config + the `connection_shared` map (for
     /// observing coordinator-initiated disconnect signals).
     pub(crate) shared: Arc<ServerShared<E>>,
+
+    /// Per-address map of recv-side connection halves.
+    ///
+    /// Populated by `WorldServer::into_pipeline_states()` when the
+    /// pipeline coordinator takes ownership; empty in serial mode
+    /// (where `WorldServer::user_connections` holds the full
+    /// `Connection` wrappers). Once the recv thread runs against
+    /// `RecvState` directly (step 4-F), this map replaces
+    /// `WorldServer::user_connections` for recv-path lookups.
+    pub recv_user_connections: HashMap<SocketAddr, RecvConnection>,
 }
 
 impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
@@ -65,6 +80,12 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
             incoming_world_events: WorldEvents::new(),
             incoming_tick_events: TickEvents::new(),
             shared,
+            recv_user_connections: HashMap::new(),
         }
     }
 }
+
+// SAFETY: All fields are Send: HashMap of RecvConnection (which is Send
+// because PingManager / TickBufferReceiver / Timer / Arc<ConnectionShared>
+// are all Send) plus owned timer/queue/event state.
+unsafe impl<E: Copy + Eq + std::hash::Hash + Send + Sync> Send for RecvState<E> {}

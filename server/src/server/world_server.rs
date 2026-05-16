@@ -556,6 +556,68 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         )
     }
 
+    /// Consume this `WorldServer` into the field-level pipeline states
+    /// (step 4-E). Dissolves the per-user `Connection` wrappers into the
+    /// recv and send halves, populating `RecvState::recv_user_connections`
+    /// and `SendState::send_user_connections` respectively. Returns the
+    /// two states along with any non-pipeline-owned residual that the
+    /// caller may need (currently the coordinator-only state on the
+    /// world_server such as room_store, entity_room_map, etc., still
+    /// lives on `Self` and is *not* migrated here — step 4-F's coordinator
+    /// keeps the residual `WorldServer` around for borrow-API surface
+    /// continuity per the §8 "Refined architecture" note; this method
+    /// returns only the two thread-side states needed by the recv/send
+    /// threads).
+    ///
+    /// **Step 4-F integration:** the cyberlith coordinator calls this
+    /// during `GameCell::init()` to harvest `RecvState` + `SendState`
+    /// for the recv/send threads, while keeping the residual `WorldServer`
+    /// alive as the `Server` SystemParam target. The split happens once
+    /// at startup; thereafter the two states evolve independently
+    /// (subject to the handoff queues maintained on `ServerShared`).
+    pub fn into_pipeline_states(
+        mut self,
+    ) -> (
+        super::recv_state::RecvState<E>,
+        super::send_state::SendState<E>,
+    ) {
+        let send_io = self.io.sender_cloned();
+
+        // Move out the user_connections HashMap and dissolve each
+        // `Connection` wrapper into its (recv, send) halves.
+        let user_connections = std::mem::take(&mut self.user_connections);
+        let mut recv_map: std::collections::HashMap<
+            std::net::SocketAddr,
+            crate::connection::RecvConnection,
+        > = std::collections::HashMap::with_capacity(user_connections.len());
+        let mut send_map: std::collections::HashMap<
+            std::net::SocketAddr,
+            crate::connection::SendConnection,
+        > = std::collections::HashMap::with_capacity(user_connections.len());
+        for (addr, conn) in user_connections {
+            recv_map.insert(addr, conn.recv);
+            send_map.insert(addr, conn.send);
+        }
+
+        // Move user_priorities out for SendState.
+        let user_priorities = std::mem::take(&mut self.user_priorities);
+
+        // Reuse self.recv as the basis for the returned RecvState
+        // (already wired with shared, timers, queues). Populate the
+        // recv connections map.
+        let mut recv_state = self.recv;
+        recv_state.recv_user_connections = recv_map;
+
+        let send_state = super::send_state::SendState {
+            send_user_connections: send_map,
+            user_priorities,
+            send_io,
+            shared: Arc::clone(&self.shared),
+        };
+
+        (recv_state, send_state)
+    }
+
     /// Advances the tick clock and returns any new tick events for this frame.
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         // tick event
