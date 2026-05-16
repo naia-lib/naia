@@ -22,6 +22,9 @@ pub use receive_output::ReceiveOutput;
 pub mod pipeline_handles;
 pub use pipeline_handles::{RecvHandle, SendHandle};
 
+pub mod recv_state;
+pub use recv_state::RecvState;
+
 mod scope_checks_cache;
 mod scope_change;
 mod room_store;

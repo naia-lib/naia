@@ -56,7 +56,9 @@ pub struct BaseSendConnection {
     pub message_manager: MessageManager,
     /// Manages entity-level replication state for this connection.
     pub world_manager: LocalWorldManager,
-    pub(crate) ack_send: AckManagerSend,
+    /// Outbound ack pipeline. `pub` so server-side `SendConnection` can
+    /// drain samples from the cross-half channel.
+    pub ack_send: AckManagerSend,
     heartbeat_timer: Timer,
     bandwidth_accumulator: BandwidthAccumulator,
 }

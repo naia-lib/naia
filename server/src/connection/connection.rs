@@ -6,16 +6,19 @@ use log::warn;
 
 use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
-    EntityEvent, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType,
-    HostType, Instant, MessageIndex, MessageKinds, OutgoingPacket, PacketType, Serde,
-    SerdeErr, SnapshotMap, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
+    GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, MessageIndex,
+    MessageKinds, OutgoingPacket, PacketType, Serde, SerdeErr, SnapshotMap, StandardHeader, Tick,
+    WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
     connection::{
-        io::Io, ping_config::PingConfig, ping_manager::PingManager,
-        tick_buffer_messages::TickBufferMessages, tick_buffer_receiver::TickBufferReceiver,
+        io::Io,
+        ping_config::PingConfig,
+        recv_connection::RecvConnection,
+        send_connection::SendConnection,
+        tick_buffer_messages::TickBufferMessages,
     },
     events::WorldEvents,
     request::{GlobalRequestManager, GlobalResponseManager},
@@ -60,13 +63,8 @@ pub mod bench_send_counters {
         NS_IO_SEND.store(0, Ordering::Relaxed);
         N_PACKETS_SENT.store(0, Ordering::Relaxed);
         NS_WRITE_UPDATES.store(0, Ordering::Relaxed);
-        // The take_outgoing_events breakdown lives in naia-shared
-        // (bench_take_events_counters) because the interesting work is
-        // inside LocalWorldManager.
         naia_shared::bench_take_events_counters::reset();
-        // Iris send-path phase counters live in world_server.
         crate::server::world_server::bench_iris_counters::reset();
-        // Packet-write counters live in world_writer (shared crate).
         naia_shared::bench_write_counters::reset();
     }
     /// Returns a snapshot of all counters as a tuple.
@@ -88,28 +86,23 @@ pub mod bench_send_counters {
     }
 }
 
+/// Transitional wrapper holding both halves of a per-user connection.
+///
+/// In step 4-E, `recv_user_connections: HashMap<SocketAddr, RecvConnection>`
+/// will live on `RecvState<E>`, and `send_user_connections: HashMap<SocketAddr,
+/// SendConnection>` on `SendState<E>`. `Connection` then disappears —
+/// `WorldServer::user_connections` is replaced by the two separately-owned
+/// maps. For step 4-D, the wrapper keeps `user_connections` intact while
+/// giving every consumer access to the recv/send halves they actually need.
 pub struct Connection {
-    pub address: SocketAddr,
-    pub user_key: UserKey,
-    pub base: BaseConnection,
-    pub ping_manager: PingManager,
-    tick_buffer: TickBufferReceiver,
-    pub manual_disconnect: bool,
-    timeout_timer: Timer,
-    /// Per-connection entity visibility bitset. One bit per `GlobalEntityIndex`.
-    /// Set when an entity enters scope; cleared on despawn or pause.
-    pub visibility: ConnectionVisibilityBitset,
-    /// Shared per-connection state crossing the recv/send boundary
-    /// (B4-prep + ACK/RTT atomics). The same `Arc` is also stored in
-    /// `ServerShared::connection_shared` under this connection's address.
-    /// Step 4-D / 4-E will dissolve `Connection` into separate
-    /// `RecvConnection` / `SendConnection` wrappers each holding their
-    /// own clone of this Arc; until then it lives here and is kept
-    /// in sync by `process_incoming_header` / `mark_should_send_empty_ack`.
-    pub shared: Arc<ConnectionShared>,
+    pub recv: RecvConnection,
+    pub send: SendConnection,
 }
 
 impl Connection {
+    /// Construct a new connection, wiring both halves to share the same
+    /// `Arc<ConnectionShared>` and the crossbeam channel between
+    /// `AckManagerRecv` and `AckManagerSend`.
     pub fn new(
         connection_config: &ConnectionConfig,
         ping_config: &PingConfig,
@@ -119,65 +112,93 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         max_replicated_entities: usize,
     ) -> Self {
+        let (base_recv, base_send) = BaseConnection::new_split(
+            connection_config,
+            &Some(*user_address),
+            HostType::Server,
+            user_key.to_u64(),
+            channel_kinds,
+            global_world_manager,
+        );
+        let shared = Arc::new(ConnectionShared::new());
         Self {
-            address: *user_address,
-            user_key: *user_key,
-            base: BaseConnection::new(
+            recv: RecvConnection::new(
                 connection_config,
-                &Some(*user_address),
-                HostType::Server,
-                user_key.to_u64(),
+                ping_config,
+                *user_address,
+                *user_key,
                 channel_kinds,
-                global_world_manager,
+                base_recv,
+                Arc::clone(&shared),
             ),
-            ping_manager: PingManager::new(ping_config),
-            tick_buffer: TickBufferReceiver::new(channel_kinds),
-            manual_disconnect: false,
-            timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
-            // capacity = max_replicated_entities + 1 (slot 0 = INVALID sentinel)
-            visibility: ConnectionVisibilityBitset::new(max_replicated_entities + 1),
-            shared: Arc::new(ConnectionShared::new()),
+            send: SendConnection::new(
+                *user_address,
+                *user_key,
+                base_send,
+                max_replicated_entities,
+                shared,
+            ),
         }
+    }
+
+    /// Remote socket address — same on both halves.
+    pub fn address(&self) -> SocketAddr {
+        self.recv.address
+    }
+
+    /// User key — same on both halves.
+    pub fn user_key(&self) -> UserKey {
+        self.recv.user_key
+    }
+
+    /// Borrow the shared per-connection state (Arc clone available via
+    /// `Arc::clone(&conn.shared())`).
+    pub fn shared(&self) -> &Arc<ConnectionShared> {
+        &self.recv.shared
+    }
+
+    /// True when no packet has been received within the disconnect timeout.
+    pub fn should_drop(&self) -> bool {
+        self.recv.should_drop()
     }
 
     /// Set entity `idx` as visible for this connection (scope entry or resume).
     pub fn set_entity_visible(&mut self, idx: GlobalEntityIndex) {
-        self.visibility.set(idx);
+        self.send.set_entity_visible(idx);
     }
 
     /// Clear entity `idx` as not visible for this connection (scope exit or pause).
     pub fn clear_entity_visible(&mut self, idx: GlobalEntityIndex) {
-        self.visibility.clear(idx);
+        self.send.clear_entity_visible(idx);
     }
 
-    /// Returns true when no packet has been received for longer than the
-    /// configured `disconnection_timeout_duration`.
-    pub fn should_drop(&self) -> bool {
-        self.timeout_timer.ringing()
-    }
-
-    // Incoming Data
-
+    /// Record the recv-side bookkeeping for an incoming packet header AND
+    /// drain the cross-half channel into the send half (matching the
+    /// pre-split synchronous flow). In the fully-threaded model (post-4-F),
+    /// recv calls only `recv.process_incoming_header`; the send thread runs
+    /// `send.drain_acks` at the top of its own send cycle.
     pub fn process_incoming_header(&mut self, header: &StandardHeader) {
-        // Note: identity print is now in world_server::read_data_packet for consistency
-        self.base.process_incoming_header(header, &mut []);
-        self.timeout_timer.reset();
-        // 4-C.3: surface the freshly-updated recv ack state into the
-        // cross-half `ConnectionShared` atomics so post-4-D send-thread
-        // readers observe a consistent ack snapshot without holding a
-        // recv-side reference. The base.process_incoming_header() above
-        // already pushed acked-index samples into the channel that the
-        // send half drains; here we publish the corresponding header
-        // fields for header-write callers that want them lock-free.
-        let last_rx = self.base.last_received_packet_index();
-        let bits = self.base.recv.ack_recv.ack_bitfield();
-        self.shared.set_remote_ack_seq(last_rx);
-        self.shared.set_remote_ack_bitfield(bits);
+        self.recv.process_incoming_header(header);
+        self.send.drain_acks(&mut []);
+    }
+
+    /// Build the standard header for an outgoing packet, threading the
+    /// recv-side ack info from the recv half into the send half's writer.
+    pub fn write_header(
+        &mut self,
+        packet_type: PacketType,
+        writer: &mut BitWriter,
+    ) -> StandardHeader {
+        let last_rx = self.recv.base.ack_recv.last_received_packet_index();
+        let ack_bits = self.recv.base.ack_recv.ack_bitfield();
+        self.send
+            .base
+            .write_header_with(packet_type, last_rx, ack_bits, writer)
     }
 
     #[cfg(feature = "test_utils")]
     pub fn diff_handler_receiver_count(&self) -> usize {
-        self.base.send.world_manager.diff_handler_receiver_count()
+        self.send.base.world_manager.diff_handler_receiver_count()
     }
 
     #[cfg(feature = "test_utils")]
@@ -188,7 +209,8 @@ impl Connection {
         message_tick: &naia_shared::Tick,
         message: naia_shared::MessageContainer,
     ) -> bool {
-        self.tick_buffer
+        self.recv
+            .tick_buffer
             .inject_message(channel_kind, host_tick, message_tick, message)
     }
 
@@ -205,17 +227,20 @@ impl Connection {
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
         // read tick-buffered messages
-        self.tick_buffer.read_messages(
+        self.recv.tick_buffer.read_messages(
             channel_kinds,
             message_kinds,
             &server_tick,
             &client_tick,
-            self.base.send.world_manager.entity_converter(),
+            self.send.base.world_manager.entity_converter(),
             reader,
         )?;
 
-        // read common parts of packet (messages & world events)
-        self.base.read_packet(
+        // read common parts of packet (messages & world events) — runs on
+        // the coordinator thread that owns SendState in the new tick
+        // sequence; lives on the send half per the MessageManager
+        // sub-audit (see naia-shared/base_connection.rs).
+        self.send.base.read_packet(
             channel_kinds,
             message_kinds,
             component_kinds,
@@ -242,10 +267,11 @@ impl Connection {
         world: &mut W,
         incoming_events: &mut WorldEvents<E>,
     ) -> Vec<EntityEvent> {
+        let user_key = self.user_key();
         // Receive Message Events
         let (entity_converter, entity_waitlist) =
-            self.base.send.world_manager.get_message_processor_helpers();
-        let messages = self.base.send.message_manager.receive_messages(
+            self.send.base.world_manager.get_message_processor_helpers();
+        let messages = self.send.base.message_manager.receive_messages(
             message_kinds,
             now,
             entity_converter,
@@ -253,22 +279,22 @@ impl Connection {
         );
         for (channel_kind, messages) in messages {
             for message in messages {
-                incoming_events.push_message(&self.user_key, &channel_kind, message);
+                incoming_events.push_message(&user_key, &channel_kind, message);
             }
         }
 
         // Receive Request and Response Events
-        let (requests, responses) = self.base.send.message_manager.receive_requests_and_responses();
+        let (requests, responses) = self.send.base.message_manager.receive_requests_and_responses();
         // Requests
         for (channel_kind, requests) in requests {
             for (local_response_id, request) in requests {
                 let global_response_id = global_response_manager.create_response_id(
-                    &self.user_key,
+                    &user_key,
                     &channel_kind,
                     &local_response_id,
                 );
                 incoming_events.push_request(
-                    &self.user_key,
+                    &user_key,
                     &channel_kind,
                     global_response_id,
                     request,
@@ -282,7 +308,7 @@ impl Connection {
 
         // Receive World Events
         if client_authoritative_entities {
-            self.base.send.world_manager.take_incoming_events(
+            self.send.base.world_manager.take_incoming_events(
                 global_entity_map,
                 global_world_manager,
                 component_kinds,
@@ -295,10 +321,11 @@ impl Connection {
     }
 
     pub fn tick_buffer_messages(&mut self, tick: &Tick, messages: &mut TickBufferMessages) {
-        let channel_messages = self.tick_buffer.receive_messages(tick);
+        let user_key = self.user_key();
+        let channel_messages = self.recv.tick_buffer.receive_messages(tick);
         for (channel_kind, received_messages) in channel_messages {
             for message in received_messages {
-                messages.push_message(&self.user_key, &channel_kind, message);
+                messages.push_message(&user_key, &channel_kind, message);
             }
         }
     }
@@ -319,11 +346,11 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) {
-        let rtt_millis = self.ping_manager.rtt_average;
+        let rtt_millis = self.recv.ping_manager.rtt_average;
 
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
-        self.base.collect_messages(now, &rtt_millis);
+        self.send.base.collect_messages(now, &rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_COLLECT_MESSAGES
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
@@ -333,13 +360,13 @@ impl Connection {
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
         let mut host_world_events = self
-            .base.send
+            .send
+            .base
             .world_manager
             .take_outgoing_commands(now, &rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_TAKE_OUTGOING_EVENTS
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
-        // Count drained commands and messages for this connection
         #[cfg(feature = "e2e_debug")]
         {
             use crate::server::world_server::{
@@ -352,9 +379,7 @@ impl Connection {
             }
         }
 
-        // Phase A: tick the outbound token-bucket bandwidth accumulator
-        // before the send cycle. Refreshes budget + one-packet overshoot.
-        self.base.accumulate_bandwidth(now);
+        self.send.base.accumulate_bandwidth(now);
 
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
@@ -380,15 +405,13 @@ impl Connection {
             }
         }
         if any_sent {
-            self.base.mark_sent();
+            self.send.base.mark_sent();
         }
         #[cfg(feature = "bench_instrumentation")]
         bench_send_counters::NS_SEND_PACKET_LOOP
             .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
     }
 
-    /// Send any message, component actions and component updates to the client
-    /// Will split the data into multiple packets.
     #[allow(clippy::too_many_arguments)]
     fn send_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
@@ -405,38 +428,28 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) -> bool {
-        let has_messages = self.base.send.message_manager.has_outgoing_messages();
+        let has_messages = self.send.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
 
-        // Check one-shot ACK flag (edge-triggered, consumed here)
-        let needs_ack_only = self.base.take_should_send_empty_ack();
+        let needs_ack_only = self.send.base.take_should_send_empty_ack();
 
-        // If ACK-only and no messages/events, send exactly ONE header-only packet and return false
         if needs_ack_only && !has_messages && !has_events {
             let mut writer = BitWriter::new();
-            writer.reserve_bits(3); // Messages, Updates, Actions finish bits
+            writer.reserve_bits(3);
 
-            // write header
-            let _header = self.base.write_header(PacketType::Data, &mut writer);
+            let _header = self.write_header(PacketType::Data, &mut writer);
 
-            // write server tick
             let tick = time_manager.current_tick();
             tick.ser(&mut writer);
-
-            // write server tick instant
             time_manager.current_tick_instant().ser(&mut writer);
 
-            // write finish bits for empty packet (no messages, no updates, no actions)
-            false.ser(&mut writer); // Messages finish bit
-            false.ser(&mut writer); // Updates finish bit
-            false.ser(&mut writer); // Actions finish bit
+            false.ser(&mut writer);
+            false.ser(&mut writer);
+            false.ser(&mut writer);
 
-            // send packet
-            if io.send_packet(&self.address, writer.to_packet()).is_err() {
-                warn!(
-                    "Server Error: Cannot send ACK-only packet to {}",
-                    &self.address
-                );
+            let addr = self.address();
+            if io.send_packet(&addr, writer.to_packet()).is_err() {
+                warn!("Server Error: Cannot send ACK-only packet to {}", &addr);
             } else {
                 #[cfg(feature = "e2e_debug")]
                 {
@@ -444,18 +457,12 @@ impl Connection {
                 }
             }
 
-            // Return false to stop the loop (ACK-only is one-shot)
             return false;
         }
 
-        // Normal packet sending path (with messages/events or no ACK needed)
         if has_events || has_messages {
-            // Phase A: bandwidth budget gate — if we can't afford another MTU
-            // packet under the token-bucket (one-packet overshoot included),
-            // defer the remaining work to the next tick. Anything unsent
-            // compounds; starvation is structurally impossible per Fiedler.
-            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
-                self.base.record_bandwidth_deferred();
+            if !self.send.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+                self.send.base.record_bandwidth_deferred();
                 return false;
             }
 
@@ -478,16 +485,15 @@ impl Connection {
             bench_send_counters::NS_WRITE_PACKET
                 .fetch_add(t_write.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
 
-            // send packet, measuring actual size before the move so we can
-            // spend exactly what went on the wire.
             let packet = writer.to_packet();
             let packet_bytes = packet.slice().len() as u32;
             #[cfg(feature = "bench_instrumentation")]
             let t_io = std::time::Instant::now();
-            if io.send_packet(&self.address, packet).is_err() {
-                warn!("Server Error: Cannot send data packet to {}", &self.address);
+            let addr = self.address();
+            if io.send_packet(&addr, packet).is_err() {
+                warn!("Server Error: Cannot send data packet to {}", &addr);
             } else {
-                self.base.spend_bandwidth(packet_bytes);
+                self.send.base.spend_bandwidth(packet_bytes);
                 #[cfg(feature = "bench_instrumentation")]
                 bench_send_counters::N_PACKETS_SENT
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -523,30 +529,19 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) -> BitWriter {
-        let next_packet_index = self.base.next_packet_index();
+        let next_packet_index = self.send.base.next_packet_index();
 
         let mut writer = BitWriter::new();
-
-        // Reserve bits we know will be required to finish the message:
-        // 1. Messages finish bit
-        // 2. Updates finish bit
-        // 3. Actions finish bit
         writer.reserve_bits(3);
 
-        // write header
-        self.base.write_header(PacketType::Data, &mut writer);
+        self.write_header(PacketType::Data, &mut writer);
 
-        // write server tick
         let tick = time_manager.current_tick();
         tick.ser(&mut writer);
-
-        // write server tick instant
         time_manager.current_tick_instant().ser(&mut writer);
 
-        // write common data packet
         let mut has_written = false;
 
-        // Count SetAuthority(Granted) commands before writing
         #[cfg(feature = "e2e_debug")]
         let set_auth_granted_before = host_world_events
             .iter()
@@ -563,7 +558,7 @@ impl Connection {
         let diff_handler_guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
         #[cfg(feature = "bench_instrumentation")]
         let t_base_write = std::time::Instant::now();
-        self.base.write_packet(
+        self.send.base.write_packet(
             channel_kinds,
             message_kinds,
             component_kinds,
@@ -586,7 +581,6 @@ impl Connection {
 
         #[cfg(feature = "e2e_debug")]
         {
-            // Count SetAuthority(Granted) commands after writing (they're consumed during write)
             let set_auth_granted_after = host_world_events
                 .iter()
                 .filter(|(_, cmd)| {
@@ -597,8 +591,6 @@ impl Connection {
                     }
                 })
                 .count();
-
-            // The difference is how many were written
             let written_count = set_auth_granted_before - set_auth_granted_after;
             if written_count > 0 {
                 use crate::server::world_server::SERVER_WROTE_SET_AUTH;
@@ -611,7 +603,7 @@ impl Connection {
 
     /// IO-free variant of `send_packets`. Builds all outgoing packets for this
     /// connection without sending them. Returns `(packets, any_built)`.
-    /// Caller flushes each packet via `io.send_packet(&self.address, pkt)` after
+    /// Caller flushes each packet via `io.send_packet(&self.address(), pkt)` after
     /// the parallel build phase completes.
     #[allow(clippy::too_many_arguments)]
     pub fn build_all_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -627,10 +619,11 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) -> (Vec<OutgoingPacket>, bool) {
-        let rtt_millis = self.ping_manager.rtt_average;
-        self.base.collect_messages(now, &rtt_millis);
-        let mut host_world_events = self.base.send.world_manager.take_outgoing_commands(now, &rtt_millis);
-        self.base.accumulate_bandwidth(now);
+        let rtt_millis = self.recv.ping_manager.rtt_average;
+        self.send.base.collect_messages(now, &rtt_millis);
+        let mut host_world_events =
+            self.send.base.world_manager.take_outgoing_commands(now, &rtt_millis);
+        self.send.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
         loop {
@@ -653,17 +646,12 @@ impl Connection {
         }
         let any_built = !packets.is_empty();
         if any_built {
-            self.base.mark_sent();
+            self.send.base.mark_sent();
         }
         (packets, any_built)
     }
 
-    /// Build one outgoing packet without IO. Mirrors `send_packet` minus the
-    /// `io.send_packet()` call. Returns `None` when there is nothing to send
-    /// (terminates the `build_all_packets` loop).
-    ///
-    /// `spend_bandwidth` is called optimistically on the data path (ACK-only
-    /// skips it, matching the existing `send_packet` behavior).
+    /// Build one outgoing packet without IO. See `build_all_packets`.
     #[allow(clippy::too_many_arguments)]
     fn build_one_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
@@ -679,15 +667,14 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) -> Option<OutgoingPacket> {
-        let has_messages = self.base.send.message_manager.has_outgoing_messages();
+        let has_messages = self.send.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
-        let needs_ack_only = self.base.take_should_send_empty_ack();
+        let needs_ack_only = self.send.base.take_should_send_empty_ack();
 
         if needs_ack_only && !has_messages && !has_events {
-            // ACK-only: one-shot header packet, no spend_bandwidth (matches send_packet)
             let mut writer = BitWriter::new();
             writer.reserve_bits(3);
-            let _header = self.base.write_header(PacketType::Data, &mut writer);
+            let _header = self.write_header(PacketType::Data, &mut writer);
             time_manager.current_tick().ser(&mut writer);
             time_manager.current_tick_instant().ser(&mut writer);
             false.ser(&mut writer);
@@ -697,8 +684,8 @@ impl Connection {
         }
 
         if has_events || has_messages {
-            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
-                self.base.record_bandwidth_deferred();
+            if !self.send.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+                self.send.base.record_bandwidth_deferred();
                 return None;
             }
             let writer = self.write_packet(
@@ -715,8 +702,7 @@ impl Connection {
                 snapshot_map,
             );
             let packet = writer.to_packet();
-            // Optimistic spend: over-commit ≤1 MTU on network error; self-corrects next tick.
-            self.base.spend_bandwidth(packet.slice().len() as u32);
+            self.send.base.spend_bandwidth(packet.slice().len() as u32);
             return Some(packet);
         }
 
@@ -724,6 +710,6 @@ impl Connection {
     }
 
     pub fn process_received_commands(&mut self) {
-        self.base.send.world_manager.process_delivered_commands();
+        self.send.base.world_manager.process_delivered_commands();
     }
 }

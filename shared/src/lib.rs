@@ -101,7 +101,7 @@ pub use connection::{
     ack_manager::AckManager,
     bandwidth::BandwidthConfig,
     bandwidth_monitor::BandwidthMonitor,
-    base_connection::BaseConnection,
+    base_connection::{BaseConnection, BaseRecvConnection, BaseSendConnection},
     compression_config::{CompressionConfig, CompressionMode},
     connection_config::ConnectionConfig,
     connection_stats::ConnectionStats,
