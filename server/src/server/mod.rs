@@ -13,6 +13,9 @@ pub use world_server::WorldServer;
 pub mod connection_shared;
 pub use connection_shared::ConnectionShared;
 
+pub mod server_shared;
+pub use server_shared::ServerShared;
+
 pub mod receive_output;
 pub use receive_output::ReceiveOutput;
 

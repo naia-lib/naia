@@ -13,12 +13,12 @@ use log::{info, warn};
 use naia_shared::{
     handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
     ConnectionStats, DisconnectReason,
-    ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
     GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
     GlobalRequestId, GlobalResponseId, OutgoingPacket, OutgoingPriorityHook, SnapshotMap,
     UserPriorityState, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer,
-    MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request,
+    PacketType, Protocol, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, Serde,
     SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
@@ -172,13 +172,12 @@ impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
 pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
-    server_config: ServerConfig,
+    /// Cross-thread shared state (C.3 Phase 4 step 4-A).
+    /// Init-only fields (`server_config`, kind tables, `global_dirty`) live
+    /// here so pipeline recv/send handles can hold an `Arc<ServerShared<E>>`
+    /// without contention. Subsequent steps (4-B onwards) add locked fields.
+    pub(crate) shared: Arc<crate::server::ServerShared<E>>,
 
-    // Protocol
-    channel_kinds: ChannelKinds,
-    message_kinds: MessageKinds,
-    component_kinds: ComponentKinds,
-    client_authoritative_entities: bool,
     io: Io,
     // cont
     heartbeat_timer: Timer,
@@ -198,10 +197,6 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     // Maintained on every spawn/despawn; eliminates GlobalEntityMap HashMap lookups
     // in the hot Phase 2 / Phase 3 send paths.
     idx_to_world: Vec<Option<E>>,
-    // Held to keep the GlobalDirtyBitset alive; consumers access it via GlobalWorldManager.
-    // Will be read directly in a later phase.
-    #[allow(dead_code)]
-    global_dirty: Arc<GlobalDirtyBitset>,
     // Events
     addrs_with_new_packets: HashSet<SocketAddr>,
     outstanding_disconnects: Vec<(UserKey, DisconnectReason)>,
@@ -276,13 +271,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         global_world_manager.set_global_dirty(Arc::clone(&global_dirty));
         global_world_manager.init_protocol_kind_count(component_kinds.kind_count());
 
-        Self {
-            // Config
+        let shared = Arc::new(crate::server::ServerShared::new(
             server_config,
             channel_kinds,
             message_kinds,
             component_kinds,
             client_authoritative_entities,
+            global_dirty,
+        ));
+
+        Self {
+            shared,
             io,
             heartbeat_timer,
             ping_timer,
@@ -298,7 +297,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             global_world_manager,
             global_entity_map: GlobalEntityMap::new(),
             idx_to_world: vec![None; capacity],
-            global_dirty,
             // Events
             addrs_with_new_packets: HashSet::new(),
             outstanding_disconnects: Vec::new(), // (UserKey, DisconnectReason)
@@ -352,13 +350,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         use std::collections::hash_map::Entry;
         let new_connection = Connection::new(
-            &self.server_config.connection,
-            &self.server_config.ping,
+            &self.shared.server_config.connection,
+            &self.shared.server_config.ping,
             user_address,
             user_key,
-            &self.channel_kinds,
+            &self.shared.channel_kinds,
             &self.global_world_manager,
-            self.server_config.max_replicated_entities as usize,
+            self.shared.server_config.max_replicated_entities as usize,
         );
 
         match self.user_connections.entry(*user_address) {
@@ -597,7 +595,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         channel_kind: &ChannelKind,
         message: MessageContainer,
     ) -> Result<(), NaiaServerError> {
-        let channel_settings = self.channel_kinds.channel(channel_kind);
+        let channel_settings = self.shared.channel_kinds.channel(channel_kind);
 
         if !channel_settings.can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
@@ -614,7 +612,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
         let accepted = connection.base.message_manager.send_message(
-            &self.message_kinds,
+            &self.shared.message_kinds,
             &mut converter,
             channel_kind,
             message,
@@ -665,7 +663,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         channel_kind: &ChannelKind,
         request_box: Box<dyn Message>,
     ) -> Result<GlobalRequestId, NaiaServerError> {
-        let channel_settings = self.channel_kinds.channel(channel_kind);
+        let channel_settings = self.shared.channel_kinds.channel(channel_kind);
 
         if !channel_settings.can_request_and_respond() {
             panic!("Requests can only be sent over Bidirectional, Reliable Channels");
@@ -690,7 +688,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         let message = MessageContainer::new(request_box);
         connection.base.message_manager.send_request(
-            &self.message_kinds,
+            &self.shared.message_kinds,
             &mut converter,
             channel_kind,
             request_id,
@@ -737,7 +735,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_converter_mut(&self.global_world_manager);
         let response = MessageContainer::new(response_box);
         connection.base.message_manager.send_response(
-            &self.message_kinds,
+            &self.shared.message_kinds,
             &mut converter,
             &channel_kind,
             local_response_id,
@@ -841,7 +839,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             let handler = self.global_world_manager.diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-            for global_idx in self.global_dirty.dirty_entity_iter() {
+            for global_idx in self.shared.global_dirty.dirty_entity_iter() {
                 // Option B wire-cache invalidation: clear this entity's PATH A cache
                 // before Phase 3 re-serializes, ensuring no stale bytes reach the wire.
                 guard.clear_wire_cache_for_entity(global_idx);
@@ -850,7 +848,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 let Some(world_entity) = self.idx_to_world[global_idx.as_usize()] else { continue; };
                 if !world.has_entity(&world_entity) { continue; }
 
-                for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
+                for (word_idx, dirty_word) in self.shared.global_dirty.dirty_words(global_idx).iter().enumerate() {
                     let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
                     while word != 0 {
                         let bit_pos = word.trailing_zeros() as usize;
@@ -895,12 +893,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 let connection = self.user_connections.get(user_address).unwrap();
                 let mut events: UpdateEvents = HashMap::new();
 
-                for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
+                for global_idx in connection.visibility.intersect_dirty(&*self.shared.global_dirty) {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                     #[cfg(feature = "bench_instrumentation")]
                     bench_iris_counters::N_PHASE3_ENTITY_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-                    for (word_idx, dirty_word) in self.global_dirty.dirty_words(global_idx).iter().enumerate() {
+                    for (word_idx, dirty_word) in self.shared.global_dirty.dirty_words(global_idx).iter().enumerate() {
                         let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
                         while word != 0 {
                             let bit_pos = word.trailing_zeros() as usize;
@@ -958,9 +956,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .collect();
 
         // Shared immutable borrows — valid since user_connections/priorities are empty.
-        let channel_kinds     = &self.channel_kinds;
-        let message_kinds     = &self.message_kinds;
-        let component_kinds   = &self.component_kinds;
+        let channel_kinds     = &self.shared.channel_kinds;
+        let message_kinds     = &self.shared.message_kinds;
+        let component_kinds   = &self.shared.component_kinds;
         let gwm               = &self.global_world_manager;
         let global_entity_map = &self.global_entity_map;
         let time_manager      = &self.time_manager;
@@ -2477,12 +2475,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // update in world manager
         self.global_world_manager.insert_component_record(
-            // &self.component_kinds,
+            // &self.shared.component_kinds,
             &global_entity,
             &component_kind,
         );
         self.global_world_manager.insert_component_diff_handler(
-            &self.component_kinds,
+            &self.shared.component_kinds,
             &global_entity,
             component,
         );
@@ -2620,7 +2618,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let result = self.global_world_manager.entity_publish(global_entity);
         if result {
             world.entity_publish(
-                &self.component_kinds,
+                &self.shared.component_kinds,
                 &self.global_entity_map,
                 &self.global_world_manager,
                 world_entity,
@@ -2757,7 +2755,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.global_world_manager
                 .entity_enable_delegation(global_entity);
             world.entity_enable_delegation(
-                &self.component_kinds,
+                &self.shared.component_kinds,
                 &self.global_entity_map,
                 &self.global_world_manager,
                 world_entity,
@@ -2797,7 +2795,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     return;
                 }
                 world.entity_publish(
-                    &self.component_kinds,
+                    &self.shared.component_kinds,
                     &self.global_entity_map,
                     &self.global_world_manager,
                     world_entity,
@@ -2889,7 +2887,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.global_world_manager
             .entity_enable_delegation(global_entity);
         world.entity_enable_delegation(
-            &self.component_kinds,
+            &self.shared.component_kinds,
             &self.global_entity_map,
             &self.global_world_manager,
             world_entity,
@@ -3020,7 +3018,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         reason: DisconnectReason,
         world: &mut W,
     ) {
-        if self.client_authoritative_entities {
+        if self.shared.client_authoritative_entities {
             self.despawn_all_remote_entities(user_key, world);
             if let Some(all_owned_entities) =
                 self.global_world_manager.user_all_owned_entities(user_key)
@@ -3255,10 +3253,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // process data
         connection.read_packet(
-            &self.channel_kinds,
-            &self.message_kinds,
-            &self.component_kinds,
-            self.client_authoritative_entities,
+            &self.shared.channel_kinds,
+            &self.shared.message_kinds,
+            &self.shared.component_kinds,
+            self.shared.client_authoritative_entities,
             server_tick,
             client_tick,
             reader,
@@ -3291,9 +3289,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             (
                 connection.user_key,
                 connection.process_packets(
-                    &self.message_kinds,
-                    &self.component_kinds,
-                    self.client_authoritative_entities,
+                    &self.shared.message_kinds,
+                    &self.shared.component_kinds,
+                    self.shared.client_authoritative_entities,
                     now,
                     &mut self.global_entity_map,
                     &mut self.global_world_manager,
@@ -3369,7 +3367,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         &component_kind,
                     );
                     self.global_world_manager.insert_component_record(
-                        // &self.component_kinds,
+                        // &self.shared.component_kinds,
                         &global_entity,
                         &component_kind,
                     );
@@ -3382,7 +3380,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                     if is_public_and_client_owned || is_delegated {
                         world.component_publish(
-                            &self.component_kinds,
+                            &self.shared.component_kinds,
                             &self.global_entity_map,
                             &self.global_world_manager,
                             &world_entity,
@@ -3391,7 +3389,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                         if is_delegated {
                             world.component_enable_delegation(
-                                &self.component_kinds,
+                                &self.shared.component_kinds,
                                 &self.global_entity_map,
                                 &self.global_world_manager,
                                 &world_entity,
@@ -3969,7 +3967,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             connection
                 .base
                 .world_manager
-                .host_init_entity(global_entity, component_kinds, &self.component_kinds, self.global_world_manager.entity_is_static(global_entity));
+                .host_init_entity(global_entity, component_kinds, &self.shared.component_kinds, self.global_world_manager.entity_is_static(global_entity));
             connection.set_entity_visible(entity_idx);
             #[cfg(feature = "e2e_debug")]
             {
