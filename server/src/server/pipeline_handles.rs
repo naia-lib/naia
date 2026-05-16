@@ -1,64 +1,62 @@
-use std::{hash::Hash, sync::Arc};
+//! Pipeline-mode handles for the recv and send halves of a `WorldServer`
+//! (step 4-E.2f).
+//!
+//! Each handle owns its substate directly — no `Arc<Mutex<WorldServer>>`
+//! wrapper. `RecvState<E>` and `SendState<E>` are both already `Send`
+//! (their `unsafe impl Send` blocks at `recv_state.rs:96` and
+//! `send_state.rs:48` carry the safety story), so the handles inherit
+//! `Send` without any further unsafe.
+//!
+//! `WorldServer::into_pipeline_handles(self)` decomposes the server into
+//! three pieces — `CoordinatorState<E>`, `RecvHandle<E>`, `SendHandle<E>` —
+//! and `WorldServer::from_pipeline_states(...)` reassembles them. The
+//! split is structural; thread-independent operation of the recv and
+//! send halves is wired up by the bevy pipeline coordinator in step 4-F.
+//!
+//! Until 4-F, callers reassemble the handles back into a `WorldServer`
+//! to drive `receive_all_packets` / `send_all_packets` through the
+//! existing methods. The split is therefore a no-op for current
+//! consumers, but the type-level rearrangement is in place so 4-F can
+//! distribute the methods across threads without further public-API
+//! changes.
 
-use parking_lot::Mutex;
-use naia_shared::WorldRefType;
+use std::hash::Hash;
 
-use super::{world_server::WorldServer, receive_output::ReceiveOutput};
+use crate::server::{recv_state::RecvState, send_state::SendState};
 
-/// Pipeline-facing receive handle.
+/// Recv-thread handle. Owns `RecvState<E>` directly.
 ///
-/// Wraps `WorldServer<E>` behind an `Arc<Mutex<>>` so it can be sent to a
-/// dedicated recv thread.  In Phase 3 both `RecvHandle` and `SendHandle`
-/// point to the **same** `WorldServer` instance; the mutex serialises access.
-/// True concurrent execution (recv and send running simultaneously) requires
-/// the field-level split planned for Phase 4.
-///
-/// # Thread safety
-///
-/// `WorldServer<E>` may contain raw pointers internally, so we assert `Send`
-/// manually.  This is safe because the mutex guarantees exclusive access.
+/// In 4-F this handle is moved onto the recv thread; the coordinator
+/// keeps `CoordinatorState<E>` and the `Arc<ServerShared<E>>` so the
+/// three pieces can run concurrently behind the coordinator-driven
+/// 12-step tick sequence (§8 line 1235 onwards).
 pub struct RecvHandle<E: Copy + Eq + Hash + Send + Sync> {
-    pub(super) world_server: Arc<Mutex<WorldServer<E>>>,
+    /// Recv-thread-exclusive substate (timers, queues, recv-side
+    /// connection halves, pending data packets, recv io).
+    pub state: RecvState<E>,
 }
 
-// SAFETY: access is always gated by the parking_lot::Mutex.
-unsafe impl<E: Copy + Eq + Hash + Send + Sync> Send for RecvHandle<E> {}
-
 impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
-    /// Run the full receive phase and return decoded events.
-    ///
-    /// Calls [`WorldServer::receive_all_packets`] then drains accumulated
-    /// world events into a [`ReceiveOutput`].
-    ///
-    /// Note: [`WorldServer::process_all_packets`] is NOT called here because
-    /// it requires a `World` reference — the caller is responsible for
-    /// invoking that separately (or the pipeline coordinator handles it).
-    ///
-    /// Called from the recv thread in the pipeline coordinator.
-    pub fn receive(&mut self) -> ReceiveOutput<E> {
-        let mut ws = self.world_server.lock();
-        ws.receive()
+    /// Consume this handle and return the inner `RecvState<E>` —
+    /// used by `WorldServer::from_pipeline_states` for serial-mode
+    /// reassembly until 4-F's coordinator runs the recv thread directly.
+    pub fn into_state(self) -> RecvState<E> {
+        self.state
     }
 }
 
-/// Pipeline-facing send handle.
-///
-/// Mirrors [`RecvHandle`] — same `Arc<Mutex<WorldServer<E>>>` under the hood.
-/// Phase 3: serialised via mutex.  Phase 4: will hold a separate `WorldSend`
-/// half after the field split.
+/// Send-thread handle. Owns `SendState<E>` directly.
 pub struct SendHandle<E: Copy + Eq + Hash + Send + Sync> {
-    pub(super) world_server: Arc<Mutex<WorldServer<E>>>,
+    /// Send-thread-exclusive substate (per-user send connections,
+    /// per-user + global priority layers, send io).
+    pub state: SendState<E>,
 }
 
-// SAFETY: access is always gated by the parking_lot::Mutex.
-unsafe impl<E: Copy + Eq + Hash + Send + Sync> Send for SendHandle<E> {}
-
 impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
-    /// Flush all outbound packets to connected clients.
-    ///
-    /// Forwards to [`WorldServer::send_all_packets`].
-    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
-        let mut ws = self.world_server.lock();
-        ws.send_all_packets(world);
+    /// Consume this handle and return the inner `SendState<E>` —
+    /// used by `WorldServer::from_pipeline_states` for serial-mode
+    /// reassembly until 4-F's coordinator runs the send thread directly.
+    pub fn into_state(self) -> SendState<E> {
+        self.state
     }
 }

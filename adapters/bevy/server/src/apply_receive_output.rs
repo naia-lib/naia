@@ -22,17 +22,23 @@ mod bevy_events {
 /// Apply a [`ReceiveOutput`] to the Bevy world, firing the same events that
 /// [`translate_world_events`] fires from a live [`ServerImpl`].
 ///
-/// This is the pipeline-coordinator entry point: after `RecvHandle::receive()`
-/// returns a `ReceiveOutput`, pass it here (along with the Bevy `World` and the
-/// `ServerImpl` resource) to propagate all decoded events into Bevy's message
-/// queues.
+/// This is the pipeline-coordinator entry point: after the recv phase
+/// completes (in 4-F this becomes a coordinator-driven step that reads the
+/// recv-side world events into a `ReceiveOutput`), pass the output here
+/// along with the Bevy `World` and the `ServerImpl` resource to propagate
+/// all decoded events into Bevy's message queues.
 ///
-/// # Phase 3 note
+/// # Phase 4 wiring note
 ///
-/// The implementation mirrors `translate_world_events` from `systems.rs` but
-/// works from a pre-collected `ReceiveOutput` instead of re-locking the server.
-/// Defined here as a building block; the pipeline coordinator is wired up in
-/// Phase 4.
+/// 4-E.2f rewired `RecvHandle` / `SendHandle` to own their substates
+/// directly (`Box<RecvState<E>>` / `Box<SendState<E>>`), and
+/// `WorldServer::into_pipeline_handles` returns the three-way
+/// `(CoordinatorState, RecvHandle, SendHandle)`. The bevy adapter's
+/// coordinator (step 4-F) is responsible for harvesting a `ReceiveOutput`
+/// from the recv-side state on each tick and calling this function with
+/// it. The implementation mirrors `translate_world_events` from
+/// `systems.rs` but works from a pre-collected `ReceiveOutput` instead
+/// of re-locking the server.
 pub fn apply_receive_output(
     world: &mut World,
     server: &mut ServerImpl,

@@ -69,3 +69,7 @@ path = "contract_tests/integration_only/10_entity_delegation.rs"
 [[test]]
 name = "parallel_send_matches_serial"
 path = "contract_tests/integration_only/parallel_send_matches_serial.rs"
+
+[[test]]
+name = "pipeline_recv_send_independent"
+path = "contract_tests/integration_only/pipeline_recv_send_independent.rs"

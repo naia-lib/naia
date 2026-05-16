@@ -602,22 +602,47 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         super::receive_output::ReceiveOutput { world_events, pending_ticks }
     }
 
-    /// Consume this `WorldServer` and return a pair of pipeline handles.
+    /// Consume this `WorldServer` and return the three pipeline pieces
+    /// (step 4-E.2f). `CoordinatorState<E>` is handed back to the caller
+    /// directly so the bevy pipeline adapter can stash it inside
+    /// `ServerImpl::WorldOnly` (or equivalent) and orchestrate the
+    /// recv/send threads around it per the 12-step §8 sequence.
     ///
-    /// Both handles share the same `WorldServer` instance behind an
-    /// `Arc<parking_lot::Mutex<>>`.  In Phase 3 they serialise (the mutex
-    /// ensures only one handle is active at a time).  True concurrent
-    /// execution — recv and send running on separate threads simultaneously —
-    /// requires the field-level split planned for Phase 4.
-    ///
-    /// After this call the original `WorldServer` is consumed; all further
-    /// interaction must go through the returned handles.
-    pub fn into_pipeline_handles(self) -> (super::pipeline_handles::RecvHandle<E>, super::pipeline_handles::SendHandle<E>) {
-        let shared = Arc::new(parking_lot::Mutex::new(self));
+    /// The `Arc<ServerShared<E>>` clone needed to wire the two halves
+    /// back together (or to read shared state from the coordinator
+    /// thread) can be cloned from either handle's `state.shared` before
+    /// passing the handles off to their threads.
+    pub fn into_pipeline_handles(
+        self,
+    ) -> (
+        super::coord_state::CoordinatorState<E>,
+        super::pipeline_handles::RecvHandle<E>,
+        super::pipeline_handles::SendHandle<E>,
+    ) {
+        let (coord, recv_state, send_state) = self.into_pipeline_states();
         (
-            super::pipeline_handles::RecvHandle { world_server: Arc::clone(&shared) },
-            super::pipeline_handles::SendHandle { world_server: shared },
+            coord,
+            super::pipeline_handles::RecvHandle { state: recv_state },
+            super::pipeline_handles::SendHandle { state: send_state },
         )
+    }
+
+    /// Reassemble a `WorldServer<E>` from its three pipeline pieces
+    /// (step 4-E.2f). Used by callers that need to drive the full
+    /// `receive_all_packets` / `send_all_packets` lifecycle through the
+    /// existing methods after a structural split — primarily the
+    /// `pipeline_recv_send_independent` smoke test and any 4-F adapter
+    /// path that still needs the monolithic `WorldServer` surface.
+    ///
+    /// The `Arc<ServerShared<E>>` is recovered from `recv.shared`
+    /// (the same Arc clone also lives on `send.shared`).
+    pub fn from_pipeline_states(
+        coord: super::coord_state::CoordinatorState<E>,
+        recv: super::recv_state::RecvState<E>,
+        send: super::send_state::SendState<E>,
+    ) -> Self {
+        let shared = Arc::clone(&recv.shared);
+        Self { shared, recv, send, coord }
     }
 
     /// Consume this `WorldServer` into the field-level pipeline states
