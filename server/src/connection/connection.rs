@@ -7,7 +7,7 @@ use naia_shared::{
     BaseConnection, BigMapKey, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
     ConnectionConfig, ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand,
     EntityEvent, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType,
-    HostType, Instant, MessageIndex, MessageKinds, PacketType, Serde,
+    HostType, Instant, MessageIndex, MessageKinds, OutgoingPacket, PacketType, Serde,
     SerdeErr, SnapshotMap, StandardHeader, Tick, Timer, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
@@ -295,7 +295,7 @@ impl Connection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
-        snapshot_map: &mut SnapshotMap,
+        snapshot_map: &SnapshotMap,
     ) {
         let rtt_millis = self.ping_manager.rtt_average;
 
@@ -381,7 +381,7 @@ impl Connection {
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
-        snapshot_map: &mut SnapshotMap,
+        snapshot_map: &SnapshotMap,
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
@@ -499,7 +499,7 @@ impl Connection {
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
-        snapshot_map: &mut SnapshotMap,
+        snapshot_map: &SnapshotMap,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 
@@ -585,6 +585,120 @@ impl Connection {
         }
 
         writer
+    }
+
+    /// IO-free variant of `send_packets`. Builds all outgoing packets for this
+    /// connection without sending them. Returns `(packets, any_built)`.
+    /// Caller flushes each packet via `io.send_packet(&self.address, pkt)` after
+    /// the parallel build phase completes.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_all_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+        &mut self,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        now: &Instant,
+        world: &W,
+        converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &GlobalWorldManager,
+        time_manager: &TimeManager,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        snapshot_map: &SnapshotMap,
+    ) -> (Vec<OutgoingPacket>, bool) {
+        let rtt_millis = self.ping_manager.rtt_average;
+        self.base.collect_messages(now, &rtt_millis);
+        let mut host_world_events = self.base.world_manager.take_outgoing_commands(now, &rtt_millis);
+        self.base.accumulate_bandwidth(now);
+
+        let mut packets = Vec::new();
+        loop {
+            let Some(pkt) = self.build_one_packet(
+                channel_kinds,
+                message_kinds,
+                component_kinds,
+                now,
+                world,
+                converter,
+                global_world_manager,
+                time_manager,
+                &mut host_world_events,
+                update_list,
+                snapshot_map,
+            ) else {
+                break;
+            };
+            packets.push(pkt);
+        }
+        let any_built = !packets.is_empty();
+        if any_built {
+            self.base.mark_sent();
+        }
+        (packets, any_built)
+    }
+
+    /// Build one outgoing packet without IO. Mirrors `send_packet` minus the
+    /// `io.send_packet()` call. Returns `None` when there is nothing to send
+    /// (terminates the `build_all_packets` loop).
+    ///
+    /// `spend_bandwidth` is called optimistically on the data path (ACK-only
+    /// skips it, matching the existing `send_packet` behavior).
+    #[allow(clippy::too_many_arguments)]
+    fn build_one_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+        &mut self,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        now: &Instant,
+        world: &W,
+        entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &GlobalWorldManager,
+        time_manager: &TimeManager,
+        host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        snapshot_map: &SnapshotMap,
+    ) -> Option<OutgoingPacket> {
+        let has_messages = self.base.message_manager.has_outgoing_messages();
+        let has_events = !host_world_events.is_empty() || !update_list.is_empty();
+        let needs_ack_only = self.base.take_should_send_empty_ack();
+
+        if needs_ack_only && !has_messages && !has_events {
+            // ACK-only: one-shot header packet, no spend_bandwidth (matches send_packet)
+            let mut writer = BitWriter::new();
+            writer.reserve_bits(3);
+            let _header = self.base.write_header(PacketType::Data, &mut writer);
+            time_manager.current_tick().ser(&mut writer);
+            time_manager.current_tick_instant().ser(&mut writer);
+            false.ser(&mut writer);
+            false.ser(&mut writer);
+            false.ser(&mut writer);
+            return Some(writer.to_packet());
+        }
+
+        if has_events || has_messages {
+            if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
+                self.base.record_bandwidth_deferred();
+                return None;
+            }
+            let writer = self.write_packet(
+                channel_kinds,
+                message_kinds,
+                component_kinds,
+                now,
+                world,
+                entity_converter,
+                global_world_manager,
+                time_manager,
+                host_world_events,
+                update_list,
+                snapshot_map,
+            );
+            let packet = writer.to_packet();
+            // Optimistic spend: over-commit ≤1 MTU on network error; self-corrects next tick.
+            self.base.spend_bandwidth(packet.slice().len() as u32);
+            return Some(packet);
+        }
+
+        None
     }
 
     pub fn process_received_commands(&mut self) {

@@ -81,7 +81,7 @@ impl WorldWriter {
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
-        snapshot_map: Option<&mut SnapshotMap>,
+        snapshot_map: Option<&SnapshotMap>,
     ) {
         // write entity updates
         Self::write_updates(
@@ -803,7 +803,7 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
-        mut snapshot_map: Option<&mut SnapshotMap>,
+        snapshot_map: Option<&SnapshotMap>,
     ) {
         let mut i = 0;
         while i < update_list.len() {
@@ -854,7 +854,7 @@ impl WorldWriter {
                 &world_entity,
                 has_written,
                 kinds,
-                snapshot_map.as_mut().map(|m| &mut **m),
+                snapshot_map,
             );
 
             // write ComponentContinue finish bit, release
@@ -895,7 +895,7 @@ impl WorldWriter {
         world_entity: &E,
         has_written: &mut bool,
         kinds: &mut HashMap<ComponentKind, u16>,
-        mut snapshot_map: Option<&mut SnapshotMap>,
+        snapshot_map: Option<&SnapshotMap>,
     ) {
         let mut written_component_kinds = Vec::new();
         let component_kind_set: Vec<ComponentKind> = kinds.keys().cloned().collect();
@@ -965,41 +965,38 @@ impl WorldWriter {
                     }
                     // else: diff mask > 8 bytes (unreachable for all registered components) — fall through to two-pass
 
-                } else if let Some(sm) = snapshot_map.as_mut().map(|m| &mut **m) {
+                } else if let Some(sm) = snapshot_map {
                     // ── PATH B: UserDependent ───────────────────────────────────
                     // EntityProperty fields resolve per-user local entity IDs — bytes differ per user.
                     // ECS is read once per component per tick into snapshot_map; all users
                     // serialize from the snapshot, never from ECS directly.
-                    let snapshot_entry = sm
-                        .entry((*global_entity, *component_kind))
-                        .or_insert_with(|| {
-                            world.component_of_kind(world_entity, component_kind)
-                                .expect("Component does not exist in World")
-                                .copy_to_box()
-                        });
-                    let snapshot: &dyn Replicate = snapshot_entry.as_ref();
+                    // Phase 1+2 guarantees every entry is present. If somehow missing,
+                    // optimized_write stays false and the two-pass path below handles it.
+                    if let Some(snapshot_entry) = sm.get(&(*global_entity, *component_kind)) {
+                        let snapshot: &dyn Replicate = snapshot_entry.as_ref();
 
-                    let mut converter = world_manager.entity_converter_mut(global_world_manager);
+                        let mut converter = world_manager.entity_converter_mut(global_world_manager);
 
-                    // Counter pass
-                    let mut counter = writer.counter();
-                    true.ser(&mut counter);
-                    component_kind.ser(component_kinds, &mut counter);
-                    snapshot.write_update(&diff_mask, &mut counter, &mut converter);
-                    if counter.overflowed() {
-                        if !*has_written {
-                            Self::warn_overflow_update(component_kinds.kind_to_name(component_kind), counter.bits_needed(), writer.bits_free());
+                        // Counter pass
+                        let mut counter = writer.counter();
+                        true.ser(&mut counter);
+                        component_kind.ser(component_kinds, &mut counter);
+                        snapshot.write_update(&diff_mask, &mut counter, &mut converter);
+                        if counter.overflowed() {
+                            if !*has_written {
+                                Self::warn_overflow_update(component_kinds.kind_to_name(component_kind), counter.bits_needed(), writer.bits_free());
+                            }
+                            break;
                         }
-                        break;
+
+                        *has_written = true;
+
+                        // Writer pass
+                        true.ser(writer);
+                        component_kind.ser(component_kinds, writer);
+                        snapshot.write_update(&diff_mask, writer, &mut converter);
+                        optimized_write = true;
                     }
-
-                    *has_written = true;
-
-                    // Writer pass
-                    true.ser(writer);
-                    component_kind.ser(component_kinds, writer);
-                    snapshot.write_update(&diff_mask, writer, &mut converter);
-                    optimized_write = true;
                 }
                 // else: UserDependent but snapshot_map is None — fall through to two-pass
             }

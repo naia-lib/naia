@@ -38,6 +38,7 @@ naia-server-socket = { version = "0.25", path = "../socket/server", optional = t
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 fastrand = { version = "1.7.0" }
+rayon = "1"
 
 ring = { version = "0.16.15", optional = true }
 http = { version = "1.2", optional = true }

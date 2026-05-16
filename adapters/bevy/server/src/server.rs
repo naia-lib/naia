@@ -88,7 +88,7 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn send_all_packets<W: WorldRefType<Entity>>(&mut self, world: W) {
+    pub(crate) fn send_all_packets<W: WorldRefType<Entity> + Sync>(&mut self, world: W) {
         match self {
             Self::Full(server) => server.send_all_packets(world),
             Self::WorldOnly(server) => server.send_all_packets(world),

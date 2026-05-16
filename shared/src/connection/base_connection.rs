@@ -224,7 +224,7 @@ impl BaseConnection {
         host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         global_diff_handler: Option<&GlobalDiffHandler>,
-        snapshot_map: Option<&mut SnapshotMap>,
+        snapshot_map: Option<&SnapshotMap>,
     ) {
         // write messages
         self.write_messages(

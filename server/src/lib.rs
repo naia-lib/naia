@@ -12,7 +12,7 @@
 //! # use naia_shared::{Instant, WorldMutType, WorldRefType};
 //! # fn run<E, W>(server: &mut Server<E>, world: W, now: Instant)
 //! #     where E: Copy + Eq + std::hash::Hash + Send + Sync,
-//! #           W: WorldMutType<E> + WorldRefType<E> + Copy
+//! #           W: WorldMutType<E> + WorldRefType<E> + Copy + Sync
 //! # {
 //! loop {
 //!     server.receive_all_packets();                    // 1. read from socket

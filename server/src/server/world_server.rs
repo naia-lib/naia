@@ -16,11 +16,11 @@ use naia_shared::{
     ChannelKinds, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
     GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
-    GlobalRequestId, GlobalResponseId, OutgoingPriorityHook, SnapshotMap, UserPriorityState,
-    GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, MessageKinds, PacketType,
-    Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry,
-    Response, ResponseReceiveKey, ResponseSendKey, Serde, SerdeErr, SharedGlobalWorldManager,
-    StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
+    GlobalRequestId, GlobalResponseId, OutgoingPacket, OutgoingPriorityHook, SnapshotMap,
+    UserPriorityState, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer,
+    MessageKinds, PacketType, Protocol, Replicate, ReplicatedComponent, Request,
+    ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, Serde,
+    SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -763,7 +763,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
-    pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
+    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
         #[cfg(feature = "e2e_debug")]
         {
             SERVER_SEND_ALL_PACKETS_CALLS.fetch_add(1, Ordering::Relaxed);
@@ -837,24 +837,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             std::sync::atomic::Ordering::Relaxed,
         );
 
-        // ── Iris Phase 3: Per-user send loop ─────────────────────────────────────
-        // For each user, bitwise-AND the global dirty bitset with this user's
-        // visibility bitset — O(capacity/64) — to get the candidate entity set.
-        // Then apply per-user component checks (diff mask, auth) to build
-        // update_events. No ECS reads; all information comes from the bitsets and
-        // per-user diff masks.
-        for user_address in &user_addresses {
-            // Build per-user update_events with immutable borrows only.
-            // Value = (GlobalEntityIndex, component kinds) — index carried to avoid a
-            // second HashMap lookup when resolving world_entity in update_list building.
-            #[cfg(feature = "bench_instrumentation")]
-            let _iris_p3_build_t0 = std::time::Instant::now();
+        // ── Iris Phase 3A: serial — build per-user update_events ────────────────
+        // Immutable borrows only. All users' events are built here before
+        // any mutable borrow is taken, so the RwLock guard can be dropped
+        // before the parallel build phase begins.
+        #[cfg(feature = "bench_instrumentation")]
+        let _iris_p3a_t0 = std::time::Instant::now();
 
-            let update_events: HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)> = {
+        type UpdateEvents = HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)>;
+        let mut update_events_by_addr: HashMap<SocketAddr, UpdateEvents> = HashMap::new();
+        {
+            let handler = self.global_world_manager.diff_handler();
+            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+            for user_address in &user_addresses {
                 let connection = self.user_connections.get(user_address).unwrap();
-                let handler = self.global_world_manager.diff_handler();
-                let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-                let mut events: HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)> = HashMap::new();
+                let mut events: UpdateEvents = HashMap::new();
 
                 for global_idx in connection.visibility.intersect_dirty(&*self.global_dirty) {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
@@ -871,17 +868,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             #[cfg(feature = "bench_instrumentation")]
                             bench_iris_counters::N_PHASE3_COMPONENT_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-                            // Hot path (steady state): compact-key lookup with pre-resolved
-                            // entity_idx + kind_bit — no RwLock, no (GlobalEntity,ComponentKind)
-                            // hash. Falls back to the slower two-call path for the pre-delivery
-                            // window and edge cases (delegated / remote-owned entities).
                             if connection.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
-                                // fast path: dirty + delivered — proceed to events.entry below
+                                // fast path: dirty + delivered
                             } else if connection.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
-                                // slow-path (pre-delivery): diff mask clear — skip
                                 continue;
                             } else if !connection.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
-                                // slow-path (pre-delivery): not yet updatable — skip
                                 continue;
                             }
 
@@ -891,74 +882,119 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         }
                     }
                 }
-                events
-            }; // connection (immutable), guard, handler Arc all drop here
+                update_events_by_addr.insert(*user_address, events);
+            }
+        } // guard + handler Arc drop here — RwLock released before parallel phase
 
-            #[cfg(feature = "bench_instrumentation")]
-            bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
-                _iris_p3_build_t0.elapsed().as_nanos() as u64,
-                std::sync::atomic::Ordering::Relaxed,
-            );
+        // Pre-populate user_priorities for all users (requires &mut, must be serial).
+        for user_address in &user_addresses {
+            let conn = self.user_connections.get(user_address).unwrap();
+            self.user_priorities.entry(conn.user_key).or_default();
+        }
 
-            // Exclusive mutable borrows for the actual packet send.
-            #[cfg(feature = "bench_instrumentation")]
-            let _iris_p3_sort_t0 = std::time::Instant::now();
+        #[cfg(feature = "bench_instrumentation")]
+        bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
+            _iris_p3a_t0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
-            let connection = self.user_connections.get_mut(user_address).unwrap();
-            // Build priority hook over the (global, user) layers. Split-borrow is safe
-            // because `user_priorities` and `global_priority` are disjoint fields.
-            let user_layer = self
-                .user_priorities
-                .entry(connection.user_key)
-                .or_default();
-            let mut hook = WorldServerPriorityHook {
-                global: &self.global_priority,
-                user: user_layer,
-                converter: &self.global_entity_map,
-            };
+        // ── Iris Phase 3B: parallel — build packets per user ─────────────────────
+        // Temporarily move each Connection and UserPriorityState out of their
+        // HashMaps so rayon tasks get exclusive owned access — no unsafe needed.
+        // Both are re-inserted after collect() returns. Cost: O(N) HashMap ops,
+        // negligible vs the parallelised packet-build work.
+        let work: Vec<(SocketAddr, UpdateEvents, Connection, UserPriorityState<E>)> = user_addresses.iter()
+            .filter_map(|addr| {
+                let conn = self.user_connections.remove(addr)?;
+                let user_key = conn.user_key;
+                let user_prio = self.user_priorities.remove(&user_key)
+                    .unwrap_or_default();
+                let events = update_events_by_addr.remove(addr)
+                    .unwrap_or_default();
+                Some((*addr, events, conn, user_prio))
+            })
+            .collect();
 
-            // Build pre-sorted update_list: advance priority, sort descending, resolve world_entity.
-            // O(1) idx_to_world array access replaces the GlobalEntityMap HashMap lookup.
-            let initial_update_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
-            let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashMap<ComponentKind, u16>)> = update_events
-                .into_iter()
-                .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
-                .collect();
-            scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-            let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> = scored
-                .into_iter()
-                .filter_map(|(ge, idx, _, kinds)| {
-                    self.idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
-                })
-                .collect();
+        // Shared immutable borrows — valid since user_connections/priorities are empty.
+        let channel_kinds     = &self.channel_kinds;
+        let message_kinds     = &self.message_kinds;
+        let component_kinds   = &self.component_kinds;
+        let gwm               = &self.global_world_manager;
+        let global_entity_map = &self.global_entity_map;
+        let time_manager      = &self.time_manager;
+        let global_priority   = &self.global_priority;
+        let idx_to_world      = &self.idx_to_world;
+        let snapshot_map_ref  = &snapshot_map;
 
-            #[cfg(feature = "bench_instrumentation")]
-            bench_iris_counters::NS_PHASE3_SORT.fetch_add(
-                _iris_p3_sort_t0.elapsed().as_nanos() as u64,
-                std::sync::atomic::Ordering::Relaxed,
-            );
+        #[cfg(feature = "bench_instrumentation")]
+        let _iris_p3b_t0 = std::time::Instant::now();
 
-            connection.send_packets(
-                &self.channel_kinds,
-                &self.message_kinds,
-                &self.component_kinds,
-                &now,
-                &mut self.io,
-                &world,
-                &self.global_entity_map,
-                &self.global_world_manager,
-                &self.time_manager,
-                &mut update_list,
-                &mut snapshot_map,
-            );
+        use rayon::prelude::*;
+        let results: Vec<(SocketAddr, Vec<OutgoingPacket>, Connection, UserPriorityState<E>)> = work.into_par_iter()
+            .map(|(addr, mut update_events, mut conn, mut user_prio)| {
+                let mut hook = WorldServerPriorityHook {
+                    global: global_priority,
+                    user: &mut user_prio,
+                    converter: global_entity_map,
+                };
 
-            // Priority reset for fully-sent entities.
-            let current_tick = self.time_manager.current_tick();
-            let remaining: std::collections::HashSet<GlobalEntity> =
-                update_list.iter().map(|(ge, _, _, _)| *ge).collect();
-            for ge in &initial_update_entities {
-                if !remaining.contains(ge) {
-                    hook.reset_after_send(ge, current_tick as u32);
+                let initial_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
+                let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashMap<ComponentKind, u16>)> =
+                    update_events.drain()
+                        .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
+                        .collect();
+                scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+                let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> =
+                    scored.into_iter()
+                        .filter_map(|(ge, idx, _, kinds)| {
+                            idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
+                        })
+                        .collect();
+
+                let (packets, _) = conn.build_all_packets(
+                    channel_kinds,
+                    message_kinds,
+                    component_kinds,
+                    &now,
+                    &world,
+                    global_entity_map,
+                    gwm,
+                    time_manager,
+                    &mut update_list,
+                    snapshot_map_ref,
+                );
+
+                // Priority reset for fully-sent entities (hook still alive here).
+                let current_tick = time_manager.current_tick();
+                let remaining: HashSet<GlobalEntity> =
+                    update_list.iter().map(|(ge, _, _, _)| *ge).collect();
+                for ge in &initial_entities {
+                    if !remaining.contains(ge) {
+                        hook.reset_after_send(ge, current_tick as u32);
+                    }
+                }
+                // hook dropped here; user_prio borrow ends
+
+                (addr, packets, conn, user_prio)
+            })
+            .collect();
+
+        #[cfg(feature = "bench_instrumentation")]
+        bench_iris_counters::NS_PHASE3_SORT.fetch_add(
+            _iris_p3b_t0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
+        // ── Serial flush + re-insert ──────────────────────────────────────────────
+        // Re-insert connections after parallel build, then flush packets via IO.
+        // self.io.send_packet() updates outgoing_bytes_this_tick and bandwidth monitor.
+        for (addr, packets, conn, user_prio) in results {
+            let user_key = conn.user_key;
+            self.user_connections.insert(addr, conn);
+            self.user_priorities.insert(user_key, user_prio);
+            for packet in packets {
+                if self.io.send_packet(&addr, packet).is_err() {
+                    warn!("Server Error: Cannot send data packet to {}", addr);
                 }
             }
         }

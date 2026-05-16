@@ -25,6 +25,7 @@ naia-demo-world = { path = "../../demos/demo_utils/demo_world" }
 
 bevy_ecs = { version = "0.18", default-features = false }
 parking_lot = "0.12"
+rayon = "1"
 
 log = "0.4"
 
@@ -64,3 +65,7 @@ path = "contract_tests/integration_only/09_entity_ownership.rs"
 [[test]]
 name = "integration_only_10_entity_delegation"
 path = "contract_tests/integration_only/10_entity_delegation.rs"
+
+[[test]]
+name = "parallel_send_matches_serial"
+path = "contract_tests/integration_only/parallel_send_matches_serial.rs"

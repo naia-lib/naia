@@ -354,7 +354,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// mutations for the current frame have been applied. Computes diffs,
     /// serialises packets, and hands them to the transport layer. If this is
     /// not called, clients never receive any updates.
-    pub fn send_all_packets<W: WorldRefType<E>>(&mut self, world: W) {
+    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
         self.world_server.send_all_packets(world);
     }
 
