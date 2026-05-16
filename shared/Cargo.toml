@@ -44,6 +44,7 @@ bevy_ecs = { version = "0.18", default-features = false, optional = true }
 zstd = { version = "0.12.2", optional = true }
 http = { version = "1.2", optional = true }
 parking_lot = "0.12"
+crossbeam-channel = "0.5"
 blake3 = "1"
 metrics = { version = "0.24", optional = true }
 
