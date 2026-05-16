@@ -30,6 +30,7 @@ use std::{
     marker::PhantomData,
     net::SocketAddr,
     sync::Arc,
+    time::Duration,
 };
 
 use parking_lot::{Mutex, RwLock};
@@ -40,6 +41,7 @@ use naia_shared::{
 
 use crate::{
     server::{connection_shared::ConnectionShared, scope_change::ScopeChange},
+    time_manager::TimeManager,
     ServerConfig, UserKey,
 };
 
@@ -92,6 +94,13 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// per-user atomics by `SocketAddr` without touching either state half.
     pub(crate) connection_shared: RwLock<HashMap<SocketAddr, Arc<ConnectionShared>>>,
 
+    /// Server tick clock + tick-duration EWMA (step 4-E.2b). LOCK ORDER
+    /// position #4. The recv thread takes the **write** guard once per
+    /// tick inside `take_tick_events` (calling `recv_server_tick`); every
+    /// other site — `process_ping`, `current_tick`, ping/heartbeat send
+    /// paths, the send-loop Iris phase — takes a brief **read** guard.
+    pub(crate) time_manager: RwLock<TimeManager>,
+
     _phantom: PhantomData<E>,
 }
 
@@ -105,6 +114,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
         component_kinds: ComponentKinds,
         client_authoritative_entities: bool,
         global_dirty: Arc<GlobalDirtyBitset>,
+        tick_interval: Duration,
     ) -> Self {
         Self {
             server_config,
@@ -116,6 +126,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             scope_change_queue: Mutex::new(VecDeque::new()),
             pending_auth_grants: Mutex::new(Vec::new()),
             connection_shared: RwLock::new(HashMap::new()),
+            time_manager: RwLock::new(TimeManager::new(tick_interval)),
             _phantom: PhantomData,
         }
     }

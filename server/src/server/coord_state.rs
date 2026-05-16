@@ -3,7 +3,7 @@
 //! Bundles the fields that are neither recv-thread-exclusive nor
 //! send-thread-exclusive nor cross-thread-shared. Later 4-E.2 sub-commits
 //! migrate individual fields out:
-//!   * 4-E.2b — `time_manager` → `ServerShared`
+//!   * 4-E.2b — `time_manager` → `ServerShared` ✅ (landed)
 //!   * 4-E.2c — `global_entity_map` + `idx_to_world` → `ServerShared`
 //!   * 4-E.2d — `user_connections` dissolved into recv/send halves;
 //!              `global_priority` → `SendState`
@@ -18,7 +18,6 @@ use naia_shared::{GlobalEntityMap, GlobalPriorityState, ResourceRegistry};
 use crate::{
     connection::connection::Connection,
     request::{GlobalRequestManager, GlobalResponseManager},
-    time_manager::TimeManager,
     world::{
         entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
         global_world_manager::GlobalWorldManager,
@@ -54,8 +53,6 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) global_request_manager: GlobalRequestManager,
     /// In-flight outbound responses awaiting client receipt.
     pub(crate) global_response_manager: GlobalResponseManager,
-    /// Server tick clock + ping/RTT state. → ServerShared (4-E.2b).
-    pub(crate) time_manager: TimeManager,
     /// Sender-wide priority layer. → SendState (4-E.2d).
     pub(crate) global_priority: GlobalPriorityState<E>,
     /// Push-based mirror of pending scope checks; reads are O(1).

@@ -218,8 +218,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &compression,
         );
 
-        let time_manager = TimeManager::new(tick_interval);
-
         // +1 for INVALID slot 0; also the size of idx_to_world.
         let capacity = (server_config.max_replicated_entities as usize) + 1;
 
@@ -241,6 +239,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             component_kinds,
             client_authoritative_entities,
             global_dirty,
+            tick_interval,
         ));
 
         let recv = crate::server::RecvState::new(Arc::clone(&shared), recv_io);
@@ -263,7 +262,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             idx_to_world: vec![None; capacity],
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
-            time_manager,
             global_priority: GlobalPriorityState::new(),
             scope_checks_cache: ScopeChecksCache::new(),
             resource_registry: ResourceRegistry::new(),
@@ -402,7 +400,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             continue;
                         }
                         PacketType::Ping => {
-                            let response = self.coord.time_manager.process_ping(&mut reader).unwrap();
+                            let response = self.shared.time_manager.read().process_ping(&mut reader).unwrap();
                             // send packet
                             if self.send.send_io.send_packet(&address, response.to_packet()).is_err() {
                                 // Pong send failure is transient: client will re-ping on its
@@ -420,9 +418,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         PacketType::Pong => {
                             if let Some(connection) = self.coord.user_connections.get_mut(&address) {
                                 connection.process_incoming_header(&header);
+                                let tm = self.shared.time_manager.read();
                                 connection.recv
                                     .ping_manager
-                                    .process_pong(&self.coord.time_manager, &mut reader);
+                                    .process_pong(&*tm, &mut reader);
                             }
 
                             continue;
@@ -594,10 +593,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Advances the tick clock and returns any new tick events for this frame.
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
-        // tick event
-        if self.coord.time_manager.recv_server_tick(now) {
-            self.recv.incoming_tick_events
-                .push_tick(self.coord.time_manager.current_tick());
+        // 4-E.2b: the single write-guard site for `time_manager`. Hold the
+        // write guard only long enough to advance the clock + read the
+        // resulting tick, then drop it before touching `self.recv`.
+        let new_tick = {
+            let mut tm = self.shared.time_manager.write();
+            if tm.recv_server_tick(now) {
+                Some(tm.current_tick())
+            } else {
+                None
+            }
+        };
+        if let Some(tick) = new_tick {
+            self.recv.incoming_tick_events.push_tick(tick);
         }
         std::mem::replace(&mut self.recv.incoming_tick_events, TickEvents::new())
     }
@@ -985,7 +993,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let component_kinds   = &self.shared.component_kinds;
         let gwm               = &self.coord.global_world_manager;
         let global_entity_map = &self.coord.global_entity_map;
-        let time_manager      = &self.coord.time_manager;
+        // 4-E.2b: hold the time_manager read guard for the whole par_iter
+        // scope. `&*time_manager_guard` is `&TimeManager` (Sync), safe to
+        // capture into each rayon task. The send thread is the only reader
+        // here; the recv thread's single write site runs in `take_tick_events`
+        // and would block briefly on this guard — but `send_all_packets`
+        // and `take_tick_events` never overlap inside a single tick.
+        let time_manager_guard = self.shared.time_manager.read();
+        let time_manager: &TimeManager = &*time_manager_guard;
         let global_priority   = &self.coord.global_priority;
         let idx_to_world      = &self.coord.idx_to_world;
         let snapshot_map_ref  = &snapshot_map;
@@ -2042,12 +2057,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Gets the current tick of the Server
     pub fn current_tick(&self) -> Tick {
-        self.coord.time_manager.current_tick()
+        self.shared.time_manager.read().current_tick()
     }
 
     /// Gets the current average tick duration of the Server
     pub fn average_tick_duration(&self) -> Duration {
-        self.coord.time_manager.average_tick_duration()
+        self.shared.time_manager.read().average_tick_duration()
     }
 
     // Rooms
@@ -3301,7 +3316,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // read client tick
         let client_tick = Tick::de(reader)?;
 
-        let server_tick = self.coord.time_manager.current_tick();
+        let server_tick = self.shared.time_manager.read().current_tick();
 
         // process data
         connection.read_packet(
@@ -3650,6 +3665,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if self.recv.ping_timer.ringing() {
             self.recv.ping_timer.reset();
 
+            let tm_guard = self.shared.time_manager.read();
+            let tm: &TimeManager = &*tm_guard;
             for (user_address, connection) in &mut self.coord.user_connections.iter_mut() {
                 // send pings
                 if connection.recv.ping_manager.should_send_ping() {
@@ -3659,15 +3676,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     let _header = connection.write_header(PacketType::Ping, &mut writer);
 
                     // write server tick
-                    self.coord.time_manager.current_tick().ser(&mut writer);
+                    tm.current_tick().ser(&mut writer);
 
                     // write server tick instant
-                    self.coord.time_manager.current_tick_instant().ser(&mut writer);
+                    tm.current_tick_instant().ser(&mut writer);
 
                     // write body
                     connection.recv
                         .ping_manager
-                        .write_ping(&mut writer, &self.coord.time_manager);
+                        .write_ping(&mut writer, tm);
 
                     // send packet
                     if self
@@ -3690,13 +3707,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if self.recv.heartbeat_timer.ringing() {
             self.recv.heartbeat_timer.reset();
 
+            let tm_guard = self.shared.time_manager.read();
+            let tm: &TimeManager = &*tm_guard;
             for (user_address, connection) in &mut self.coord.user_connections.iter_mut() {
                 // user heartbeats
                 if connection.send.base.should_send_heartbeat() {
                     Self::send_heartbeat_packet(
                         user_address,
                         connection,
-                        &self.coord.time_manager,
+                        tm,
                         &mut self.send.send_io,
                     );
                 }
@@ -3738,12 +3757,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn handle_empty_acks(&mut self) {
         // empty acks
 
+        let tm_guard = self.shared.time_manager.read();
+        let tm: &TimeManager = &*tm_guard;
         for (user_address, connection) in &mut self.coord.user_connections.iter_mut() {
             if connection.send.base.should_send_empty_ack() {
                 Self::send_heartbeat_packet(
                     user_address,
                     connection,
-                    &self.coord.time_manager,
+                    tm,
                     &mut self.send.send_io,
                 );
             }
