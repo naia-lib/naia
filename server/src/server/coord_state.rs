@@ -4,7 +4,7 @@
 //! send-thread-exclusive nor cross-thread-shared. Later 4-E.2 sub-commits
 //! migrate individual fields out:
 //!   * 4-E.2b — `time_manager` → `ServerShared` ✅ (landed)
-//!   * 4-E.2c — `global_entity_map` + `idx_to_world` → `ServerShared`
+//!   * 4-E.2c — `global_entity_map` + `idx_to_world` → `ServerShared` ✅ (landed)
 //!   * 4-E.2d — `user_connections` dissolved into recv/send halves;
 //!              `global_priority` → `SendState`
 //!
@@ -13,7 +13,7 @@
 
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
-use naia_shared::{GlobalEntityMap, GlobalPriorityState, ResourceRegistry};
+use naia_shared::{GlobalPriorityState, ResourceRegistry};
 
 use crate::{
     connection::connection::Connection,
@@ -44,11 +44,6 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) entity_scope_map: EntityScopeMap,
     /// Per-server-world replicated-entity registry.
     pub(crate) global_world_manager: GlobalWorldManager,
-    /// World-entity ↔ GlobalEntity bidirectional map. → ServerShared (4-E.2c).
-    pub(crate) global_entity_map: GlobalEntityMap<E>,
-    /// Dense `GlobalEntityIndex` → world-entity array. Slot 0 (INVALID) is
-    /// always `None`. → ServerShared (4-E.2c).
-    pub(crate) idx_to_world: Vec<Option<E>>,
     /// In-flight outbound requests awaiting matching responses.
     pub(crate) global_request_manager: GlobalRequestManager,
     /// In-flight outbound responses awaiting client receipt.

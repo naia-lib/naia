@@ -27,7 +27,6 @@
 use std::{
     collections::{HashMap, VecDeque},
     hash::Hash,
-    marker::PhantomData,
     net::SocketAddr,
     sync::Arc,
     time::Duration,
@@ -36,7 +35,8 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 
 use naia_shared::{
-    ChannelKinds, ComponentKinds, EntityAuthStatus, GlobalDirtyBitset, GlobalEntity, MessageKinds,
+    ChannelKinds, ComponentKinds, EntityAuthStatus, GlobalDirtyBitset, GlobalEntity,
+    GlobalEntityMap, MessageKinds,
 };
 
 use crate::{
@@ -101,7 +101,21 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// paths, the send-loop Iris phase — takes a brief **read** guard.
     pub(crate) time_manager: RwLock<TimeManager>,
 
-    _phantom: PhantomData<E>,
+    /// World-entity ↔ GlobalEntity bidirectional map (step 4-E.2c).
+    /// LOCK ORDER position #3 (paired with `idx_to_world`). The
+    /// coordinator takes **write** for spawn / despawn / reservation
+    /// flows; every other path (send Iris phase, EntityAndGlobalEntity-
+    /// Converter impl, room/scope plumbing) takes a brief **read** guard.
+    /// Hot send-side loops hold one read guard for the whole tick scope
+    /// to amortize the RwLock acquisition.
+    pub(crate) global_entity_map: RwLock<GlobalEntityMap<E>>,
+
+    /// Dense `GlobalEntityIndex` → world-entity array (step 4-E.2c).
+    /// Slot 0 (INVALID) is always `None`. Paired with `global_entity_map`
+    /// at LOCK ORDER position #3 — they cover the same logical slot of
+    /// information (one is HashMap-keyed, the other is dense-index keyed)
+    /// and are always updated together.
+    pub(crate) idx_to_world: RwLock<Vec<Option<E>>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
@@ -115,6 +129,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
         client_authoritative_entities: bool,
         global_dirty: Arc<GlobalDirtyBitset>,
         tick_interval: Duration,
+        entity_index_capacity: usize,
     ) -> Self {
         Self {
             server_config,
@@ -127,7 +142,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             pending_auth_grants: Mutex::new(Vec::new()),
             connection_shared: RwLock::new(HashMap::new()),
             time_manager: RwLock::new(TimeManager::new(tick_interval)),
-            _phantom: PhantomData,
+            global_entity_map: RwLock::new(GlobalEntityMap::new()),
+            idx_to_world: RwLock::new(vec![None; entity_index_capacity]),
         }
     }
 }
