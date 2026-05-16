@@ -1,4 +1,5 @@
 use std::collections::{HashMap, VecDeque};
+use std::sync::Arc;
 use std::{hash::Hash, net::SocketAddr};
 
 use log::warn;
@@ -18,6 +19,7 @@ use crate::{
     },
     events::WorldEvents,
     request::{GlobalRequestManager, GlobalResponseManager},
+    server::connection_shared::ConnectionShared,
     time_manager::TimeManager,
     user::UserKey,
     world::global_world_manager::GlobalWorldManager,
@@ -97,6 +99,14 @@ pub struct Connection {
     /// Per-connection entity visibility bitset. One bit per `GlobalEntityIndex`.
     /// Set when an entity enters scope; cleared on despawn or pause.
     pub visibility: ConnectionVisibilityBitset,
+    /// Shared per-connection state crossing the recv/send boundary
+    /// (B4-prep + ACK/RTT atomics). The same `Arc` is also stored in
+    /// `ServerShared::connection_shared` under this connection's address.
+    /// Step 4-D / 4-E will dissolve `Connection` into separate
+    /// `RecvConnection` / `SendConnection` wrappers each holding their
+    /// own clone of this Arc; until then it lives here and is kept
+    /// in sync by `process_incoming_header` / `mark_should_send_empty_ack`.
+    pub shared: Arc<ConnectionShared>,
 }
 
 impl Connection {
@@ -126,6 +136,7 @@ impl Connection {
             timeout_timer: Timer::new(connection_config.disconnection_timeout_duration),
             // capacity = max_replicated_entities + 1 (slot 0 = INVALID sentinel)
             visibility: ConnectionVisibilityBitset::new(max_replicated_entities + 1),
+            shared: Arc::new(ConnectionShared::new()),
         }
     }
 
@@ -151,6 +162,17 @@ impl Connection {
         // Note: identity print is now in world_server::read_data_packet for consistency
         self.base.process_incoming_header(header, &mut []);
         self.timeout_timer.reset();
+        // 4-C.3: surface the freshly-updated recv ack state into the
+        // cross-half `ConnectionShared` atomics so post-4-D send-thread
+        // readers observe a consistent ack snapshot without holding a
+        // recv-side reference. The base.process_incoming_header() above
+        // already pushed acked-index samples into the channel that the
+        // send half drains; here we publish the corresponding header
+        // fields for header-write callers that want them lock-free.
+        let last_rx = self.base.last_received_packet_index();
+        let bits = self.base.recv.ack_recv.ack_bitfield();
+        self.shared.set_remote_ack_seq(last_rx);
+        self.shared.set_remote_ack_bitfield(bits);
     }
 
     #[cfg(feature = "test_utils")]

@@ -353,6 +353,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.shared.server_config.max_replicated_entities as usize,
         );
 
+        // 4-C.3: register the new connection's shared atomic cell into the
+        // ServerShared map. Coordinator-side reads (e.g. UserMut::disconnect
+        // signalling recv via `set_should_disconnect`) take this Arc by
+        // address, avoiding any need to reach into `user_connections`.
+        self.shared
+            .connection_shared
+            .write()
+            .insert(*user_address, std::sync::Arc::clone(&new_connection.shared));
+
         match self.user_connections.entry(*user_address) {
             Entry::Vacant(v) => {
                 v.insert(new_connection);
@@ -3067,6 +3076,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let user_addr = user.address();
 
         info!("deleting authenticated user for {}", user.address());
+        // 4-C.3: drop the per-connection shared-state Arc from the map.
+        // Any send-thread holders of a clone keep their Arc until they
+        // observe the disconnect through ConnectionShared::should_disconnect
+        // (set elsewhere by the coordinator-initiated disconnect path).
+        self.shared.connection_shared.write().remove(&user_addr);
         self.user_connections.remove(&user_addr);
 
         // Drop this user's entire per-user priority layer so entries never

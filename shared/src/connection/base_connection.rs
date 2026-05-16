@@ -84,22 +84,44 @@ impl BaseConnection {
         channel_kinds: &ChannelKinds,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
+        let (recv, send) = Self::new_split(
+            connection_config,
+            address,
+            host_type,
+            user_key,
+            channel_kinds,
+            global_world_manager,
+        );
+        Self { recv, send }
+    }
+
+    /// Construct the two halves of a `BaseConnection` directly, wired by the
+    /// shared ack channel. Used by `naia-server::Connection::new` which holds
+    /// the halves on `RecvConnection` / `SendConnection` separately and does
+    /// not need the `BaseConnection` wrapper.
+    pub fn new_split(
+        connection_config: &ConnectionConfig,
+        address: &Option<SocketAddr>,
+        host_type: HostType,
+        user_key: u64,
+        channel_kinds: &ChannelKinds,
+        global_world_manager: &dyn GlobalWorldManagerType,
+    ) -> (BaseRecvConnection, BaseSendConnection) {
         let (ack_recv, ack_send) = AckManager::new_split();
-        Self {
-            recv: BaseRecvConnection { ack_recv },
-            send: BaseSendConnection {
-                message_manager: MessageManager::new(host_type, channel_kinds),
-                world_manager: LocalWorldManager::new(
-                    address,
-                    host_type,
-                    user_key,
-                    global_world_manager,
-                ),
-                ack_send,
-                heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
-                bandwidth_accumulator: BandwidthAccumulator::new(&connection_config.bandwidth),
-            },
-        }
+        let recv = BaseRecvConnection { ack_recv };
+        let send = BaseSendConnection {
+            message_manager: MessageManager::new(host_type, channel_kinds),
+            world_manager: LocalWorldManager::new(
+                address,
+                host_type,
+                user_key,
+                global_world_manager,
+            ),
+            ack_send,
+            heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
+            bandwidth_accumulator: BandwidthAccumulator::new(&connection_config.bandwidth),
+        };
+        (recv, send)
     }
 
     /// Process an incoming packet header. Recv half handles received-packet
