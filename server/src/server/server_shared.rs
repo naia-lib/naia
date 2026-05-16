@@ -90,6 +90,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// step 4-C lands the Connection split — the map itself stays here so
     /// the coordinator and the bevy event-application layer can address
     /// per-user atomics by `SocketAddr` without touching either state half.
+    #[allow(dead_code)]
     pub(crate) connection_shared: RwLock<HashMap<SocketAddr, Arc<ConnectionShared>>>,
 
     _phantom: PhantomData<E>,

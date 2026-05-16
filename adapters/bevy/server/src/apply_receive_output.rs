@@ -33,6 +33,7 @@ mod bevy_events {
 /// works from a pre-collected `ReceiveOutput` instead of re-locking the server.
 /// Defined here as a building block; the pipeline coordinator is wired up in
 /// Phase 4.
+#[allow(dead_code)]
 pub fn apply_receive_output(
     world: &mut World,
     server: &mut ServerImpl,

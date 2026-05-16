@@ -87,6 +87,7 @@ pub mod bench_send_counters {
 }
 
 pub struct Connection {
+    #[allow(dead_code)]
     pub address: SocketAddr,
     pub user_key: UserKey,
     pub base: BaseConnection,
@@ -281,8 +282,8 @@ impl Connection {
         }
     }
 
-    // Outgoing data
-    #[allow(clippy::too_many_arguments)]
+    // Outgoing data (kept for compatibility; callers now use build_packets)
+    #[allow(dead_code, clippy::too_many_arguments)]
     pub fn send_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
         channel_kinds: &ChannelKinds,
