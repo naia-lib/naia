@@ -28,6 +28,7 @@ pub trait OutgoingPriorityHook {
 ///
 /// Combined multiplicatively with each `UserPriorityState` entry at sort time:
 /// `effective_gain = global.gain.unwrap_or(1.0) × user.gain.unwrap_or(1.0)`.
+#[derive(Clone)]
 pub struct GlobalPriorityState<E: Copy + Eq + Hash> {
     entries: HashMap<E, EntityPriorityData>,
 }

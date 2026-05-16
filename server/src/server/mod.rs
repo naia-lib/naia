@@ -31,6 +31,9 @@ pub use send_state::SendState;
 pub mod coord_state;
 pub use coord_state::CoordinatorState;
 
+pub mod send_state_update;
+pub use send_state_update::SendStateUpdate;
+
 pub(crate) mod scope_checks_cache;
 mod scope_change;
 pub(crate) mod room_store;

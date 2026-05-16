@@ -249,6 +249,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let send = crate::server::SendState {
             send_user_connections: HashMap::new(),
             user_priorities: HashMap::new(),
+            global_priority: GlobalPriorityState::new(),
             send_io,
             shared: Arc::clone(&shared),
         };
@@ -261,7 +262,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             global_world_manager,
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
-            global_priority: GlobalPriorityState::new(),
+            global_priority_mirror: GlobalPriorityState::new(),
             scope_checks_cache: ScopeChecksCache::new(),
             resource_registry: ResourceRegistry::new(),
             historian: None,
@@ -325,16 +326,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .write()
             .insert(*user_address, std::sync::Arc::clone(&recv_conn.shared));
 
-        // 4-E.2d: split-map insert. `recv_user_connections` and
-        // `send_user_connections` are authoritative. Re-inserting replaces
-        // any prior entry (matches the old `Entry::Occupied` overwrite).
+        // 4-E.2e: recv-side insertion happens directly (same thread
+        // owns recv_user_connections). The send half is queued via
+        // `SendStateUpdate::ConnectionAdded` — in serial mode the queue
+        // drains at `WorldServer::receive`'s tail before the user can
+        // observe any difference; in pipeline mode the coordinator
+        // drains at step 6.5 so the recv thread never touches the
+        // send-side map directly.
         self.recv.recv_user_connections.insert(*user_address, recv_conn);
-        self.send.send_user_connections.insert(*user_address, send_conn);
+        self.shared
+            .pending_send_state_updates
+            .lock()
+            .push(crate::server::SendStateUpdate::ConnectionAdded(
+                *user_address,
+                Box::new(send_conn),
+            ));
 
         if self.send.send_io.bandwidth_monitor_enabled() {
             self.recv.recv_io.register_client(user_address);
             self.send.send_io.register_client(user_address);
         }
+
+        // 4-E.2e: drain ConnectionAdded inline so any subsequent
+        // read_data_packet in the same recv cycle, or the resource
+        // auto-scope below, can find the new `SendConnection` in
+        // `send.send_user_connections`. In pipeline mode (4-F+) this
+        // drain moves to the coordinator at step 6.5; here in serial
+        // mode the recv and coordinator threads are one, so doing it
+        // immediately is equivalent and preserves single-recv-cycle
+        // semantics.
+        self.commit_pending_send_state_updates();
 
         // Replicated Resources auto-scope: now that the connection
         // exists in the user_connections maps, scope-include every
@@ -483,6 +504,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
+        // 4-E.2e: coordinator-stage decode of every Data packet buffered
+        // during this recv cycle. Must run before `process_received_commands`
+        // (which finalizes commands the decode just wrote to
+        // `send_conn.base.world_manager`).
+        self.decode_pending_data_packets();
+
         for address in received_addresses {
             if let Some(send_conn) = self.send.send_user_connections.get_mut(&address) {
                 send_conn.process_received_commands();
@@ -497,6 +524,52 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let addresses = std::mem::take(&mut self.recv.addrs_with_new_packets);
         for address in addresses {
             self.process_packets(&address, &mut world, now);
+        }
+    }
+
+    /// Drain `ServerShared::pending_send_state_updates` and apply each
+    /// variant to `self.send` (step 4-E.2e).
+    ///
+    /// In serial mode this is called inline immediately after
+    /// `finalize_connection` / `user_delete` push their updates so
+    /// observable behavior matches the pre-4-E.2e direct-write path.
+    /// In pipeline mode (4-F+), the coordinator calls this at step 6.5
+    /// between recv and send phases — the recv thread must not touch
+    /// `send.send_user_connections` directly.
+    pub fn commit_pending_send_state_updates(&mut self) {
+        use crate::server::send_state_update::SendStateUpdate;
+        // Swap the queue out under the lock so we don't hold it across
+        // the apply loop (the apply step takes no other locks but the
+        // pattern stays cheap and lock-order-friendly).
+        let pending: Vec<SendStateUpdate<E>> = {
+            let mut guard = self.shared.pending_send_state_updates.lock();
+            std::mem::take(&mut *guard)
+        };
+        for update in pending {
+            match update {
+                SendStateUpdate::ConnectionAdded(addr, send_conn) => {
+                    self.send.send_user_connections.insert(addr, *send_conn);
+                }
+                SendStateUpdate::ConnectionRemoved(addr) => {
+                    self.send.send_user_connections.remove(&addr);
+                }
+                SendStateUpdate::PriorityChanged { entity, gain } => {
+                    // 4-E.2e: reserved variant. The borrow API still
+                    // writes through `coord.global_priority_mirror` and
+                    // publish-on-read carries it over. If a future
+                    // commit rewires the borrow API to push here, apply
+                    // the gain directly to `send.global_priority`.
+                    let mut entry = self.send.global_priority.get_mut(entity);
+                    match gain {
+                        Some(g) => {
+                            entry.set_gain(g);
+                        }
+                        None => {
+                            entry.reset();
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -834,6 +907,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // only the bytes sent during THIS tick (readable after send_packets).
         self.send.send_io.reset_outgoing_bytes_this_tick();
 
+        // 4-E.2e: publish-on-read for global_priority. The borrow API
+        // writes go into `coord.global_priority_mirror`; Iris below reads
+        // from `send.global_priority`. Cost is O(N entities-with-overrides)
+        // — typically 0 unless the game has actively tuned priorities.
+        // The future per-entity SendStateUpdate::PriorityChanged path will
+        // shrink this to incremental updates; for now the full clone keeps
+        // semantics simple and correct.
+        self.send
+            .global_priority
+            .clone_from(&self.coord.global_priority_mirror);
+
         // update entity scopes
         #[cfg(feature = "bench_instrumentation")]
         let _scope_t0 = std::time::Instant::now();
@@ -1010,7 +1094,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // and `take_tick_events` never overlap inside a single tick.
         let time_manager_guard = self.shared.time_manager.read();
         let time_manager: &TimeManager = &*time_manager_guard;
-        let global_priority   = &self.coord.global_priority;
+        // 4-E.2e: read the send-thread-authoritative copy. The publish
+        // step at the top of this method just refreshed it from
+        // `coord.global_priority_mirror`.
+        let global_priority   = &self.send.global_priority;
         let snapshot_map_ref  = &snapshot_map;
 
         #[cfg(feature = "bench_instrumentation")]
@@ -2005,14 +2092,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Read-only handle to the sender-wide (global) priority state for `entity`.
     /// Combined multiplicatively with the per-user gain at sort time.
+    ///
+    /// 4-E.2e: read target is `coord.global_priority_mirror`. The send
+    /// thread's read target (`send.global_priority`) is a clone refreshed
+    /// at the top of `send_all_packets`.
     pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
-        self.coord.global_priority.get_ref(entity)
+        self.coord.global_priority_mirror.get_ref(entity)
     }
 
     /// Mutable handle to the sender-wide (global) priority state for `entity`.
     /// Lazy-creates an entry on first write.
+    ///
+    /// 4-E.2e: writes target `coord.global_priority_mirror`. The publish
+    /// step at the top of the next `send_all_packets` carries the change
+    /// over to `send.global_priority`. See `SendStateUpdate::PriorityChanged`
+    /// for the future per-entity sync path.
     pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
-        self.coord.global_priority.get_mut(entity)
+        self.coord.global_priority_mirror.get_mut(entity)
     }
 
     /// Read-only handle to the per-user priority state for `entity` on the
@@ -2258,7 +2354,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         };
         // Priority layer eviction: drop global entry + every user's per-user
         // entry for this entity. Prevents leaks across entity lifetime.
-        self.coord.global_priority.on_despawn(world_entity);
+        // 4-E.2e: evict from BOTH mirror (borrow-API source) and the
+        // send-side authoritative copy — publish-on-read at next
+        // `send_all_packets` would also clear it, but doing it eagerly
+        // here keeps the two copies bit-identical between ticks.
+        self.coord.global_priority_mirror.on_despawn(world_entity);
+        self.send.global_priority.on_despawn(world_entity);
         for layer in self.send.user_priorities.values_mut() {
             layer.on_scope_exit(world_entity);
         }
@@ -3119,9 +3220,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // observe the disconnect through ConnectionShared::should_disconnect
         // (set elsewhere by the coordinator-initiated disconnect path).
         self.shared.connection_shared.write().remove(&user_addr);
-        // 4-E.2d: dropping from both authoritative split maps.
+        // 4-E.2d: drop recv-side directly (coordinator owns the recv map
+        // in pipeline mode too).
+        // 4-E.2e: send-side removal routes through the SendStateUpdate
+        // queue so the coordinator never reaches into the send-side
+        // map; drained inline below for same-cycle visibility.
         self.recv.recv_user_connections.remove(&user_addr);
-        self.send.send_user_connections.remove(&user_addr);
+        self.shared
+            .pending_send_state_updates
+            .lock()
+            .push(crate::server::SendStateUpdate::ConnectionRemoved(user_addr));
+        self.commit_pending_send_state_updates();
 
         // Drop this user's entire per-user priority layer so entries never
         // leak across user sessions.
@@ -3301,6 +3410,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     // Private methods
 
+    /// Recv-stage handler for a Data packet. Runs on the recv thread.
+    ///
+    /// 4-E.2e: recv-side does the bare minimum — process the standard
+    /// header (publishes ACK snapshot on the shared atomic), read the
+    /// client tick out of the wire stream, and buffer the remaining
+    /// reader into `RecvState::pending_data_packets`. The coordinator
+    /// thread later drains via `decode_pending_data_packets` (serial:
+    /// inline at recv tail; pipeline: 4-E.2f wires
+    /// `SendHandle::process_recv_packets`).
     fn read_data_packet(
         &mut self,
         address: &SocketAddr,
@@ -3311,14 +3429,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Server Error: received non-data packet in data packet handler");
         }
 
-        // 4-E.2d: composite handler — split into recv-side + send-side pieces.
-        // Recv writes the ACK snapshot, decodes tick-buffer messages, and
-        // updates timeouts; send drains the ACK channel, decodes the
-        // message/world section, and arms an ACK-only response.
         let Some(recv_conn) = self.recv.recv_user_connections.get_mut(address) else {
-            return Ok(());
-        };
-        let Some(send_conn) = self.send.send_user_connections.get_mut(address) else {
             return Ok(());
         };
 
@@ -3327,39 +3438,98 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             SERVER_RX_FRAMES.fetch_add(1, Ordering::Relaxed);
         }
 
-        // Process incoming header (recv) + drain acks (send).
+        // Recv-side bookkeeping: publish ack snapshot + reset timeout.
         recv_conn.process_incoming_header(header);
-        send_conn.drain_acks(&mut []);
 
-        // read client tick
+        // Read client tick out of the wire stream; the remainder of the
+        // reader is the message/world section + tick-buffered messages,
+        // both decoded later by `decode_pending_data_packets`.
         let client_tick = Tick::de(reader)?;
-
-        let server_tick = self.shared.time_manager.read().current_tick();
-
-        // Recv-side: decode tick-buffered messages first.
-        recv_conn.tick_buffer.read_messages(
-            &self.shared.channel_kinds,
-            &self.shared.message_kinds,
-            &server_tick,
-            &client_tick,
-            send_conn.base.world_manager.entity_converter(),
-            reader,
-        )?;
-
-        // Send-side: decode message/world section.
-        send_conn.read_data_section(
-            &self.shared.channel_kinds,
-            &self.shared.message_kinds,
-            &self.shared.component_kinds,
-            self.shared.client_authoritative_entities,
-            client_tick,
-            reader,
-        )?;
-
-        // Mark that we should send an ACK-only packet
-        send_conn.base.mark_should_send_empty_ack();
+        let owned = reader.to_owned();
+        self.recv.pending_data_packets.push((*address, client_tick, owned));
 
         Ok(())
+    }
+
+    /// Coordinator-stage decode for all buffered Data packets (step 4-E.2e).
+    ///
+    /// Drains `RecvState::pending_data_packets`, then for each entry:
+    /// 1. drains the cross-half ACK channel into the send-side ack manager,
+    /// 2. decodes tick-buffered messages onto the matching `RecvConnection`,
+    /// 3. decodes the message/world section onto the matching `SendConnection`,
+    /// 4. arms an ACK-only response on the send half.
+    ///
+    /// Called inline at the tail of `receive_all_packets` in serial mode;
+    /// called from `SendHandle::process_recv_packets` in pipeline mode
+    /// (wired in 4-E.2f).
+    fn decode_pending_data_packets(&mut self) {
+        let pending: Vec<(SocketAddr, Tick, naia_shared::OwnedBitReader)> =
+            std::mem::take(&mut self.recv.pending_data_packets);
+        for (address, client_tick, owned_reader) in pending {
+            let mut reader = owned_reader.borrow();
+
+            // Disjoint &mut borrows of self.recv / self.send / &self.shared.
+            let Some(send_conn) = self.send.send_user_connections.get_mut(&address) else {
+                continue;
+            };
+            let Some(recv_conn) = self.recv.recv_user_connections.get_mut(&address) else {
+                continue;
+            };
+
+            // Send-side: drain cross-half ACK channel into ack manager.
+            send_conn.drain_acks(&mut []);
+
+            // Snapshot server_tick at decode time. In serial mode this is
+            // effectively the same instant as recv. In pipeline mode the
+            // recv thread may have moved on by a tick; tick-buffer
+            // semantics still work because read_messages compares against
+            // the server_tick at the moment the message is being applied.
+            let server_tick = self.shared.time_manager.read().current_tick();
+
+            // Recv-side: decode tick-buffered messages.
+            if recv_conn
+                .tick_buffer
+                .read_messages(
+                    &self.shared.channel_kinds,
+                    &self.shared.message_kinds,
+                    &server_tick,
+                    &client_tick,
+                    send_conn.base.world_manager.entity_converter(),
+                    &mut reader,
+                )
+                .is_err()
+            {
+                warn!(
+                    "Server Error: cannot decode tick-buffered messages from {}",
+                    address
+                );
+                continue;
+            }
+
+            // Send-side: decode message/world section.
+            if send_conn
+                .read_data_section(
+                    &self.shared.channel_kinds,
+                    &self.shared.message_kinds,
+                    &self.shared.component_kinds,
+                    self.shared.client_authoritative_entities,
+                    client_tick,
+                    &mut reader,
+                )
+                .is_err()
+            {
+                warn!(
+                    "Server Error: cannot decode data section from {}",
+                    address
+                );
+                continue;
+            }
+
+            // Arm an ACK-only response (heartbeat-style) so the client
+            // gets immediate acknowledgement of this data packet even
+            // if the server has nothing to send back this tick.
+            send_conn.base.mark_should_send_empty_ack();
+        }
     }
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {

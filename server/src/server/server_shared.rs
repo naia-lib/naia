@@ -40,7 +40,10 @@ use naia_shared::{
 };
 
 use crate::{
-    server::{connection_shared::ConnectionShared, scope_change::ScopeChange},
+    server::{
+        connection_shared::ConnectionShared, scope_change::ScopeChange,
+        send_state_update::SendStateUpdate,
+    },
     time_manager::TimeManager,
     ServerConfig, UserKey,
 };
@@ -73,6 +76,15 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Global dirty bitset — already atomic; recv writes, send reads.
     pub global_dirty: Arc<GlobalDirtyBitset>,
+
+    /// Recv → send handoff queue (step 4-E.2e). LOCK ORDER position #5.
+    /// `finalize_connection` pushes `ConnectionAdded` here from the recv
+    /// thread (which can't write to `SendState.send_user_connections`
+    /// directly in pipeline mode). The disconnect path pushes
+    /// `ConnectionRemoved`. Drained inline at `WorldServer::receive`'s
+    /// tail in serial mode; drained by the coordinator at step 6.5 in
+    /// pipeline mode. See `send_state_update.rs` for variant semantics.
+    pub(crate) pending_send_state_updates: Mutex<Vec<SendStateUpdate<E>>>,
 
     /// Queue of scope-change events accumulated by coordinator code and
     /// drained at the top of `send_all_packets`. Mutex held briefly on
@@ -138,6 +150,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             component_kinds,
             client_authoritative_entities,
             global_dirty,
+            pending_send_state_updates: Mutex::new(Vec::new()),
             scope_change_queue: Mutex::new(VecDeque::new()),
             pending_auth_grants: Mutex::new(Vec::new()),
             connection_shared: RwLock::new(HashMap::new()),

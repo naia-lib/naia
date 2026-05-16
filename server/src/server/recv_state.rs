@@ -12,7 +12,7 @@ use std::{
     sync::Arc,
 };
 
-use naia_shared::{DisconnectReason, Timer};
+use naia_shared::{DisconnectReason, OwnedBitReader, Tick, Timer};
 
 use crate::{
     connection::{io::RecvIo, RecvConnection},
@@ -66,6 +66,21 @@ pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
     /// Receive half of the transport (step 4-E.2a). Owned here so the
     /// recv thread has exclusive mutable access without locking.
     pub(crate) recv_io: RecvIo,
+
+    /// Data packets buffered by the recv path for later coordinator-side
+    /// decode (step 4-E.2e). Each tuple is `(addr, client_tick,
+    /// owned_reader)` where the reader's internal state has already
+    /// advanced past the `StandardHeader` and the `Tick` field — the
+    /// decoder starts at the message/world section directly.
+    ///
+    /// The recv thread reads `StandardHeader` + the client tick, calls
+    /// `RecvConnection::process_incoming_header` (so the ACK snapshot
+    /// publishes immediately on the cross-half atomic), then snapshots
+    /// the in-flight `BitReader` into an `OwnedBitReader` and pushes
+    /// here. In serial mode the queue drains inline at the tail of
+    /// `WorldServer::receive_all_packets`; in pipeline mode the
+    /// coordinator drains via `SendHandle::process_recv_packets` (4-E.2f).
+    pub(crate) pending_data_packets: Vec<(SocketAddr, Tick, OwnedBitReader)>,
 }
 
 impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
@@ -86,6 +101,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
             shared,
             recv_user_connections: HashMap::new(),
             recv_io,
+            pending_data_packets: Vec::new(),
         }
     }
 }

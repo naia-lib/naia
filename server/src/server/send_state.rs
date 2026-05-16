@@ -13,7 +13,7 @@
 
 use std::{collections::HashMap, hash::Hash, net::SocketAddr, sync::Arc};
 
-use naia_shared::UserPriorityState;
+use naia_shared::{GlobalPriorityState, UserPriorityState};
 
 use crate::{
     connection::{io::SendIo, SendConnection},
@@ -31,6 +31,15 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// Per-user priority layer. Entries evicted on scope exit; whole
     /// map entry dropped on disconnect (handled by the coordinator).
     pub user_priorities: HashMap<UserKey, UserPriorityState<E>>,
+
+    /// Sender-wide priority layer (step 4-E.2e). Authoritative for the
+    /// Iris send-path read. Kept in sync with `coord.global_priority_mirror`
+    /// via publish-on-read at the top of `send_all_packets` — the borrow
+    /// API `global_entity_priority_mut` would need a public-API change in
+    /// `naia-shared::EntityPriorityMut` to push per-entity updates through
+    /// the `SendStateUpdate` queue. A later commit can rewire that path
+    /// (the `SendStateUpdate::PriorityChanged` variant is already defined).
+    pub global_priority: GlobalPriorityState<E>,
 
     /// Send half of the transport (step 4-E.2a). Carries the encoder,
     /// outgoing bandwidth monitor, and per-tick byte counter alongside
