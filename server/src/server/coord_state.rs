@@ -20,10 +20,7 @@ use naia_shared::{GlobalPriorityState, ResourceRegistry};
 
 use crate::{
     request::{GlobalRequestManager, GlobalResponseManager},
-    world::{
-        entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
-        global_world_manager::GlobalWorldManager,
-    },
+    world::{entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap},
 };
 
 use super::{room_store::RoomStore, scope_checks_cache::ScopeChecksCache, user_store::UserStore};
@@ -41,8 +38,6 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) entity_room_map: EntityRoomMap,
     /// Entity ↔ per-user scope membership index.
     pub(crate) entity_scope_map: EntityScopeMap,
-    /// Per-server-world replicated-entity registry.
-    pub(crate) global_world_manager: GlobalWorldManager,
     /// In-flight outbound requests awaiting matching responses.
     pub(crate) global_request_manager: GlobalRequestManager,
     /// In-flight outbound responses awaiting client receipt.

@@ -13,7 +13,8 @@
 //!
 //! ```text
 //! 1. connection_shared (RwLock<HashMap>)    — outermost
-//! 2. global_world_manager.diff_handler()    — internal RwLock
+//! 2. global_world_manager (outer RwLock)    — wraps the field
+//! 2a. global_world_manager.diff_handler()   — internal RwLock (acquired AFTER the outer #2 guard)
 //! 3. global_entity_map / idx_to_world       — RwLock
 //! 4. time_manager                           — RwLock
 //! 5. pending_send_state_updates             — Mutex
@@ -45,6 +46,7 @@ use crate::{
         send_state_update::SendStateUpdate,
     },
     time_manager::TimeManager,
+    world::global_world_manager::GlobalWorldManager,
     ServerConfig, UserKey,
 };
 
@@ -122,6 +124,17 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// to amortize the RwLock acquisition.
     pub(crate) global_entity_map: RwLock<GlobalEntityMap<E>>,
 
+    /// Per-world replicated-entity registry (step 4-F.naia.a).
+    /// LOCK ORDER position #2 (outer wrapper). The inner
+    /// `diff_handler: Arc<RwLock<GlobalDiffHandler>>` keeps its own
+    /// internal RwLock at LOCK ORDER position #2a — acquire AFTER the
+    /// outer #2 guard, never inverted. Coordinator-thread paths take
+    /// **write** for spawn / despawn / publication / delegation /
+    /// authority transitions; the send thread takes **read** for the
+    /// Iris loop (one guard amortized across the whole tick); the recv
+    /// thread is read-only for connection lifecycle queries.
+    pub(crate) global_world_manager: RwLock<GlobalWorldManager>,
+
     /// Dense `GlobalEntityIndex` → world-entity array (step 4-E.2c).
     /// Slot 0 (INVALID) is always `None`. Paired with `global_entity_map`
     /// at LOCK ORDER position #3 — they cover the same logical slot of
@@ -140,6 +153,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
         component_kinds: ComponentKinds,
         client_authoritative_entities: bool,
         global_dirty: Arc<GlobalDirtyBitset>,
+        global_world_manager: GlobalWorldManager,
         tick_interval: Duration,
         entity_index_capacity: usize,
     ) -> Self {
@@ -155,6 +169,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             pending_auth_grants: Mutex::new(Vec::new()),
             connection_shared: RwLock::new(HashMap::new()),
             time_manager: RwLock::new(TimeManager::new(tick_interval)),
+            global_world_manager: RwLock::new(global_world_manager),
             global_entity_map: RwLock::new(GlobalEntityMap::new()),
             idx_to_world: RwLock::new(vec![None; entity_index_capacity]),
         }
