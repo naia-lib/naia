@@ -10,6 +10,15 @@ pub use main_server::MainServer;
 pub mod world_server;
 pub use world_server::WorldServer;
 
+pub mod connection_shared;
+pub use connection_shared::ConnectionShared;
+
+pub mod receive_output;
+pub use receive_output::ReceiveOutput;
+
+pub mod pipeline_handles;
+pub use pipeline_handles::{RecvHandle, SendHandle};
+
 mod scope_checks_cache;
 mod scope_change;
 mod room_store;

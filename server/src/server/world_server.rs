@@ -528,6 +528,41 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         std::mem::replace(&mut self.incoming_world_events, WorldEvents::<E>::new())
     }
 
+    /// Pipeline-friendly receive step.
+    ///
+    /// Runs [`receive_all_packets`](Self::receive_all_packets) and then drains
+    /// the accumulated world events into a [`ReceiveOutput`].
+    ///
+    /// [`process_all_packets`](Self::process_all_packets) is NOT called here
+    /// because it requires a `World` reference; the caller (or pipeline
+    /// coordinator) is responsible for that step.
+    ///
+    /// Non-pipeline callers can continue using the three-step sequence:
+    /// `receive_all_packets()` → `process_all_packets()` → `take_world_events()`.
+    pub fn receive(&mut self) -> super::receive_output::ReceiveOutput<E> {
+        self.receive_all_packets();
+        let world_events = self.take_world_events();
+        super::receive_output::ReceiveOutput { world_events }
+    }
+
+    /// Consume this `WorldServer` and return a pair of pipeline handles.
+    ///
+    /// Both handles share the same `WorldServer` instance behind an
+    /// `Arc<parking_lot::Mutex<>>`.  In Phase 3 they serialise (the mutex
+    /// ensures only one handle is active at a time).  True concurrent
+    /// execution — recv and send running on separate threads simultaneously —
+    /// requires the field-level split planned for Phase 4.
+    ///
+    /// After this call the original `WorldServer` is consumed; all further
+    /// interaction must go through the returned handles.
+    pub fn into_pipeline_handles(self) -> (super::pipeline_handles::RecvHandle<E>, super::pipeline_handles::SendHandle<E>) {
+        let shared = Arc::new(parking_lot::Mutex::new(self));
+        (
+            super::pipeline_handles::RecvHandle { world_server: Arc::clone(&shared) },
+            super::pipeline_handles::SendHandle { world_server: shared },
+        )
+    }
+
     /// Advances the tick clock and returns any new tick events for this frame.
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         // tick event

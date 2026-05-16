@@ -83,7 +83,8 @@ pub use naia_server::{
         FileBitWriter, ResponseReceiveKey, SerdeErr, SignedInteger, SignedVariableInteger,
         SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
-    transport, ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
+    transport, ConnectionShared, ReceiveOutput, RecvHandle, SendHandle, ReplicationConfig,
+    RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
 };
 
 #[cfg(feature = "bench_instrumentation")]
@@ -92,6 +93,7 @@ pub use naia_server::{bench_iris_counters, bench_send_counters, bench_scope_coun
 pub mod events;
 
 mod app_ext;
+mod apply_receive_output;
 mod bundle_event_registry;
 mod commands;
 mod component_event_registry;

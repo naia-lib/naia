@@ -111,7 +111,10 @@ pub use events::{
     UpdateComponentEvent, WorldEvents, WorldPacketEvent,
 };
 pub use room::{RoomKey, RoomMut, RoomRef};
-pub use server::{MainServer, Server, ServerConfig, WorldServer};
+pub use server::{
+    ConnectionShared, MainServer, RecvHandle, ReceiveOutput, SendHandle, Server, ServerConfig,
+    WorldServer,
+};
 
 #[cfg(feature = "e2e_debug")]
 pub use server::world_server::{
