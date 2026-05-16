@@ -30,6 +30,7 @@ pub struct ConnectionShared {
 }
 
 impl ConnectionShared {
+    /// Creates a `ConnectionShared` with all fields zeroed (RTT defaults to `0.0 ms`).
     pub fn new() -> Self {
         Self {
             remote_ack_seq: AtomicU16::new(0),
@@ -41,28 +42,34 @@ impl ConnectionShared {
 
     // --- Writer API (recv path) ---
 
+    /// Stores the remote's latest acknowledged packet sequence number.
     pub fn set_remote_ack_seq(&self, seq: u16) {
         self.remote_ack_seq.store(seq, Ordering::Release);
     }
 
+    /// Stores the remote's ACK bitfield (the 32 packets before `remote_ack_seq`).
     pub fn set_remote_ack_bitfield(&self, bits: u32) {
         self.remote_ack_bitfield.store(bits, Ordering::Release);
     }
 
+    /// Signals the send path to emit an ACK-only packet on the next opportunity.
     pub fn set_should_send_empty_ack(&self) {
         self.should_send_empty_ack.store(true, Ordering::Release);
     }
 
+    /// Updates the average round-trip time estimate (in milliseconds).
     pub fn set_rtt_avg_ms(&self, rtt: f32) {
         self.rtt_avg_ms.store(rtt.to_bits(), Ordering::Release);
     }
 
     // --- Reader API (send path) ---
 
+    /// Returns the remote's latest acknowledged packet sequence number.
     pub fn remote_ack_seq(&self) -> u16 {
         self.remote_ack_seq.load(Ordering::Acquire)
     }
 
+    /// Returns the remote's ACK bitfield (the 32 packets before `remote_ack_seq`).
     pub fn remote_ack_bitfield(&self) -> u32 {
         self.remote_ack_bitfield.load(Ordering::Acquire)
     }
@@ -72,6 +79,7 @@ impl ConnectionShared {
         self.should_send_empty_ack.swap(false, Ordering::AcqRel)
     }
 
+    /// Returns the current average round-trip time estimate (in milliseconds).
     pub fn rtt_avg_ms(&self) -> f32 {
         f32::from_bits(self.rtt_avg_ms.load(Ordering::Acquire))
     }
