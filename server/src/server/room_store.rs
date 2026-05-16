@@ -15,7 +15,7 @@ use super::{scope_change::ScopeChange, user_store::UserStore};
 /// queries. Mutation methods that affect state outside of `rooms` (users,
 /// entity-room map, scope cache) accept those structures as parameters so the
 /// borrow checker stays happy at the `WorldServer` call sites.
-pub(super) struct RoomStore {
+pub(crate) struct RoomStore {
     rooms: BigMap<RoomKey, Room>,
 }
 

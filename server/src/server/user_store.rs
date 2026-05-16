@@ -15,7 +15,7 @@ use crate::{
 /// Pure query methods are self-contained. Lifecycle methods that affect other
 /// `WorldServer` domains (connections, scope, priorities, rooms) stay on
 /// `WorldServer` as thin orchestration.
-pub(super) struct UserStore {
+pub(crate) struct UserStore {
     users: HashMap<UserKey, WorldUser>,
     /// Tracks users that have been pre-registered (via `receive_user`) but
     /// whose connection handshake has not yet completed. Removed when the

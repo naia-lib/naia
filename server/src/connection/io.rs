@@ -1,3 +1,10 @@
+//! Split recv/send transport halves (C.3 Phase 4 step 4-E.2a).
+//!
+//! Previously a single `Io` struct held both ends of the transport plus
+//! the encoder/decoder + bandwidth monitors. Pipeline mode runs recv and
+//! send on independent threads, so the two halves are now separate
+//! structs owned by `RecvState` and `SendState` respectively.
+
 use std::{net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{CompressionConfig, Decoder, Encoder, OutgoingPacket, OwnedBitReader};
@@ -8,14 +15,20 @@ use crate::{
     transport::{PacketReceiver, PacketSender},
 };
 
+/// Receive half of the transport — owned by the recv thread.
 #[derive(Clone)]
-pub struct Io {
-    packet_sender: Option<Box<dyn PacketSender>>,
+pub struct RecvIo {
     packet_receiver: Option<Box<dyn PacketReceiver>>,
-    outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
     incoming_bandwidth_monitor: Option<BandwidthMonitor>,
-    outgoing_encoder: Option<Encoder>,
     incoming_decoder: Option<Decoder>,
+}
+
+/// Send half of the transport — owned by the send thread.
+#[derive(Clone)]
+pub struct SendIo {
+    packet_sender: Option<Box<dyn PacketSender>>,
+    outgoing_bandwidth_monitor: Option<BandwidthMonitor>,
+    outgoing_encoder: Option<Encoder>,
     /// Bytes sent during the most recent `send_all_packets` tick.
     /// Reset at the start of each `send_all_packets` via
     /// `reset_outgoing_bytes_this_tick`, incremented in `send_packet`.
@@ -23,90 +36,48 @@ pub struct Io {
     outgoing_bytes_this_tick: u64,
 }
 
-impl Io {
-    pub fn new(
-        bandwidth_measure_duration: &Option<Duration>,
-        compression_config: &Option<CompressionConfig>,
-    ) -> Self {
-        let outgoing_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
-        let incoming_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
+/// Construct a fresh recv/send pair from the bandwidth + compression config.
+/// Replaces the old `Io::new` (which returned a single combined struct).
+pub fn new_io_pair(
+    bandwidth_measure_duration: &Option<Duration>,
+    compression_config: &Option<CompressionConfig>,
+) -> (RecvIo, SendIo) {
+    let outgoing_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
+    let incoming_bandwidth_monitor = bandwidth_measure_duration.map(BandwidthMonitor::new);
 
-        let outgoing_encoder = compression_config.as_ref().and_then(|config| {
-            config
-                .server_to_client
-                .as_ref()
-                .map(|mode| Encoder::new(mode.clone()))
-        });
-        let incoming_decoder = compression_config.as_ref().and_then(|config| {
-            config
-                .client_to_server
-                .as_ref()
-                .map(|mode| Decoder::new(mode.clone()))
-        });
-
-        Self {
-            packet_sender: None,
-            packet_receiver: None,
-            outgoing_bandwidth_monitor,
-            incoming_bandwidth_monitor,
-            outgoing_encoder,
-            incoming_decoder,
-            outgoing_bytes_this_tick: 0,
-        }
-    }
-
-    pub fn load(
-        &mut self,
-        packet_sender: Box<dyn PacketSender>,
-        packet_receiver: Box<dyn PacketReceiver>,
-    ) {
-        if self.packet_sender.is_some() {
-            panic!("Packet sender/receiver already loaded! Cannot do this twice!");
-        }
-
-        self.packet_sender = Some(packet_sender);
-        self.packet_receiver = Some(packet_receiver);
-    }
-
-    pub fn is_loaded(&self) -> bool {
-        self.packet_sender.is_some()
-    }
-
-    pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
-        if self.packet_sender.is_none() {
-            panic!("Cannot call Server.sender_cloned() until you call Server.listen()!");
-        }
-
-        self.packet_sender.as_ref().unwrap().clone()
-    }
-
-    pub fn send_packet(
-        &mut self,
-        address: &SocketAddr,
-        packet: OutgoingPacket,
-    ) -> Result<(), NaiaServerError> {
-        // get payload
-        let mut payload = packet.slice();
-
-        // Compression
-        if let Some(encoder) = &mut self.outgoing_encoder {
-            payload = encoder.encode(payload);
-        }
-
-        // Bandwidth monitoring
-        if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
-            monitor.record_packet(address, payload.len());
-        }
-
-        // Per-tick byte counter (always tracked; cheap)
-        self.outgoing_bytes_this_tick =
-            self.outgoing_bytes_this_tick.saturating_add(payload.len() as u64);
-
-        self.packet_sender
+    let outgoing_encoder = compression_config.as_ref().and_then(|config| {
+        config
+            .server_to_client
             .as_ref()
-            .expect("Cannot call Server.send_packet() until you call Server.listen()!")
-            .send(address, payload)
-            .map_err(|_| NaiaServerError::SendError(*address))
+            .map(|mode| Encoder::new(mode.clone()))
+    });
+    let incoming_decoder = compression_config.as_ref().and_then(|config| {
+        config
+            .client_to_server
+            .as_ref()
+            .map(|mode| Decoder::new(mode.clone()))
+    });
+
+    let recv = RecvIo {
+        packet_receiver: None,
+        incoming_bandwidth_monitor,
+        incoming_decoder,
+    };
+    let send = SendIo {
+        packet_sender: None,
+        outgoing_bandwidth_monitor,
+        outgoing_encoder,
+        outgoing_bytes_this_tick: 0,
+    };
+    (recv, send)
+}
+
+impl RecvIo {
+    pub fn load(&mut self, packet_receiver: Box<dyn PacketReceiver>) {
+        if self.packet_receiver.is_some() {
+            panic!("Packet receiver already loaded! Cannot do this twice!");
+        }
+        self.packet_receiver = Some(packet_receiver);
     }
 
     pub fn recv_reader(&mut self) -> Result<Option<(SocketAddr, OwnedBitReader)>, NaiaServerError> {
@@ -118,16 +89,12 @@ impl Io {
 
         match receive_result {
             Ok(Some((address, mut payload))) => {
-                // Bandwidth monitoring
                 if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
                     monitor.record_packet(&address, payload.len());
                 }
-
-                // Decompression
                 if let Some(decoder) = &mut self.incoming_decoder {
                     payload = decoder.decode(payload);
                 }
-
                 Ok(Some((address, OwnedBitReader::new(payload))))
             }
             Ok(None) => Ok(None),
@@ -136,15 +103,94 @@ impl Io {
     }
 
     pub fn bandwidth_monitor_enabled(&self) -> bool {
-        self.outgoing_bandwidth_monitor.is_some() && self.incoming_bandwidth_monitor.is_some()
+        self.incoming_bandwidth_monitor.is_some()
+    }
+
+    pub fn register_client(&mut self, address: &SocketAddr) {
+        self.incoming_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .create_client(address);
+    }
+
+    pub fn deregister_client(&mut self, address: &SocketAddr) {
+        self.incoming_bandwidth_monitor
+            .as_mut()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .delete_client(address);
+    }
+
+    pub fn tick_bandwidth_monitor(&mut self) {
+        if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
+            monitor.tick();
+        }
+    }
+
+    pub fn incoming_bandwidth_total(&self) -> f32 {
+        self.incoming_bandwidth_monitor
+            .as_ref()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .total_bandwidth()
+    }
+
+    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
+        self.incoming_bandwidth_monitor
+            .as_ref()
+            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
+            .client_bandwidth(address)
+    }
+}
+
+impl SendIo {
+    pub fn load(&mut self, packet_sender: Box<dyn PacketSender>) {
+        if self.packet_sender.is_some() {
+            panic!("Packet sender already loaded! Cannot do this twice!");
+        }
+        self.packet_sender = Some(packet_sender);
+    }
+
+    pub fn is_loaded(&self) -> bool {
+        self.packet_sender.is_some()
+    }
+
+    pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
+        if self.packet_sender.is_none() {
+            panic!("Cannot call Server.sender_cloned() until you call Server.listen()!");
+        }
+        self.packet_sender.as_ref().unwrap().clone()
+    }
+
+    pub fn send_packet(
+        &mut self,
+        address: &SocketAddr,
+        packet: OutgoingPacket,
+    ) -> Result<(), NaiaServerError> {
+        let mut payload = packet.slice();
+
+        if let Some(encoder) = &mut self.outgoing_encoder {
+            payload = encoder.encode(payload);
+        }
+
+        if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
+            monitor.record_packet(address, payload.len());
+        }
+
+        self.outgoing_bytes_this_tick =
+            self.outgoing_bytes_this_tick.saturating_add(payload.len() as u64);
+
+        self.packet_sender
+            .as_ref()
+            .expect("Cannot call Server.send_packet() until you call Server.listen()!")
+            .send(address, payload)
+            .map_err(|_| NaiaServerError::SendError(*address))
+    }
+
+    pub fn bandwidth_monitor_enabled(&self) -> bool {
+        self.outgoing_bandwidth_monitor.is_some()
     }
 
     pub fn register_client(&mut self, address: &SocketAddr) {
         self.outgoing_bandwidth_monitor
-            .as_mut()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .create_client(address);
-        self.incoming_bandwidth_monitor
             .as_mut()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .create_client(address);
@@ -155,19 +201,10 @@ impl Io {
             .as_mut()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .delete_client(address);
-        self.incoming_bandwidth_monitor
-            .as_mut()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .delete_client(address);
     }
 
-    /// Tick bandwidth monitors to clear expired packets.
-    /// Call this during the update phase of the tick cycle.
-    pub fn tick_bandwidth_monitors(&mut self) {
+    pub fn tick_bandwidth_monitor(&mut self) {
         if let Some(monitor) = &mut self.outgoing_bandwidth_monitor {
-            monitor.tick();
-        }
-        if let Some(monitor) = &mut self.incoming_bandwidth_monitor {
             monitor.tick();
         }
     }
@@ -192,22 +229,8 @@ impl Io {
             .total_bandwidth()
     }
 
-    pub fn incoming_bandwidth_total(&self) -> f32 {
-        self.incoming_bandwidth_monitor
-            .as_ref()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .total_bandwidth()
-    }
-
     pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
         self.outgoing_bandwidth_monitor
-            .as_ref()
-            .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
-            .client_bandwidth(address)
-    }
-
-    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
-        self.incoming_bandwidth_monitor
             .as_ref()
             .expect("Need to call `enable_bandwidth_monitor()` on Io before calling this")
             .client_bandwidth(address)

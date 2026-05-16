@@ -8,7 +8,7 @@ use naia_shared::{
 };
 
 use crate::{
-    connection::io::Io,
+    connection::io::{new_io_pair, RecvIo, SendIo},
     events::main_events::MainEvents,
     handshake::{HandshakeAction, HandshakeManager, Handshaker},
     transport::{AuthReceiver, AuthSender, PacketSender, Socket},
@@ -26,7 +26,8 @@ pub struct MainServer {
     require_auth: bool,
     pending_auth_timeout: Duration,
     // cont
-    io: Io,
+    recv_io: RecvIo,
+    send_io: SendIo,
     auth_io: Option<(Box<dyn AuthSender>, Box<dyn AuthReceiver>)>,
     handshake_manager: Box<dyn Handshaker>,
     // Users
@@ -58,7 +59,7 @@ impl MainServer {
             ..
         } = protocol;
 
-        let io = Io::new(
+        let (recv_io, send_io) = new_io_pair(
             &server_config.connection.bandwidth_measure_duration,
             &compression,
         );
@@ -70,7 +71,8 @@ impl MainServer {
             require_auth: server_config.require_auth,
             pending_auth_timeout: server_config.pending_auth_timeout,
             // Connection
-            io,
+            recv_io,
+            send_io,
             auth_io: None,
             handshake_manager: Box::new(HandshakeManager::new(protocol_id)),
             // Users
@@ -86,14 +88,15 @@ impl MainServer {
         let boxed_socket: Box<dyn Socket> = socket.into();
         let (auth_sender, auth_receiver, packet_sender, packet_receiver) = boxed_socket.listen();
 
-        self.io.load(packet_sender, packet_receiver);
+        self.recv_io.load(packet_receiver);
+        self.send_io.load(packet_sender);
 
         self.auth_io = Some((auth_sender, auth_receiver));
     }
 
     /// Returns a cloned handle to the underlying packet sender.
     pub fn sender_cloned(&self) -> Box<dyn PacketSender> {
-        self.io.sender_cloned()
+        self.send_io.sender_cloned()
     }
 
     /// Resets all handshake state, user connections, and pending events back to defaults.
@@ -107,7 +110,7 @@ impl MainServer {
     /// Returns whether or not the Server has initialized correctly and is
     /// listening for Clients
     pub fn is_listening(&self) -> bool {
-        self.io.is_loaded()
+        self.send_io.is_loaded()
     }
 
     /// Returns socket config
@@ -258,7 +261,7 @@ impl MainServer {
             // Send multiple times for reliability (like client does)
             for _ in 0..10 {
                 let disconnect_packet = self.handshake_manager.write_disconnect();
-                if self.io.send_packet(&address, disconnect_packet).is_err() {
+                if self.send_io.send_packet(&address, disconnect_packet).is_err() {
                     log::warn!("Server Error: Cannot send disconnect packet to {}", address);
                     break;
                 }
@@ -333,7 +336,7 @@ impl MainServer {
 
         // receive socket events
         loop {
-            match self.io.recv_reader() {
+            match self.recv_io.recv_reader() {
                 Ok(Some((address, owned_reader))) => {
                     // receive packet
                     let mut reader = owned_reader.borrow();
@@ -383,7 +386,7 @@ impl MainServer {
                                     self.incoming_events.push_queued_disconnect(&user_key);
                                 }
                                 Ok(HandshakeAction::SendPacket(packet)) => {
-                                    if self.io.send_packet(&address, packet).is_err() {
+                                    if self.send_io.send_packet(&address, packet).is_err() {
                                         // Single send failure is not fatal: the client will
                                         // retry the handshake on its own timeout. Persistent
                                         // failures will surface via connection timeout.
@@ -395,7 +398,7 @@ impl MainServer {
                                     validate_packet,
                                 )) => {
                                     self.finalize_connection(&user_key, &address);
-                                    if self.io.send_packet(&address, validate_packet).is_err() {
+                                    if self.send_io.send_packet(&address, validate_packet).is_err() {
                                         // Same rationale as SendPacket above: client retries.
                                         warn!(
                                             "Server Error: Cannot send validation packet to {}",

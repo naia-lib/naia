@@ -16,7 +16,9 @@ use std::{collections::HashMap, hash::Hash, net::SocketAddr, sync::Arc};
 use naia_shared::UserPriorityState;
 
 use crate::{
-    connection::SendConnection, server::ServerShared, transport::PacketSender, user::UserKey,
+    connection::{io::SendIo, SendConnection},
+    server::ServerShared,
+    user::UserKey,
 };
 
 /// Send-thread-exclusive state lifted out of `WorldServer` (step 4-E).
@@ -30,10 +32,11 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// map entry dropped on disconnect (handled by the coordinator).
     pub user_priorities: HashMap<UserKey, UserPriorityState<E>>,
 
-    /// Outbound packet sender (cloned from `Io::sender_cloned()` at
-    /// `into_pipeline_states` time so the send thread doesn't hold a
-    /// reference back into `Io`).
-    pub send_io: Box<dyn PacketSender>,
+    /// Send half of the transport (step 4-E.2a). Carries the encoder,
+    /// outgoing bandwidth monitor, and per-tick byte counter alongside
+    /// the `Box<dyn PacketSender>`. Owned here so the send thread has
+    /// exclusive mutable access without locking.
+    pub send_io: SendIo,
 
     /// Shared init-only config + cross-thread atomic cells.
     pub shared: Arc<ServerShared<E>>,

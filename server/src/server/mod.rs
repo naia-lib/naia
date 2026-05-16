@@ -28,7 +28,10 @@ pub use recv_state::RecvState;
 pub mod send_state;
 pub use send_state::SendState;
 
-mod scope_checks_cache;
+pub mod coord_state;
+pub use coord_state::CoordinatorState;
+
+pub(crate) mod scope_checks_cache;
 mod scope_change;
-mod room_store;
-mod user_store;
+pub(crate) mod room_store;
+pub(crate) mod user_store;

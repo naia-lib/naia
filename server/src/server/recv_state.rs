@@ -15,7 +15,7 @@ use std::{
 use naia_shared::{DisconnectReason, Timer};
 
 use crate::{
-    connection::RecvConnection,
+    connection::{io::RecvIo, RecvConnection},
     events::{TickEvents, WorldEvents},
     server::ServerShared,
     user::UserKey,
@@ -62,12 +62,16 @@ pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
     /// `RecvState` directly (step 4-F), this map replaces
     /// `WorldServer::user_connections` for recv-path lookups.
     pub recv_user_connections: HashMap<SocketAddr, RecvConnection>,
+
+    /// Receive half of the transport (step 4-E.2a). Owned here so the
+    /// recv thread has exclusive mutable access without locking.
+    pub(crate) recv_io: RecvIo,
 }
 
 impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Construct a new `RecvState` with default timers seeded from the
     /// shared `ServerShared<E>` server-config Arc.
-    pub fn new(shared: Arc<ServerShared<E>>) -> Self {
+    pub fn new(shared: Arc<ServerShared<E>>, recv_io: RecvIo) -> Self {
         let heartbeat_interval = shared.server_config.connection.heartbeat_interval;
         let ping_interval = shared.server_config.ping.ping_interval;
         let disconnect_timeout = shared.server_config.connection.disconnection_timeout_duration;
@@ -81,6 +85,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
             incoming_tick_events: TickEvents::new(),
             shared,
             recv_user_connections: HashMap::new(),
+            recv_io,
         }
     }
 }

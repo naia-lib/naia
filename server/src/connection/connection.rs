@@ -14,7 +14,7 @@ use naia_shared::{
 
 use crate::{
     connection::{
-        io::Io,
+        io::SendIo,
         ping_config::PingConfig,
         recv_connection::RecvConnection,
         send_connection::SendConnection,
@@ -338,7 +338,7 @@ impl Connection {
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
         now: &Instant,
-        io: &mut Io,
+        io: &mut SendIo,
         world: &W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
@@ -419,7 +419,7 @@ impl Connection {
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
         now: &Instant,
-        io: &mut Io,
+        io: &mut SendIo,
         world: &W,
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
