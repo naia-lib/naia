@@ -67,7 +67,7 @@ impl Connection {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
             let is_static = global_world_manager.entity_is_static(&entity);
             connection
-                .base
+                .base.send
                 .world_manager
                 .host_init_entity(&entity, component_kinds, component_kinds_map, is_static);
         }
@@ -165,8 +165,8 @@ impl Connection {
     ) -> Vec<EntityEvent> {
         // Receive Message Events
         let (entity_converter, entity_waitlist) =
-            self.base.world_manager.get_message_processor_helpers();
-        let messages = self.base.message_manager.receive_messages(
+            self.base.send.world_manager.get_message_processor_helpers();
+        let messages = self.base.send.message_manager.receive_messages(
             &protocol.message_kinds,
             now,
             entity_converter,
@@ -179,7 +179,7 @@ impl Connection {
         }
 
         // Receive Request and Response Events
-        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        let (requests, responses) = self.base.send.message_manager.receive_requests_and_responses();
         // Requests
         for (channel_kind, requests) in requests {
             for (local_response_id, request) in requests {
@@ -196,7 +196,7 @@ impl Connection {
         }
 
         // Receive World Events
-        self.base.world_manager.take_incoming_events(
+        self.base.send.world_manager.take_incoming_events(
             global_entity_map,
             global_world_manager,
             &protocol.component_kinds,
@@ -224,7 +224,7 @@ impl Connection {
             &self.time_manager.server_receivable_tick,
         );
         let (mut host_world_events, update_events_map) = self
-            .base
+            .base.send
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
         let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> = update_events_map
@@ -288,7 +288,7 @@ impl Connection {
     ) -> bool {
         if !host_world_events.is_empty()
             || !update_list.is_empty()
-            || self.base.message_manager.has_outgoing_messages()
+            || self.base.send.message_manager.has_outgoing_messages()
             || self.tick_buffer.has_messages()
         {
             // Phase A: bandwidth budget gate — defer further work to next
@@ -396,6 +396,6 @@ impl Connection {
     }
 
     pub fn process_received_commands(&mut self) {
-        self.base.world_manager.process_delivered_commands();
+        self.base.send.world_manager.process_delivered_commands();
     }
 }

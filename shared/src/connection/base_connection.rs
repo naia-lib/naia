@@ -7,6 +7,7 @@ use std::{
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
+use crate::connection::ack_manager::{AckManager, AckManagerRecv, AckManagerSend};
 use crate::connection::bandwidth_accumulator::BandwidthAccumulator;
 use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
@@ -18,21 +19,59 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
     },
-    AckManager, ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
+    ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
     EntityCommand, GlobalEntity, GlobalEntityIndex, MessageKinds, PacketNotifiable, PacketType,
     StandardHeader, Tick, Timer, WorldRefType,
 };
 
-/// Represents a connection to a remote host, and provides functionality to
-/// manage the connection and the communications to it
-pub struct BaseConnection {
+/// Recv-side half of `BaseConnection` (step 4-C.2).
+///
+/// Owns only the recv-side ack pipeline. Other recv-exclusive state on
+/// the server's `Connection` (e.g. `ping_manager`, `tick_buffer`,
+/// `timeout_timer`, `manual_disconnect`) is migrated to a `RecvConnection`
+/// wrapper in step 4-C.3.
+pub struct BaseRecvConnection {
+    pub ack_recv: AckManagerRecv,
+}
+
+/// Send-side half of `BaseConnection` (step 4-C.2).
+///
+/// Owns the channel-routed message queues, the per-connection local world
+/// manager, the outbound ack pipeline, the heartbeat timer, and the
+/// bandwidth accumulator.
+///
+/// Per the MessageManager sub-audit called out in the §7 §8 spec: although
+/// `MessageManager` contains both `channel_senders` (send-only) and
+/// `channel_receivers` (recv-only), the recv-side decode path
+/// (`read_messages` / `receive_messages` / `receive_requests_and_responses`)
+/// is invoked from the **coordinator** thread (in `process_all_packets` at
+/// step 2 of the 12-step tick sequence), not from the recv thread itself.
+/// The recv thread only buffers raw packet bytes — see
+/// `WorldServer::receive_all_packets`. So `MessageManager` is classified
+/// send-side here: it sits next to the data the coordinator + send thread
+/// need (it's also a `PacketNotifiable` notifiable that fires from the send
+/// path's `AckManagerSend::drain_samples`).
+pub struct BaseSendConnection {
     /// Manages channel-routed message send/receive queues for this connection.
     pub message_manager: MessageManager,
     /// Manages entity-level replication state for this connection.
     pub world_manager: LocalWorldManager,
-    ack_manager: AckManager,
+    pub(crate) ack_send: AckManagerSend,
     heartbeat_timer: Timer,
     bandwidth_accumulator: BandwidthAccumulator,
+}
+
+/// Transitional facade that owns both halves as public sub-fields. Callers
+/// access `base.recv.*` for recv-side state (currently only `ack_recv`)
+/// and `base.send.*` for send-side state (`message_manager`,
+/// `world_manager`, etc.). Step 4-C.3 dissolves this facade by moving
+/// each half onto the new `RecvConnection` / `SendConnection` wrappers.
+pub struct BaseConnection {
+    /// Recv-side half of the connection (ack pipeline only at this stage).
+    pub recv: BaseRecvConnection,
+    /// Send-side half of the connection (message manager, world manager,
+    /// ack send pipeline, heartbeat timer, bandwidth accumulator).
+    pub send: BaseSendConnection,
 }
 
 impl BaseConnection {
@@ -45,20 +84,55 @@ impl BaseConnection {
         channel_kinds: &ChannelKinds,
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
+        let (ack_recv, ack_send) = AckManager::new_split();
         Self {
-            message_manager: MessageManager::new(host_type, channel_kinds),
-            world_manager: LocalWorldManager::new(
-                address,
-                host_type,
-                user_key,
-                global_world_manager,
-            ),
-            ack_manager: AckManager::new(),
-            heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
-            bandwidth_accumulator: BandwidthAccumulator::new(&connection_config.bandwidth),
+            recv: BaseRecvConnection { ack_recv },
+            send: BaseSendConnection {
+                message_manager: MessageManager::new(host_type, channel_kinds),
+                world_manager: LocalWorldManager::new(
+                    address,
+                    host_type,
+                    user_key,
+                    global_world_manager,
+                ),
+                ack_send,
+                heartbeat_timer: Timer::new(connection_config.heartbeat_interval),
+                bandwidth_accumulator: BandwidthAccumulator::new(&connection_config.bandwidth),
+            },
         }
     }
 
+    /// Process an incoming packet header. Recv half handles received-packet
+    /// bookkeeping and pushes acked-index samples into the cross-half channel;
+    /// send half drains the channel, removes acknowledged entries from
+    /// `sent_packets`, and fires delivery notifications on the message and
+    /// world managers (plus any caller-supplied extras).
+    pub fn process_incoming_header(
+        &mut self,
+        header: &StandardHeader,
+        extra_notifiables: &mut [&mut dyn PacketNotifiable],
+    ) {
+        self.recv.ack_recv.process_incoming_header(header);
+        // Disjoint field borrows: destructure so the borrow checker can see
+        // ack_send, message_manager, and world_manager are independent.
+        let BaseSendConnection {
+            message_manager,
+            world_manager,
+            ack_send,
+            ..
+        } = &mut self.send;
+        let mut base_notifiables: [&mut dyn PacketNotifiable; 2] =
+            [message_manager, world_manager];
+        ack_send.drain_samples(&mut base_notifiables, extra_notifiables);
+    }
+
+    /// Returns the sequence index of the last received packet from the remote.
+    pub fn last_received_packet_index(&self) -> PacketIndex {
+        self.recv.ack_recv.last_received_packet_index()
+    }
+}
+
+impl BaseSendConnection {
     // Bandwidth accumulator (outbound token-bucket cap)
 
     /// Tick the bandwidth accumulator, adding `target_bytes_per_sec × dt` to
@@ -107,7 +181,7 @@ impl BaseConnection {
     /// heartbeat)
     pub fn mark_sent(&mut self) {
         self.heartbeat_timer.reset();
-        self.ack_manager.clear_should_send_empty_ack();
+        self.ack_send.clear_should_send_empty_ack();
     }
 
     /// Returns whether a heartbeat message should be sent
@@ -119,62 +193,51 @@ impl BaseConnection {
 
     /// Sets the flag requesting that an empty ack packet be sent.
     pub fn mark_should_send_empty_ack(&mut self) {
-        self.ack_manager.mark_should_send_empty_ack();
+        self.ack_send.mark_should_send_empty_ack();
     }
 
     /// Returns `true` if an empty ack should be sent this tick.
     pub fn should_send_empty_ack(&self) -> bool {
-        self.ack_manager.should_send_empty_ack()
+        self.ack_send.should_send_empty_ack()
     }
 
     /// Returns the empty-ack flag and clears it atomically.
     pub fn take_should_send_empty_ack(&mut self) -> bool {
-        self.ack_manager.take_should_send_empty_ack()
+        self.ack_send.take_should_send_empty_ack()
     }
 
-    /// Process an incoming packet, pulling out the packet index number to keep
-    /// track of the current RTT, and sending the packet to the AckManager to
-    /// handle packet notification events
-    pub fn process_incoming_header(
-        &mut self,
-        header: &StandardHeader,
-        packet_notifiables: &mut [&mut dyn PacketNotifiable],
-    ) {
-        let mut base_packet_notifiables: [&mut dyn PacketNotifiable; 2] =
-            [&mut self.message_manager, &mut self.world_manager];
-        self.ack_manager.process_incoming_header(
-            header,
-            &mut base_packet_notifiables,
-            packet_notifiables,
-        );
-    }
-
-    /// Given a packet payload, start tracking the packet via it's index, attach
+    /// Given a packet payload, start tracking the packet via its index, attach
     /// the appropriate header, and return the packet's resulting underlying
-    /// bytes
-    pub fn write_header(
+    /// bytes. Requires the recv half's last-received state for the inbound
+    /// ack-bitfield fields; callers go through `BaseConnection::write_header`.
+    ///
+    /// This is the post-4-C.2 form: pure send-side, taking recv-derived
+    /// ack info as parameters. Step 4-C.3 will surface those values via
+    /// `ConnectionShared` atomics, removing the recv-side reference.
+    pub fn write_header_with(
         &mut self,
         packet_type: PacketType,
+        last_recv_packet_index: PacketIndex,
+        ack_bitfield: u32,
         writer: &mut BitWriter,
     ) -> StandardHeader {
-        let header = self.ack_manager.next_outgoing_packet_header(packet_type);
+        let header = self.ack_send.next_outgoing_packet_header(
+            packet_type,
+            last_recv_packet_index,
+            ack_bitfield,
+        );
         header.ser(writer);
         header
     }
 
     /// Get the next outgoing packet's index
     pub fn next_packet_index(&self) -> PacketIndex {
-        self.ack_manager.next_sender_packet_index()
-    }
-
-    /// Returns the sequence index of the last received packet from the remote.
-    pub fn last_received_packet_index(&self) -> PacketIndex {
-        self.ack_manager.last_received_packet_index()
+        self.ack_send.next_sender_packet_index()
     }
 
     /// Fraction of sent data-packets that were lost in the last 64-packet window.
     pub fn packet_loss_pct(&self) -> f32 {
-        self.ack_manager.packet_loss_pct()
+        self.ack_send.packet_loss_pct()
     }
 
     /// Drains pending world-manager and message-manager outbound queues into writeable packets.
@@ -280,5 +343,146 @@ impl BaseConnection {
         }
 
         Ok(())
+    }
+}
+
+impl BaseConnection {
+    /// Convenience wrapper for callers that previously hit `base.write_header`.
+    /// Reads the inbound ack-bitfield state from the recv half and forwards
+    /// to `BaseSendConnection::write_header_with`.
+    pub fn write_header(
+        &mut self,
+        packet_type: PacketType,
+        writer: &mut BitWriter,
+    ) -> StandardHeader {
+        let last_rx = self.recv.ack_recv.last_received_packet_index();
+        let ack_bits = self.recv.ack_recv.ack_bitfield();
+        self.send
+            .write_header_with(packet_type, last_rx, ack_bits, writer)
+    }
+
+    // ----- Transitional delegating accessors for send-side methods -----
+    //
+    // These keep the pre-split `connection.base.X(..)` call pattern working
+    // for the ~50 existing call sites in server + client. Step 4-C.3 lifts
+    // these calls up to the new `RecvConnection` / `SendConnection`
+    // wrappers; at that point this transitional facade goes away.
+
+    /// Bandwidth: see [`BaseSendConnection::accumulate_bandwidth`].
+    pub fn accumulate_bandwidth(&mut self, now: &Instant) {
+        self.send.accumulate_bandwidth(now);
+    }
+    /// Bandwidth: see [`BaseSendConnection::can_spend_bandwidth`].
+    pub fn can_spend_bandwidth(&self, b: u32) -> bool {
+        self.send.can_spend_bandwidth(b)
+    }
+    /// Bandwidth: see [`BaseSendConnection::spend_bandwidth`].
+    pub fn spend_bandwidth(&mut self, b: u32) {
+        self.send.spend_bandwidth(b);
+    }
+    /// Bandwidth: see [`BaseSendConnection::bandwidth_remaining`].
+    pub fn bandwidth_remaining(&self) -> f64 {
+        self.send.bandwidth_remaining()
+    }
+    /// Bandwidth: see [`BaseSendConnection::bandwidth_bytes_sent_last_tick`].
+    pub fn bandwidth_bytes_sent_last_tick(&self) -> u64 {
+        self.send.bandwidth_bytes_sent_last_tick()
+    }
+    /// Bandwidth: see [`BaseSendConnection::bandwidth_packets_deferred_last_tick`].
+    pub fn bandwidth_packets_deferred_last_tick(&self) -> u32 {
+        self.send.bandwidth_packets_deferred_last_tick()
+    }
+    /// Bandwidth: see [`BaseSendConnection::record_bandwidth_deferred`].
+    pub fn record_bandwidth_deferred(&mut self) {
+        self.send.record_bandwidth_deferred();
+    }
+    /// Heartbeat: see [`BaseSendConnection::mark_sent`].
+    pub fn mark_sent(&mut self) {
+        self.send.mark_sent();
+    }
+    /// Heartbeat: see [`BaseSendConnection::should_send_heartbeat`].
+    pub fn should_send_heartbeat(&self) -> bool {
+        self.send.should_send_heartbeat()
+    }
+    /// Acks: see [`BaseSendConnection::mark_should_send_empty_ack`].
+    pub fn mark_should_send_empty_ack(&mut self) {
+        self.send.mark_should_send_empty_ack();
+    }
+    /// Acks: see [`BaseSendConnection::should_send_empty_ack`].
+    pub fn should_send_empty_ack(&self) -> bool {
+        self.send.should_send_empty_ack()
+    }
+    /// Acks: see [`BaseSendConnection::take_should_send_empty_ack`].
+    pub fn take_should_send_empty_ack(&mut self) -> bool {
+        self.send.take_should_send_empty_ack()
+    }
+    /// Packet info: see [`BaseSendConnection::next_packet_index`].
+    pub fn next_packet_index(&self) -> PacketIndex {
+        self.send.next_packet_index()
+    }
+    /// Packet info: see [`BaseSendConnection::packet_loss_pct`].
+    pub fn packet_loss_pct(&self) -> f32 {
+        self.send.packet_loss_pct()
+    }
+    /// Send pipeline: see [`BaseSendConnection::collect_messages`].
+    pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
+        self.send.collect_messages(now, rtt_millis);
+    }
+    /// Read pipeline: see [`BaseSendConnection::read_packet`].
+    pub fn read_packet(
+        &mut self,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        tick: &Tick,
+        read_world_events: bool,
+        reader: &mut BitReader,
+    ) -> Result<(), SerdeErr> {
+        self.send.read_packet(
+            channel_kinds,
+            message_kinds,
+            component_kinds,
+            tick,
+            read_world_events,
+            reader,
+        )
+    }
+    /// Write pipeline: see [`BaseSendConnection::write_packet`].
+    #[allow(clippy::too_many_arguments)]
+    pub fn write_packet<E: Copy + Eq + Hash + Sync + Send, W: WorldRefType<E>>(
+        &mut self,
+        channel_kinds: &ChannelKinds,
+        message_kinds: &MessageKinds,
+        component_kinds: &ComponentKinds,
+        now: &Instant,
+        writer: &mut BitWriter,
+        packet_index: PacketIndex,
+        world: &W,
+        entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        global_world_manager: &dyn GlobalWorldManagerType,
+        has_written: &mut bool,
+        write_world_events: bool,
+        host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        global_diff_handler: Option<&GlobalDiffHandler>,
+        snapshot_map: Option<&SnapshotMap>,
+    ) {
+        self.send.write_packet(
+            channel_kinds,
+            message_kinds,
+            component_kinds,
+            now,
+            writer,
+            packet_index,
+            world,
+            entity_converter,
+            global_world_manager,
+            has_written,
+            write_world_events,
+            host_world_events,
+            update_list,
+            global_diff_handler,
+            snapshot_map,
+        );
     }
 }

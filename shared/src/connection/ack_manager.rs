@@ -189,21 +189,50 @@ impl AckManager {
     /// Builds and returns the standard header for the next outgoing packet,
     /// advancing the sequence counter.
     pub fn next_outgoing_packet_header(&mut self, packet_type: PacketType) -> StandardHeader {
-        let next_packet_index = self.send.next_packet_index;
         let last_rx = self.recv.last_recv_packet_index;
         let ack_bits = self.recv.ack_bitfield();
+        self.send
+            .next_outgoing_packet_header(packet_type, last_rx, ack_bits)
+    }
 
-        let outgoing = StandardHeader::new(packet_type, next_packet_index, last_rx, ack_bits);
-
-        self.send.track_packet(packet_type, next_packet_index);
-        self.send.next_packet_index = self.send.next_packet_index.wrapping_add(1);
-
-        outgoing
+    /// Splits a freshly-constructed `AckManager` into its two halves wired by
+    /// a shared crossbeam channel. Used by `BaseConnection::new()` after the
+    /// 4-C.2 split — both halves live on different sub-structs (and, after
+    /// step 4-C.3 lands, different threads).
+    pub fn new_split() -> (AckManagerRecv, AckManagerSend) {
+        let mgr = Self::new();
+        (mgr.recv, mgr.send)
     }
 }
 
 impl AckManagerRecv {
-    fn process_incoming_header(&mut self, header: &StandardHeader) {
+    /// Returns the sequence index of the most recently received packet.
+    pub fn last_received_packet_index(&self) -> PacketIndex {
+        self.last_recv_packet_index
+    }
+
+    /// Computes the 32-bit ack bitfield for outbound headers, based on
+    /// which of the 32 packets preceding `last_recv_packet_index` are
+    /// present in `received_packets`.
+    pub fn ack_bitfield(&self) -> u32 {
+        let last_received_remote_packet_index = self.last_recv_packet_index;
+        let mut ack_bitfield: u32 = 0;
+        let mut mask: u32 = 1;
+
+        for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
+            let received_packet_index = last_received_remote_packet_index.wrapping_sub(i);
+            if self.received_packets.exists(received_packet_index) {
+                ack_bitfield |= mask;
+            }
+            mask <<= 1;
+        }
+
+        ack_bitfield
+    }
+
+    /// Process an incoming packet header — record receipt and emit
+    /// `AckSample`s onto the cross-half channel.
+    pub fn process_incoming_header(&mut self, header: &StandardHeader) {
         let sender_packet_index = header.sender_packet_index;
         let sender_ack_index = header.sender_ack_index;
         let mut sender_ack_bitfield = header.sender_ack_bitfield;
@@ -243,30 +272,68 @@ impl AckManagerRecv {
         // 64-sample window.
         let _ = self.sample_tx.try_send(sample);
     }
-
-    fn ack_bitfield(&self) -> u32 {
-        let last_received_remote_packet_index = self.last_recv_packet_index;
-        let mut ack_bitfield: u32 = 0;
-        let mut mask: u32 = 1;
-
-        for i in 1..=REDUNDANT_PACKET_ACKS_SIZE {
-            let received_packet_index = last_received_remote_packet_index.wrapping_sub(i);
-            if self.received_packets.exists(received_packet_index) {
-                ack_bitfield |= mask;
-            }
-            mask <<= 1;
-        }
-
-        ack_bitfield
-    }
 }
 
 impl AckManagerSend {
+    /// Returns the recent packet loss percentage (0.0–1.0) measured by the loss monitor.
+    pub fn packet_loss_pct(&self) -> f32 {
+        self.loss_monitor.packet_loss_pct()
+    }
+
+    /// Returns `true` if an empty ack packet should be sent this tick.
+    pub fn should_send_empty_ack(&self) -> bool {
+        self.should_send_empty_ack
+    }
+
+    /// Sets the flag requesting that an empty ack packet be sent.
+    pub fn mark_should_send_empty_ack(&mut self) {
+        self.should_send_empty_ack = true;
+    }
+
+    /// Clears the empty-ack flag without returning it.
+    pub fn clear_should_send_empty_ack(&mut self) {
+        self.should_send_empty_ack = false;
+    }
+
+    /// Take the should_send_empty_ack flag (returns and clears it).
+    pub fn take_should_send_empty_ack(&mut self) -> bool {
+        let result = self.should_send_empty_ack;
+        self.should_send_empty_ack = false;
+        result
+    }
+
+    /// Get the index of the next outgoing packet.
+    pub fn next_sender_packet_index(&self) -> PacketIndex {
+        self.next_packet_index
+    }
+
+    /// Builds the standard header for the next outgoing packet. Takes the
+    /// recv-derived ack info (`last_recv_packet_index` + `ack_bitfield`)
+    /// from the caller — step 4-C.3 will surface those via
+    /// `ConnectionShared` atomics, eliminating the recv-side dependency.
+    pub fn next_outgoing_packet_header(
+        &mut self,
+        packet_type: PacketType,
+        last_recv_packet_index: PacketIndex,
+        ack_bitfield: u32,
+    ) -> StandardHeader {
+        let next_packet_index = self.next_packet_index;
+        let outgoing = StandardHeader::new(
+            packet_type,
+            next_packet_index,
+            last_recv_packet_index,
+            ack_bitfield,
+        );
+        self.track_packet(packet_type, next_packet_index);
+        self.next_packet_index = self.next_packet_index.wrapping_add(1);
+        outgoing
+    }
+
     /// Drains pending `AckSample`s pushed by the recv half. For each sample
     /// whose index is still tracked in `sent_packets`, remove it and — if it
     /// was a `Data` packet — update `loss_monitor` and (for `Acked` samples)
     /// fire delivery notifications. Matches pre-split behavior exactly.
-    fn drain_samples(
+    pub fn drain_samples(
         &mut self,
         base_packet_notifiables: &mut [&mut dyn PacketNotifiable],
         packet_notifiables: &mut [&mut dyn PacketNotifiable],

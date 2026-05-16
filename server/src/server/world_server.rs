@@ -602,10 +602,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return Err(NaiaServerError::UserNotFound);
         };
         let mut converter = connection
-            .base
+            .base.send
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
-        let accepted = connection.base.message_manager.send_message(
+        let accepted = connection.base.send.message_manager.send_message(
             &self.shared.message_kinds,
             &mut converter,
             channel_kind,
@@ -676,12 +676,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             ));
         };
         let mut converter = connection
-            .base
+            .base.send
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
 
         let message = MessageContainer::new(request_box);
-        connection.base.message_manager.send_request(
+        connection.base.send.message_manager.send_request(
             &self.shared.message_kinds,
             &mut converter,
             channel_kind,
@@ -724,11 +724,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return false;
         };
         let mut converter = connection
-            .base
+            .base.send
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
         let response = MessageContainer::new(response_box);
-        connection.base.message_manager.send_response(
+        connection.base.send.message_manager.send_response(
             &self.shared.message_kinds,
             &mut converter,
             &channel_kind,
@@ -902,11 +902,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             #[cfg(feature = "bench_instrumentation")]
                             bench_iris_counters::N_PHASE3_COMPONENT_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
 
-                            if connection.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
+                            if connection.base.send.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
                                 // fast path: dirty + delivered
-                            } else if connection.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
+                            } else if connection.base.send.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
                                 continue;
-                            } else if !connection.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                            } else if !connection.base.send.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
                                 continue;
                             }
 
@@ -1043,7 +1043,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 let Some(conn) = self.user_connections.get_mut(&address) else {
                     continue;
                 };
-                if !conn.base.world_manager.has_global_entity(&global_entity) {
+                if !conn.base.send.world_manager.has_global_entity(&global_entity) {
                     continue;
                 }
                 let user_key_for_conn = conn.user_key;
@@ -1052,7 +1052,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     new_status = EntityAuthStatus::Granted;
                 }
                 // Use host_send_set_auth which handles both HostEntity and RemoteEntity
-                conn.base
+                conn.base.send
                     .world_manager
                     .host_send_set_auth(&global_entity, new_status);
                 #[cfg(feature = "e2e_debug")]
@@ -1415,12 +1415,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 if let Some(user) = self.user_store.get(&prev_holder_key) {
                     if let Some(connection) = self.user_connections.get_mut(&user.address()) {
                         if connection
-                            .base
+                            .base.send
                             .world_manager
                             .has_global_entity(global_entity)
                         {
                             connection
-                                .base
+                                .base.send
                                 .world_manager
                                 .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
                         }
@@ -1432,14 +1432,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 for (_user_key, user) in self.user_store.iter() {
                     if let Some(connection) = self.user_connections.get_mut(&user.address()) {
                         if !connection
-                            .base
+                            .base.send
                             .world_manager
                             .has_global_entity(global_entity)
                         {
                             continue;
                         }
                         connection
-                            .base
+                            .base.send
                             .world_manager
                             .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
                     }
@@ -1463,7 +1463,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // After migration, the entity is a RemoteEntity on the client, but the server
                 // still sends from HostEntity perspective and the client's routing handles it
                 if !connection
-                    .base
+                    .base.send
                     .world_manager
                     .has_global_entity(global_entity)
                 {
@@ -1475,7 +1475,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 // The server always sends from HostEntity perspective, and the client's
                 // routing logic will handle converting it to the correct entity type
                 connection
-                    .base
+                    .base.send
                     .world_manager
                     .host_send_set_auth(global_entity, EntityAuthStatus::Available);
             }
@@ -1662,7 +1662,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // After migration, the entity is a RemoteEntity on the client, but the server
             // still sends from HostEntity perspective and the client's routing handles it
             if !connection
-                .base
+                .base.send
                 .world_manager
                 .has_global_entity(&global_entity)
             {
@@ -1679,7 +1679,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // The server always sends from HostEntity perspective, and the client's
             // routing logic will handle converting it to the correct entity type
             connection
-                .base
+                .base.send
                 .world_manager
                 .host_send_set_auth(&global_entity, new_status);
             #[cfg(feature = "e2e_debug")]
@@ -1725,7 +1725,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 continue;
             };
             if !connection
-                .base
+                .base.send
                 .world_manager
                 .has_global_entity(&global_entity)
             {
@@ -1737,7 +1737,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 EntityAuthStatus::Denied
             };
             connection
-                .base
+                .base.send
                 .world_manager
                 .host_send_set_auth(&global_entity, new_status);
         }
@@ -2258,14 +2258,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         for (_, connection) in self.user_connections.iter_mut() {
             if !connection
-                .base
+                .base.send
                 .world_manager
                 .has_global_entity(global_entity)
             {
                 continue;
             }
             // remove entity from user connection
-            connection.base.world_manager.despawn_entity(global_entity);
+            connection.base.send.world_manager.despawn_entity(global_entity);
             connection.clear_entity_visible(entity_idx);
         }
     }
@@ -2517,7 +2517,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
             // insert component into user's connection
             let has_entity = connection
-                .base
+                .base.send
                 .world_manager
                 .has_global_entity(global_entity);
 
@@ -2526,7 +2526,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 continue;
             }
             connection
-                .base
+                .base.send
                 .world_manager
                 .insert_component(global_entity, component_kind);
         }
@@ -2568,7 +2568,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // which scopes they are part of
         for (_, connection) in self.user_connections.iter_mut() {
             if !connection
-                .base
+                .base.send
                 .world_manager
                 .has_global_entity(global_entity)
             {
@@ -2577,7 +2577,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
             // remove component from user connection
             connection
-                .base
+                .base.send
                 .world_manager
                 .remove_component(global_entity, component_kind);
         }
@@ -2605,7 +2605,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             if let Some(user) = self.user_store.get(&user_key) {
                 if let Some(connection) = self.user_connections.get_mut(&user.address()) {
                     connection
-                        .base
+                        .base.send
                         .world_manager
                         .send_publish(HostType::Server, global_entity);
                 }
@@ -2659,7 +2659,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             if let Some(addr) = owner_addr {
                 if let Some(connection) = self.user_connections.get_mut(&addr) {
                     connection
-                        .base
+                        .base.send
                         .world_manager
                         .send_unpublish(HostType::Server, global_entity);
                 }
@@ -2686,8 +2686,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             if owner_addr == Some(*addr) {
                 continue;
             }
-            if connection.base.world_manager.has_global_entity(global_entity) {
-                connection.base.world_manager.despawn_entity(global_entity);
+            if connection.base.send.world_manager.has_global_entity(global_entity) {
+                connection.base.send.world_manager.despawn_entity(global_entity);
                 connection.clear_entity_visible(entity_idx);
             }
         }
@@ -2721,7 +2721,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 };
 
                 if !connection
-                    .base
+                    .base.send
                     .world_manager
                     .has_global_entity(global_entity)
                 {
@@ -2735,7 +2735,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     global_entity,
                     user.address()
                 );
-                connection.base.world_manager.send_enable_delegation(
+                connection.base.send.world_manager.send_enable_delegation(
                     HostType::Server,
                     client_origin.is_some(),
                     global_entity,
@@ -2840,7 +2840,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // Step 0: Capture old RemoteEntity BEFORE migration (will be needed for MigrateResponse)
         let old_remote_entity = match connection
-            .base
+            .base.send
             .world_manager
             .entity_converter()
             .global_entity_to_remote_entity(global_entity)
@@ -2857,7 +2857,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Step 1: Migrate entity from RemoteEntity to HostEntity
         // This creates the HostEntity in HostEngine so it can receive commands
         let new_host_entity = match connection
-            .base
+            .base.send
             .world_manager
             .migrate_entity_remote_to_host(global_entity)
         {
@@ -2871,13 +2871,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // This allows MigrateResponse to be sent (requires Delegated state)
         // We do NOT send EnableDelegation back to the client - they already sent it!
         connection
-            .base
+            .base.send
             .world_manager
             .host_local_enable_delegation(&new_host_entity);
 
         // Step 3: Send MigrateResponse to client
         // This will be the FIRST message in the new HostEntityChannel sequence (subcommand_id=0)
-        connection.base.world_manager.host_send_migrate_response(
+        connection.base.send.world_manager.host_send_migrate_response(
             global_entity,
             &old_remote_entity,
             &new_host_entity,
@@ -2933,7 +2933,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     continue;
                 };
                 if !connection
-                    .base
+                    .base.send
                     .world_manager
                     .has_global_entity(global_entity)
                 {
@@ -2945,7 +2945,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     EntityAuthStatus::Denied
                 };
                 connection
-                    .base
+                    .base.send
                     .world_manager
                     .host_send_set_auth(global_entity, new_status);
             }
@@ -2973,7 +2973,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 };
 
                 if !connection
-                    .base
+                    .base.send
                     .world_manager
                     .has_global_entity(global_entity)
                 {
@@ -2983,7 +2983,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                 // Send DisableDelegationEntity action through EntityActionEvent system
                 connection
-                    .base
+                    .base.send
                     .world_manager
                     .send_disable_delegation(global_entity);
             }
@@ -3111,7 +3111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
-        let remote_global_entities = connection.base.world_manager.remote_entities();
+        let remote_global_entities = connection.base.send.world_manager.remote_entities();
         let entity_events = SharedGlobalWorldManager::despawn_all_entities(
             world,
             &self.global_entity_map,
@@ -3335,7 +3335,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     let user = self.user_store.get(user_key).unwrap();
                     let connection = self.user_connections.get_mut(&user.address()).unwrap();
                     connection
-                        .base
+                        .base.send
                         .world_manager
                         .remote_spawn_entity(&global_entity); // TODO: migrate to localworldmanager
                     #[cfg(feature = "e2e_debug")]
@@ -3575,7 +3575,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                         let user = self.user_store.get(user_key).unwrap();
                         let connection = self.user_connections.get_mut(&user.address()).unwrap();
                         connection
-                            .base
+                            .base.send
                             .world_manager
                             .remote_despawn_entity(&global_entity);
 
@@ -3738,7 +3738,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                 // check if host has entity, because it may have been removed from room before despawning, and we don't want to double despawn
                 if !connection
-                    .base
+                    .base.send
                     .world_manager
                     .has_global_entity(&removed_global_entity)
                 {
@@ -3753,7 +3753,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                 // remove entity from user connection
                 connection
-                    .base
+                    .base.send
                     .world_manager
                     .despawn_entity(&removed_global_entity);
                 connection.clear_entity_visible(entity_idx);
@@ -3810,7 +3810,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                                 continue;
                             }
                         }
-                        if !connection.base.world_manager.has_global_entity(global_entity) {
+                        if !connection.base.send.world_manager.has_global_entity(global_entity) {
                             continue;
                         }
                         let entity_idx = {
@@ -3824,11 +3824,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             .unwrap_or(ScopeExit::Despawn);
                         match scope_exit {
                             ScopeExit::Persist => {
-                                connection.base.world_manager.pause_entity(global_entity);
+                                connection.base.send.world_manager.pause_entity(global_entity);
                                 connection.clear_entity_visible(entity_idx);
                             }
                             ScopeExit::Despawn => {
-                                connection.base.world_manager.despawn_entity(global_entity);
+                                connection.base.send.world_manager.despawn_entity(global_entity);
                                 connection.clear_entity_visible(entity_idx);
                             }
                         }
@@ -3908,7 +3908,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         //   is_tracked         = entity is in entity_map (active OR paused)
         //   currently_paused   = tracked but not active
         let currently_visible = connection.visibility.is_set(entity_idx);
-        let is_tracked = connection.base.world_manager.has_global_entity(global_entity);
+        let is_tracked = connection.base.send.world_manager.has_global_entity(global_entity);
         let currently_paused = is_tracked && !currently_visible;
 
         // Decide scope membership. Per contract [entity-scopes-06] /
@@ -3963,7 +3963,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
             if currently_paused {
                 // Re-entering scope on a paused (ScopeExit::Persist) entity.
-                connection.base.world_manager.resume_entity(global_entity);
+                connection.base.send.world_manager.resume_entity(global_entity);
                 connection.set_entity_visible(entity_idx);
                 return;
             }
@@ -3973,7 +3973,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .component_kinds(global_entity)
                 .unwrap();
             connection
-                .base
+                .base.send
                 .world_manager
                 .host_init_entity(global_entity, component_kinds, &self.shared.component_kinds, self.global_world_manager.entity_is_static(global_entity));
             connection.set_entity_visible(entity_idx);
@@ -3985,7 +3985,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             if !self.global_world_manager.entity_is_delegated(global_entity) {
                 return;
             }
-            connection.base.world_manager.send_enable_delegation(
+            connection.base.send.world_manager.send_enable_delegation(
                 HostType::Server,
                 false,
                 global_entity,
@@ -4006,7 +4006,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     EntityAuthStatus::Denied
                 };
                 connection
-                    .base
+                    .base.send
                     .world_manager
                     .host_send_set_auth(global_entity, new_status);
             }
@@ -4019,11 +4019,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .unwrap_or(ScopeExit::Despawn);
             match scope_exit {
                 ScopeExit::Persist => {
-                    connection.base.world_manager.pause_entity(global_entity);
+                    connection.base.send.world_manager.pause_entity(global_entity);
                     connection.clear_entity_visible(entity_idx);
                 }
                 ScopeExit::Despawn => {
-                    connection.base.world_manager.despawn_entity(global_entity);
+                    connection.base.send.world_manager.despawn_entity(global_entity);
                     connection.clear_entity_visible(entity_idx);
                 }
             }
@@ -4117,7 +4117,7 @@ cfg_if! {
             pub fn total_dirty_update_count(&self) -> usize {
                 self.user_connections
                     .values()
-                    .map(|conn| conn.base.world_manager.dirty_update_count())
+                    .map(|conn| conn.base.send.world_manager.dirty_update_count())
                     .sum()
             }
         }
@@ -4146,7 +4146,7 @@ cfg_if! {
                     .get(&user.address())
                     .expect("User connection does not exist");
 
-                connection.base.world_manager.local_entities()
+                connection.base.send.world_manager.local_entities()
             }
 
             /// Retrieves an EntityRef that exposes read-only operations for the Entity
@@ -4196,7 +4196,7 @@ cfg_if! {
             ) -> Option<E> {
                 let user = self.user_store.get(user_key)?;
                 let connection = self.user_connections.get(&user.address())?;
-                let converter = connection.base.world_manager.entity_converter();
+                let converter = connection.base.send.world_manager.entity_converter();
 
                 let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
                 let global_entity = converter.owned_entity_to_global_entity(&owned_local_entity).ok()?;
@@ -4217,7 +4217,7 @@ cfg_if! {
 
                 let user = self.user_store.get(user_key)?;
                 let connection = self.user_connections.get(&user.address())?;
-                let converter = connection.base.world_manager.entity_converter();
+                let converter = connection.base.send.world_manager.entity_converter();
                 let owned_entity = converter.global_entity_to_owned_entity(&global_entity).ok()?;
 
                 Some(LocalEntity::from(owned_entity))

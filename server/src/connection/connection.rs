@@ -155,7 +155,7 @@ impl Connection {
 
     #[cfg(feature = "test_utils")]
     pub fn diff_handler_receiver_count(&self) -> usize {
-        self.base.world_manager.diff_handler_receiver_count()
+        self.base.send.world_manager.diff_handler_receiver_count()
     }
 
     #[cfg(feature = "test_utils")]
@@ -188,7 +188,7 @@ impl Connection {
             message_kinds,
             &server_tick,
             &client_tick,
-            self.base.world_manager.entity_converter(),
+            self.base.send.world_manager.entity_converter(),
             reader,
         )?;
 
@@ -222,8 +222,8 @@ impl Connection {
     ) -> Vec<EntityEvent> {
         // Receive Message Events
         let (entity_converter, entity_waitlist) =
-            self.base.world_manager.get_message_processor_helpers();
-        let messages = self.base.message_manager.receive_messages(
+            self.base.send.world_manager.get_message_processor_helpers();
+        let messages = self.base.send.message_manager.receive_messages(
             message_kinds,
             now,
             entity_converter,
@@ -236,7 +236,7 @@ impl Connection {
         }
 
         // Receive Request and Response Events
-        let (requests, responses) = self.base.message_manager.receive_requests_and_responses();
+        let (requests, responses) = self.base.send.message_manager.receive_requests_and_responses();
         // Requests
         for (channel_kind, requests) in requests {
             for (local_response_id, request) in requests {
@@ -260,7 +260,7 @@ impl Connection {
 
         // Receive World Events
         if client_authoritative_entities {
-            self.base.world_manager.take_incoming_events(
+            self.base.send.world_manager.take_incoming_events(
                 global_entity_map,
                 global_world_manager,
                 component_kinds,
@@ -311,7 +311,7 @@ impl Connection {
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
         let mut host_world_events = self
-            .base
+            .base.send
             .world_manager
             .take_outgoing_commands(now, &rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
@@ -383,7 +383,7 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) -> bool {
-        let has_messages = self.base.message_manager.has_outgoing_messages();
+        let has_messages = self.base.send.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
 
         // Check one-shot ACK flag (edge-triggered, consumed here)
@@ -607,7 +607,7 @@ impl Connection {
     ) -> (Vec<OutgoingPacket>, bool) {
         let rtt_millis = self.ping_manager.rtt_average;
         self.base.collect_messages(now, &rtt_millis);
-        let mut host_world_events = self.base.world_manager.take_outgoing_commands(now, &rtt_millis);
+        let mut host_world_events = self.base.send.world_manager.take_outgoing_commands(now, &rtt_millis);
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
@@ -657,7 +657,7 @@ impl Connection {
         update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
         snapshot_map: &SnapshotMap,
     ) -> Option<OutgoingPacket> {
-        let has_messages = self.base.message_manager.has_outgoing_messages();
+        let has_messages = self.base.send.message_manager.has_outgoing_messages();
         let has_events = !host_world_events.is_empty() || !update_list.is_empty();
         let needs_ack_only = self.base.take_should_send_empty_ack();
 
@@ -702,6 +702,6 @@ impl Connection {
     }
 
     pub fn process_received_commands(&mut self) {
-        self.base.world_manager.process_delivered_commands();
+        self.base.send.world_manager.process_delivered_commands();
     }
 }

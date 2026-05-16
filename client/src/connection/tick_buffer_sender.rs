@@ -73,6 +73,7 @@ impl TickBufferSender {
         has_written: &mut bool,
     ) {
         let mut converter = connection
+            .send
             .world_manager
             .entity_converter_mut(global_world_manager);
 
