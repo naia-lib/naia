@@ -25,19 +25,23 @@
 //! the locked fields under this order.
 
 use std::{
-    collections::VecDeque,
+    collections::{HashMap, VecDeque},
     hash::Hash,
     marker::PhantomData,
+    net::SocketAddr,
     sync::Arc,
 };
 
-use parking_lot::Mutex;
+use parking_lot::{Mutex, RwLock};
 
 use naia_shared::{
     ChannelKinds, ComponentKinds, EntityAuthStatus, GlobalDirtyBitset, GlobalEntity, MessageKinds,
 };
 
-use crate::{server::scope_change::ScopeChange, ServerConfig, UserKey};
+use crate::{
+    server::{connection_shared::ConnectionShared, scope_change::ScopeChange},
+    ServerConfig, UserKey,
+};
 
 /// Cross-thread shared state for the three-stage pipeline.
 ///
@@ -78,6 +82,16 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) pending_auth_grants:
         Mutex<Vec<(UserKey, GlobalEntity, EntityAuthStatus)>>,
 
+    /// Per-connection `ConnectionShared` cells (atomics for ACK/RTT and
+    /// coordinator → recv `should_disconnect` per B4). Outermost lock per
+    /// the LOCK ORDER block above. Populated when a connection is finalized;
+    /// removed when the user disconnects. `RecvConnection` and
+    /// `SendConnection` will each hold a clone of the inner `Arc<>` once
+    /// step 4-C lands the Connection split — the map itself stays here so
+    /// the coordinator and the bevy event-application layer can address
+    /// per-user atomics by `SocketAddr` without touching either state half.
+    pub(crate) connection_shared: RwLock<HashMap<SocketAddr, Arc<ConnectionShared>>>,
+
     _phantom: PhantomData<E>,
 }
 
@@ -101,6 +115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             global_dirty,
             scope_change_queue: Mutex::new(VecDeque::new()),
             pending_auth_grants: Mutex::new(Vec::new()),
+            connection_shared: RwLock::new(HashMap::new()),
             _phantom: PhantomData,
         }
     }

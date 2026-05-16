@@ -27,6 +27,16 @@ pub struct ConnectionShared {
     /// updates on each pong receipt; send reads for retransmit-timing
     /// decisions in `collect_messages`.
     pub rtt_avg_ms: AtomicU32,
+
+    /// Coordinator-initiated disconnect signal (B4). The coordinator
+    /// (e.g. `UserMut::disconnect()`) sets this atomic; the recv thread
+    /// observes it on its next loop iteration and processes the disconnect
+    /// in the usual way (sets `RecvConnection.manual_disconnect = true`,
+    /// pushes a Disconnect event into `incoming_world_events`).
+    ///
+    /// Provides a thread-safe handshake without needing the coordinator
+    /// to reach into `RecvState`.
+    pub should_disconnect: AtomicBool,
 }
 
 impl ConnectionShared {
@@ -37,7 +47,18 @@ impl ConnectionShared {
             remote_ack_bitfield: AtomicU32::new(0),
             should_send_empty_ack: AtomicBool::new(false),
             rtt_avg_ms: AtomicU32::new(0_f32.to_bits()),
+            should_disconnect: AtomicBool::new(false),
         }
+    }
+
+    /// Signals the recv thread to process a coordinator-initiated disconnect (B4).
+    pub fn set_should_disconnect(&self) {
+        self.should_disconnect.store(true, Ordering::Release);
+    }
+
+    /// Returns `true` and clears the flag if a coordinator disconnect is pending.
+    pub fn take_should_disconnect(&self) -> bool {
+        self.should_disconnect.swap(false, Ordering::AcqRel)
     }
 
     // --- Writer API (recv path) ---
