@@ -25,14 +25,19 @@
 //! the locked fields under this order.
 
 use std::{
+    collections::VecDeque,
     hash::Hash,
     marker::PhantomData,
     sync::Arc,
 };
 
-use naia_shared::{ChannelKinds, ComponentKinds, GlobalDirtyBitset, MessageKinds};
+use parking_lot::Mutex;
 
-use crate::ServerConfig;
+use naia_shared::{
+    ChannelKinds, ComponentKinds, EntityAuthStatus, GlobalDirtyBitset, GlobalEntity, MessageKinds,
+};
+
+use crate::{server::scope_change::ScopeChange, ServerConfig, UserKey};
 
 /// Cross-thread shared state for the three-stage pipeline.
 ///
@@ -63,6 +68,16 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// Global dirty bitset — already atomic; recv writes, send reads.
     pub global_dirty: Arc<GlobalDirtyBitset>,
 
+    /// Queue of scope-change events accumulated by coordinator code and
+    /// drained at the top of `send_all_packets`. Mutex held briefly on
+    /// push/drain; no hot-path contention.
+    pub(crate) scope_change_queue: Mutex<VecDeque<ScopeChange>>,
+
+    /// Auth grants deferred one tick to ensure entity registration on the
+    /// client side. Drained at the end of `send_all_packets` Phase 3.
+    pub(crate) pending_auth_grants:
+        Mutex<Vec<(UserKey, GlobalEntity, EntityAuthStatus)>>,
+
     _phantom: PhantomData<E>,
 }
 
@@ -84,6 +99,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             component_kinds,
             client_authoritative_entities,
             global_dirty,
+            scope_change_queue: Mutex::new(VecDeque::new()),
+            pending_auth_grants: Mutex::new(Vec::new()),
             _phantom: PhantomData,
         }
     }

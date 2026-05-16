@@ -4,7 +4,7 @@ use crate::{RoomKey, UserKey};
 
 /// Events that drive scope re-evaluation.
 /// Each variant encodes exactly the (user, entity) pairs that need attention.
-pub(super) enum ScopeChange {
+pub(crate) enum ScopeChange {
     /// User was added to a room — check all entities in that room for this user.
     UserEnteredRoom(UserKey, RoomKey),
     /// User was removed from a room — entities in that room may need despawning.

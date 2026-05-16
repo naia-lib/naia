@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{hash_set::Iter, HashMap, HashSet, VecDeque},
+    collections::{hash_set::Iter, HashMap, HashSet},
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -207,9 +207,6 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     global_response_manager: GlobalResponseManager,
     // Ticks
     time_manager: TimeManager,
-    // Deferred auth grants (one-tick delay to ensure entity registration)
-    pending_auth_grants: Vec<(UserKey, GlobalEntity, EntityAuthStatus)>,
-    scope_change_queue: VecDeque<ScopeChange>,
     // Sender-wide priority layer. Per-user layer stored here keyed by UserKey
     // — see `user_priorities`. Evicted on entity despawn.
     global_priority: GlobalPriorityState<E>,
@@ -306,9 +303,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
             time_manager,
-            // Deferred auth grants
-            pending_auth_grants: Vec::new(),
-            scope_change_queue: VecDeque::new(),
             global_priority: GlobalPriorityState::new(),
             user_priorities: HashMap::new(),
             scope_checks_cache: ScopeChecksCache::new(),
@@ -1040,7 +1034,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         // Flush deferred auth grants (one-tick delay ensures entity registration on client)
-        let pending_grants = std::mem::take(&mut self.pending_auth_grants);
+        let pending_grants = std::mem::take(&mut *self.shared.pending_auth_grants.lock());
         for (owner_user_key, global_entity, _granted_status) in pending_grants {
             // Collect addresses first to avoid borrowing issues
             let user_addresses: Vec<SocketAddr> = self.user_connections.keys().copied().collect();
@@ -2339,11 +2333,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         self.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
-        self.scope_change_queue.push_back(ScopeChange::ScopeToggled(
-            *user_key,
-            global_entity,
-            is_contained,
-        ));
+        self.shared
+            .scope_change_queue
+            .lock()
+            .push_back(ScopeChange::ScopeToggled(
+                *user_key,
+                global_entity,
+                is_contained,
+            ));
     }
 
     pub(crate) fn user_scope_has_entity(&self, user_key: &UserKey, world_entity: &E) -> bool {
@@ -2631,9 +2628,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .entity_get_rooms(global_entity)
                 .map(|rooms| rooms.iter().copied().collect())
                 .unwrap_or_default();
-            for room_key in entity_rooms {
-                self.scope_change_queue
-                    .push_back(ScopeChange::EntityEnteredRoom(*global_entity, room_key));
+            if !entity_rooms.is_empty() {
+                let mut q = self.shared.scope_change_queue.lock();
+                for room_key in entity_rooms {
+                    q.push_back(ScopeChange::EntityEnteredRoom(*global_entity, room_key));
+                }
             }
         }
         result
@@ -3147,9 +3146,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let Self { room_store, user_store, global_entity_map, scope_checks_cache, scope_change_queue, .. } = self;
-        let change = room_store.add_user(room_key, user_key, user_store, global_entity_map, scope_checks_cache);
-        scope_change_queue.push_back(change);
+        let change = {
+            let Self { room_store, user_store, global_entity_map, scope_checks_cache, .. } = &mut *self;
+            room_store.add_user(room_key, user_key, user_store, global_entity_map, scope_checks_cache)
+        };
+        self.shared.scope_change_queue.lock().push_back(change);
     }
 
     /// Removes a User from a Room
@@ -3158,9 +3159,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let Self { room_store, user_store, scope_checks_cache, scope_change_queue, .. } = self;
-        let change = room_store.remove_user(room_key, user_key, user_store, scope_checks_cache);
-        scope_change_queue.push_back(change);
+        let change = {
+            let Self { room_store, user_store, scope_checks_cache, .. } = &mut *self;
+            room_store.remove_user(room_key, user_key, user_store, scope_checks_cache)
+        };
+        self.shared.scope_change_queue.lock().push_back(change);
     }
 
     /// Get a count of Users in a given Room
@@ -3204,9 +3207,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let Self { room_store, global_entity_map, entity_room_map, scope_checks_cache, scope_change_queue, .. } = self;
-        if let Some(change) = room_store.add_entity(room_key, world_entity, global_entity_map, entity_room_map, scope_checks_cache) {
-            scope_change_queue.push_back(change);
+        let change_opt = {
+            let Self { room_store, global_entity_map, entity_room_map, scope_checks_cache, .. } = &mut *self;
+            room_store.add_entity(room_key, world_entity, global_entity_map, entity_room_map, scope_checks_cache)
+        };
+        if let Some(change) = change_opt {
+            self.shared.scope_change_queue.lock().push_back(change);
         }
     }
 
@@ -3764,7 +3770,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn drain_scope_change_queue<W: WorldRefType<E>>(&mut self, world: &W) {
         // Snapshot the queue so we can re-borrow self mutably for apply_scope_for_user.
-        let changes: Vec<ScopeChange> = self.scope_change_queue.drain(..).collect();
+        let changes: Vec<ScopeChange> = self.shared.scope_change_queue.lock().drain(..).collect();
         for change in changes {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
@@ -3875,7 +3881,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         if !world.has_entity(&world_entity) {
             // Entity not yet spawned in Bevy (deferred commands still pending).
             // Re-queue so we retry next frame instead of permanently losing the scope change.
-            self.scope_change_queue
+            self.shared
+                .scope_change_queue
+                .lock()
                 .push_back(ScopeChange::ScopeToggled(*user_key, *global_entity, true));
             return;
         }
@@ -4102,7 +4110,7 @@ cfg_if! {
 
             #[doc(hidden)]
             pub fn scope_change_queue_len(&self) -> usize {
-                self.scope_change_queue.len()
+                self.shared.scope_change_queue.lock().len()
             }
 
             #[doc(hidden)]
