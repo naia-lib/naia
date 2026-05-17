@@ -1,6 +1,6 @@
 use std::{
     any::Any,
-    collections::{hash_set::Iter, HashMap, HashSet},
+    collections::{hash_set::Iter, HashMap},
     hash::Hash,
     net::SocketAddr,
     panic,
@@ -11,29 +11,25 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    AuthorityError, BitWriter, Channel, ChannelKind, ConnectionStats, DisconnectReason,
+    AuthorityError, Channel, ChannelKind, ConnectionStats, DisconnectReason,
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
-    GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
-    GlobalRequestId, GlobalResponseId, OutgoingPacket, OutgoingPriorityHook, SnapshotMap,
-    UserPriorityState, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer,
-    PacketType, Protocol, Replicate, ReplicatedComponent, Request,
-    ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, Serde,
+    GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState,
+    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, Protocol, Replicate, ReplicatedComponent, Request,
+    ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey,
     SharedGlobalWorldManager, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{
         connection::new_connection_pair,
-        io::{new_io_pair, SendIo},
-        send_connection::SendConnection,
+        io::new_io_pair,
         tick_buffer_messages::TickBufferMessages,
     },
     events::{world_events::WorldEvents, TickEvents},
     request::{GlobalRequestManager, GlobalResponseManager},
     room::Room,
     server::scope_checks_cache::ScopeChecksCache,
-    time_manager::TimeManager,
     transport::{PacketReceiver, PacketSender},
     world::{
         entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,
@@ -136,40 +132,6 @@ pub static SERVER_WORLD_MSGS_DRAINED: AtomicUsize = AtomicUsize::new(0);
 pub static SERVER_WROTE_SET_AUTH: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_WORLD_PKTS_SENT: AtomicUsize = AtomicUsize::new(0);
-
-/// Adapter that bridges the `OutgoingPriorityHook` trait (keyed by
-/// `GlobalEntity`) to the per-user `UserPriorityState<E>` plus the read-only
-/// `GlobalPriorityState<E>` layer. Constructed per-connection inside
-/// `send_all_packets` from split-borrowed disjoint fields on `WorldServer`.
-///
-/// `advance` returns `effective_gain = global.gain × user.gain` (defaults 1.0)
-/// added cumulatively into the user-layer accumulator — the canonical rule
-/// from PRIORITY_ACCUMULATOR_PLAN.md III.7.1.
-struct WorldServerPriorityHook<'a, E: Copy + Eq + Hash + Send + Sync> {
-    global: &'a GlobalPriorityState<E>,
-    user: &'a mut UserPriorityState<E>,
-    converter: &'a GlobalEntityMap<E>,
-}
-
-impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook
-    for WorldServerPriorityHook<'a, E>
-{
-    fn advance(&mut self, entity: &GlobalEntity) -> f32 {
-        let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
-            return 0.0;
-        };
-        let g = self.global.gain_override(&world_entity).unwrap_or(1.0);
-        let u = self.user.gain_override(&world_entity).unwrap_or(1.0);
-        self.user.advance(world_entity, g * u)
-    }
-
-    fn reset_after_send(&mut self, entity: &GlobalEntity, current_tick: u32) {
-        let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
-            return;
-        };
-        self.user.reset_after_send(&world_entity, current_tick);
-    }
-}
 
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
@@ -441,24 +403,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 continue;
             };
             self.finalize_connection(&user_key, &address);
-        }
-    }
-
-    /// 4-F.naia.c.1: drain `shared.pending_outbound_packets` and emit each
-    /// packet via `send.send_io`. Recv path pushes Handshake Connect
-    /// Responses + Ping Pong responses here because it cannot touch
-    /// `SendState::send_io` in pipeline mode. Drained at the top of
-    /// `send_all_packets`.
-    pub(crate) fn flush_pending_outbound_packets(&mut self) {
-        let pending: Vec<(SocketAddr, naia_shared::OutgoingPacket)> =
-            std::mem::take(&mut *self.shared.pending_outbound_packets.lock());
-        for (address, packet) in pending {
-            if self.send.send_io.send_packet(&address, packet).is_err() {
-                warn!(
-                    "Server Error: cannot flush queued outbound packet to {}",
-                    address
-                );
-            }
         }
     }
 
@@ -953,288 +897,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// already exists post-4-C.1; verify the mirror is in sync before
     /// landing 4-F.naia.h.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
-        #[cfg(feature = "e2e_debug")]
-        {
-            SERVER_SEND_ALL_PACKETS_CALLS.fetch_add(1, Ordering::Relaxed);
-        }
-        let now = Instant::now();
-
-        // Zero per-tick byte counter so outgoing_bytes_last_tick() reports
-        // only the bytes sent during THIS tick (readable after send_packets).
-        self.send.send_io.reset_outgoing_bytes_this_tick();
-
-        // 4-F.naia.b: preamble (publish global_priority + scope/queue drain +
-        // pending_auth_grants flush) is factored into `run_send_preamble`.
-        // Today it runs inline at the top of `send_all_packets`; once the
-        // 4-F.cyberlith.e coordinator wires the 12-step sequence, that
-        // coordinator will call `run_send_preamble` directly before kicking
-        // the send thread (and `send_all_packets` will skip the inline call).
+        // 4-F.naia.h: send-half body lives on `SendState::send_all_packets`.
+        // The serial / cyberlith.d coordinator entry point preserves the
+        // original behavior by running the coord-stage preamble inline
+        // and then delegating the send-side work. The 4-F.cyberlith.e
+        // multi-thread coordinator will instead call `run_send_preamble`
+        // on the coord thread and `SendHandle::send_all_packets` on the
+        // send thread (with a sync barrier between them).
         self.run_send_preamble(&world);
-
-        // 4-F.naia.c.1: flush queued outbound packets (handshake responses,
-        // pong responses) that the recv path enqueued because it cannot
-        // touch `SendState::send_io` in pipeline mode.
-        self.flush_pending_outbound_packets();
-
-        // 4-F.naia.c.2a: periodic send-side maintenance — heartbeats and
-        // empty-ack carriers. Both touch only `send.send_user_connections`
-        // + `send.send_io` + `shared.time_manager.read()`, so they live in
-        // the send path now (relocated from `receive_all_packets`).
-        self.handle_heartbeats();
-        self.handle_empty_acks();
-
-        // Collect and shuffle user addresses for fair priority ordering.
-        let mut user_addresses: Vec<SocketAddr> =
-            self.send.send_user_connections.keys().copied().collect();
-        fastrand::shuffle(&mut user_addresses);
-
-        // ── Iris Phase 1+2: Global dirty scan + UserDependent snapshot ──────────
-        // Iterate dirty entities once for all users. Build SnapshotMap for
-        // UserDependent (EntityProperty) components so Phase 3 reads the snapshot,
-        // not ECS, achieving O(1) ECS reads per dirty component per tick.
-        #[cfg(feature = "bench_instrumentation")]
-        let _iris_p12_t0 = std::time::Instant::now();
-
-        let mut snapshot_map: SnapshotMap = SnapshotMap::new();
-        {
-            let handler = self.shared.global_world_manager.read().diff_handler();
-            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-            // 4-E.2c: one read guard for the whole dirty-entity scan loop.
-            // Hot path — RwLock acquisition cost amortized over every dirty entity.
-            let idx_to_world = self.shared.idx_to_world.read();
-            for global_idx in self.shared.global_dirty.dirty_entity_iter() {
-                // Option B wire-cache invalidation: clear this entity's PATH A cache
-                // before Phase 3 re-serializes, ensuring no stale bytes reach the wire.
-                guard.clear_wire_cache_for_entity(global_idx);
-                let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
-                if !self.shared.global_world_manager.read().entity_is_replicating(&global_entity) { continue; }
-                let Some(world_entity) = idx_to_world[global_idx.as_usize()] else { continue; };
-                if !world.has_entity(&world_entity) { continue; }
-
-                for (word_idx, dirty_word) in self.shared.global_dirty.dirty_words(global_idx).iter().enumerate() {
-                    let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
-                    while word != 0 {
-                        let bit_pos = word.trailing_zeros() as usize;
-                        word &= word - 1;
-                        let kind_bit = (word_idx * 64 + bit_pos) as u16;
-                        let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
-                        if !world.has_component_of_kind(&world_entity, &component_kind) { continue; }
-
-                        // O(1) array access via per-entity ComponentFlags —
-                        // replaces the ComponentKinds HashSet lookup.
-                        if guard.is_component_user_dependent(global_idx, kind_bit).unwrap_or(false) {
-                            let snap = world
-                                .component_of_kind(&world_entity, &component_kind)
-                                .expect("component verified above")
-                                .copy_to_box();
-                            snapshot_map.insert((global_entity, component_kind), snap);
-                        }
-                    }
-                }
-            }
-        } // guard and handler Arc drop here, releasing the read lock
-
-        #[cfg(feature = "bench_instrumentation")]
-        bench_iris_counters::NS_PHASE12.fetch_add(
-            _iris_p12_t0.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-
-        // ── Iris Phase 3A: serial — build per-user update_events ────────────────
-        // Immutable borrows only. All users' events are built here before
-        // any mutable borrow is taken, so the RwLock guard can be dropped
-        // before the parallel build phase begins.
-        #[cfg(feature = "bench_instrumentation")]
-        let _iris_p3a_t0 = std::time::Instant::now();
-
-        type UpdateEvents = HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)>;
-        let mut update_events_by_addr: HashMap<SocketAddr, UpdateEvents> = HashMap::new();
-        {
-            let handler = self.shared.global_world_manager.read().diff_handler();
-            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-            for user_address in &user_addresses {
-                let send_conn = self.send.send_user_connections.get(user_address).unwrap();
-                let mut events: UpdateEvents = HashMap::new();
-
-                for global_idx in send_conn.visibility.intersect_dirty(&*self.shared.global_dirty) {
-                    let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
-                    #[cfg(feature = "bench_instrumentation")]
-                    bench_iris_counters::N_PHASE3_ENTITY_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-                    for (word_idx, dirty_word) in self.shared.global_dirty.dirty_words(global_idx).iter().enumerate() {
-                        let mut word = dirty_word.load(std::sync::atomic::Ordering::Relaxed);
-                        while word != 0 {
-                            let bit_pos = word.trailing_zeros() as usize;
-                            word &= word - 1;
-                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
-                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
-                            #[cfg(feature = "bench_instrumentation")]
-                            bench_iris_counters::N_PHASE3_COMPONENT_VISITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-
-                            if send_conn.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
-                                // fast path: dirty + delivered
-                            } else if send_conn.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
-                                continue;
-                            } else if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
-                                continue;
-                            }
-
-                            events.entry(global_entity)
-                                .or_insert_with(|| (global_idx, HashMap::new()))
-                                .1.insert(component_kind, kind_bit);
-                        }
-                    }
-                }
-                update_events_by_addr.insert(*user_address, events);
-            }
-        } // guard + handler Arc drop here — RwLock released before parallel phase
-
-        // Pre-populate user_priorities for all users (requires &mut, must be serial).
-        for user_address in &user_addresses {
-            let send_conn = self.send.send_user_connections.get(user_address).unwrap();
-            self.send.user_priorities.entry(send_conn.user_key).or_default();
-        }
-
-        #[cfg(feature = "bench_instrumentation")]
-        bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
-            _iris_p3a_t0.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-
-        // ── Iris Phase 3B: parallel — build packets per user ─────────────────────
-        // Temporarily move each Connection and UserPriorityState out of their
-        // HashMaps so rayon tasks get exclusive owned access — no unsafe needed.
-        // Both are re-inserted after collect() returns. Cost: O(N) HashMap ops,
-        // negligible vs the parallelised packet-build work.
-        // 4-E.2d: Iris par_iter now moves SendConnection (the half that
-        // owns base.message_manager + base.world_manager + visibility).
-        // RTT is supplied per-task from the matching RecvConnection so
-        // SendConnection can run without reaching across the boundary.
-        let work: Vec<(SocketAddr, UpdateEvents, SendConnection, UserPriorityState<E>, f32)> =
-            user_addresses.iter()
-            .filter_map(|addr| {
-                let send_conn = self.send.send_user_connections.remove(addr)?;
-                let user_key = send_conn.user_key;
-                let user_prio = self.send.user_priorities.remove(&user_key)
-                    .unwrap_or_default();
-                let events = update_events_by_addr.remove(addr)
-                    .unwrap_or_default();
-                let rtt_millis = self.recv.recv_user_connections.get(addr)
-                    .map(|r| r.ping_manager.rtt_average)
-                    .unwrap_or(0.0);
-                Some((*addr, events, send_conn, user_prio, rtt_millis))
-            })
-            .collect();
-
-        // Shared immutable borrows — valid since user_connections/priorities are empty.
-        let channel_kinds     = &self.shared.channel_kinds;
-        let message_kinds     = &self.shared.message_kinds;
-        let component_kinds   = &self.shared.component_kinds;
-        // 4-F.naia.a: hold a read guard for the whole par_iter scope
-        // alongside the other shared-state guards below. `&*gwm_guard`
-        // is `Sync`, safe to capture into rayon tasks.
-        let gwm_guard         = self.shared.global_world_manager.read();
-        let gwm: &GlobalWorldManager = &*gwm_guard;
-        // 4-E.2c: hold the global_entity_map + idx_to_world read guards for
-        // the whole par_iter scope. `&*<guard>` is a `Sync` reference safe
-        // to capture into each rayon task. The recv path's only writers
-        // (spawn / despawn / register_remote_entity) run from
-        // `receive_all_packets` / coordinator code, which never overlaps
-        // `send_all_packets` inside a single tick.
-        let global_entity_map_guard = self.shared.global_entity_map.read();
-        let global_entity_map: &GlobalEntityMap<E> = &*global_entity_map_guard;
-        let idx_to_world_guard = self.shared.idx_to_world.read();
-        let idx_to_world: &Vec<Option<E>> = &*idx_to_world_guard;
-        // 4-E.2b: hold the time_manager read guard for the whole par_iter
-        // scope. `&*time_manager_guard` is `&TimeManager` (Sync), safe to
-        // capture into each rayon task. The send thread is the only reader
-        // here; the recv thread's single write site runs in `take_tick_events`
-        // and would block briefly on this guard — but `send_all_packets`
-        // and `take_tick_events` never overlap inside a single tick.
-        let time_manager_guard = self.shared.time_manager.read();
-        let time_manager: &TimeManager = &*time_manager_guard;
-        // 4-E.2e: read the send-thread-authoritative copy. The publish
-        // step at the top of this method just refreshed it from
-        // `coord.global_priority_mirror`.
-        let global_priority   = &self.send.global_priority;
-        let snapshot_map_ref  = &snapshot_map;
-
-        #[cfg(feature = "bench_instrumentation")]
-        let _iris_p3b_t0 = std::time::Instant::now();
-
-        use rayon::prelude::*;
-        let results: Vec<(SocketAddr, Vec<OutgoingPacket>, SendConnection, UserPriorityState<E>)> =
-            work.into_par_iter()
-            .map(|(addr, mut update_events, mut send_conn, mut user_prio, rtt_millis)| {
-                let mut hook = WorldServerPriorityHook {
-                    global: global_priority,
-                    user: &mut user_prio,
-                    converter: global_entity_map,
-                };
-
-                let initial_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
-                let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashMap<ComponentKind, u16>)> =
-                    update_events.drain()
-                        .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
-                        .collect();
-                scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-                let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> =
-                    scored.into_iter()
-                        .filter_map(|(ge, idx, _, kinds)| {
-                            idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
-                        })
-                        .collect();
-
-                let (packets, _) = send_conn.build_all_packets(
-                    channel_kinds,
-                    message_kinds,
-                    component_kinds,
-                    &now,
-                    &world,
-                    global_entity_map,
-                    gwm,
-                    time_manager,
-                    rtt_millis,
-                    &mut update_list,
-                    snapshot_map_ref,
-                );
-
-                // Priority reset for fully-sent entities (hook still alive here).
-                let current_tick = time_manager.current_tick();
-                let remaining: HashSet<GlobalEntity> =
-                    update_list.iter().map(|(ge, _, _, _)| *ge).collect();
-                for ge in &initial_entities {
-                    if !remaining.contains(ge) {
-                        hook.reset_after_send(ge, current_tick as u32);
-                    }
-                }
-                // hook dropped here; user_prio borrow ends
-
-                (addr, packets, send_conn, user_prio)
-            })
-            .collect();
-
-        #[cfg(feature = "bench_instrumentation")]
-        bench_iris_counters::NS_PHASE3_SORT.fetch_add(
-            _iris_p3b_t0.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
-
-        // ── Serial flush + re-insert ──────────────────────────────────────────────
-        // Re-insert send connections after parallel build, then flush
-        // packets via IO. `send.send_io.send_packet()` updates
-        // outgoing_bytes_this_tick and bandwidth monitor.
-        for (addr, packets, send_conn, user_prio) in results {
-            let user_key = send_conn.user_key;
-            self.send.send_user_connections.insert(addr, send_conn);
-            self.send.user_priorities.insert(user_key, user_prio);
-            for packet in packets {
-                if self.send.send_io.send_packet(&addr, packet).is_err() {
-                    warn!("Server Error: Cannot send data packet to {}", addr);
-                }
-            }
-        }
-
+        self.send.send_all_packets(world);
     }
 
     /// 4-F.naia.b: coordinator-side preamble for the send phase. Runs
@@ -3863,77 +3534,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    // 4-F.naia.c.2c: `handle_pings` moved to `SendState::send_pings`,
-    // which takes `&mut HashMap<SocketAddr, RecvConnection>` for the
-    // per-user `ping_manager.write_ping(...)` borrow into the recv half.
-    // The ping_timer also lives on `SendState` now (relocated from
-    // `RecvState`) — every other piece of ping dispatch (header /
-    // `send_io` / `mark_sent`) was already send-side.
-
-    fn handle_heartbeats(&mut self) {
-        // heartbeats — send-side only after dissolution (header reads from
-        // the shared ACK atomic). 4-F.naia.c.2a: timer moved to `SendState`
-        // alongside the rest of the send-side state this method touches.
-        if self.send.heartbeat_timer.ringing() {
-            self.send.heartbeat_timer.reset();
-
-            let tm_guard = self.shared.time_manager.read();
-            let tm: &TimeManager = &*tm_guard;
-            for (user_address, send_conn) in &mut self.send.send_user_connections.iter_mut() {
-                if send_conn.base.should_send_heartbeat() {
-                    Self::send_heartbeat_packet(
-                        user_address,
-                        send_conn,
-                        tm,
-                        &mut self.send.send_io,
-                    );
-                }
-            }
-        }
-    }
-
-    fn send_heartbeat_packet(
-        user_address: &SocketAddr,
-        send_conn: &mut SendConnection,
-        time_manager: &TimeManager,
-        io: &mut SendIo,
-    ) {
-        let mut writer = BitWriter::new();
-
-        // write header (reads ack snapshot via shared atomic)
-        let _header = send_conn.write_header(PacketType::Heartbeat, &mut writer);
-
-        // write server tick
-        time_manager.current_tick().ser(&mut writer);
-        time_manager.current_tick_instant().ser(&mut writer);
-
-        // send packet
-        if io.send_packet(user_address, writer.to_packet()).is_err() {
-            // Heartbeat send failure is not fatal: the connection timeout
-            // will detect a persistently dead link when heartbeats stop arriving.
-            warn!(
-                "Server Error: Cannot send heartbeat packet to {}",
-                user_address
-            );
-        }
-        send_conn.base.mark_sent();
-    }
-
-    fn handle_empty_acks(&mut self) {
-        // empty acks
-        let tm_guard = self.shared.time_manager.read();
-        let tm: &TimeManager = &*tm_guard;
-        for (user_address, send_conn) in &mut self.send.send_user_connections.iter_mut() {
-            if send_conn.base.should_send_empty_ack() {
-                Self::send_heartbeat_packet(
-                    user_address,
-                    send_conn,
-                    tm,
-                    &mut self.send.send_io,
-                );
-            }
-        }
-    }
 
     // Entity Scopes
 

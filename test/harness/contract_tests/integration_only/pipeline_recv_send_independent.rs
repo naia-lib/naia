@@ -20,15 +20,15 @@
 //! Step 4-F.naia.c.3 adds the `pipeline_recv_send_threads_overlap` test
 //! below: spawns a recv thread and a send thread against the bare
 //! handles (no bevy world involved), records per-iteration `Instant`s,
-//! and asserts > 50% of recv iterations temporally overlap with at
-//! least one send iteration. The send-side work goes through
-//! `SendHandle::send_pings` + `SendHandle::process_recv_packets` —
-//! both real send-side-pure methods landed in c.2b/c.2c. The full
-//! `SendHandle::send_all_packets` extraction is deferred to the
-//! 4-F.cyberlith.e coordinator step (it requires factoring out
-//! `run_send_preamble` from the body and snapshotting per-user RTT
-//! values across the recv/send boundary); the overlap test does not
-//! need it to prove the structural concurrency claim.
+//! and asserts the two threads' active windows overlap > 50% on
+//! wall-clock. As of step 4-F.naia.h the send-side work goes through
+//! the real `SendHandle::send_all_packets` (driven by an empty
+//! `WorldRefType<u64>` stub since the test has zero clients and zero
+//! entities — Iris does no work but the full code path runs). The
+//! `run_send_preamble` cross-half access has been fully resolved:
+//! recv-side RTT is mirrored into `ConnectionShared::rtt_avg_ms` at
+//! pong-receipt time so the send-half reads from the atomic without
+//! touching `recv_user_connections`.
 
 #![allow(unused_imports)]
 
@@ -210,25 +210,39 @@ fn pipeline_recv_send_independent() {
     _assert_handles_send_safe();
 }
 
-/// 4-F.naia.c.3 — > 50% temporal-overlap assertion across a 100-tick
-/// window. Proves that `RecvHandle::receive` and the send-side handle
-/// methods can actually run on independent threads at the same time
-/// (the structural concurrency guarantee that 4-F.naia.c was always
-/// building toward).
+/// 4-F.naia.c.3 + 4-F.naia.h — active-window overlap assertion across
+/// a 50ms wall-clock window. Proves that `RecvHandle::receive` and
+/// `SendHandle::send_all_packets` can run on independent threads at
+/// the same time (the structural concurrency guarantee that 4-F.naia.c
+/// + 4-F.naia.h were building toward).
 ///
-/// **Why the send side calls `send_pings` + `process_recv_packets`
-/// rather than a `send_all_packets`-shaped routine.** The Iris loop's
-/// per-user `rtt_millis` snapshot still reads from `recv.recv_user_connections`
-/// directly (see `world_server.rs` ~L1049); lifting that read off the
-/// recv-half is a non-trivial follow-up that belongs to the cyberlith.e
-/// coordinator step. The methods used here are 100% send-side-pure: the
-/// recv-side borrow is satisfied entirely by the `&mut recv_conns`
-/// parameter on each call, which the send thread owns its own copy of
-/// (an empty `HashMap` — the test isn't measuring delivered packets, it's
-/// measuring whether the two threads make forward progress concurrently).
+/// **Why an `EmptyWorld<u64>` stub.** The test isn't measuring
+/// delivered packets — it's measuring whether the two threads make
+/// forward progress concurrently. With zero clients connected and zero
+/// entities spawned, `SendState::send_all_packets`'s Iris loop iterates
+/// nothing and the rayon par_iter has nothing to do; the call still
+/// exercises every coord-stage-free code path (handshake/pong flush,
+/// heartbeats, empty-acks, Phase 1+2 dirty scan over an empty bitset).
+/// Empty `WorldRefType<u64>` impl for the overlap test. The test runs
+/// with zero clients and zero entities so every method's "not found"
+/// path is the only one exercised.
+struct EmptyWorld;
+
+impl naia_shared::WorldRefType<u64> for EmptyWorld {
+    fn has_entity(&self, _world_entity: &u64) -> bool { false }
+    fn entities(&self) -> Vec<u64> { Vec::new() }
+    fn has_component<R: naia_shared::ReplicatedComponent>(&self, _e: &u64) -> bool { false }
+    fn has_component_of_kind(&self, _e: &u64, _k: &naia_shared::ComponentKind) -> bool { false }
+    fn component<'a, R: naia_shared::ReplicatedComponent>(
+        &'a self, _e: &u64,
+    ) -> Option<naia_shared::ReplicaRefWrapper<'a, R>> { None }
+    fn component_of_kind<'a>(
+        &'a self, _e: &u64, _k: &naia_shared::ComponentKind,
+    ) -> Option<naia_shared::ReplicaDynRefWrapper<'a>> { None }
+}
+
 #[test]
 fn pipeline_recv_send_threads_overlap() {
-    use std::collections::HashMap;
     use std::sync::Arc;
     use std::time::{Duration, Instant};
 
@@ -285,13 +299,15 @@ fn pipeline_recv_send_threads_overlap() {
     });
 
     let send_thread = std::thread::spawn(move || {
-        let mut recv_conns_stub: HashMap<std::net::SocketAddr, _> = HashMap::new();
         let mut spans: Vec<(Instant, Instant)> = Vec::with_capacity(2000);
         barrier_send.wait();
         let deadline = Instant::now() + window;
         while Instant::now() < deadline {
             let start = Instant::now();
-            send_handle.send_pings(&mut recv_conns_stub);
+            // 4-F.naia.h: the real send-half routine now drives the test.
+            // `EmptyWorld` is `Sync` (no fields) and works for the zero-
+            // client / zero-entity case the test exercises.
+            send_handle.send_all_packets(EmptyWorld);
             let end = Instant::now();
             spans.push((start, end));
         }

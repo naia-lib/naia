@@ -107,6 +107,10 @@ pub fn new_connection_pair(
         base_recv,
         Arc::clone(&shared),
     );
+    // 4-F.naia.h: seed the cross-half RTT atomic with the same initial
+    // estimate PingManager uses, so the send half reads a sensible value
+    // for retransmit-timing decisions before the first pong arrives.
+    shared.set_rtt_avg_ms(recv.ping_manager.rtt_average);
     let send = SendConnection::new(
         *user_address,
         *user_key,

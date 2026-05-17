@@ -50,7 +50,7 @@
 
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
-use naia_shared::{Instant, Tick};
+use naia_shared::{Instant, Tick, WorldRefType};
 
 use crate::{
     connection::RecvConnection,
@@ -150,5 +150,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
             pending_data_packets,
             server_tick,
         );
+    }
+
+    /// Pipeline-mode send-half tick body (step 4-F.naia.h).
+    ///
+    /// Thin wrapper that forwards to [`SendState::send_all_packets`].
+    /// Called by the 4-F.cyberlith.e coordinator on the send thread AFTER
+    /// the coord thread has called `WorldServer::run_send_preamble` on
+    /// the reassembled server (or, once the coord/send split is taken
+    /// further, after a coord-side equivalent of the preamble runs).
+    ///
+    /// The world snapshot passed in must outlive the call. Today the
+    /// only `WorldRefType + Sync` implementation that crosses thread
+    /// boundaries is bevy's `world.proxy()`; if cyberlith.e finds it
+    /// is not actually `Send`-safe to move across threads, the send
+    /// thread will instead need a cheap clone of the relevant subset
+    /// before this call. The signature here matches the serial
+    /// `SendState::send_all_packets` shape exactly so the two paths
+    /// remain interchangeable.
+    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        self.state.send_all_packets(world);
     }
 }

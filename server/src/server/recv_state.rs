@@ -203,6 +203,13 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 recv_conn.process_incoming_header(&header);
                                 let tm = self.shared.time_manager.read();
                                 recv_conn.ping_manager.process_pong(&*tm, &mut reader);
+                                // 4-F.naia.h: mirror the recv-side RTT EMA into
+                                // `ConnectionShared::rtt_avg_ms` so the send half
+                                // (Iris Phase 3B in `SendState::send_all_packets`)
+                                // can read RTT without touching `recv_user_connections`.
+                                recv_conn
+                                    .shared
+                                    .set_rtt_avg_ms(recv_conn.ping_manager.rtt_average);
                             }
                             continue;
                         }
