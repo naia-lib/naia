@@ -247,10 +247,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         let recv = crate::server::RecvState::new(Arc::clone(&shared), recv_io);
 
+        let heartbeat_interval = shared.server_config.connection.heartbeat_interval;
         let send = crate::server::SendState {
             send_user_connections: HashMap::new(),
             user_priorities: HashMap::new(),
             global_priority: GlobalPriorityState::new(),
+            heartbeat_timer: naia_shared::Timer::new(heartbeat_interval),
             send_io,
             shared: Arc::clone(&shared),
         };
@@ -380,8 +382,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         self.handle_disconnects();
         self.handle_pings();
-        self.handle_heartbeats();
-        self.handle_empty_acks();
+        // 4-F.naia.c.2a: handle_heartbeats + handle_empty_acks now run at
+        // the top of `send_all_packets` (after the outbound-packet flush,
+        // before Iris). They touch only `send.*` + `shared.time_manager`,
+        // so keeping them in the recv path would have blocked the c.2b
+        // RecvHandle::receive split. See spec §4-F.naia.c.2 for context.
 
         let mut received_addresses = HashSet::new();
 
@@ -997,6 +1002,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // pong responses) that the recv path enqueued because it cannot
         // touch `SendState::send_io` in pipeline mode.
         self.flush_pending_outbound_packets();
+
+        // 4-F.naia.c.2a: periodic send-side maintenance — heartbeats and
+        // empty-ack carriers. Both touch only `send.send_user_connections`
+        // + `send.send_io` + `shared.time_manager.read()`, so they live in
+        // the send path now (relocated from `receive_all_packets`).
+        self.handle_heartbeats();
+        self.handle_empty_acks();
 
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =
@@ -4025,9 +4037,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn handle_heartbeats(&mut self) {
         // heartbeats — send-side only after dissolution (header reads from
-        // the shared ACK atomic).
-        if self.recv.heartbeat_timer.ringing() {
-            self.recv.heartbeat_timer.reset();
+        // the shared ACK atomic). 4-F.naia.c.2a: timer moved to `SendState`
+        // alongside the rest of the send-side state this method touches.
+        if self.send.heartbeat_timer.ringing() {
+            self.send.heartbeat_timer.reset();
 
             let tm_guard = self.shared.time_manager.read();
             let tm: &TimeManager = &*tm_guard;

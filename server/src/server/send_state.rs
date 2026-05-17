@@ -13,7 +13,7 @@
 
 use std::{collections::HashMap, hash::Hash, net::SocketAddr, sync::Arc};
 
-use naia_shared::{GlobalPriorityState, UserPriorityState};
+use naia_shared::{GlobalPriorityState, Timer, UserPriorityState};
 
 use crate::{
     connection::{io::SendIo, SendConnection},
@@ -40,6 +40,13 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// the `SendStateUpdate` queue. A later commit can rewire that path
     /// (the `SendStateUpdate::PriorityChanged` variant is already defined).
     pub global_priority: GlobalPriorityState<E>,
+
+    /// Periodic heartbeat send cadence (relocated from `RecvState` in
+    /// 4-F.naia.c.2a). Fires when `handle_heartbeats` should sweep every
+    /// `send_user_connection` for an outbound heartbeat packet — entirely
+    /// send-side state, so it lives here now that the send half drives
+    /// the dispatch loop.
+    pub(crate) heartbeat_timer: Timer,
 
     /// Send half of the transport (step 4-E.2a). Carries the encoder,
     /// outgoing bandwidth monitor, and per-tick byte counter alongside
