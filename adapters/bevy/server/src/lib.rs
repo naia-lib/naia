@@ -106,6 +106,7 @@ mod server;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
+pub use apply_receive_output::apply_receive_output_pipeline;
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;

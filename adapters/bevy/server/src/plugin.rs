@@ -71,19 +71,28 @@ pub struct Plugin {
     /// `Update` — the coordinator invokes `run_schedule(Update)` between the
     /// `PhysicsSyncSchedule` and the send kick.
     pipeline: bool,
+    /// `types_and_sets_only` mode (Phase B.7 of MISSION_SIM_OWNS_WORLD).
+    /// When `true`, the plugin registers shared types + message types +
+    /// `ComponentEventRegistry` + system sets + `world_to_host_sync`, but
+    /// SKIPS constructing the `ServerImpl` resource. The caller installs
+    /// `CoordHandle`/`RecvHandle`/`SendHandle` separately via
+    /// `naia_server::pipeline_actors::spawn_server_handles` and drives the
+    /// recv/apply/send phases through `apply_receive_output_pipeline` +
+    /// `apply_recv_to_world`.
+    state_external: bool,
 }
 
 impl Plugin {
     /// Creates the plugin with the given server configuration and protocol.
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, false, false)
+        Self::new_impl(server_config, protocol, false, false, false)
     }
 
     /// World-only variant. Skips full `Server` setup (auth, accept_connection,
     /// etc.) and registers a `WorldServer` instead. Used by services that
     /// proxy connections (e.g., the game cell behind a session server).
     pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, false)
+        Self::new_impl(server_config, protocol, true, false, false)
     }
 
     /// Pipeline + world-only variant (Phase 4 capacity uplift). Builds the
@@ -93,7 +102,20 @@ impl Plugin {
     /// systems (`HostSyncOwnedAddedTracking`, `HostSyncChangeTracking`,
     /// `WorldToHostSync`) remain in `Update`.
     pub fn world_only_pipeline(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true)
+        Self::new_impl(server_config, protocol, true, true, false)
+    }
+
+    /// Phase B.7 variant: installs shared types + system sets +
+    /// `world_to_host_sync` but does NOT construct a `ServerImpl`. Used
+    /// by the SubApp pipeline coordinator (cyberlith) which installs
+    /// `CoordHandle`/`RecvHandle`/`SendHandle` via `spawn_server_handles`
+    /// and drives recv/apply/send via the `apply_*_pipeline` family.
+    ///
+    /// `server_config` is unused by this variant (no `ServerImpl` is
+    /// built) but kept in the signature for symmetry with the other
+    /// constructors; callers may pass `ServerConfig::default()`.
+    pub fn types_and_sets_only(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, true, true, true)
     }
 
     fn new_impl(
@@ -101,12 +123,14 @@ impl Plugin {
         protocol: Protocol,
         world_only: bool,
         pipeline: bool,
+        state_external: bool,
     ) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
             config: Mutex::new(Some(config)),
             world_only,
             pipeline,
+            state_external,
         }
     }
 }
@@ -119,21 +143,34 @@ impl PluginType for Plugin {
         world_data.add_systems(app);
         app.insert_resource(world_data);
 
-        let server_impl = if !self.world_only {
+        // Phase B.7: types_and_sets_only skips constructing the
+        // ServerImpl resource. The caller installs CoordHandle /
+        // RecvHandle / SendHandle via `spawn_server_handles` and drives
+        // recv/apply/send through the `apply_*_pipeline` entry points.
+        let server_impl = if self.state_external {
+            // Still need to consume `config.protocol` so the downstream
+            // `take_world_data` (above) is the only consumer; nothing
+            // else to do here.
+            let _ = config.server_config;
+            None
+        } else if !self.world_only {
             let server = Server::<Entity>::new(config.server_config, config.protocol.into());
-            ServerImpl::full(server)
+            Some(ServerImpl::full(server))
         } else {
             let protocol: NaiaProtocol = config.protocol.into();
             let server = WorldServer::<Entity>::new(config.server_config, protocol);
-            ServerImpl::world_only(server)
+            Some(ServerImpl::world_only(server))
         };
 
         app
             // SHARED PLUGIN //
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
-            .insert_resource(server_impl)
-            .init_resource::<ComponentEventRegistry>()
+            .init_resource::<ComponentEventRegistry>();
+        if let Some(impl_) = server_impl {
+            app.insert_resource(impl_);
+        }
+        app
             // EVENTS //
             .add_message::<ConnectEvent>()
             .add_message::<DisconnectEvent>()

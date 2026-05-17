@@ -18,11 +18,13 @@
 //! `into_pipeline_handles`.
 
 mod handles;
+mod orchestration;
 mod recv_helpers;
 mod router;
 mod spawn;
 
 pub use handles::CoordHandle;
+pub use orchestration::{apply_recv_to_world, run_with_world_server};
 pub use recv_helpers::{RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer};
 pub use router::TickMessageRouter;
 pub use spawn::spawn_server_handles;

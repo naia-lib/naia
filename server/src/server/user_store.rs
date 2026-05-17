@@ -24,7 +24,7 @@ pub(crate) struct UserStore {
 }
 
 impl UserStore {
-    pub(super) fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             users: HashMap::new(),
             disconnected_users: HashMap::new(),
@@ -33,64 +33,64 @@ impl UserStore {
 
     // ── Core map access ──────────────────────────────────────────────────
 
-    pub(super) fn get(&self, key: &UserKey) -> Option<&WorldUser> {
+    pub(crate) fn get(&self, key: &UserKey) -> Option<&WorldUser> {
         self.users.get(key)
     }
 
-    pub(super) fn get_mut(&mut self, key: &UserKey) -> Option<&mut WorldUser> {
+    pub(crate) fn get_mut(&mut self, key: &UserKey) -> Option<&mut WorldUser> {
         self.users.get_mut(key)
     }
 
-    pub(super) fn contains(&self, key: &UserKey) -> bool {
+    pub(crate) fn contains(&self, key: &UserKey) -> bool {
         self.users.contains_key(key)
     }
 
-    pub(super) fn insert(&mut self, key: UserKey, user: WorldUser) {
+    pub(crate) fn insert(&mut self, key: UserKey, user: WorldUser) {
         self.users.insert(key, user);
     }
 
     /// Remove the `WorldUser` record. Does NOT touch `disconnected_users`
     /// (that entry is removed in `take_disconnected` at handshake time).
-    pub(super) fn remove(&mut self, key: &UserKey) -> Option<WorldUser> {
+    pub(crate) fn remove(&mut self, key: &UserKey) -> Option<WorldUser> {
         self.users.remove(key)
     }
 
-    pub(super) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.users.len()
     }
 
-    pub(super) fn iter(&self) -> impl Iterator<Item = (&UserKey, &WorldUser)> {
+    pub(crate) fn iter(&self) -> impl Iterator<Item = (&UserKey, &WorldUser)> {
         self.users.iter()
     }
 
-    pub(super) fn keys_copied(&self) -> Vec<UserKey> {
+    pub(crate) fn keys_copied(&self) -> Vec<UserKey> {
         self.users.keys().copied().collect()
     }
 
     // ── Convenience queries ───────────────────────────────────────────────
 
-    pub(super) fn address(&self, key: &UserKey) -> Option<SocketAddr> {
+    pub(crate) fn address(&self, key: &UserKey) -> Option<SocketAddr> {
         self.users.get(key).map(|u| u.address())
     }
 
-    pub(super) fn room_keys_iter(&self, key: &UserKey) -> Option<Iter<'_, RoomKey>> {
+    pub(crate) fn room_keys_iter(&self, key: &UserKey) -> Option<Iter<'_, RoomKey>> {
         self.users.get(key).map(|u| u.room_keys().iter())
     }
 
-    pub(super) fn rooms_count(&self, key: &UserKey) -> Option<usize> {
+    pub(crate) fn rooms_count(&self, key: &UserKey) -> Option<usize> {
         self.users.get(key).map(|u| u.rooms_count())
     }
 
     // ── Disconnected-users tracking ───────────────────────────────────────
 
     /// Register a pre-authenticated user address (before handshake completes).
-    pub(super) fn register_disconnected(&mut self, addr: SocketAddr, key: UserKey) {
+    pub(crate) fn register_disconnected(&mut self, addr: SocketAddr, key: UserKey) {
         self.disconnected_users.insert(addr, key);
     }
 
     /// Remove and return the `UserKey` for a pre-authenticated address,
     /// called when a handshake completes.
-    pub(super) fn take_disconnected(&mut self, addr: &SocketAddr) -> Option<UserKey> {
+    pub(crate) fn take_disconnected(&mut self, addr: &SocketAddr) -> Option<UserKey> {
         self.disconnected_users.remove(addr)
     }
 }

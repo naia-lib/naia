@@ -1,6 +1,6 @@
 use bevy_ecs::{entity::Entity, message::Messages, world::{Mut, World}};
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
-use naia_server::{EntityOwner, Events, ReceiveOutput};
+use naia_server::{pipeline_actors::CoordHandle, EntityOwner, Events, ReceiveOutput};
 
 use crate::{
     component_event_registry::ComponentEventRegistry, plugin::Singleton, server::ServerImpl,
@@ -215,6 +215,190 @@ pub fn apply_receive_output(
     // `RemoveComponentEvent<C>` (and bundle equivalents) never fire under
     // `world_only_pipeline` mode, so any system reading them (e.g. the
     // level-editor cell's `sync_tile_inserts`) silently does nothing.
+    world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry>| {
+        registry.receive_events(world, &mut events);
+    });
+}
+
+/// Phase B.7 (MISSION_SIM_OWNS_WORLD) sibling of [`apply_receive_output`]
+/// for the three-handle pipeline architecture.
+///
+/// Same event-emission body as [`apply_receive_output`], byte-for-byte,
+/// EXCEPT the two `ServerImpl` query sites (`is_resource_entity`,
+/// `entity_owner`) route through [`CoordHandle`] instead. The
+/// `ComponentEventRegistry::receive_events` tail call is preserved
+/// verbatim (lesson 11 of `feedback_naia_4f_operational`: omitting it
+/// silently breaks `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /
+/// `RemoveComponentEvent<C>` fan-out for any registered component type).
+///
+/// Cyberlith's `GameCell::update` calls this from its cross-half block
+/// after `apply_recv_to_world` populates `output.world_events`.
+pub fn apply_receive_output_pipeline(
+    world: &mut World,
+    coord: &CoordHandle<Entity>,
+    output: ReceiveOutput<Entity>,
+) {
+    // Fire one bevy `TickEvent` per server tick that the recv path advanced.
+    if !output.pending_ticks.is_empty() {
+        let mut tick_writer = world
+            .get_resource_mut::<Messages<bevy_events::TickEvent>>()
+            .unwrap();
+        for tick in output.pending_ticks {
+            tick_writer.write(bevy_events::TickEvent(tick));
+        }
+    }
+
+    let mut events: Events<Entity> = Events::from(output.world_events);
+
+    if events.is_empty() {
+        return;
+    }
+
+    // Connect Event
+    if events.has::<naia_events::ConnectEvent>() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::ConnectEvent>>()
+            .unwrap();
+        for user_key in events.read::<naia_events::ConnectEvent>() {
+            event_writer.write(bevy_events::ConnectEvent(user_key));
+        }
+    }
+
+    // Disconnect Event
+    if events.has::<naia_events::DisconnectEvent>() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::DisconnectEvent>>()
+            .unwrap();
+        for (user_key, user, reason) in events.read::<naia_events::DisconnectEvent>() {
+            event_writer.write(bevy_events::DisconnectEvent(user_key, user, reason));
+        }
+    }
+
+    // Error Event
+    if events.has::<naia_events::ErrorEvent>() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::ErrorEvent>>()
+            .unwrap();
+        for error in events.read::<naia_events::ErrorEvent>() {
+            event_writer.write(bevy_events::ErrorEvent(error));
+        }
+    }
+
+    // Message Event
+    if events.has_messages() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::MessageEvents>>()
+            .unwrap();
+        event_writer.write(bevy_events::MessageEvents::from(&mut events));
+    }
+
+    // Request Event
+    if events.has_requests() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::RequestEvents>>()
+            .unwrap();
+        event_writer.write(bevy_events::RequestEvents::from(&mut events));
+    }
+
+    // Auth Event
+    if events.has_auths() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::AuthEvents>>()
+            .unwrap();
+        event_writer.write(bevy_events::AuthEvents::from(&mut events));
+    }
+
+    // Spawn Entity Event (with resource-entity filter)
+    if events.has::<naia_events::SpawnEntityEvent>() {
+        let mut client_spawned_entities = Vec::new();
+        for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
+            if coord.is_resource_entity(&entity) {
+                continue;
+            }
+            if !world.proxy().has_entity(&entity) {
+                continue;
+            }
+            if let EntityOwner::Client(user_key) = coord.entity_owner(&entity) {
+                client_spawned_entities.push((user_key, entity));
+            }
+        }
+        {
+            let mut event_writer = world
+                .get_resource_mut::<Messages<bevy_events::SpawnEntityEvent>>()
+                .unwrap();
+            for &(user_key, entity) in &client_spawned_entities {
+                event_writer.write(bevy_events::SpawnEntityEvent(user_key, entity));
+            }
+        }
+        for (user_key, entity) in client_spawned_entities {
+            world.entity_mut(entity).insert(ClientOwned(user_key));
+        }
+    }
+
+    // Despawn Entity Event (resource-entity filter)
+    if events.has::<naia_events::DespawnEntityEvent>() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent>>()
+            .unwrap();
+        for (user_key, entity) in events.read::<naia_events::DespawnEntityEvent>() {
+            if coord.is_resource_entity(&entity) {
+                continue;
+            }
+            event_writer.write(bevy_events::DespawnEntityEvent(user_key, entity));
+        }
+    }
+
+    // Publish Entity Event
+    if events.has::<naia_events::PublishEntityEvent>() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::PublishEntityEvent>>()
+            .unwrap();
+        for (user_key, entity) in events.read::<naia_events::PublishEntityEvent>() {
+            event_writer.write(bevy_events::PublishEntityEvent(user_key, entity));
+        }
+    }
+
+    // Unpublish Entity Event
+    if events.has::<naia_events::UnpublishEntityEvent>() {
+        let mut event_writer = world
+            .get_resource_mut::<Messages<bevy_events::UnpublishEntityEvent>>()
+            .unwrap();
+        for (user_key, entity) in events.read::<naia_events::UnpublishEntityEvent>() {
+            event_writer.write(bevy_events::UnpublishEntityEvent(user_key, entity));
+        }
+    }
+
+    // Delegate Entity Event
+    if events.has::<naia_events::DelegateEntityEvent>() {
+        for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
+            world
+                .entity_mut(entity)
+                .insert(HostOwned::new::<Singleton>());
+        }
+    }
+
+    // Entity Auth Grant Event
+    if events.has::<naia_events::EntityAuthGrantEvent>() {
+        for (_, entity) in events.read::<naia_events::EntityAuthGrantEvent>() {
+            world.entity_mut(entity).remove::<HostOwned>();
+        }
+    }
+
+    // Entity Auth Reset Event
+    if events.has::<naia_events::EntityAuthResetEvent>() {
+        for entity in events.read::<naia_events::EntityAuthResetEvent>() {
+            if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
+                entity_mut.insert(HostOwned::new::<Singleton>());
+            }
+        }
+    }
+
+    // Component / Bundle events — fan out via the registry, mirroring the
+    // tail of `translate_world_events`. Lesson 11 of
+    // `feedback_naia_4f_operational`: omitting this tail call silently
+    // breaks user-registered `InsertComponentEvent<C>` /
+    // `UpdateComponentEvent<C>` / `RemoveComponentEvent<C>` even when the
+    // binary packets decoded successfully.
     world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry>| {
         registry.receive_events(world, &mut events);
     });
