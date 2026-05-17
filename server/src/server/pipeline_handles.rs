@@ -20,9 +20,14 @@
 //! distribute the methods across threads without further public-API
 //! changes.
 
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 
-use crate::server::{recv_state::RecvState, send_state::SendState};
+use naia_shared::{Instant, Tick};
+
+use crate::{
+    connection::RecvConnection,
+    server::{receive_output::ReceiveOutput, recv_state::RecvState, send_state::SendState},
+};
 
 /// Recv-thread handle. Owns `RecvState<E>` directly.
 ///
@@ -43,6 +48,33 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     pub fn into_state(self) -> RecvState<E> {
         self.state
     }
+
+    /// Pipeline-mode recv step (step 4-F.naia.c.2b).
+    ///
+    /// Drives the recv-only socket loop (no `SendState` access) and
+    /// packages the per-tick handoff queues into a [`ReceiveOutput`] for
+    /// the coordinator to thread into:
+    ///   1. `WorldServer::drain_pending_handshakes` (coord-stage; needs
+    ///      `coord.user_store`).
+    ///   2. `SendHandle::process_recv_packets` (which consumes
+    ///      `received_addresses` + `pending_data_packets` alongside a
+    ///      `&mut` borrow of the recv connection map for the tick-buffer
+    ///      decode + per-address ack drain + command finalization).
+    pub fn receive(&mut self) -> ReceiveOutput<E> {
+        self.state.receive();
+        let world_events = self.state.take_world_events();
+        let mut tick_events = self.state.take_tick_events(&Instant::now());
+        let pending_ticks: Vec<Tick> =
+            tick_events.read::<crate::events::TickEvent>().collect();
+        let received_addresses = std::mem::take(&mut self.state.received_addresses);
+        let pending_data_packets = std::mem::take(&mut self.state.pending_data_packets);
+        ReceiveOutput {
+            world_events,
+            pending_ticks,
+            received_addresses,
+            pending_data_packets,
+        }
+    }
 }
 
 /// Send-thread handle. Owns `SendState<E>` directly.
@@ -58,5 +90,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// reassembly until 4-F's coordinator runs the send thread directly.
     pub fn into_state(self) -> SendState<E> {
         self.state
+    }
+
+    /// Pipeline-mode coord-stage cross-half processing (step 4-F.naia.c.2b).
+    ///
+    /// Thin wrapper that forwards to [`SendState::process_recv_packets`].
+    /// The coordinator pulls `received_addresses` + `pending_data_packets`
+    /// off a [`ReceiveOutput`] returned by [`RecvHandle::receive`] and
+    /// passes `&mut recv_handle.state.recv_user_connections` for the
+    /// tick-buffer decode borrow.
+    pub fn process_recv_packets(
+        &mut self,
+        recv_conns: &mut HashMap<SocketAddr, RecvConnection>,
+        output: &mut ReceiveOutput<E>,
+        server_tick: Tick,
+    ) {
+        let received_addresses = std::mem::take(&mut output.received_addresses);
+        let pending_data_packets = std::mem::take(&mut output.pending_data_packets);
+        self.state.process_recv_packets(
+            recv_conns,
+            received_addresses,
+            pending_data_packets,
+            server_tick,
+        );
     }
 }

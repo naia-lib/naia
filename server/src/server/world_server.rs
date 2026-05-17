@@ -11,8 +11,7 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    handshake::HandshakeHeader, AuthorityError, BitReader, BitWriter, Channel, ChannelKind,
-    ConnectionStats, DisconnectReason,
+    AuthorityError, BitWriter, Channel, ChannelKind, ConnectionStats, DisconnectReason,
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
     GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState,
@@ -20,7 +19,7 @@ use naia_shared::{
     UserPriorityState, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer,
     PacketType, Protocol, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, Serde,
-    SerdeErr, SharedGlobalWorldManager, StandardHeader, Tick, WorldMutType, WorldRefType,
+    SharedGlobalWorldManager, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -31,7 +30,6 @@ use crate::{
         tick_buffer_messages::TickBufferMessages,
     },
     events::{world_events::WorldEvents, TickEvents},
-    handshake::HandshakeManager,
     request::{GlobalRequestManager, GlobalResponseManager},
     room::Room,
     server::scope_checks_cache::ScopeChecksCache,
@@ -375,157 +373,47 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// Maintain connection with a client and read all incoming packet data
+    /// (serial-mode wrapper, step 4-F.naia.c.2b).
+    ///
+    /// The recv-only socket loop now lives on [`RecvState::receive`];
+    /// the cross-half decode + per-address drain + command finalization
+    /// lives on [`SendState::process_recv_packets`]. This wrapper glues
+    /// them together with the coord-stage `drain_pending_handshakes`
+    /// step in between (which needs `coord.user_store`).
     pub fn receive_all_packets(&mut self) {
-        // Tick bandwidth monitors to clear expired packets
-        self.recv.recv_io.tick_bandwidth_monitor();
+        // Send-side bandwidth tick (the recv-side counterpart fires inside
+        // `RecvState::receive`).
         self.send.send_io.tick_bandwidth_monitor();
 
-        self.handle_disconnects();
+        // Cross-half periodic (recv timer drives a send-side dispatch).
+        // 4-F.naia.c.2c will lift this out of the serial wrapper into a
+        // coord-stage helper invoked between `RecvHandle::receive` and
+        // `SendHandle::process_recv_packets`.
         self.handle_pings();
-        // 4-F.naia.c.2a: handle_heartbeats + handle_empty_acks now run at
-        // the top of `send_all_packets` (after the outbound-packet flush,
-        // before Iris). They touch only `send.*` + `shared.time_manager`,
-        // so keeping them in the recv path would have blocked the c.2b
-        // RecvHandle::receive split. See spec §4-F.naia.c.2 for context.
+        // 4-F.naia.c.2a: handle_heartbeats + handle_empty_acks fire at
+        // the top of `send_all_packets`, not here.
 
-        let mut received_addresses = HashSet::new();
+        // 1. Recv-only socket loop + recv-side periodic disconnect scan.
+        self.recv.receive();
 
-        // receive socket events
-        loop {
-            match self.recv.recv_io.recv_reader() {
-                Ok(Some((address, owned_reader))) => {
-                    // receive packet
-                    let mut reader = owned_reader.borrow();
-
-                    // read header
-                    let Ok(header) = StandardHeader::de(&mut reader) else {
-                        // Received a malformed packet
-                        // TODO: increase suspicion against packet sender
-                        continue;
-                    };
-
-                    received_addresses.insert(address);
-
-                    match header.packet_type {
-                        PacketType::Data => {
-                            self.recv.addrs_with_new_packets.insert(address);
-
-                            if self
-                                .read_data_packet(&address, &header, &mut reader)
-                                .is_err()
-                            {
-                                warn!("Server Error: cannot read malformed packet");
-                                continue;
-                            }
-                        }
-                        PacketType::Heartbeat => {
-                            // 4-E.2d: composite split — recv writes the ack
-                            // snapshot, send drains the cross-half channel.
-                            if let Some(recv_conn) = self.recv.recv_user_connections.get_mut(&address) {
-                                recv_conn.process_incoming_header(&header);
-                            }
-                            if let Some(send_conn) = self.send.send_user_connections.get_mut(&address) {
-                                send_conn.drain_acks(&mut []);
-                            }
-
-                            continue;
-                        }
-                        PacketType::Ping => {
-                            // 4-F.naia.c.1: queue the pong response on
-                            // `pending_outbound_packets` (recv path cannot
-                            // touch `SendState::send_io` in pipeline mode);
-                            // serial-mode drain happens at the top of
-                            // `send_all_packets` via `flush_pending_outbound_packets`.
-                            let response = self.shared.time_manager.read().process_ping(&mut reader).unwrap();
-                            self.shared
-                                .pending_outbound_packets
-                                .lock()
-                                .push((address, response.to_packet()));
-
-                            if let Some(recv_conn) = self.recv.recv_user_connections.get_mut(&address) {
-                                recv_conn.process_incoming_header(&header);
-                            }
-                            if let Some(send_conn) = self.send.send_user_connections.get_mut(&address) {
-                                send_conn.drain_acks(&mut []);
-                            }
-
-                            continue;
-                        }
-                        PacketType::Pong => {
-                            if let Some(recv_conn) = self.recv.recv_user_connections.get_mut(&address) {
-                                recv_conn.process_incoming_header(&header);
-                                let tm = self.shared.time_manager.read();
-                                recv_conn
-                                    .ping_manager
-                                    .process_pong(&*tm, &mut reader);
-                            }
-                            if let Some(send_conn) = self.send.send_user_connections.get_mut(&address) {
-                                send_conn.drain_acks(&mut []);
-                            }
-
-                            continue;
-                        }
-                        PacketType::Handshake => {
-                            let handshake_header_result = HandshakeHeader::de(&mut reader);
-                            let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
-                            else {
-                                warn!(
-                                    "Server Error: received invalid handshake packet: {:?}",
-                                    handshake_header_result
-                                );
-                                continue;
-                            };
-                            // 4-F.naia.c.1: defer finalize_connection to the
-                            // coord stage (recv thread can't touch user_store)
-                            // via `pending_handshakes`. Always push — the drain
-                            // (`drain_pending_handshakes`) is idempotent
-                            // because `take_disconnected` returns None for
-                            // already-finalized addresses (spec Option C-2).
-                            self.shared.pending_handshakes.lock().push(address);
-
-                            // 4-F.naia.c.1: queue the Connect Response on
-                            // `pending_outbound_packets` (recv path cannot
-                            // touch `SendState::send_io` in pipeline mode);
-                            // the serial-mode flush happens at the top of
-                            // `send_all_packets`.
-                            let packet = HandshakeManager::write_connect_response().to_packet();
-                            self.shared
-                                .pending_outbound_packets
-                                .lock()
-                                .push((address, packet));
-
-                            continue;
-                        }
-                    }
-                }
-                Ok(None) => {
-                    // No more packets, break loop
-                    break;
-                }
-                Err(error) => {
-                    self.recv.incoming_world_events
-                        .push_error(NaiaServerError::Wrapped(Box::new(error)));
-                }
-            }
-        }
-
-        // 4-F.naia.c.1: drain pending_handshakes — serial-mode equivalent
-        // to the coord-stage drain that runs in pipeline mode. Must happen
-        // before `decode_pending_data_packets` so the newly-finalized
-        // SendConnection exists when the data decoder looks it up.
+        // 2. Coord-stage handshake drain — must happen before the
+        // cross-half post-pass so newly-finalized SendConnections exist
+        // when the data decoder looks them up.
         self.drain_pending_handshakes();
 
-        // 4-E.2e: coordinator-stage decode of every Data packet buffered
-        // during this recv cycle. Must run before `process_received_commands`
-        // (which finalizes commands the decode just wrote to
-        // `send_conn.base.world_manager`).
-        self.decode_pending_data_packets();
-
-        for address in received_addresses {
-            if let Some(send_conn) = self.send.send_user_connections.get_mut(&address) {
-                send_conn.process_received_commands();
-            }
-        }
+        // 3. Cross-half post-pass: per-address drain_acks + per-data-packet
+        // decode + per-address process_received_commands.
+        let received_addresses =
+            std::mem::take(&mut self.recv.received_addresses);
+        let pending_data_packets =
+            std::mem::take(&mut self.recv.pending_data_packets);
+        let server_tick = self.shared.time_manager.read().current_tick();
+        self.send.process_recv_packets(
+            &mut self.recv.recv_user_connections,
+            received_addresses,
+            pending_data_packets,
+            server_tick,
+        );
     }
 
     /// 4-F.naia.c.1: coordinator-stage drain of `shared.pending_handshakes`.
@@ -654,7 +542,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let mut tick_events = self.take_tick_events(&Instant::now());
         let pending_ticks: Vec<Tick> =
             tick_events.read::<crate::events::TickEvent>().collect();
-        super::receive_output::ReceiveOutput { world_events, pending_ticks }
+        // 4-F.naia.c.2b: in the serial path `receive_all_packets` already
+        // drained `received_addresses` + `pending_data_packets` into the
+        // inline `SendState::process_recv_packets` call, so the
+        // ReceiveOutput surface for these is empty here. Pipeline-mode
+        // `RecvHandle::receive` populates them.
+        super::receive_output::ReceiveOutput {
+            world_events,
+            pending_ticks,
+            received_addresses: std::collections::HashSet::new(),
+            pending_data_packets: Vec::new(),
+        }
     }
 
     /// Consume this `WorldServer` and return the three pipeline pieces
@@ -3560,118 +3458,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// thread later drains via `decode_pending_data_packets` (serial:
     /// inline at recv tail; pipeline: 4-E.2f wires
     /// `SendHandle::process_recv_packets`).
-    fn read_data_packet(
-        &mut self,
-        address: &SocketAddr,
-        header: &StandardHeader,
-        reader: &mut BitReader,
-    ) -> Result<(), SerdeErr> {
-        if header.packet_type != PacketType::Data {
-            panic!("Server Error: received non-data packet in data packet handler");
-        }
+    // 4-F.naia.c.2b: `read_data_packet` moved to `RecvState::read_data_packet`
+    // (recv-only) so `RecvState::receive` can drive it without crossing
+    // halves.
 
-        let Some(recv_conn) = self.recv.recv_user_connections.get_mut(address) else {
-            return Ok(());
-        };
-
-        #[cfg(feature = "e2e_debug")]
-        {
-            SERVER_RX_FRAMES.fetch_add(1, Ordering::Relaxed);
-        }
-
-        // Recv-side bookkeeping: publish ack snapshot + reset timeout.
-        recv_conn.process_incoming_header(header);
-
-        // Read client tick out of the wire stream; the remainder of the
-        // reader is the message/world section + tick-buffered messages,
-        // both decoded later by `decode_pending_data_packets`.
-        let client_tick = Tick::de(reader)?;
-        let owned = reader.to_owned();
-        self.recv.pending_data_packets.push((*address, client_tick, owned));
-
-        Ok(())
-    }
-
-    /// Coordinator-stage decode for all buffered Data packets (step 4-E.2e).
-    ///
-    /// Drains `RecvState::pending_data_packets`, then for each entry:
-    /// 1. drains the cross-half ACK channel into the send-side ack manager,
-    /// 2. decodes tick-buffered messages onto the matching `RecvConnection`,
-    /// 3. decodes the message/world section onto the matching `SendConnection`,
-    /// 4. arms an ACK-only response on the send half.
-    ///
-    /// Called inline at the tail of `receive_all_packets` in serial mode;
-    /// called from `SendHandle::process_recv_packets` in pipeline mode
-    /// (wired in 4-E.2f).
-    fn decode_pending_data_packets(&mut self) {
-        let pending: Vec<(SocketAddr, Tick, naia_shared::OwnedBitReader)> =
-            std::mem::take(&mut self.recv.pending_data_packets);
-        for (address, client_tick, owned_reader) in pending {
-            let mut reader = owned_reader.borrow();
-
-            // Disjoint &mut borrows of self.recv / self.send / &self.shared.
-            let Some(send_conn) = self.send.send_user_connections.get_mut(&address) else {
-                continue;
-            };
-            let Some(recv_conn) = self.recv.recv_user_connections.get_mut(&address) else {
-                continue;
-            };
-
-            // Send-side: drain cross-half ACK channel into ack manager.
-            send_conn.drain_acks(&mut []);
-
-            // Snapshot server_tick at decode time. In serial mode this is
-            // effectively the same instant as recv. In pipeline mode the
-            // recv thread may have moved on by a tick; tick-buffer
-            // semantics still work because read_messages compares against
-            // the server_tick at the moment the message is being applied.
-            let server_tick = self.shared.time_manager.read().current_tick();
-
-            // Recv-side: decode tick-buffered messages.
-            if recv_conn
-                .tick_buffer
-                .read_messages(
-                    &self.shared.channel_kinds,
-                    &self.shared.message_kinds,
-                    &server_tick,
-                    &client_tick,
-                    send_conn.base.world_manager.entity_converter(),
-                    &mut reader,
-                )
-                .is_err()
-            {
-                warn!(
-                    "Server Error: cannot decode tick-buffered messages from {}",
-                    address
-                );
-                continue;
-            }
-
-            // Send-side: decode message/world section.
-            if send_conn
-                .read_data_section(
-                    &self.shared.channel_kinds,
-                    &self.shared.message_kinds,
-                    &self.shared.component_kinds,
-                    self.shared.client_authoritative_entities,
-                    client_tick,
-                    &mut reader,
-                )
-                .is_err()
-            {
-                warn!(
-                    "Server Error: cannot decode data section from {}",
-                    address
-                );
-                continue;
-            }
-
-            // Arm an ACK-only response (heartbeat-style) so the client
-            // gets immediate acknowledgement of this data packet even
-            // if the server has nothing to send back this tick.
-            send_conn.base.mark_should_send_empty_ack();
-        }
-    }
+    // 4-F.naia.c.2b: the former `decode_pending_data_packets` method has
+    // moved to `SendState::process_recv_packets`, which is the canonical
+    // home for cross-half post-recv processing. The two halves are still
+    // passed in together; the difference is that `&mut RecvConnection`
+    // arrives as an explicit parameter rather than via `self.recv`, which
+    // lets `SendHandle` run the same body from the pipeline coordinator.
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         let user_disconnects = std::mem::take(&mut self.recv.outstanding_disconnects);
@@ -4442,23 +4238,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         guard.entity_to_global_idx(global_entity).unwrap_or(GlobalEntityIndex::INVALID)
     }
 
-    fn handle_disconnects(&mut self) {
-        if self.recv.timeout_timer.ringing() {
-            self.recv.timeout_timer.reset();
-
-            // Only queue timeout-based disconnects here; manual disconnects are already
-            // queued by user_queue_disconnect() when they are initiated.
-            let mut user_disconnects: Vec<UserKey> = Vec::new();
-            for (_, recv_conn) in self.recv.recv_user_connections.iter() {
-                if recv_conn.should_drop() && !recv_conn.manual_disconnect {
-                    user_disconnects.push(recv_conn.user_key);
-                }
-            }
-            for user_key in user_disconnects {
-                self.recv.outstanding_disconnects.push((user_key, DisconnectReason::TimedOut));
-            }
-        }
-    }
+    // 4-F.naia.c.2b: `handle_disconnects` moved to
+    // `RecvState::handle_disconnects` (recv-only).
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for WorldServer<E> {

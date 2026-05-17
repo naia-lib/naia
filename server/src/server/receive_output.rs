@@ -1,6 +1,6 @@
-use std::hash::Hash;
+use std::{collections::HashSet, hash::Hash, net::SocketAddr};
 
-use naia_shared::Tick;
+use naia_shared::{OwnedBitReader, Tick};
 
 use crate::events::world_events::WorldEvents;
 
@@ -32,4 +32,27 @@ pub struct ReceiveOutput<E: Copy + Eq + Hash + Send + Sync> {
     /// pipeline coordinator uses these to drive simulation work; the bevy
     /// adapter's `apply_receive_output` fires one `TickEvent` per entry.
     pub pending_ticks: Vec<Tick>,
+
+    /// Addresses that delivered at least one packet during this recv phase
+    /// (step 4-F.naia.c.2b). Populated by `RecvHandle::receive` /
+    /// `WorldServer::receive_all_packets`; consumed by
+    /// `SendHandle::process_recv_packets` for the per-address `drain_acks`
+    /// + `process_received_commands` sweep. The set is intentionally
+    /// broader than the data-only `addrs_with_new_packets` set on
+    /// `RecvState`: any inbound Heartbeat / Ping / Pong / Data counts.
+    pub received_addresses: HashSet<SocketAddr>,
+
+    /// Data packets buffered during the recv phase, drained from
+    /// `RecvState::pending_data_packets` (step 4-F.naia.c.2b). Each tuple
+    /// is `(addr, client_tick, owned_reader)` — the reader has already
+    /// advanced past `StandardHeader` + `Tick`, so the decoder starts at
+    /// the message/world section directly.
+    ///
+    /// In serial mode `WorldServer::receive_all_packets` packages these
+    /// into the `ReceiveOutput` it constructs internally and passes them
+    /// to `SendState::process_recv_packets` inline. In pipeline mode the
+    /// coordinator drains them off the returned `ReceiveOutput` and hands
+    /// them to `SendHandle::process_recv_packets` alongside the recv
+    /// connection map.
+    pub pending_data_packets: Vec<(SocketAddr, Tick, OwnedBitReader)>,
 }
