@@ -18,9 +18,13 @@
 //! `into_pipeline_handles`.
 
 mod handles;
+mod recv_helpers;
+mod router;
 mod spawn;
 
 pub use handles::CoordHandle;
+pub use recv_helpers::{RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer};
+pub use router::TickMessageRouter;
 pub use spawn::spawn_server_handles;
 
 #[cfg(test)]
