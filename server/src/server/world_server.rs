@@ -935,26 +935,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // only the bytes sent during THIS tick (readable after send_packets).
         self.send.send_io.reset_outgoing_bytes_this_tick();
 
-        // 4-E.2e: publish-on-read for global_priority. The borrow API
-        // writes go into `coord.global_priority_mirror`; Iris below reads
-        // from `send.global_priority`. Cost is O(N entities-with-overrides)
-        // — typically 0 unless the game has actively tuned priorities.
-        // The future per-entity SendStateUpdate::PriorityChanged path will
-        // shrink this to incremental updates; for now the full clone keeps
-        // semantics simple and correct.
-        self.send
-            .global_priority
-            .clone_from(&self.coord.global_priority_mirror);
-
-        // update entity scopes
-        #[cfg(feature = "bench_instrumentation")]
-        let _scope_t0 = std::time::Instant::now();
-        self.update_entity_scopes(&world);
-        #[cfg(feature = "bench_instrumentation")]
-        bench_scope_counters::NS_UPDATE_ENTITY_SCOPES.fetch_add(
-            _scope_t0.elapsed().as_nanos() as u64,
-            std::sync::atomic::Ordering::Relaxed,
-        );
+        // 4-F.naia.b: preamble (publish global_priority + scope/queue drain +
+        // pending_auth_grants flush) is factored into `run_send_preamble`.
+        // Today it runs inline at the top of `send_all_packets`; once the
+        // 4-F.cyberlith.e coordinator wires the 12-step sequence, that
+        // coordinator will call `run_send_preamble` directly before kicking
+        // the send thread (and `send_all_packets` will skip the inline call).
+        self.run_send_preamble(&world);
 
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =
@@ -1208,7 +1195,47 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        // Flush deferred auth grants (one-tick delay ensures entity registration on client)
+    }
+
+    /// 4-F.naia.b: coordinator-side preamble for the send phase. Runs
+    /// `publish global_priority` + `update_entity_scopes` + `flush_pending_auth_grants`.
+    /// Touches `coord.*` freely. Today this is called inline from
+    /// `send_all_packets`; the 4-F.cyberlith.e coordinator will call this
+    /// explicitly before kicking the send thread (so `SendHandle::send_all_packets`
+    /// on the send thread becomes a `self.send.*` + `self.shared.*`-only method).
+    pub(crate) fn run_send_preamble<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
+        // 4-E.2e: publish-on-read for global_priority. The borrow API
+        // writes go into `coord.global_priority_mirror`; Iris below reads
+        // from `send.global_priority`. Cost is O(N entities-with-overrides)
+        // — typically 0 unless the game has actively tuned priorities.
+        // The future per-entity SendStateUpdate::PriorityChanged path will
+        // shrink this to incremental updates; for now the full clone keeps
+        // semantics simple and correct.
+        self.send
+            .global_priority
+            .clone_from(&self.coord.global_priority_mirror);
+
+        // update entity scopes
+        #[cfg(feature = "bench_instrumentation")]
+        let _scope_t0 = std::time::Instant::now();
+        self.update_entity_scopes(world);
+        #[cfg(feature = "bench_instrumentation")]
+        bench_scope_counters::NS_UPDATE_ENTITY_SCOPES.fetch_add(
+            _scope_t0.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
+
+        // Flush deferred auth grants before Iris reads send.send_user_connections.
+        // Auth grants mutate send_conn.base.world_manager via host_send_set_auth,
+        // so they must run before the Iris build phase to be packed THIS tick.
+        self.flush_pending_auth_grants();
+    }
+
+    /// 4-F.naia.b: drains `shared.pending_auth_grants` and applies the
+    /// SetAuthority messages onto `send_user_connections`. Coord-stage —
+    /// runs as part of `run_send_preamble`. Lock order: takes the
+    /// `pending_auth_grants` Mutex (position #7, last) briefly.
+    pub(crate) fn flush_pending_auth_grants(&mut self) {
         let pending_grants = std::mem::take(&mut *self.shared.pending_auth_grants.lock());
         for (owner_user_key, global_entity, _granted_status) in pending_grants {
             // Collect addresses first to avoid borrowing issues
