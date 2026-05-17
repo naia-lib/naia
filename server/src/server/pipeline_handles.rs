@@ -13,12 +13,40 @@
 //! split is structural; thread-independent operation of the recv and
 //! send halves is wired up by the bevy pipeline coordinator in step 4-F.
 //!
-//! Until 4-F, callers reassemble the handles back into a `WorldServer`
-//! to drive `receive_all_packets` / `send_all_packets` through the
-//! existing methods. The split is therefore a no-op for current
-//! consumers, but the type-level rearrangement is in place so 4-F can
-//! distribute the methods across threads without further public-API
-//! changes.
+//! # Status (2026-05-16, post cyberlith.d)
+//!
+//! The cyberlith side `GameCell::update` is in serial-equivalent mode
+//! (cyberlith `2da625e1`) and currently does NOT call
+//! `into_pipeline_handles` — it keeps `WorldServer` reassembled and
+//! drives `receive_with_world` + `send_all_packets` inline. The
+//! multi-thread pipeline (step 4-F.cyberlith.e) is the next milestone.
+//!
+//! # Architectural constraints relevant to step 4-F.cyberlith.e
+//!
+//! **C1 (cross-half access).** `SendHandle::process_recv_packets` below
+//! takes `&mut recv_conns` (from `RecvState::recv_user_connections`).
+//! In a fully-3-threaded design those connections live on the recv
+//! thread and `SendState` lives in coord/send territory — no single
+//! thread holds both, so this method cannot be called in true 3-thread
+//! mode. The .e MVP keeps recv on the coord (single thread holds both
+//! halves) and parallelises only sim + send.
+//!
+//! **C2 (World mutation).** The decoded entity events (spawn / insert /
+//! despawn) are applied to `&mut World` by
+//! `WorldServer::process_all_packets`, which mutates `self.send.*`
+//! while doing so. After `into_pipeline_handles`, the coord no longer
+//! holds a unified `WorldServer`. The .e MVP works around this by NOT
+//! calling `into_pipeline_handles` — it uses `receive_with_world`
+//! (cyberlith.d) which bundles `receive_all_packets +
+//! process_all_packets` inline.
+//!
+//! **C3 (send extraction).** `SendHandle::send_all_packets` does not
+//! exist yet. Adding it is step 4-F.naia.h — see the doc-comment on
+//! `WorldServer::send_all_packets` for the three-phase factoring plan.
+//!
+//! See `cyberlith/_AGENTS/MISSION_CAPACITY_UPLIFT.md` ("4-F.cyberlith.e
+//! — multi-thread pipeline coordinator", architectural reality check
+//! C1/C2/C3/C4) for the design decisions these constraints drove.
 
 use std::{collections::HashMap, hash::Hash, net::SocketAddr};
 

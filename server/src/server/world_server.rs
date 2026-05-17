@@ -922,6 +922,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Sends all update messages to all Clients. If you don't call this
     /// method, the Server will never communicate with it's connected
     /// Clients
+    ///
+    /// # Pipeline-mode extraction (deferred — step 4-F.naia.h)
+    ///
+    /// The body has three logical phases:
+    ///   1. **`run_send_preamble`** — drains coord-side handoff queues
+    ///      (`scope_change_queue`, `pending_auth_grants`,
+    ///      `pending_send_state_updates`), publishes
+    ///      `global_priority_mirror`. Touches `self.coord.*` and
+    ///      `self.shared.*` — must stay on the coordinator.
+    ///   2. **Iris three-phase loop** — Phase 1+2 dirty scan +
+    ///      Phase 3 per-user pack. Touches only `self.send.*` and
+    ///      `self.shared.*` (read-only). Safe to move to `SendState`.
+    ///   3. **`flush_pending_auth_grants`** — tail step that wires
+    ///      `pending_auth_grants` into per-user send-side state.
+    ///      Touches `self.send.*` only.
+    ///
+    /// Step 4-F.naia.h factors phase 1 into a coord-side method
+    /// (`WorldServer::run_send_preamble`) and moves phases 2 + 3 to
+    /// `SendState::send_all_packets` so `SendHandle` can drive them
+    /// from a background thread. See
+    /// `pipeline_recv_send_independent.rs:20-31` for the deferred-work
+    /// annotation and the architectural-reality block in
+    /// `cyberlith/_AGENTS/MISSION_CAPACITY_UPLIFT.md` (search
+    /// "4-F.cyberlith.e — multi-thread pipeline coordinator").
+    ///
+    /// The RTT cross-half access (`collect_outgoing_messages` reads
+    /// `ping_manager.rtt_millis()` on the recv side) is resolved by
+    /// mirroring into the `ConnectionShared::rtt_avg_ms` atomic that
+    /// already exists post-4-C.1; verify the mirror is in sync before
+    /// landing 4-F.naia.h.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
         #[cfg(feature = "e2e_debug")]
         {
