@@ -1,8 +1,11 @@
-use bevy_ecs::{entity::Entity, message::Messages, world::World};
+use bevy_ecs::{entity::Entity, message::Messages, world::{Mut, World}};
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
 use naia_server::{EntityOwner, Events, ReceiveOutput};
 
-use crate::{plugin::Singleton, server::ServerImpl, ClientOwned};
+use crate::{
+    component_event_registry::ComponentEventRegistry, plugin::Singleton, server::ServerImpl,
+    ClientOwned,
+};
 
 mod naia_events {
     pub use naia_server::{
@@ -205,4 +208,14 @@ pub fn apply_receive_output(
             }
         }
     }
+
+    // Component / Bundle events — fan out via the registry, mirroring the
+    // tail of `translate_world_events`. Without this, user-registered
+    // `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /
+    // `RemoveComponentEvent<C>` (and bundle equivalents) never fire under
+    // `world_only_pipeline` mode, so any system reading them (e.g. the
+    // level-editor cell's `sync_tile_inserts`) silently does nothing.
+    world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry>| {
+        registry.receive_events(world, &mut events);
+    });
 }

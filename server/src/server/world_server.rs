@@ -523,17 +523,60 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         std::mem::replace(&mut self.recv.incoming_world_events, WorldEvents::<E>::new())
     }
 
-    /// Pipeline-friendly receive step.
+    /// Serial-equivalent pipeline-coordinator entry point (step 4-F.cyberlith.d).
+    ///
+    /// Runs the full receive sequence — [`receive_all_packets`](Self::receive_all_packets)
+    /// (network IO + handshake finalize + cross-half decode of data packets),
+    /// followed by [`process_all_packets`](Self::process_all_packets) (which
+    /// applies the decoded `EntityEvent`s to `world` and populates
+    /// `incoming_world_events` with the resulting Spawn / Insert / Update /
+    /// Despawn entries) — and then drains the accumulated world + tick events
+    /// into a [`ReceiveOutput`].
+    ///
+    /// Without the `process_all_packets` call, all client-driven world
+    /// mutations (delegated spawns, client-authoritative component inserts,
+    /// remote despawns, queued disconnects) would silently fail to fire their
+    /// matching `incoming_world_events` entries — adapter-side callers (e.g.
+    /// `naia_bevy_server::apply_receive_output`) would then see an empty
+    /// world-events stream and never fan out the corresponding Bevy events
+    /// even though the binary packets decoded successfully.
+    ///
+    /// Pipeline-mode (4-F.cyberlith.e) callers that run the recv phase on a
+    /// background thread should use [`receive_all_packets`](Self::receive_all_packets)
+    /// + [`process_all_packets`](Self::process_all_packets) +
+    /// [`take_world_events`](Self::take_world_events) directly so the recv
+    /// loop can run without holding `world`.
+    pub fn receive_with_world<W: WorldMutType<E>>(
+        &mut self,
+        world: W,
+    ) -> super::receive_output::ReceiveOutput<E> {
+        let now = Instant::now();
+        self.receive_all_packets();
+        self.process_all_packets(world, &now);
+        let world_events = self.take_world_events();
+        let mut tick_events = self.take_tick_events(&now);
+        let pending_ticks: Vec<Tick> =
+            tick_events.read::<crate::events::TickEvent>().collect();
+        super::receive_output::ReceiveOutput {
+            world_events,
+            pending_ticks,
+            received_addresses: std::collections::HashSet::new(),
+            pending_data_packets: Vec::new(),
+        }
+    }
+
+    /// Receive-only step that skips world mutation.
     ///
     /// Runs [`receive_all_packets`](Self::receive_all_packets) and then drains
     /// the accumulated world events into a [`ReceiveOutput`].
     ///
     /// [`process_all_packets`](Self::process_all_packets) is NOT called here
-    /// because it requires a `World` reference; the caller (or pipeline
-    /// coordinator) is responsible for that step.
-    ///
-    /// Non-pipeline callers can continue using the three-step sequence:
-    /// `receive_all_packets()` → `process_all_packets()` → `take_world_events()`.
+    /// because it requires a `World` reference. The world-events stream
+    /// therefore contains only entries that `receive_all_packets` populates
+    /// directly (e.g. connect events fired by `finalize_connection`); any
+    /// entries that would have come from decoded data packets (spawn / insert
+    /// / despawn / queued-disconnect) are absent. Most callers want
+    /// [`receive_with_world`](Self::receive_with_world) instead.
     pub fn receive(&mut self) -> super::receive_output::ReceiveOutput<E> {
         self.receive_all_packets();
         let world_events = self.take_world_events();
