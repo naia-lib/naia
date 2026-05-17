@@ -381,6 +381,13 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         global_world_manager: &dyn GlobalWorldManagerType,
         entity: &Entity,
     ) {
+        if !WorldRefType::<Entity>::has_entity(self, entity) {
+            // Entity was despawned from Bevy's world before the server's delegation-complete
+            // message arrived (e.g. client undo removed the entity before the MigrateResponse
+            // packet was processed).  Naia will clean it up via on_despawn → despawn_entity_worldless
+            // in a later system, so there is nothing to do here.
+            return;
+        }
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_enable_delegation(
                 self,
@@ -417,6 +424,9 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn entity_disable_delegation(&mut self, entity: &Entity) {
+        if !WorldRefType::<Entity>::has_entity(self, entity) {
+            return;
+        }
         for component_kind in WorldMutType::<Entity>::component_kinds(self, entity) {
             WorldMutType::<Entity>::component_disable_delegation(self, entity, &component_kind);
         }
