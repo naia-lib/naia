@@ -217,17 +217,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             ping_timer: naia_shared::Timer::new(ping_interval),
             send_io,
             shared: Arc::clone(&shared),
+            // Phase A.3 — relocated from CoordinatorState.
+            entity_room_map: EntityRoomMap::new(),
+            entity_scope_map: EntityScopeMap::new(),
+            scope_checks_cache: ScopeChecksCache::new(),
         };
 
         let coord = crate::server::CoordinatorState {
             user_store: UserStore::new(),
             room_store: RoomStore::new(),
-            entity_room_map: EntityRoomMap::new(),
-            entity_scope_map: EntityScopeMap::new(),
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
             global_priority_mirror: GlobalPriorityState::new(),
-            scope_checks_cache: ScopeChecksCache::new(),
             resource_registry: ResourceRegistry::new(),
             historian: None,
         };
@@ -845,12 +846,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// a bulk teleport), call `mark_all_scope_checks_pending()` first to
     /// enqueue the full cross-product into the pending queue.
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
-        self.coord.scope_checks_cache.pending_slice().to_vec()
+        self.send.scope_checks_cache.pending_slice().to_vec()
     }
 
     /// Clears the pending queue. Call after processing `scope_checks_pending()`.
     pub fn mark_scope_checks_pending_handled(&mut self) {
-        self.coord.scope_checks_cache.mark_pending_handled();
+        self.send.scope_checks_cache.mark_pending_handled();
     }
 
     /// Re-enqueues all current (room, user, entity) tuples into the pending
@@ -858,7 +859,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// startup, or after bulk world changes) without bypassing the incremental
     /// system. Follow with `scope_checks_pending()` + `mark_scope_checks_pending_handled()`.
     pub fn mark_all_scope_checks_pending(&mut self) {
-        self.coord.scope_checks_cache.mark_all_pending();
+        self.send.scope_checks_cache.mark_all_pending();
     }
 
     /// Slow-path recompute — used by tests to verify the cache stays
@@ -2137,7 +2138,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Single linear retain — covers all rooms that previously contained
         // the entity, replacing what would otherwise be one retain per
         // affected room.
-        self.coord.scope_checks_cache
+        self.send.scope_checks_cache
             .on_entity_despawned(*world_entity);
         self.cleanup_entity_replication(&global_entity);
         self.shared.global_world_manager.write()
@@ -2149,10 +2150,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.despawn_entity_from_all_connections(global_entity);
 
         // Delete scope
-        self.coord.entity_scope_map.remove_entity(global_entity);
+        self.send.entity_scope_map.remove_entity(global_entity);
 
         // Delete room cache entry
-        if let Some(room_keys) = self.coord.entity_room_map.remove_from_all_rooms(global_entity) {
+        if let Some(room_keys) = self.send.entity_room_map.remove_from_all_rooms(global_entity) {
             for room_key in room_keys {
                 if let Some(room) = self.coord.room_store.get_mut(&room_key) {
                     room.remove_entity(global_entity, true);
@@ -2190,7 +2191,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Remove all entities from a User's scope
     pub(crate) fn user_scope_remove_user(&mut self, user_key: &UserKey) {
-        self.coord.entity_scope_map.remove_user(user_key);
+        self.send.entity_scope_map.remove_user(user_key);
     }
 
     pub(crate) fn user_scope_set_entity(
@@ -2246,7 +2247,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
-        self.coord.entity_scope_map
+        self.send.entity_scope_map
             .insert(*user_key, global_entity, is_contained);
         self.shared
             .scope_change_queue
@@ -2296,13 +2297,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         // Check explicit include/exclude
-        if let Some(in_scope) = self.coord.entity_scope_map.get(user_key, &global_entity) {
+        if let Some(in_scope) = self.send.entity_scope_map.get(user_key, &global_entity) {
             if *in_scope {
                 // [entity-scopes-09]: explicit include() cannot bypass the room gate for
                 // server-owned non-resource entities that have no rooms at all. Entities
                 // in rooms (even rooms the user isn't in) are valid include() targets per
                 // [entity-scopes-06]; only completely roomless entities are gated.
-                let entity_is_roomless = self.coord
+                let entity_is_roomless = self.send
                     .entity_room_map
                     .entity_get_rooms(&global_entity)
                     .is_none();
@@ -2324,7 +2325,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let Some(user) = self.coord.user_store.get(user_key) else {
             return false;
         };
-        let Some(entity_rooms) = self.coord.entity_room_map.entity_get_rooms(&global_entity) else {
+        let Some(entity_rooms) = self.send.entity_room_map.entity_get_rooms(&global_entity) else {
             return false;
         };
         let user_rooms = user.room_keys();
@@ -2536,7 +2537,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // Re-evaluate scope for every user who shares a room with this entity.
             // The EntityEnteredRoom change was already processed when Private (and
             // returned early); now that the entity is Public we must trigger it again.
-            let entity_rooms: Vec<RoomKey> = self.coord
+            let entity_rooms: Vec<RoomKey> = self.send
                 .entity_room_map
                 .entity_get_rooms(global_entity)
                 .map(|rooms| rooms.iter().copied().collect())
@@ -2746,12 +2747,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // out-of-scope by the application (contract
         // [entity-delegation-09]: "migration yields no holder if owner is
         // out of scope at migration time").
-        if self.coord
+        if self.send
             .entity_scope_map
             .get(&user_key, global_entity)
             .is_none()
         {
-            self.coord.entity_scope_map.insert(user_key, *global_entity, true);
+            self.send.entity_scope_map.insert(user_key, *global_entity, true);
         }
 
         // Migrate Entity from Remote -> Host connection
@@ -2825,7 +2826,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // EnableDelegation). We use `entity_scope_map` directly
         // because `user_scope_has_entity` takes a world_entity (E),
         // not a global_entity, and we only have the global here.
-        let owner_in_scope = self.coord
+        let owner_in_scope = self.send
             .entity_scope_map
             .get(client_key, global_entity)
             .copied()
@@ -3021,7 +3022,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // leak across user sessions.
         self.send.user_priorities.remove(user_key);
 
-        self.coord.entity_scope_map.remove_user(user_key);
+        self.send.entity_scope_map.remove_user(user_key);
 
         // Clean up all user data
         for room_key in user.room_keys() {
@@ -3031,7 +3032,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 .unsubscribe_user(user_key);
             // Mirror the room→user removal into the scope-checks cache —
             // this path bypasses `room_remove_user`.
-            self.coord.scope_checks_cache
+            self.send.scope_checks_cache
                 .on_user_removed_from_room(*room_key, *user_key);
         }
 
@@ -3078,9 +3079,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Deletes the Room associated with a given RoomKey on the Server.
     /// Returns true if the Room existed.
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
-        let crate::server::CoordinatorState {
-            room_store, user_store, entity_room_map, scope_checks_cache, ..
-        } = &mut self.coord;
+        // Phase A.3 — destructure across both halves: room_store/user_store
+        // live on CoordinatorState; entity_room_map/scope_checks_cache live
+        // on SendState. `&mut self.coord` and `&mut self.send` are disjoint
+        // fields so simultaneous mut borrows are sound.
+        let crate::server::CoordinatorState { room_store, user_store, .. } = &mut self.coord;
+        let crate::server::SendState {
+            entity_room_map, scope_checks_cache, ..
+        } = &mut self.send;
         room_store.destroy(room_key, user_store, entity_room_map, scope_checks_cache)
     }
 
@@ -3102,9 +3108,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         let change = {
             let entity_map = self.shared.global_entity_map.read();
-            let crate::server::CoordinatorState {
-                room_store, user_store, scope_checks_cache, ..
-            } = &mut self.coord;
+            let crate::server::CoordinatorState { room_store, user_store, .. } = &mut self.coord;
+            let crate::server::SendState { scope_checks_cache, .. } = &mut self.send;
             room_store.add_user(room_key, user_key, user_store, &*entity_map, scope_checks_cache)
         };
         self.shared.scope_change_queue.lock().push_back(change);
@@ -3117,9 +3122,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
         let change = {
-            let crate::server::CoordinatorState {
-                room_store, user_store, scope_checks_cache, ..
-            } = &mut self.coord;
+            let crate::server::CoordinatorState { room_store, user_store, .. } = &mut self.coord;
+            let crate::server::SendState { scope_checks_cache, .. } = &mut self.send;
             room_store.remove_user(room_key, user_key, user_store, scope_checks_cache)
         };
         self.shared.scope_change_queue.lock().push_back(change);
@@ -3168,9 +3172,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let change_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            let crate::server::CoordinatorState {
-                room_store, entity_room_map, scope_checks_cache, ..
-            } = &mut self.coord;
+            let crate::server::CoordinatorState { room_store, .. } = &mut self.coord;
+            let crate::server::SendState {
+                entity_room_map, scope_checks_cache, ..
+            } = &mut self.send;
             room_store.add_entity(room_key, world_entity, &*entity_map, entity_room_map, scope_checks_cache)
         };
         if let Some(change) = change_opt {
@@ -3181,9 +3186,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let entity_map = self.shared.global_entity_map.read();
-        let crate::server::CoordinatorState {
-            room_store, entity_room_map, scope_checks_cache, ..
-        } = &mut self.coord;
+        let crate::server::CoordinatorState { room_store, .. } = &mut self.coord;
+        let crate::server::SendState {
+            entity_room_map, scope_checks_cache, ..
+        } = &mut self.send;
         room_store.remove_entity(room_key, world_entity, &*entity_map, entity_room_map, scope_checks_cache);
     }
 
@@ -3554,7 +3560,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
                 // evaluate whether the Entity really needs to be despawned!
                 // what if the Entity shares another Room with this User? It shouldn't be despawned!
-                if let Some(entity_rooms) = self.coord
+                if let Some(entity_rooms) = self.send
                     .entity_room_map
                     .entity_get_rooms(&removed_global_entity)
                 {
@@ -3633,7 +3639,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     for global_entity in &entity_list {
                         // Only despawn if the user has no other room in common with the entity.
                         if let Some(entity_rooms) =
-                            self.coord.entity_room_map.entity_get_rooms(global_entity)
+                            self.send.entity_room_map.entity_get_rooms(global_entity)
                         {
                             if entity_rooms.iter().any(|rk| user_rooms.contains(rk)) {
                                 continue;
@@ -3753,13 +3759,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // every connected user, but the explicit-exclude override still
         // applies defensively.
         let in_common_room = if let Some(entity_rooms) =
-            self.coord.entity_room_map.entity_get_rooms(global_entity)
+            self.send.entity_room_map.entity_get_rooms(global_entity)
         {
             entity_rooms.intersection(user.room_keys()).next().is_some()
         } else {
             false
         };
-        let explicit = self.coord
+        let explicit = self.send
             .entity_scope_map
             .get(user_key, global_entity)
             .copied();
@@ -3768,7 +3774,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // server-owned entities that have no rooms at all. If the entity has rooms
         // (even rooms the user isn't in), include() is a valid cross-room override
         // per [entity-scopes-06]. Resources and client-owned entities are exempt.
-        let entity_is_roomless = self.coord
+        let entity_is_roomless = self.send
             .entity_room_map
             .entity_get_rooms(global_entity)
             .is_none();

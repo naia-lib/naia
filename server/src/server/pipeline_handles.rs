@@ -54,7 +54,9 @@ use naia_shared::{Instant, Tick, WorldRefType};
 
 use crate::{
     connection::RecvConnection,
+    room::RoomKey,
     server::{receive_output::ReceiveOutput, recv_state::RecvState, send_state::SendState},
+    user::UserKey,
 };
 
 /// Recv-thread handle. Owns `RecvState<E>` directly.
@@ -171,4 +173,78 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
         self.state.send_all_packets(world);
     }
+
+    // ============================================================
+    // Phase A.3 — send-side scope APIs (cyberlith D5)
+    // ============================================================
+    //
+    // The cyberlith Send SubApp computes its own per-user visibility (D5)
+    // and needs to publish the result into naia's scope tables, which now
+    // live on `SendState`. These helpers expose just-enough surface for
+    // the send-side scope policy without re-introducing the
+    // `WorldServer::user_scope_mut` chain that depends on
+    // `CoordinatorState::user_store` and `RoomStore`.
+
+    /// Returns a snapshot of the pending scope-check tuples
+    /// `(room_key, user_key, world_entity)`.
+    ///
+    /// Mirrors `WorldServer::scope_checks_pending()` but operates against
+    /// the relocated `SendState::scope_checks_cache`. Cyberlith's
+    /// `run_scope_policy` system reads this each tick to decide which
+    /// per-user / per-entity scope decisions to recompute.
+    pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
+        self.state.scope_checks_cache.pending_slice().to_vec()
+    }
+
+    /// Mark all currently-pending scope checks as handled.
+    ///
+    /// Mirrors `WorldServer::mark_scope_checks_pending_handled()`. Call
+    /// after every batch returned by [`scope_checks_pending`].
+    pub fn mark_scope_checks_pending_handled(&mut self) {
+        self.state.scope_checks_cache.mark_pending_handled();
+    }
+
+    /// Set a per-user explicit scope bit for `global_entity`.
+    ///
+    /// This is the *raw* writer path: it inserts into
+    /// `entity_scope_map` and pushes a `ScopeChange::ScopeToggled` onto
+    /// the cross-half `scope_change_queue`. It does **NOT** run the
+    /// publicity/owner pre-checks that
+    /// `WorldServer::user_scope_set_entity` runs — D5's send-side scope
+    /// policy is responsible for only invoking it on entities it has
+    /// already determined are valid scope targets.
+    ///
+    /// `global_entity` is provided directly (not `world_entity`) so the
+    /// call doesn't depend on the cyberlith-side world-entity ↔
+    /// global-entity mapping (the Send SubApp can resolve via its
+    /// `SendReplMap` if needed before calling).
+    pub fn user_scope_set_global_entity(
+        &mut self,
+        user_key: &UserKey,
+        global_entity: naia_shared::GlobalEntity,
+        is_contained: bool,
+    ) {
+        self.state
+            .entity_scope_map
+            .insert(*user_key, global_entity, is_contained);
+        self.state
+            .shared
+            .scope_change_queue
+            .lock()
+            .push_back(crate::server::scope_change::ScopeChange::ScopeToggled(
+                *user_key,
+                global_entity,
+                is_contained,
+            ));
+    }
+
+    /// Phase A.3 deviation note: `room_mut` is NOT implemented on
+    /// `SendHandle`. The spec listed it, but `RoomStore` stays on
+    /// `CoordinatorState` (it's coord-thread state — user_store is its
+    /// peer, and room membership is set via lifecycle events that arrive
+    /// on the Recv SubApp). D5's send-side scope policy does not need
+    /// it. Cyberlith reaches room state via `CoordHandle` on the Recv
+    /// SubApp instead.
+    #[doc(hidden)]
+    fn _phase_a3_no_room_mut_on_send() {}
 }

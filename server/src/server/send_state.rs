@@ -29,10 +29,13 @@ use naia_shared::{
 
 use crate::{
     connection::{io::SendIo, RecvConnection, SendConnection},
-    server::ServerShared,
+    server::{scope_checks_cache::ScopeChecksCache, ServerShared},
     time_manager::TimeManager,
     user::UserKey,
-    world::global_world_manager::GlobalWorldManager,
+    world::{
+        entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
+        global_world_manager::GlobalWorldManager,
+    },
 };
 
 /// Send-thread-exclusive state lifted out of `WorldServer` (step 4-E).
@@ -78,6 +81,25 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Shared init-only config + cross-thread atomic cells.
     pub shared: Arc<ServerShared<E>>,
+
+    /// Entity ↔ room membership index (relocated from `CoordinatorState`
+    /// in Phase A.3 of MISSION_SIM_OWNS_WORLD). Read by Iris during
+    /// `send_all_packets` (room-gate decisions) and mutated when entities
+    /// enter / leave rooms. Send-side because the dispatching code that
+    /// reads it (Iris + per-user scope-policy hook) is already send-side.
+    pub(crate) entity_room_map: EntityRoomMap,
+
+    /// Entity ↔ per-user scope membership index (relocated from
+    /// `CoordinatorState` in Phase A.3). Mutated by
+    /// `user_scope_set_entity` (typically called by D5's send-side scope
+    /// policy in cyberlith). Read by `user_scope_has_entity`.
+    pub(crate) entity_scope_map: EntityScopeMap,
+
+    /// Push-based mirror of pending scope checks (relocated from
+    /// `CoordinatorState` in Phase A.3). Send-side because the scope
+    /// policy that drains it (`scope_checks_pending` /
+    /// `mark_scope_checks_pending_handled`) is itself send-side under D5.
+    pub(crate) scope_checks_cache: ScopeChecksCache<E>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {

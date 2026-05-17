@@ -18,12 +18,9 @@ use std::hash::Hash;
 
 use naia_shared::{GlobalPriorityState, ResourceRegistry};
 
-use crate::{
-    request::{GlobalRequestManager, GlobalResponseManager},
-    world::{entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap},
-};
+use crate::request::{GlobalRequestManager, GlobalResponseManager};
 
-use super::{room_store::RoomStore, scope_checks_cache::ScopeChecksCache, user_store::UserStore};
+use super::{room_store::RoomStore, user_store::UserStore};
 
 /// Coordinator-thread state lifted out of `WorldServer` (step 4-E.2a).
 ///
@@ -34,10 +31,6 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) user_store: UserStore,
     /// Per-room metadata.
     pub(crate) room_store: RoomStore,
-    /// Entity ↔ room membership index.
-    pub(crate) entity_room_map: EntityRoomMap,
-    /// Entity ↔ per-user scope membership index.
-    pub(crate) entity_scope_map: EntityScopeMap,
     /// In-flight outbound requests awaiting matching responses.
     pub(crate) global_request_manager: GlobalRequestManager,
     /// In-flight outbound responses awaiting client receipt.
@@ -50,8 +43,6 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// `global_entity_priority_mut` borrow API or `on_despawn`); the
     /// publish-on-read step keeps `send.global_priority` in sync.
     pub(crate) global_priority_mirror: GlobalPriorityState<E>,
-    /// Push-based mirror of pending scope checks; reads are O(1).
-    pub(crate) scope_checks_cache: ScopeChecksCache<E>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.
