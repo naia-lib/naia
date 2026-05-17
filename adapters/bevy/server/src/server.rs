@@ -719,18 +719,35 @@ impl<'w> Server<'w> {
         self.server_impl.resource_authority_status::<R>()
     }
 
-    pub fn world_only_resource_scope(
+    pub fn world_only_resource_scope<R>(
         world: &mut World,
-        f: impl FnOnce(&mut World, &mut WorldServer<Entity>),
-    ) {
+        f: impl FnOnce(&mut World, &mut WorldServer<Entity>) -> R,
+    ) -> R {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| match &mut *server {
-            ServerImpl::WorldOnly(server) => {
-                f(world, server);
-            }
+            ServerImpl::WorldOnly(server) => f(world, server),
             ServerImpl::Full(_) => {
                 panic!("Expected WorldOnly Server, found Full Server");
             }
         })
+    }
+
+    /// Pipeline-mode coordinator helper (step 4-F.cyberlith.d): apply a
+    /// `ReceiveOutput<Entity>` returned by `WorldServer::receive()` to the
+    /// Bevy `World`, firing the same Bevy events that the in-Update
+    /// `translate_world_events` / `translate_tick_events` systems fire in
+    /// the non-pipeline mode.
+    ///
+    /// Internally pulls the `ServerImpl` resource out of `World` via
+    /// `resource_scope` (so the caller doesn't need to reach for the
+    /// private wrapper), then delegates to
+    /// [`crate::apply_receive_output::apply_receive_output`].
+    pub fn apply_receive_output(
+        world: &mut World,
+        output: naia_server::ReceiveOutput<Entity>,
+    ) {
+        world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+            crate::apply_receive_output::apply_receive_output(world, &mut *server, output);
+        });
     }
 }
 
