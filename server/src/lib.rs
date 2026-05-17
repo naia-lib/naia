@@ -83,6 +83,11 @@ mod user;
 mod user_scope;
 mod world;
 
+/// Pipeline-mode handle packaging for the cyberlith Sim-Owns-World
+/// architecture. See [`pipeline_actors::spawn_server_handles`] for the
+/// entry point.
+pub mod pipeline_actors;
+
 cfg_if! {
     if #[cfg(feature = "interior_visibility")] {
         pub use naia_shared::LocalEntity;
@@ -115,6 +120,7 @@ pub use server::{
     ConnectionShared, CoordinatorState, MainServer, RecvHandle, RecvState, ReceiveOutput,
     SendHandle, SendState, Server, ServerConfig, WorldServer,
 };
+pub use pipeline_actors::{CoordHandle, spawn_server_handles};
 
 #[cfg(feature = "e2e_debug")]
 pub use server::world_server::{
