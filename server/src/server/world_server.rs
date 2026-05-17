@@ -426,14 +426,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                             continue;
                         }
                         PacketType::Ping => {
+                            // 4-F.naia.c.1: queue the pong response on
+                            // `pending_outbound_packets` (recv path cannot
+                            // touch `SendState::send_io` in pipeline mode);
+                            // serial-mode drain happens at the top of
+                            // `send_all_packets` via `flush_pending_outbound_packets`.
                             let response = self.shared.time_manager.read().process_ping(&mut reader).unwrap();
-                            // send packet
-                            if self.send.send_io.send_packet(&address, response.to_packet()).is_err() {
-                                // Pong send failure is transient: client will re-ping on its
-                                // own timer. Persistent link failures show up via timeout.
-                                warn!("Server Error: Cannot send pong packet to {}", address);
-                                continue;
-                            };
+                            self.shared
+                                .pending_outbound_packets
+                                .lock()
+                                .push((address, response.to_packet()));
 
                             if let Some(recv_conn) = self.recv.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
@@ -468,26 +470,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                                 );
                                 continue;
                             };
-                            let has_connection =
-                                self.send.send_user_connections.contains_key(&address);
-                            if !has_connection {
-                                let Some(user_key) = self.coord.user_store.take_disconnected(&address)
-                                else {
-                                    warn!("Server Error: received handshake packet from unknown address: {:?}", address);
-                                    continue;
-                                };
-                                self.finalize_connection(&user_key, &address);
-                            }
+                            // 4-F.naia.c.1: defer finalize_connection to the
+                            // coord stage (recv thread can't touch user_store)
+                            // via `pending_handshakes`. Always push — the drain
+                            // (`drain_pending_handshakes`) is idempotent
+                            // because `take_disconnected` returns None for
+                            // already-finalized addresses (spec Option C-2).
+                            self.shared.pending_handshakes.lock().push(address);
 
-                            // Send Connect Response
+                            // 4-F.naia.c.1: queue the Connect Response on
+                            // `pending_outbound_packets` (recv path cannot
+                            // touch `SendState::send_io` in pipeline mode);
+                            // the serial-mode flush happens at the top of
+                            // `send_all_packets`.
                             let packet = HandshakeManager::write_connect_response().to_packet();
-                            if self.send.send_io.send_packet(&address, packet).is_err() {
-                                warn!(
-                                    "Server Error: Cannot send handshake response to {}",
-                                    address
-                                );
-                                continue;
-                            }
+                            self.shared
+                                .pending_outbound_packets
+                                .lock()
+                                .push((address, packet));
 
                             continue;
                         }
@@ -504,6 +504,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
         }
 
+        // 4-F.naia.c.1: drain pending_handshakes — serial-mode equivalent
+        // to the coord-stage drain that runs in pipeline mode. Must happen
+        // before `decode_pending_data_packets` so the newly-finalized
+        // SendConnection exists when the data decoder looks it up.
+        self.drain_pending_handshakes();
+
         // 4-E.2e: coordinator-stage decode of every Data packet buffered
         // during this recv cycle. Must run before `process_received_commands`
         // (which finalizes commands the decode just wrote to
@@ -513,6 +519,50 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         for address in received_addresses {
             if let Some(send_conn) = self.send.send_user_connections.get_mut(&address) {
                 send_conn.process_received_commands();
+            }
+        }
+    }
+
+    /// 4-F.naia.c.1: coordinator-stage drain of `shared.pending_handshakes`.
+    /// Recv path pushes addresses on incoming ClientConnectRequest packets;
+    /// this method finalizes each one (lookup user_key via
+    /// `coord.user_store.take_disconnected`, build connection pair, register
+    /// shared atomic, queue ConnectionAdded). Idempotent on repeated pushes
+    /// because `take_disconnected` returns None on the second call (spec
+    /// Option C-2).
+    ///
+    /// Called inline at the tail of `receive_all_packets` in serial mode;
+    /// in pipeline mode (4-F.cyberlith.e), the coordinator calls this after
+    /// `RecvHandle::receive` returns and before `run_send_preamble`.
+    pub(crate) fn drain_pending_handshakes(&mut self) {
+        let pending: Vec<SocketAddr> =
+            std::mem::take(&mut *self.shared.pending_handshakes.lock());
+        for address in pending {
+            let Some(user_key) = self.coord.user_store.take_disconnected(&address) else {
+                // Repeat Handshake retry (already finalized) — silently
+                // skip. The Connect Response was already queued by the
+                // recv path so the client will observe the retry as
+                // acknowledged.
+                continue;
+            };
+            self.finalize_connection(&user_key, &address);
+        }
+    }
+
+    /// 4-F.naia.c.1: drain `shared.pending_outbound_packets` and emit each
+    /// packet via `send.send_io`. Recv path pushes Handshake Connect
+    /// Responses + Ping Pong responses here because it cannot touch
+    /// `SendState::send_io` in pipeline mode. Drained at the top of
+    /// `send_all_packets`.
+    pub(crate) fn flush_pending_outbound_packets(&mut self) {
+        let pending: Vec<(SocketAddr, naia_shared::OutgoingPacket)> =
+            std::mem::take(&mut *self.shared.pending_outbound_packets.lock());
+        for (address, packet) in pending {
+            if self.send.send_io.send_packet(&address, packet).is_err() {
+                warn!(
+                    "Server Error: cannot flush queued outbound packet to {}",
+                    address
+                );
             }
         }
     }
@@ -942,6 +992,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // coordinator will call `run_send_preamble` directly before kicking
         // the send thread (and `send_all_packets` will skip the inline call).
         self.run_send_preamble(&world);
+
+        // 4-F.naia.c.1: flush queued outbound packets (handshake responses,
+        // pong responses) that the recv path enqueued because it cannot
+        // touch `SendState::send_io` in pipeline mode.
+        self.flush_pending_outbound_packets();
 
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =

@@ -20,6 +20,8 @@
 //! 5. pending_send_state_updates             — Mutex
 //! 6. scope_change_queue                     — Mutex
 //! 7. pending_auth_grants                    — Mutex
+//! 8. pending_outbound_packets               — Mutex (recv→send packet ferry)
+//! 9. pending_handshakes                     — Mutex (recv→coord handshake handoff)
 //! ```
 //!
 //! Step 4-A introduces this discipline; subsequent steps (4-B onwards) add
@@ -37,7 +39,7 @@ use parking_lot::{Mutex, RwLock};
 
 use naia_shared::{
     ChannelKinds, ComponentKinds, EntityAuthStatus, GlobalDirtyBitset, GlobalEntity,
-    GlobalEntityMap, MessageKinds,
+    GlobalEntityMap, MessageKinds, OutgoingPacket,
 };
 
 use crate::{
@@ -97,6 +99,24 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// client side. Drained at the end of `send_all_packets` Phase 3.
     pub(crate) pending_auth_grants:
         Mutex<Vec<(UserKey, GlobalEntity, EntityAuthStatus)>>,
+
+    /// 4-F.naia.c.1: outbound packets queued by the recv path because the
+    /// recv thread doesn't own `SendState::send_io`. Used for Handshake
+    /// Connect Responses and Ping Pong responses. Drained at the top of
+    /// `send_all_packets` via `flush_pending_outbound_packets`. LOCK ORDER
+    /// position #8 (after `pending_auth_grants`, before `pending_handshakes`).
+    /// Briefly-held Mutex on push/drain — no hot-path contention.
+    pub(crate) pending_outbound_packets:
+        Mutex<Vec<(SocketAddr, OutgoingPacket)>>,
+
+    /// 4-F.naia.c.1: addresses for which the recv path observed a Handshake
+    /// `ClientConnectRequest` packet. Recv pushes (one entry per inbound
+    /// handshake — `take_disconnected` is idempotent on the drain side per
+    /// the spec's Option C-2). Drained by the coordinator-stage
+    /// `drain_pending_handshakes`, which looks up the matching user_key
+    /// via `coord.user_store.take_disconnected` and calls
+    /// `finalize_connection`. LOCK ORDER position #9 (last).
+    pub(crate) pending_handshakes: Mutex<Vec<SocketAddr>>,
 
     /// Per-connection `ConnectionShared` cells (atomics for ACK/RTT and
     /// coordinator → recv `should_disconnect` per B4). Outermost lock per
@@ -167,6 +187,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             pending_send_state_updates: Mutex::new(Vec::new()),
             scope_change_queue: Mutex::new(VecDeque::new()),
             pending_auth_grants: Mutex::new(Vec::new()),
+            pending_outbound_packets: Mutex::new(Vec::new()),
+            pending_handshakes: Mutex::new(Vec::new()),
             connection_shared: RwLock::new(HashMap::new()),
             time_manager: RwLock::new(TimeManager::new(tick_interval)),
             global_world_manager: RwLock::new(global_world_manager),
