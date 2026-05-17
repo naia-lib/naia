@@ -78,13 +78,14 @@ pub use naia_bevy_shared::{
     Tick, WorldUpdate,
 };
 pub use naia_server::{
+    pipeline_actors,
     shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
         FileBitWriter, ResponseReceiveKey, SerdeErr, SignedInteger, SignedVariableInteger,
         SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
     transport, ConnectionShared, ReceiveOutput, RecvHandle, SendHandle, ReplicationConfig,
-    RoomKey, SerdeBevy as Serde, ServerConfig, UserKey,
+    RoomKey, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
 };
 
 #[cfg(feature = "bench_instrumentation")]
