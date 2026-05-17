@@ -30,9 +30,6 @@ use crate::{
 
 /// Bundles the recv-thread-exclusive `WorldServer` fields (step 4-D).
 pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
-    /// Periodic ping send cadence — fires when the recv loop should send
-    /// a ping packet for RTT estimation.
-    pub(crate) ping_timer: Timer,
     /// Periodic outer-loop tick that drives `handle_disconnects`.
     pub(crate) timeout_timer: Timer,
 
@@ -99,10 +96,8 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Construct a new `RecvState` with default timers seeded from the
     /// shared `ServerShared<E>` server-config Arc.
     pub fn new(shared: Arc<ServerShared<E>>, recv_io: RecvIo) -> Self {
-        let ping_interval = shared.server_config.ping.ping_interval;
         let disconnect_timeout = shared.server_config.connection.disconnection_timeout_duration;
         Self {
-            ping_timer: Timer::new(ping_interval),
             timeout_timer: Timer::new(disconnect_timeout),
             addrs_with_new_packets: HashSet::new(),
             received_addresses: HashSet::new(),

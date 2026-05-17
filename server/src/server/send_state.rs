@@ -20,7 +20,10 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{GlobalPriorityState, OwnedBitReader, Tick, Timer, UserPriorityState};
+use naia_shared::{
+    BitWriter, GlobalPriorityState, OwnedBitReader, PacketType, Serde, Tick, Timer,
+    UserPriorityState,
+};
 
 use crate::{
     connection::{io::SendIo, RecvConnection, SendConnection},
@@ -55,6 +58,14 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// the dispatch loop.
     pub(crate) heartbeat_timer: Timer,
 
+    /// Periodic ping send cadence (relocated from `RecvState` in
+    /// 4-F.naia.c.2c). Send-side because the dispatch (`write_header` +
+    /// `send_io.send_packet` + `mark_sent`) is send-side; only the
+    /// per-user `ping_manager.write_ping(...)` read crosses into the
+    /// recv half, and the coord/serial caller passes a `&mut recv_conns`
+    /// borrow for that.
+    pub(crate) ping_timer: Timer,
+
     /// Send half of the transport (step 4-E.2a). Carries the encoder,
     /// outgoing bandwidth monitor, and per-tick byte counter alongside
     /// the `Box<dyn PacketSender>`. Owned here so the send thread has
@@ -66,6 +77,66 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
+    /// Periodic ping dispatch (step 4-F.naia.c.2c — relocated from
+    /// `WorldServer::handle_pings`).
+    ///
+    /// Send-side because every operation other than
+    /// `recv_conn.ping_manager.write_ping(...)` is send-side: the
+    /// `ping_timer` lives on `SendState`, the per-user header is
+    /// assembled via `send_conn.write_header` (reads the cross-half ack
+    /// snapshot atomic), the packet is dispatched via `self.send_io`,
+    /// and `mark_sent` updates the send-side heartbeat suppression. The
+    /// `&mut recv_conns` borrow exists solely so each user's
+    /// `ping_manager.should_send_ping()` / `write_ping(...)` can run
+    /// against the recv-half body data.
+    ///
+    /// Serial mode: called from `WorldServer::receive_all_packets` with
+    /// `&mut self.recv.recv_user_connections`. Pipeline mode: called by
+    /// the coordinator with `&mut recv_handle.state.recv_user_connections`
+    /// either standalone or alongside `process_recv_packets`.
+    pub fn send_pings(
+        &mut self,
+        recv_conns: &mut HashMap<SocketAddr, RecvConnection>,
+    ) {
+        if !self.ping_timer.ringing() {
+            return;
+        }
+        self.ping_timer.reset();
+
+        let tm_guard = self.shared.time_manager.read();
+        let tm = &*tm_guard;
+        for (user_address, recv_conn) in recv_conns.iter_mut() {
+            if !recv_conn.ping_manager.should_send_ping() {
+                continue;
+            }
+            let Some(send_conn) = self.send_user_connections.get_mut(user_address) else {
+                continue;
+            };
+            let mut writer = BitWriter::new();
+
+            // write header (send side, reads ack snapshot atomic)
+            let _header = send_conn.write_header(PacketType::Ping, &mut writer);
+
+            // write server tick
+            tm.current_tick().ser(&mut writer);
+            tm.current_tick_instant().ser(&mut writer);
+
+            // write body (recv side)
+            recv_conn.ping_manager.write_ping(&mut writer, tm);
+
+            if self
+                .send_io
+                .send_packet(user_address, writer.to_packet())
+                .is_err()
+            {
+                // Ping send failure is not fatal: the connection timeout
+                // will detect a persistently dead link via missed pongs.
+                warn!("Server Error: Cannot send ping packet to {}", user_address);
+            }
+            send_conn.base.mark_sent();
+        }
+    }
+
     /// Coordinator-stage cross-half processing (step 4-F.naia.c.2b).
     ///
     /// Runs the work that used to live at the tail of

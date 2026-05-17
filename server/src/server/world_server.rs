@@ -246,11 +246,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let recv = crate::server::RecvState::new(Arc::clone(&shared), recv_io);
 
         let heartbeat_interval = shared.server_config.connection.heartbeat_interval;
+        let ping_interval = shared.server_config.ping.ping_interval;
         let send = crate::server::SendState {
             send_user_connections: HashMap::new(),
             user_priorities: HashMap::new(),
             global_priority: GlobalPriorityState::new(),
             heartbeat_timer: naia_shared::Timer::new(heartbeat_interval),
+            ping_timer: naia_shared::Timer::new(ping_interval),
             send_io,
             shared: Arc::clone(&shared),
         };
@@ -385,11 +387,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // `RecvState::receive`).
         self.send.send_io.tick_bandwidth_monitor();
 
-        // Cross-half periodic (recv timer drives a send-side dispatch).
-        // 4-F.naia.c.2c will lift this out of the serial wrapper into a
-        // coord-stage helper invoked between `RecvHandle::receive` and
-        // `SendHandle::process_recv_packets`.
-        self.handle_pings();
+        // 4-F.naia.c.2c: periodic ping dispatch. Method lives on
+        // `SendState`; recv-side `ping_manager` access flows in via the
+        // `&mut recv_user_connections` borrow. Pipeline coordinator
+        // calls the same method directly on `SendHandle`.
+        self.send.send_pings(&mut self.recv.recv_user_connections);
         // 4-F.naia.c.2a: handle_heartbeats + handle_empty_acks fire at
         // the top of `send_all_packets`, not here.
 
@@ -3788,48 +3790,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    fn handle_pings(&mut self) {
-        // pings — split-borrow: recv map drives the should_send check and
-        // writes the ping body; matching send map entry assembles the
-        // header (reads ack atomic) + mark_sent.
-        if self.recv.ping_timer.ringing() {
-            self.recv.ping_timer.reset();
-
-            let tm_guard = self.shared.time_manager.read();
-            let tm: &TimeManager = &*tm_guard;
-            for (user_address, recv_conn) in &mut self.recv.recv_user_connections.iter_mut() {
-                if !recv_conn.ping_manager.should_send_ping() {
-                    continue;
-                }
-                let Some(send_conn) = self.send.send_user_connections.get_mut(user_address) else {
-                    continue;
-                };
-                let mut writer = BitWriter::new();
-
-                // write header (send side, reads ack snapshot atomic)
-                let _header = send_conn.write_header(PacketType::Ping, &mut writer);
-
-                // write server tick
-                tm.current_tick().ser(&mut writer);
-                tm.current_tick_instant().ser(&mut writer);
-
-                // write body (recv side)
-                recv_conn.ping_manager.write_ping(&mut writer, tm);
-
-                // send packet
-                if self
-                    .send.send_io
-                    .send_packet(user_address, writer.to_packet())
-                    .is_err()
-                {
-                    // Ping send failure is not fatal: the connection timeout
-                    // will detect a persistently dead link via missed pongs.
-                    warn!("Server Error: Cannot send ping packet to {}", user_address);
-                }
-                send_conn.base.mark_sent();
-            }
-        }
-    }
+    // 4-F.naia.c.2c: `handle_pings` moved to `SendState::send_pings`,
+    // which takes `&mut HashMap<SocketAddr, RecvConnection>` for the
+    // per-user `ping_manager.write_ping(...)` borrow into the recv half.
+    // The ping_timer also lives on `SendState` now (relocated from
+    // `RecvState`) — every other piece of ping dispatch (header /
+    // `send_io` / `mark_sent`) was already send-side.
 
     fn handle_heartbeats(&mut self) {
         // heartbeats — send-side only after dissolution (header reads from

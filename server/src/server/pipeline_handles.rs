@@ -92,6 +92,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state
     }
 
+    /// Pipeline-mode periodic ping dispatch (step 4-F.naia.c.2c).
+    /// Thin wrapper that forwards to [`SendState::send_pings`].
+    pub fn send_pings(
+        &mut self,
+        recv_conns: &mut HashMap<SocketAddr, RecvConnection>,
+    ) {
+        self.state.send_pings(recv_conns);
+    }
+
     /// Pipeline-mode coord-stage cross-half processing (step 4-F.naia.c.2b).
     ///
     /// Thin wrapper that forwards to [`SendState::process_recv_packets`].
