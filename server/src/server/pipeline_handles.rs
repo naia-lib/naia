@@ -238,6 +238,43 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
             ));
     }
 
+    /// Set a per-user explicit scope bit for `world_entity`.
+    ///
+    /// Convenience wrapper over [`user_scope_set_global_entity`]: looks up
+    /// `world_entity → GlobalEntity` via the shared
+    /// [`naia_shared::EntityAndGlobalEntityConverter`] (no scope mutation
+    /// performed if the entity is not registered) and forwards to the
+    /// global-entity-keyed setter.
+    ///
+    /// Mirrors `WorldServer::UserScopeMut::include / exclude` ergonomics
+    /// for the Send SubApp world (where bevy entities are the natural
+    /// key but the cross-half scope queue is keyed by `GlobalEntity`).
+    /// Used by cyberlith D.5b's send-side `static_tile_scope_policy`.
+    ///
+    /// Returns `true` if a scope mutation was queued, `false` if
+    /// `world_entity` was not registered with this server's
+    /// `global_entity_map` (in which case the call is a no-op).
+    pub fn user_scope_set_entity(
+        &mut self,
+        user_key: &UserKey,
+        world_entity: &E,
+        is_contained: bool,
+    ) -> bool {
+        use naia_shared::EntityAndGlobalEntityConverter;
+        let global_entity = match self
+            .state
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        {
+            Ok(ge) => ge,
+            Err(_) => return false,
+        };
+        self.user_scope_set_global_entity(user_key, global_entity, is_contained);
+        true
+    }
+
     /// Phase A.3 deviation note: `room_mut` is NOT implemented on
     /// `SendHandle`. The spec listed it, but `RoomStore` stays on
     /// `CoordinatorState` (it's coord-thread state — user_store is its
