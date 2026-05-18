@@ -19,7 +19,7 @@ use crate::{
 
 #[derive(Resource)]
 #[derive(Default)]
-pub(crate) struct ComponentEventRegistry {
+pub struct ComponentEventRegistry {
     bundle_registry: BundleEventRegistry,
     component_handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,
 }
