@@ -43,6 +43,7 @@ use crate::connection::SendConnection;
 ///
 /// See module docs for variant intent and the publish-on-read note on
 /// `PriorityChanged`.
+#[allow(dead_code)]
 pub enum SendStateUpdate<E: Copy + Eq + Hash + Send + Sync> {
     /// A new connection was finalized on the recv thread; insert the
     /// matching `SendConnection` into `SendState.send_user_connections`.

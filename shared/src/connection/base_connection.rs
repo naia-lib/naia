@@ -31,6 +31,7 @@ use crate::{
 /// `timeout_timer`, `manual_disconnect`) is migrated to a `RecvConnection`
 /// wrapper in step 4-C.3.
 pub struct BaseRecvConnection {
+    /// Inbound-ack pipeline tracking which sent packets the peer has acknowledged.
     pub ack_recv: AckManagerRecv,
 }
 

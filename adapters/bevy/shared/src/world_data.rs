@@ -50,7 +50,7 @@ impl WorldData {
 
     // Entities //
 
-    pub(crate) fn entities(&self) -> Vec<Entity> {
+    pub fn entities(&self) -> Vec<Entity> {
         let mut output = Vec::new();
 
         for entity in &self.entities {
@@ -60,22 +60,37 @@ impl WorldData {
         output
     }
 
-    pub(crate) fn spawn_entity(&mut self, entity: &Entity) {
+    pub fn spawn_entity(&mut self, entity: &Entity) {
         self.entities.insert(*entity);
     }
 
-    pub(crate) fn despawn_entity(&mut self, entity: &Entity) {
+    pub fn despawn_entity(&mut self, entity: &Entity) {
         self.entities.remove(entity);
     }
 
     // Components
 
     #[allow(clippy::borrowed_box)]
-    pub(crate) fn component_access(
+    pub fn component_access(
         &self,
         component_kind: &ComponentKind,
     ) -> Option<&Box<dyn ComponentAccess>> {
         self.kind_to_accessor_map.get(component_kind)
+    }
+
+    /// D.3 sugar: lookup `ComponentAccess` by kind and invoke
+    /// `insert_component` in one call. Panics if the kind is not registered.
+    pub fn insert_component_dyn(
+        &self,
+        world: &mut bevy_ecs::world::World,
+        entity: &Entity,
+        kind: &ComponentKind,
+        boxed: Box<dyn Replicate>,
+    ) {
+        let accessor = self
+            .component_access(kind)
+            .expect("ComponentKind must be registered in this WorldData");
+        accessor.insert_component(world, entity, boxed);
     }
 
     pub(crate) fn put_kind<R: Replicate + Component<Mutability = Mutable>>(
