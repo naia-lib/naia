@@ -14,5 +14,6 @@ pub mod entity_command;
 pub mod entity_event;
 pub mod local;
 pub mod publicity;
+pub mod snapshot_world;
 pub mod world_reader;
 pub mod world_writer;
