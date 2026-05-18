@@ -100,6 +100,7 @@ mod bundle_event_registry;
 mod commands;
 mod component_event_registry;
 mod components;
+mod host_sync_pipeline;
 mod plugin;
 #[doc(hidden)]
 mod resource_sync;
@@ -111,6 +112,7 @@ pub use apply_receive_output::apply_receive_output_pipeline;
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
+pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
 pub use server::Server;
 

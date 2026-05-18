@@ -118,6 +118,40 @@ impl Plugin {
         Self::new_impl(server_config, protocol, true, true, true)
     }
 
+    /// Iris 2 (MISSION_IRIS_2 / SPEC_IRIS_2_NAIA.md §1.4) — pipelined
+    /// Sim-side variant.
+    ///
+    /// Functionally identical to [`Plugin::types_and_sets_only`]:
+    /// installs shared types + system sets + per-`Replicate`
+    /// `on_component_added` / `on_component_removed` / `on_despawn`
+    /// change-tracking systems via `WorldData::add_systems`, but skips
+    /// `world_to_host_sync` (no `ServerImpl` in pipeline mode).
+    ///
+    /// What's new vs. `types_and_sets_only` is the **documented
+    /// intended use**: this constructor signals that the host bevy
+    /// world being plugged in is cyberlith's Sim SubApp world (the
+    /// gameplay source of truth), NOT the Send-mirror world that
+    /// `types_and_sets_only` historically targeted.
+    ///
+    /// Cyberlith Sim drives the host-sync drain step via the new
+    /// [`crate::drain_host_sync_into_pipeline`] helper (called from a
+    /// Sim main-schedule system) — this replaces the
+    /// `world_to_host_sync` body byte-for-byte but routes through the
+    /// three pipeline handles instead of `ResMut<ServerImpl>`.
+    ///
+    /// Spawn-side semantics are unchanged from the non-pipelined
+    /// plugin: cyberlith Sim entities marked with `enable_replication`
+    /// (or `commands.spawn((...))` followed by `commands.enable_replication`)
+    /// get the `HostOwned` marker, which triggers per-component
+    /// `on_component_added` → `HostSyncEvent::Insert` → drain →
+    /// `insert_component_worldless` → diff-handler attach. Subsequent
+    /// `Mut<R>::deref_mut()` mutations fire the
+    /// `PropertyMutate` callback → `GlobalDirtyBitset` mark — exactly
+    /// the same chain as today's Send-mirror flow.
+    pub fn sim_integration(server_config: ServerConfig, protocol: Protocol) -> Self {
+        Self::new_impl(server_config, protocol, true, true, true)
+    }
+
     fn new_impl(
         server_config: ServerConfig,
         protocol: Protocol,
