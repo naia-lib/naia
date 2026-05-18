@@ -142,6 +142,17 @@ where
     // WorldEvents (target of the merged drain below); ws.recv.incoming_world_events
     // holds the prior events ready to be augmented by process_all_packets.
 
+    // Drain pending handshakes — in pipeline mode (RecvState::receive),
+    // handshake packets are DEFERRED to `shared.pending_handshakes`
+    // instead of calling `finalize_connection` inline. The coord stage
+    // (us) finalizes them, which fires ConnectEvent into
+    // `recv.incoming_world_events` AND inserts new SendConnections
+    // into `send.send_user_connections` (via
+    // `commit_pending_send_state_updates`). Without this, the new
+    // connection never appears send-side and any `send_message` /
+    // `broadcast_message` to it silently drops.
+    ws.drain_pending_handshakes();
+
     // Cross-half decode step: the recv path skipped this because it
     // had no SendHandle. We replicate the second half of
     // `WorldServer::receive_all_packets` here. The drain of
