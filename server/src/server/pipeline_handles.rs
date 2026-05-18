@@ -105,6 +105,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
             pending_data_packets,
         }
     }
+
+    /// Drain the tick-buffered messages received for `tick` from every
+    /// connected user.
+    ///
+    /// Recv-only — touches only [`RecvState::recv_user_connections`].
+    /// Mirrors `WorldServer::receive_tick_buffer_messages` (`world_server.rs:825`),
+    /// whose body reads exclusively from `self.recv.recv_user_connections`.
+    /// Exposed on [`RecvHandle`] so cyberlith's per-tick decoder (moving
+    /// off main onto Recv per MISSION_SIM_OWNS_WORLD D.5e.1+.2) can run
+    /// without WorldServer reassembly.
+    pub fn receive_tick_buffer_messages(
+        &mut self,
+        tick: &Tick,
+    ) -> crate::connection::tick_buffer_messages::TickBufferMessages {
+        let mut tick_buffer_messages =
+            crate::connection::tick_buffer_messages::TickBufferMessages::new();
+        for (_user_address, recv_conn) in self.state.recv_user_connections.iter_mut() {
+            recv_conn.tick_buffer_messages(tick, &mut tick_buffer_messages);
+        }
+        tick_buffer_messages
+    }
 }
 
 /// Send-thread handle. Owns `SendState<E>` directly.
