@@ -144,6 +144,7 @@ pub use messages::{
 pub use named::Named;
 pub use world::{
     component::{
+        cached_replicate::CachedReplicate,
         component_kinds::{ComponentKind, ComponentKinds},
         entity_property::EntityProperty,
         property::Property,

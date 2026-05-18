@@ -1,3 +1,4 @@
+pub mod cached_replicate;
 pub mod component_kinds;
 pub mod entity_property;
 pub mod property;
