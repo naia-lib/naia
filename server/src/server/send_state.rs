@@ -12,11 +12,13 @@
 //! coordinator threads for connection state.
 
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
     sync::{atomic::Ordering, Arc},
 };
+
+use parking_lot::Mutex;
 
 use log::warn;
 
@@ -29,7 +31,11 @@ use naia_shared::{
 
 use crate::{
     connection::{io::SendIo, RecvConnection, SendConnection},
-    server::{scope_checks_cache::ScopeChecksCache, ServerShared},
+    server::{
+        scope_change::{RoomChange, ScopeChange},
+        scope_checks_cache::ScopeChecksCache,
+        ServerShared,
+    },
     time_manager::TimeManager,
     user::UserKey,
     world::{
@@ -374,6 +380,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// mirror seeded in `new_connection_pair` and refreshed on every
     /// pong by `RecvState::receive`'s `Pong` handler).
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        // Drain any CoordHandle::room_* pushes that landed between ticks.
+        // Mutates entity_room_map + scope_checks_cache; leaves non-RoomChange
+        // variants in the queue for the existing per-user scope-evaluation
+        // drainer to consume.
+        let shared = Arc::clone(&self.shared);
+        self.apply_pending_room_changes(&shared.scope_change_queue);
+
         #[cfg(feature = "e2e_debug")]
         {
             crate::server::world_server::SERVER_SEND_ALL_PACKETS_CALLS
@@ -603,6 +616,66 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             for packet in packets {
                 if self.send_io.send_packet(&addr, packet).is_err() {
                     warn!("Server Error: Cannot send data packet to {}", addr);
+                }
+            }
+        }
+    }
+
+    /// Apply pending `RoomChange` events from `scope_change_queue` to
+    /// `entity_room_map` + `scope_checks_cache`.
+    ///
+    /// Must be called before any read of those two structures (i.e. at
+    /// the top of `send_all_packets`, before `drain_scope_change_queue`
+    /// fires per-user scope re-evaluation).
+    ///
+    /// Idempotent: re-call drains an empty queue.
+    ///
+    /// Non-RoomChange variants are left in the queue for the existing
+    /// per-user scope-evaluation drainer to consume.
+    pub(crate) fn apply_pending_room_changes(
+        &mut self,
+        scope_change_queue: &Mutex<VecDeque<ScopeChange<E>>>,
+    ) {
+        let drained: Vec<RoomChange<E>> = {
+            let mut q = scope_change_queue.lock();
+            let mut out = Vec::with_capacity(q.len());
+            let mut keep = VecDeque::with_capacity(q.len());
+            for change in q.drain(..) {
+                if let ScopeChange::RoomChange(rc) = change {
+                    out.push(rc);
+                } else {
+                    keep.push_back(change);
+                }
+            }
+            *q = keep;
+            out
+        };
+
+        for change in drained {
+            match change {
+                RoomChange::UserAdded { room_key, user_key, entities_in_room } => {
+                    self.scope_checks_cache.on_user_added_to_room(
+                        room_key, user_key, entities_in_room);
+                }
+                RoomChange::UserRemoved { room_key, user_key } => {
+                    self.scope_checks_cache.on_user_removed_from_room(
+                        room_key, user_key);
+                }
+                RoomChange::EntityAdded { room_key, world_entity, global_entity, users_in_room } => {
+                    self.entity_room_map.entity_add_room(&global_entity, &room_key);
+                    self.scope_checks_cache.on_entity_added_to_room(
+                        room_key, world_entity, users_in_room);
+                }
+                RoomChange::EntityRemoved { room_key, world_entity, global_entity } => {
+                    self.entity_room_map.remove_from_room(&global_entity, &room_key);
+                    self.scope_checks_cache.on_entity_removed_from_room(
+                        room_key, world_entity);
+                }
+                RoomChange::RoomDestroyed { room_key, removed_entities } => {
+                    for (_world_entity, global_entity) in &removed_entities {
+                        self.entity_room_map.remove_from_room(global_entity, &room_key);
+                    }
+                    self.scope_checks_cache.on_room_destroyed(room_key);
                 }
             }
         }

@@ -15,12 +15,14 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
-use naia_shared::{BigMapKey, DisconnectReason, Protocol};
+use naia_shared::{BigMapKey, GlobalEntitySpawner, Protocol};
+#[allow(unused_imports)]
+use naia_shared::DisconnectReason;
 
 use crate::events::world_events::WorldEvents;
 use crate::server::receive_output::ReceiveOutput;
+use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
-use crate::user::UserKey;
 
 use super::{
     CoordHandle, RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer,
@@ -252,4 +254,66 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     let decoded_again: Vec<(UserKey, TestTick)> =
         messages_again.read::<TestTickBufferedChannel, TestTick>();
     assert!(decoded_again.is_empty(), "tick buffer should drain to empty");
+}
+
+/// Integration test for CoordHandle room-ops deferred-drain path (§ 5.4).
+///
+/// Verifies that:
+/// - CoordHandle::create_room, room_add_user, room_add_entity push to
+///   scope_change_queue without draining.
+/// - apply_pending_room_changes (as called from SendState::send_all_packets)
+///   correctly applies those changes to entity_room_map + scope_checks_cache.
+#[test]
+fn coord_handle_room_ops_deferred_drain_path() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, mut send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    // Register entity 42u64 in global_entity_map so room_add_entity can
+    // look up its GlobalEntity.
+    let global_entity = {
+        let mut entity_map = coord.shared.global_entity_map.write();
+        entity_map.spawn(42u64, None)
+    };
+
+    // Register a user so room_add_user can subscribe it.
+    let user_key = UserKey::from_u64(1);
+    let user_addr: SocketAddr = "127.0.0.1:9001".parse().unwrap();
+    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+
+    // Coord-side room ops — all push-only, no drain.
+    let rk = coord.create_room();
+    coord.room_add_user(&rk, &user_key);
+    coord.room_add_entity(&rk, &42u64);
+
+    // The queue should have 4 entries: (legacy+room) for add_user, (legacy+room) for add_entity.
+    {
+        let q = coord.shared.scope_change_queue.lock();
+        assert!(
+            q.len() >= 2,
+            "expected at least 2 entries in scope_change_queue before drain, got {}",
+            q.len()
+        );
+    }
+
+    // Drain via apply_pending_room_changes — same path as send_all_packets.
+    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+
+    // entity_room_map must have entity 42u64 in room rk.
+    let erm_rooms = send.state.entity_room_map.entity_get_rooms(&global_entity);
+    assert!(
+        erm_rooms.map(|set| set.contains(&rk)).unwrap_or(false),
+        "entity_room_map should map global_entity → rk after drain"
+    );
+
+    // scope_checks_cache.pending_slice() must have the (rk, user_key, 42u64) tuple
+    // (entity was added after user, so on_entity_added_to_room adds (rk, user_key, 42u64)).
+    let pending = send.state.scope_checks_cache.pending_slice();
+    assert!(
+        pending.contains(&(rk, user_key, 42u64)),
+        "scope_checks_cache.pending_slice should contain (rk, user_key, 42) after drain; got: {pending:?}"
+    );
 }

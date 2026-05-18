@@ -35,6 +35,6 @@ pub mod send_state_update;
 pub use send_state_update::SendStateUpdate;
 
 pub(crate) mod scope_checks_cache;
-mod scope_change;
+pub(crate) mod scope_change;
 pub(crate) mod room_store;
 pub(crate) mod user_store;

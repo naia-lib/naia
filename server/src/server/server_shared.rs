@@ -93,7 +93,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// Queue of scope-change events accumulated by coordinator code and
     /// drained at the top of `send_all_packets`. Mutex held briefly on
     /// push/drain; no hot-path contention.
-    pub(crate) scope_change_queue: Mutex<VecDeque<ScopeChange>>,
+    pub(crate) scope_change_queue: Mutex<VecDeque<ScopeChange<E>>>,
 
     /// Auth grants deferred one tick to ensure entity registration on the
     /// client side. Drained at the end of `send_all_packets` Phase 3.

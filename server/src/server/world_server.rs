@@ -898,6 +898,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// already exists post-4-C.1; verify the mirror is in sync before
     /// landing 4-F.naia.h.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        // Defense-in-depth: drainer is also called by every WorldServer::room_*
+        // method, so the queue should be empty here for in-process callers.
+        // SendState::send_all_packets also calls this — idempotent when empty.
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
+
         // 4-F.naia.h: send-half body lives on `SendState::send_all_packets`.
         // The serial / cyberlith.d coordinator entry point preserves the
         // original behavior by running the coord-stage preamble inline
@@ -3079,15 +3084,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Deletes the Room associated with a given RoomKey on the Server.
     /// Returns true if the Room existed.
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
-        // Phase A.3 — destructure across both halves: room_store/user_store
-        // live on CoordinatorState; entity_room_map/scope_checks_cache live
-        // on SendState. `&mut self.coord` and `&mut self.send` are disjoint
-        // fields so simultaneous mut borrows are sound.
-        let crate::server::CoordinatorState { room_store, user_store, .. } = &mut self.coord;
-        let crate::server::SendState {
-            entity_room_map, scope_checks_cache, ..
-        } = &mut self.send;
-        room_store.destroy(room_key, user_store, entity_room_map, scope_checks_cache)
+        let (existed, room_change_opt) = {
+            let entity_map = self.shared.global_entity_map.read();
+            self.coord.room_store.destroy(room_key, &mut self.coord.user_store, &*entity_map)
+        };
+        if let Some(room_change) = room_change_opt {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(ScopeChange::RoomChange(room_change));
+        }
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
+        existed
     }
 
     //////// users
@@ -3106,13 +3112,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let change = {
+        let (legacy_change, room_change) = {
             let entity_map = self.shared.global_entity_map.read();
-            let crate::server::CoordinatorState { room_store, user_store, .. } = &mut self.coord;
-            let crate::server::SendState { scope_checks_cache, .. } = &mut self.send;
-            room_store.add_user(room_key, user_key, user_store, &*entity_map, scope_checks_cache)
+            self.coord.room_store.add_user(room_key, user_key, &mut self.coord.user_store, &*entity_map)
         };
-        self.shared.scope_change_queue.lock().push_back(change);
+        {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(legacy_change);
+            q.push_back(ScopeChange::RoomChange(room_change));
+        }
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
     /// Removes a User from a Room
@@ -3121,12 +3130,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let change = {
-            let crate::server::CoordinatorState { room_store, user_store, .. } = &mut self.coord;
-            let crate::server::SendState { scope_checks_cache, .. } = &mut self.send;
-            room_store.remove_user(room_key, user_key, user_store, scope_checks_cache)
-        };
-        self.shared.scope_change_queue.lock().push_back(change);
+        let (legacy_change, room_change) = self.coord.room_store.remove_user::<E>(
+            room_key, user_key, &mut self.coord.user_store);
+        {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(legacy_change);
+            q.push_back(ScopeChange::RoomChange(room_change));
+        }
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
     /// Get a count of Users in a given Room
@@ -3170,27 +3181,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Entities will only ever be in-scope for Users which are in a Room with
     /// them.
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let change_opt = {
+        let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            let crate::server::CoordinatorState { room_store, .. } = &mut self.coord;
-            let crate::server::SendState {
-                entity_room_map, scope_checks_cache, ..
-            } = &mut self.send;
-            room_store.add_entity(room_key, world_entity, &*entity_map, entity_room_map, scope_checks_cache)
+            self.coord.room_store.add_entity(room_key, world_entity, &*entity_map)
         };
-        if let Some(change) = change_opt {
-            self.shared.scope_change_queue.lock().push_back(change);
+        if let Some((legacy_change, room_change)) = pair_opt {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(legacy_change);
+            q.push_back(ScopeChange::RoomChange(room_change));
         }
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
     /// Remove an Entity from a Room, associated with the given RoomKey
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
-        let entity_map = self.shared.global_entity_map.read();
-        let crate::server::CoordinatorState { room_store, .. } = &mut self.coord;
-        let crate::server::SendState {
-            entity_room_map, scope_checks_cache, ..
-        } = &mut self.send;
-        room_store.remove_entity(room_key, world_entity, &*entity_map, entity_room_map, scope_checks_cache);
+        let pair_opt = {
+            let entity_map = self.shared.global_entity_map.read();
+            self.coord.room_store.remove_entity(room_key, world_entity, &*entity_map)
+        };
+        if let Some((legacy_change, room_change)) = pair_opt {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(legacy_change);
+            q.push_back(ScopeChange::RoomChange(room_change));
+        }
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
 
@@ -3605,7 +3619,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn drain_scope_change_queue<W: WorldRefType<E>>(&mut self, world: &W) {
         // Snapshot the queue so we can re-borrow self mutably for apply_scope_for_user.
-        let changes: Vec<ScopeChange> = self.shared.scope_change_queue.lock().drain(..).collect();
+        let changes: Vec<ScopeChange<E>> = self.shared.scope_change_queue.lock().drain(..).collect();
         for change in changes {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
@@ -3685,6 +3699,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
                 ScopeChange::ScopeToggled(user_key, global_entity, _is_included) => {
                     self.apply_scope_for_user(world, &user_key, &global_entity);
+                }
+                ScopeChange::RoomChange(_) => {
+                    unreachable!("apply_pending_room_changes must run before drain_scope_change_queue");
                 }
             }
         }

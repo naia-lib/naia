@@ -11,8 +11,10 @@ use std::{hash::Hash, sync::Arc};
 
 use naia_shared::{EntityAndGlobalEntityConverter, Tick};
 
-use crate::server::ServerShared;
+use crate::room::{Room, RoomKey};
 use crate::server::coord_state::CoordinatorState;
+use crate::server::scope_change::ScopeChange;
+use crate::server::ServerShared;
 use crate::user::UserKey;
 use crate::EntityOwner;
 
@@ -111,5 +113,73 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// manager).
     pub fn current_tick(&self) -> Tick {
         self.shared.time_manager.read().current_tick()
+    }
+
+    // ====================================================================
+    // Room-ops API (flat methods; push to scope_change_queue, no drain).
+    // Send's apply_pending_room_changes drains on next send_all_packets.
+    // ====================================================================
+
+    /// Create a new room and return its key.
+    pub fn create_room(&mut self) -> RoomKey {
+        self.state.room_store.insert(Room::new())
+    }
+
+    /// Destroy a room. Returns true if the room existed.
+    pub fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
+        let (existed, room_change_opt) = {
+            let entity_map = self.shared.global_entity_map.read();
+            self.state.room_store.destroy(room_key, &mut self.state.user_store, &*entity_map)
+        };
+        if let Some(room_change) = room_change_opt {
+            self.shared.scope_change_queue.lock().push_back(ScopeChange::RoomChange(room_change));
+        }
+        existed
+    }
+
+    /// Add a user to a room. Push-only; Send drains on next tick.
+    pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        let (legacy_change, room_change) = {
+            let entity_map = self.shared.global_entity_map.read();
+            self.state.room_store.add_user(room_key, user_key, &mut self.state.user_store, &*entity_map)
+        };
+        let mut q = self.shared.scope_change_queue.lock();
+        q.push_back(legacy_change);
+        q.push_back(ScopeChange::RoomChange(room_change));
+    }
+
+    /// Remove a user from a room. Push-only; Send drains on next tick.
+    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        let (legacy_change, room_change) = self.state.room_store.remove_user::<E>(
+            room_key, user_key, &mut self.state.user_store);
+        let mut q = self.shared.scope_change_queue.lock();
+        q.push_back(legacy_change);
+        q.push_back(ScopeChange::RoomChange(room_change));
+    }
+
+    /// Add an entity to a room. Push-only; Send drains on next tick.
+    pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
+        let pair_opt = {
+            let entity_map = self.shared.global_entity_map.read();
+            self.state.room_store.add_entity(room_key, world_entity, &*entity_map)
+        };
+        if let Some((legacy_change, room_change)) = pair_opt {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(legacy_change);
+            q.push_back(ScopeChange::RoomChange(room_change));
+        }
+    }
+
+    /// Remove an entity from a room. Push-only; Send drains on next tick.
+    pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
+        let pair_opt = {
+            let entity_map = self.shared.global_entity_map.read();
+            self.state.room_store.remove_entity(room_key, world_entity, &*entity_map)
+        };
+        if let Some((legacy_change, room_change)) = pair_opt {
+            let mut q = self.shared.scope_change_queue.lock();
+            q.push_back(legacy_change);
+            q.push_back(ScopeChange::RoomChange(room_change));
+        }
     }
 }

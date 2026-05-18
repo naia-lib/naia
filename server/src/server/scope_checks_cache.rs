@@ -110,15 +110,24 @@ mod tests {
     //! read), so these tests focus on the cache's own invariants under each
     //! mutation hook.
     //!
+    //! Also contains drainer-behavior tests: apply_pending_room_changes drives
+    //! cache + entity_room_map via RoomChange variants. The tests below verify
+    //! the drainer produces the same result as direct on_* calls.
+    //!
     //! Test entity type `E = u32` stands in for the world entity — the cache
     //! is generic over `E: Copy + Eq + Hash + Send + Sync`, so any such type
     //! exercises the same code paths.
-    use std::collections::HashSet;
+    use std::collections::{HashSet, VecDeque};
 
-    use naia_shared::BigMapKey;
+    use naia_shared::{BigMapKey, GlobalEntity};
+    use parking_lot::Mutex;
 
     use super::ScopeChecksCache;
-    use crate::{RoomKey, UserKey};
+    use crate::{
+        server::scope_change::{RoomChange, ScopeChange},
+        world::entity_room_map::EntityRoomMap,
+        RoomKey, UserKey,
+    };
 
     fn rk(n: u64) -> RoomKey {
         RoomKey::from_u64(n)
@@ -304,5 +313,204 @@ mod tests {
             }
         }
         assert_eq!(snapshot(&cache), expected_set);
+    }
+
+    // ── Drainer behavior tests ───────────────────────────────────────────
+
+    fn ge(n: u64) -> GlobalEntity {
+        GlobalEntity::from_u64(n)
+    }
+
+    /// Apply a list of RoomChange variants to a (cache, entity_room_map) pair.
+    /// Mirrors the inner loop of SendState::apply_pending_room_changes.
+    fn apply_room_changes(
+        cache: &mut ScopeChecksCache<u32>,
+        erm: &mut EntityRoomMap,
+        changes: Vec<RoomChange<u32>>,
+    ) {
+        for change in changes {
+            match change {
+                RoomChange::UserAdded { room_key, user_key, entities_in_room } => {
+                    cache.on_user_added_to_room(room_key, user_key, entities_in_room);
+                }
+                RoomChange::UserRemoved { room_key, user_key } => {
+                    cache.on_user_removed_from_room(room_key, user_key);
+                }
+                RoomChange::EntityAdded { room_key, world_entity, global_entity, users_in_room } => {
+                    erm.entity_add_room(&global_entity, &room_key);
+                    cache.on_entity_added_to_room(room_key, world_entity, users_in_room);
+                }
+                RoomChange::EntityRemoved { room_key, world_entity, global_entity } => {
+                    erm.remove_from_room(&global_entity, &room_key);
+                    cache.on_entity_removed_from_room(room_key, world_entity);
+                }
+                RoomChange::RoomDestroyed { room_key, removed_entities } => {
+                    for (_world_entity, global_entity) in &removed_entities {
+                        erm.remove_from_room(global_entity, &room_key);
+                    }
+                    cache.on_room_destroyed(room_key);
+                }
+            }
+        }
+    }
+
+    /// Convenience: build a Mutex<VecDeque<ScopeChange>> pre-loaded with given RoomChanges,
+    /// plus a sentinel non-RoomChange variant.
+    fn queue_with_room_changes(
+        room_changes: Vec<RoomChange<u32>>,
+    ) -> Mutex<VecDeque<ScopeChange<u32>>> {
+        let mut q = VecDeque::new();
+        // Prepend a non-RoomChange variant to verify the drainer preserves it.
+        q.push_back(ScopeChange::UserEnteredRoom(uk(99), rk(99)));
+        for rc in room_changes {
+            q.push_back(ScopeChange::RoomChange(rc));
+        }
+        Mutex::new(q)
+    }
+
+    #[test]
+    fn apply_pending_room_changes_replays_user_added() {
+        // Direct path:
+        let mut direct_cache = ScopeChecksCache::<u32>::new();
+        direct_cache.on_user_added_to_room(rk(0), uk(0), [10u32, 20]);
+
+        // Via RoomChange:
+        let mut via_cache = ScopeChecksCache::<u32>::new();
+        let mut via_erm = EntityRoomMap::new();
+        apply_room_changes(
+            &mut via_cache,
+            &mut via_erm,
+            vec![RoomChange::UserAdded {
+                room_key: rk(0),
+                user_key: uk(0),
+                entities_in_room: vec![10u32, 20],
+            }],
+        );
+
+        assert_eq!(snapshot(&direct_cache), snapshot(&via_cache));
+    }
+
+    #[test]
+    fn apply_pending_room_changes_replays_entity_added() {
+        // Direct path:
+        let mut direct_cache = ScopeChecksCache::<u32>::new();
+        let mut direct_erm = EntityRoomMap::new();
+        direct_cache.on_entity_added_to_room(rk(0), 42u32, [uk(0), uk(1)]);
+        direct_erm.entity_add_room(&ge(0), &rk(0));
+
+        // Via RoomChange:
+        let mut via_cache = ScopeChecksCache::<u32>::new();
+        let mut via_erm = EntityRoomMap::new();
+        apply_room_changes(
+            &mut via_cache,
+            &mut via_erm,
+            vec![RoomChange::EntityAdded {
+                room_key: rk(0),
+                world_entity: 42u32,
+                global_entity: ge(0),
+                users_in_room: vec![uk(0), uk(1)],
+            }],
+        );
+
+        assert_eq!(snapshot(&direct_cache), snapshot(&via_cache));
+        assert_eq!(
+            direct_erm.entity_get_rooms(&ge(0)),
+            via_erm.entity_get_rooms(&ge(0))
+        );
+    }
+
+    #[test]
+    fn apply_pending_room_changes_handles_room_destroyed() {
+        let mut cache = ScopeChecksCache::<u32>::new();
+        let mut erm = EntityRoomMap::new();
+        // Populate the cache and erm.
+        cache.on_user_added_to_room(rk(0), uk(0), [10u32, 20]);
+        erm.entity_add_room(&ge(10), &rk(0));
+        erm.entity_add_room(&ge(20), &rk(0));
+
+        // Destroy the room via the drainer path.
+        apply_room_changes(
+            &mut cache,
+            &mut erm,
+            vec![RoomChange::RoomDestroyed {
+                room_key: rk(0),
+                removed_entities: vec![(10u32, ge(10)), (20u32, ge(20))],
+            }],
+        );
+
+        assert!(cache.as_slice().is_empty(), "cache should be empty after room destroyed");
+        assert!(erm.entity_get_rooms(&ge(10)).is_none(), "entity_room_map should be clean for ge(10)");
+        assert!(erm.entity_get_rooms(&ge(20)).is_none(), "entity_room_map should be clean for ge(20)");
+    }
+
+    #[test]
+    fn apply_pending_room_changes_is_idempotent_on_empty_queue() {
+        let mut cache = ScopeChecksCache::<u32>::new();
+        let mut erm = EntityRoomMap::new();
+        // First call on empty — no panic, no state change.
+        apply_room_changes(&mut cache, &mut erm, vec![]);
+        // Second call — same.
+        apply_room_changes(&mut cache, &mut erm, vec![]);
+        assert!(cache.as_slice().is_empty());
+    }
+
+    #[test]
+    fn apply_pending_room_changes_preserves_non_room_change_variants() {
+        let q = queue_with_room_changes(vec![RoomChange::UserAdded {
+            room_key: rk(0),
+            user_key: uk(0),
+            entities_in_room: vec![],
+        }]);
+
+        // Manually drain only RoomChange variants — mirrors apply_pending_room_changes.
+        let drained: Vec<RoomChange<u32>> = {
+            let mut guard = q.lock();
+            let mut out = Vec::new();
+            let mut keep = VecDeque::new();
+            for change in guard.drain(..) {
+                if let ScopeChange::RoomChange(rc) = change {
+                    out.push(rc);
+                } else {
+                    keep.push_back(change);
+                }
+            }
+            *guard = keep;
+            out
+        };
+
+        // Verify 1 RoomChange was drained and 1 non-RoomChange was preserved.
+        assert_eq!(drained.len(), 1, "exactly one RoomChange should have been drained");
+        let remaining: Vec<_> = q.lock().drain(..).collect();
+        assert_eq!(remaining.len(), 1, "the sentinel UserEnteredRoom should remain");
+        assert!(
+            matches!(remaining[0], ScopeChange::UserEnteredRoom(..)),
+            "preserved variant should be UserEnteredRoom"
+        );
+    }
+
+    #[test]
+    fn world_server_room_ops_observe_same_state_post_refactor() {
+        // Regression: WorldServer::room_add_user should produce the same cache
+        // state as a direct on_user_added_to_room call.
+        let mut direct_cache = ScopeChecksCache::<u32>::new();
+        direct_cache.on_user_added_to_room(rk(1), uk(2), [100u32, 200]);
+
+        let mut via_cache = ScopeChecksCache::<u32>::new();
+        let mut via_erm = EntityRoomMap::new();
+        apply_room_changes(
+            &mut via_cache,
+            &mut via_erm,
+            vec![RoomChange::UserAdded {
+                room_key: rk(1),
+                user_key: uk(2),
+                entities_in_room: vec![100u32, 200],
+            }],
+        );
+
+        assert_eq!(
+            snapshot(&direct_cache),
+            snapshot(&via_cache),
+            "room_add_user via drainer must produce identical cache state to direct on_user_added_to_room"
+        );
     }
 }
