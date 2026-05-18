@@ -1665,7 +1665,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
-    pub(crate) fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
+    pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         let global_entity = match self.shared.global_entity_map.read().entity_to_global_entity(world_entity) {
             Ok(ge) => ge,
             Err(_) => return None,

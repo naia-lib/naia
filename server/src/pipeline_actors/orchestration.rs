@@ -72,6 +72,29 @@ where
     )
 }
 
+/// Re-split a `WorldServer<E>` back into the three handles. Used by
+/// callers that needed `&mut WorldServer` access alongside `&mut World`
+/// (e.g. `configure_entity_replication`) and so couldn't use the
+/// closure form of `run_with_world_server` — they construct the
+/// WorldServer manually via `WorldServer::from_pipeline_states` and
+/// must re-package the result via this function (since the
+/// `Arc<ServerShared>` is `pub(crate)` to outside callers, they can't
+/// rebuild `CoordHandle` manually).
+pub fn split_world_server<E>(
+    ws: WorldServer<E>,
+) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
+where
+    E: Copy + Eq + Hash + Send + Sync,
+{
+    let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
+    let shared = Arc::clone(&recv_state.shared);
+    (
+        CoordHandle { state: coord_state, shared },
+        RecvHandle { state: recv_state },
+        SendHandle { state: send_state },
+    )
+}
+
 /// Pipeline-mode equivalent of `WorldServer::receive_with_world` — closes
 /// the world-mutation gap that [`RecvHandle::receive`] leaves open.
 ///

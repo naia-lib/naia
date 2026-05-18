@@ -199,9 +199,15 @@ impl PluginType for Plugin {
             // before naia's change-detection systems run so they see the new components.
             .add_systems(Update, ApplyDeferred.in_set(HostSyncOwnedAddedTracking))
             .configure_sets(Update, HostSyncChangeTracking.before(WorldToHostSync))
-            .configure_sets(Update, WorldToHostSync.before(SendPackets))
-            // SYSTEMS //
-            .add_systems(Update, world_to_host_sync.in_set(WorldToHostSync));
+            .configure_sets(Update, WorldToHostSync.before(SendPackets));
+
+        // world_to_host_sync uses ResMut<ServerImpl> via resource_scope.
+        // In state_external mode (Phase B.7b) ServerImpl doesn't exist;
+        // the caller (cyberlith's GameCell::update) drives an equivalent
+        // pipeline-flavored host-sync explicitly via its own helper.
+        if !self.state_external {
+            app.add_systems(Update, world_to_host_sync.in_set(WorldToHostSync));
+        }
 
         // Recv/translate/send systems are driven by the pipeline coordinator
         // in pipeline mode — skip registering them in `Update`.
