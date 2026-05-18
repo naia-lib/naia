@@ -35,7 +35,9 @@ use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
 use naia_bevy_shared::{Protocol, WorldProxy, WorldRefType};
-use naia_shared::{ComponentKind, SnapshotWorld};
+use naia_shared::{
+    BitWriter, ComponentKind, FakeEntityConverter, SnapshotWorld,
+};
 use naia_test_harness::test_protocol::Position;
 
 fn protocol() -> Protocol {
@@ -256,6 +258,89 @@ fn multi_entity_multi_component_parity() {
     // contract Iris's `send_all_packets` actually depends on per
     // FINDINGS Q10 #4.
     assert!(has_entity_parity(&bevy_view, &snap, &entries));
+}
+
+/// Serialize a component via the **dyn write path** — i.e.
+/// `component_of_kind(&e, &kind).write(...)` — exactly the callsite Iris
+/// invokes inside `send_all_packets` for `EntityCommand::SpawnWithComponents`
+/// (`world_writer.rs:288-291`) and `EntityCommand::InsertComponent`
+/// (`world_writer.rs:374-377`). Returns the raw bytes the writer
+/// produced.
+///
+/// This closes the audit gap in the trait-surface test: typed
+/// `component<R>` parity proves the underlying value is equal, but the
+/// production wire-emission path goes through the dyn vtable
+/// (`ReplicaDynRefWrapper` → `dyn Replicate::write`). Asserting byte
+/// equality on this path pins the actual emission contract.
+fn serialize_via_dyn_write(
+    view: &impl WorldRefType<Entity>,
+    entity: Entity,
+    kind: &ComponentKind,
+    component_kinds: &naia_shared::ComponentKinds,
+) -> Box<[u8]> {
+    let component_ref = view
+        .component_of_kind(&entity, kind)
+        .expect("component_of_kind returned None — caller must ensure presence");
+    let mut writer = BitWriter::new();
+    let mut converter = FakeEntityConverter;
+    component_ref.write(component_kinds, &mut writer, &mut converter);
+    writer.to_bytes()
+}
+
+/// Wire-byte parity across SnapshotWorld and bevy WorldRef for the dyn
+/// write path — the contract Iris's `send_all_packets` actually exercises.
+#[test]
+fn dyn_write_bytes_match_across_views() {
+    let proto = protocol();
+    let component_kinds = &proto.inner().component_kinds;
+
+    let mut app = App::new();
+    app.add_plugins(ServerPlugin::sim_integration(
+        ServerConfig::default(),
+        protocol(),
+    ));
+
+    // Case 1: freshly-spawned entity, single component, distinctive value.
+    let e1 = app.world_mut().spawn(Position::new(3.5, -1.25)).id();
+    // Case 2: zero-valued component, exercises the all-zero serialization edge.
+    let e2 = app.world_mut().spawn(Position::new(0.0, 0.0)).id();
+    // Case 3: large-magnitude value.
+    let e3 = app.world_mut().spawn(Position::new(1.0e6, -1.0e6)).id();
+
+    let entries = [e1, e2, e3];
+    let snap = snapshot_mirror(&app, &entries);
+    let bevy_view = app.world().proxy();
+    let kind = ComponentKind::of::<Position>();
+
+    for &e in &entries {
+        let bevy_bytes = serialize_via_dyn_write(&bevy_view, e, &kind, component_kinds);
+        let snap_bytes = serialize_via_dyn_write(&snap, e, &kind, component_kinds);
+        assert_eq!(
+            bevy_bytes, snap_bytes,
+            "dyn-write byte divergence for entity {:?}: bevy={:?} snap={:?}",
+            e, bevy_bytes, snap_bytes,
+        );
+    }
+
+    // Mutate, re-snapshot, re-compare: the post-mutation value must
+    // serialize identically through both views.
+    {
+        let mut pos = app.world_mut().get_mut::<Position>(e1).unwrap();
+        *pos.x = -42.0;
+        *pos.y = 99.75;
+    }
+    let snap = snapshot_mirror(&app, &entries);
+    let bevy_view = app.world().proxy();
+    let bevy_bytes = serialize_via_dyn_write(&bevy_view, e1, &kind, component_kinds);
+    let snap_bytes = serialize_via_dyn_write(&snap, e1, &kind, component_kinds);
+    assert_eq!(
+        bevy_bytes, snap_bytes,
+        "post-mutation dyn-write divergence: bevy={:?} snap={:?}",
+        bevy_bytes, snap_bytes,
+    );
+
+    // Sanity: bytes are non-empty (we actually wrote something).
+    assert!(!bevy_bytes.is_empty(), "serialized output must not be empty");
 }
 
 #[test]
