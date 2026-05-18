@@ -544,6 +544,86 @@ fn coverage_exits_zero_on_live_spec_tree() {
     );
 }
 
+// ============================================================================
+// BDD gate — load-bearing test that all spec scenarios pass
+// ============================================================================
+
+/// The load-bearing BDD gate: lint the live spec tree to produce the full
+/// resolved plan, run every scenario through the adapter, then PARSE the
+/// run_report.json and assert every scenario's status == "passed".
+///
+/// This is the test that catches scenario-level regressions. The earlier
+/// `demo_a_adapter_run_succeeds_on_valid_scenarios` test asserts only
+/// that the run *completes* (i.e. the adapter binary exits 0); it does
+/// NOT inspect the report contents. So a failing scenario would pass
+/// that test silently. This test closes that gap.
+///
+/// On failure: panics with the count + list of failed scenario keys,
+/// pointing the developer at the specific contracts that regressed.
+///
+/// Naive `cargo test` does NOT exercise the 343 BDD scenarios in any
+/// other test — this test is the only place where `cargo test` actually
+/// fails on a scenario regression. Removing this test silently weakens
+/// the gate.
+#[test]
+fn bdd_gate_all_scenarios_pass() {
+    let lint_output = run_namako_cli("lint", &["-s", ".", "-o", "bdd_gate_plan.json"]);
+    assert_success(&lint_output, "lint for BDD gate");
+
+    let run_output = run_adapter(
+        "run",
+        &["-p", "bdd_gate_plan.json", "-o", "bdd_gate_report.json"],
+    );
+    assert_success(&run_output, "BDD gate run");
+
+    let report_path = specs_dir().join("bdd_gate_report.json");
+    let report_content = fs::read_to_string(&report_path).expect("read BDD gate report");
+    let report: serde_json::Value =
+        serde_json::from_str(&report_content).expect("parse BDD gate report");
+
+    let scenarios = report
+        .get("scenarios")
+        .and_then(|v| v.as_array())
+        .expect("BDD gate report has `scenarios` array");
+
+    let total = scenarios.len();
+    assert!(
+        total > 0,
+        "BDD gate must run at least one scenario; got 0 — feature tree empty or lint output broken"
+    );
+
+    let failed: Vec<String> = scenarios
+        .iter()
+        .filter(|s| s.get("status").and_then(|v| v.as_str()) != Some("passed"))
+        .map(|s| {
+            let key = s
+                .get("scenario_key")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(missing scenario_key)");
+            let status = s
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("(missing status)");
+            format!("  {} → {}", key, status)
+        })
+        .collect();
+
+    // Cleanup before potentially panicking — leaves no orphan fixture files.
+    let _ = fs::remove_file(specs_dir().join("bdd_gate_plan.json"));
+    let _ = fs::remove_file(specs_dir().join("bdd_gate_report.json"));
+
+    if !failed.is_empty() {
+        panic!(
+            "BDD gate failed: {} of {} scenarios did not pass.\nFailures:\n{}",
+            failed.len(),
+            total,
+            failed.join("\n")
+        );
+    }
+
+    eprintln!("BDD gate: {}/{} scenarios passed", total, total);
+}
+
 /// `coverage --fail-on-deferred-non-policy` exits 1 when deferred non-policy
 /// scenarios exist.
 ///
