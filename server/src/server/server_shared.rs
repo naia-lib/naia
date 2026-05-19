@@ -38,8 +38,9 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 
 use naia_shared::{
-    ChannelKinds, ComponentKinds, EntityAuthStatus, GlobalDirtyBitset, GlobalEntity,
-    GlobalEntityMap, MessageKinds, OutgoingPacket,
+    ChannelKinds, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityDoesNotExistError, GlobalDirtyBitset, GlobalEntity, GlobalEntityMap, MessageKinds,
+    OutgoingPacket,
 };
 
 use crate::{
@@ -196,5 +197,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             global_entity_map: RwLock::new(GlobalEntityMap::new()),
             idx_to_world: RwLock::new(vec![None; entity_index_capacity]),
         }
+    }
+}
+
+// MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — see
+// `pipeline_actors/sim_converter.rs` for rationale + wire-identity
+// argument. Mirrors `WorldServer<E>`'s impl at
+// `server/src/server/world_server.rs:3956`; both delegate to the same
+// `global_entity_map` `RwLock` so `EntityProperty::set` produces
+// byte-identical wire payloads.
+impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for ServerShared<E> {
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        self.global_entity_map
+            .read()
+            .global_entity_to_entity(global_entity)
+    }
+
+    fn entity_to_global_entity(
+        &self,
+        world_entity: &E,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
     }
 }

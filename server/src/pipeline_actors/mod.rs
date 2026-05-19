@@ -22,6 +22,7 @@ mod orchestration;
 mod recv_helpers;
 mod router;
 mod send_state_view;
+mod sim_converter;
 #[allow(missing_docs)]
 mod sim_event_receiver;
 mod snapshot_sender;
@@ -32,6 +33,7 @@ pub use orchestration::{apply_recv_to_world, run_with_world_server, split_world_
 pub use recv_helpers::{RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer};
 pub use router::TickMessageRouter;
 pub use send_state_view::SendStateView;
+pub use sim_converter::SimConverter;
 pub use sim_event_receiver::{
     SimConnectEvent, SimDespawnEntityEvent, SimDisconnectEvent, SimErrorEvent,
     SimEventReceiver, SimPublishEntityEvent, SimSpawnEntityEvent, SimTickEvent,

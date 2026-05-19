@@ -105,6 +105,7 @@ mod plugin;
 #[doc(hidden)]
 mod resource_sync;
 mod server;
+mod sim_converter;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
@@ -117,6 +118,7 @@ pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
 pub use server::Server;
+pub use sim_converter::SimConverter;
 
 /// Call `listen` on the naia server resource directly via the App,
 /// before any systems run. Use this when you want to initialize the

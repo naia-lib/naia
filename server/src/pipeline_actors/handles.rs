@@ -115,6 +115,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared.time_manager.read().current_tick()
     }
 
+    /// MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — return a
+    /// cloneable [`crate::pipeline_actors::SimConverter`] view over
+    /// this server's `Arc<ServerShared<E>>`.
+    ///
+    /// Cyberlith installs the returned `SimConverter` as a Bevy
+    /// `Resource` on the Sim app so Sim systems can construct
+    /// `EntityProperty`-bearing messages or components without
+    /// reassembling a `WorldServer<E>`. The backing
+    /// `EntityAndGlobalEntityConverter<E>` impl on `ServerShared<E>`
+    /// delegates to the same `global_entity_map` `RwLock` that
+    /// `WorldServer`'s converter reads, so wire output is byte-identical.
+    pub fn sim_converter(&self) -> crate::pipeline_actors::SimConverter<E>
+    where
+        E: 'static,
+    {
+        let shared_clone: Arc<crate::server::ServerShared<E>> = Arc::clone(&self.shared);
+        let arc: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync> = shared_clone;
+        crate::pipeline_actors::SimConverter::from_arc(arc)
+    }
+
     // ====================================================================
     // Room-ops API (flat methods; push to scope_change_queue, no drain).
     // Send's apply_pending_room_changes drains on next send_all_packets.
