@@ -211,6 +211,42 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.apply_pending_send_preamble();
     }
 
+    /// C.6 prep #6 — drain entity-scope variants (`EntityEnteredRoom`,
+    /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
+    /// `scope_change_queue` and fan them out to user connections.
+    ///
+    /// Companion to [`apply_pending_send_preamble`] (which only drains
+    /// `RoomChange` variants). Together the two methods restore the
+    /// full body of the legacy `WorldServer::run_send_preamble` for
+    /// pipeline-mode callers that hold a `SendHandle` directly.
+    ///
+    /// Cyberlith pattern:
+    /// ```ignore
+    /// send.apply_pending_send_preamble();
+    /// send.apply_pending_scope_changes(&snap);
+    /// send.send_all_packets(snap);
+    /// ```
+    ///
+    /// The intermediate `apply_pending_scope_changes` is what publishes
+    /// freshly-room-added entities into per-user `send_user_connections`
+    /// (the spawn-to-user path). Without it, `send_all_packets`'s Iris
+    /// dirty-scan finds no per-user spawn intents and clients see
+    /// nothing for entities that entered rooms this tick.
+    ///
+    /// Needs a `WorldRefType<E>` because the per-(user, entity) fanout
+    /// calls `world.has_entity(world_entity)` before spawning. Pass the
+    /// same world snapshot you're about to feed `send_all_packets`.
+    ///
+    /// Idempotent within a tick: the per-tick flag causes the
+    /// subsequent `send_all_packets` to skip its auto-call. See
+    /// [`SendState::apply_pending_scope_changes`] for the full body.
+    pub fn apply_pending_scope_changes<W: naia_shared::WorldRefType<E>>(
+        &mut self,
+        world: &W,
+    ) {
+        self.state.apply_pending_scope_changes(world);
+    }
+
     /// C.6 prep — send a message to the user at `address` without
     /// reassembling the WorldServer.
     ///

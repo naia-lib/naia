@@ -18,19 +18,23 @@ use std::{
     sync::{atomic::Ordering, Arc},
 };
 
+// HashSet/HashMap imported above are used in the new mirror fields for C.6 prep #6.
+
 use parking_lot::Mutex;
 
 use log::warn;
 
 use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity,
-    GlobalEntityIndex, GlobalEntityMap, GlobalPriorityState, GlobalWorldManagerType, Instant,
-    Message, MessageContainer, OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType,
-    Serde, SnapshotMap, Tick, Timer, UserPriorityState, WorldRefType,
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalPriorityState,
+    GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OutgoingPacket,
+    OutgoingPriorityHook, OwnedBitReader, PacketType, Serde, SnapshotMap, Tick, Timer,
+    UserPriorityState, WorldRefType,
 };
 
 use crate::{
     connection::{io::SendIo, RecvConnection, SendConnection},
+    room::RoomKey,
     server::{
         scope_change::{RoomChange, ScopeChange},
         scope_checks_cache::ScopeChecksCache,
@@ -39,9 +43,10 @@ use crate::{
     time_manager::TimeManager,
     user::UserKey,
     world::{
-        entity_room_map::EntityRoomMap, entity_scope_map::EntityScopeMap,
-        global_world_manager::GlobalWorldManager,
+        entity_owner::EntityOwner, entity_room_map::EntityRoomMap,
+        entity_scope_map::EntityScopeMap, global_world_manager::GlobalWorldManager,
     },
+    ScopeExit,
 };
 
 /// Send-thread-exclusive state lifted out of `WorldServer` (step 4-E).
@@ -115,6 +120,32 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// `send_all_packets` runs the preamble inline as before — fully
     /// backward compatible.
     pub(crate) preamble_done_this_tick: bool,
+
+    /// C.6 prep #6 — `apply_pending_scope_changes` was called this tick
+    /// (the entity-scope fanout sibling of the preamble split). When
+    /// `true`, `send_all_packets` skips its auto-call and resets the
+    /// flag. Same pattern as `preamble_done_this_tick`.
+    pub(crate) scope_changes_done_this_tick: bool,
+
+    /// C.6 prep #6 — Send-side mirror of `User.room_keys()` (which lives
+    /// on coord's `UserStore`). Maintained by `apply_pending_room_changes`
+    /// via the `RoomChange::UserAdded`/`UserRemoved`/`RoomDestroyed` data.
+    /// Read by `apply_pending_scope_changes` when evaluating
+    /// `ScopeToggled` (room-intersection logic) and `UserLeftRoom`.
+    pub(crate) user_room_map: HashMap<UserKey, HashSet<RoomKey>>,
+
+    /// C.6 prep #6 — Send-side mirror of `Room::user_keys()`. Used by
+    /// `apply_pending_scope_changes` when handling `UserEnteredRoom`
+    /// (need all users in the room to fan out a single entity's spawn
+    /// intent). Maintained alongside `room_entities_map` in
+    /// `apply_pending_room_changes`.
+    pub(crate) room_users_map: HashMap<RoomKey, HashSet<UserKey>>,
+
+    /// C.6 prep #6 — Send-side mirror of `Room::entities()` paired with
+    /// the matching world entity. Used by `apply_pending_scope_changes`
+    /// when handling `UserEnteredRoom` (need all entities-in-room to
+    /// fan out a single user's scope evaluation).
+    pub(crate) room_entities_map: HashMap<RoomKey, HashMap<GlobalEntity, E>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
@@ -510,6 +541,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // Reset the flag for the next tick.
         self.preamble_done_this_tick = false;
 
+        // C.6 prep #6 — entity-scope drain (publishes spawn intents
+        // into per-user `send_user_connections`). Auto-call mirrors
+        // the preamble flag pattern: if the caller already invoked
+        // `apply_pending_scope_changes` this tick, skip. Otherwise
+        // run inline. Legacy `WorldServer::send_all_packets` callers
+        // see an empty queue here (their `drain_scope_change_queue`
+        // already ran during `run_send_preamble`), so this is a
+        // wire-byte-identical no-op for them.
+        if !self.scope_changes_done_this_tick {
+            self.apply_pending_scope_changes(&world);
+        }
+        self.scope_changes_done_this_tick = false;
+
         #[cfg(feature = "e2e_debug")]
         {
             crate::server::world_server::SERVER_SEND_ALL_PACKETS_CALLS
@@ -765,27 +809,452 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 RoomChange::UserAdded { room_key, user_key, entities_in_room } => {
                     self.scope_checks_cache.on_user_added_to_room(
                         room_key, user_key, entities_in_room);
+                    // C.6 prep #6 — mirror coord-side user_store room
+                    // membership onto SendState so apply_pending_scope_changes
+                    // can resolve `user.room_keys()` without coord access.
+                    self.user_room_map.entry(user_key)
+                        .or_default()
+                        .insert(room_key);
+                    self.room_users_map.entry(room_key)
+                        .or_default()
+                        .insert(user_key);
                 }
                 RoomChange::UserRemoved { room_key, user_key } => {
                     self.scope_checks_cache.on_user_removed_from_room(
                         room_key, user_key);
+                    if let Some(set) = self.user_room_map.get_mut(&user_key) {
+                        set.remove(&room_key);
+                        if set.is_empty() {
+                            self.user_room_map.remove(&user_key);
+                        }
+                    }
+                    if let Some(set) = self.room_users_map.get_mut(&room_key) {
+                        set.remove(&user_key);
+                    }
                 }
                 RoomChange::EntityAdded { room_key, world_entity, global_entity, users_in_room } => {
                     self.entity_room_map.entity_add_room(&global_entity, &room_key);
                     self.scope_checks_cache.on_entity_added_to_room(
                         room_key, world_entity, users_in_room);
+                    self.room_entities_map.entry(room_key)
+                        .or_default()
+                        .insert(global_entity, world_entity);
                 }
                 RoomChange::EntityRemoved { room_key, world_entity, global_entity } => {
                     self.entity_room_map.remove_from_room(&global_entity, &room_key);
                     self.scope_checks_cache.on_entity_removed_from_room(
                         room_key, world_entity);
+                    if let Some(map) = self.room_entities_map.get_mut(&room_key) {
+                        map.remove(&global_entity);
+                    }
                 }
                 RoomChange::RoomDestroyed { room_key, removed_entities } => {
                     for (_world_entity, global_entity) in &removed_entities {
                         self.entity_room_map.remove_from_room(global_entity, &room_key);
                     }
                     self.scope_checks_cache.on_room_destroyed(room_key);
+                    // Drop room from mirrors. user_room_map: every user
+                    // in the destroyed room loses that membership.
+                    if let Some(users) = self.room_users_map.remove(&room_key) {
+                        for user_key in users {
+                            if let Some(set) = self.user_room_map.get_mut(&user_key) {
+                                set.remove(&room_key);
+                                if set.is_empty() {
+                                    self.user_room_map.remove(&user_key);
+                                }
+                            }
+                        }
+                    }
+                    self.room_entities_map.remove(&room_key);
                 }
+            }
+        }
+    }
+
+    /// C.6 prep #6 — drain entity-scope variants (`EntityEnteredRoom`,
+    /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
+    /// `scope_change_queue` and fan them out to user connections.
+    ///
+    /// Companion to [`apply_pending_send_preamble`] (which only drains
+    /// `RoomChange` variants). Together the two methods restore the full
+    /// body of the legacy `WorldServer::run_send_preamble` →
+    /// `update_entity_scopes` → `drain_scope_change_queue` chain for the
+    /// pipeline-mode callers that hold a `SendHandle` directly.
+    ///
+    /// The entity-scope variants are the ones that publish entities to
+    /// user connections: they invoke `host_init_entity` +
+    /// `set_entity_visible` (spawn-into-user-connection) and
+    /// `despawn_entity` / `pause_entity` (despawn / pause), which is
+    /// what makes a freshly-room-added entity show up on clients.
+    ///
+    /// Needs a `&W: WorldRefType<E>` because the per-(user, entity)
+    /// fanout calls `world.has_entity(world_entity)` before spawning —
+    /// pipeline-mode callers pass the same `SnapshotWorld<E>` they're
+    /// about to feed `send_all_packets`.
+    ///
+    /// Call between [`apply_pending_send_preamble`] and
+    /// [`send_all_packets`] (or omit; `send_all_packets` auto-calls when
+    /// the per-tick flag isn't set — see backward-compat note on
+    /// `scope_changes_done_this_tick`).
+    ///
+    /// Idempotent within a tick: setting `scope_changes_done_this_tick`
+    /// causes the subsequent `send_all_packets` to skip its auto-call.
+    pub fn apply_pending_scope_changes<W: WorldRefType<E>>(&mut self, world: &W) {
+        // Drain all remaining (non-RoomChange) variants. RoomChange
+        // entries should already be gone (apply_pending_room_changes
+        // ran in the preamble); any that survived (because the caller
+        // skipped the preamble) are re-queued for the next preamble
+        // tick — they only mutate mirror state, not per-user spawn.
+        let drained: Vec<ScopeChange<E>> = {
+            let mut q = self.shared.scope_change_queue.lock();
+            let mut out = Vec::with_capacity(q.len());
+            let mut keep = VecDeque::with_capacity(q.len());
+            for change in q.drain(..) {
+                match change {
+                    ScopeChange::RoomChange(_) => keep.push_back(change),
+                    _ => out.push(change),
+                }
+            }
+            *q = keep;
+            out
+        };
+
+        // Snapshot `UserKey → SocketAddr` once (avoids repeated
+        // `send_user_connections` reverse-scans inside the per-change loop).
+        let user_addresses: HashMap<UserKey, SocketAddr> = self
+            .send_user_connections
+            .iter()
+            .map(|(addr, conn)| (conn.user_key, *addr))
+            .collect();
+
+        for change in drained {
+            match change {
+                ScopeChange::UserEnteredRoom(user_key, room_key) => {
+                    let entity_list: Vec<(GlobalEntity, E)> = self
+                        .room_entities_map
+                        .get(&room_key)
+                        .map(|m| m.iter().map(|(ge, we)| (*ge, *we)).collect())
+                        .unwrap_or_default();
+                    for (global_entity, world_entity) in &entity_list {
+                        self.apply_scope_for_user(
+                            world,
+                            &user_addresses,
+                            &user_key,
+                            global_entity,
+                            world_entity,
+                        );
+                    }
+                }
+                ScopeChange::UserLeftRoom(user_key, room_key) => {
+                    // Despawn / pause every entity that was in the
+                    // departed room and isn't covered by another shared
+                    // room. Mirrors legacy `WorldServer::drain_scope_change_queue`
+                    // UserLeftRoom arm.
+                    let entity_list: Vec<(GlobalEntity, E)> = self
+                        .room_entities_map
+                        .get(&room_key)
+                        .map(|m| m.iter().map(|(ge, we)| (*ge, *we)).collect())
+                        .unwrap_or_default();
+                    let user_rooms = self
+                        .user_room_map
+                        .get(&user_key)
+                        .cloned()
+                        .unwrap_or_default();
+                    let Some(addr) = user_addresses.get(&user_key).copied() else {
+                        continue;
+                    };
+                    let diff_handler_arc =
+                        self.shared.global_world_manager.read().diff_handler();
+                    let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
+                        continue;
+                    };
+                    for (global_entity, _world_entity) in &entity_list {
+                        if let Some(entity_rooms) =
+                            self.entity_room_map.entity_get_rooms(global_entity)
+                        {
+                            if entity_rooms.iter().any(|rk| user_rooms.contains(rk)) {
+                                continue;
+                            }
+                        }
+                        if !send_conn.base.world_manager.has_global_entity(global_entity) {
+                            continue;
+                        }
+                        let entity_idx = {
+                            let guard = diff_handler_arc.read()
+                                .expect("GlobalDiffHandler lock poisoned");
+                            guard.entity_to_global_idx(global_entity)
+                                .unwrap_or(GlobalEntityIndex::INVALID)
+                        };
+                        let scope_exit = self
+                            .shared
+                            .global_world_manager
+                            .read()
+                            .entity_replication_config(global_entity)
+                            .map(|c| c.scope_exit)
+                            .unwrap_or(ScopeExit::Despawn);
+                        match scope_exit {
+                            ScopeExit::Persist => {
+                                send_conn.base.world_manager.pause_entity(global_entity);
+                                send_conn.clear_entity_visible(entity_idx);
+                            }
+                            ScopeExit::Despawn => {
+                                send_conn.base.world_manager.despawn_entity(global_entity);
+                                send_conn.clear_entity_visible(entity_idx);
+                            }
+                        }
+                    }
+                }
+                ScopeChange::EntityEnteredRoom(global_entity, room_key) => {
+                    let user_keys: Vec<UserKey> = self
+                        .room_users_map
+                        .get(&room_key)
+                        .map(|s| s.iter().copied().collect())
+                        .unwrap_or_default();
+                    // Resolve world_entity once.
+                    let world_entity_opt = self
+                        .room_entities_map
+                        .get(&room_key)
+                        .and_then(|m| m.get(&global_entity).copied())
+                        .or_else(|| {
+                            self.shared
+                                .global_entity_map
+                                .read()
+                                .global_entity_to_entity(&global_entity)
+                                .ok()
+                        });
+                    let Some(world_entity) = world_entity_opt else { continue; };
+                    for user_key in &user_keys {
+                        self.apply_scope_for_user(
+                            world,
+                            &user_addresses,
+                            user_key,
+                            &global_entity,
+                            &world_entity,
+                        );
+                    }
+                }
+                ScopeChange::ScopeToggled(user_key, global_entity, _is_included) => {
+                    let world_entity_opt = self
+                        .shared
+                        .global_entity_map
+                        .read()
+                        .global_entity_to_entity(&global_entity)
+                        .ok();
+                    let Some(world_entity) = world_entity_opt else { continue; };
+                    self.apply_scope_for_user(
+                        world,
+                        &user_addresses,
+                        &user_key,
+                        &global_entity,
+                        &world_entity,
+                    );
+                }
+                ScopeChange::RoomChange(_) => {
+                    // Already filtered above into `keep` — unreachable.
+                    unreachable!("RoomChange variants are filtered out");
+                }
+            }
+        }
+
+        self.scope_changes_done_this_tick = true;
+    }
+
+    /// Per-(user, entity) scope evaluator. Mirrors the body of legacy
+    /// `WorldServer::apply_scope_for_user` (server/src/server/world_server.rs
+    /// ~lines 3712-3894), but reads only from `SendState` + `shared` +
+    /// the per-call `world` + `user_addresses` snapshot.
+    ///
+    /// Two contract deviations vs legacy:
+    ///
+    /// 1. `resource_registry` lives on `CoordinatorState`; not reachable
+    ///    from `SendState`. Replicated resources publish via their own
+    ///    code path (server/src/server/world_server.rs §RESOURCES_PLAN)
+    ///    and are NOT exercised by the cyberlith pipeline's
+    ///    `apply_pending_scope_changes` call (the legacy WorldServer
+    ///    `send_all_packets` path still runs `drain_scope_change_queue`
+    ///    with the live registry). Treating `is_resource` as `false`
+    ///    here is safe for the pipeline-mode caller: it only flips the
+    ///    "in scope for all users regardless of room" override, which
+    ///    is independently published by the resource path.
+    ///
+    /// 2. On `!world.has_entity(world_entity)` the legacy version
+    ///    re-queues a `ScopeToggled(user, entity, true)` so the entity
+    ///    enters scope next tick. Same behavior here — push onto
+    ///    `scope_change_queue` for the next tick's drain.
+    #[allow(clippy::too_many_lines)]
+    fn apply_scope_for_user<W: WorldRefType<E>>(
+        &mut self,
+        world: &W,
+        user_addresses: &HashMap<UserKey, SocketAddr>,
+        user_key: &UserKey,
+        global_entity: &GlobalEntity,
+        world_entity: &E,
+    ) {
+        // Resolve dense GlobalEntityIndex before any mutable borrows.
+        let entity_idx = {
+            let handler = self.shared.global_world_manager.read().diff_handler();
+            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+            guard
+                .entity_to_global_idx(global_entity)
+                .unwrap_or(GlobalEntityIndex::INVALID)
+        };
+
+        let Some(addr) = user_addresses.get(user_key).copied() else {
+            return;
+        };
+        let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
+            return;
+        };
+        if !world.has_entity(world_entity) {
+            // Entity not yet spawned in the snapshot world — re-queue
+            // for next tick.
+            self.shared
+                .scope_change_queue
+                .lock()
+                .push_back(ScopeChange::ScopeToggled(*user_key, *global_entity, true));
+            return;
+        }
+        if self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_is_public_and_owned_by_user(user_key, global_entity)
+        {
+            return;
+        }
+        if matches!(
+            self.shared
+                .global_world_manager
+                .read()
+                .entity_owner(global_entity),
+            Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
+        ) {
+            return;
+        }
+
+        let currently_visible = send_conn.visibility.is_set(entity_idx);
+        let is_tracked = send_conn.base.world_manager.has_global_entity(global_entity);
+        let currently_paused = is_tracked && !currently_visible;
+
+        let in_common_room = if let Some(entity_rooms) =
+            self.entity_room_map.entity_get_rooms(global_entity)
+        {
+            // user.room_keys() ↔ user_room_map
+            let user_rooms = self.user_room_map.get(user_key);
+            match user_rooms {
+                Some(user_rooms) => entity_rooms.intersection(user_rooms).next().is_some(),
+                None => false,
+            }
+        } else {
+            false
+        };
+        let explicit = self
+            .entity_scope_map
+            .get(user_key, global_entity)
+            .copied();
+        // See doc-comment deviation #1: resource_registry not reachable
+        // here; treat as `false`. Resources publish via their own path.
+        let is_resource = false;
+        let entity_is_roomless = self
+            .entity_room_map
+            .entity_get_rooms(global_entity)
+            .is_none();
+        let server_owned_roomless_non_resource = self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_owner(global_entity)
+            .map(|o| o.is_server())
+            .unwrap_or(false)
+            && !is_resource
+            && entity_is_roomless;
+        let should_be_in_scope = match explicit {
+            Some(true) if server_owned_roomless_non_resource => false,
+            Some(in_scope) => in_scope,
+            None => is_resource || in_common_room,
+        };
+        if should_be_in_scope {
+            if currently_visible {
+                return;
+            }
+            if currently_paused {
+                send_conn.base.world_manager.resume_entity(global_entity);
+                send_conn.set_entity_visible(entity_idx);
+                return;
+            }
+            let component_kinds = self
+                .shared
+                .global_world_manager
+                .read()
+                .component_kinds(global_entity)
+                .unwrap();
+            let is_static = self
+                .shared
+                .global_world_manager
+                .read()
+                .entity_is_static(global_entity);
+            send_conn.base.world_manager.host_init_entity(
+                global_entity,
+                component_kinds,
+                &self.shared.component_kinds,
+                is_static,
+            );
+            send_conn.set_entity_visible(entity_idx);
+
+            if !self
+                .shared
+                .global_world_manager
+                .read()
+                .entity_is_delegated(global_entity)
+            {
+                return;
+            }
+            send_conn.base.world_manager.send_enable_delegation(
+                HostType::Server,
+                false,
+                global_entity,
+            );
+            if self
+                .shared
+                .global_world_manager
+                .read()
+                .entity_has_holder(global_entity)
+            {
+                let new_status = if self
+                    .shared
+                    .global_world_manager
+                    .read()
+                    .user_is_authority_holder(user_key, global_entity)
+                {
+                    EntityAuthStatus::Granted
+                } else {
+                    EntityAuthStatus::Denied
+                };
+                send_conn
+                    .base
+                    .world_manager
+                    .host_send_set_auth(global_entity, new_status);
+            }
+        } else if currently_visible {
+            let scope_exit = self
+                .shared
+                .global_world_manager
+                .read()
+                .entity_replication_config(global_entity)
+                .map(|c| c.scope_exit)
+                .unwrap_or(ScopeExit::Despawn);
+            match scope_exit {
+                ScopeExit::Persist => {
+                    send_conn.base.world_manager.pause_entity(global_entity);
+                    send_conn.clear_entity_visible(entity_idx);
+                }
+                ScopeExit::Despawn => {
+                    send_conn.base.world_manager.despawn_entity(global_entity);
+                    send_conn.clear_entity_visible(entity_idx);
+                }
+            }
+            if let Some(layer) = self.user_priorities.get_mut(user_key) {
+                layer.on_scope_exit(world_entity);
             }
         }
     }
