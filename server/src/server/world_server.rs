@@ -227,6 +227,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             user_room_map: HashMap::new(),
             room_users_map: HashMap::new(),
             room_entities_map: HashMap::new(),
+            // Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) —
+            // bounded per-entry retry counter for `ScopeToggled`
+            // re-queues issued by `apply_scope_for_user`.
+            scope_retry_counts: HashMap::new(),
         };
 
         let coord = crate::server::CoordinatorState {

@@ -146,7 +146,37 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// when handling `UserEnteredRoom` (need all entities-in-room to
     /// fan out a single user's scope evaluation).
     pub(crate) room_entities_map: HashMap<RoomKey, HashMap<GlobalEntity, E>>,
+
+    /// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — per-(user,
+    /// entity) retry counter for `ScopeToggled` re-queues issued by
+    /// `apply_scope_for_user` when `world.has_entity` returns false.
+    ///
+    /// Background: the 2026-05-19 f3-saga finding during
+    /// MISSION_SIM_OWNS_WORLD showed that an unbounded re-queue can
+    /// retry indefinitely (memory growth) while the prior implementation
+    /// effectively gave up after ~2 ticks (lost scope events on any
+    /// pipeline-lag). Bounded retry (N=`SCOPE_RETRY_MAX`) restores
+    /// survivability without unbounded growth.
+    ///
+    /// Send-thread-exclusive (no Mutex): the counter is read/written
+    /// only inside `apply_scope_for_user`, which is called from
+    /// `apply_pending_scope_changes` (also send-side).
+    pub(crate) scope_retry_counts: HashMap<(UserKey, GlobalEntity), u8>,
 }
+
+/// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — maximum number
+/// of retries an entry in the `scope_change_queue` may accumulate when
+/// the target world entity is not (yet) present in the snapshot world
+/// passed to `apply_pending_scope_changes`.
+///
+/// At the canonical 25 Hz tick rate, N=16 retries spans ~640ms of
+/// pipeline lag, which comfortably absorbs any plausible cyberlith
+/// Sim → Send → snapshot-build delay while bounding memory.
+///
+/// On exhaustion the entry is dropped and `warn!` logged. On
+/// successful publish (`world.has_entity == true` proceeds past the
+/// guard) the counter is reset.
+pub(crate) const SCOPE_RETRY_MAX: u8 = 16;
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Periodic ping dispatch (step 4-F.naia.c.2c — relocated from
@@ -1153,13 +1183,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         );
         if !world.has_entity(world_entity) {
             // Entity not yet spawned in the snapshot world — re-queue
-            // for next tick.
-            self.shared
-                .scope_change_queue
-                .lock()
-                .push_back(ScopeChange::ScopeToggled(*user_key, *global_entity, true));
+            // for next tick, but only up to `SCOPE_RETRY_MAX` times per
+            // (user, entity) pair. See `SCOPE_RETRY_MAX` doc-comment
+            // for the 2026-05-19 f3-saga motivation.
+            let key = (*user_key, *global_entity);
+            let current = self.scope_retry_counts.get(&key).copied().unwrap_or(0);
+            match scope_retry_decision(current) {
+                None => {
+                    warn!(
+                        "apply_scope_for_user: dropping ScopeToggled for \
+                         user={:?} entity={:?} after {} retries — target \
+                         world entity never became available in snapshot \
+                         world. See MISSION_USER_ONLY_SEES_SIM §5 (Phase A).",
+                        user_key, global_entity, SCOPE_RETRY_MAX,
+                    );
+                    self.scope_retry_counts.remove(&key);
+                }
+                Some(next) => {
+                    self.scope_retry_counts.insert(key, next);
+                    self.shared
+                        .scope_change_queue
+                        .lock()
+                        .push_back(ScopeChange::ScopeToggled(
+                            *user_key,
+                            *global_entity,
+                            true,
+                        ));
+                }
+            }
             return;
         }
+        // Success path — `world.has_entity == true`. Reset the retry
+        // counter for this (user, entity) pair so a future re-queue
+        // starts fresh.
+        self.scope_retry_counts.remove(&(*user_key, *global_entity));
         if self
             .shared
             .global_world_manager
@@ -1352,3 +1409,75 @@ impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook
 // (UDP and local transports) are Send. The HashMap fields are owned
 // outright. UserPriorityState contains POD numeric state.
 unsafe impl<E: Copy + Eq + Hash + Send + Sync> Send for SendState<E> {}
+
+/// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — pure decision
+/// helper for the bounded `ScopeToggled` re-queue counter, factored
+/// out of [`SendState::apply_scope_for_user`] so the increment /
+/// exhaustion semantics can be unit-tested without fabricating a full
+/// `SendState` + connected user.
+///
+/// `current` is the count BEFORE this attempt (i.e. how many times the
+/// entry has already been re-queued). Returns `Some(next)` if the
+/// caller should re-queue and store `next` as the new counter value;
+/// returns `None` if the cap is reached and the caller should drop the
+/// entry + emit a `warn!`.
+#[inline]
+pub(crate) fn scope_retry_decision(current: u8) -> Option<u8> {
+    if current >= SCOPE_RETRY_MAX {
+        None
+    } else {
+        Some(current + 1)
+    }
+}
+
+#[cfg(test)]
+mod scope_retry_tests {
+    use super::{scope_retry_decision, SCOPE_RETRY_MAX};
+
+    /// The retry counter must accept every attempt up to and including
+    /// the (SCOPE_RETRY_MAX - 1)th retry, then reject on the
+    /// SCOPE_RETRY_MAX-th attempt. With N=16, retries 0..=15 succeed
+    /// (16 re-queues total) and the 16th attempt drops.
+    #[test]
+    fn scope_retry_decision_caps_at_max() {
+        for attempt in 0..SCOPE_RETRY_MAX {
+            assert_eq!(
+                scope_retry_decision(attempt),
+                Some(attempt + 1),
+                "attempt {} (under cap) must re-queue",
+                attempt,
+            );
+        }
+        assert_eq!(
+            scope_retry_decision(SCOPE_RETRY_MAX),
+            None,
+            "attempt at cap must drop",
+        );
+        assert_eq!(
+            scope_retry_decision(SCOPE_RETRY_MAX + 1),
+            None,
+            "attempts past cap must also drop (defensive)",
+        );
+        assert_eq!(
+            scope_retry_decision(u8::MAX),
+            None,
+            "saturated counter must drop without overflow",
+        );
+    }
+
+    /// N=16 was chosen so that at 25 Hz tick rate the retry window
+    /// spans roughly 640 ms. This test pins the constant so any
+    /// inadvertent change forces a deliberate review (the rationale
+    /// lives on the `SCOPE_RETRY_MAX` doc-comment).
+    #[test]
+    fn scope_retry_max_is_sixteen() {
+        assert_eq!(SCOPE_RETRY_MAX, 16);
+    }
+
+    /// First retry from a fresh (count=0) state increments to 1 — the
+    /// "happy path" branch every re-queue takes at least once.
+    #[test]
+    fn first_retry_returns_one() {
+        assert_eq!(scope_retry_decision(0), Some(1));
+    }
+}
