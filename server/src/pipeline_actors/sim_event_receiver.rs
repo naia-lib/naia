@@ -319,6 +319,100 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         std::mem::take(&mut *self.inner.unpublishes.lock())
     }
 
+    // ────────────────────────────────────────────────────────────────
+    // Typed push helpers — used by the combined helper
+    // `apply_receive_output_pipeline_with_sim_receiver` (in the bevy
+    // server adapter) so it can drain a `ReceiveOutput<E>` once and
+    // fan to both the bevy `Messages<X>` sinks AND this receiver
+    // without double-consuming `WorldEvents<E>`.
+    //
+    // These are additive to `push_from_receive_output`; existing
+    // single-sink callers stay on that method.
+    // ────────────────────────────────────────────────────────────────
+
+    /// Push a single tick into the tick buffer.
+    pub fn push_tick(&self, tick: Tick) {
+        self.inner.ticks.lock().push(SimTickEvent(tick));
+    }
+
+    /// Push a single connect event into the connect buffer.
+    pub fn push_connect(&self, user_key: UserKey) {
+        self.inner.connects.lock().push(SimConnectEvent { user_key });
+    }
+
+    /// Push a single disconnect event into the disconnect buffer.
+    pub fn push_disconnect(
+        &self,
+        user_key: UserKey,
+        address: SocketAddr,
+        reason: DisconnectReason,
+    ) {
+        self.inner.disconnects.lock().push(SimDisconnectEvent {
+            user_key,
+            address,
+            reason,
+        });
+    }
+
+    /// Push a single error event (already-formatted message) into the
+    /// error buffer. Mirrors `push_from_receive_output`'s
+    /// `format!("{err:?}")` collapse since `NaiaServerError` variants
+    /// carry non-Clone payloads.
+    pub fn push_error(&self, error: String) {
+        self.inner.errors.lock().push(SimErrorEvent { error });
+    }
+
+    /// Push a client-owned spawn event into the spawn buffer.
+    /// Caller is responsible for the resource-entity + client-owner
+    /// filter (mirroring `push_from_receive_output`).
+    pub fn push_spawn_client_owned(&self, user_key: UserKey, entity: E) {
+        self.inner
+            .spawns
+            .lock()
+            .push(SimSpawnEntityEvent { user_key, entity });
+    }
+
+    /// Push a despawn event into the despawn buffer.
+    /// Caller is responsible for the resource-entity filter.
+    pub fn push_despawn(&self, user_key: UserKey, entity: E) {
+        self.inner
+            .despawns
+            .lock()
+            .push(SimDespawnEntityEvent { user_key, entity });
+    }
+
+    /// Push a publish event into the publish buffer.
+    pub fn push_publish(&self, user_key: UserKey, entity: E) {
+        self.inner
+            .publishes
+            .lock()
+            .push(SimPublishEntityEvent { user_key, entity });
+    }
+
+    /// Push an unpublish event into the unpublish buffer.
+    pub fn push_unpublish(&self, user_key: UserKey, entity: E) {
+        self.inner
+            .unpublishes
+            .lock()
+            .push(SimUnpublishEntityEvent { user_key, entity });
+    }
+
+    /// Push the entries of a (channel_kind, message_kind) entry into
+    /// the erased messages buffer. `MessageContainer` is Arc-internal
+    /// so cloning is cheap.
+    pub fn push_message(
+        &self,
+        channel_kind: ChannelKind,
+        message_kind: MessageKind,
+        user_key: UserKey,
+        container: MessageContainer,
+    ) {
+        self.inner
+            .messages
+            .lock()
+            .push((channel_kind, message_kind, user_key, container));
+    }
+
     /// Drain all messages of type `M` received on channel `C`. Other
     /// channel/message combinations are left in the buffer for their
     /// own type-specific drainers.

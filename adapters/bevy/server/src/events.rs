@@ -84,6 +84,19 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for MessageEvents {
 }
 
 impl MessageEvents {
+    /// Construct from a pre-drained messages map. Used by
+    /// `apply_receive_output_pipeline_with_sim_receiver` (C.6 prep
+    /// 7/7) which drains `events.take_messages()` once and fans the
+    /// map into both a `SimEventReceiver` and this `Messages` writer.
+    /// The resulting `MessageEvents` is byte-identical to
+    /// `MessageEvents::from(&mut events)` against the same input.
+    #[doc(hidden)]
+    pub fn from_inner(
+        inner: HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>,
+    ) -> Self {
+        Self { inner }
+    }
+
     pub fn read<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
         let channel_kind = ChannelKind::of::<C>();
         if let Some(message_map) = self.inner.get(&channel_kind) {

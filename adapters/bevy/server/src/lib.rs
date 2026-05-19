@@ -108,7 +108,9 @@ mod server;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
-pub use apply_receive_output::apply_receive_output_pipeline;
+pub use apply_receive_output::{
+    apply_receive_output_pipeline, apply_receive_output_pipeline_with_sim_receiver,
+};
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
