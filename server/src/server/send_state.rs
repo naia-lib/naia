@@ -531,6 +531,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// skips the inline preamble. Otherwise the preamble runs first
     /// for backward compatibility.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/SendState] send_all_packets enter send_user_conns={} preamble_done={} scope_done={}",
+            self.send_user_connections.len(),
+            self.preamble_done_this_tick,
+            self.scope_changes_done_this_tick
+        );
         // C.6 prep — if the caller already invoked
         // `apply_pending_send_preamble` this tick (via `SendHandle`),
         // skip the inline preamble. Otherwise run it for backward
@@ -764,14 +771,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // ── Serial flush + re-insert ──────────────────────────────────────────────
         for (addr, packets, send_conn, user_prio) in results {
             let user_key = send_conn.user_key;
+            #[cfg(feature = "f3_diag")]
+            let packet_count = packets.len();
             self.send_user_connections.insert(addr, send_conn);
             self.user_priorities.insert(user_key, user_prio);
+            #[cfg(feature = "f3_diag")]
+            eprintln!(
+                "[F3-DIAG naia/SendState] send_all_packets emit user={:?} addr={:?} packets={}",
+                user_key, addr, packet_count
+            );
             for packet in packets {
                 if self.send_io.send_packet(&addr, packet).is_err() {
                     warn!("Server Error: Cannot send data packet to {}", addr);
                 }
             }
         }
+        #[cfg(feature = "f3_diag")]
+        eprintln!("[F3-DIAG naia/SendState] send_all_packets exit");
     }
 
     /// Apply pending `RoomChange` events from `scope_change_queue` to
@@ -900,6 +916,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Idempotent within a tick: setting `scope_changes_done_this_tick`
     /// causes the subsequent `send_all_packets` to skip its auto-call.
     pub fn apply_pending_scope_changes<W: WorldRefType<E>>(&mut self, world: &W) {
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/SendState] apply_pending_scope_changes enter queue_len={} send_user_conns={} room_users={:?} user_rooms={:?} room_entities={:?}",
+            self.shared.scope_change_queue.lock().len(),
+            self.send_user_connections.len(),
+            self.room_users_map.iter().map(|(k,v)| (format!("{:?}", k), v.len())).collect::<Vec<_>>(),
+            self.user_room_map.iter().map(|(k,v)| (format!("{:?}", k), v.len())).collect::<Vec<_>>(),
+            self.room_entities_map.iter().map(|(k,v)| (format!("{:?}", k), v.len())).collect::<Vec<_>>(),
+        );
         // Drain all remaining (non-RoomChange) variants. RoomChange
         // entries should already be gone (apply_pending_room_changes
         // ran in the preamble); any that survived (because the caller
@@ -927,6 +952,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .map(|(addr, conn)| (conn.user_key, *addr))
             .collect();
 
+        #[cfg(feature = "f3_diag")]
+        {
+            eprintln!(
+                "[F3-DIAG naia/SendState] apply_pending_scope_changes drained={} variants={:?}",
+                drained.len(),
+                drained.iter().map(|c| match c {
+                    ScopeChange::UserEnteredRoom(u, r) => format!("UserEnteredRoom({:?},{:?})", u, r),
+                    ScopeChange::UserLeftRoom(u, r) => format!("UserLeftRoom({:?},{:?})", u, r),
+                    ScopeChange::EntityEnteredRoom(e, r) => format!("EntityEnteredRoom({:?},{:?})", e, r),
+                    ScopeChange::ScopeToggled(u, e, b) => format!("ScopeToggled({:?},{:?},{})", u, e, b),
+                    ScopeChange::RoomChange(_) => "RoomChange".to_string(),
+                }).collect::<Vec<_>>(),
+            );
+        }
         for change in drained {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
@@ -1105,6 +1144,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
             return;
         };
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/SendState] apply_scope_for_user user={:?} ge={:?} has_entity_in_world={}",
+            user_key,
+            global_entity,
+            world.has_entity(world_entity)
+        );
         if !world.has_entity(world_entity) {
             // Entity not yet spawned in the snapshot world — re-queue
             // for next tick.
@@ -1193,6 +1239,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .global_world_manager
                 .read()
                 .entity_is_static(global_entity);
+            #[cfg(feature = "f3_diag")]
+            eprintln!(
+                "[F3-DIAG naia/SendState] apply_scope_for_user host_init_entity+set_visible user={:?} ge={:?} is_static={} kinds={}",
+                user_key,
+                global_entity,
+                is_static,
+                component_kinds.len()
+            );
             send_conn.base.world_manager.host_init_entity(
                 global_entity,
                 component_kinds,

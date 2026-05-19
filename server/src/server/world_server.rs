@@ -669,11 +669,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         let Some(user) = self.coord.user_store.get(user_key) else {
+            #[cfg(feature = "f3_diag")]
+            eprintln!(
+                "[F3-DIAG naia/WorldServer] send_message_inner user_not_found_in_user_store user={:?} channel={:?}",
+                user_key, channel_kind
+            );
             return Err(NaiaServerError::UserNotFound);
         };
         let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
+            #[cfg(feature = "f3_diag")]
+            eprintln!(
+                "[F3-DIAG naia/WorldServer] send_message_inner no_send_conn user={:?} addr={:?} channel={:?}",
+                user_key, user.address(), channel_kind
+            );
             return Err(NaiaServerError::UserNotFound);
         };
+        #[cfg(feature = "f3_diag")]
+        eprintln!(
+            "[F3-DIAG naia/WorldServer] send_message_inner enqueue user={:?} addr={:?} channel={:?}",
+            user_key, user.address(), channel_kind
+        );
         let gwm = self.shared.global_world_manager.read();
         let mut converter = send_conn
             .base

@@ -78,6 +78,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         let gwm = self.shared.global_world_manager.read();
         let gem = self.shared.global_entity_map.read();
 
+        #[cfg(feature = "f3_diag")]
+        {
+            let all: Vec<_> = gwm.all_global_entities().collect();
+            let resolved: Vec<E> = all.iter()
+                .filter_map(|ge| gem.global_entity_to_entity(ge).ok())
+                .collect();
+            eprintln!(
+                "[F3-DIAG naia/SendStateView] live_entities all_global_entities.len={} resolved.len={}",
+                all.len(),
+                resolved.len()
+            );
+            return resolved;
+        }
+        #[cfg(not(feature = "f3_diag"))]
         gwm.all_global_entities()
             .filter_map(|ge| gem.global_entity_to_entity(ge).ok())
             .collect()

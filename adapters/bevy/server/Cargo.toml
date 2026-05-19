@@ -19,6 +19,9 @@ transport_local = [ "naia-server/transport_local" ]
 test_time = [ "naia-server/test_time", "naia-bevy-shared/test_time" ]
 interior_visibility = [ "naia-server/interior_visibility" ]
 bench_instrumentation = [ "naia-server/bench_instrumentation" ]
+# Additive, default-off. Cascades to `naia-server/f3_diag` — see that
+# crate's `[features]` for details.
+f3_diag = [ "naia-server/f3_diag" ]
 
 [dependencies]
 parking_lot = "0.12"
