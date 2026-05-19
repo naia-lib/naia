@@ -211,6 +211,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.apply_pending_send_preamble();
     }
 
+    /// C.6 prep — send a message to the user at `address` without
+    /// reassembling the WorldServer.
+    ///
+    /// Cyberlith pattern:
+    /// ```ignore
+    /// let addr = coord.user_address(user_key).expect("user exists");
+    /// send.send_message_to_address::<EntityAssignmentChannel, _>(&addr, &msg);
+    /// ```
+    ///
+    /// Internally builds the per-user `EntityAndGlobalEntityConverter`
+    /// from `shared.global_world_manager` + the send connection's
+    /// `world_manager`, so messages carrying `EntityProperty` fields
+    /// resolve per-user local entity ids correctly.
+    ///
+    /// Returns `false` if no send connection exists at `address`
+    /// (user disconnected between the address lookup and this call).
+    pub fn send_message_to_address<C: naia_shared::Channel, M: naia_shared::Message>(
+        &mut self,
+        address: &std::net::SocketAddr,
+        message: &M,
+    ) -> bool {
+        self.state.send_message_to_address::<C, M>(address, message)
+    }
+
     // ============================================================
     // Phase A.3 — send-side scope APIs (cyberlith D5)
     // ============================================================

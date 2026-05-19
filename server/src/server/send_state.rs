@@ -23,10 +23,10 @@ use parking_lot::Mutex;
 use log::warn;
 
 use naia_shared::{
-    BitWriter, ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntityIndex,
-    GlobalEntityMap, GlobalPriorityState, GlobalWorldManagerType, Instant, OutgoingPacket,
-    OutgoingPriorityHook, OwnedBitReader, PacketType, Serde, SnapshotMap, Tick, Timer,
-    UserPriorityState, WorldRefType,
+    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter, GlobalEntity,
+    GlobalEntityIndex, GlobalEntityMap, GlobalPriorityState, GlobalWorldManagerType, Instant,
+    Message, MessageContainer, OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType,
+    Serde, SnapshotMap, Tick, Timer, UserPriorityState, WorldRefType,
 };
 
 use crate::{
@@ -433,6 +433,64 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.handle_empty_acks();
 
         self.preamble_done_this_tick = true;
+    }
+
+    /// C.6 prep — send a message to the user at `address` without
+    /// reassembling the WorldServer.
+    ///
+    /// `WorldServer::send_message` looks up `user_key → address` via
+    /// `coord.user_store`, then dispatches against the send-side
+    /// connection and message manager. In the pipeline architecture
+    /// (cyberlith Send SubApp permanently holds `SendHandle`), the
+    /// caller resolves `user_key → address` via
+    /// [`crate::pipeline_actors::CoordHandle::user_address`] once and
+    /// then calls this method directly — no per-tick WorldServer
+    /// reassembly.
+    ///
+    /// Returns `true` if the message was queued. Returns `false` if
+    /// `address` has no matching send connection (user disconnected
+    /// between the address lookup and this call, or the address is
+    /// stale).
+    ///
+    /// Internally constructs the per-user entity converter from
+    /// `shared.global_world_manager` + the send connection's local
+    /// `world_manager`, so messages with `EntityProperty` fields
+    /// (e.g. cyberlith's `EntityAssignment`) serialize against the
+    /// correct per-user local-entity mapping without the caller
+    /// providing a converter.
+    pub fn send_message_to_address<C: Channel, M: Message>(
+        &mut self,
+        address: &std::net::SocketAddr,
+        message: &M,
+    ) -> bool {
+        let container = MessageContainer::new(M::clone_box(message));
+        self.send_message_container_to_address(address, &ChannelKind::of::<C>(), container)
+    }
+
+    /// Channel-erased sibling of [`send_message_to_address`]. Cyberlith's
+    /// generic send paths can call this when they already hold a
+    /// `ChannelKind` + `MessageContainer` pair.
+    pub fn send_message_container_to_address(
+        &mut self,
+        address: &std::net::SocketAddr,
+        channel_kind: &ChannelKind,
+        message: MessageContainer,
+    ) -> bool {
+        let channel_settings = self.shared.channel_kinds.channel(channel_kind);
+        if !channel_settings.can_send_to_client() {
+            panic!("Cannot send message to Client on this Channel");
+        }
+        let Some(send_conn) = self.send_user_connections.get_mut(address) else {
+            return false;
+        };
+        let gwm = self.shared.global_world_manager.read();
+        let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
+        send_conn.base.message_manager.send_message(
+            &self.shared.message_kinds,
+            &mut converter,
+            channel_kind,
+            message,
+        )
     }
 
     /// Build and dispatch all outbound packets for this tick.
