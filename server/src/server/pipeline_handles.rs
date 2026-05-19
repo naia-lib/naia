@@ -271,6 +271,44 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_message_to_address::<C, M>(address, message)
     }
 
+    /// MISSION_USER_ONLY_SEES_SIM Phase B.3 (2026-05-19) — convenience
+    /// wrapper that resolves `user_key → SocketAddr` via the supplied
+    /// `CoordHandle` and forwards to [`send_message_to_address`].
+    ///
+    /// Cyberlith pattern (no separate `coord.user_address` step):
+    /// ```ignore
+    /// send.send_message_to_user::<EntityAssignmentChannel, _>(&coord, user_key, &msg);
+    /// ```
+    ///
+    /// Returns `false` if either:
+    /// - the `user_key` is unknown to coord's `user_store` (user never
+    ///   joined or was already removed), OR
+    /// - no send connection exists at the resolved address (user
+    ///   disconnected between the lookup and this call).
+    ///
+    /// Internally:
+    /// 1. `coord.user_address(user_key)` → `Option<SocketAddr>`
+    /// 2. If `None`, return `false`.
+    /// 3. Otherwise forward to `send_message_to_address::<C, M>(&addr, message)`.
+    ///
+    /// Wire output is byte-identical to the legacy
+    /// `Server::send_message(user_key, msg)` path (which internally does
+    /// the same address resolution). The only behavioral difference is
+    /// the `bool` return shape (vs. legacy's `Result<(), NaiaServerError>`),
+    /// chosen for consistency with the sibling
+    /// [`send_message_to_address`] entry point.
+    pub fn send_message_to_user<C: naia_shared::Channel, M: naia_shared::Message>(
+        &mut self,
+        coord: &crate::pipeline_actors::CoordHandle<E>,
+        user_key: &UserKey,
+        message: &M,
+    ) -> bool {
+        let Some(address) = coord.user_address(user_key) else {
+            return false;
+        };
+        self.send_message_to_address::<C, M>(&address, message)
+    }
+
     // ============================================================
     // Phase A.3 — send-side scope APIs (cyberlith D5)
     // ============================================================
