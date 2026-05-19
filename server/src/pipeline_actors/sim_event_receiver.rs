@@ -1,0 +1,358 @@
+//! `SimEventReceiver<E>` — C.6-prep Sim-side inbound transport-event facade.
+//!
+//! # Why this exists
+//!
+//! Today cyberlith calls
+//! [`crate::pipeline_actors::apply_receive_output_pipeline`]
+//! against a bevy world to populate naia's per-event `Messages<X>` buffers,
+//! then drains those buffers via `MessageReader<X>` from its own systems.
+//! That works fine *when the consumer system runs in the same bevy world*
+//! `apply_receive_output_pipeline` was called against. For the
+//! Medium-symmetric C.6 architecture (cyberlith Sim is the only stage
+//! holding user code), Sim wants to drain events without first having
+//! `apply_receive_output_pipeline` run against Sim's world — that body
+//! mutates the world (insert `ClientOwned`/`HostOwned` components,
+//! despawn entities) and is byte-equivalent to what naia would do anyway,
+//! but reasoning about the mutations from a Sim-system perspective is
+//! noisy.
+//!
+//! `SimEventReceiver<E>` is a parking-lot-Mutex-backed shared facade:
+//! every event type that `apply_receive_output_pipeline` fires into
+//! `Messages<X>` is also fanned out into a per-type vector inside the
+//! receiver. Sim systems drain by type via `drain_connect_events()` /
+//! `drain_message_events()` / etc., and they never have to look at
+//! naia's `Events<E>` flow directly.
+//!
+//! # Coexistence with `apply_receive_output_pipeline`
+//!
+//! Per the C.6-prep spec (§1.4): "the existing bevy `Messages<X>`
+//! population is preserved during this mission so existing consumers
+//! still work." Cyberlith pre-C.6 callers that drain Messages on Recv
+//! continue to function. A consumer wanting the new facade installs a
+//! `SimEventReceiver<E>` on Sim, and calls
+//! [`SimEventReceiver::push_from_receive_output`] with each tick's
+//! `ReceiveOutput<E>` (from whichever SubApp it has access to). The
+//! Messages population is independent.
+//!
+//! # Why this is a facade, not an embedded worker
+//!
+//! The C.6-prep spec §1.4 proposes that naia internally pumps events
+//! into the channels. Doing that cleanly requires naia to own the SubApp
+//! identity / spawning, which the cyberlith
+//! `_AGENTS/GAME_CELL_PIPELINING_TARGET.md` §3.1 explicitly assigns to
+//! the consumer's orchestrator (Coord owns SubApps, never naia). The
+//! facade splits the API surface cleanly: cyberlith owns the
+//! SubApp-spawning + extract loop, naia provides the typed-receiver
+//! resource and the `push_from_receive_output` adapter. The consumer's
+//! one-line wiring inside its extract pass is the same `Resource::insert
+//! + adapter call` that an embedded worker would have done internally.
+
+use std::{hash::Hash, net::SocketAddr, sync::Arc};
+
+use parking_lot::Mutex;
+
+use naia_shared::{
+    Channel, ChannelKind, DisconnectReason, Message, MessageContainer, MessageKind, Tick,
+};
+
+use crate::{
+    events::Events, server::receive_output::ReceiveOutput, user::UserKey, EntityOwner,
+};
+
+use super::handles::CoordHandle;
+
+// ────────────────────────────────────────────────────────────────────
+// Per-event-type carrier structs (clone-friendly, Debug for tests).
+// Fields are self-documenting and parallel the bevy `Messages<X>`
+// payloads `apply_receive_output_pipeline` writes.
+// ────────────────────────────────────────────────────────────────────
+
+#[derive(Clone, Debug)]
+pub struct SimConnectEvent {
+    pub user_key: UserKey,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimDisconnectEvent {
+    pub user_key: UserKey,
+    pub address: SocketAddr,
+    pub reason: DisconnectReason,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimErrorEvent {
+    /// Stringified `NaiaServerError` — the error variants carry
+    /// non-Clone payloads in places, so we collapse to a String here
+    /// for the channel-shared facade.
+    pub error: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct SimTickEvent(pub Tick);
+
+#[derive(Clone, Debug)]
+pub struct SimSpawnEntityEvent<E> {
+    pub user_key: UserKey,
+    pub entity: E,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimDespawnEntityEvent<E> {
+    pub user_key: UserKey,
+    pub entity: E,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimPublishEntityEvent<E> {
+    pub user_key: UserKey,
+    pub entity: E,
+}
+
+#[derive(Clone, Debug)]
+pub struct SimUnpublishEntityEvent<E> {
+    pub user_key: UserKey,
+    pub entity: E,
+}
+
+// ────────────────────────────────────────────────────────────────────
+// SimEventReceiver
+// ────────────────────────────────────────────────────────────────────
+
+/// Mutex-backed Sim-side inbound event receiver. Cloneable (Arc-internal).
+/// Install once as a Sim Resource; clone if you need the consumer half
+/// elsewhere.
+///
+/// All `drain_*` methods are non-blocking: they take the buffer for
+/// their event type and return a `Vec` (empty when nothing has arrived).
+pub struct SimEventReceiver<E: Copy + Eq + Hash + Send + Sync + 'static> {
+    inner: Arc<SimEventReceiverInner<E>>,
+}
+
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SimEventReceiver<E> {
+    fn clone(&self) -> Self {
+        Self {
+            inner: Arc::clone(&self.inner),
+        }
+    }
+}
+
+struct SimEventReceiverInner<E: Copy + Eq + Hash + Send + Sync + 'static> {
+    connects: Mutex<Vec<SimConnectEvent>>,
+    disconnects: Mutex<Vec<SimDisconnectEvent>>,
+    errors: Mutex<Vec<SimErrorEvent>>,
+    ticks: Mutex<Vec<SimTickEvent>>,
+    spawns: Mutex<Vec<SimSpawnEntityEvent<E>>>,
+    despawns: Mutex<Vec<SimDespawnEntityEvent<E>>>,
+    publishes: Mutex<Vec<SimPublishEntityEvent<E>>>,
+    unpublishes: Mutex<Vec<SimUnpublishEntityEvent<E>>>,
+    /// Erased message storage — keyed by (ChannelKind, MessageKind).
+    /// Drained by `drain_messages::<C, M>`.
+    messages: Mutex<Vec<(ChannelKind, MessageKind, UserKey, MessageContainer)>>,
+}
+
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
+    /// Construct a fresh receiver.
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(SimEventReceiverInner {
+                connects: Mutex::new(Vec::new()),
+                disconnects: Mutex::new(Vec::new()),
+                errors: Mutex::new(Vec::new()),
+                ticks: Mutex::new(Vec::new()),
+                spawns: Mutex::new(Vec::new()),
+                despawns: Mutex::new(Vec::new()),
+                publishes: Mutex::new(Vec::new()),
+                unpublishes: Mutex::new(Vec::new()),
+                messages: Mutex::new(Vec::new()),
+            }),
+        }
+    }
+
+    /// Fan out every event in `output` into the per-type vectors.
+    /// Mirrors the body of `apply_receive_output_pipeline` but writes
+    /// to the receiver instead of bevy `Messages<X>`.
+    ///
+    /// Consumes `output` (same semantics as
+    /// `apply_receive_output_pipeline`); pre-existing Messages-based
+    /// consumers should keep using `apply_receive_output_pipeline`
+    /// directly and call this in parallel from the same SubApp.
+    ///
+    /// `coord` is needed for the same resource-entity filter
+    /// `apply_receive_output_pipeline` applies (Spawn / Despawn of
+    /// resource entities are suppressed).
+    pub fn push_from_receive_output(&self, coord: &CoordHandle<E>, output: ReceiveOutput<E>) {
+        let inner = &*self.inner;
+
+        // Tick events
+        if !output.pending_ticks.is_empty() {
+            let mut guard = inner.ticks.lock();
+            for tick in output.pending_ticks {
+                guard.push(SimTickEvent(tick));
+            }
+        }
+
+        let mut events: Events<E> = Events::from(output.world_events);
+        if events.is_empty() {
+            return;
+        }
+
+        // Connect
+        if events.has::<crate::ConnectEvent>() {
+            let mut guard = inner.connects.lock();
+            for user_key in events.read::<crate::ConnectEvent>() {
+                guard.push(SimConnectEvent { user_key });
+            }
+        }
+        // Disconnect
+        if events.has::<crate::DisconnectEvent>() {
+            let mut guard = inner.disconnects.lock();
+            for (user_key, address, reason) in events.read::<crate::DisconnectEvent>() {
+                guard.push(SimDisconnectEvent {
+                    user_key,
+                    address,
+                    reason,
+                });
+            }
+        }
+        // Error
+        if events.has::<crate::ErrorEvent>() {
+            let mut guard = inner.errors.lock();
+            for err in events.read::<crate::ErrorEvent>() {
+                guard.push(SimErrorEvent {
+                    error: format!("{err:?}"),
+                });
+            }
+        }
+        // Spawn (resource-entity filter via coord; client-owned only,
+        // matching `apply_receive_output_pipeline`).
+        if events.has::<crate::SpawnEntityEvent>() {
+            let mut guard = inner.spawns.lock();
+            for (_, entity) in events.read::<crate::SpawnEntityEvent>() {
+                if coord.is_resource_entity(&entity) {
+                    continue;
+                }
+                if let EntityOwner::Client(user_key) = coord.entity_owner(&entity) {
+                    guard.push(SimSpawnEntityEvent { user_key, entity });
+                }
+            }
+        }
+        // Despawn
+        if events.has::<crate::DespawnEntityEvent>() {
+            let mut guard = inner.despawns.lock();
+            for (user_key, entity) in events.read::<crate::DespawnEntityEvent>() {
+                if coord.is_resource_entity(&entity) {
+                    continue;
+                }
+                guard.push(SimDespawnEntityEvent { user_key, entity });
+            }
+        }
+        // Publish / Unpublish
+        if events.has::<crate::PublishEntityEvent>() {
+            let mut guard = inner.publishes.lock();
+            for (user_key, entity) in events.read::<crate::PublishEntityEvent>() {
+                guard.push(SimPublishEntityEvent { user_key, entity });
+            }
+        }
+        if events.has::<crate::UnpublishEntityEvent>() {
+            let mut guard = inner.unpublishes.lock();
+            for (user_key, entity) in events.read::<crate::UnpublishEntityEvent>() {
+                guard.push(SimUnpublishEntityEvent { user_key, entity });
+            }
+        }
+
+        // Messages — stash erased; consumer types via `drain_messages::<C, M>`.
+        if events.has_messages() {
+            let mut guard = inner.messages.lock();
+            let drained = events.take_messages();
+            for (channel_kind, by_kind) in drained {
+                for (message_kind, list) in by_kind {
+                    for (user_key, container) in list {
+                        guard.push((channel_kind, message_kind, user_key, container));
+                    }
+                }
+            }
+        }
+
+        // Component / Bundle / Auth / Request event types are intentionally
+        // NOT fanned out — they remain on `apply_receive_output_pipeline`'s
+        // bevy `Messages<X>` path. Cyberlith Sim consumes typed component
+        // events via bevy `MessageReader<InsertComponentEvent<C>>` etc.
+    }
+
+    /// Drain all queued connect events.
+    pub fn drain_connect_events(&self) -> Vec<SimConnectEvent> {
+        std::mem::take(&mut *self.inner.connects.lock())
+    }
+
+    /// Drain all queued disconnect events.
+    pub fn drain_disconnect_events(&self) -> Vec<SimDisconnectEvent> {
+        std::mem::take(&mut *self.inner.disconnects.lock())
+    }
+
+    /// Drain all queued error events.
+    pub fn drain_error_events(&self) -> Vec<SimErrorEvent> {
+        std::mem::take(&mut *self.inner.errors.lock())
+    }
+
+    /// Drain all queued tick events.
+    pub fn drain_tick_events(&self) -> Vec<SimTickEvent> {
+        std::mem::take(&mut *self.inner.ticks.lock())
+    }
+
+    /// Drain all queued client-owned entity-spawn events.
+    pub fn drain_spawn_entity_events(&self) -> Vec<SimSpawnEntityEvent<E>> {
+        std::mem::take(&mut *self.inner.spawns.lock())
+    }
+
+    /// Drain all queued entity-despawn events.
+    pub fn drain_despawn_entity_events(&self) -> Vec<SimDespawnEntityEvent<E>> {
+        std::mem::take(&mut *self.inner.despawns.lock())
+    }
+
+    /// Drain all queued entity-publish events.
+    pub fn drain_publish_entity_events(&self) -> Vec<SimPublishEntityEvent<E>> {
+        std::mem::take(&mut *self.inner.publishes.lock())
+    }
+
+    /// Drain all queued entity-unpublish events.
+    pub fn drain_unpublish_entity_events(&self) -> Vec<SimUnpublishEntityEvent<E>> {
+        std::mem::take(&mut *self.inner.unpublishes.lock())
+    }
+
+    /// Drain all messages of type `M` received on channel `C`. Other
+    /// channel/message combinations are left in the buffer for their
+    /// own type-specific drainers.
+    pub fn drain_messages<C: Channel, M: Message>(&self) -> Vec<(UserKey, M)> {
+        let want_channel = ChannelKind::of::<C>();
+        let want_message = MessageKind::of::<M>();
+        let mut out = Vec::new();
+        let mut guard = self.inner.messages.lock();
+        let mut keep = Vec::with_capacity(guard.len());
+        for (ck, mk, user_key, container) in guard.drain(..) {
+            if ck == want_channel && mk == want_message {
+                match container.to_boxed_any().downcast::<M>() {
+                    Ok(boxed) => {
+                        out.push((user_key, *boxed));
+                        continue;
+                    }
+                    Err(_boxed_any) => {
+                        // Type mismatch — this should be impossible given
+                        // the kind keys match. Drop the message rather
+                        // than panicking; this preserves the existing
+                        // `Events<E>` semantics.
+                        continue;
+                    }
+                }
+            }
+            keep.push((ck, mk, user_key, container));
+        }
+        *guard = keep;
+        out
+    }
+}
+
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Default for SimEventReceiver<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}

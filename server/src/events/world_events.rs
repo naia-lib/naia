@@ -45,7 +45,9 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
-    pub(crate) fn new() -> Self {
+    /// Construct an empty `WorldEvents<E>`. Used by pipeline-mode
+    /// callers building synthetic `ReceiveOutput<E>` values (e.g. tests).
+    pub fn new() -> Self {
         Self {
             connections: Vec::new(),
             disconnections: Vec::new(),
