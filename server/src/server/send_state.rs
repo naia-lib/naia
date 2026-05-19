@@ -106,6 +106,15 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// policy that drains it (`scope_checks_pending` /
     /// `mark_scope_checks_pending_handled`) is itself send-side under D5.
     pub(crate) scope_checks_cache: ScopeChecksCache<E>,
+
+    /// C.6 prep — `apply_pending_send_preamble` was called this tick
+    /// (the new public split point on `SendHandle`). When `true`,
+    /// `send_all_packets` skips its built-in preamble call and resets
+    /// the flag so the next tick starts from `false`. When `false`
+    /// (existing callers that go straight to `send_all_packets`),
+    /// `send_all_packets` runs the preamble inline as before — fully
+    /// backward compatible.
+    pub(crate) preamble_done_this_tick: bool,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
@@ -379,13 +388,69 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// sources from `SendConnection::shared.rtt_avg_ms()` (the atomic
     /// mirror seeded in `new_connection_pair` and refreshed on every
     /// pong by `RecvState::receive`'s `Pong` handler).
-    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
-        // Drain any CoordHandle::room_* pushes that landed between ticks.
-        // Mutates entity_room_map + scope_checks_cache; leaves non-RoomChange
-        // variants in the queue for the existing per-user scope-evaluation
-        // drainer to consume.
+    /// C.6 prep — split the per-tick send preamble out of
+    /// `send_all_packets` so cyberlith's Send SubApp can run it on the
+    /// Send-owned thread before constructing a `SnapshotWorld<E>`,
+    /// without first reassembling the WorldServer.
+    ///
+    /// The preamble:
+    ///   1. Drains pending `RoomChange`s from `scope_change_queue` into
+    ///      `entity_room_map` + `scope_checks_cache`.
+    ///   2. Zeroes the per-tick outgoing-bytes counter.
+    ///   3. Flushes queued outbound packets (handshake responses, pong
+    ///      responses) that the recv path enqueued because it cannot
+    ///      touch `SendState::send_io` in pipeline mode.
+    ///   4. Sweeps `handle_heartbeats` + `handle_empty_acks`.
+    ///
+    /// All four steps need only `SendState` + `Arc<ServerShared>` — no
+    /// reassembled WorldServer, no world snapshot. Idempotent within a
+    /// tick: setting `preamble_done_this_tick = true` causes the
+    /// subsequent `send_all_packets` to skip its inline preamble.
+    ///
+    /// Backward compat: callers that invoke `send_all_packets` directly
+    /// (without first calling this) still get the preamble inline —
+    /// `send_all_packets` checks the flag.
+    pub fn apply_pending_send_preamble(&mut self) {
+        // 1. Drain any CoordHandle::room_* pushes that landed between
+        // ticks. Mutates entity_room_map + scope_checks_cache; leaves
+        // non-RoomChange variants in the queue for the existing per-user
+        // scope-evaluation drainer to consume.
         let shared = Arc::clone(&self.shared);
         self.apply_pending_room_changes(&shared.scope_change_queue);
+
+        // 2. Zero per-tick byte counter so outgoing_bytes_last_tick()
+        // reports only the bytes sent during THIS tick.
+        self.send_io.reset_outgoing_bytes_this_tick();
+
+        // 3. 4-F.naia.c.1: flush queued outbound packets (handshake
+        // responses, pong responses) that the recv path enqueued
+        // because it cannot touch `SendState::send_io` in pipeline mode.
+        self.flush_pending_outbound_packets();
+
+        // 4. 4-F.naia.c.2a: periodic send-side maintenance — heartbeats
+        // and empty-ack carriers.
+        self.handle_heartbeats();
+        self.handle_empty_acks();
+
+        self.preamble_done_this_tick = true;
+    }
+
+    /// Build and dispatch all outbound packets for this tick.
+    ///
+    /// If the caller has already invoked [`SendState::apply_pending_send_preamble`]
+    /// earlier in the same tick (set via the C.6 prep split), this
+    /// skips the inline preamble. Otherwise the preamble runs first
+    /// for backward compatibility.
+    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        // C.6 prep — if the caller already invoked
+        // `apply_pending_send_preamble` this tick (via `SendHandle`),
+        // skip the inline preamble. Otherwise run it for backward
+        // compatibility with all existing callers.
+        if !self.preamble_done_this_tick {
+            self.apply_pending_send_preamble();
+        }
+        // Reset the flag for the next tick.
+        self.preamble_done_this_tick = false;
 
         #[cfg(feature = "e2e_debug")]
         {
@@ -393,20 +458,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .fetch_add(1, Ordering::Relaxed);
         }
         let now = Instant::now();
-
-        // Zero per-tick byte counter so outgoing_bytes_last_tick() reports
-        // only the bytes sent during THIS tick (readable after send_packets).
-        self.send_io.reset_outgoing_bytes_this_tick();
-
-        // 4-F.naia.c.1: flush queued outbound packets (handshake responses,
-        // pong responses) that the recv path enqueued because it cannot
-        // touch `SendState::send_io` in pipeline mode.
-        self.flush_pending_outbound_packets();
-
-        // 4-F.naia.c.2a: periodic send-side maintenance — heartbeats and
-        // empty-ack carriers.
-        self.handle_heartbeats();
-        self.handle_empty_acks();
 
         // Collect and shuffle user addresses for fair priority ordering.
         let mut user_addresses: Vec<SocketAddr> =

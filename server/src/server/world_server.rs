@@ -221,6 +221,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             entity_room_map: EntityRoomMap::new(),
             entity_scope_map: EntityScopeMap::new(),
             scope_checks_cache: ScopeChecksCache::new(),
+            preamble_done_this_tick: false,
         };
 
         let coord = crate::server::CoordinatorState {

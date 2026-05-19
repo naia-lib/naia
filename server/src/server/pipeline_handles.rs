@@ -195,6 +195,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_all_packets(world);
     }
 
+    /// C.6 prep — run the per-tick send preamble on `SendState` alone,
+    /// without needing a world snapshot or a reassembled `WorldServer`.
+    ///
+    /// Cyberlith's Send SubApp calls this from its `ApplyExtract` phase
+    /// (after extract delivers the inbound `SnapshotWorld<E>` from Sim,
+    /// before serialization runs in `SerializePackets`). The subsequent
+    /// `send_all_packets` invocation detects that the preamble already
+    /// ran this tick and skips its inline preamble.
+    ///
+    /// See [`SendState::apply_pending_send_preamble`] for the full
+    /// preamble sequence (room changes drain, outbound flush,
+    /// heartbeats, empty acks).
+    pub fn apply_pending_send_preamble(&mut self) {
+        self.state.apply_pending_send_preamble();
+    }
+
     // ============================================================
     // Phase A.3 — send-side scope APIs (cyberlith D5)
     // ============================================================

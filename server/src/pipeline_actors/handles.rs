@@ -170,6 +170,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         }
     }
 
+    /// C.6 prep — number of pending `ScopeChange` entries on the
+    /// cross-half `scope_change_queue`. Used by Send's preamble drain
+    /// tests + cyberlith Send SubApp telemetry to observe backpressure
+    /// between the coord/cyberlith-Sim room mutations and the Send-side
+    /// drain. O(1) lock + len().
+    pub fn scope_change_queue_len(&self) -> usize {
+        self.shared.scope_change_queue.lock().len()
+    }
+
     /// Remove an entity from a room. Push-only; Send drains on next tick.
     pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
