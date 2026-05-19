@@ -84,7 +84,7 @@ pub use naia_server::{
         FileBitWriter, ResponseReceiveKey, SerdeErr, SignedInteger, SignedVariableInteger,
         SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
-    transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, SendHandle,
+    transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, ScopeExit, SendHandle,
     ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
     WorldServer,
 };

@@ -29,7 +29,10 @@ mod snapshot_sender;
 mod spawn;
 
 pub use handles::CoordHandle;
-pub use orchestration::{apply_recv_to_world, run_with_world_server, split_world_server};
+pub use orchestration::{
+    apply_recv_to_world, configure_entity_replication, run_with_world_server,
+    split_world_server,
+};
 pub use recv_helpers::{RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer};
 pub use router::TickMessageRouter;
 pub use send_state_view::SendStateView;

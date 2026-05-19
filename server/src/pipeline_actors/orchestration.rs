@@ -72,6 +72,97 @@ where
     )
 }
 
+/// MISSION_USER_ONLY_SEES_SIM Phase B.2 (2026-05-19) —
+/// pipeline-friendly entry point for `configure_entity_replication`.
+///
+/// Cyberlith's pre-B.2 wrapper (`server_access::configure_entity_
+/// replication_with_world`) inlined the take/call/put dance against
+/// three `Option<*Handle>` Bevy Resources and a `WorldProxyMut` borrow.
+/// This function folds the whole pattern into one naia call so that
+/// post-Phase-C the cyberlith Sim system shrinks to roughly:
+///
+/// ```ignore
+/// fn sim_system(world: &mut World) {
+///     let coord = world.resource_mut::<NaiaCoordResource>().0.take().unwrap();
+///     let recv  = world.resource_mut::<NaiaRecvResource>().0.take().unwrap();
+///     let send  = world.resource_mut::<SendHandleResource>().0.take().unwrap();
+///     let (coord, recv, send) = configure_entity_replication(
+///         coord, recv, send,
+///         &mut WorldProxyMut::proxy_mut(world),
+///         &entity, config,
+///     );
+///     world.resource_mut::<NaiaCoordResource>().0 = Some(coord);
+///     world.resource_mut::<NaiaRecvResource>().0 = Some(recv);
+///     world.resource_mut::<SendHandleResource>().0 = Some(send);
+/// }
+/// ```
+///
+/// Internally calls `WorldServer::configure_entity_replication`
+/// verbatim under a [`run_with_world_server`] reassembly. Wire output
+/// is byte-identical to the legacy path by construction (it IS the
+/// legacy path).
+///
+/// # Why not a method on `CoordHandle`?
+///
+/// The spec (`MISSION_USER_ONLY_SEES_SIM.md` §6.2) proposed
+/// `CoordHandle::configure_entity_replication(&mut self, entity,
+/// config)` with the Send-side acknowledgment deferred to
+/// `apply_pending_send_preamble` via a new `ScopeChange::ConfigureReplication`
+/// variant. End-to-end audit of `WorldServer::configure_entity_replication`
+/// (`world_server.rs:1423`) found three reasons to defer that design:
+///
+/// 1. The Send-side state machine is read-before-write across multiple
+///    locks (e.g. `unpublish_entity` captures `owner_addr` from coord
+///    BEFORE `gwm.entity_unpublish` transitions ClientPublic → Client).
+///    Splitting capture from mutation across tick boundaries requires
+///    snapshotting half a dozen pieces of state into the variant
+///    payload — substantial state-machine surface area to maintain in
+///    two places.
+///
+/// 2. The `enable_delegation_client_owned_entity` sub-path
+///    (`world_server.rs:2719`) does protocol-ordered work on
+///    `send_user_connections`: `migrate_entity_remote_to_host` +
+///    `host_local_enable_delegation` + `host_send_migrate_response`
+///    must run synchronously so that `MigrateResponse` is the FIRST
+///    message in the new HostEntityChannel sequence (subcommand_id=0).
+///    Deferring breaks the per-channel sequencing contract.
+///
+/// 3. `world.entity_publish` / `world.entity_unpublish` /
+///    `world.entity_enable_delegation` install per-component diff
+///    mutators on the Bevy world (`adapters/bevy/shared/src/component
+///    _access.rs:207`). In Sim-owns-world this is the Sim world. The
+///    preamble has no world parameter today; adding one breaks every
+///    existing caller. Storing world-mutation work in a separate
+///    queue drained by a NEW `apply_pending_world_hooks<W>` method
+///    splits the state machine across two methods and forces every
+///    consumer to remember to call both.
+///
+/// The pragmatic alternative shipped here: keep the wire body
+/// verbatim under reassembly, expose a single-call ergonomic
+/// surface. Cyberlith Phase C gets the consumer ergonomics it
+/// wanted (no manual `from_pipeline_states` / `split_world_server`
+/// dance) and the byte-identity is by-construction. Deferring
+/// `enable_delegation_client_owned_entity` cleanly is a follow-up
+/// (post Phase E, when the worker-thread Plugin variant takes
+/// ownership of the send loop).
+pub fn configure_entity_replication<E, W>(
+    coord: CoordHandle<E>,
+    recv: RecvHandle<E>,
+    send: SendHandle<E>,
+    world: &mut W,
+    entity: &E,
+    config: crate::world::replication_config::ReplicationConfig,
+) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
+where
+    E: Copy + Eq + Hash + Send + Sync,
+    W: WorldMutType<E>,
+{
+    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+        ws.configure_entity_replication(world, entity, config);
+    });
+    (coord, recv, send)
+}
+
 /// Re-split a `WorldServer<E>` back into the three handles. Used by
 /// callers that needed `&mut WorldServer` access alongside `&mut World`
 /// (e.g. `configure_entity_replication`) and so couldn't use the
