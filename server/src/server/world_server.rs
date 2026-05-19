@@ -3641,6 +3641,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     fn drain_scope_change_queue<W: WorldRefType<E>>(&mut self, world: &W) {
         // Snapshot the queue so we can re-borrow self mutably for apply_scope_for_user.
         let changes: Vec<ScopeChange<E>> = self.shared.scope_change_queue.lock().drain(..).collect();
+        #[cfg(feature = "f3_diag")]
+        if !changes.is_empty() {
+            let summary: Vec<String> = changes.iter().map(|c| match c {
+                ScopeChange::UserEnteredRoom(u, r) => format!("UserEnteredRoom({:?},{:?})", u, r),
+                ScopeChange::UserLeftRoom(u, r) => format!("UserLeftRoom({:?},{:?})", u, r),
+                ScopeChange::EntityEnteredRoom(e, r) => format!("EntityEnteredRoom({:?},{:?})", e, r),
+                ScopeChange::ScopeToggled(u, e, b) => format!("ScopeToggled({:?},{:?},{})", u, e, b),
+                ScopeChange::RoomChange(_) => "RoomChange(_)".to_string(),
+            }).collect();
+            eprintln!("[F3-DIAG naia/WorldServer] drain_scope_change_queue draining {} variants: {:?}", changes.len(), summary);
+        }
         for change in changes {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
@@ -3739,18 +3750,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let entity_idx = self.entity_global_idx(global_entity);
 
         let Some(user) = self.coord.user_store.get(user_key) else {
+            #[cfg(feature = "f3_diag")]
+            eprintln!("[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} ge={:?} reason=user_not_found", user_key, global_entity);
             return;
         };
-        let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
+        let user_addr = user.address();
+        let Some(send_conn) = self.send.send_user_connections.get_mut(&user_addr) else {
+            #[cfg(feature = "f3_diag")]
+            eprintln!("[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} addr={:?} ge={:?} reason=no_send_conn", user_key, user_addr, global_entity);
             return;
         };
         let Some(world_entity) = self.shared.global_entity_map.read()
             .global_entity_to_entity(global_entity)
             .ok()
         else {
+            #[cfg(feature = "f3_diag")]
+            eprintln!("[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} ge={:?} reason=no_world_entity_mapping", user_key, global_entity);
             return;
         };
         if !world.has_entity(&world_entity) {
+            #[cfg(feature = "f3_diag")]
+            eprintln!("[F3-DIAG naia/apply_scope_for_user] REQUEUE user={:?} ge={:?} reason=world.has_entity=false", user_key, global_entity);
             // Entity not yet spawned in Bevy (deferred commands still pending).
             // Re-queue so we retry next frame instead of permanently losing the scope change.
             self.shared
@@ -3828,6 +3848,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             Some(in_scope) => in_scope,
             None => is_resource || in_common_room,
         };
+        #[cfg(feature = "f3_diag")]
+        eprintln!("[F3-DIAG naia/apply_scope_for_user] DECIDE user={:?} ge={:?} should_be_in_scope={} currently_visible={} currently_paused={} in_common_room={} explicit={:?} is_resource={}", user_key, global_entity, should_be_in_scope, currently_visible, currently_paused, in_common_room, explicit, is_resource);
         if should_be_in_scope {
             if currently_visible {
                 // Entity already active — no change needed.
@@ -3841,9 +3863,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
             // Entity not yet tracked for this connection — enter scope.
             let component_kinds = self.shared.global_world_manager.read()
-                
+
                 .component_kinds(global_entity)
                 .unwrap();
+            #[cfg(feature = "f3_diag")]
+            eprintln!("[F3-DIAG naia/apply_scope_for_user] HOST_INIT user={:?} ge={:?} component_kinds.len={}", user_key, global_entity, component_kinds.len());
             send_conn
                 .base
                 .world_manager
