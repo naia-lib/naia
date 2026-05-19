@@ -5,6 +5,7 @@ use bevy_ecs::{
     component::{Component, Mutable},
     entity::Entity,
     prelude::Resource,
+    schedule::InternedScheduleLabel,
 };
 
 use naia_shared::{ComponentKind, Replicate};
@@ -45,6 +46,17 @@ impl WorldData {
     pub fn add_systems(&self, app: &mut App) {
         for accessor in self.kind_to_accessor_map.values() {
             accessor.add_systems(app);
+        }
+    }
+
+    /// Like [`add_systems`], but registers every per-Replicate
+    /// `on_component_added` / `on_component_removed` system in
+    /// `schedule` instead of `Update`. Used by `Plugin::sim_integration`
+    /// when the host bevy app's gameplay schedule is e.g. `SimMain`
+    /// rather than the canonical `Update`.
+    pub fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
+        for accessor in self.kind_to_accessor_map.values() {
+            accessor.add_systems_to_schedule(app, schedule);
         }
     }
 

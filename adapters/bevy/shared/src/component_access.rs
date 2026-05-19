@@ -4,7 +4,7 @@ use bevy_app::{App, Update};
 use bevy_ecs::{
     component::{Component, Mutable},
     entity::Entity,
-    schedule::IntoScheduleConfigs,
+    schedule::{InternedScheduleLabel, IntoScheduleConfigs},
     world::World,
 };
 
@@ -25,6 +25,19 @@ pub trait AppTag: Send + Sync + 'static {
 
 pub trait ComponentAccess: Send + Sync {
     fn add_systems(&self, app: &mut App);
+    /// Register `on_component_added::<R>` / `on_component_removed::<R>` in
+    /// `schedule` instead of the default `Update`. Used by callers (e.g.
+    /// cyberlith's Sim SubApp) whose change-tracking must run in a custom
+    /// schedule like `SimMain` rather than `Update`. The default impl
+    /// forwards to [`add_systems`] for backward compatibility, which
+    /// continues to register under `Update`.
+    fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
+        // Default implementation: ignore the schedule and use the
+        // canonical `Update` registration via `add_systems`. Implementors
+        // that genuinely care about schedule placement override.
+        let _ = schedule;
+        self.add_systems(app);
+    }
     fn box_clone(&self) -> Box<dyn ComponentAccess>;
     fn component<'w>(
         &self,
@@ -93,6 +106,15 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
     fn add_systems(&self, app: &mut App) {
         app.add_systems(
             Update,
+            (on_component_added::<R>, on_component_removed::<R>)
+                .chain()
+                .in_set(HostSyncChangeTracking),
+        );
+    }
+
+    fn add_systems_to_schedule(&self, app: &mut App, schedule: InternedScheduleLabel) {
+        app.add_systems(
+            schedule,
             (on_component_added::<R>, on_component_removed::<R>)
                 .chain()
                 .in_set(HostSyncChangeTracking),

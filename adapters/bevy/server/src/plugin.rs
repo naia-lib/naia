@@ -2,7 +2,11 @@ use parking_lot::Mutex;
 use std::{ops::DerefMut};
 
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
-use bevy_ecs::{entity::Entity, prelude::ApplyDeferred, schedule::IntoScheduleConfigs};
+use bevy_ecs::{
+    entity::Entity,
+    prelude::ApplyDeferred,
+    schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
+};
 
 use naia_bevy_shared::{
     HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
@@ -80,19 +84,27 @@ pub struct Plugin {
     /// recv/apply/send phases through `apply_receive_output_pipeline` +
     /// `apply_recv_to_world`.
     state_external: bool,
+    /// Optional override for the schedule under which per-Replicate
+    /// `on_component_added` / `on_component_removed` change-tracking
+    /// systems are registered. When `None`, the default `Update` schedule
+    /// is used (backward compatible with all existing callers — namako,
+    /// the existing cyberlith integration). Set via
+    /// [`Plugin::sim_integration_with_schedule`] to register under a
+    /// custom schedule like cyberlith Sim's `SimMain`.
+    change_detection_schedule: Option<InternedScheduleLabel>,
 }
 
 impl Plugin {
     /// Creates the plugin with the given server configuration and protocol.
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, false, false, false)
+        Self::new_impl(server_config, protocol, false, false, false, None)
     }
 
     /// World-only variant. Skips full `Server` setup (auth, accept_connection,
     /// etc.) and registers a `WorldServer` instead. Used by services that
     /// proxy connections (e.g., the game cell behind a session server).
     pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, false, false)
+        Self::new_impl(server_config, protocol, true, false, false, None)
     }
 
     /// Pipeline + world-only variant (Phase 4 capacity uplift). Builds the
@@ -102,7 +114,7 @@ impl Plugin {
     /// systems (`HostSyncOwnedAddedTracking`, `HostSyncChangeTracking`,
     /// `WorldToHostSync`) remain in `Update`.
     pub fn world_only_pipeline(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, false)
+        Self::new_impl(server_config, protocol, true, true, false, None)
     }
 
     /// Phase B.7 variant: installs shared types + system sets +
@@ -115,7 +127,7 @@ impl Plugin {
     /// built) but kept in the signature for symmetry with the other
     /// constructors; callers may pass `ServerConfig::default()`.
     pub fn types_and_sets_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, true)
+        Self::new_impl(server_config, protocol, true, true, true, None)
     }
 
     /// Iris 2 (MISSION_IRIS_2 / SPEC_IRIS_2_NAIA.md §1.4) — pipelined
@@ -149,7 +161,32 @@ impl Plugin {
     /// `PropertyMutate` callback → `GlobalDirtyBitset` mark — exactly
     /// the same chain as today's Send-mirror flow.
     pub fn sim_integration(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, true)
+        Self::new_impl(server_config, protocol, true, true, true, None)
+    }
+
+    /// Variant of [`Plugin::sim_integration`] that registers all per-Replicate
+    /// `on_component_added` / `on_component_removed` change-tracking systems
+    /// in `schedule` instead of the canonical `Update`.
+    ///
+    /// Cyberlith's Sim SubApp drives its gameplay logic in a non-`Update`
+    /// schedule (`SimMain`). For the Sim-side host-sync flow to fire
+    /// correctly, the per-component change-detection systems must also
+    /// run in that schedule — `Update` is never invoked on the Sim
+    /// SubApp. This constructor threads the schedule label through to
+    /// [`crate::naia_bevy_shared::WorldData::add_systems_to_schedule`].
+    pub fn sim_integration_with_schedule<S: ScheduleLabel>(
+        server_config: ServerConfig,
+        protocol: Protocol,
+        schedule: S,
+    ) -> Self {
+        Self::new_impl(
+            server_config,
+            protocol,
+            true,
+            true,
+            true,
+            Some(schedule.intern()),
+        )
     }
 
     fn new_impl(
@@ -158,6 +195,7 @@ impl Plugin {
         world_only: bool,
         pipeline: bool,
         state_external: bool,
+        change_detection_schedule: Option<InternedScheduleLabel>,
     ) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
@@ -165,6 +203,7 @@ impl Plugin {
             world_only,
             pipeline,
             state_external,
+            change_detection_schedule,
         }
     }
 }
@@ -174,7 +213,11 @@ impl PluginType for Plugin {
         let mut config = self.config.lock().deref_mut().take().unwrap();
 
         let world_data = config.protocol.take_world_data();
-        world_data.add_systems(app);
+        if let Some(schedule) = self.change_detection_schedule {
+            world_data.add_systems_to_schedule(app, schedule);
+        } else {
+            world_data.add_systems(app);
+        }
         app.insert_resource(world_data);
 
         // Phase B.7: types_and_sets_only skips constructing the
