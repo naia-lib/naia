@@ -71,7 +71,11 @@ use bevy_ecs::{
     schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
     world::World,
 };
-use crossbeam_channel::{bounded, Receiver, Sender, TrySendError};
+use crossbeam_channel::{bounded, Receiver, Sender};
+// `TrySendError` is only used on the non-test_time receive path (the
+// test_time recv worker is a pure parking service and never sends output).
+#[cfg(not(feature = "test_time"))]
+use crossbeam_channel::TrySendError;
 use parking_lot::Mutex;
 
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -920,6 +924,10 @@ fn worker_park_checkpoint(park: &ParkControl) {
 /// Because the park flag is only observed at the checkpoint (step 1), a
 /// park request that arrives mid-receive-window simply waits one short
 /// iteration until the worker has re-deposited the handle and parks.
+//
+// `recv_slot` / `out_tx` are only touched on the non-test_time receive
+// path; in test_time the recv worker is a pure parking service.
+#[cfg_attr(feature = "test_time", allow(unused_variables))]
 fn recv_worker_loop(
     recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
     out_tx: &Sender<ReceiveOutput<Entity>>,
