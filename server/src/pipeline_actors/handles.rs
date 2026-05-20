@@ -9,7 +9,7 @@
 
 use std::{hash::Hash, sync::Arc};
 
-use naia_shared::{EntityAndGlobalEntityConverter, Tick};
+use naia_shared::{EntityAndGlobalEntityConverter, GlobalEntitySpawner, Tick};
 
 use crate::room::{Room, RoomKey};
 use crate::server::coord_state::CoordinatorState;
@@ -209,6 +209,61 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             let mut q = self.shared.scope_change_queue.lock();
             q.push_back(legacy_change);
             q.push_back(ScopeChange::RoomChange(room_change));
+        }
+    }
+
+    // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.2.1 (2026-05-19) — Coord-only
+    // entity-replication enablement.
+    // ====================================================================
+    //
+    // `WorldServer::enable_entity_replication` (`world_server.rs:1044`)
+    // delegates to `spawn_entity_inner` which exclusively writes Coord-
+    // side shared state: `shared.global_entity_map`,
+    // `shared.global_world_manager`, and `shared.idx_to_world`. There is
+    // NO Send-side state mutation and NO world-hook registration on this
+    // path — `EntityOwner::Server` registration alone does not install
+    // per-component diff mutators (those land at `entity_publish` time,
+    // which is a separate `configure_entity_replication` concern handled
+    // by D.2.2).
+    //
+    // End-to-end audit (`feedback-verify-before-proposing`) found that
+    // the spec's prescribed `ScopeChange::EnableReplication` variant +
+    // `apply_pending_world_hooks` registration would have nothing to
+    // carry — there is no deferrable Send-side work to defer. Exposing
+    // the existing shared-state writes as a Coord-only method is
+    // therefore the entire delta. Backward compat:
+    // `WorldServer::enable_entity_replication` remains unchanged.
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.1 (2026-05-19) —
+    /// register `entity` as a server-owned replicating entity without
+    /// reassembling a `WorldServer`.
+    ///
+    /// Byte-identical to `WorldServer::enable_entity_replication`:
+    /// writes the same three shared-state fields
+    /// (`global_entity_map`, `global_world_manager`, `idx_to_world`)
+    /// in the same order. No Send-side mutation; no world-hook
+    /// registration; no deferred drainer work.
+    ///
+    /// Replaces the `run_with_world_server(coord, recv, send, |ws|
+    /// ws.enable_entity_replication(&entity))` reassembly pattern that
+    /// cyberlith's `server_access::drain_sim_registrations` and
+    /// `drain_sim_tile_registrations` use today.
+    pub fn enable_entity_replication(&mut self, world_entity: &E) {
+        // Mirror `WorldServer::spawn_entity_inner` field-for-field —
+        // identical write order, identical inputs, same locks.
+        let global_entity = self
+            .shared
+            .global_entity_map
+            .write()
+            .spawn(*world_entity, None);
+        let idx = self
+            .shared
+            .global_world_manager
+            .write()
+            .insert_entity_record(&global_entity, EntityOwner::Server);
+        if idx.is_valid() {
+            self.shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
         }
     }
 }
