@@ -533,4 +533,142 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// SubApp instead.
     #[doc(hidden)]
     fn _phase_a3_no_room_mut_on_send() {}
+
+    // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — read-only
+    // scope query: is `world_entity` currently in-scope for `user_key`?
+    // ====================================================================
+    //
+    // Mirrors `WorldServer::user_scope_has_entity` (world_server.rs:2292)
+    // with one adaptation: the `coord.resource_registry.is_resource_entity`
+    // call (which lives on CoordinatorState, not accessible from SendHandle)
+    // is replaced by the `is_resource: bool` parameter. The caller
+    // (cyberlith's Sim tick system) pre-computes it via
+    // `CoordHandle::is_resource_entity(entity)`. All other state accesses
+    // go through `self.state.shared` (shared global_entity_map + gwm) and
+    // `self.state.entity_scope_map` / `self.state.entity_room_map` /
+    // `self.state.user_room_map` (SendState send-side mirrors).
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — query
+    /// whether `world_entity` is currently in-scope for `user_key`.
+    ///
+    /// Mirrors `WorldServer::user_scope_has_entity` but operates against
+    /// Send-side state only — no Coord state required. The one Coord-only
+    /// field accessed by the original (`coord.resource_registry`) is
+    /// replaced by the `is_resource` parameter; the caller supplies it via
+    /// `CoordHandle::is_resource_entity(world_entity)` before calling here.
+    ///
+    /// Decision logic (byte-identical to `WorldServer::user_scope_has_entity`
+    /// once the `is_resource` substitution is accounted for):
+    /// 1. Owner of a client-owned entity is always in-scope.
+    /// 2. Private entities are never in-scope for non-owners.
+    /// 3. Explicit `include()`/`exclude()` wins unless the entity is a
+    ///    roomless server-owned non-resource, in which case `include()` is
+    ///    vetoed per [entity-scopes-09].
+    /// 4. Default: in-scope iff user and entity share at least one room.
+    ///
+    /// Returns `false` if `world_entity` is not registered in the global
+    /// entity map.
+    pub fn user_scope_has_entity(
+        &self,
+        user_key: &UserKey,
+        world_entity: &E,
+        is_resource: bool,
+    ) -> bool {
+        use naia_shared::{EntityAndGlobalEntityConverter, Publicity};
+
+        let global_entity = match self
+            .state
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        {
+            Ok(ge) => ge,
+            Err(_) => return false,
+        };
+
+        // Check if entity has Private replication config.
+        let is_private = if let Some(config) = self
+            .state
+            .shared
+            .global_world_manager
+            .read()
+            .entity_replication_config(&global_entity)
+        {
+            matches!(config.publicity, Publicity::Private)
+        } else {
+            false
+        };
+
+        // Owning client is always in-scope for client-owned entities.
+        let is_owner = if let Some(
+            crate::EntityOwner::Client(owner_key)
+            | crate::EntityOwner::ClientWaiting(owner_key)
+            | crate::EntityOwner::ClientPublic(owner_key),
+        ) = self
+            .state
+            .shared
+            .global_world_manager
+            .read()
+            .entity_owner(&global_entity)
+        {
+            owner_key == *user_key
+        } else {
+            false
+        };
+
+        if is_owner {
+            return true;
+        }
+
+        if is_private {
+            return false;
+        }
+
+        // Check explicit include/exclude.
+        if let Some(in_scope) = self
+            .state
+            .entity_scope_map
+            .get(user_key, &global_entity)
+        {
+            if *in_scope {
+                // [entity-scopes-09]: explicit include() cannot bypass the
+                // room gate for server-owned non-resource entities that have
+                // no rooms at all.
+                let entity_is_roomless = self
+                    .state
+                    .entity_room_map
+                    .entity_get_rooms(&global_entity)
+                    .is_none();
+                if entity_is_roomless {
+                    let server_owned = self
+                        .state
+                        .shared
+                        .global_world_manager
+                        .read()
+                        .entity_owner(&global_entity)
+                        .map(|o| o.is_server())
+                        .unwrap_or(false);
+                    if server_owned && !is_resource {
+                        return false;
+                    }
+                }
+            }
+            return *in_scope;
+        }
+
+        // Default: in-scope if user and entity share a room.
+        let Some(entity_rooms) = self
+            .state
+            .entity_room_map
+            .entity_get_rooms(&global_entity)
+        else {
+            return false;
+        };
+        let Some(user_rooms) = self.state.user_room_map.get(user_key) else {
+            return false;
+        };
+        entity_rooms.intersection(user_rooms).next().is_some()
+    }
 }

@@ -534,3 +534,177 @@ fn coord_handle_disconnect_user_queues_request() {
     // (after the recv drain has removed it) must be a no-op (tested above).
     drop(q);
 }
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — `SendHandle::scope_checks_pending`
+/// and `SendHandle::mark_scope_checks_pending_handled`.
+///
+/// Verifies that pending scope-check tuples appear after a room add-user +
+/// add-entity sequence (via the coord room ops → preamble drain path), and
+/// that `mark_scope_checks_pending_handled` clears the pending slice.
+#[test]
+fn send_handle_scope_checks_pending_and_mark_handled() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, mut send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    // Register entity 10u64 in global_entity_map.
+    coord.shared.global_entity_map.write().spawn(10u64, None);
+
+    // Register a user.
+    let user_key = UserKey::from_u64(1);
+    let user_addr: SocketAddr = "127.0.0.1:20001".parse().unwrap();
+    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+
+    // Coord room ops — push-only.
+    let rk = coord.create_room();
+    coord.room_add_user(&rk, &user_key);
+    coord.room_add_entity(&rk, &10u64);
+
+    // Before drain, pending should be empty (scope cache not yet updated).
+    let pending_before = send.scope_checks_pending();
+    assert!(
+        pending_before.is_empty(),
+        "pending should be empty before preamble drain, got: {pending_before:?}"
+    );
+
+    // Drain via apply_pending_room_changes — same path as send_all_packets preamble.
+    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+
+    // After drain, pending must contain the (room, user, entity) tuple.
+    let pending_after = send.scope_checks_pending();
+    assert!(
+        pending_after.contains(&(rk, user_key, 10u64)),
+        "scope_checks_pending should contain (rk, user_key, 10) after drain, got: {pending_after:?}"
+    );
+
+    // Mark handled — pending slice must clear.
+    send.mark_scope_checks_pending_handled();
+    let pending_cleared = send.scope_checks_pending();
+    assert!(
+        pending_cleared.is_empty(),
+        "scope_checks_pending should be empty after mark_pending_handled, got: {pending_cleared:?}"
+    );
+}
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — `SendHandle::user_scope_has_entity`
+/// with explicit include / exclude.
+///
+/// Verifies that:
+/// - `user_scope_has_entity` returns `true` after `user_scope_set_entity(include)`.
+/// - `user_scope_has_entity` returns `false` after `user_scope_set_entity(exclude)`.
+/// - `is_resource=false` is exercised (server-owned, in a room → include wins normally).
+#[test]
+fn send_handle_user_scope_has_entity_explicit_include_exclude() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, mut send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    // Register entity 42u64 as a server-owned entity.
+    let world_entity: u64 = 42;
+    let global_entity = coord.shared.global_entity_map.write().spawn(world_entity, None);
+    let idx = coord
+        .shared
+        .global_world_manager
+        .write()
+        .insert_entity_record(&global_entity, crate::world::entity_owner::EntityOwner::Server);
+    if idx.is_valid() {
+        coord.shared.idx_to_world.write()[idx.as_usize()] = Some(world_entity);
+    }
+
+    // Register a user.
+    let user_key = UserKey::from_u64(2);
+    let user_addr: SocketAddr = "127.0.0.1:20002".parse().unwrap();
+    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+
+    // Put the entity in a room so it is not roomless (avoids the roomless
+    // server-owned gate that would veto explicit include on non-resources).
+    let rk = coord.create_room();
+    coord.room_add_user(&rk, &user_key);
+    coord.room_add_entity(&rk, &world_entity);
+
+    // Drain pending room changes so entity_room_map + user_room_map are current.
+    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+
+    // Set explicit include.
+    let set_ok = send.user_scope_set_entity(&user_key, &world_entity, true);
+    assert!(set_ok, "user_scope_set_entity should return true for a registered entity");
+
+    // user_scope_has_entity must return true (is_resource=false, entity is in a room).
+    assert!(
+        send.user_scope_has_entity(&user_key, &world_entity, false),
+        "user_scope_has_entity should return true after explicit include"
+    );
+
+    // Set explicit exclude.
+    send.user_scope_set_entity(&user_key, &world_entity, false);
+    assert!(
+        !send.user_scope_has_entity(&user_key, &world_entity, false),
+        "user_scope_has_entity should return false after explicit exclude"
+    );
+}
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — `SendHandle::user_scope_has_entity`
+/// default room-sharing logic.
+///
+/// Without an explicit scope bit, an entity in the same room as the user
+/// must be in-scope; an entity in a different room must not be in-scope.
+#[test]
+fn send_handle_user_scope_has_entity_room_default() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, mut send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    // Register two entities.
+    let entity_in_room: u64 = 100;
+    let entity_not_in_room: u64 = 200;
+    let ge_in = coord.shared.global_entity_map.write().spawn(entity_in_room, None);
+    let ge_out = coord.shared.global_entity_map.write().spawn(entity_not_in_room, None);
+    for ge in [ge_in, ge_out] {
+        let idx = coord
+            .shared
+            .global_world_manager
+            .write()
+            .insert_entity_record(&ge, crate::world::entity_owner::EntityOwner::Server);
+        if idx.is_valid() {
+            coord.shared.idx_to_world.write()[idx.as_usize()] = Some(entity_in_room);
+        }
+    }
+
+    // Register a user.
+    let user_key = UserKey::from_u64(3);
+    let user_addr: SocketAddr = "127.0.0.1:20003".parse().unwrap();
+    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+
+    // Only entity_in_room goes into the room with the user.
+    let rk = coord.create_room();
+    coord.room_add_user(&rk, &user_key);
+    coord.room_add_entity(&rk, &entity_in_room);
+
+    // entity_not_in_room goes into a different room the user is NOT in.
+    let rk2 = coord.create_room();
+    coord.room_add_entity(&rk2, &entity_not_in_room);
+
+    // Drain pending room changes.
+    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+
+    // entity_in_room: in same room as user → in-scope by default.
+    assert!(
+        send.user_scope_has_entity(&user_key, &entity_in_room, false),
+        "entity sharing a room with the user should be in-scope by default"
+    );
+
+    // entity_not_in_room: in a different room → not in-scope by default.
+    assert!(
+        !send.user_scope_has_entity(&user_key, &entity_not_in_room, false),
+        "entity in a different room should NOT be in-scope by default"
+    );
+}
