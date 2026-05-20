@@ -4,8 +4,11 @@
 # Path to specs directory (relative to this config's directory, which is the naia repo root)
 specs_dir = "test/specs"
 
-# Adapter command to run the NPA test adapter
-adapter_cmd = "cargo run --manifest-path test/npa/Cargo.toml --"
+# Adapter command to run the NPA test adapter.
+# Uses run_npa.sh instead of `cargo run` directly: on warm builds (nothing
+# changed) this completes in < 0.5s; only cold builds pay the full compile
+# cost once per session. See test/npa/run_npa.sh for details.
+adapter_cmd = "bash test/npa/run_npa.sh"
 
 # Primary agent (applies to both runner + planner)
 agent = "copilot"

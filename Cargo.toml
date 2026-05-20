@@ -21,6 +21,7 @@ members = [
     "test/spec_tool",
     "test/tests",
     "test/bench",
+    "test/suite_bench",
     "adapters/bevy/client",
     "adapters/bevy/server",
     "adapters/bevy/shared",
