@@ -14,6 +14,14 @@ pub struct HostEntityChannel {
     buffered_messages: OrderedIds<EntityMessage<()>>,
     incoming_messages: Vec<EntityMessage<()>>,
     outgoing_commands: Vec<EntityCommand>,
+
+    /// Reserved auth-channel command to be emitted as `subcommand_id=0`
+    /// the next time any auth-channel command is enqueued OR the
+    /// outgoing buffer is drained. See [`reserve_first_command`] for
+    /// the rationale (delegation's `MigrateResponse`-first invariant
+    /// expressed explicitly at the channel level rather than relying
+    /// on the synchronous call order in `enable_delegation_client_owned_entity`).
+    reserved_first_command: Option<EntityCommand>,
 }
 
 impl HostEntityChannel {
@@ -26,6 +34,8 @@ impl HostEntityChannel {
             buffered_messages: OrderedIds::new(),
             incoming_messages: Vec::new(),
             outgoing_commands: Vec::new(),
+
+            reserved_first_command: None,
         }
     }
 
@@ -35,6 +45,9 @@ impl HostEntityChannel {
 
     /// Validates and routes `command` to the component set or authority sub-channel, queuing it for outbound delivery.
     pub fn send_command(&mut self, command: EntityCommand) {
+        // Flush any reserved auth-channel command first so it lands at
+        // subcommand_id=0 ahead of `command`. No-op if none reserved.
+        self.flush_reserved_into_auth_channel();
         match command.get_type() {
             EntityMessageType::Spawn
             | EntityMessageType::SpawnWithComponents
@@ -94,6 +107,9 @@ impl HostEntityChannel {
         &mut self,
         outgoing_commands: &mut Vec<EntityCommand>,
     ) {
+        // Ensure any reserved-first command is emitted even when no
+        // other command follows it within this tick.
+        self.flush_reserved_into_auth_channel();
         outgoing_commands.append(&mut self.outgoing_commands);
     }
 
@@ -141,12 +157,98 @@ impl HostEntityChannel {
             buffered_messages: OrderedIds::new(),
             incoming_messages: Vec::new(),
             outgoing_commands: Vec::new(),
+            reserved_first_command: None,
         }
     }
 
     /// Drains and returns all queued outbound [`EntityCommand`]s.
     pub fn extract_outgoing_commands(&mut self) -> Vec<EntityCommand> {
+        // Ensure any reserved-first command is emitted even when no
+        // other command follows it within this tick.
+        self.flush_reserved_into_auth_channel();
         std::mem::take(&mut self.outgoing_commands)
+    }
+
+    /// Reserve an auth-channel command to be emitted as the FIRST
+    /// outbound command on this channel (`subcommand_id=0`).
+    ///
+    /// Background: the server's delegation path
+    /// (`enable_delegation_client_owned_entity`) requires that
+    /// `MigrateResponse` is the FIRST command in the new
+    /// `HostEntityChannel` sequence so the client can sync its
+    /// `next_subcommand_id=1` (see `RemoteEntityChannel`
+    /// post-migration setup). Historically this invariant was
+    /// implicit: the synchronous server code happened to call
+    /// `host_send_migrate_response` first. Encoding it explicitly at
+    /// the channel level decouples the invariant from caller order
+    /// and unblocks deferring the Send-side delegation work to a
+    /// later preamble drain (see MISSION_USER_ONLY_SEES_SIM Phase
+    /// D.2 blocker 2).
+    ///
+    /// The reserved command will be enqueued (and consume
+    /// `subcommand_id=0`) on the next of:
+    ///   - any [`send_command`] call (the reserved command goes ahead
+    ///     of the new command, which then takes `subcommand_id=1`),
+    ///   - any drain via [`extract_outgoing_commands`] or
+    ///     `drain_outgoing_messages_into`.
+    ///
+    /// Constraints:
+    /// - Panics if a first-command is already reserved.
+    /// - Panics if any auth-channel command has already been sent on
+    ///   this channel (i.e. the would-be `subcommand_id=0` slot is
+    ///   already gone).
+    /// - The reserved command MUST be an auth-channel command type
+    ///   (Publish / Unpublish / EnableDelegation / DisableDelegation /
+    ///   SetAuthority / RequestAuthority / ReleaseAuthority /
+    ///   EnableDelegationResponse / MigrateResponse). Lifecycle
+    ///   commands (Spawn/Despawn/Noop) and component commands are
+    ///   rejected with a panic.
+    pub fn reserve_first_command(&mut self, command: EntityCommand) {
+        if self.reserved_first_command.is_some() {
+            panic!(
+                "HostEntityChannel::reserve_first_command called twice before drain (type={:?})",
+                command.get_type()
+            );
+        }
+        if self.auth_channel.sender_has_sent_any() {
+            panic!(
+                "HostEntityChannel::reserve_first_command called after a command was already \
+                 emitted on this channel; subcommand_id=0 slot has already been consumed \
+                 (incoming type={:?})",
+                command.get_type()
+            );
+        }
+        match command.get_type() {
+            EntityMessageType::Publish
+            | EntityMessageType::Unpublish
+            | EntityMessageType::EnableDelegation
+            | EntityMessageType::DisableDelegation
+            | EntityMessageType::SetAuthority
+            | EntityMessageType::RequestAuthority
+            | EntityMessageType::ReleaseAuthority
+            | EntityMessageType::EnableDelegationResponse
+            | EntityMessageType::MigrateResponse => {}
+            other => {
+                panic!(
+                    "HostEntityChannel::reserve_first_command only accepts auth-channel command \
+                     types; got {:?}",
+                    other
+                );
+            }
+        }
+        self.reserved_first_command = Some(command);
+    }
+
+    /// If a first-command is reserved, validate + route it through the
+    /// auth channel so it consumes `subcommand_id=0`. Idempotent
+    /// once drained.
+    fn flush_reserved_into_auth_channel(&mut self) {
+        if let Some(reserved) = self.reserved_first_command.take() {
+            self.auth_channel.validate_command(&reserved);
+            self.auth_channel.send_command(reserved);
+            self.auth_channel
+                .sender_drain_messages_into(&mut self.outgoing_commands);
+        }
     }
 
     /// Force-enable delegation on this channel (client-side only)

@@ -176,6 +176,17 @@ impl HostWorldManager {
         self.host_engine.send_command(converter, command);
     }
 
+    /// Reserves an auth-channel command (`SubCommandId=0`) on the
+    /// host entity's `HostEntityChannel`. See
+    /// [`crate::world::sync::HostEntityChannel::reserve_first_command`].
+    pub fn reserve_first_command(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        command: EntityCommand,
+    ) {
+        self.host_engine.reserve_first_command(converter, command);
+    }
+
     pub(crate) fn get_host_world(&self) -> &HashMap<HostEntity, HostEntityChannel> {
         self.host_engine.get_world()
     }

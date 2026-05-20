@@ -93,6 +93,136 @@ fn host_entity_channel_extract_outgoing_commands() {
     assert!(commands.is_empty());
 }
 
+// ---- D.2.3: HostEntityChannel::reserve_first_command tests ----
+//
+// These tests verify the explicit "first-message" invariant primitive
+// that makes the `MigrateResponse-as-subcommand_id=0` contract a
+// property of HostEntityChannel itself rather than of caller ordering
+// in `enable_delegation_client_owned_entity`.
+
+mod reserve_first_command_tests {
+    use crate::{
+        world::{
+            entity_command::EntityCommand,
+            local::local_entity::RemoteEntity,
+            sync::HostEntityChannel,
+        },
+        BigMapKey, EntityAuthStatus, GlobalEntity, HostEntity, HostType,
+    };
+
+    fn migrate_response_cmd(id: u64) -> EntityCommand {
+        EntityCommand::MigrateResponse(
+            None,
+            GlobalEntity::from_u64(id),
+            RemoteEntity::new(id as u16),
+            HostEntity::new(id as u16),
+        )
+    }
+
+    fn set_authority_cmd(id: u64) -> EntityCommand {
+        EntityCommand::SetAuthority(None, GlobalEntity::from_u64(id), EntityAuthStatus::Granted)
+    }
+
+    fn subcommand_id_of(cmd: &EntityCommand) -> Option<u8> {
+        match cmd {
+            EntityCommand::Publish(s, _)
+            | EntityCommand::Unpublish(s, _)
+            | EntityCommand::EnableDelegation(s, _)
+            | EntityCommand::DisableDelegation(s, _)
+            | EntityCommand::SetAuthority(s, _, _)
+            | EntityCommand::RequestAuthority(s, _)
+            | EntityCommand::ReleaseAuthority(s, _)
+            | EntityCommand::EnableDelegationResponse(s, _)
+            | EntityCommand::MigrateResponse(s, _, _, _) => *s,
+            _ => None,
+        }
+    }
+
+    /// Helper: simulate the prerequisite the legacy delegation flow
+    /// performs before sending MigrateResponse — `host_local_enable_delegation`
+    /// force-transitions the new HostEntityChannel from Published to
+    /// Delegated state so MigrateResponse passes auth_channel
+    /// validation. We use the public test-only hook
+    /// `local_enable_delegation`.
+    fn force_delegate_channel(channel: &mut HostEntityChannel) {
+        channel.local_enable_delegation();
+    }
+
+    /// T1: legacy delegation path — reserve_first_command then NO
+    /// intervening send. The reserved MigrateResponse must come out
+    /// at subcommand_id=0 on drain. Byte-identical to pre-refactor:
+    /// in the legacy synchronous flow, host_send_migrate_response
+    /// was followed by no other auth-channel send on the fresh
+    /// channel before the tick boundary.
+    #[test]
+    fn t1_legacy_reserve_then_drain_emits_at_subcommand_id_0() {
+        let mut channel = HostEntityChannel::new(HostType::Server);
+        force_delegate_channel(&mut channel);
+        channel.reserve_first_command(migrate_response_cmd(1));
+        let commands = channel.extract_outgoing_commands();
+        assert_eq!(commands.len(), 1, "expected exactly one emitted command");
+        let cmd = &commands[0];
+        assert!(matches!(cmd, EntityCommand::MigrateResponse(_, _, _, _)));
+        assert_eq!(subcommand_id_of(cmd), Some(0));
+    }
+
+    /// T2: reserve_first_command + intervening enqueue — reserved
+    /// MigrateResponse goes first (subcommand_id=0); intervening
+    /// SetAuthority follows (subcommand_id=1).
+    #[test]
+    fn t2_reserve_then_send_orders_reserved_first() {
+        let mut channel = HostEntityChannel::new(HostType::Server);
+        force_delegate_channel(&mut channel);
+        channel.reserve_first_command(migrate_response_cmd(2));
+        channel.send_command(set_authority_cmd(2));
+        let commands = channel.extract_outgoing_commands();
+        assert_eq!(commands.len(), 2, "expected reserved + sent commands");
+        assert!(matches!(&commands[0], EntityCommand::MigrateResponse(_, _, _, _)));
+        assert_eq!(subcommand_id_of(&commands[0]), Some(0));
+        assert!(matches!(&commands[1], EntityCommand::SetAuthority(_, _, _)));
+        assert_eq!(subcommand_id_of(&commands[1]), Some(1));
+    }
+
+    /// T3: reserve_first_command + no intervening enqueue — only the
+    /// reserved command goes out (at subcommand_id=0).
+    #[test]
+    fn t3_reserve_only_emits_single_reserved_command() {
+        let mut channel = HostEntityChannel::new(HostType::Server);
+        force_delegate_channel(&mut channel);
+        channel.reserve_first_command(migrate_response_cmd(3));
+        // Drain without any send_command call.
+        let commands = channel.extract_outgoing_commands();
+        assert_eq!(commands.len(), 1);
+        assert!(matches!(&commands[0], EntityCommand::MigrateResponse(_, _, _, _)));
+        assert_eq!(subcommand_id_of(&commands[0]), Some(0));
+    }
+
+    /// T4a: double-reserve panics.
+    #[test]
+    #[should_panic(expected = "reserve_first_command called twice")]
+    fn t4a_double_reserve_panics() {
+        let mut channel = HostEntityChannel::new(HostType::Server);
+        channel.reserve_first_command(migrate_response_cmd(4));
+        channel.reserve_first_command(migrate_response_cmd(4));
+    }
+
+    /// T4b: reserve AFTER a send_command has already consumed
+    /// subcommand_id=0 panics — the slot is gone.
+    #[test]
+    #[should_panic(expected = "subcommand_id=0 slot has already been consumed")]
+    fn t4b_reserve_after_send_panics() {
+        let mut channel = HostEntityChannel::new(HostType::Server);
+        // SetAuthority requires Delegated state; use force-publish then
+        // force-enable-delegation via a Publish + EnableDelegation
+        // sequence, simulating a fresh server-side delegation flow.
+        channel.send_command(EntityCommand::EnableDelegation(
+            None,
+            GlobalEntity::from_u64(5),
+        ));
+        channel.reserve_first_command(migrate_response_cmd(5));
+    }
+}
+
 #[test]
 fn remote_component_channel_force_drain_buffers() {
     // Test that we can force-drain all buffered operations

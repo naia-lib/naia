@@ -450,6 +450,24 @@ impl LocalWorldManager {
     }
 
     /// Sends a `MigrateResponse` command to notify the peer that an entity has migrated to the server's control.
+    ///
+    /// The MigrateResponse MUST be the FIRST command on the new
+    /// `HostEntityChannel` so the client can re-sync its
+    /// `next_subcommand_id=1` after migration (see
+    /// `RemoteEntityChannel::post_migration_setup`). We express this
+    /// invariant explicitly via
+    /// [`HostEntityChannel::reserve_first_command`] rather than
+    /// relying on this method being called before any other
+    /// `host.send_command` for the same entity. This decouples the
+    /// invariant from the caller's synchronous ordering and unblocks
+    /// deferring the Send-side delegation work to a later preamble
+    /// drain (MISSION_USER_ONLY_SEES_SIM Phase D.2 blocker 2).
+    ///
+    /// Wire-byte-identical to the prior `host.send_command` path: in
+    /// the legacy synchronous delegation flow, no other auth-channel
+    /// command had yet been routed for the freshly-migrated host
+    /// entity, so the reserved command is the first to consume
+    /// `subcommand_id=0` — identical to the pre-refactor behaviour.
     pub fn host_send_migrate_response(
         &mut self,
         global_entity: &GlobalEntity,
@@ -464,7 +482,7 @@ impl LocalWorldManager {
             *old_remote_entity,
             *new_host_entity,
         );
-        self.host.send_command(&self.entity_map, command);
+        self.host.reserve_first_command(&self.entity_map, command);
     }
 
     #[track_caller]

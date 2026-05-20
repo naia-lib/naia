@@ -24,4 +24,10 @@ impl AuthChannelSender {
     pub(crate) fn drain_messages_into(&mut self, commands: &mut Vec<EntityCommand>) {
         commands.append(&mut self.outgoing_commands);
     }
+
+    /// Returns `true` if at least one command has been assigned a
+    /// `SubCommandId` by this sender (i.e. `next_subcommand_id > 0`).
+    pub(crate) fn has_sent_any(&self) -> bool {
+        self.next_subcommand_id != 0
+    }
 }

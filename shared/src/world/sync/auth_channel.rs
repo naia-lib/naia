@@ -193,6 +193,14 @@ impl AuthChannel {
         self.sender.drain_messages_into(commands);
     }
 
+    /// Returns `true` if the sender has ever assigned a `SubCommandId`
+    /// (i.e. its `next_subcommand_id` has advanced past 0). Used by
+    /// `HostEntityChannel::reserve_first_command` to enforce that the
+    /// `subcommand_id=0` slot is still available.
+    pub(crate) fn sender_has_sent_any(&self) -> bool {
+        self.sender.has_sent_any()
+    }
+
     /// Get current state of the AuthChannel (for testing)
     pub fn state(&self) -> EntityAuthChannelState {
         self.state

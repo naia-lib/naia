@@ -146,6 +146,36 @@ impl HostEngine {
         entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
     }
 
+    /// Reserve an auth-channel command (`SubCommandId=0`) on the
+    /// `HostEntityChannel` keyed by `command.entity()`'s host entity.
+    /// See [`HostEntityChannel::reserve_first_command`] for semantics.
+    ///
+    /// Panics if the host entity has no entity channel yet (the
+    /// caller must have already migrated/spawned the host entity).
+    pub(crate) fn reserve_first_command(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+        command: EntityCommand,
+    ) {
+        let global_entity = command.entity();
+        let host_entity = converter
+            .global_entity_to_host_entity(&global_entity)
+            .unwrap();
+        let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
+            panic!(
+                "HostEngine::reserve_first_command: no entity channel for host_entity={:?} \
+                 (command type={:?})",
+                host_entity,
+                command.get_type()
+            );
+        };
+        entity_channel.reserve_first_command(command);
+        // Also drain so that the reserved command actually reaches the
+        // engine-level outgoing buffer at the end of this tick even if
+        // no subsequent `send_command` follows.
+        entity_channel.drain_outgoing_messages_into(&mut self.outgoing_commands);
+    }
+
     pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
         self.entity_channels
             .remove(entity)
