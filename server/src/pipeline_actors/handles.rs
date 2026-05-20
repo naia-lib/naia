@@ -199,6 +199,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         self.shared.scope_change_queue.lock().len()
     }
 
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — number of
+    /// pending World-side `configure_entity_replication` hook ops on the
+    /// `pending_world_hooks` queue. Used by tests + cyberlith Sim
+    /// telemetry to observe that world-hook registration is deferred to
+    /// (and consumed by) `apply_pending_world_hooks`. O(1) lock + len().
+    pub fn pending_world_hooks_len(&self) -> usize {
+        self.shared.pending_world_hooks.lock().len()
+    }
+
     /// Remove an entity from a room. Push-only; Send drains on next tick.
     pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
@@ -265,5 +274,445 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         if idx.is_valid() {
             self.shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
         }
+    }
+
+    // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — Coord-only
+    // entity-replication reconfiguration with deferred Send/World work.
+    // ====================================================================
+    //
+    // Byte-identity strategy (vs `WorldServer::configure_entity_replication`,
+    // `world_server.rs:1423`): run the publicity-transition decision tree
+    // EXACTLY ONCE here, reading PRE-transition gwm state, performing the
+    // Coord-side gwm writes immediately (so a subsequent same-tick
+    // configure on the same entity reads the post-transition state, as it
+    // would under the fused path), and recording the Send-side and
+    // World-side leaf work as flat ordered op lists. The tree is NOT
+    // re-evaluated in the drain — that would mis-branch off the
+    // already-transitioned gwm. Capturing a flat op list with all
+    // per-connection parameters resolved at push time is the B.2
+    // blocker-1 read-before-write fix (see `configure_replication.rs`).
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — set the
+    /// [`ReplicationConfig`](crate::ReplicationConfig) for `world_entity`
+    /// without reassembling a `WorldServer`.
+    ///
+    /// Mutates Coord-side `global_world_manager` state immediately and
+    /// DEFERS all Send-side state-machine work to the next
+    /// [`SendHandle::apply_pending_send_preamble`] (via a
+    /// `ScopeChange::ConfigureReplication` payload) and all World-side
+    /// component-hook registration to
+    /// [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`
+    /// twin), which the Sim system calls with the `&mut World`.
+    ///
+    /// Wire-byte-identical to `WorldServer::configure_entity_replication`
+    /// once both drains have run. The existing `WorldServer` method is
+    /// unchanged for backward compat.
+    pub fn configure_entity_replication(
+        &mut self,
+        world_entity: &E,
+        config: crate::ReplicationConfig,
+    ) where
+        E: 'static,
+    {
+        use crate::server::configure_replication::{
+            ConfigureCapture, ConfigureSendOp, ConfigureWorldOp,
+        };
+        use crate::server::scope_change::ScopeChange;
+        use naia_shared::Publicity;
+
+        let global_entity = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+        if !self
+            .shared
+            .global_world_manager
+            .read()
+            .has_entity(&global_entity)
+        {
+            panic!("Entity is not yet replicating. Be sure to call `enable_replication` or `spawn_entity` on the Server, before configuring replication.");
+        }
+
+        // --- Read PRE-transition state (read-before-write capture) ---
+        let entity_owner = self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_owner(&global_entity)
+            .unwrap();
+        let server_owned: bool = entity_owner.is_server();
+        let client_owned: bool = entity_owner.is_client();
+        // Mirror the legacy `client_origin` derivation (world_server.rs:1448).
+        let client_origin: Option<UserKey> = match entity_owner {
+            EntityOwner::Client(uk)
+            | EntityOwner::ClientPublic(uk)
+            | EntityOwner::ClientWaiting(uk) => Some(uk),
+            EntityOwner::Server | EntityOwner::Local => None,
+        };
+        let prev_config = self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_replication_config(&global_entity)
+            .unwrap();
+        if prev_config == config {
+            // Fully identical — no-op (matches legacy early return).
+            return;
+        }
+
+        let mut send_ops: Vec<ConfigureSendOp<E>> = Vec::new();
+        let mut world_ops: Vec<ConfigureWorldOp<E>> = Vec::new();
+
+        // Handle publicity state machine only when publicity changed —
+        // this branch structure mirrors `world_server.rs:1464` verbatim.
+        if prev_config.publicity != config.publicity {
+            match prev_config.publicity {
+                Publicity::Private => {
+                    if server_owned {
+                        panic!("Server-owned entity should never be private");
+                    }
+                    match config.publicity {
+                        Publicity::Private => {
+                            unreachable!("publicity prev == next but outer check passed");
+                        }
+                        Publicity::Public => {
+                            // private -> public
+                            self.capture_publish(
+                                &global_entity,
+                                world_entity,
+                                true,
+                                &mut send_ops,
+                                &mut world_ops,
+                            );
+                        }
+                        Publicity::Delegated => {
+                            // private -> delegated
+                            self.capture_publish(
+                                &global_entity,
+                                world_entity,
+                                true,
+                                &mut send_ops,
+                                &mut world_ops,
+                            );
+                            self.capture_enable_delegation(
+                                &global_entity,
+                                world_entity,
+                                client_origin,
+                                &mut send_ops,
+                                &mut world_ops,
+                            );
+                        }
+                    }
+                }
+                Publicity::Public => match config.publicity {
+                    Publicity::Private => {
+                        // public -> private
+                        if server_owned {
+                            panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                        }
+                        self.capture_unpublish(
+                            &global_entity,
+                            world_entity,
+                            true,
+                            &mut send_ops,
+                            &mut world_ops,
+                        );
+                    }
+                    Publicity::Public => {
+                        unreachable!("publicity prev == next but outer check passed");
+                    }
+                    Publicity::Delegated => {
+                        // public -> delegated
+                        self.capture_enable_delegation(
+                            &global_entity,
+                            world_entity,
+                            client_origin,
+                            &mut send_ops,
+                            &mut world_ops,
+                        );
+                    }
+                },
+                Publicity::Delegated => {
+                    if client_owned {
+                        panic!("Client-owned entity should never be delegated");
+                    }
+                    match config.publicity {
+                        Publicity::Private => {
+                            // delegated -> private
+                            if server_owned {
+                                panic!("Cannot unpublish a Server-owned Entity (doing so would disable replication entirely, just use a local entity instead)");
+                            }
+                            self.capture_disable_delegation(
+                                &global_entity,
+                                world_entity,
+                                &mut send_ops,
+                                &mut world_ops,
+                            );
+                            self.capture_unpublish(
+                                &global_entity,
+                                world_entity,
+                                true,
+                                &mut send_ops,
+                                &mut world_ops,
+                            );
+                        }
+                        Publicity::Public => {
+                            // delegated -> public
+                            self.capture_disable_delegation(
+                                &global_entity,
+                                world_entity,
+                                &mut send_ops,
+                                &mut world_ops,
+                            );
+                        }
+                        Publicity::Delegated => {
+                            unreachable!("publicity prev == next but outer check passed");
+                        }
+                    }
+                }
+            }
+        }
+
+        // Always persist the scope_exit field regardless of whether
+        // publicity changed (mirrors world_server.rs:1543). Coord-side
+        // write — do it immediately.
+        self.shared
+            .global_world_manager
+            .write()
+            .entity_set_scope_exit(&global_entity, config.scope_exit);
+
+        // Queue the deferred Send-side work (if any).
+        if !send_ops.is_empty() {
+            self.shared
+                .scope_change_queue
+                .lock()
+                .push_back(ScopeChange::ConfigureReplication(ConfigureCapture {
+                    send_ops,
+                }));
+        }
+        // Queue the deferred World-side hooks (if any).
+        if !world_ops.is_empty() {
+            let mut q = self.shared.pending_world_hooks.lock();
+            for op in world_ops {
+                q.push_back(op);
+            }
+        }
+    }
+
+    /// Coord-immediate `publish_entity` body split: do the gwm
+    /// `entity_publish` write now (so same-tick reads compose) and
+    /// record the Send-side + World-side leaf work. Mirrors
+    /// `WorldServer::publish_entity` (`world_server.rs:2531`).
+    fn capture_publish(
+        &mut self,
+        global_entity: &naia_shared::GlobalEntity,
+        world_entity: &E,
+        server_origin: bool,
+        send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
+        world_ops: &mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
+    ) {
+        use crate::server::configure_replication::{ConfigureSendOp, ConfigureWorldOp};
+
+        if server_origin {
+            // Resolve the owner address from PRE-transition gwm + the
+            // coord user store, exactly as `publish_entity` does before
+            // `gwm.entity_publish`. The owner MUST be a Client here.
+            let entity_owner = self
+                .shared
+                .global_world_manager
+                .read()
+                .entity_owner(global_entity);
+            let Some(EntityOwner::Client(user_key)) = entity_owner else {
+                panic!(
+                    "Entity is not owned by a Client. Cannot publish entity. Owner is: {:?}",
+                    entity_owner
+                );
+            };
+            if let Some(addr) = self.state.user_store.address(&user_key) {
+                send_ops.push(ConfigureSendOp::Publish {
+                    global_entity: *global_entity,
+                    owner_addr: addr,
+                });
+            }
+        }
+
+        // Coord-side gwm write — immediate.
+        let result = self
+            .shared
+            .global_world_manager
+            .write()
+            .entity_publish(global_entity);
+        if result {
+            // World hook + scope re-eval are deferred (legacy runs them
+            // only when `result == true`).
+            world_ops.push(ConfigureWorldOp::Publish {
+                world_entity: *world_entity,
+            });
+            send_ops.push(ConfigureSendOp::PublishScopeReeval {
+                global_entity: *global_entity,
+            });
+        }
+    }
+
+    /// Coord-immediate `unpublish_entity` body split. The `owner_addr`
+    /// capture happens BEFORE `gwm.entity_unpublish` transitions
+    /// ClientPublic → Client — this is the B.2 blocker-1 read-before-write
+    /// fix. Mirrors `WorldServer::unpublish_entity` (`world_server.rs:2585`).
+    fn capture_unpublish(
+        &mut self,
+        global_entity: &naia_shared::GlobalEntity,
+        world_entity: &E,
+        _server_origin: bool,
+        send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
+        world_ops: &mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
+    ) {
+        use crate::server::configure_replication::{ConfigureSendOp, ConfigureWorldOp};
+
+        // Capture the owner address while gwm still holds ClientPublic.
+        let owner_addr: Option<std::net::SocketAddr> = self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_owner(global_entity)
+            .and_then(|o| {
+                if let EntityOwner::ClientPublic(k) = o {
+                    Some(k)
+                } else {
+                    None
+                }
+            })
+            .and_then(|k| self.state.user_store.address(&k));
+
+        send_ops.push(ConfigureSendOp::Unpublish {
+            global_entity: *global_entity,
+            owner_addr,
+        });
+
+        // Coord-side gwm write — immediate.
+        self.shared
+            .global_world_manager
+            .write()
+            .entity_unpublish(global_entity);
+
+        // Deregister each component from the diff handler (Coord-side
+        // gwm write) — immediate, mirrors world_server.rs:2621.
+        let kinds_opt: Option<Vec<naia_shared::ComponentKind>> = self
+            .shared
+            .global_world_manager
+            .read()
+            .component_kinds(global_entity)
+            .map(|k| k.into_iter().collect());
+        if let Some(kinds) = kinds_opt {
+            for component_kind in kinds {
+                self.shared
+                    .global_world_manager
+                    .write()
+                    .remove_component_diff_handler(global_entity, &component_kind);
+            }
+        }
+
+        world_ops.push(ConfigureWorldOp::Unpublish {
+            world_entity: *world_entity,
+        });
+    }
+
+    /// Coord-immediate `entity_enable_delegation` body split. Mirrors
+    /// `WorldServer::entity_enable_delegation` (`world_server.rs:2649`).
+    fn capture_enable_delegation(
+        &mut self,
+        global_entity: &naia_shared::GlobalEntity,
+        world_entity: &E,
+        client_origin: Option<UserKey>,
+        send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
+        world_ops: &mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
+    ) {
+        use crate::server::configure_replication::{ConfigureSendOp, ConfigureWorldOp};
+
+        // Per-connection `send_enable_delegation` fan-out — deferred.
+        send_ops.push(ConfigureSendOp::EnableDelegationFanout {
+            global_entity: *global_entity,
+            client_origin,
+        });
+
+        if let Some(client_key) = client_origin {
+            // The client-owned delegation migration sequence — protocol
+            // ordered, deferred. The gwm `entity_publish` (race-path) +
+            // `migrate_entity_to_server` + `entity_enable_delegation` +
+            // `client_request_authority` writes happen inside the Send
+            // drain because they are interleaved with per-connection
+            // migration state that only Send owns. The WORLD hooks for
+            // this path are ALSO pushed by the Send drain (not here):
+            // the legacy `enable_delegation_client_owned_entity` calls
+            // `world.entity_publish` (only on the Client→ClientPublic
+            // race-path) BEFORE `world.entity_enable_delegation`, and
+            // whether the race-path fires is only known at drain time
+            // (it reads the gwm owner then). Pushing the EnableDelegation
+            // world op here would (a) wrongly order it before a possible
+            // Publish op and (b) emit it even if the race-path aborts.
+            // So `apply_delegation_migrate` enqueues the world ops in the
+            // correct order during the drain.
+            send_ops.push(ConfigureSendOp::DelegationMigrate {
+                global_entity: *global_entity,
+                world_entity: *world_entity,
+                client_key,
+            });
+            // NOTE: no `world_ops.push` here — see above.
+        } else {
+            // Server-origin delegation — Coord-side gwm write immediate.
+            self.shared
+                .global_world_manager
+                .write()
+                .entity_enable_delegation(global_entity);
+            world_ops.push(ConfigureWorldOp::EnableDelegation {
+                world_entity: *world_entity,
+            });
+        }
+    }
+
+    /// Coord-immediate `entity_disable_delegation` body split. Mirrors
+    /// `WorldServer::entity_disable_delegation` (`world_server.rs:2914`).
+    fn capture_disable_delegation(
+        &mut self,
+        global_entity: &naia_shared::GlobalEntity,
+        world_entity: &E,
+        send_ops: &mut Vec<crate::server::configure_replication::ConfigureSendOp<E>>,
+        world_ops: &mut Vec<crate::server::configure_replication::ConfigureWorldOp<E>>,
+    ) {
+        use crate::server::configure_replication::{ConfigureSendOp, ConfigureWorldOp};
+
+        send_ops.push(ConfigureSendOp::DisableDelegationFanout {
+            global_entity: *global_entity,
+        });
+
+        // Coord-side gwm write — immediate.
+        self.shared
+            .global_world_manager
+            .write()
+            .entity_disable_delegation(global_entity);
+
+        world_ops.push(ConfigureWorldOp::DisableDelegation {
+            world_entity: *world_entity,
+        });
+    }
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain the
+    /// pending World-side `configure_entity_replication` hook ops onto
+    /// `world`, installing per-component diff mutators against the
+    /// (already-transitioned) gwm.
+    ///
+    /// Called by the Sim system each tick (it holds the `&mut World`).
+    /// Idempotent: re-call drains an empty queue. Pairs with the Send
+    /// drain inside `apply_pending_send_preamble`. See
+    /// [`crate::SendHandle::apply_pending_world_hooks`] for the twin on
+    /// the Send handle.
+    pub fn apply_pending_world_hooks<W>(&self, world: &mut W)
+    where
+        W: naia_shared::WorldMutType<E>,
+        E: 'static,
+    {
+        crate::server::send_state::drain_pending_world_hooks(&self.shared, world);
     }
 }

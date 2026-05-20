@@ -29,7 +29,7 @@ use naia_shared::{
     EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalPriorityState,
     GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OutgoingPacket,
     OutgoingPriorityHook, OwnedBitReader, PacketType, Serde, SnapshotMap, Tick, Timer,
-    UserPriorityState, WorldRefType,
+    UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -479,6 +479,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let shared = Arc::clone(&self.shared);
         self.apply_pending_room_changes(&shared.scope_change_queue);
 
+        // 1b. MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain
+        // any CoordHandle::configure_entity_replication pushes. Executes
+        // the deferred Send-side leaf ops (publish/unpublish/delegation
+        // commands, despawn-from-non-owner, the migration sequence with
+        // reserve_first_command, auth fan-out) against
+        // `send_user_connections`. Any `EntityEnteredRoom` re-evals it
+        // re-pushes are left on the queue for the per-user scope drainer
+        // (`apply_pending_scope_changes`) later this tick — exactly as
+        // the legacy `publish_entity` re-push behaves.
+        self.apply_pending_configure_replication(&shared.scope_change_queue);
+
         // 2. Zero per-tick byte counter so outgoing_bytes_last_tick()
         // reports only the bytes sent during THIS tick.
         self.send_io.reset_outgoing_bytes_this_tick();
@@ -917,6 +928,388 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
     }
 
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain
+    /// `ScopeChange::ConfigureReplication` payloads from
+    /// `scope_change_queue` and execute their deferred Send-side leaf ops
+    /// against `send_user_connections`.
+    ///
+    /// Each op is a verbatim relocation of the corresponding statement in
+    /// `WorldServer::{publish_entity, unpublish_entity,
+    /// entity_enable_delegation, enable_delegation_client_owned_entity,
+    /// entity_disable_delegation}` — same per-connection call, same
+    /// order. The gwm writes already ran (immediately) in
+    /// `CoordHandle::configure_entity_replication`; this method performs
+    /// only the Send-half work, using the pre-transition state captured
+    /// into each op's payload (B.2 blocker-1 read-before-write fix).
+    ///
+    /// Non-`ConfigureReplication` variants are left in the queue for the
+    /// other drainers to consume.
+    pub(crate) fn apply_pending_configure_replication(
+        &mut self,
+        scope_change_queue: &Mutex<VecDeque<ScopeChange<E>>>,
+    ) {
+        let drained: Vec<crate::server::configure_replication::ConfigureCapture<E>> = {
+            let mut q = scope_change_queue.lock();
+            let mut out = Vec::new();
+            let mut keep = VecDeque::with_capacity(q.len());
+            for change in q.drain(..) {
+                if let ScopeChange::ConfigureReplication(cap) = change {
+                    out.push(cap);
+                } else {
+                    keep.push_back(change);
+                }
+            }
+            *q = keep;
+            out
+        };
+
+        for capture in drained {
+            for op in capture.send_ops {
+                self.apply_configure_send_op(op);
+            }
+        }
+    }
+
+    /// Execute a single deferred Send-side `configure_entity_replication`
+    /// op. See [`crate::server::configure_replication::ConfigureSendOp`].
+    fn apply_configure_send_op(
+        &mut self,
+        op: crate::server::configure_replication::ConfigureSendOp<E>,
+    ) {
+        use crate::server::configure_replication::ConfigureSendOp;
+
+        match op {
+            ConfigureSendOp::Publish {
+                global_entity,
+                owner_addr,
+            } => {
+                // Mirror `publish_entity`'s `send_publish` (the owner is a
+                // Client; `server_origin == true`). world_server.rs:2548.
+                if let Some(send_conn) = self.send_user_connections.get_mut(&owner_addr) {
+                    send_conn
+                        .base
+                        .world_manager
+                        .send_publish(HostType::Server, &global_entity);
+                }
+            }
+
+            ConfigureSendOp::PublishScopeReeval { global_entity } => {
+                // Mirror `publish_entity`'s post-publish scope re-eval
+                // (world_server.rs:2570): re-push `EntityEnteredRoom` for
+                // every room the now-public entity is in, reading the
+                // Send-owned `entity_room_map`. The re-pushed variants are
+                // consumed by `apply_pending_scope_changes` later this
+                // tick — same as the legacy synchronous behaviour.
+                let entity_rooms: Vec<RoomKey> = self
+                    .entity_room_map
+                    .entity_get_rooms(&global_entity)
+                    .map(|rooms| rooms.iter().copied().collect())
+                    .unwrap_or_default();
+                if !entity_rooms.is_empty() {
+                    let mut q = self.shared.scope_change_queue.lock();
+                    for room_key in entity_rooms {
+                        q.push_back(ScopeChange::EntityEnteredRoom(global_entity, room_key));
+                    }
+                }
+            }
+
+            ConfigureSendOp::Unpublish {
+                global_entity,
+                owner_addr,
+            } => {
+                // Mirror `unpublish_entity` (world_server.rs:2601): owner
+                // `send_unpublish`, then despawn-from-non-owner.
+                if let Some(addr) = owner_addr {
+                    if let Some(send_conn) = self.send_user_connections.get_mut(&addr) {
+                        send_conn
+                            .base
+                            .world_manager
+                            .send_unpublish(HostType::Server, &global_entity);
+                    }
+                }
+
+                let entity_idx = self.configure_entity_global_idx(&global_entity);
+                for (addr, send_conn) in self.send_user_connections.iter_mut() {
+                    if owner_addr == Some(*addr) {
+                        continue;
+                    }
+                    if send_conn.base.world_manager.has_global_entity(&global_entity) {
+                        send_conn.base.world_manager.despawn_entity(&global_entity);
+                        send_conn.clear_entity_visible(entity_idx);
+                    }
+                }
+            }
+
+            ConfigureSendOp::EnableDelegationFanout {
+                global_entity,
+                client_origin,
+            } => {
+                // Mirror `entity_enable_delegation`'s per-connection
+                // fan-out (world_server.rs:2664). Snapshot the
+                // (user_key, addr) pairs first so we can re-borrow
+                // `send_user_connections` mutably inside the loop.
+                let users: Vec<(UserKey, SocketAddr)> = self
+                    .send_user_connections
+                    .keys()
+                    .copied()
+                    .filter_map(|addr| self.addr_to_user_key(&addr).map(|uk| (uk, addr)))
+                    .collect();
+                for (user_key, addr) in users {
+                    if let Some(client_key) = &client_origin {
+                        if &user_key == client_key {
+                            continue;
+                        }
+                    }
+                    let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
+                        continue;
+                    };
+                    if !send_conn.base.world_manager.has_global_entity(&global_entity) {
+                        continue;
+                    }
+                    send_conn.base.world_manager.send_enable_delegation(
+                        HostType::Server,
+                        client_origin.is_some(),
+                        &global_entity,
+                    );
+                }
+            }
+
+            ConfigureSendOp::DelegationMigrate {
+                global_entity,
+                world_entity,
+                client_key,
+            } => {
+                self.apply_delegation_migrate(&global_entity, &world_entity, &client_key);
+            }
+
+            ConfigureSendOp::DisableDelegationFanout { global_entity } => {
+                // Mirror `entity_disable_delegation`'s per-connection
+                // fan-out (world_server.rs:2926).
+                let addrs: Vec<SocketAddr> =
+                    self.send_user_connections.keys().copied().collect();
+                for addr in addrs {
+                    let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
+                        continue;
+                    };
+                    if !send_conn.base.world_manager.has_global_entity(&global_entity) {
+                        continue;
+                    }
+                    send_conn
+                        .base
+                        .world_manager
+                        .send_disable_delegation(&global_entity);
+                }
+            }
+        }
+    }
+
+    /// Send-side equivalent of `WorldServer::entity_global_idx`
+    /// (world_server.rs:3946) — resolve the dense `GlobalEntityIndex`
+    /// via the shared diff handler.
+    fn configure_entity_global_idx(&self, global_entity: &GlobalEntity) -> GlobalEntityIndex {
+        let handler = self.shared.global_world_manager.read().diff_handler();
+        let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+        guard
+            .entity_to_global_idx(global_entity)
+            .unwrap_or(GlobalEntityIndex::INVALID)
+    }
+
+    /// Send-side `UserKey` lookup for an address. The coord `user_store`
+    /// is not reachable from `SendState`; the per-connection
+    /// `SendConnection::user_key` (cached at finalize time) is the
+    /// Send-owned source for the address→user mapping.
+    fn addr_to_user_key(&self, addr: &SocketAddr) -> Option<UserKey> {
+        self.send_user_connections.get(addr).map(|c| c.user_key)
+    }
+
+    /// Mirror of `WorldServer::enable_delegation_client_owned_entity`'s
+    /// Send-half (world_server.rs:2719) for the deferred drain. The gwm
+    /// publicity/ownership/auth writes are performed HERE (not in the
+    /// Coord method) because they are interleaved with per-connection
+    /// migration state that only Send owns — keeping them adjacent to the
+    /// `migrate_entity_remote_to_host` + `host_local_enable_delegation` +
+    /// `host_send_migrate_response` sequence preserves legacy ordering and
+    /// the subcommand_id=0 MigrateResponse invariant (now made explicit by
+    /// D.2.3's `reserve_first_command`).
+    fn apply_delegation_migrate(
+        &mut self,
+        global_entity: &GlobalEntity,
+        world_entity: &E,
+        client_key: &UserKey,
+    ) {
+        use crate::server::configure_replication::ConfigureWorldOp;
+
+        // Resolve owner + publish-if-needed (mirror world_server.rs:2726).
+        let Some(entity_owner) = self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_owner(global_entity)
+        else {
+            panic!("entity should have an owner at this point");
+        };
+        let owner_user_key = match entity_owner {
+            EntityOwner::Client(user_key) => {
+                // Publish-after-delegation packet-ordering race: promote to
+                // ClientPublic now (gwm write). Legacy
+                // `enable_delegation_client_owned_entity` calls
+                // `world.entity_publish` in THIS branch only, BEFORE
+                // `world.entity_enable_delegation`. Enqueue the Publish
+                // world hook now so it lands ahead of the EnableDelegation
+                // hook pushed below — preserving legacy world-hook order.
+                let result = self
+                    .shared
+                    .global_world_manager
+                    .write()
+                    .entity_publish(global_entity);
+                if !result {
+                    warn!(
+                        "apply_delegation_migrate: entity_publish failed for {:?}; aborting",
+                        global_entity
+                    );
+                    return;
+                }
+                self.shared
+                    .pending_world_hooks
+                    .lock()
+                    .push_back(ConfigureWorldOp::Publish {
+                        world_entity: *world_entity,
+                    });
+                user_key
+            }
+            EntityOwner::ClientPublic(user_key) => user_key,
+            _owner => {
+                panic!(
+                    "entity should be owned by a public client at this point. Owner is: {:?}",
+                    _owner
+                );
+            }
+        };
+
+        let user_key = owner_user_key;
+        self.shared
+            .global_world_manager
+            .write()
+            .migrate_entity_to_server(global_entity);
+
+        if self.entity_scope_map.get(&user_key, global_entity).is_none() {
+            self.entity_scope_map.insert(user_key, *global_entity, true);
+        }
+
+        let Some(addr) = self.addr_for_user_key(&user_key) else {
+            panic!("user should exist");
+        };
+        let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
+            panic!("connection does not exist")
+        };
+
+        let old_remote_entity = match send_conn
+            .base
+            .world_manager
+            .entity_converter()
+            .global_entity_to_remote_entity(global_entity)
+        {
+            Ok(entity) => entity,
+            Err(_) => {
+                panic!(
+                    "Entity must exist as RemoteEntity before delegation: {:?}",
+                    global_entity
+                );
+            }
+        };
+        let new_host_entity = match send_conn
+            .base
+            .world_manager
+            .migrate_entity_remote_to_host(global_entity)
+        {
+            Ok(entity) => entity,
+            Err(e) => {
+                panic!("Failed to migrate entity during delegation: {}", e);
+            }
+        };
+        send_conn
+            .base
+            .world_manager
+            .host_local_enable_delegation(&new_host_entity);
+        // MigrateResponse reserved at subcommand_id=0 (D.2.3).
+        send_conn.base.world_manager.host_send_migrate_response(
+            global_entity,
+            &old_remote_entity,
+            &new_host_entity,
+        );
+
+        self.shared
+            .global_world_manager
+            .write()
+            .entity_enable_delegation(global_entity);
+
+        // Enqueue the EnableDelegation world hook (legacy
+        // world_server.rs:2844, AFTER any race-path Publish hook).
+        self.shared
+            .pending_world_hooks
+            .lock()
+            .push_back(ConfigureWorldOp::EnableDelegation {
+                world_entity: *world_entity,
+            });
+
+        // Auth fan-out (mirror world_server.rs:2859). Owner gets Granted
+        // iff still in-scope at migration time.
+        let owner_in_scope = self
+            .entity_scope_map
+            .get(client_key, global_entity)
+            .copied()
+            .unwrap_or(false);
+        if owner_in_scope {
+            let requester =
+                crate::world::server_auth_handler::AuthOwner::from_user_key(Some(client_key));
+            let result = self
+                .shared
+                .global_world_manager
+                .write()
+                .client_request_authority(global_entity, &requester);
+            if result.is_err() {
+                panic!("failed to grant authority of client-owned delegated entity to creating user");
+            }
+            let user_snapshot: Vec<(UserKey, SocketAddr)> = self
+                .send_user_connections
+                .keys()
+                .copied()
+                .filter_map(|addr| self.addr_to_user_key(&addr).map(|uk| (uk, addr)))
+                .collect();
+            for (uk, addr) in user_snapshot {
+                let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
+                    continue;
+                };
+                if !send_conn.base.world_manager.has_global_entity(global_entity) {
+                    continue;
+                }
+                let new_status = if uk == *client_key {
+                    EntityAuthStatus::Granted
+                } else {
+                    EntityAuthStatus::Denied
+                };
+                send_conn
+                    .base
+                    .world_manager
+                    .host_send_set_auth(global_entity, new_status);
+            }
+        }
+    }
+
+    /// Resolve a connection address for a `UserKey` via the per-connection
+    /// `user_key` cache (the coord user store is not reachable here).
+    fn addr_for_user_key(&self, user_key: &UserKey) -> Option<SocketAddr> {
+        self.send_user_connections
+            .iter()
+            .find_map(|(addr, conn)| {
+                if &conn.user_key == user_key {
+                    Some(*addr)
+                } else {
+                    None
+                }
+            })
+    }
+
     /// C.6 prep #6 — drain entity-scope variants (`EntityEnteredRoom`,
     /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
     /// `scope_change_queue` and fan them out to user connections.
@@ -966,7 +1359,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             let mut keep = VecDeque::with_capacity(q.len());
             for change in q.drain(..) {
                 match change {
-                    ScopeChange::RoomChange(_) => keep.push_back(change),
+                    // RoomChange + ConfigureReplication are drained by the
+                    // preamble (apply_pending_room_changes /
+                    // apply_pending_configure_replication). If the caller
+                    // skipped the preamble they survive here; re-queue them
+                    // for the next preamble tick rather than mishandling.
+                    ScopeChange::RoomChange(_) | ScopeChange::ConfigureReplication(_) => {
+                        keep.push_back(change)
+                    }
                     _ => out.push(change),
                 }
             }
@@ -1118,9 +1518,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         &world_entity,
                     );
                 }
-                ScopeChange::RoomChange(_) => {
+                ScopeChange::RoomChange(_) | ScopeChange::ConfigureReplication(_) => {
                     // Already filtered above into `keep` — unreachable.
-                    unreachable!("RoomChange variants are filtered out");
+                    unreachable!("RoomChange / ConfigureReplication variants are filtered out");
                 }
             }
         }
@@ -1427,6 +1827,67 @@ pub(crate) fn scope_retry_decision(current: u8) -> Option<u8> {
         None
     } else {
         Some(current + 1)
+    }
+}
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain the
+/// `pending_world_hooks` queue on `shared`, applying each deferred
+/// World-side hook op onto `world`.
+///
+/// Each op maps to a `WorldMutType` hook (`entity_publish` /
+/// `entity_unpublish` / `entity_enable_delegation` /
+/// `entity_disable_delegation`) — a verbatim relocation of the
+/// corresponding `world.*` call in `WorldServer::{publish_entity,
+/// unpublish_entity, entity_enable_delegation, entity_disable_delegation}`.
+/// Reads the POST-transition gwm (the Coord method already wrote it),
+/// exactly as the legacy synchronous path reads it after its own gwm
+/// write — so the per-component diff-mutator installation is identical.
+///
+/// Called from [`crate::pipeline_actors::CoordHandle::apply_pending_world_hooks`]
+/// and [`crate::SendHandle::apply_pending_world_hooks`].
+pub(crate) fn drain_pending_world_hooks<E, W>(shared: &Arc<ServerShared<E>>, world: &mut W)
+where
+    E: Copy + Eq + Hash + Send + Sync + 'static,
+    W: WorldMutType<E>,
+{
+    use crate::server::configure_replication::ConfigureWorldOp;
+
+    let drained: Vec<ConfigureWorldOp<E>> = {
+        let mut q = shared.pending_world_hooks.lock();
+        q.drain(..).collect()
+    };
+
+    for op in drained {
+        match op {
+            ConfigureWorldOp::Publish { world_entity } => {
+                // Mirror world_server.rs:2561.
+                let entity_map = shared.global_entity_map.read();
+                world.entity_publish(
+                    &shared.component_kinds,
+                    &*entity_map,
+                    &*shared.global_world_manager.read(),
+                    &world_entity,
+                );
+            }
+            ConfigureWorldOp::Unpublish { world_entity } => {
+                // Mirror world_server.rs:2614.
+                world.entity_unpublish(&world_entity);
+            }
+            ConfigureWorldOp::EnableDelegation { world_entity } => {
+                // Mirror world_server.rs:2710 / 2844.
+                let entity_map = shared.global_entity_map.read();
+                world.entity_enable_delegation(
+                    &shared.component_kinds,
+                    &*entity_map,
+                    &*shared.global_world_manager.read(),
+                    &world_entity,
+                );
+            }
+            ConfigureWorldOp::DisableDelegation { world_entity } => {
+                // Mirror world_server.rs:2950.
+                world.entity_disable_delegation(&world_entity);
+            }
+        }
     }
 }
 

@@ -247,6 +247,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.apply_pending_scope_changes(world);
     }
 
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain the
+    /// pending World-side `configure_entity_replication` hook ops onto
+    /// `world`, installing per-component diff mutators against the
+    /// (already-transitioned) gwm.
+    ///
+    /// Twin of [`crate::pipeline_actors::CoordHandle::apply_pending_world_hooks`]
+    /// — both drain the same `shared.pending_world_hooks` queue, so a Sim
+    /// system may call whichever handle it has in hand. The Send-side
+    /// per-connection work for the same configure call drains separately
+    /// inside [`apply_pending_send_preamble`]. Idempotent.
+    pub fn apply_pending_world_hooks<W: naia_shared::WorldMutType<E>>(&self, world: &mut W)
+    where
+        E: 'static,
+    {
+        crate::server::send_state::drain_pending_world_hooks(&self.state.shared, world);
+    }
+
     /// C.6 prep — send a message to the user at `address` without
     /// reassembling the WorldServer.
     ///

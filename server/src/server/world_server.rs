@@ -3739,6 +3739,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 ScopeChange::RoomChange(_) => {
                     unreachable!("apply_pending_room_changes must run before drain_scope_change_queue");
                 }
+                ScopeChange::ConfigureReplication(_) => {
+                    // D.2.2: only the Coord-only `CoordHandle::configure_
+                    // entity_replication` pushes this variant; the legacy
+                    // fused `WorldServer::configure_entity_replication`
+                    // path is fully synchronous and never enqueues it.
+                    unreachable!("ConfigureReplication is never pushed on the fused WorldServer path");
+                }
             }
         }
     }

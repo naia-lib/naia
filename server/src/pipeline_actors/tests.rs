@@ -317,3 +317,112 @@ fn coord_handle_room_ops_deferred_drain_path() {
         "scope_checks_cache.pending_slice should contain (rk, user_key, 42) after drain; got: {pending:?}"
     );
 }
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — unpublish
+/// read-before-write capture (B.2 blocker 1).
+///
+/// `unpublish_entity` captures `owner_addr` from the ClientPublic owner
+/// BEFORE `gwm.entity_unpublish` transitions it to Client. The Coord-only
+/// `configure_entity_replication` must snapshot that address into the
+/// `ConfigureSendOp::Unpublish` payload at queue-PUSH time so the
+/// deferred Send drain can still address the formerly-owning connection
+/// even though gwm has already moved on.
+///
+/// This test verifies the capture is taken from the PRE-transition state:
+/// after `configure_entity_replication(private)` the gwm owner is `Client`
+/// (transitioned), yet the queued op carries the `ClientPublic` owner's
+/// address.
+#[test]
+fn configure_unpublish_captures_owner_addr_before_transition() {
+    use crate::server::configure_replication::ConfigureSendOp;
+    use crate::server::scope_change::ScopeChange;
+    use crate::world::entity_owner::EntityOwner;
+    use crate::ReplicationConfig;
+    use naia_shared::Publicity;
+
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    // Register a user with a known address.
+    let user_key = UserKey::from_u64(7);
+    let user_addr: SocketAddr = "127.0.0.1:9007".parse().unwrap();
+    coord
+        .state
+        .user_store
+        .insert(user_key, WorldUser::new(user_addr));
+
+    // Manufacture a client-owned, PUBLIC entity (ClientPublic) in gwm.
+    let world_entity: u64 = 77;
+    let global_entity = coord.shared.global_entity_map.write().spawn(world_entity, None);
+    coord
+        .shared
+        .global_world_manager
+        .write()
+        .insert_entity_record(&global_entity, EntityOwner::Client(user_key));
+    // entity_publish: Client → ClientPublic + Publicity::Public.
+    let published = coord
+        .shared
+        .global_world_manager
+        .write()
+        .entity_publish(&global_entity);
+    assert!(published, "manufactured entity should publish");
+    assert!(matches!(
+        coord
+            .shared
+            .global_world_manager
+            .read()
+            .entity_owner(&global_entity),
+        Some(EntityOwner::ClientPublic(_))
+    ));
+
+    // Configure Public → Private (unpublish). The Coord method must
+    // capture the owner address NOW, while gwm is ClientPublic.
+    coord.configure_entity_replication(&world_entity, ReplicationConfig::private());
+
+    // gwm has transitioned to Client (post-write).
+    assert!(
+        matches!(
+            coord
+                .shared
+                .global_world_manager
+                .read()
+                .entity_owner(&global_entity),
+            Some(EntityOwner::Client(_))
+        ),
+        "gwm owner must be Client after unpublish (transitioned immediately)",
+    );
+    assert_eq!(
+        coord
+            .shared
+            .global_world_manager
+            .read()
+            .entity_replication_config(&global_entity)
+            .unwrap()
+            .publicity,
+        Publicity::Private,
+    );
+
+    // The queued ConfigureReplication op must carry the captured
+    // ClientPublic owner address (read BEFORE the transition).
+    let q = coord.shared.scope_change_queue.lock();
+    let mut found_owner_addr: Option<Option<SocketAddr>> = None;
+    for change in q.iter() {
+        if let ScopeChange::ConfigureReplication(cap) = change {
+            for op in &cap.send_ops {
+                if let ConfigureSendOp::Unpublish { owner_addr, .. } = op {
+                    found_owner_addr = Some(*owner_addr);
+                }
+            }
+        }
+    }
+    assert_eq!(
+        found_owner_addr,
+        Some(Some(user_addr)),
+        "deferred Unpublish op must carry the owner address captured \
+         from the PRE-transition ClientPublic state",
+    );
+}

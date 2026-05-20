@@ -2,6 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::GlobalEntity;
 
+use crate::server::configure_replication::ConfigureCapture;
 use crate::{RoomKey, UserKey};
 
 /// Events that drive scope re-evaluation.
@@ -18,6 +19,15 @@ pub(crate) enum ScopeChange<E: Copy + Eq + Hash + Send + Sync> {
     /// Room-level structural change — SendState projection fields (entity_room_map,
     /// scope_checks_cache) are updated by apply_pending_room_changes drainer.
     RoomChange(RoomChange<E>),
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — deferred
+    /// Send-side `configure_entity_replication` work. The Coord-only
+    /// `CoordHandle::configure_entity_replication` performs the gwm
+    /// writes immediately and captures the Send-side leaf ops here; the
+    /// `SendState::apply_pending_configure_replication` drainer (driven
+    /// from `apply_pending_send_preamble`) executes them. World-side
+    /// hooks ride a separate `pending_world_hooks` queue (different
+    /// drain site — needs the `&mut World`).
+    ConfigureReplication(ConfigureCapture<E>),
 }
 
 /// Payloads for room-structural mutations that need to update SendState projection

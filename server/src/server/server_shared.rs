@@ -22,6 +22,7 @@
 //! 7. pending_auth_grants                    — Mutex
 //! 8. pending_outbound_packets               — Mutex (recv→send packet ferry)
 //! 9. pending_handshakes                     — Mutex (recv→coord handshake handoff)
+//! 10. pending_world_hooks                    — Mutex (D.2.2 coord→sim world-hook ferry)
 //! ```
 //!
 //! Step 4-A introduces this discipline; subsequent steps (4-B onwards) add
@@ -45,8 +46,8 @@ use naia_shared::{
 
 use crate::{
     server::{
-        connection_shared::ConnectionShared, scope_change::ScopeChange,
-        send_state_update::SendStateUpdate,
+        configure_replication::ConfigureWorldOp, connection_shared::ConnectionShared,
+        scope_change::ScopeChange, send_state_update::SendStateUpdate,
     },
     time_manager::TimeManager,
     world::global_world_manager::GlobalWorldManager,
@@ -163,6 +164,16 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// information (one is HashMap-keyed, the other is dense-index keyed)
     /// and are always updated together.
     pub(crate) idx_to_world: RwLock<Vec<Option<E>>>,
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — pending
+    /// World-side `configure_entity_replication` hook ops, pushed by
+    /// `CoordHandle::configure_entity_replication` and drained by
+    /// `SendHandle::apply_pending_world_hooks<W>` on the Sim system
+    /// (the only stage holding the `&mut World`). LOCK ORDER position
+    /// #10 (last) — briefly-held Mutex on push/drain, no hot-path
+    /// contention. Kept separate from `scope_change_queue` because the
+    /// drain site differs (world parameter required).
+    pub(crate) pending_world_hooks: Mutex<VecDeque<ConfigureWorldOp<E>>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
@@ -196,6 +207,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             global_world_manager: RwLock::new(global_world_manager),
             global_entity_map: RwLock::new(GlobalEntityMap::new()),
             idx_to_world: RwLock::new(vec![None; entity_index_capacity]),
+            pending_world_hooks: Mutex::new(VecDeque::new()),
         }
     }
 }
