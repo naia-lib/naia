@@ -23,6 +23,7 @@
 //! 8. pending_outbound_packets               — Mutex (recv→send packet ferry)
 //! 9. pending_handshakes                     — Mutex (recv→coord handshake handoff)
 //! 10. pending_world_hooks                    — Mutex (D.2.2 coord→sim world-hook ferry)
+//! 11. pending_disconnect_requests            — Mutex (D.3b.3 coord→recv disconnect ferry)
 //! ```
 //!
 //! Step 4-A introduces this discipline; subsequent steps (4-B onwards) add
@@ -43,6 +44,8 @@ use naia_shared::{
     EntityDoesNotExistError, GlobalDirtyBitset, GlobalEntity, GlobalEntityMap, MessageKinds,
     OutgoingPacket,
 };
+
+use naia_shared::DisconnectReason;
 
 use crate::{
     server::{
@@ -174,6 +177,14 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// contention. Kept separate from `scope_change_queue` because the
     /// drain site differs (world parameter required).
     pub(crate) pending_world_hooks: Mutex<VecDeque<ConfigureWorldOp<E>>>,
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — pending
+    /// disconnect requests pushed by `CoordHandle::disconnect_user` and
+    /// drained by the recv path at the top of `process_disconnects`,
+    /// immediately before `outstanding_disconnects` is consumed. LOCK
+    /// ORDER position #11 (last) — briefly-held Mutex on push/drain, no
+    /// hot-path contention.
+    pub(crate) pending_disconnect_requests: Mutex<Vec<(UserKey, DisconnectReason)>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
@@ -208,6 +219,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             global_entity_map: RwLock::new(GlobalEntityMap::new()),
             idx_to_world: RwLock::new(vec![None; entity_index_capacity]),
             pending_world_hooks: Mutex::new(VecDeque::new()),
+            pending_disconnect_requests: Mutex::new(Vec::new()),
         }
     }
 }

@@ -426,3 +426,111 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
          from the PRE-transition ClientPublic state",
     );
 }
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::receive_user`
+///
+/// Verifies that `CoordHandle::receive_user(user_key, addr)` inserts the user
+/// into `coord.state.user_store` exactly as `WorldServer::receive_user` does,
+/// confirmed via the existing `user_exists` query method.
+#[test]
+fn coord_handle_receive_user_inserts_into_user_store() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    let user_key = UserKey::from_u64(100);
+    let user_addr: SocketAddr = "127.0.0.1:11000".parse().unwrap();
+
+    // Before receive_user the user must not exist.
+    assert!(
+        !coord.user_exists(&user_key),
+        "user should not exist before receive_user"
+    );
+
+    coord.receive_user(user_key, user_addr);
+
+    // After receive_user the user must be present.
+    assert!(
+        coord.user_exists(&user_key),
+        "user should exist after receive_user"
+    );
+
+    // The stored address must match.
+    assert_eq!(
+        coord.user_address(&user_key),
+        Some(user_addr),
+        "user_address should match the addr passed to receive_user"
+    );
+}
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::disconnect_user`
+/// idempotency on unknown user.
+///
+/// Calling `disconnect_user` for a user that was never registered must return
+/// silently without panicking and must NOT push to `pending_disconnect_requests`.
+#[test]
+fn coord_handle_disconnect_user_nonexistent_is_noop() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    let unknown_key = UserKey::from_u64(999);
+
+    // Must not panic.
+    coord.disconnect_user(&unknown_key);
+
+    // Queue must remain empty.
+    let q = coord.shared.pending_disconnect_requests.lock();
+    assert!(
+        q.is_empty(),
+        "pending_disconnect_requests should stay empty for unknown user, got: {q:?}"
+    );
+}
+
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::disconnect_user`
+/// queues a request for a known user.
+///
+/// After `receive_user` then `disconnect_user`, `pending_disconnect_requests`
+/// must contain exactly one `(user_key, DisconnectReason::Kicked)` entry.
+#[test]
+fn coord_handle_disconnect_user_queues_request() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (mut coord, _recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+
+    let user_key = UserKey::from_u64(200);
+    let user_addr: SocketAddr = "127.0.0.1:12000".parse().unwrap();
+
+    coord.receive_user(user_key, user_addr);
+    coord.disconnect_user(&user_key);
+
+    let q = coord.shared.pending_disconnect_requests.lock();
+    assert_eq!(
+        q.len(),
+        1,
+        "pending_disconnect_requests should have exactly 1 entry after disconnect_user"
+    );
+    let (queued_key, queued_reason) = &q[0];
+    assert_eq!(*queued_key, user_key, "queued user_key must match");
+    assert!(
+        matches!(queued_reason, DisconnectReason::Kicked),
+        "queued reason must be Kicked, got: {queued_reason:?}"
+    );
+
+    // Calling disconnect_user a second time must be idempotent —
+    // the user_store still contains the user (only the recv drain removes it)
+    // so a second call pushes a second entry. Idempotency at the QUEUE push
+    // level is not required; `user_queue_disconnect` handles dedup via
+    // `manual_disconnect`. But calling disconnect_user on a non-existent key
+    // (after the recv drain has removed it) must be a no-op (tested above).
+    drop(q);
+}

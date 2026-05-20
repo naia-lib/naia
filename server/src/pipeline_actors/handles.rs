@@ -7,15 +7,17 @@
 //! `SendHandle::state.shared` — all three point at the same underlying
 //! [`ServerShared`] allocation.
 
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
-use naia_shared::{EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntitySpawner, Tick};
+use naia_shared::{
+    DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntitySpawner, Tick,
+};
 
 use crate::room::{Room, RoomKey};
 use crate::server::coord_state::CoordinatorState;
 use crate::server::scope_change::ScopeChange;
 use crate::server::ServerShared;
-use crate::user::UserKey;
+use crate::user::{UserKey, WorldUser};
 use crate::EntityOwner;
 
 /// Coord-half of a pipeline-mode [`crate::WorldServer`].
@@ -133,6 +135,53 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         let shared_clone: Arc<crate::server::ServerShared<E>> = Arc::clone(&self.shared);
         let arc: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync> = shared_clone;
         crate::pipeline_actors::SimConverter::from_arc(arc)
+    }
+
+    // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — Coord-only
+    // connection lifecycle: receive_user / disconnect_user.
+    // ====================================================================
+    //
+    // `receive_user`: mirrors `WorldServer::receive_user` (world_server.rs:270)
+    // field-for-field. Both operations touch only `self.state.user_store`.
+    //
+    // `disconnect_user`: the underlying `user_queue_disconnect` (world_server.rs:3006)
+    // touches recv-only state (`recv_user_connections`, `outstanding_disconnects`).
+    // It cannot run from the coord thread. Instead, we push the request to
+    // `shared.pending_disconnect_requests` (LOCK ORDER #11). The recv path
+    // drains it at the top of `process_disconnects`, immediately before
+    // `outstanding_disconnects` is consumed, which preserves atomicity within
+    // one recv tick.
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — register a
+    /// newly-accepted user so the coord state can track their scope without
+    /// reassembling a `WorldServer`.
+    ///
+    /// Byte-identical to `WorldServer::receive_user`: inserts a `WorldUser`
+    /// record into the user_store and registers the address in the
+    /// disconnected-users map so the subsequent handshake can look it up via
+    /// `user_store.take_disconnected`.
+    pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
+        self.state.user_store.insert(user_key, WorldUser::new(user_addr));
+        self.state.user_store.register_disconnected(user_addr, user_key);
+    }
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — request a
+    /// user disconnect without reassembling a `WorldServer`.
+    ///
+    /// Idempotent: returns silently if the user is not in the user_store
+    /// (already disconnected or never registered). Otherwise pushes
+    /// `(user_key, DisconnectReason::Kicked)` onto
+    /// `shared.pending_disconnect_requests`; the recv path drains the queue
+    /// at the top of `process_disconnects` via `user_queue_disconnect`.
+    pub fn disconnect_user(&mut self, user_key: &UserKey) {
+        if !self.state.user_store.contains(user_key) {
+            return;
+        }
+        self.shared
+            .pending_disconnect_requests
+            .lock()
+            .push((*user_key, DisconnectReason::Kicked));
     }
 
     // ====================================================================

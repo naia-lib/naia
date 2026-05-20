@@ -3261,6 +3261,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     // lets `SendHandle` run the same body from the pipeline coordinator.
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
+        // MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — drain
+        // disconnect requests queued by `CoordHandle::disconnect_user`. Collect
+        // while holding the lock, then call `user_queue_disconnect` without
+        // the lock (it may re-lock other shared state). Runs immediately before
+        // `outstanding_disconnects` is consumed so both are processed in the
+        // same recv tick.
+        let pending: Vec<(crate::user::UserKey, DisconnectReason)> =
+            std::mem::take(&mut *self.shared.pending_disconnect_requests.lock());
+        for (user_key, reason) in pending {
+            self.user_queue_disconnect(&user_key, reason);
+        }
+
         let user_disconnects = std::mem::take(&mut self.recv.outstanding_disconnects);
         for (user_key, reason) in user_disconnects {
             self.user_disconnect(&user_key, reason, world);
