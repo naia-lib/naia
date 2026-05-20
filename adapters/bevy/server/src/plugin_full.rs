@@ -228,6 +228,11 @@ pub struct PluginInternalState {
     /// `drain_armed_coord_into_resource` system to install into
     /// [`CoordHandleRes`]. Drained at most once.
     armed_coord: Mutex<Option<CoordHandle<Entity>>>,
+    /// Test-only: when set, workers panic on their next loop iteration
+    /// (after the park checkpoint, before any other work). Used by
+    /// the D.5 panic-propagation test.
+    #[cfg(any(test, feature = "test_time"))]
+    test_panic_request: Arc<AtomicBool>,
 }
 
 struct WorkerHandle {
@@ -259,6 +264,20 @@ impl PluginInternalState {
             workers: Mutex::new(Vec::new()),
             sim_event_receiver: Mutex::new(Some(sim_event_receiver)),
             armed_coord: Mutex::new(None),
+            #[cfg(any(test, feature = "test_time"))]
+            test_panic_request: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    /// Test/dev hook: request that workers panic on their next loop
+    /// iteration. Available under `cfg(test)` or with the `test_time`
+    /// feature (already used by all bevy adapter integration tests).
+    #[cfg(any(test, feature = "test_time"))]
+    pub fn request_worker_panic_for_test(&self) {
+        self.test_panic_request.store(true, Ordering::SeqCst);
+        // Unpark workers so they observe the request promptly.
+        for w in self.workers.lock().iter() {
+            w.thread.unpark();
         }
     }
 
@@ -310,6 +329,8 @@ impl PluginInternalState {
         let shutdown_recv = Arc::clone(&self.shutdown);
         let park_recv = Arc::clone(&self.park);
         let panic_recv = Arc::clone(&self.panic_slot);
+        #[cfg(any(test, feature = "test_time"))]
+        let test_panic_recv = Arc::clone(&self.test_panic_request);
 
         #[cfg(feature = "test_time")]
         let clock_handle_recv = naia_bevy_shared::TestClock::shareable_handle();
@@ -322,7 +343,14 @@ impl PluginInternalState {
 
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let mut recv = recv;
-                    recv_worker_loop(&mut recv, &recv_tx, &shutdown_recv, &park_recv);
+                    recv_worker_loop(
+                        &mut recv,
+                        &recv_tx,
+                        &shutdown_recv,
+                        &park_recv,
+                        #[cfg(any(test, feature = "test_time"))]
+                        &test_panic_recv,
+                    );
                 }));
 
                 if let Err(payload) = result {
@@ -345,6 +373,8 @@ impl PluginInternalState {
         let shutdown_send = Arc::clone(&self.shutdown);
         let park_send = Arc::clone(&self.park);
         let panic_send = Arc::clone(&self.panic_slot);
+        #[cfg(any(test, feature = "test_time"))]
+        let test_panic_send = Arc::clone(&self.test_panic_request);
 
         #[cfg(feature = "test_time")]
         let clock_handle_send = naia_bevy_shared::TestClock::shareable_handle();
@@ -357,7 +387,14 @@ impl PluginInternalState {
 
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                     let mut send = send;
-                    send_worker_loop(&mut send, &snap_rx, &shutdown_send, &park_send);
+                    send_worker_loop(
+                        &mut send,
+                        &snap_rx,
+                        &shutdown_send,
+                        &park_send,
+                        #[cfg(any(test, feature = "test_time"))]
+                        &test_panic_send,
+                    );
                 }));
 
                 if let Err(payload) = result {
@@ -596,11 +633,16 @@ fn recv_worker_loop(
     out_tx: &Sender<ReceiveOutput<Entity>>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
+    #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     loop {
         worker_park_checkpoint(park);
         if shutdown.load(Ordering::SeqCst) {
             return;
+        }
+        #[cfg(any(test, feature = "test_time"))]
+        if test_panic.load(Ordering::SeqCst) {
+            panic!("test-requested recv worker panic");
         }
         let output = recv.receive();
         // bounded(1) — if main is behind, drop the OLDEST so newer
@@ -635,11 +677,16 @@ fn send_worker_loop(
     snap_rx: &SnapshotReceiver<Entity>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
+    #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     loop {
         worker_park_checkpoint(park);
         if shutdown.load(Ordering::SeqCst) {
             return;
+        }
+        #[cfg(any(test, feature = "test_time"))]
+        if test_panic.load(Ordering::SeqCst) {
+            panic!("test-requested send worker panic");
         }
         if let Some(snap) = snap_rx.take_latest() {
             send.apply_pending_send_preamble();
