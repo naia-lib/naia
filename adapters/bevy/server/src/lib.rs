@@ -73,9 +73,16 @@
 //! [`Commands`]: bevy_ecs::system::Commands
 //! [`Replicate`]: naia_bevy_shared::Replicate
 
+// Re-exported so consumers (e.g. cyberlith `game_cell`) depend only on this
+// adapter crate and never reach past it into `naia-bevy-shared` / `naia-shared`
+// directly. `SnapshotWorld` / `IdentityToken` originate in `naia-shared` but are
+// surfaced here via `naia-bevy-shared` (the bevy shared layer re-exports them).
 pub use naia_bevy_shared::{
-    EntityAuthStatus, HandleTickEvents, HandleWorldEvents, Random, Replicate, ReplicateBundle,
-    Tick, WorldUpdate,
+    ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
+    HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
+    ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, SendPackets, SnapshotWorld,
+    Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand, WorldProxyMut, WorldToHostSync,
+    WorldUpdate,
 };
 pub use naia_server::{
     pipeline_actors,

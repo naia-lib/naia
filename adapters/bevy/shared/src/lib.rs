@@ -7,7 +7,8 @@ pub use naia_shared::{
     ComponentKind, ComponentKinds, PendingComponentUpdate, CompressionConfig, CompressionMode,
     ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityAuthAccessor,
     EntityAuthStatus, EntityDoesNotExistError, EntityProperty, FakeEntityConverter, FileBitWriter,
-    GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, Instant, LinkConditionerConfig,
+    GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, IdentityToken, Instant,
+    LinkConditionerConfig,
     LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntityMap,
     MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
     OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,
@@ -15,6 +16,7 @@ pub use naia_shared::{
     Request, ResourceAlreadyExists, ResourceKinds, ResourceRegistry, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
+    SnapshotWorld,
     Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
     UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };

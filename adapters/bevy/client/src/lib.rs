@@ -68,10 +68,12 @@
 //!
 //! [`Commands`]: bevy_ecs::system::Commands
 
+// Re-exported so consumers (e.g. cyberlith `game_network`) depend only on this
+// adapter crate and never reach past it into `naia-bevy-shared` directly.
 pub use naia_bevy_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, EntityAuthStatus, GameInstant,
-    HandleTickEvents, HandleWorldEvents, Random, Replicate, ReplicateBundle, ResponseSendKey, Tick,
-    Timer, WorldUpdate,
+    HandleTickEvents, HandleWorldEvents, Protocol, Random, Replicate, ReplicateBundle,
+    ResponseSendKey, Tick, Timer, WorldUpdate,
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},
