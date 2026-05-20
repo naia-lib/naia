@@ -277,6 +277,72 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.3b.1 (2026-05-19) — Coord-only
+    // `mark_entity_as_static`.
+    // ====================================================================
+    //
+    // End-to-end audit (`feedback-verify-before-proposing`) of
+    // `WorldServer::mark_entity_as_static` (`world_server.rs:1133`) ->
+    // `GlobalWorldManager::mark_entity_as_static`
+    // (`global_world_manager.rs:104`): the entire operation is a single
+    // gwm flag write — `record.is_static = true`. There is NO Send-side
+    // state-machine mutation and NO world-hook registration; the
+    // `is_static` flag is read only by Coord-side diff machinery during
+    // packet assembly. It is therefore a trivial Coord-only mirror like
+    // `enable_entity_replication` above — no `ScopeChange` variant and no
+    // deferred drainer work (the D.2.2 deferred pattern would have nothing
+    // to carry).
+    //
+    // Mirrors the legacy resolve-then-write sequence field-for-field,
+    // including the same panic when the entity is absent from the global
+    // map. Backward compat: `WorldServer::mark_entity_as_static` is
+    // unchanged. This retires the last `run_with_world_server`
+    // reassembly in cyberlith's `drain_sim_tile_registrations`
+    // (Phase E.6).
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.1 (2026-05-19) — mark
+    /// `world_entity` as static (its component data is not re-sent after
+    /// the initial spawn packet) without reassembling a `WorldServer`.
+    ///
+    /// Coord-side-only: writes the `is_static` flag on the entity's
+    /// `global_world_manager` record. No Send-side mutation; no world-hook
+    /// registration; no deferred drainer work. Field-for-field identical
+    /// to `WorldServer::mark_entity_as_static`, including the panic when
+    /// the entity is not yet in the global map.
+    pub fn mark_entity_as_static(&mut self, world_entity: &E) {
+        let Ok(global_entity) = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            panic!("entity not found in global map");
+        };
+        self.shared
+            .global_world_manager
+            .write()
+            .mark_entity_as_static(&global_entity);
+    }
+
+    /// Returns `true` if `world_entity` has been marked as static. Mirrors
+    /// `WorldServer::entity_is_static` (reads only from `shared`).
+    pub fn entity_is_static(&self, world_entity: &E) -> bool {
+        use naia_shared::GlobalWorldManagerType;
+        let Ok(global_entity) = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return false;
+        };
+        self.shared
+            .global_world_manager
+            .read()
+            .entity_is_static(&global_entity)
+    }
+
+    // ====================================================================
     // MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — Coord-only
     // entity-replication reconfiguration with deferred Send/World work.
     // ====================================================================
