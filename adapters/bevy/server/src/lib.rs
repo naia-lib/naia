@@ -119,8 +119,8 @@ pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
 pub use plugin_full::{
-    CoordHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes, SendHandleRes,
-    SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
+    drain_recv_impl, CoordHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes,
+    SendHandleRes, SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
 };
 pub use server::Server;
 pub use sim_converter::SimConverter;

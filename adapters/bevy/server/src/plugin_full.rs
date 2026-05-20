@@ -61,7 +61,7 @@ use std::{
         atomic::{AtomicBool, AtomicU8, Ordering},
         Arc,
     },
-    thread::{self, JoinHandle, Thread},
+    thread::{self, JoinHandle},
 };
 
 use bevy_app::App;
@@ -211,7 +211,43 @@ struct ParkControl {
     /// the expected worker count before continuing past
     /// [`PluginInternalState::park_workers`].
     parked_count: Mutex<u32>,
+    /// Signalled by a worker when it increments `parked_count` at the
+    /// checkpoint. `park_workers()` waits on this for `parked_count`
+    /// to reach the expected worker count.
     parked_cv: parking_lot::Condvar,
+    /// Signalled by `unpark_workers()` (under the `parked_count` lock)
+    /// when it clears `park`. Parked workers wait on this to leave the
+    /// checkpoint. Replaces the prior `thread::park()`/`thread::unpark()`
+    /// scheme, which had a token race: a worker that consumed its unpark
+    /// token but was descheduled before re-reading `park` would re-read
+    /// the *next* cycle's `park=true` and re-block with no token, never
+    /// re-incrementing `parked_count` → deadlock. A condvar guarded by
+    /// the same mutex as the `park` read has no such lost transition.
+    resume_cv: parking_lot::Condvar,
+    /// Signalled by a worker when it decrements `parked_count` on leaving
+    /// the checkpoint. `unpark_workers()` waits on this until
+    /// `parked_count` is back to 0 — i.e. it is **synchronous**: it does
+    /// not return until every parked worker has observed `park=false` and
+    /// left the checkpoint. Because `unpark_workers()` and the next
+    /// `park_workers()` run sequentially on the same thread, this
+    /// guarantees `park` can never be re-set to `true` while a worker is
+    /// still mid-resume.
+    resumed_cv: parking_lot::Condvar,
+    /// Mutex + condvar for workers to sleep in between park windows
+    /// (test_time mode only). Workers block here when idle; `park_workers()`
+    /// signals this condvar after setting `park=true` so workers wake, loop
+    /// to `worker_park_checkpoint`, and enter the coordinated park protocol.
+    ///
+    /// This is the *idle* wait, separate from the *checkpoint* wait
+    /// (`resume_cv`): a body-sleeping worker isn't yet counted in
+    /// `parked_count`, whereas a checkpoint-waiting worker is. Keeping them
+    /// distinct lets `park_workers()` wake idlers (body_sleep_cv) without
+    /// disturbing the parked-count barrier, and lets `unpark_workers()`
+    /// release parked workers (resume_cv) without waking idlers.
+    #[cfg(feature = "test_time")]
+    body_sleep_mu: Mutex<()>,
+    #[cfg(feature = "test_time")]
+    body_sleep_cv: parking_lot::Condvar,
 }
 
 impl ParkControl {
@@ -220,6 +256,12 @@ impl ParkControl {
             park: AtomicBool::new(false),
             parked_count: Mutex::new(0),
             parked_cv: parking_lot::Condvar::new(),
+            resume_cv: parking_lot::Condvar::new(),
+            resumed_cv: parking_lot::Condvar::new(),
+            #[cfg(feature = "test_time")]
+            body_sleep_mu: Mutex::new(()),
+            #[cfg(feature = "test_time")]
+            body_sleep_cv: parking_lot::Condvar::new(),
         }
     }
 }
@@ -301,7 +343,6 @@ pub struct PluginInternalState {
 
 struct WorkerHandle {
     name: &'static str,
-    thread: Thread,
     join: Option<JoinHandle<()>>,
 }
 
@@ -356,9 +397,15 @@ impl PluginInternalState {
     #[cfg(any(test, feature = "test_time"))]
     pub fn request_worker_panic_for_test(&self) {
         self.test_panic_request.store(true, Ordering::SeqCst);
-        // Unpark workers so they observe the request promptly.
-        for w in self.workers.lock().iter() {
-            w.thread.unpark();
+        // Wake any parked or idle (body-sleeping) workers so they loop
+        // back to the top and observe the request. (Polling workers in
+        // the non-test_time path observe it on their next iteration
+        // without a wakeup.)
+        self.park.resume_cv.notify_all();
+        #[cfg(feature = "test_time")]
+        {
+            let _g = self.park.body_sleep_mu.lock();
+            self.park.body_sleep_cv.notify_all();
         }
     }
 
@@ -454,7 +501,6 @@ impl PluginInternalState {
                 naia_bevy_shared::TestClock::detach_shared();
             })
             .expect("spawn recv worker thread");
-        let recv_thread = recv_join.thread().clone();
 
         // Send worker borrows the send handle from the shared park-window
         // slot per-iteration (D.3a), symmetric to the recv worker. Seed
@@ -503,7 +549,6 @@ impl PluginInternalState {
                 naia_bevy_shared::TestClock::detach_shared();
             })
             .expect("spawn send worker thread");
-        let send_thread = send_join.thread().clone();
 
         // Coord handle stays on main as a Resource via CoordHandleRes
         // — the caller's `Plugin::build` already installed
@@ -521,12 +566,10 @@ impl PluginInternalState {
         self.workers.lock().extend([
             WorkerHandle {
                 name: "naia-recv-worker",
-                thread: recv_thread,
                 join: Some(recv_join),
             },
             WorkerHandle {
                 name: "naia-send-worker",
-                thread: send_thread,
                 join: Some(send_join),
             },
         ]);
@@ -558,13 +601,26 @@ impl PluginInternalState {
             return;
         }
         let expected = self.workers.lock().len() as u32;
-        #[cfg(feature = "test_time")]
-        eprintln!("[E6C-DIAG park_workers] called expected={} current_parked={}", expected, *self.park.parked_count.lock());
         self.park.park.store(true, Ordering::SeqCst);
-        // Unpark each worker so they observe the park flag on the next
-        // iteration even if currently sleeping.
-        for w in self.workers.lock().iter() {
-            w.thread.unpark();
+        // In test_time mode: wake body-sleeping workers via condvar so they
+        // loop back to the checkpoint and park.
+        //
+        // Hold body_sleep_mu while notifying to prevent the classic lost-wakeup
+        // race: without the lock, notify_all() can fire AFTER a worker checks
+        // the condvar condition (finds park=false, enters wait) but BEFORE it
+        // calls wait() — the signal is lost and the worker sleeps forever.
+        // Holding the lock ensures either the worker sees park=true (set above,
+        // SeqCst) and skips wait(), or the worker is already inside wait() and
+        // will be woken. (parking_lot condvar wait releases the lock atomically.)
+        //
+        // In production (non-test_time): workers poll `park` between their short
+        // thread::sleep()s, so they reach the checkpoint within one sleep
+        // interval — no explicit wakeup needed (and thread::unpark() would not
+        // wake a thread::sleep() anyway).
+        #[cfg(feature = "test_time")]
+        {
+            let _g = self.park.body_sleep_mu.lock();
+            self.park.body_sleep_cv.notify_all();
         }
         let mut g = self.park.parked_count.lock();
         while *g < expected {
@@ -587,19 +643,41 @@ impl PluginInternalState {
         }
     }
 
-    /// Resume both worker threads.
+    /// Resume both worker threads. **Synchronous**: does not return until
+    /// every parked worker has observed `park=false` and left the
+    /// checkpoint (`parked_count` back to 0). This is what makes the next
+    /// `park_workers()` safe — it cannot set `park=true` while a worker is
+    /// still mid-resume, which was the root of the prior `thread::park()`
+    /// token-race deadlock.
     pub fn unpark_workers(&self) {
         if self.state() != State::Running {
             return;
         }
-        // Reset count and clear park flag, then unpark threads to wake
-        // them out of their park loop.
-        #[cfg(feature = "test_time")]
-        eprintln!("[E6C-DIAG unpark_workers] called");
-        *self.park.parked_count.lock() = 0;
+        let mut g = self.park.parked_count.lock();
+        // Clear the park flag and wake checkpoint waiters under the same
+        // lock the checkpoint reads `park` under (no lost wakeup).
         self.park.park.store(false, Ordering::SeqCst);
-        for w in self.workers.lock().iter() {
-            w.thread.unpark();
+        self.park.resume_cv.notify_all();
+        // Wait until all parked workers have decremented out of the
+        // checkpoint. A worker that finished/panicked never incremented,
+        // so it doesn't hold up the count.
+        while *g > 0 {
+            // Bounded wait so a worker that finishes (panic/exit) after we
+            // last observed the count is still noticed promptly.
+            let finished_unparked = self
+                .workers
+                .lock()
+                .iter()
+                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
+                .count() as u32;
+            // If the only thing keeping the count above 0 would be a
+            // worker that has since finished, stop waiting.
+            if finished_unparked >= *g {
+                break;
+            }
+            self.park
+                .resumed_cv
+                .wait_for(&mut g, std::time::Duration::from_millis(5));
         }
     }
 
@@ -664,12 +742,23 @@ impl Drop for PluginInternalState {
         // Drop the recv channel sender so the main-side drain stops
         // expecting more outputs.
         self.recv_out_chan_tx.lock().take();
-        // Unpark + clear park flag so workers can exit promptly.
-        self.park.park.store(false, Ordering::SeqCst);
-        let mut workers = std::mem::take(&mut *self.workers.lock());
-        for w in &workers {
-            w.thread.unpark();
+        // Clear the park flag + wake checkpoint waiters so any parked
+        // worker leaves the checkpoint and observes shutdown. Done under
+        // the parked_count lock (same lock the checkpoint reads `park`
+        // under) to avoid a lost wakeup.
+        {
+            let _g = self.park.parked_count.lock();
+            self.park.park.store(false, Ordering::SeqCst);
+            self.park.resume_cv.notify_all();
         }
+        // Wake body-sleeping workers (test_time mode) so they observe shutdown.
+        // Hold the lock to prevent lost-wakeup (see park_workers comment).
+        #[cfg(feature = "test_time")]
+        {
+            let _g = self.park.body_sleep_mu.lock();
+            self.park.body_sleep_cv.notify_all();
+        }
+        let mut workers = std::mem::take(&mut *self.workers.lock());
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         for w in workers.iter_mut() {
@@ -783,20 +872,32 @@ pub(crate) fn install_full_pipelining(
 // ─── Worker loops ───────────────────────────────────────────────────────────
 
 /// Top-of-iteration: if `park` is set, increment parked_count, notify
-/// main, then `thread::park()` until unparked + park cleared.
+/// main, then wait on `resume_cv` until `unpark_workers()` clears `park`.
 fn worker_park_checkpoint(park: &ParkControl) {
+    // Fast path: not parking, no lock needed.
     if !park.park.load(Ordering::SeqCst) {
         return;
     }
-    {
-        let mut g = park.parked_count.lock();
-        *g += 1;
-        park.parked_cv.notify_all();
+    let mut g = park.parked_count.lock();
+    // Re-check under the lock: `park` may have been cleared between the
+    // unlocked load above and acquiring the lock.
+    if !park.park.load(Ordering::SeqCst) {
+        return;
     }
-    // Park loop: keep parking until the park flag clears.
+    *g += 1;
+    park.parked_cv.notify_all();
+    // Park loop: wait on the resume condvar (NOT thread::park) until the
+    // park flag clears. The condvar wait atomically releases `g`; the
+    // `park` read happens under `g`, and `unpark_workers()` clears `park`
+    // + notifies under the same lock — so there is no lost transition and
+    // no token to drop.
     while park.park.load(Ordering::SeqCst) {
-        thread::park();
+        park.resume_cv.wait(&mut g);
     }
+    // Leaving the checkpoint: decrement and signal `unpark_workers()`,
+    // which blocks until this count returns to 0 (synchronous unpark).
+    *g -= 1;
+    park.resumed_cv.notify_all();
 }
 
 /// Recv worker loop. The `RecvHandle` is **not** owned by this closure
@@ -861,16 +962,23 @@ fn recv_worker_loop(
         // UDP socket promptly between ticks, avoiding packet loss under load.
         #[cfg(feature = "test_time")]
         {
-            // Pure parking-service mode: block here with zero CPU cost until
-            // park_workers() wakes us via thread::unpark(). On wake, loop
-            // back to worker_park_checkpoint to service the park request.
-            // thread::park() may spuriously wake; the checkpoint check
-            // handles that gracefully (exits immediately if park=false).
-            // Using thread::park() instead of thread::sleep() ensures workers
-            // are truly idle between park windows regardless of parallelism
-            // level — critical for parallel test suites where spin-loops
-            // would saturate CPUs across concurrent GameCell instances.
-            thread::park();
+            // Body-sleep: block with zero CPU cost until park_workers()
+            // signals body_sleep_cv (meaning park=true and workers should
+            // reach the checkpoint). Using body_sleep_cv instead of
+            // thread::park() avoids the single-token race where park_workers()'s
+            // thread::unpark() token is consumed here, leaving the checkpoint
+            // while-loop's thread::park() without a token (deadlock). Condvar
+            // notify_all is not token-based and always wakes waiting workers.
+            // The `test_panic` clause lets `request_worker_panic_for_test`
+            // wake an idle worker so it loops back and observes the request.
+            let mut g = park.body_sleep_mu.lock();
+            while !park.park.load(Ordering::SeqCst)
+                && !shutdown.load(Ordering::SeqCst)
+                && !test_panic.load(Ordering::SeqCst)
+            {
+                park.body_sleep_cv.wait(&mut g);
+            }
+            drop(g);
             continue;
         }
 
@@ -970,14 +1078,8 @@ fn send_worker_loop(
         send.apply_pending_send_preamble();
 
         if let Some(snap) = snap_opt {
-            #[cfg(feature = "test_time")]
-            eprintln!("[E6C-DIAG send_worker] apply_pending_scope_changes...");
             send.apply_pending_scope_changes(&snap);
-            #[cfg(feature = "test_time")]
-            eprintln!("[E6C-DIAG send_worker] send_all_packets...");
             send.send_all_packets(snap);
-            #[cfg(feature = "test_time")]
-            eprintln!("[E6C-DIAG send_worker] send_all_packets done");
         } else {
             // No snapshot this iteration — re-deposit the handle and loop
             // back to the park checkpoint.
@@ -987,11 +1089,19 @@ fn send_worker_loop(
                     None => { thread::sleep(std::time::Duration::from_micros(100)); }
                 }
             }
-            // In test_time mode: block with zero CPU cost until the next
-            // park_workers() wakeup (see recv worker comment above).
+            // In test_time mode: body-sleep on condvar (zero CPU, no token race).
             // In production: short sleep keeps CPU low between sends.
             #[cfg(feature = "test_time")]
-            thread::park();
+            {
+                let mut g = park.body_sleep_mu.lock();
+                while !park.park.load(Ordering::SeqCst)
+                    && !shutdown.load(Ordering::SeqCst)
+                    && !test_panic.load(Ordering::SeqCst)
+                {
+                    park.body_sleep_cv.wait(&mut g);
+                }
+                drop(g);
+            }
             #[cfg(not(feature = "test_time"))]
             thread::sleep(std::time::Duration::from_micros(100));
             continue;
@@ -1080,9 +1190,6 @@ pub fn drain_recv_impl(
         if output.is_empty() {
             continue;
         }
-        #[cfg(feature = "test_time")]
-        eprintln!("[E6C-DIAG drain_recv_impl] non-empty output: ticks={} addrs={}",
-            output.pending_ticks.len(), output.received_addresses.len());
         let server_tick = coord.current_tick();
         let (c, r, s) = apply_recv_to_world(
             coord,
