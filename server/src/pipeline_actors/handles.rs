@@ -9,7 +9,7 @@
 
 use std::{hash::Hash, sync::Arc};
 
-use naia_shared::{EntityAndGlobalEntityConverter, GlobalEntitySpawner, Tick};
+use naia_shared::{EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntitySpawner, Tick};
 
 use crate::room::{Room, RoomKey};
 use crate::server::coord_state::CoordinatorState;
@@ -322,6 +322,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .global_world_manager
             .write()
             .mark_entity_as_static(&global_entity);
+    }
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — pure
+    /// Coord-side read of the entity's authority status. Mirrors
+    /// `WorldServer::entity_authority_status` (`world_server.rs:1698`) —
+    /// reads only `shared.global_entity_map` + `shared.global_world_manager`.
+    /// Used by the host-sync drain's auth gate (skip insert/remove/despawn
+    /// when a client holds authority). Returns `None` when the entity is
+    /// not in the global map.
+    pub fn entity_authority_status(
+        &self,
+        world_entity: &E,
+    ) -> Option<EntityAuthStatus> {
+        let global_entity = match self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        {
+            Ok(ge) => ge,
+            Err(_) => return None,
+        };
+        self.shared
+            .global_world_manager
+            .read()
+            .entity_authority_status(&global_entity)
     }
 
     /// Returns `true` if `world_entity` has been marked as static. Mirrors

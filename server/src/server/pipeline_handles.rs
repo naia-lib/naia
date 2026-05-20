@@ -311,6 +311,56 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         crate::server::send_state::drain_pending_world_hooks(&self.state.shared, world);
     }
 
+    // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — host-sync
+    // worldless ops + `is_listening`, exposed handle-direct so the
+    // pipeline host-sync drain (`drain_host_sync_into_pipeline`) no longer
+    // reassembles a `WorldServer`. Thin forwards to the `SendState`
+    // namesakes (which mirror `WorldServer::*` field-for-field — see the
+    // D.3b.2 section in `send_state.rs`). Existing `WorldServer::*` methods
+    // are unchanged.
+    // ====================================================================
+
+    /// Pipeline-mode `is_listening`. Forwards to [`SendState::is_listening`]
+    /// (`send_io.is_loaded()`). Used by the host-sync drain's "skip while
+    /// not listening" guard, mirroring `WorldServer::is_listening`.
+    pub fn is_listening(&self) -> bool {
+        self.state.is_listening()
+    }
+
+    /// Pipeline-mode `insert_component_worldless`. Byte-identical to
+    /// `WorldServer::insert_component_worldless`. Mutates `shared.gwm` +
+    /// per-connection scope state on `SendState`; no Coord state needed.
+    pub fn insert_component_worldless(
+        &mut self,
+        world_entity: &E,
+        component: &mut dyn naia_shared::Replicate,
+    ) {
+        self.state.insert_component_worldless(world_entity, component);
+    }
+
+    /// Pipeline-mode `remove_component_worldless`. Byte-identical to
+    /// `WorldServer::remove_component_worldless`.
+    pub fn remove_component_worldless(
+        &mut self,
+        world_entity: &E,
+        component_kind: &naia_shared::ComponentKind,
+    ) {
+        self.state.remove_component_worldless(world_entity, component_kind);
+    }
+
+    /// Pipeline-mode `despawn_entity_worldless`. Byte-identical to
+    /// `WorldServer::despawn_entity_worldless`. Takes `&mut CoordinatorState`
+    /// because the priority-mirror eviction + room-cache cleanup write
+    /// Coord-side state (pass `&mut coord_handle.state`).
+    pub fn despawn_entity_worldless(
+        &mut self,
+        coord: &mut crate::server::coord_state::CoordinatorState<E>,
+        world_entity: &E,
+    ) {
+        self.state.despawn_entity_worldless(coord, world_entity);
+    }
+
     /// C.6 prep — send a message to the user at `address` without
     /// reassembling the WorldServer.
     ///

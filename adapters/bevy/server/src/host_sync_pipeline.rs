@@ -7,8 +7,19 @@
 //! `despawn_entity_worldless` machinery. Under the three-handle pipeline
 //! (`Plugin::types_and_sets_only` / `Plugin::sim_integration`)
 //! `ServerImpl` does not exist; the equivalent drain runs against the
-//! three pipeline handles instead, briefly re-assembling them into a
-//! `WorldServer` via [`run_with_world_server`].
+//! three pipeline handles directly.
+//!
+//! MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19): this helper no
+//! longer reassembles a `WorldServer` via `run_with_world_server`. The
+//! `is_listening` guard reads `SendHandle::is_listening`, the auth gate
+//! reads `CoordHandle::entity_authority_status`, and the insert / remove /
+//! despawn ops route through the `SendHandle::*_worldless` methods (the
+//! despawn borrows `&mut coord.state` for its Coord-side priority/room
+//! cleanup). Each worldless method mirrors its `WorldServer` namesake
+//! field-for-field, so the wire output is byte-identical to the prior
+//! reassembly path. This is the naia surface that retires cyberlith's
+//! `world_to_host_sync_pipeline` `run_with_naia_server` reassembly
+//! (Phase E.6).
 //!
 //! This is a sibling helper to [`crate::apply_receive_output_pipeline`]
 //! and follows the same calling convention: the caller passes the three
@@ -23,7 +34,7 @@ use std::ops::DerefMut;
 use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
 use naia_bevy_shared::{EntityAuthStatus, HostSyncEvent, WorldMutType, WorldProxyMut};
-use naia_server::pipeline_actors::{CoordHandle, run_with_world_server};
+use naia_server::pipeline_actors::CoordHandle;
 use naia_server::{RecvHandle, SendHandle};
 
 /// Drain `Messages<HostSyncEvent>` against the three pipeline handles
@@ -70,11 +81,11 @@ use naia_server::{RecvHandle, SendHandle};
 /// unchanged without rebuilding `WorldServer` (zero-cost no-op path).
 pub fn drain_host_sync_into_pipeline(
     world: &mut World,
-    coord: CoordHandle<Entity>,
+    mut coord: CoordHandle<Entity>,
     recv: RecvHandle<Entity>,
-    send: SendHandle<Entity>,
+    mut send: SendHandle<Entity>,
 ) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
-    // Drain the message queue first; if empty, skip the WS rebuild.
+    // Drain the message queue first; if empty, skip all handle work.
     let host_component_events: Vec<HostSyncEvent> = world
         .get_resource_mut::<Messages<HostSyncEvent>>()
         .map(|mut reader| reader.drain().collect())
@@ -83,57 +94,59 @@ pub fn drain_host_sync_into_pipeline(
         return (coord, recv, send);
     }
 
-    let (coord, recv, send, ()) =
-        run_with_world_server(coord, recv, send, |ws| {
-            // Skip drain entirely while not listening — matches today's
-            // `world_to_host_sync` guard on `server.is_listening()`.
-            if !ws.is_listening() {
-                return;
-            }
-            for event in host_component_events {
-                match event {
-                    HostSyncEvent::Insert(_host_id, entity, component_kind) => {
-                        if ws.entity_authority_status(&entity)
-                            == Some(EntityAuthStatus::Denied)
-                        {
-                            // Client holds auth — skip (client driver
-                            // will apply the insert via the receive
-                            // path).
-                            continue;
-                        }
-                        let mut world_proxy = world.proxy_mut();
-                        let Some(mut component_mut) =
-                            world_proxy.component_mut_of_kind(&entity, &component_kind)
-                        else {
-                            // Component already removed between
-                            // emission and drain — same tolerant
-                            // behavior as the non-pipelined path.
-                            continue;
-                        };
-                        ws.insert_component_worldless(
-                            &entity,
-                            DerefMut::deref_mut(&mut component_mut),
-                        );
-                    }
-                    HostSyncEvent::Remove(_host_id, entity, component_kind) => {
-                        if ws.entity_authority_status(&entity)
-                            == Some(EntityAuthStatus::Denied)
-                        {
-                            continue;
-                        }
-                        ws.remove_component_worldless(&entity, &component_kind);
-                    }
-                    HostSyncEvent::Despawn(_host_id, entity) => {
-                        if ws.entity_authority_status(&entity)
-                            == Some(EntityAuthStatus::Denied)
-                        {
-                            continue;
-                        }
-                        ws.despawn_entity_worldless(&entity);
-                    }
+    // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — handle-direct
+    // drain. No `run_with_world_server` reassembly: queries route through
+    // `SendHandle::is_listening` + `CoordHandle::entity_authority_status`,
+    // mutations through the `SendHandle::*_worldless` ops (despawn borrows
+    // `&mut coord.state`). Byte-identical to the prior `WorldServer` path
+    // — the worldless methods mirror `WorldServer::*` field-for-field.
+
+    // Skip drain entirely while not listening — matches today's
+    // `world_to_host_sync` guard on `server.is_listening()`.
+    if !send.is_listening() {
+        return (coord, recv, send);
+    }
+    for event in host_component_events {
+        match event {
+            HostSyncEvent::Insert(_host_id, entity, component_kind) => {
+                if coord.entity_authority_status(&entity)
+                    == Some(EntityAuthStatus::Denied)
+                {
+                    // Client holds auth — skip (client driver will apply
+                    // the insert via the receive path).
+                    continue;
                 }
+                let mut world_proxy = world.proxy_mut();
+                let Some(mut component_mut) =
+                    world_proxy.component_mut_of_kind(&entity, &component_kind)
+                else {
+                    // Component already removed between emission and drain
+                    // — same tolerant behavior as the non-pipelined path.
+                    continue;
+                };
+                send.insert_component_worldless(
+                    &entity,
+                    DerefMut::deref_mut(&mut component_mut),
+                );
             }
-        });
+            HostSyncEvent::Remove(_host_id, entity, component_kind) => {
+                if coord.entity_authority_status(&entity)
+                    == Some(EntityAuthStatus::Denied)
+                {
+                    continue;
+                }
+                send.remove_component_worldless(&entity, &component_kind);
+            }
+            HostSyncEvent::Despawn(_host_id, entity) => {
+                if coord.entity_authority_status(&entity)
+                    == Some(EntityAuthStatus::Denied)
+                {
+                    continue;
+                }
+                send.despawn_entity_worldless(&mut coord.state, &entity);
+            }
+        }
+    }
 
     (coord, recv, send)
 }

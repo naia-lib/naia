@@ -27,15 +27,16 @@ use log::warn;
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalPriorityState,
-    GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, OutgoingPacket,
-    OutgoingPriorityHook, OwnedBitReader, PacketType, Serde, SnapshotMap, Tick, Timer,
-    UserPriorityState, WorldMutType, WorldRefType,
+    GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer,
+    OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, Serde,
+    SnapshotMap, Tick, Timer, UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
     connection::{io::SendIo, RecvConnection, SendConnection},
     room::RoomKey,
     server::{
+        coord_state::CoordinatorState,
         scope_change::{RoomChange, ScopeChange},
         scope_checks_cache::ScopeChecksCache,
         ServerShared,
@@ -1767,6 +1768,217 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             if let Some(layer) = self.user_priorities.get_mut(user_key) {
                 layer.on_scope_exit(world_entity);
             }
+        }
+    }
+
+    // ====================================================================
+    // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — host-sync
+    // worldless ops, relocated from `WorldServer` so the pipeline-mode
+    // host-sync drain can run handle-direct (no `run_with_world_server`
+    // reassembly). Each mirrors its `WorldServer` namesake field-for-field
+    // — identical lock order, identical writes — so the wire output is
+    // byte-identical. The `WorldServer::*_worldless` methods are unchanged
+    // (they remain the serial-mode path + the parity oracle in tests).
+    //
+    // Cross-half ownership (audited end-to-end against
+    // `world_server.rs:2150/2397/2492`):
+    // - `insert_component_worldless` / `remove_component_worldless` touch
+    //   `shared.gwm` (writes) + `send_user_connections` (per-connection
+    //   fan-out). Both halves live on `SendState` (`send_user_connections`
+    //   field + `shared` Arc) — no Coord state needed.
+    // - `despawn_entity_worldless` additionally touches
+    //   `coord.global_priority_mirror` (eviction) + `coord.room_store`
+    //   (room cache cleanup). Those live on `CoordinatorState`, so the
+    //   method takes `&mut CoordinatorState<E>`.
+
+    /// Pipeline-mode `is_listening`. Mirrors `WorldServer::is_listening`
+    /// (`world_server.rs:251`) — reads only `send_io.is_loaded()`. The
+    /// loaded flag is Send-side state, so this lives on `SendState`.
+    pub(crate) fn is_listening(&self) -> bool {
+        self.send_io.is_loaded()
+    }
+
+    /// Pipeline-mode `insert_component_worldless`. Byte-for-byte mirror of
+    /// `WorldServer::insert_component_worldless` (`world_server.rs:2397`)
+    /// with `excluding_user_opt = None` inlined (the host-sync drain always
+    /// passes `None`, so the `coord.user_store` lookup in
+    /// `insert_new_component_into_entity_scopes` is dead — omitted here).
+    pub(crate) fn insert_component_worldless(
+        &mut self,
+        world_entity: &E,
+        component: &mut dyn Replicate,
+    ) {
+        let component_kind = component.kind();
+
+        let global_entity = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        if self
+            .shared
+            .global_world_manager
+            .read()
+            .has_component_record(&global_entity, &component_kind)
+        {
+            warn!(
+                "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
+                component.name(), global_entity,
+            );
+            return;
+        }
+
+        // Inlined `insert_new_component_into_entity_scopes(.., None)`:
+        // add component to connections already tracking entity.
+        for (_addr, send_conn) in self.send_user_connections.iter_mut() {
+            let has_entity = send_conn.base.world_manager.has_global_entity(&global_entity);
+            if !has_entity {
+                continue;
+            }
+            send_conn
+                .base
+                .world_manager
+                .insert_component(&global_entity, &component_kind);
+        }
+
+        // update in world manager
+        self.shared
+            .global_world_manager
+            .write()
+            .insert_component_record(&global_entity, &component_kind);
+        self.shared
+            .global_world_manager
+            .write()
+            .insert_component_diff_handler(&self.shared.component_kinds, &global_entity, component);
+
+        // if entity is delegated, convert over
+        if self
+            .shared
+            .global_world_manager
+            .read()
+            .entity_is_delegated(&global_entity)
+        {
+            let accessor = self
+                .shared
+                .global_world_manager
+                .read()
+                .get_entity_auth_accessor(&global_entity);
+            component.enable_delegation(&accessor, None)
+        }
+    }
+
+    /// Pipeline-mode `remove_component_worldless`. Byte-for-byte mirror of
+    /// `WorldServer::remove_component_worldless` (`world_server.rs:2492`).
+    pub(crate) fn remove_component_worldless(
+        &mut self,
+        world_entity: &E,
+        component_kind: &ComponentKind,
+    ) {
+        let global_entity = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        // Inlined `remove_component_from_all_connections`.
+        for (_, send_conn) in self.send_user_connections.iter_mut() {
+            if !send_conn.base.world_manager.has_global_entity(&global_entity) {
+                continue;
+            }
+            send_conn
+                .base
+                .world_manager
+                .remove_component(&global_entity, component_kind);
+        }
+
+        // cleanup all other loose ends
+        self.shared
+            .global_world_manager
+            .write()
+            .remove_component_record(&global_entity, component_kind);
+        self.shared
+            .global_world_manager
+            .write()
+            .remove_component_diff_handler(&global_entity, component_kind);
+    }
+
+    /// Pipeline-mode `despawn_entity_worldless`. Byte-for-byte mirror of
+    /// `WorldServer::despawn_entity_worldless` (`world_server.rs:2150`)
+    /// including the inlined `cleanup_entity_replication` +
+    /// `despawn_entity_from_all_connections` private helpers. Takes
+    /// `&mut CoordinatorState<E>` because the priority-mirror eviction and
+    /// room-cache cleanup write Coord-side state.
+    pub(crate) fn despawn_entity_worldless(
+        &mut self,
+        coord: &mut CoordinatorState<E>,
+        world_entity: &E,
+    ) {
+        let Ok(global_entity) = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return;
+        };
+        // Priority layer eviction (coord mirror + send copies + per-user).
+        coord.global_priority_mirror.on_despawn(world_entity);
+        self.global_priority.on_despawn(world_entity);
+        for layer in self.user_priorities.values_mut() {
+            layer.on_scope_exit(world_entity);
+        }
+        // Drop every (*, *, world_entity) tuple from the scope-checks cache.
+        self.scope_checks_cache.on_entity_despawned(*world_entity);
+
+        // Inlined `cleanup_entity_replication`.
+        self.despawn_entity_from_all_connections(&global_entity);
+        self.entity_scope_map.remove_entity(&global_entity);
+        if let Some(room_keys) = self.entity_room_map.remove_from_all_rooms(&global_entity) {
+            for room_key in room_keys {
+                if let Some(room) = coord.room_store.get_mut(&room_key) {
+                    room.remove_entity(&global_entity, true);
+                }
+            }
+        }
+        self.shared
+            .global_world_manager
+            .write()
+            .remove_entity_diff_handlers(&global_entity);
+
+        self.shared
+            .global_world_manager
+            .write()
+            .remove_entity_record(&global_entity);
+        self.shared
+            .global_entity_map
+            .write()
+            .despawn_by_global(&global_entity);
+    }
+
+    /// Inlined `WorldServer::despawn_entity_from_all_connections`
+    /// (`world_server.rs:2199`). Resolves the global idx, clears
+    /// `idx_to_world`, and despawns the entity from every connection that
+    /// has it in scope.
+    fn despawn_entity_from_all_connections(&mut self, global_entity: &GlobalEntity) {
+        let entity_idx = {
+            let handler = self.shared.global_world_manager.read().diff_handler();
+            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+            guard
+                .entity_to_global_idx(global_entity)
+                .unwrap_or(GlobalEntityIndex::INVALID)
+        };
+        if entity_idx.is_valid() {
+            self.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+        }
+        for (_, send_conn) in self.send_user_connections.iter_mut() {
+            if !send_conn.base.world_manager.has_global_entity(global_entity) {
+                continue;
+            }
+            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.clear_entity_visible(entity_idx);
         }
     }
 }
