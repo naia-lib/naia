@@ -90,6 +90,19 @@ fn send_worker_drains_published_snapshots() {
     sender.send(SnapshotWorld::<Entity>::new());
     assert!(sender.has_pending(), "snapshot pending immediately after send");
 
+    // Under the E.6 zero-CPU-idle worker model, an idle (body-sleeping) send
+    // worker does not poll for snapshots out-of-band in test_time mode — it
+    // drains during a park window. Drive one park/unpark cycle so the worker
+    // wakes, observes the published snapshot via take_latest, and drains it.
+    // (Production / non-test_time workers poll autonomously every ~100µs, but
+    // that path is unreachable here: this crate's dev-dependency forces the
+    // test_time feature on, so these tests always run park-driven.)
+    {
+        let state = app.world().resource::<PluginInternalState>();
+        state.park_workers();
+        state.unpark_workers();
+    }
+
     // Give the Send worker time to drain.
     let drain_deadline = std::time::Instant::now() + Duration::from_secs(2);
     while sender.has_pending() && std::time::Instant::now() < drain_deadline {
