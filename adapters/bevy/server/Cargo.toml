@@ -16,7 +16,24 @@ maintenance = { status = "actively-developed" }
 transport_webrtc = [ "naia-server/transport_webrtc" ]
 transport_udp = [ "naia-server/transport_udp" ]
 transport_local = [ "naia-server/transport_local" ]
+# `test_time` means ONLY "advanceable clock" (TestClock backs the time
+# manager). It no longer implies parked workers — that is now `deterministic`.
 test_time = [ "naia-server/test_time", "naia-bevy-shared/test_time" ]
+# Forces the Recv/Send worker loops into their parking-service path and the
+# consumer to drive recv/send synchronously inside the park window — i.e. the
+# fully-serialized, reproducible-output execution the E2E/sim suite relies on.
+# Implies `test_time` (the synchronous park-window drive needs the controllable
+# clock). The parked-vs-active choice is centralized in `build.rs` as the
+# `workers_active` cfg = `not(deterministic)`. With `test_time` ON but
+# `deterministic` OFF (a bench), the same advanceable clock runs with ACTIVE
+# workers, so a driver can measure real 3-stage thread overlap under a
+# saturated simulated clock. This split is fail-OPEN: builds that need
+# deterministic output MUST enable this (e.g. `cyberlith_test_harness` enables
+# it by default).
+deterministic = [ "test_time" ]
+# Bench-only cross-thread per-stage timing aggregator (see `pipeline_timing.rs`).
+# Zero-cost when off.
+pipeline_timing = []
 interior_visibility = [ "naia-server/interior_visibility" ]
 bench_instrumentation = [ "naia-server/bench_instrumentation" ]
 # Additive, default-off. Cascades to `naia-server/f3_diag` — see that
@@ -33,7 +50,11 @@ bevy_ecs = { version = "0.18", default-features=false }
 log = { version = "0.4" }
 
 [dev-dependencies]
-naia-bevy-server = { path = ".", features = ["transport_local", "test_time"] }
+# `deterministic` (not just `test_time`) so the integration tests keep the
+# parked-worker / synchronous-drive behavior they were written against. Feature
+# unification forces it on for the whole crate-under-test (see
+# `memory/feedback_naia_bevy_server_test_time_unification.md`).
+naia-bevy-server = { path = ".", features = ["transport_local", "deterministic"] }
 naia-bevy-client = { path = "../client", features = ["transport_local", "test_time"] }
 naia-bevy-shared = { path = "../shared", features = ["test_time"] }
 naia-server = { path = "../../../server", features = ["bevy_support", "transport_local", "test_time", "test_utils"] }

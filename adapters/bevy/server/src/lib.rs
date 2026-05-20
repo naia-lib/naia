@@ -100,6 +100,7 @@ pub use naia_server::{
 pub use naia_server::{bench_iris_counters, bench_send_counters, bench_scope_counters, bench_serde_counters, bench_take_events_counters, bench_write_counters};
 
 pub mod events;
+pub mod pipeline_timing;
 
 mod app_ext;
 mod apply_receive_output;

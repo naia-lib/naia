@@ -72,9 +72,9 @@ use bevy_ecs::{
     world::World,
 };
 use crossbeam_channel::{bounded, Receiver, Sender};
-// `TrySendError` is only used on the non-test_time receive path (the
-// test_time recv worker is a pure parking service and never sends output).
-#[cfg(not(feature = "test_time"))]
+// `TrySendError` is only used on the active receive path (the parked recv
+// worker is a pure parking service and never sends output).
+#[cfg(workers_active)]
 use crossbeam_channel::TrySendError;
 use parking_lot::Mutex;
 
@@ -248,9 +248,9 @@ struct ParkControl {
     /// distinct lets `park_workers()` wake idlers (body_sleep_cv) without
     /// disturbing the parked-count barrier, and lets `unpark_workers()`
     /// release parked workers (resume_cv) without waking idlers.
-    #[cfg(feature = "test_time")]
+    #[cfg(not(workers_active))]
     body_sleep_mu: Mutex<()>,
-    #[cfg(feature = "test_time")]
+    #[cfg(not(workers_active))]
     body_sleep_cv: parking_lot::Condvar,
 }
 
@@ -262,9 +262,9 @@ impl ParkControl {
             parked_cv: parking_lot::Condvar::new(),
             resume_cv: parking_lot::Condvar::new(),
             resumed_cv: parking_lot::Condvar::new(),
-            #[cfg(feature = "test_time")]
+            #[cfg(not(workers_active))]
             body_sleep_mu: Mutex::new(()),
-            #[cfg(feature = "test_time")]
+            #[cfg(not(workers_active))]
             body_sleep_cv: parking_lot::Condvar::new(),
         }
     }
@@ -406,7 +406,7 @@ impl PluginInternalState {
         // the non-test_time path observe it on their next iteration
         // without a wakeup.)
         self.park.resume_cv.notify_all();
-        #[cfg(feature = "test_time")]
+        #[cfg(not(workers_active))]
         {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
@@ -606,7 +606,7 @@ impl PluginInternalState {
         }
         let expected = self.workers.lock().len() as u32;
         self.park.park.store(true, Ordering::SeqCst);
-        // In test_time mode: wake body-sleeping workers via condvar so they
+        // Parked-worker mode: wake body-sleeping workers via condvar so they
         // loop back to the checkpoint and park.
         //
         // Hold body_sleep_mu while notifying to prevent the classic lost-wakeup
@@ -617,15 +617,21 @@ impl PluginInternalState {
         // SeqCst) and skips wait(), or the worker is already inside wait() and
         // will be woken. (parking_lot condvar wait releases the lock atomically.)
         //
-        // In production (non-test_time): workers poll `park` between their short
+        // Active-worker mode: workers poll `park` between their short
         // thread::sleep()s, so they reach the checkpoint within one sleep
         // interval — no explicit wakeup needed (and thread::unpark() would not
         // wake a thread::sleep() anyway).
-        #[cfg(feature = "test_time")]
+        #[cfg(not(workers_active))]
         {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
         }
+        // Time spent blocked here is the "park barrier wait" — the main thread
+        // waiting for the workers to reach their checkpoint. Large per-tick
+        // ⇒ the workers' tick work landed on the main critical path
+        // (serialization); ~0 ⇒ they finished in the gaps. See pipeline_timing.
+        #[cfg(feature = "pipeline_timing")]
+        let _t_barrier = std::time::Instant::now();
         let mut g = self.park.parked_count.lock();
         while *g < expected {
             // Break early if the not-yet-parked workers have all
@@ -645,6 +651,8 @@ impl PluginInternalState {
                 .parked_cv
                 .wait_for(&mut g, std::time::Duration::from_millis(5));
         }
+        #[cfg(feature = "pipeline_timing")]
+        crate::pipeline_timing::record_barrier(_t_barrier.elapsed().as_nanos() as u64);
     }
 
     /// Resume both worker threads. **Synchronous**: does not return until
@@ -755,9 +763,9 @@ impl Drop for PluginInternalState {
             self.park.park.store(false, Ordering::SeqCst);
             self.park.resume_cv.notify_all();
         }
-        // Wake body-sleeping workers (test_time mode) so they observe shutdown.
-        // Hold the lock to prevent lost-wakeup (see park_workers comment).
-        #[cfg(feature = "test_time")]
+        // Wake body-sleeping workers (parked-worker mode) so they observe
+        // shutdown. Hold the lock to prevent lost-wakeup (see park_workers).
+        #[cfg(not(workers_active))]
         {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
@@ -925,9 +933,9 @@ fn worker_park_checkpoint(park: &ParkControl) {
 /// park request that arrives mid-receive-window simply waits one short
 /// iteration until the worker has re-deposited the handle and parks.
 //
-// `recv_slot` / `out_tx` are only touched on the non-test_time receive
-// path; in test_time the recv worker is a pure parking service.
-#[cfg_attr(feature = "test_time", allow(unused_variables))]
+// `recv_slot` / `out_tx` are only touched on the active receive path; the
+// parked recv worker is a pure parking service.
+#[cfg_attr(not(workers_active), allow(unused_variables))]
 fn recv_worker_loop(
     recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
     out_tx: &Sender<ReceiveOutput<Entity>>,
@@ -968,7 +976,7 @@ fn recv_worker_loop(
         //
         // Production (non-test_time): recv.receive() runs here to drain the
         // UDP socket promptly between ticks, avoiding packet loss under load.
-        #[cfg(feature = "test_time")]
+        #[cfg(not(workers_active))]
         {
             // Body-sleep: block with zero CPU cost until park_workers()
             // signals body_sleep_cv (meaning park=true and workers should
@@ -990,7 +998,7 @@ fn recv_worker_loop(
             continue;
         }
 
-        #[cfg(not(feature = "test_time"))]
+        #[cfg(workers_active)]
         {
         // Don't start a receive() if park was requested.
         if park.park.load(Ordering::SeqCst) {
@@ -1006,7 +1014,11 @@ fn recv_worker_loop(
             }
         };
 
+        #[cfg(feature = "pipeline_timing")]
+        let _t_recv = std::time::Instant::now();
         let output = recv.receive();
+        #[cfg(feature = "pipeline_timing")]
+        crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
 
         // Re-deposit using try_lock spin (never blocks park checkpoint).
         loop {
@@ -1025,7 +1037,7 @@ fn recv_worker_loop(
         if !shutdown.load(Ordering::SeqCst) && !park.park.load(Ordering::SeqCst) {
             thread::sleep(std::time::Duration::from_micros(100));
         }
-        } // end #[cfg(not(feature = "test_time"))]
+        } // end #[cfg(workers_active)]
     }
 }
 
@@ -1035,10 +1047,11 @@ fn recv_worker_loop(
 /// needs the send half. Same per-iteration deposit discipline keeps the
 /// park-window borrow race-free.
 ///
-/// In `test_time` this worker is a **pure parking service** (like the recv
-/// worker): the consumer drives the send synchronously inside its park
-/// window, so `snap_rx` / `send_slot` are unused here.
-#[cfg_attr(feature = "test_time", allow(unused_variables))]
+/// In the parked (deterministic) mode this worker is a **pure parking
+/// service** (like the recv worker): the consumer drives the send
+/// synchronously inside its park window, so `snap_rx` / `send_slot` are
+/// unused here.
+#[cfg_attr(not(workers_active), allow(unused_variables))]
 fn send_worker_loop(
     send_slot: &Arc<Mutex<Option<SendHandle<Entity>>>>,
     snap_rx: &SnapshotReceiver<Entity>,
@@ -1066,7 +1079,7 @@ fn send_worker_loop(
         // parallel test load, perturbing avatar spawn order (rapier handle
         // assignment) → non-deterministic physics. Body-sleep until the next
         // park (zero CPU); never touch the snapshot or the send handle.
-        #[cfg(feature = "test_time")]
+        #[cfg(not(workers_active))]
         {
             let mut g = park.body_sleep_mu.lock();
             while !park.park.load(Ordering::SeqCst)
@@ -1079,7 +1092,7 @@ fn send_worker_loop(
             continue;
         }
 
-        #[cfg(not(feature = "test_time"))]
+        #[cfg(workers_active)]
         {
             // Don't start send work if park was requested — send_all_packets
             // holds time_manager.read() for its entire packet loop, which can
@@ -1102,11 +1115,15 @@ fn send_worker_loop(
 
             // Flush handshake responses every iteration so the initial
             // handshake completes before Sim generates its first snapshot.
+            #[cfg(feature = "pipeline_timing")]
+            let _t_send = std::time::Instant::now();
             send.apply_pending_send_preamble();
 
             if let Some(snap) = snap_opt {
                 send.apply_pending_scope_changes(&snap);
                 send.send_all_packets(snap);
+                #[cfg(feature = "pipeline_timing")]
+                crate::pipeline_timing::record_send(_t_send.elapsed().as_nanos() as u64);
             } else {
                 loop {
                     match send_slot.try_lock() {
@@ -1239,16 +1256,16 @@ pub fn drain_recv_impl(
 /// This eliminates the double park/unpark cycle (once here, once in
 /// `open_park_window`) that caused a hard-to-reproduce race condition.
 pub fn drain_recv_worker_output(world: &mut World) {
-    // In test_time mode: the recv worker is a pure parking service and
-    // recv.receive() is called synchronously from the consumer's park
+    // Parked (deterministic) mode: the recv worker is a pure parking service
+    // and recv.receive() is called synchronously from the consumer's park
     // window. Skip the park+recv+unpark cycle here entirely.
-    #[cfg(feature = "test_time")]
+    #[cfg(not(workers_active))]
     {
         let _ = world;
         return;
     }
 
-    #[cfg(not(feature = "test_time"))]
+    #[cfg(workers_active)]
     {
         use naia_bevy_shared::WorldProxyMut;
         use naia_server::pipeline_actors::apply_recv_to_world;
@@ -1300,7 +1317,11 @@ pub fn drain_recv_worker_output(world: &mut World) {
         let mut send = send_opt.unwrap();
 
         let mut outputs: Vec<ReceiveOutput<Entity>> = receiver.try_iter().collect();
+        #[cfg(feature = "pipeline_timing")]
+        let _t_recv = std::time::Instant::now();
         let fresh_output = recv.receive();
+        #[cfg(feature = "pipeline_timing")]
+        crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
         outputs.push(fresh_output);
 
         if outputs.iter().all(|o| o.is_empty()) {
