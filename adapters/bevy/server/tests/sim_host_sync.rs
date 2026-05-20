@@ -7,10 +7,10 @@
 //! D.3b.2 exposes those handle-direct:
 //! - `SendHandle::is_listening` (mirrors `WorldServer::is_listening` —
 //!   `send_io.is_loaded()`),
-//! - `CoordHandle::entity_authority_status` (pure shared read),
+//! - `SimHandle::entity_authority_status` (pure shared read),
 //! - `SendHandle::{insert,remove}_component_worldless` (shared gwm +
 //!   per-connection scope state),
-//! - `SendHandle::despawn_entity_worldless(&mut coord.state, ..)` (adds
+//! - `SendHandle::despawn_entity_worldless(&mut sim_handle.state, ..)` (adds
 //!   Coord-side priority-mirror + room-cache cleanup).
 //!
 //! Each `*_worldless` method mirrors its `WorldServer` namesake
@@ -38,7 +38,7 @@ use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
 use naia_bevy_server::{
     drain_host_sync_into_pipeline,
-    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
     EntityOwner, Plugin as ServerPlugin, RecvHandle, SendHandle, ServerConfig,
 };
 use naia_bevy_shared::{HostSyncEvent, Protocol as BevyProtocol};
@@ -71,20 +71,20 @@ fn next_addr() -> String {
 /// is true (the drain short-circuits otherwise, matching the legacy
 /// `world_to_host_sync` guard). Loads the io exactly like
 /// `send_scope_changes_drain.rs::handles_listening`.
-fn handles() -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+fn handles() -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
-    let (coord, recv, send) =
+    let (sim_handle, recv, send) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
 
     let hub = LocalTransportHub::new(next_addr().parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
     let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(Box::new(socket));
 
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);
     });
-    (coord, recv, send)
+    (sim_handle, recv, send)
 }
 
 /// Build a Sim-side bevy app holding the host-sync plumbing + a registered
@@ -117,10 +117,10 @@ struct Observed {
     auth: Option<EntityAuthStatus>,
 }
 
-fn observe(coord: &CoordHandle<Entity>, entity: &Entity) -> Observed {
+fn observe(sim_handle: &SimHandle<Entity>, entity: &Entity) -> Observed {
     Observed {
-        owner: coord.entity_owner(entity),
-        auth: coord.entity_authority_status(entity),
+        owner: sim_handle.entity_owner(entity),
+        auth: sim_handle.entity_authority_status(entity),
     }
 }
 
@@ -132,20 +132,20 @@ fn handle_direct_insert_matches_legacy() {
 
     fn run(handle_direct: bool) -> Observed {
         let (mut sim_app, entity) = sim_app_with_entity();
-        let (mut coord, recv, send) = handles();
-        coord.enable_entity_replication(&entity);
+        let (mut sim_handle, recv, send) = handles();
+        sim_handle.enable_entity_replication(&entity);
 
         let pos_kind = ComponentKind::of::<Position>();
         let events = vec![HostSyncEvent::Insert(TypeId::of::<()>(), entity, pos_kind)];
 
-        let (coord, _recv, _send) = if handle_direct {
+        let (sim_handle, _recv, _send) = if handle_direct {
             write_events(sim_app.world_mut(), events);
-            drain_host_sync_into_pipeline(sim_app.world_mut(), coord, recv, send)
+            drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send)
         } else {
             // Legacy oracle: reassemble WorldServer and run the same body.
             use naia_bevy_shared::{WorldMutType, WorldProxyMut};
             use std::ops::DerefMut;
-            let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
                 if !ws.is_listening() {
                     return;
                 }
@@ -162,10 +162,10 @@ fn handle_direct_insert_matches_legacy() {
                     }
                 }
             });
-            (coord, recv, send)
+            (sim_handle, recv, send)
         };
 
-        observe(&coord, &entity)
+        observe(&sim_handle, &entity)
     }
 
     let from_handle = run(true);
@@ -185,8 +185,8 @@ fn handle_direct_remove_matches_legacy() {
 
     fn run(handle_direct: bool) -> Observed {
         let (mut sim_app, entity) = sim_app_with_entity();
-        let (mut coord, mut recv, mut send) = handles();
-        coord.enable_entity_replication(&entity);
+        let (mut sim_handle, mut recv, mut send) = handles();
+        sim_handle.enable_entity_replication(&entity);
         let pos_kind = ComponentKind::of::<Position>();
 
         // Insert first (handle-direct in both cases — that path is covered
@@ -197,18 +197,18 @@ fn handle_direct_remove_matches_legacy() {
                 vec![HostSyncEvent::Insert(TypeId::of::<()>(), entity, pos_kind)],
             );
             let (c, r, s) =
-                drain_host_sync_into_pipeline(sim_app.world_mut(), coord, recv, send);
-            coord = c;
+                drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send);
+            sim_handle = c;
             recv = r;
             send = s;
         }
 
         let events = vec![HostSyncEvent::Remove(TypeId::of::<()>(), entity, pos_kind)];
-        let (coord, _recv, _send) = if handle_direct {
+        let (sim_handle, _recv, _send) = if handle_direct {
             write_events(sim_app.world_mut(), events);
-            drain_host_sync_into_pipeline(sim_app.world_mut(), coord, recv, send)
+            drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send)
         } else {
-            let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
                 if !ws.is_listening() {
                     return;
                 }
@@ -221,10 +221,10 @@ fn handle_direct_remove_matches_legacy() {
                     }
                 }
             });
-            (coord, recv, send)
+            (sim_handle, recv, send)
         };
 
-        observe(&coord, &entity)
+        observe(&sim_handle, &entity)
     }
 
     let from_handle = run(true);
@@ -243,15 +243,15 @@ fn handle_direct_despawn_matches_legacy_and_clears_state() {
 
     fn run(handle_direct: bool) -> Observed {
         let (mut sim_app, entity) = sim_app_with_entity();
-        let (mut coord, recv, send) = handles();
-        coord.enable_entity_replication(&entity);
+        let (mut sim_handle, recv, send) = handles();
+        sim_handle.enable_entity_replication(&entity);
 
         let events = vec![HostSyncEvent::Despawn(TypeId::of::<()>(), entity)];
-        let (coord, _recv, _send) = if handle_direct {
+        let (sim_handle, _recv, _send) = if handle_direct {
             write_events(sim_app.world_mut(), events);
-            drain_host_sync_into_pipeline(sim_app.world_mut(), coord, recv, send)
+            drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send)
         } else {
-            let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
                 if !ws.is_listening() {
                     return;
                 }
@@ -264,10 +264,10 @@ fn handle_direct_despawn_matches_legacy_and_clears_state() {
                     }
                 }
             });
-            (coord, recv, send)
+            (sim_handle, recv, send)
         };
 
-        observe(&coord, &entity)
+        observe(&sim_handle, &entity)
     }
 
     let from_handle = run(true);
@@ -285,20 +285,20 @@ fn handle_direct_despawn_matches_legacy_and_clears_state() {
 fn queries_match_world_server() {
     // is_listening + entity_authority_status read identically through the
     // handles vs the reassembled WorldServer.
-    let (mut coord, recv, send) = handles();
+    let (mut sim_handle, recv, send) = handles();
     let mut sim_app = App::new();
     sim_app.add_plugins(ServerPlugin::sim_integration(
         ServerConfig::default(),
         protocol_bevy(),
     ));
     let entity = sim_app.world_mut().spawn(()).id();
-    coord.enable_entity_replication(&entity);
+    sim_handle.enable_entity_replication(&entity);
 
     let handle_is_listening = send.is_listening();
-    let handle_auth = coord.entity_authority_status(&entity);
+    let handle_auth = sim_handle.entity_authority_status(&entity);
 
     let (_c, _r, _s, (ws_is_listening, ws_auth)) =
-        run_with_world_server(coord, recv, send, |ws| {
+        run_with_world_server(sim_handle, recv, send, |ws| {
             (ws.is_listening(), ws.entity_authority_status(&entity))
         });
 
@@ -308,7 +308,7 @@ fn queries_match_world_server() {
     );
     assert_eq!(
         handle_auth, ws_auth,
-        "CoordHandle::entity_authority_status must equal WorldServer::entity_authority_status",
+        "SimHandle::entity_authority_status must equal WorldServer::entity_authority_status",
     );
 }
 
@@ -317,7 +317,7 @@ fn not_listening_short_circuits() {
     // A non-listening server (spawn_server_handles without io_load) must
     // skip the drain entirely — a queued Despawn leaves the entity intact,
     // matching the legacy `world_to_host_sync` `is_listening` guard.
-    let (mut coord, recv, send) =
+    let (mut sim_handle, recv, send) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
     assert!(!send.is_listening(), "fresh handles are not listening");
 
@@ -330,18 +330,18 @@ fn not_listening_short_circuits() {
         .world_mut()
         .insert_resource(Messages::<HostSyncEvent>::default());
     let entity = sim_app.world_mut().spawn(Position::new(1.0, 2.0)).id();
-    coord.enable_entity_replication(&entity);
+    sim_handle.enable_entity_replication(&entity);
 
     write_events(
         sim_app.world_mut(),
         vec![HostSyncEvent::Despawn(TypeId::of::<()>(), entity)],
     );
-    let (coord, _recv, _send) =
-        drain_host_sync_into_pipeline(sim_app.world_mut(), coord, recv, send);
+    let (sim_handle, _recv, _send) =
+        drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send);
 
     // Not listening -> drain skipped -> entity still server-owned.
     assert!(
-        matches!(coord.entity_owner(&entity), EntityOwner::Server),
+        matches!(sim_handle.entity_owner(&entity), EntityOwner::Server),
         "not-listening drain must not despawn the entity",
     );
 }
@@ -350,14 +350,14 @@ fn not_listening_short_circuits() {
 fn empty_queue_is_noop() {
     // No HostSyncEvents -> handles returned unchanged, entity untouched.
     let (mut sim_app, entity) = sim_app_with_entity();
-    let (mut coord, recv, send) = handles();
-    coord.enable_entity_replication(&entity);
-    let before = observe(&coord, &entity);
+    let (mut sim_handle, recv, send) = handles();
+    sim_handle.enable_entity_replication(&entity);
+    let before = observe(&sim_handle, &entity);
 
-    let (coord, _recv, _send) =
-        drain_host_sync_into_pipeline(sim_app.world_mut(), coord, recv, send);
+    let (sim_handle, _recv, _send) =
+        drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send);
 
-    let after = observe(&coord, &entity);
+    let after = observe(&sim_handle, &entity);
     assert_eq!(before, after, "empty queue must leave shared state untouched");
     assert!(matches!(after.owner, EntityOwner::Server));
 }

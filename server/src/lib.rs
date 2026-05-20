@@ -120,7 +120,7 @@ pub use server::{
     ConnectionShared, CoordinatorState, MainServer, RecvHandle, RecvState, ReceiveOutput,
     SendHandle, SendState, Server, ServerConfig, WorldServer,
 };
-pub use pipeline_actors::{CoordHandle, spawn_server_handles};
+pub use pipeline_actors::{SimHandle, spawn_server_handles};
 
 #[cfg(feature = "e2e_debug")]
 pub use server::world_server::{

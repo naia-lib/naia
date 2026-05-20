@@ -62,7 +62,7 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     pub user_priorities: HashMap<UserKey, UserPriorityState<E>>,
 
     /// Sender-wide priority layer (step 4-E.2e). Authoritative for the
-    /// Iris send-path read. Kept in sync with `coord.global_priority_mirror`
+    /// Iris send-path read. Kept in sync with `sim_handle.global_priority_mirror`
     /// via publish-on-read at the top of `send_all_packets` — the borrow
     /// API `global_entity_priority_mut` would need a public-API change in
     /// `naia-shared::EntityPriorityMut` to push per-entity updates through
@@ -81,7 +81,7 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// 4-F.naia.c.2c). Send-side because the dispatch (`write_header` +
     /// `send_io.send_packet` + `mark_sent`) is send-side; only the
     /// per-user `ping_manager.write_ping(...)` read crosses into the
-    /// recv half, and the coord/serial caller passes a `&mut recv_conns`
+    /// recv half, and the coordination/serial caller passes a `&mut recv_conns`
     /// borrow for that.
     pub(crate) ping_timer: Timer,
 
@@ -129,7 +129,7 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) scope_changes_done_this_tick: bool,
 
     /// C.6 prep #6 — Send-side mirror of `User.room_keys()` (which lives
-    /// on coord's `UserStore`). Maintained by `apply_pending_room_changes`
+    /// on sim_handle's `UserStore`). Maintained by `apply_pending_room_changes`
     /// via the `RoomChange::UserAdded`/`UserRemoved`/`RoomDestroyed` data.
     /// Read by `apply_pending_scope_changes` when evaluating
     /// `ScopeToggled` (room-intersection logic) and `UserLeftRoom`.
@@ -249,7 +249,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `RecvConnection::tick_buffer` alongside the send-side ack /
     /// world-manager updates without breaking the recv/send state
     /// separation: in pipeline mode the coordinator can hand both halves
-    /// in concurrently because both threads are paused on the coord-stage
+    /// in concurrently because both threads are paused on the coordination-stage
     /// handoff.
     ///
     /// Sequence (in order):
@@ -428,7 +428,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///
     /// Runs every send-side step a tick requires AFTER the coordinator
     /// has called `WorldServer::run_send_preamble` (which performs the
-    /// coord-stage `global_priority` publish + `update_entity_scopes` +
+    /// coordination-stage `global_priority` publish + `update_entity_scopes` +
     /// `flush_pending_auth_grants` work it owns).
     ///
     /// Sequence:
@@ -473,7 +473,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// (without first calling this) still get the preamble inline —
     /// `send_all_packets` checks the flag.
     pub fn apply_pending_send_preamble(&mut self) {
-        // 1. Drain any CoordHandle::room_* pushes that landed between
+        // 1. Drain any SimHandle::room_* pushes that landed between
         // ticks. Mutates entity_room_map + scope_checks_cache; leaves
         // non-RoomChange variants in the queue for the existing per-user
         // scope-evaluation drainer to consume.
@@ -481,7 +481,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.apply_pending_room_changes(&shared.scope_change_queue);
 
         // 1b. MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain
-        // any CoordHandle::configure_entity_replication pushes. Executes
+        // any SimHandle::configure_entity_replication pushes. Executes
         // the deferred Send-side leaf ops (publish/unpublish/delegation
         // commands, despawn-from-non-owner, the migration sequence with
         // reserve_first_command, auth fan-out) against
@@ -512,11 +512,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// reassembling the WorldServer.
     ///
     /// `WorldServer::send_message` looks up `user_key → address` via
-    /// `coord.user_store`, then dispatches against the send-side
+    /// `sim_handle.user_store`, then dispatches against the send-side
     /// connection and message manager. In the pipeline architecture
     /// (cyberlith Send SubApp permanently holds `SendHandle`), the
     /// caller resolves `user_key → address` via
-    /// [`crate::pipeline_actors::CoordHandle::user_address`] once and
+    /// [`crate::pipeline_actors::SimHandle::user_address`] once and
     /// then calls this method directly — no per-tick WorldServer
     /// reassembly.
     ///
@@ -867,9 +867,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 RoomChange::UserAdded { room_key, user_key, entities_in_room } => {
                     self.scope_checks_cache.on_user_added_to_room(
                         room_key, user_key, entities_in_room);
-                    // C.6 prep #6 — mirror coord-side user_store room
+                    // C.6 prep #6 — mirror coordination-side user_store room
                     // membership onto SendState so apply_pending_scope_changes
-                    // can resolve `user.room_keys()` without coord access.
+                    // can resolve `user.room_keys()` without coordination-side access.
                     self.user_room_map.entry(user_key)
                         .or_default()
                         .insert(room_key);
@@ -939,7 +939,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// entity_enable_delegation, enable_delegation_client_owned_entity,
     /// entity_disable_delegation}` — same per-connection call, same
     /// order. The gwm writes already ran (immediately) in
-    /// `CoordHandle::configure_entity_replication`; this method performs
+    /// `SimHandle::configure_entity_replication`; this method performs
     /// only the Send-half work, using the pre-transition state captured
     /// into each op's payload (B.2 blocker-1 read-before-write fix).
     ///
@@ -1115,7 +1115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .unwrap_or(GlobalEntityIndex::INVALID)
     }
 
-    /// Send-side `UserKey` lookup for an address. The coord `user_store`
+    /// Send-side `UserKey` lookup for an address. The sim_handle `user_store`
     /// is not reachable from `SendState`; the per-connection
     /// `SendConnection::user_key` (cached at finalize time) is the
     /// Send-owned source for the address→user mapping.
@@ -1298,7 +1298,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Resolve a connection address for a `UserKey` via the per-connection
-    /// `user_key` cache (the coord user store is not reachable here).
+    /// `user_key` cache (the coordination user store is not reachable here).
     fn addr_for_user_key(&self, user_key: &UserKey) -> Option<SocketAddr> {
         self.send_user_connections
             .iter()
@@ -1787,7 +1787,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     //   fan-out). Both halves live on `SendState` (`send_user_connections`
     //   field + `shared` Arc) — no Coord state needed.
     // - `despawn_entity_worldless` additionally touches
-    //   `coord.global_priority_mirror` (eviction) + `coord.room_store`
+    //   `sim_handle.global_priority_mirror` (eviction) + `sim_handle.room_store`
     //   (room cache cleanup). Those live on `CoordinatorState`, so the
     //   method takes `&mut CoordinatorState<E>`.
 
@@ -1801,7 +1801,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Pipeline-mode `insert_component_worldless`. Byte-for-byte mirror of
     /// `WorldServer::insert_component_worldless` (`world_server.rs:2397`)
     /// with `excluding_user_opt = None` inlined (the host-sync drain always
-    /// passes `None`, so the `coord.user_store` lookup in
+    /// passes `None`, so the `sim_handle.user_store` lookup in
     /// `insert_new_component_into_entity_scopes` is dead — omitted here).
     pub(crate) fn insert_component_worldless(
         &mut self,
@@ -1913,7 +1913,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// room-cache cleanup write Coord-side state.
     pub(crate) fn despawn_entity_worldless(
         &mut self,
-        coord: &mut CoordinatorState<E>,
+        sim_handle: &mut CoordinatorState<E>,
         world_entity: &E,
     ) {
         let Ok(global_entity) = self
@@ -1924,8 +1924,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         else {
             return;
         };
-        // Priority layer eviction (coord mirror + send copies + per-user).
-        coord.global_priority_mirror.on_despawn(world_entity);
+        // Priority layer eviction (coordination mirror + send copies + per-user).
+        sim_handle.global_priority_mirror.on_despawn(world_entity);
         self.global_priority.on_despawn(world_entity);
         for layer in self.user_priorities.values_mut() {
             layer.on_scope_exit(world_entity);
@@ -1938,7 +1938,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.entity_scope_map.remove_entity(&global_entity);
         if let Some(room_keys) = self.entity_room_map.remove_from_all_rooms(&global_entity) {
             for room_key in room_keys {
-                if let Some(room) = coord.room_store.get_mut(&room_key) {
+                if let Some(room) = sim_handle.room_store.get_mut(&room_key) {
                     room.remove_entity(&global_entity, true);
                 }
             }
@@ -2055,7 +2055,7 @@ pub(crate) fn scope_retry_decision(current: u8) -> Option<u8> {
 /// exactly as the legacy synchronous path reads it after its own gwm
 /// write — so the per-component diff-mutator installation is identical.
 ///
-/// Called from [`crate::pipeline_actors::CoordHandle::apply_pending_world_hooks`]
+/// Called from [`crate::pipeline_actors::SimHandle::apply_pending_world_hooks`]
 /// and [`crate::SendHandle::apply_pending_world_hooks`].
 pub(crate) fn drain_pending_world_hooks<E, W>(shared: &Arc<ServerShared<E>>, world: &mut W)
 where

@@ -25,7 +25,7 @@ use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
 use super::{
-    CoordHandle, RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer,
+    SimHandle, RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer,
     spawn_server_handles,
 };
 
@@ -38,24 +38,24 @@ fn spawn_server_handles_constructs_three_handles() {
     proto.lock();
     let protocol = proto.build();
 
-    let (coord, recv, send) =
+    let (sim_handle, recv, send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // The three handles construct and own their own state. The Arc on
-    // CoordHandle::shared is the same allocation as on the recv/send
+    // SimHandle::shared is the same allocation as on the recv/send
     // handles, so the strong count must be at least 3.
-    let strong = std::sync::Arc::strong_count(&coord.shared);
+    let strong = std::sync::Arc::strong_count(&sim_handle.shared);
     assert!(
         strong >= 3,
         "expected at least 3 strong refs to ServerShared after split, got {strong}",
     );
 
-    drop((coord, recv, send));
+    drop((sim_handle, recv, send));
 }
 
 #[test]
 fn pipeline_handles_are_send() {
-    assert_send::<CoordHandle<u64>>();
+    assert_send::<SimHandle<u64>>();
     assert_send::<RecvHandle<u64>>();
     assert_send::<SendHandle<u64>>();
     // Naia-server doesn't depend on bevy_ecs, so we can't reference
@@ -138,7 +138,7 @@ fn drain_tick_buffer_on_empty_recv_handle_is_empty() {
     proto.lock();
     let protocol = proto.build();
 
-    let (_coord, mut recv, _send) =
+    let (_sim_handle, mut recv, _send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     let messages = drain_tick_buffer(&mut recv, 0);
@@ -184,7 +184,7 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     proto.lock();
     let protocol = proto.build();
 
-    let (_coord, mut recv, _send) =
+    let (_sim_handle, mut recv, _send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Sanity-check that the channel kind made it into the shared
@@ -256,42 +256,42 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     assert!(decoded_again.is_empty(), "tick buffer should drain to empty");
 }
 
-/// Integration test for CoordHandle room-ops deferred-drain path (§ 5.4).
+/// Integration test for SimHandle room-ops deferred-drain path (§ 5.4).
 ///
 /// Verifies that:
-/// - CoordHandle::create_room, room_add_user, room_add_entity push to
+/// - SimHandle::create_room, room_add_user, room_add_entity push to
 ///   scope_change_queue without draining.
 /// - apply_pending_room_changes (as called from SendState::send_all_packets)
 ///   correctly applies those changes to entity_room_map + scope_checks_cache.
 #[test]
-fn coord_handle_room_ops_deferred_drain_path() {
+fn sim_handle_room_ops_deferred_drain_path() {
     let mut proto = Protocol::builder();
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, mut send) =
+    let (mut sim_handle, _recv, mut send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Register entity 42u64 in global_entity_map so room_add_entity can
     // look up its GlobalEntity.
     let global_entity = {
-        let mut entity_map = coord.shared.global_entity_map.write();
+        let mut entity_map = sim_handle.shared.global_entity_map.write();
         entity_map.spawn(42u64, None)
     };
 
     // Register a user so room_add_user can subscribe it.
     let user_key = UserKey::from_u64(1);
     let user_addr: SocketAddr = "127.0.0.1:9001".parse().unwrap();
-    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
 
     // Coord-side room ops — all push-only, no drain.
-    let rk = coord.create_room();
-    coord.room_add_user(&rk, &user_key);
-    coord.room_add_entity(&rk, &42u64);
+    let rk = sim_handle.create_room();
+    sim_handle.room_add_user(&rk, &user_key);
+    sim_handle.room_add_entity(&rk, &42u64);
 
     // The queue should have 4 entries: (legacy+room) for add_user, (legacy+room) for add_entity.
     {
-        let q = coord.shared.scope_change_queue.lock();
+        let q = sim_handle.shared.scope_change_queue.lock();
         assert!(
             q.len() >= 2,
             "expected at least 2 entries in scope_change_queue before drain, got {}",
@@ -300,7 +300,7 @@ fn coord_handle_room_ops_deferred_drain_path() {
     }
 
     // Drain via apply_pending_room_changes — same path as send_all_packets.
-    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // entity_room_map must have entity 42u64 in room rk.
     let erm_rooms = send.state.entity_room_map.entity_get_rooms(&global_entity);
@@ -344,34 +344,34 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, _send) =
+    let (mut sim_handle, _recv, _send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Register a user with a known address.
     let user_key = UserKey::from_u64(7);
     let user_addr: SocketAddr = "127.0.0.1:9007".parse().unwrap();
-    coord
+    sim_handle
         .state
         .user_store
         .insert(user_key, WorldUser::new(user_addr));
 
     // Manufacture a client-owned, PUBLIC entity (ClientPublic) in gwm.
     let world_entity: u64 = 77;
-    let global_entity = coord.shared.global_entity_map.write().spawn(world_entity, None);
-    coord
+    let global_entity = sim_handle.shared.global_entity_map.write().spawn(world_entity, None);
+    sim_handle
         .shared
         .global_world_manager
         .write()
         .insert_entity_record(&global_entity, EntityOwner::Client(user_key));
     // entity_publish: Client → ClientPublic + Publicity::Public.
-    let published = coord
+    let published = sim_handle
         .shared
         .global_world_manager
         .write()
         .entity_publish(&global_entity);
     assert!(published, "manufactured entity should publish");
     assert!(matches!(
-        coord
+        sim_handle
             .shared
             .global_world_manager
             .read()
@@ -381,12 +381,12 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
 
     // Configure Public → Private (unpublish). The Coord method must
     // capture the owner address NOW, while gwm is ClientPublic.
-    coord.configure_entity_replication(&world_entity, ReplicationConfig::private());
+    sim_handle.configure_entity_replication(&world_entity, ReplicationConfig::private());
 
     // gwm has transitioned to Client (post-write).
     assert!(
         matches!(
-            coord
+            sim_handle
                 .shared
                 .global_world_manager
                 .read()
@@ -396,7 +396,7 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
         "gwm owner must be Client after unpublish (transitioned immediately)",
     );
     assert_eq!(
-        coord
+        sim_handle
             .shared
             .global_world_manager
             .read()
@@ -408,7 +408,7 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
 
     // The queued ConfigureReplication op must carry the captured
     // ClientPublic owner address (read BEFORE the transition).
-    let q = coord.shared.scope_change_queue.lock();
+    let q = sim_handle.shared.scope_change_queue.lock();
     let mut found_owner_addr: Option<Option<SocketAddr>> = None;
     for change in q.iter() {
         if let ScopeChange::ConfigureReplication(cap) = change {
@@ -427,18 +427,18 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
     );
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::receive_user`
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `SimHandle::receive_user`
 ///
-/// Verifies that `CoordHandle::receive_user(user_key, addr)` inserts the user
-/// into `coord.state.user_store` exactly as `WorldServer::receive_user` does,
+/// Verifies that `SimHandle::receive_user(user_key, addr)` inserts the user
+/// into `sim_handle.state.user_store` exactly as `WorldServer::receive_user` does,
 /// confirmed via the existing `user_exists` query method.
 #[test]
-fn coord_handle_receive_user_inserts_into_user_store() {
+fn sim_handle_receive_user_inserts_into_user_store() {
     let mut proto = Protocol::builder();
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, _send) =
+    let (mut sim_handle, _recv, _send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     let user_key = UserKey::from_u64(100);
@@ -446,74 +446,74 @@ fn coord_handle_receive_user_inserts_into_user_store() {
 
     // Before receive_user the user must not exist.
     assert!(
-        !coord.user_exists(&user_key),
+        !sim_handle.user_exists(&user_key),
         "user should not exist before receive_user"
     );
 
-    coord.receive_user(user_key, user_addr);
+    sim_handle.receive_user(user_key, user_addr);
 
     // After receive_user the user must be present.
     assert!(
-        coord.user_exists(&user_key),
+        sim_handle.user_exists(&user_key),
         "user should exist after receive_user"
     );
 
     // The stored address must match.
     assert_eq!(
-        coord.user_address(&user_key),
+        sim_handle.user_address(&user_key),
         Some(user_addr),
         "user_address should match the addr passed to receive_user"
     );
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::disconnect_user`
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `SimHandle::disconnect_user`
 /// idempotency on unknown user.
 ///
 /// Calling `disconnect_user` for a user that was never registered must return
 /// silently without panicking and must NOT push to `pending_disconnect_requests`.
 #[test]
-fn coord_handle_disconnect_user_nonexistent_is_noop() {
+fn sim_handle_disconnect_user_nonexistent_is_noop() {
     let mut proto = Protocol::builder();
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, _send) =
+    let (mut sim_handle, _recv, _send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     let unknown_key = UserKey::from_u64(999);
 
     // Must not panic.
-    coord.disconnect_user(&unknown_key);
+    sim_handle.disconnect_user(&unknown_key);
 
     // Queue must remain empty.
-    let q = coord.shared.pending_disconnect_requests.lock();
+    let q = sim_handle.shared.pending_disconnect_requests.lock();
     assert!(
         q.is_empty(),
         "pending_disconnect_requests should stay empty for unknown user, got: {q:?}"
     );
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::disconnect_user`
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `SimHandle::disconnect_user`
 /// queues a request for a known user.
 ///
 /// After `receive_user` then `disconnect_user`, `pending_disconnect_requests`
 /// must contain exactly one `(user_key, DisconnectReason::Kicked)` entry.
 #[test]
-fn coord_handle_disconnect_user_queues_request() {
+fn sim_handle_disconnect_user_queues_request() {
     let mut proto = Protocol::builder();
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, _send) =
+    let (mut sim_handle, _recv, _send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     let user_key = UserKey::from_u64(200);
     let user_addr: SocketAddr = "127.0.0.1:12000".parse().unwrap();
 
-    coord.receive_user(user_key, user_addr);
-    coord.disconnect_user(&user_key);
+    sim_handle.receive_user(user_key, user_addr);
+    sim_handle.disconnect_user(&user_key);
 
-    let q = coord.shared.pending_disconnect_requests.lock();
+    let q = sim_handle.shared.pending_disconnect_requests.lock();
     assert_eq!(
         q.len(),
         1,
@@ -539,7 +539,7 @@ fn coord_handle_disconnect_user_queues_request() {
 /// and `SendHandle::mark_scope_checks_pending_handled`.
 ///
 /// Verifies that pending scope-check tuples appear after a room add-user +
-/// add-entity sequence (via the coord room ops → preamble drain path), and
+/// add-entity sequence (via the SimHandle room ops → preamble drain path), and
 /// that `mark_scope_checks_pending_handled` clears the pending slice.
 #[test]
 fn send_handle_scope_checks_pending_and_mark_handled() {
@@ -547,21 +547,21 @@ fn send_handle_scope_checks_pending_and_mark_handled() {
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, mut send) =
+    let (mut sim_handle, _recv, mut send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Register entity 10u64 in global_entity_map.
-    coord.shared.global_entity_map.write().spawn(10u64, None);
+    sim_handle.shared.global_entity_map.write().spawn(10u64, None);
 
     // Register a user.
     let user_key = UserKey::from_u64(1);
     let user_addr: SocketAddr = "127.0.0.1:20001".parse().unwrap();
-    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
 
     // Coord room ops — push-only.
-    let rk = coord.create_room();
-    coord.room_add_user(&rk, &user_key);
-    coord.room_add_entity(&rk, &10u64);
+    let rk = sim_handle.create_room();
+    sim_handle.room_add_user(&rk, &user_key);
+    sim_handle.room_add_entity(&rk, &10u64);
 
     // Before drain, pending should be empty (scope cache not yet updated).
     let pending_before = send.scope_checks_pending();
@@ -571,7 +571,7 @@ fn send_handle_scope_checks_pending_and_mark_handled() {
     );
 
     // Drain via apply_pending_room_changes — same path as send_all_packets preamble.
-    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // After drain, pending must contain the (room, user, entity) tuple.
     let pending_after = send.scope_checks_pending();
@@ -602,34 +602,34 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, mut send) =
+    let (mut sim_handle, _recv, mut send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Register entity 42u64 as a server-owned entity.
     let world_entity: u64 = 42;
-    let global_entity = coord.shared.global_entity_map.write().spawn(world_entity, None);
-    let idx = coord
+    let global_entity = sim_handle.shared.global_entity_map.write().spawn(world_entity, None);
+    let idx = sim_handle
         .shared
         .global_world_manager
         .write()
         .insert_entity_record(&global_entity, crate::world::entity_owner::EntityOwner::Server);
     if idx.is_valid() {
-        coord.shared.idx_to_world.write()[idx.as_usize()] = Some(world_entity);
+        sim_handle.shared.idx_to_world.write()[idx.as_usize()] = Some(world_entity);
     }
 
     // Register a user.
     let user_key = UserKey::from_u64(2);
     let user_addr: SocketAddr = "127.0.0.1:20002".parse().unwrap();
-    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
 
     // Put the entity in a room so it is not roomless (avoids the roomless
     // server-owned gate that would veto explicit include on non-resources).
-    let rk = coord.create_room();
-    coord.room_add_user(&rk, &user_key);
-    coord.room_add_entity(&rk, &world_entity);
+    let rk = sim_handle.create_room();
+    sim_handle.room_add_user(&rk, &user_key);
+    sim_handle.room_add_entity(&rk, &world_entity);
 
     // Drain pending room changes so entity_room_map + user_room_map are current.
-    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // Set explicit include.
     let set_ok = send.user_scope_set_entity(&user_key, &world_entity, true);
@@ -660,41 +660,41 @@ fn send_handle_user_scope_has_entity_room_default() {
     proto.lock();
     let protocol = proto.build();
 
-    let (mut coord, _recv, mut send) =
+    let (mut sim_handle, _recv, mut send) =
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Register two entities.
     let entity_in_room: u64 = 100;
     let entity_not_in_room: u64 = 200;
-    let ge_in = coord.shared.global_entity_map.write().spawn(entity_in_room, None);
-    let ge_out = coord.shared.global_entity_map.write().spawn(entity_not_in_room, None);
+    let ge_in = sim_handle.shared.global_entity_map.write().spawn(entity_in_room, None);
+    let ge_out = sim_handle.shared.global_entity_map.write().spawn(entity_not_in_room, None);
     for ge in [ge_in, ge_out] {
-        let idx = coord
+        let idx = sim_handle
             .shared
             .global_world_manager
             .write()
             .insert_entity_record(&ge, crate::world::entity_owner::EntityOwner::Server);
         if idx.is_valid() {
-            coord.shared.idx_to_world.write()[idx.as_usize()] = Some(entity_in_room);
+            sim_handle.shared.idx_to_world.write()[idx.as_usize()] = Some(entity_in_room);
         }
     }
 
     // Register a user.
     let user_key = UserKey::from_u64(3);
     let user_addr: SocketAddr = "127.0.0.1:20003".parse().unwrap();
-    coord.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
 
     // Only entity_in_room goes into the room with the user.
-    let rk = coord.create_room();
-    coord.room_add_user(&rk, &user_key);
-    coord.room_add_entity(&rk, &entity_in_room);
+    let rk = sim_handle.create_room();
+    sim_handle.room_add_user(&rk, &user_key);
+    sim_handle.room_add_entity(&rk, &entity_in_room);
 
     // entity_not_in_room goes into a different room the user is NOT in.
-    let rk2 = coord.create_room();
-    coord.room_add_entity(&rk2, &entity_not_in_room);
+    let rk2 = sim_handle.create_room();
+    sim_handle.room_add_entity(&rk2, &entity_not_in_room);
 
     // Drain pending room changes.
-    send.state.apply_pending_room_changes(&coord.shared.scope_change_queue);
+    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // entity_in_room: in same room as user → in-scope by default.
     assert!(

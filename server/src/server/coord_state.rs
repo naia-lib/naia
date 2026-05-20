@@ -7,7 +7,7 @@
 //!   * 4-E.2c — `global_entity_map` + `idx_to_world` → `ServerShared` ✅ (landed)
 //!   * 4-E.2d — `user_connections` dissolved into recv/send halves ✅ (landed)
 //!   * 4-E.2e — `global_priority` split: authoritative read target moved
-//!     to `SendState.global_priority`; `coord.global_priority_mirror`
+//!     to `SendState.global_priority`; `coord_state.global_priority_mirror`
 //!     here is the borrow-API write target, cloned into `send` via
 //!     publish-on-read at the top of `send_all_packets` ✅ (landed)
 //!
@@ -38,7 +38,7 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// Sender-wide priority layer — *borrow-API target* (4-E.2e). The
     /// authoritative copy that Iris reads from lives at
     /// `SendState.global_priority` and is refreshed via `clone_from(&self
-    /// .coord.global_priority_mirror)` at the top of every
+    /// .coord_state.global_priority_mirror)` at the top of every
     /// `send_all_packets`. Writes always go here first (through the
     /// `global_entity_priority_mut` borrow API or `on_despawn`); the
     /// publish-on-read step keeps `send.global_priority` in sync.

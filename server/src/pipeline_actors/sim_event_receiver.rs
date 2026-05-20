@@ -59,7 +59,7 @@ use crate::{
     events::Events, server::receive_output::ReceiveOutput, user::UserKey, EntityOwner,
 };
 
-use super::handles::CoordHandle;
+use super::handles::SimHandle;
 
 // ────────────────────────────────────────────────────────────────────
 // Per-event-type carrier structs (clone-friendly, Debug for tests).
@@ -177,10 +177,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
     /// consumers should keep using `apply_receive_output_pipeline`
     /// directly and call this in parallel from the same SubApp.
     ///
-    /// `coord` is needed for the same resource-entity filter
+    /// `sim_handle` is needed for the same resource-entity filter
     /// `apply_receive_output_pipeline` applies (Spawn / Despawn of
     /// resource entities are suppressed).
-    pub fn push_from_receive_output(&self, coord: &CoordHandle<E>, output: ReceiveOutput<E>) {
+    pub fn push_from_receive_output(&self, sim_handle: &SimHandle<E>, output: ReceiveOutput<E>) {
         let inner = &*self.inner;
 
         // Tick events
@@ -223,15 +223,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
                 });
             }
         }
-        // Spawn (resource-entity filter via coord; client-owned only,
+        // Spawn (resource-entity filter via sim_handle; client-owned only,
         // matching `apply_receive_output_pipeline`).
         if events.has::<crate::SpawnEntityEvent>() {
             let mut guard = inner.spawns.lock();
             for (_, entity) in events.read::<crate::SpawnEntityEvent>() {
-                if coord.is_resource_entity(&entity) {
+                if sim_handle.is_resource_entity(&entity) {
                     continue;
                 }
-                if let EntityOwner::Client(user_key) = coord.entity_owner(&entity) {
+                if let EntityOwner::Client(user_key) = sim_handle.entity_owner(&entity) {
                     guard.push(SimSpawnEntityEvent { user_key, entity });
                 }
             }
@@ -240,7 +240,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         if events.has::<crate::DespawnEntityEvent>() {
             let mut guard = inner.despawns.lock();
             for (user_key, entity) in events.read::<crate::DespawnEntityEvent>() {
-                if coord.is_resource_entity(&entity) {
+                if sim_handle.is_resource_entity(&entity) {
                     continue;
                 }
                 guard.push(SimDespawnEntityEvent { user_key, entity });

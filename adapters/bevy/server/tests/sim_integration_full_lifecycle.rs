@@ -4,10 +4,10 @@
 //! Verifies:
 //!   - Plugin install registers the expected Resources (`SimConverter`,
 //!     `SimEventReceiverRes`, `SnapshotSenderRes`, `SnapshotReceiverRes`,
-//!     `CoordHandleRes`, `SendHandleRes`, `PluginInternalState`).
-//!   - Before `listen()`, `CoordHandleRes` is empty (workers not running).
+//!     `SimHandleRes`, `SendHandleRes`, `PluginInternalState`).
+//!   - Before `listen()`, `SimHandleRes` is empty (workers not running).
 //!   - After `listen()` with a `LocalServerSocket`, `App::update`
-//!     drains the armed coord into `CoordHandleRes` and Sim systems can
+//!     drains the armed sim_handle into `SimHandleRes` and Sim systems can
 //!     observe it.
 //!   - Dropping the App joins the worker threads cleanly within 5s.
 
@@ -17,7 +17,7 @@ use bevy_app::App;
 use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    pipeline_actors::SnapshotSender, transport, CoordHandleRes, Plugin as ServerPlugin,
+    pipeline_actors::SnapshotSender, transport, SimHandleRes, Plugin as ServerPlugin,
     PluginInternalState, PluginSimConfig, SendHandleRes, ServerConfig, SimConverter,
     SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
 };
@@ -69,8 +69,8 @@ fn plugin_install_registers_expected_resources() {
         "SnapshotReceiverRes installed",
     );
     assert!(
-        w.get_resource::<CoordHandleRes>().is_some(),
-        "CoordHandleRes installed",
+        w.get_resource::<SimHandleRes>().is_some(),
+        "SimHandleRes installed",
     );
     assert!(
         w.get_resource::<SendHandleRes>().is_some(),
@@ -83,30 +83,30 @@ fn plugin_install_registers_expected_resources() {
 }
 
 #[test]
-fn coord_handle_empty_before_listen() {
+fn sim_handle_empty_before_listen() {
     let app = build_app();
-    let coord_res = app.world().resource::<CoordHandleRes>();
+    let sim_handle_res = app.world().resource::<SimHandleRes>();
     assert!(
-        coord_res.0.is_none(),
-        "CoordHandleRes is None before listen()",
+        sim_handle_res.0.is_none(),
+        "SimHandleRes is None before listen()",
     );
 }
 
 #[test]
-fn listen_drains_armed_coord_into_resource_after_update() {
+fn listen_drains_armed_sim_handle_into_resource_after_update() {
     let mut app = build_app();
     {
         let state = app.world().resource::<PluginInternalState>();
         state.listen(local_socket("127.0.0.1:23001"));
     }
     // Drives the install Startup-equivalent system (registered in
-    // Update by sim_integration_full) which drains armed_coord →
-    // CoordHandleRes.
+    // Update by sim_integration_full) which drains armed_sim_handle →
+    // SimHandleRes.
     app.update();
-    let coord_res = app.world().resource::<CoordHandleRes>();
+    let sim_handle_res = app.world().resource::<SimHandleRes>();
     assert!(
-        coord_res.0.is_some(),
-        "CoordHandleRes filled after listen + update",
+        sim_handle_res.0.is_some(),
+        "SimHandleRes filled after listen + update",
     );
 }
 

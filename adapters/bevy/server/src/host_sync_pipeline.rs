@@ -12,9 +12,9 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19): this helper no
 //! longer reassembles a `WorldServer` via `run_with_world_server`. The
 //! `is_listening` guard reads `SendHandle::is_listening`, the auth gate
-//! reads `CoordHandle::entity_authority_status`, and the insert / remove /
+//! reads `SimHandle::entity_authority_status`, and the insert / remove /
 //! despawn ops route through the `SendHandle::*_worldless` methods (the
-//! despawn borrows `&mut coord.state` for its Coord-side priority/room
+//! despawn borrows `&mut sim_handle.state` for its Coord-side priority/room
 //! cleanup). Each worldless method mirrors its `WorldServer` namesake
 //! field-for-field, so the wire output is byte-identical to the prior
 //! reassembly path. This is the naia surface that retires cyberlith's
@@ -34,7 +34,7 @@ use std::ops::DerefMut;
 use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
 use naia_bevy_shared::{EntityAuthStatus, HostSyncEvent, WorldMutType, WorldProxyMut};
-use naia_server::pipeline_actors::CoordHandle;
+use naia_server::pipeline_actors::SimHandle;
 use naia_server::{RecvHandle, SendHandle};
 
 /// Drain `Messages<HostSyncEvent>` against the three pipeline handles
@@ -49,23 +49,23 @@ use naia_server::{RecvHandle, SendHandle};
 /// `Plugin::sim_integration_full`, `RecvHandleRes` / `SendHandleRes`
 /// wrap shared park-window slots: the workers must be parked (via
 /// [`crate::PluginInternalState::park_workers`]) before taking them, and
-/// unparked after returning them. `CoordHandleRes` is a plain `Option`
-/// (coord lives only on main):
+/// unparked after returning them. `SimHandleRes` is a plain `Option`
+/// (sim_handle lives only on main):
 /// ```ignore
 /// fn sim_to_host_sync(world: &mut World) {
 ///     let state = world.resource::<PluginInternalState>();
 ///     state.park_workers();
 ///
-///     let mut coord = world.resource_mut::<CoordHandleRes>().0.take().unwrap();
+///     let mut sim_handle = world.resource_mut::<SimHandleRes>().0.take().unwrap();
 ///     let recv_slot = world.resource::<RecvHandleRes>().0.clone();
 ///     let send_slot = world.resource::<SendHandleRes>().0.clone();
 ///     let recv = recv_slot.lock().take().unwrap();
 ///     let send = send_slot.lock().take().unwrap();
 ///
-///     let (coord, recv, send) =
-///         drain_host_sync_into_pipeline(world, coord, recv, send);
+///     let (sim_handle, recv, send) =
+///         drain_host_sync_into_pipeline(world, sim_handle, recv, send);
 ///
-///     world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+///     world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
 ///     *recv_slot.lock() = Some(recv);
 ///     *send_slot.lock() = Some(send);
 ///
@@ -81,35 +81,35 @@ use naia_server::{RecvHandle, SendHandle};
 /// unchanged without rebuilding `WorldServer` (zero-cost no-op path).
 pub fn drain_host_sync_into_pipeline(
     world: &mut World,
-    mut coord: CoordHandle<Entity>,
+    mut sim_handle: SimHandle<Entity>,
     recv: RecvHandle<Entity>,
     mut send: SendHandle<Entity>,
-) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     // Drain the message queue first; if empty, skip all handle work.
     let host_component_events: Vec<HostSyncEvent> = world
         .get_resource_mut::<Messages<HostSyncEvent>>()
         .map(|mut reader| reader.drain().collect())
         .unwrap_or_default();
     if host_component_events.is_empty() {
-        return (coord, recv, send);
+        return (sim_handle, recv, send);
     }
 
     // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — handle-direct
     // drain. No `run_with_world_server` reassembly: queries route through
-    // `SendHandle::is_listening` + `CoordHandle::entity_authority_status`,
+    // `SendHandle::is_listening` + `SimHandle::entity_authority_status`,
     // mutations through the `SendHandle::*_worldless` ops (despawn borrows
-    // `&mut coord.state`). Byte-identical to the prior `WorldServer` path
+    // `&mut sim_handle.state`). Byte-identical to the prior `WorldServer` path
     // — the worldless methods mirror `WorldServer::*` field-for-field.
 
     // Skip drain entirely while not listening — matches today's
     // `world_to_host_sync` guard on `server.is_listening()`.
     if !send.is_listening() {
-        return (coord, recv, send);
+        return (sim_handle, recv, send);
     }
     for event in host_component_events {
         match event {
             HostSyncEvent::Insert(_host_id, entity, component_kind) => {
-                if coord.entity_authority_status(&entity)
+                if sim_handle.entity_authority_status(&entity)
                     == Some(EntityAuthStatus::Denied)
                 {
                     // Client holds auth — skip (client driver will apply
@@ -130,7 +130,7 @@ pub fn drain_host_sync_into_pipeline(
                 );
             }
             HostSyncEvent::Remove(_host_id, entity, component_kind) => {
-                if coord.entity_authority_status(&entity)
+                if sim_handle.entity_authority_status(&entity)
                     == Some(EntityAuthStatus::Denied)
                 {
                     continue;
@@ -138,15 +138,15 @@ pub fn drain_host_sync_into_pipeline(
                 send.remove_component_worldless(&entity, &component_kind);
             }
             HostSyncEvent::Despawn(_host_id, entity) => {
-                if coord.entity_authority_status(&entity)
+                if sim_handle.entity_authority_status(&entity)
                     == Some(EntityAuthStatus::Denied)
                 {
                     continue;
                 }
-                send.despawn_entity_worldless(&mut coord.state, &entity);
+                send.despawn_entity_worldless(&mut sim_handle.state, &entity);
             }
         }
     }
 
-    (coord, recv, send)
+    (sim_handle, recv, send)
 }

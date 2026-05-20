@@ -79,7 +79,7 @@ pub struct Plugin {
     /// When `true`, the plugin registers shared types + message types +
     /// `ComponentEventRegistry` + system sets + `world_to_host_sync`, but
     /// SKIPS constructing the `ServerImpl` resource. The caller installs
-    /// `CoordHandle`/`RecvHandle`/`SendHandle` separately via
+    /// `SimHandle`/`RecvHandle`/`SendHandle` separately via
     /// `naia_server::pipeline_actors::spawn_server_handles` and drives the
     /// recv/apply/send phases through `apply_receive_output_pipeline` +
     /// `apply_recv_to_world`.
@@ -96,7 +96,7 @@ pub struct Plugin {
     /// [`Plugin::sim_integration_full`] also constructs the three
     /// pipeline handles, installs them + the C.6-prep facade
     /// resources (`SimConverter`, `SimEventReceiver`, `SnapshotSender`,
-    /// `SnapshotReceiver`, `CoordHandleRes`, `SendHandleRes`,
+    /// `SnapshotReceiver`, `SimHandleRes`, `SendHandleRes`,
     /// `PluginInternalState`), and registers the main-side
     /// `drain_recv_worker_output` + `propagate_worker_panics` systems
     /// in `change_detection_schedule` (or `Update`).
@@ -150,7 +150,7 @@ impl Plugin {
     /// Phase B.7 variant: installs shared types + system sets +
     /// `world_to_host_sync` but does NOT construct a `ServerImpl`. Used
     /// by the SubApp pipeline coordinator (cyberlith) which installs
-    /// `CoordHandle`/`RecvHandle`/`SendHandle` via `spawn_server_handles`
+    /// `SimHandle`/`RecvHandle`/`SendHandle` via `spawn_server_handles`
     /// and drives recv/apply/send via the `apply_*_pipeline` family.
     ///
     /// `server_config` is unused by this variant (no `ServerImpl` is
@@ -254,7 +254,7 @@ impl PluginType for Plugin {
         app.insert_resource(world_data);
 
         // Phase B.7: types_and_sets_only skips constructing the
-        // ServerImpl resource. The caller installs CoordHandle /
+        // ServerImpl resource. The caller installs SimHandle /
         // RecvHandle / SendHandle via `spawn_server_handles` and drives
         // recv/apply/send through the `apply_*_pipeline` entry points.
         //

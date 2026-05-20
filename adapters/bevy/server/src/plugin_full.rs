@@ -1,6 +1,6 @@
 //! `Plugin::sim_integration_full` — Plugin variant that internally
 //! owns the Recv + Send worker threads + the three pipeline handles
-//! (`CoordHandle` / `RecvHandle` / `SendHandle`).
+//! (`SimHandle` / `RecvHandle` / `SendHandle`).
 //!
 //! # MISSION_USER_ONLY_SEES_SIM Phase D
 //!
@@ -22,7 +22,7 @@
 //! - [`SnapshotSender`]`<Entity>` — Sim publishes per-tick snapshots.
 //! - [`SnapshotReceiver`]`<Entity>` — for symmetry / observability; the
 //!   internal Send worker holds the load-bearing clone.
-//! - [`CoordHandleRes`] — Sim systems take/return for cross-handle work
+//! - [`SimHandleRes`] — Sim systems take/return for cross-handle work
 //!   (e.g. `configure_entity_replication`, `send_message_to_user`).
 //! - [`SendHandleRes`] — Sim systems take/return for cross-handle work,
 //!   between Send-worker iterations. Hands off via the same
@@ -81,7 +81,7 @@ use parking_lot::Mutex;
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::{
     pipeline_actors::{
-        spawn_server_handles, CoordHandle, SimEventReceiver, SnapshotReceiver, SnapshotSender,
+        spawn_server_handles, SimHandle, SimEventReceiver, SnapshotReceiver, SnapshotSender,
     },
     shared::Protocol as NaiaProtocol,
     RecvHandle, ReceiveOutput, SendHandle, ServerConfig,
@@ -112,12 +112,12 @@ impl PluginSimConfig {
 
 // ─── Resources ──────────────────────────────────────────────────────────────
 
-/// Bevy resource holding the [`CoordHandle`]. Take/return pattern: Sim
+/// Bevy resource holding the [`SimHandle`]. Take/return pattern: Sim
 /// systems use [`Option::take`] to gain ownership for cross-handle ops
 /// (`configure_entity_replication`, `send_message_to_user`, etc.) and
 /// must put the handle back before returning.
 #[derive(Resource)]
-pub struct CoordHandleRes(pub Option<CoordHandle<Entity>>);
+pub struct SimHandleRes(pub Option<SimHandle<Entity>>);
 
 /// Bevy resource exposing the send worker's [`SendHandle`] for the
 /// park-window borrow contract.
@@ -142,9 +142,9 @@ pub struct SendHandleRes(pub Arc<Mutex<Option<SendHandle<Entity>>>>);
 /// park-window borrow contract (MISSION_USER_ONLY_SEES_SIM Phase D.3a).
 ///
 /// # Why a shared `Arc<Mutex<Option<…>>>` (not a plain `Option` like
-/// [`CoordHandleRes`])
+/// [`SimHandleRes`])
 ///
-/// The [`CoordHandle`] lives **only** on main — no worker ever owns it —
+/// The [`SimHandle`] lives **only** on main — no worker ever owns it —
 /// so a plain `Option` Resource is the honest representation. The
 /// [`RecvHandle`] is different: the internal Recv worker owns it for its
 /// socket loop. Park-window ownership is therefore *shared* between the
@@ -297,9 +297,9 @@ impl PanicSlot {
 #[derive(Resource)]
 pub struct PluginInternalState {
     state: AtomicU8,
-    /// `(coord, recv, send)` parked here between `build` and `listen`.
+    /// `(sim_handle, recv, send)` parked here between `build` and `listen`.
     /// `None` after `listen` (handles moved into workers / Resources).
-    armed_handles: Mutex<Option<(CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>)>>,
+    armed_handles: Mutex<Option<(SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>)>>,
     /// Channel for the Recv worker to push `ReceiveOutput` to main.
     /// `Some` until `listen` runs.
     recv_out_chan_rx: Mutex<Option<Receiver<ReceiveOutput<Entity>>>>,
@@ -325,9 +325,9 @@ pub struct PluginInternalState {
     /// can re-acquire it without taking the Sim Resource.
     sim_event_receiver: Mutex<Option<SimEventReceiver<Entity>>>,
     /// Coord handle stashed by `listen()` for the Startup
-    /// `drain_armed_coord_into_resource` system to install into
-    /// [`CoordHandleRes`]. Drained at most once.
-    armed_coord: Mutex<Option<CoordHandle<Entity>>>,
+    /// `drain_armed_sim_handle_into_resource` system to install into
+    /// [`SimHandleRes`]. Drained at most once.
+    armed_sim_handle: Mutex<Option<SimHandle<Entity>>>,
     /// D.3a park-window slot for the recv worker's [`RecvHandle`]. The
     /// recv worker deposits its handle here at the park checkpoint and
     /// re-claims it on unpark. The same `Arc` is wrapped by the
@@ -352,7 +352,7 @@ struct WorkerHandle {
 
 impl PluginInternalState {
     fn new_armed(
-        coord: CoordHandle<Entity>,
+        sim_handle: SimHandle<Entity>,
         recv: RecvHandle<Entity>,
         send: SendHandle<Entity>,
         sim_event_receiver: SimEventReceiver<Entity>,
@@ -362,7 +362,7 @@ impl PluginInternalState {
         let (tx, rx) = bounded::<ReceiveOutput<Entity>>(1);
         Self {
             state: AtomicU8::new(State::Armed as u8),
-            armed_handles: Mutex::new(Some((coord, recv, send))),
+            armed_handles: Mutex::new(Some((sim_handle, recv, send))),
             recv_out_chan_rx: Mutex::new(Some(rx)),
             recv_out_chan_tx: Mutex::new(Some(tx)),
             snapshot_receiver: Mutex::new(Some(snapshot_receiver)),
@@ -372,7 +372,7 @@ impl PluginInternalState {
             panic_slot: Arc::new(PanicSlot::new()),
             workers: Mutex::new(Vec::new()),
             sim_event_receiver: Mutex::new(Some(sim_event_receiver)),
-            armed_coord: Mutex::new(None),
+            armed_sim_handle: Mutex::new(None),
             recv_slot: Arc::new(Mutex::new(None)),
             send_slot: Arc::new(Mutex::new(None)),
             #[cfg(any(test, feature = "test_time"))]
@@ -435,7 +435,7 @@ impl PluginInternalState {
             "PluginInternalState::listen called in non-Armed state",
         );
 
-        let (coord, recv, send) = self
+        let (sim_handle, recv, send) = self
             .armed_handles
             .lock()
             .take()
@@ -445,8 +445,8 @@ impl PluginInternalState {
         // helper. Byte-for-byte equivalent to `Server::listen`.
         let socket: Box<dyn naia_server::transport::Socket> = socket.into();
         let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(socket);
-        let (coord, recv, send, ()) =
-            naia_server::pipeline_actors::run_with_world_server(coord, recv, send, |ws| {
+        let (sim_handle, recv, send, ()) =
+            naia_server::pipeline_actors::run_with_world_server(sim_handle, recv, send, |ws| {
                 ws.io_load(ps, pr);
             });
 
@@ -554,18 +554,18 @@ impl PluginInternalState {
             })
             .expect("spawn send worker thread");
 
-        // Coord handle stays on main as a Resource via CoordHandleRes
+        // Coord handle stays on main as a Resource via SimHandleRes
         // — the caller's `Plugin::build` already installed
-        // `CoordHandleRes(None)` and will fill it from a Startup
-        // system that drains `armed_coord` here.
+        // `SimHandleRes(None)` and will fill it from a Startup
+        // system that drains `armed_sim_handle` here.
         //
         // To avoid a chicken-and-egg with Startup ordering, the
         // sim_integration_full constructor installs a Startup system
-        // (`drain_armed_coord`) that runs once and pulls the parked
-        // coord handle into the resource. Since `listen()` can be
-        // called before or after Startup, we stash the coord on the
+        // (`drain_armed_sim_handle`) that runs once and pulls the parked
+        // SimHandle into the resource. Since `listen()` can be
+        // called before or after Startup, we stash the SimHandle on the
         // PluginInternalState itself for that drain.
-        self.armed_coord.lock().replace(coord);
+        self.armed_sim_handle.lock().replace(sim_handle);
 
         self.workers.lock().extend([
             WorkerHandle {
@@ -583,7 +583,7 @@ impl PluginInternalState {
 
     /// Park both worker threads (block until both reach the top of
     /// their idle loop). After return, callers may safely
-    /// `TestClock::advance(...)` or borrow handles via [`CoordHandleRes`]
+    /// `TestClock::advance(...)` or borrow handles via [`SimHandleRes`]
     /// / [`RecvHandleRes`] / [`SendHandleRes`] without racing the
     /// workers.
     ///
@@ -694,35 +694,35 @@ impl PluginInternalState {
         }
     }
 
-    /// Take the armed coord from the parking slot.  Filled by `listen()`
-    /// and drained by the Startup `drain_armed_coord_into_resource` system
+    /// Take the armed sim_handle from the parking slot.  Filled by `listen()`
+    /// and drained by the Startup `drain_armed_sim_handle_into_resource` system
     /// or by consumers that need to avoid a combined `&World`/`&mut World`
     /// borrow (e.g. cyberlith `init.rs` where the same `World` provides
     /// both `resource::<PluginInternalState>()` and the target
-    /// `resource_mut::<CoordHandleRes>()`).
+    /// `resource_mut::<SimHandleRes>()`).
     ///
     /// Returns `None` once the slot has been drained (idempotent).
-    pub fn take_armed_coord(&self) -> Option<CoordHandle<Entity>> {
-        self.armed_coord.lock().take()
+    pub fn take_armed_sim_handle(&self) -> Option<SimHandle<Entity>> {
+        self.armed_sim_handle.lock().take()
     }
 
-    /// Drain the armed coord parking slot into [`CoordHandleRes`] on `world`.
+    /// Drain the armed sim_handle parking slot into [`SimHandleRes`] on `world`.
     ///
     /// Called by consumers (e.g. cyberlith E.6c `init.rs`) that drive
     /// Startup manually before running `Update` — the
     /// `drain_armed_into_res` closure registered in `Update` would only
-    /// fire after Startup, but `main_init` needs the coord in
-    /// `CoordHandleRes` during Startup.  This method reproduces the same
+    /// fire after Startup, but `main_init` needs the SimHandle in
+    /// `SimHandleRes` during Startup.  This method reproduces the same
     /// drain logic and is safe to call multiple times (a no-op once the
     /// slot is empty).
-    pub fn drain_armed_coord_into_resource(&self, world: &mut bevy_ecs::world::World) {
-        if let Some(c) = self.armed_coord.lock().take() {
-            world.resource_mut::<CoordHandleRes>().0 = Some(c);
+    pub fn drain_armed_sim_handle_into_resource(&self, world: &mut bevy_ecs::world::World) {
+        if let Some(c) = self.armed_sim_handle.lock().take() {
+            world.resource_mut::<SimHandleRes>().0 = Some(c);
         }
     }
 
     /// Obtain a [`naia_server::pipeline_actors::SendStateView`] from the
-    /// pre-`listen()` armed coord handle.
+    /// pre-`listen()` armed SimHandle.
     ///
     /// Called by consumers (e.g. cyberlith E.6c `init.rs`) that need to
     /// pass `send_state_view` to `install_sim_plugins` before `listen()`
@@ -733,9 +733,9 @@ impl PluginInternalState {
         &self,
     ) -> naia_server::pipeline_actors::SendStateView<Entity> {
         let guard = self.armed_handles.lock();
-        let (coord, _, _) = guard.as_ref()
+        let (sim_handle, _, _) = guard.as_ref()
             .expect("armed_send_state_view called after listen() — handles already moved");
-        coord.send_state_view()
+        sim_handle.send_state_view()
     }
 }
 
@@ -795,7 +795,7 @@ impl Drop for PluginInternalState {
 /// Called by `Plugin::build` when `full_pipelining=true`. Constructs
 /// the three pipeline handles, installs the C.6-prep Sim Resources
 /// (`SimConverter`, `SimEventReceiver`, `SnapshotSender`,
-/// `SnapshotReceiver`, `CoordHandleRes`, `SendHandleRes`,
+/// `SnapshotReceiver`, `SimHandleRes`, `SendHandleRes`,
 /// `PluginInternalState`) on the App, and registers the main-side
 /// drain + panic-propagation systems in the supplied schedule (or
 /// `Update`).
@@ -806,14 +806,14 @@ pub(crate) fn install_full_pipelining(
     change_detection_schedule: Option<InternedScheduleLabel>,
 ) {
     let naia_proto: NaiaProtocol = protocol.into();
-    let (coord, recv, send) = spawn_server_handles::<Entity, _>(server_config, naia_proto);
+    let (sim_handle, recv, send) = spawn_server_handles::<Entity, _>(server_config, naia_proto);
 
-    let sim_converter = SimConverter::from_coord(&coord);
+    let sim_converter = SimConverter::from_sim(&sim_handle);
     let sim_event_receiver = SimEventReceiver::<Entity>::new();
     let (snap_sender, snap_receiver) = SnapshotSender::<Entity>::pair();
 
     let internal = PluginInternalState::new_armed(
-        coord,
+        sim_handle,
         recv,
         send,
         sim_event_receiver.clone(),
@@ -828,27 +828,27 @@ pub(crate) fn install_full_pipelining(
     app.insert_resource(SimEventReceiverRes(sim_event_receiver));
     app.insert_resource(SnapshotSenderRes(snap_sender));
     app.insert_resource(SnapshotReceiverRes(snap_receiver));
-    app.insert_resource(CoordHandleRes(None));
+    app.insert_resource(SimHandleRes(None));
     app.insert_resource(send_handle_res);
     app.insert_resource(recv_handle_res);
     app.insert_resource(internal);
 
-    // Startup: drain the armed coord into CoordHandleRes once the
+    // Startup: drain the armed sim_handle into SimHandleRes once the
     // consumer's `listen()` has run. The system itself is a no-op
     // until listen completes — re-run via the normal Update schedule
     // is fine because once drained the field is `None`.
     let drain_armed_into_res = |world: &mut World| {
-        let coord_opt = world
+        let sim_handle_opt = world
             .get_resource::<PluginInternalState>()
-            .and_then(|s| s.armed_coord.lock().take());
-        if let Some(c) = coord_opt {
-            world.resource_mut::<CoordHandleRes>().0 = Some(c);
+            .and_then(|s| s.armed_sim_handle.lock().take());
+        if let Some(c) = sim_handle_opt {
+            world.resource_mut::<SimHandleRes>().0 = Some(c);
         }
     };
 
     // Register main-side systems in the consumer's schedule (Update
     // by default). drain_armed runs FIRST so subsequent systems see
-    // the coord; drain_recv_worker_output then applies output; panic
+    // the SimHandle; drain_recv_worker_output then applies output; panic
     // propagation runs last.
     if let Some(label) = change_detection_schedule {
         app.add_systems(
@@ -1139,7 +1139,7 @@ fn send_worker_loop(
 /// **Requires workers to already be parked** before this is called.
 /// The caller is responsible for parking/unparking. Handles are taken
 /// from the provided slots and returned before this function returns.
-/// Returns `(coord, recv, send)` with the updated handles.
+/// Returns `(sim_handle, recv, send)` with the updated handles.
 pub fn drain_recv_impl(
     world: &mut World,
     recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
@@ -1158,13 +1158,13 @@ pub fn drain_recv_impl(
         .and_then(|s| s.sim_event_receiver.lock().as_ref().cloned());
     let Some(sim_receiver) = sim_receiver else { return };
 
-    let coord_opt = world.resource_mut::<CoordHandleRes>().0.take();
+    let sim_handle_opt = world.resource_mut::<SimHandleRes>().0.take();
     let recv_opt = recv_slot.lock().take();
     let send_opt = send_slot.lock().take();
 
-    if coord_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
-        if let Some(c) = coord_opt {
-            world.resource_mut::<CoordHandleRes>().0 = Some(c);
+    if sim_handle_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
+        if let Some(c) = sim_handle_opt {
+            world.resource_mut::<SimHandleRes>().0 = Some(c);
         }
         if let Some(r) = recv_opt {
             *recv_slot.lock() = Some(r);
@@ -1175,7 +1175,7 @@ pub fn drain_recv_impl(
         return;
     }
 
-    let mut coord = coord_opt.unwrap();
+    let mut sim_handle = sim_handle_opt.unwrap();
     let mut recv = recv_opt.unwrap();
     let mut send = send_opt.unwrap();
 
@@ -1191,7 +1191,7 @@ pub fn drain_recv_impl(
     outputs.push(fresh_output);
 
     if outputs.iter().all(|o| o.is_empty()) {
-        world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+        world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
         *recv_slot.lock() = Some(recv);
         *send_slot.lock() = Some(send);
         return;
@@ -1202,23 +1202,23 @@ pub fn drain_recv_impl(
         if output.is_empty() {
             continue;
         }
-        let server_tick = coord.current_tick();
+        let server_tick = sim_handle.current_tick();
         let (c, r, s) = apply_recv_to_world(
-            coord,
+            sim_handle,
             recv,
             send,
             world.proxy_mut(),
             &mut output,
             server_tick,
         );
-        coord = c;
+        sim_handle = c;
         recv = r;
         send = s;
-        apply_receive_output_pipeline_with_sim_receiver(world, &coord, &sim_receiver, output);
+        apply_receive_output_pipeline_with_sim_receiver(world, &sim_handle, &sim_receiver, output);
     }
 
     // Return the handles (no unpark — caller's responsibility).
-    world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+    world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
     *recv_slot.lock() = Some(recv);
     *send_slot.lock() = Some(send);
 }
@@ -1277,13 +1277,13 @@ pub fn drain_recv_worker_output(world: &mut World) {
             )
         };
 
-        let coord_opt = world.resource_mut::<CoordHandleRes>().0.take();
+        let sim_handle_opt = world.resource_mut::<SimHandleRes>().0.take();
         let recv_opt = recv_slot.lock().take();
         let send_opt = send_slot.lock().take();
 
-        if coord_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
-            if let Some(c) = coord_opt {
-                world.resource_mut::<CoordHandleRes>().0 = Some(c);
+        if sim_handle_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
+            if let Some(c) = sim_handle_opt {
+                world.resource_mut::<SimHandleRes>().0 = Some(c);
             }
             if let Some(r) = recv_opt {
                 *recv_slot.lock() = Some(r);
@@ -1295,7 +1295,7 @@ pub fn drain_recv_worker_output(world: &mut World) {
             return;
         }
 
-        let mut coord = coord_opt.unwrap();
+        let mut sim_handle = sim_handle_opt.unwrap();
         let mut recv = recv_opt.unwrap();
         let mut send = send_opt.unwrap();
 
@@ -1304,7 +1304,7 @@ pub fn drain_recv_worker_output(world: &mut World) {
         outputs.push(fresh_output);
 
         if outputs.iter().all(|o| o.is_empty()) {
-            world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+            world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
             *recv_slot.lock() = Some(recv);
             *send_slot.lock() = Some(send);
             world.resource::<PluginInternalState>().unpark_workers();
@@ -1315,22 +1315,22 @@ pub fn drain_recv_worker_output(world: &mut World) {
             if output.is_empty() {
                 continue;
             }
-            let server_tick = coord.current_tick();
+            let server_tick = sim_handle.current_tick();
             let (c, r, s) = apply_recv_to_world(
-                coord,
+                sim_handle,
                 recv,
                 send,
                 world.proxy_mut(),
                 &mut output,
                 server_tick,
             );
-            coord = c;
+            sim_handle = c;
             recv = r;
             send = s;
-            apply_receive_output_pipeline_with_sim_receiver(world, &coord, &sim_receiver, output);
+            apply_receive_output_pipeline_with_sim_receiver(world, &sim_handle, &sim_receiver, output);
         }
 
-        world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+        world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
         *recv_slot.lock() = Some(recv);
         *send_slot.lock() = Some(send);
         world.resource::<PluginInternalState>().unpark_workers();

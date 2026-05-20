@@ -126,7 +126,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// goes through a queue on `ServerShared`.
     ///
     /// In serial mode `WorldServer::receive_all_packets` calls this and
-    /// then runs the coord-stage `drain_pending_handshakes` +
+    /// then runs the coordination-stage `drain_pending_handshakes` +
     /// `SendState::process_recv_packets` post-passes; in pipeline mode
     /// `RecvHandle::receive` calls this and drains the
     /// `received_addresses` + `pending_data_packets` fields into the
@@ -225,7 +225,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 continue;
                             };
                             // 4-F.naia.c.1: defer `finalize_connection` to
-                            // the coord stage via `pending_handshakes`.
+                            // the coordination stage via `pending_handshakes`.
                             self.shared.pending_handshakes.lock().push(address);
 
                             // Queue the Connect Response on
@@ -296,7 +296,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Publishes the ack snapshot via `process_incoming_header`, reads
     /// the client tick, and buffers the rest of the reader into
     /// `pending_data_packets` for `SendState::process_recv_packets` to
-    /// decode at coord stage.
+    /// decode at coordination stage.
     fn read_data_packet(
         &mut self,
         address: &std::net::SocketAddr,

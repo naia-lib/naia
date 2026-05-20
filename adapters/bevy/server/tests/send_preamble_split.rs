@@ -35,39 +35,39 @@ fn protocol() -> naia_shared::Protocol {
 fn handles_listening(
     addr: &str,
 ) -> (
-    naia_server::pipeline_actors::CoordHandle<Entity>,
+    naia_server::pipeline_actors::SimHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
-    let (coord, recv, send) =
+    let (sim_handle, recv, send) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
     let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(Box::new(socket));
 
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);
     });
-    (coord, recv, send)
+    (sim_handle, recv, send)
 }
 
-fn queue_len(coord: &naia_server::pipeline_actors::CoordHandle<Entity>) -> usize {
-    coord.scope_change_queue_len()
+fn queue_len(sim_handle: &naia_server::pipeline_actors::SimHandle<Entity>) -> usize {
+    sim_handle.scope_change_queue_len()
 }
 
 #[test]
 fn apply_pending_send_preamble_drains_room_change_queue() {
-    let (mut coord, _recv, mut send) = handles_listening(next_addr());
+    let (mut sim_handle, _recv, mut send) = handles_listening(next_addr());
 
     // Push a RoomChange onto the queue: create + destroy an empty room.
-    let room_key = coord.create_room();
-    let destroyed = coord.room_destroy(&room_key);
+    let room_key = sim_handle.create_room();
+    let destroyed = sim_handle.room_destroy(&room_key);
     assert!(destroyed);
     assert!(
-        queue_len(&coord) >= 1,
+        queue_len(&sim_handle) >= 1,
         "room_destroy must push at least one ScopeChange",
     );
 
@@ -77,7 +77,7 @@ fn apply_pending_send_preamble_drains_room_change_queue() {
     // RoomChange variants are drained (nothing else on this queue
     // should remain since no scope toggles were pushed).
     assert_eq!(
-        queue_len(&coord),
+        queue_len(&sim_handle),
         0,
         "apply_pending_send_preamble must drain RoomChange variants",
     );
@@ -85,20 +85,20 @@ fn apply_pending_send_preamble_drains_room_change_queue() {
 
 #[test]
 fn second_call_to_send_all_packets_does_not_double_run_preamble() {
-    let (mut coord, _recv, mut send) = handles_listening(next_addr());
+    let (mut sim_handle, _recv, mut send) = handles_listening(next_addr());
 
-    let k = coord.create_room();
-    let _ = coord.room_destroy(&k);
-    assert!(queue_len(&coord) >= 1);
+    let k = sim_handle.create_room();
+    let _ = sim_handle.room_destroy(&k);
+    assert!(queue_len(&sim_handle) >= 1);
 
     // Explicit preamble: drains the queue, sets flag.
     send.apply_pending_send_preamble();
-    assert_eq!(queue_len(&coord), 0);
+    assert_eq!(queue_len(&sim_handle), 0);
 
     // Push another RoomChange — this lands AFTER the preamble ran.
-    let k2 = coord.create_room();
-    let _ = coord.room_destroy(&k2);
-    assert!(queue_len(&coord) >= 1, "second push must land on queue");
+    let k2 = sim_handle.create_room();
+    let _ = sim_handle.room_destroy(&k2);
+    assert!(queue_len(&sim_handle) >= 1, "second push must land on queue");
 
     // Empty world for send_all_packets.
     let world = World::new();
@@ -107,7 +107,7 @@ fn second_call_to_send_all_packets_does_not_double_run_preamble() {
     // send_all_packets must SKIP its inline preamble (flag was true),
     // so the post-preamble RoomChange is STILL in the queue.
     assert!(
-        queue_len(&coord) >= 1,
+        queue_len(&sim_handle) >= 1,
         "send_all_packets must SKIP preamble when apply_pending_send_preamble already ran",
     );
 
@@ -116,7 +116,7 @@ fn second_call_to_send_all_packets_does_not_double_run_preamble() {
     let world2 = World::new();
     send.send_all_packets(world2.proxy());
     assert_eq!(
-        queue_len(&coord),
+        queue_len(&sim_handle),
         0,
         "second send_all_packets (no explicit preamble) must run inline preamble",
     );
@@ -124,11 +124,11 @@ fn second_call_to_send_all_packets_does_not_double_run_preamble() {
 
 #[test]
 fn backward_compat_send_all_packets_alone_still_drains_queue() {
-    let (mut coord, _recv, mut send) = handles_listening(next_addr());
+    let (mut sim_handle, _recv, mut send) = handles_listening(next_addr());
 
-    let k = coord.create_room();
-    let _ = coord.room_destroy(&k);
-    assert!(queue_len(&coord) >= 1);
+    let k = sim_handle.create_room();
+    let _ = sim_handle.room_destroy(&k);
+    assert!(queue_len(&sim_handle) >= 1);
 
     // Call send_all_packets directly — must drain queue inline (no
     // explicit preamble called).
@@ -136,7 +136,7 @@ fn backward_compat_send_all_packets_alone_still_drains_queue() {
     send.send_all_packets(world.proxy());
 
     assert_eq!(
-        queue_len(&coord),
+        queue_len(&sim_handle),
         0,
         "backward compat: send_all_packets alone must drain the room queue",
     );

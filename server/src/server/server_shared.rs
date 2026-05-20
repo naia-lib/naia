@@ -21,9 +21,9 @@
 //! 6. scope_change_queue                     — Mutex
 //! 7. pending_auth_grants                    — Mutex
 //! 8. pending_outbound_packets               — Mutex (recv→send packet ferry)
-//! 9. pending_handshakes                     — Mutex (recv→coord handshake handoff)
-//! 10. pending_world_hooks                    — Mutex (D.2.2 coord→sim world-hook ferry)
-//! 11. pending_disconnect_requests            — Mutex (D.3b.3 coord→recv disconnect ferry)
+//! 9. pending_handshakes                     — Mutex (recv→coordination handshake handoff)
+//! 10. pending_world_hooks                    — Mutex (D.2.2 sim_handle→sim world-hook ferry)
+//! 11. pending_disconnect_requests            — Mutex (D.3b.3 sim_handle→recv disconnect ferry)
 //! ```
 //!
 //! Step 4-A introduces this discipline; subsequent steps (4-B onwards) add
@@ -119,7 +119,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// handshake — `take_disconnected` is idempotent on the drain side per
     /// the spec's Option C-2). Drained by the coordinator-stage
     /// `drain_pending_handshakes`, which looks up the matching user_key
-    /// via `coord.user_store.take_disconnected` and calls
+    /// via `sim_handle.user_store.take_disconnected` and calls
     /// `finalize_connection`. LOCK ORDER position #9 (last).
     pub(crate) pending_handshakes: Mutex<Vec<SocketAddr>>,
 
@@ -170,7 +170,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — pending
     /// World-side `configure_entity_replication` hook ops, pushed by
-    /// `CoordHandle::configure_entity_replication` and drained by
+    /// `SimHandle::configure_entity_replication` and drained by
     /// `SendHandle::apply_pending_world_hooks<W>` on the Sim system
     /// (the only stage holding the `&mut World`). LOCK ORDER position
     /// #10 (last) — briefly-held Mutex on push/drain, no hot-path
@@ -179,7 +179,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) pending_world_hooks: Mutex<VecDeque<ConfigureWorldOp<E>>>,
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — pending
-    /// disconnect requests pushed by `CoordHandle::disconnect_user` and
+    /// disconnect requests pushed by `SimHandle::disconnect_user` and
     /// drained by the recv path at the top of `process_disconnects`,
     /// immediately before `outstanding_disconnects` is consumed. LOCK
     /// ORDER position #11 (last) — briefly-held Mutex on push/drain, no

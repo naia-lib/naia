@@ -24,7 +24,7 @@
 //! `global_entity_map: RwLock<GlobalEntityMap<E>>` that
 //! `WorldServer`'s converter reads, `EntityProperty::set` produces a
 //! byte-identical `GlobalEntity` payload across the two paths. The
-//! `coord_configure_entity_replication` test in this adapter exercises
+//! `sim_configure_entity_replication` test in this adapter exercises
 //! this invariant end-to-end.
 //!
 //! # Construction
@@ -33,11 +33,11 @@
 //! handles (they all hold the same `Arc<ServerShared<E>>`):
 //!
 //! ```ignore
-//! let sim_converter = coord.sim_converter();
+//! let sim_converter = sim_handle.sim_converter();
 //! sim_app.insert_resource(sim_converter);
 //! ```
 //!
-//! See [`crate::pipeline_actors::CoordHandle::sim_converter`].
+//! See [`crate::pipeline_actors::SimHandle::sim_converter`].
 
 use std::{hash::Hash, sync::Arc};
 
@@ -55,7 +55,7 @@ pub struct SimConverter<E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimConverter<E> {
     /// Wrap an arbitrary `Arc`-backed converter. The typical
-    /// construction site is [`crate::pipeline_actors::CoordHandle::sim_converter`],
+    /// construction site is [`crate::pipeline_actors::SimHandle::sim_converter`],
     /// which wraps the shared `Arc<ServerShared<E>>`.
     pub fn from_arc(inner: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync>) -> Self {
         Self { inner }

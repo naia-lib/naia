@@ -33,7 +33,7 @@ use std::time::Duration;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_server::{
-    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
     ServerConfig,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, WorldProxy};
@@ -52,59 +52,59 @@ fn protocol() -> naia_shared::Protocol {
 fn handles_listening(
     addr: &str,
 ) -> (
-    CoordHandle<Entity>,
+    SimHandle<Entity>,
     RecvHandle<Entity>,
     SendHandle<Entity>,
 ) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
-    let (coord, recv, send) =
+    let (sim_handle, recv, send) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
     let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(Box::new(socket));
 
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);
     });
-    (coord, recv, send)
+    (sim_handle, recv, send)
 }
 
-fn queue_len(coord: &CoordHandle<Entity>) -> usize {
-    coord.scope_change_queue_len()
+fn queue_len(sim_handle: &SimHandle<Entity>) -> usize {
+    sim_handle.scope_change_queue_len()
 }
 
 fn spawn_replicating_entity(
-    coord: CoordHandle<Entity>,
+    sim_handle: SimHandle<Entity>,
     recv: RecvHandle<Entity>,
     send: SendHandle<Entity>,
     bevy_world: &mut World,
-) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>, Entity) {
+) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>, Entity) {
     let entity = bevy_world.spawn(Position::new(1.0, 2.0)).id();
-    let (coord, recv, send, ()) =
-        run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) =
+        run_with_world_server(sim_handle, recv, send, |ws| {
             ws.enable_entity_replication(&entity);
         });
-    (coord, recv, send, entity)
+    (sim_handle, recv, send, entity)
 }
 
 /// Sanity gate: the Phase A patch must not have regressed the
 /// happy-path drain (snapshot world contains the entity).
 #[test]
 fn happy_path_drain_unchanged_after_retry_patch() {
-    let (coord, recv, send) = handles_listening(next_addr());
+    let (sim_handle, recv, send) = handles_listening(next_addr());
     let mut bevy_world = World::new();
-    let (mut coord, _recv, mut send, entity) =
-        spawn_replicating_entity(coord, recv, send, &mut bevy_world);
+    let (mut sim_handle, _recv, mut send, entity) =
+        spawn_replicating_entity(sim_handle, recv, send, &mut bevy_world);
 
-    let room_key = coord.create_room();
-    coord.room_add_entity(&room_key, &entity);
+    let room_key = sim_handle.create_room();
+    sim_handle.room_add_entity(&room_key, &entity);
 
     send.apply_pending_send_preamble();
     send.apply_pending_scope_changes(&bevy_world.proxy());
     assert_eq!(
-        queue_len(&coord),
+        queue_len(&sim_handle),
         0,
         "happy path: snapshot world contains entity — full drain expected",
     );
@@ -116,15 +116,15 @@ fn happy_path_drain_unchanged_after_retry_patch() {
 /// before the retry-counter branch runs.
 #[test]
 fn synthetic_user_does_not_accrue_retries() {
-    let (coord, recv, send) = handles_listening(next_addr());
+    let (sim_handle, recv, send) = handles_listening(next_addr());
     let mut bevy_world = World::new();
-    let (mut coord, _recv, mut send, entity) =
-        spawn_replicating_entity(coord, recv, send, &mut bevy_world);
+    let (mut sim_handle, _recv, mut send, entity) =
+        spawn_replicating_entity(sim_handle, recv, send, &mut bevy_world);
 
-    let room_key = coord.create_room();
+    let room_key = sim_handle.create_room();
     let synthetic_user_key = UserKey::from_u64(1);
-    coord.room_add_user(&room_key, &synthetic_user_key);
-    coord.room_add_entity(&room_key, &entity);
+    sim_handle.room_add_user(&room_key, &synthetic_user_key);
+    sim_handle.room_add_entity(&room_key, &entity);
 
     // Empty world — entity is NOT visible in the snapshot world. If
     // synthetic_user_key were a real connected user, the per-(user,
@@ -139,7 +139,7 @@ fn synthetic_user_does_not_accrue_retries() {
         send.apply_pending_scope_changes(&empty_world.proxy());
     }
     assert_eq!(
-        queue_len(&coord),
+        queue_len(&sim_handle),
         0,
         "synthetic (un-handshaken) user must not accrue retries — \
          entry consumed by early-return before retry path",
@@ -150,12 +150,12 @@ fn synthetic_user_does_not_accrue_retries() {
 /// runaway queue growth.
 #[test]
 fn repeated_empty_world_calls_are_stable() {
-    let (coord, recv, send) = handles_listening(next_addr());
+    let (sim_handle, recv, send) = handles_listening(next_addr());
     let mut bevy_world = World::new();
-    let (mut coord, _recv, mut send, _entity) =
-        spawn_replicating_entity(coord, recv, send, &mut bevy_world);
+    let (mut sim_handle, _recv, mut send, _entity) =
+        spawn_replicating_entity(sim_handle, recv, send, &mut bevy_world);
 
-    let _room_key = coord.create_room();
+    let _room_key = sim_handle.create_room();
 
     // Mirror of SCOPE_RETRY_MAX (server/src/server/send_state.rs).
     // The canonical constant is pub(crate); adapter-level tests pin
@@ -167,7 +167,7 @@ fn repeated_empty_world_calls_are_stable() {
         send.apply_pending_send_preamble();
         send.apply_pending_scope_changes(&empty_world.proxy());
         assert!(
-            queue_len(&coord) <= 64,
+            queue_len(&sim_handle) <= 64,
             "queue must stay bounded across repeated empty-world calls",
         );
     }

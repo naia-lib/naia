@@ -15,7 +15,7 @@
 //! `run_with_world_server` reassembly. The value-add is the API
 //! surface, not the wire body. See the function's doc-comment for
 //! the design rationale (why this is a free fn that reassembles
-//! rather than a `CoordHandle` method that defers via a
+//! rather than a `SimHandle` method that defers via a
 //! `ScopeChange::ConfigureReplication` variant).
 //!
 //! Coverage:
@@ -56,7 +56,7 @@ fn protocol_bevy() -> naia_bevy_shared::Protocol {
 }
 
 fn handles() -> (
-    naia_server::pipeline_actors::CoordHandle<Entity>,
+    naia_server::pipeline_actors::SimHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
@@ -65,7 +65,7 @@ fn handles() -> (
 
 #[test]
 fn configure_entity_replication_scope_exit_toggle_via_facade() {
-    let (coord, recv, send) = handles();
+    let (sim_handle, recv, send) = handles();
 
     // Build a sim-app holding the Bevy world that owns the entity. In
     // Sim-Owns-World cyberlith, this is the SimApp world.
@@ -77,15 +77,15 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
     let entity = sim_app.world_mut().spawn(()).id();
 
     // Register the entity with naia (legacy path — Sim Phase C will
-    // route through CoordHandle::enable_entity_replication once that
+    // route through SimHandle::enable_entity_replication once that
     // API exists; today we use the reassembly).
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.enable_entity_replication(&entity);
     });
 
     // Server-spawned entities default to Public + Despawn (per
     // ReplicationConfig::public()). Verify the starting state.
-    let (coord, recv, send, start_cfg) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, start_cfg) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.entity_replication_config(&entity)
             .expect("entity registered")
     });
@@ -95,14 +95,14 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
     // Phase B.2 facade call: flip scope_exit Despawn → Persist via the
     // new pipeline-friendly entry point (no manual reassembly).
     let target = ReplicationConfig::public().persist_on_scope_exit();
-    let (coord, recv, send) = {
+    let (sim_handle, recv, send) = {
         let world: &mut World = sim_app.world_mut();
         let mut proxy = WorldProxyMut::proxy_mut(world);
-        configure_entity_replication(coord, recv, send, &mut proxy, &entity, target)
+        configure_entity_replication(sim_handle, recv, send, &mut proxy, &entity, target)
     };
 
     // Post-condition: replication_config reflects the new scope_exit.
-    let (coord, recv, send, mid_cfg) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, mid_cfg) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.entity_replication_config(&entity)
             .expect("entity registered")
     });
@@ -111,13 +111,13 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
 
     // Round-trip back to Despawn via the same facade.
     let revert = ReplicationConfig::public();
-    let (coord, recv, send) = {
+    let (sim_handle, recv, send) = {
         let world: &mut World = sim_app.world_mut();
         let mut proxy = WorldProxyMut::proxy_mut(world);
-        configure_entity_replication(coord, recv, send, &mut proxy, &entity, revert)
+        configure_entity_replication(sim_handle, recv, send, &mut proxy, &entity, revert)
     };
 
-    let (_coord, _recv, _send, end_cfg) = run_with_world_server(coord, recv, send, |ws| {
+    let (_sim_handle, _recv, _send, end_cfg) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.entity_replication_config(&entity)
             .expect("entity registered")
     });
@@ -135,7 +135,7 @@ fn configure_entity_replication_facade_matches_legacy_path_for_scope_exit() {
     fn run_with(
         facade: bool,
     ) -> ReplicationConfig {
-        let (coord, recv, send) = handles();
+        let (sim_handle, recv, send) = handles();
         let mut sim_app = App::new();
         sim_app.add_plugins(ServerPlugin::sim_integration(
             ServerConfig::default(),
@@ -143,27 +143,27 @@ fn configure_entity_replication_facade_matches_legacy_path_for_scope_exit() {
         ));
         let entity = sim_app.world_mut().spawn(()).id();
 
-        let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+        let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
             ws.enable_entity_replication(&entity);
         });
 
         let target = ReplicationConfig::public().persist_on_scope_exit();
-        let (coord, recv, send) = if facade {
+        let (sim_handle, recv, send) = if facade {
             let world: &mut World = sim_app.world_mut();
             let mut proxy = WorldProxyMut::proxy_mut(world);
-            configure_entity_replication(coord, recv, send, &mut proxy, &entity, target)
+            configure_entity_replication(sim_handle, recv, send, &mut proxy, &entity, target)
         } else {
             let world: &mut World = sim_app.world_mut();
             let mut proxy = WorldProxyMut::proxy_mut(world);
-            let (coord, recv, send, ()) =
-                run_with_world_server(coord, recv, send, |ws| {
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
                     ws.configure_entity_replication(&mut proxy, &entity, target);
                 });
-            (coord, recv, send)
+            (sim_handle, recv, send)
         };
 
-        let (_coord, _recv, _send, cfg) =
-            run_with_world_server(coord, recv, send, |ws| {
+        let (_sim_handle, _recv, _send, cfg) =
+            run_with_world_server(sim_handle, recv, send, |ws| {
                 ws.entity_replication_config(&entity)
                     .expect("entity registered")
             });

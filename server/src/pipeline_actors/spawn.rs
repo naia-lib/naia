@@ -1,6 +1,6 @@
 //! `spawn_server_handles` — single entry point that constructs a
 //! [`WorldServer`] and immediately splits it into the three pipeline
-//! handles (coord + recv + send).
+//! handles (sim_handle + recv + send).
 //!
 //! Cyberlith's `GameCell::init` (per MISSION_SIM_OWNS_WORLD.md Phase B.7
 //! / C.1 / D.1) calls this once at startup; the three returned handles
@@ -15,7 +15,7 @@ use crate::{
     server::ServerShared,
 };
 
-use super::CoordHandle;
+use super::SimHandle;
 
 /// Construct a [`WorldServer<E>`] and immediately split it into the three
 /// pipeline handles consumed by the 3-SubApp architecture.
@@ -25,10 +25,10 @@ use super::CoordHandle;
 /// let ws = WorldServer::<E>::new(config, protocol);
 /// let (coord_state, recv, send) = ws.into_pipeline_handles();
 /// let shared = Arc::clone(&recv.state.shared);
-/// (CoordHandle { state: coord_state, shared }, recv, send)
+/// (SimHandle { state: coord_state, shared }, recv, send)
 /// ```
 ///
-/// The returned `Arc<ServerShared<E>>` on [`CoordHandle::shared`] is a
+/// The returned `Arc<ServerShared<E>>` on [`SimHandle::shared`] is a
 /// clone of the same `Arc` already held by `recv.state.shared` and
 /// `send.state.shared` — all three handles see the same underlying
 /// [`ServerShared`] allocation, so cross-handle reads of shared init
@@ -37,7 +37,7 @@ use super::CoordHandle;
 pub fn spawn_server_handles<E, P>(
     server_config: ServerConfig,
     protocol: P,
-) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
+) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync + 'static,
     P: Into<Protocol>,
@@ -45,6 +45,6 @@ where
     let ws = WorldServer::<E>::new(server_config, protocol);
     let (coord_state, recv, send) = ws.into_pipeline_handles();
     let shared: Arc<ServerShared<E>> = Arc::clone(&recv.state.shared);
-    let coord = CoordHandle { state: coord_state, shared };
-    (coord, recv, send)
+    let sim_handle = SimHandle { state: coord_state, shared };
+    (sim_handle, recv, send)
 }

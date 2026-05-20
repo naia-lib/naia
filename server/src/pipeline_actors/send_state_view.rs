@@ -3,7 +3,7 @@
 //! for `SnapshotWorld<E>`.
 //!
 //! Cyberlith's Sim SubApp holds one as a bevy `Resource` (cloned from
-//! [`CoordHandle::send_state_view`]) and queries it each tick to learn:
+//! [`SimHandle::send_state_view`]) and queries it each tick to learn:
 //! - which entities to mark live in `SnapshotWorld`
 //! - which `(entity, component_kind)` pairs to populate from Sim's
 //!   gameplay world
@@ -39,7 +39,7 @@ use std::{hash::Hash, sync::Arc};
 
 use naia_shared::{ComponentKind, EntityAndGlobalEntityConverter};
 
-use crate::pipeline_actors::handles::CoordHandle;
+use crate::pipeline_actors::handles::SimHandle;
 use crate::server::ServerShared;
 
 /// Read-only Sim-side view into naia's registered entity/component
@@ -62,7 +62,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Clone for SendStateView<E> {
 impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// Constructs a view backed by the supplied `ServerShared` arc.
     /// Public-but-not-typical: cyberlith should obtain a view via
-    /// [`CoordHandle::send_state_view`] instead. This constructor is
+    /// [`SimHandle::send_state_view`] instead. This constructor is
     /// exposed primarily for tests that build a `ServerShared` directly.
     pub fn from_shared(shared: Arc<ServerShared<E>>) -> Self {
         Self { shared }
@@ -127,9 +127,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     /// Construct a [`SendStateView<E>`] backed by the same
-    /// `Arc<ServerShared>` as this CoordHandle. Cyberlith calls this
+    /// `Arc<ServerShared>` as this SimHandle. Cyberlith calls this
     /// once at init and hands the view to Sim as a Resource.
     pub fn send_state_view(&self) -> SendStateView<E> {
         SendStateView::from_shared(Arc::clone(&self.shared))
@@ -156,7 +156,7 @@ mod tests {
         assert_traits::<SendStateView<u64>>();
     }
 
-    /// Build a fresh CoordHandle<u64> backed by an empty protocol,
+    /// Build a fresh SimHandle<u64> backed by an empty protocol,
     /// extract its SendStateView, and assert both methods return empty
     /// collections on a brand-new (no entities registered) server.
     #[test]
@@ -165,10 +165,10 @@ mod tests {
         proto.lock();
         let protocol = proto.build();
 
-        let (coord, _recv, _send) =
+        let (sim_handle, _recv, _send) =
             spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
-        let view = coord.send_state_view();
+        let view = sim_handle.send_state_view();
         assert!(view.live_entities().is_empty(), "no entities → empty live");
         assert!(
             view.required_snapshot_entries().is_empty(),
@@ -189,7 +189,7 @@ mod tests {
         proto.lock();
         let protocol = proto.build();
 
-        let (coord, _recv, _send) =
+        let (sim_handle, _recv, _send) =
             spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
         // Register a world entity (id = 42) + global entity + two
@@ -197,11 +197,11 @@ mod tests {
         // entirely — go straight at the global maps.
         let world_entity: u64 = 42;
         let global_entity: GlobalEntity = {
-            let mut gem = coord.shared.global_entity_map.write();
+            let mut gem = sim_handle.shared.global_entity_map.write();
             gem.spawn(world_entity, None)
         };
         {
-            let mut gwm = coord.shared.global_world_manager.write();
+            let mut gwm = sim_handle.shared.global_world_manager.write();
             gwm.insert_entity_record(&global_entity, EntityOwner::Server);
             // Two distinct kinds drawn from std types — kinds are
             // TypeId-derived, so any two distinct types serve.
@@ -209,7 +209,7 @@ mod tests {
             gwm.insert_component_record(&global_entity, &ComponentKind::of::<TestKindB>());
         }
 
-        let view = coord.send_state_view();
+        let view = sim_handle.send_state_view();
         let live = view.live_entities();
         assert_eq!(live, vec![world_entity], "live should contain just the registered entity");
 
@@ -229,36 +229,36 @@ mod tests {
         proto.lock();
         let protocol = proto.build();
 
-        let (coord, _recv, _send) =
+        let (sim_handle, _recv, _send) =
             spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
         let world_entity: u64 = 7;
         let global_entity: GlobalEntity = {
-            let mut gem = coord.shared.global_entity_map.write();
+            let mut gem = sim_handle.shared.global_entity_map.write();
             gem.spawn(world_entity, None)
         };
         {
-            let mut gwm = coord.shared.global_world_manager.write();
+            let mut gwm = sim_handle.shared.global_world_manager.write();
             gwm.insert_entity_record(&global_entity, EntityOwner::Server);
             gwm.insert_component_record(&global_entity, &ComponentKind::of::<TestKindA>());
         }
 
         // Sanity: present before removal.
-        assert_eq!(coord.send_state_view().live_entities(), vec![world_entity]);
+        assert_eq!(sim_handle.send_state_view().live_entities(), vec![world_entity]);
 
         // Deregister the component record + entity record + map entry.
         {
-            let mut gwm = coord.shared.global_world_manager.write();
+            let mut gwm = sim_handle.shared.global_world_manager.write();
             gwm.remove_component_record(&global_entity, &ComponentKind::of::<TestKindA>());
             gwm.remove_entity_diff_handlers(&global_entity);
             gwm.remove_entity_record(&global_entity);
         }
         {
-            let mut gem = coord.shared.global_entity_map.write();
+            let mut gem = sim_handle.shared.global_entity_map.write();
             gem.despawn_by_world(&world_entity);
         }
 
-        let view = coord.send_state_view();
+        let view = sim_handle.send_state_view();
         assert!(view.live_entities().is_empty(), "live empty after removal");
         assert!(
             view.required_snapshot_entries().is_empty(),
@@ -274,15 +274,15 @@ mod tests {
         proto.lock();
         let protocol = proto.build();
 
-        let (coord, _recv, _send) =
+        let (sim_handle, _recv, _send) =
             spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
         let e1: u64 = 1;
         let e2: u64 = 2;
-        let g1 = coord.shared.global_entity_map.write().spawn(e1, None);
-        let g2 = coord.shared.global_entity_map.write().spawn(e2, None);
+        let g1 = sim_handle.shared.global_entity_map.write().spawn(e1, None);
+        let g2 = sim_handle.shared.global_entity_map.write().spawn(e2, None);
         {
-            let mut gwm = coord.shared.global_world_manager.write();
+            let mut gwm = sim_handle.shared.global_world_manager.write();
             gwm.insert_entity_record(&g1, EntityOwner::Server);
             gwm.insert_entity_record(&g2, EntityOwner::Server);
             gwm.insert_component_record(&g1, &ComponentKind::of::<TestKindA>());
@@ -290,7 +290,7 @@ mod tests {
             gwm.insert_component_record(&g2, &ComponentKind::of::<TestKindA>());
         }
 
-        let view = coord.send_state_view();
+        let view = sim_handle.send_state_view();
         let mut live = view.live_entities();
         live.sort();
         assert_eq!(live, vec![e1, e2]);

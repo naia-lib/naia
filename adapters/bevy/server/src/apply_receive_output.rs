@@ -1,7 +1,7 @@
 use bevy_ecs::{entity::Entity, message::Messages, world::{Mut, World}};
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
 use naia_server::{
-    pipeline_actors::{CoordHandle, SimEventReceiver},
+    pipeline_actors::{SimHandle, SimEventReceiver},
     EntityOwner, Events, ReceiveOutput,
 };
 
@@ -228,7 +228,7 @@ pub fn apply_receive_output(
 ///
 /// Same event-emission body as [`apply_receive_output`], byte-for-byte,
 /// EXCEPT the two `ServerImpl` query sites (`is_resource_entity`,
-/// `entity_owner`) route through [`CoordHandle`] instead. The
+/// `entity_owner`) route through [`SimHandle`] instead. The
 /// `ComponentEventRegistry::receive_events` tail call is preserved
 /// verbatim (lesson 11 of `feedback_naia_4f_operational`: omitting it
 /// silently breaks `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /
@@ -238,7 +238,7 @@ pub fn apply_receive_output(
 /// after `apply_recv_to_world` populates `output.world_events`.
 pub fn apply_receive_output_pipeline(
     world: &mut World,
-    coord: &CoordHandle<Entity>,
+    sim_handle: &SimHandle<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
     // Fire one bevy `TickEvent` per server tick that the recv path advanced.
@@ -315,13 +315,13 @@ pub fn apply_receive_output_pipeline(
     if events.has::<naia_events::SpawnEntityEvent>() {
         let mut client_spawned_entities = Vec::new();
         for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
-            if coord.is_resource_entity(&entity) {
+            if sim_handle.is_resource_entity(&entity) {
                 continue;
             }
             if !world.proxy().has_entity(&entity) {
                 continue;
             }
-            if let EntityOwner::Client(user_key) = coord.entity_owner(&entity) {
+            if let EntityOwner::Client(user_key) = sim_handle.entity_owner(&entity) {
                 client_spawned_entities.push((user_key, entity));
             }
         }
@@ -344,7 +344,7 @@ pub fn apply_receive_output_pipeline(
             .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent>>()
             .unwrap();
         for (user_key, entity) in events.read::<naia_events::DespawnEntityEvent>() {
-            if coord.is_resource_entity(&entity) {
+            if sim_handle.is_resource_entity(&entity) {
                 continue;
             }
             event_writer.write(bevy_events::DespawnEntityEvent(user_key, entity));
@@ -458,7 +458,7 @@ pub fn apply_receive_output_pipeline(
 /// call (lesson 11 of `feedback_naia_4f_operational`).
 pub fn apply_receive_output_pipeline_with_sim_receiver(
     world: &mut World,
-    coord: &CoordHandle<Entity>,
+    sim_handle: &SimHandle<Entity>,
     sim_receiver: &SimEventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
@@ -571,13 +571,13 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
     if events.has::<naia_events::SpawnEntityEvent>() {
         let mut client_spawned_entities = Vec::new();
         for (_, entity) in events.read::<naia_events::SpawnEntityEvent>() {
-            if coord.is_resource_entity(&entity) {
+            if sim_handle.is_resource_entity(&entity) {
                 continue;
             }
             if !world.proxy().has_entity(&entity) {
                 continue;
             }
-            if let EntityOwner::Client(user_key) = coord.entity_owner(&entity) {
+            if let EntityOwner::Client(user_key) = sim_handle.entity_owner(&entity) {
                 client_spawned_entities.push((user_key, entity));
             }
         }
@@ -602,7 +602,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
             .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent>>()
             .unwrap();
         for (user_key, entity) in events.read::<naia_events::DespawnEntityEvent>() {
-            if coord.is_resource_entity(&entity) {
+            if sim_handle.is_resource_entity(&entity) {
                 continue;
             }
             event_writer.write(bevy_events::DespawnEntityEvent(user_key, entity));

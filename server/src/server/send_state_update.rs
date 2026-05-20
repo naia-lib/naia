@@ -29,7 +29,7 @@
 //!   `naia-shared`; routing every mutation through this queue would
 //!   require breaking changes to that public type. The 4-E.2e
 //!   `global_priority` move uses **publish-on-read** at the start of
-//!   `send_all_packets` instead — `coord.global_priority_mirror` is
+//!   `send_all_packets` instead — `sim_handle.global_priority_mirror` is
 //!   cloned into `send.global_priority`. The `PriorityChanged` variant
 //!   exists so a future commit (likely 4-F when the coordinator and
 //!   send threads truly diverge) can rewire the borrow API to push

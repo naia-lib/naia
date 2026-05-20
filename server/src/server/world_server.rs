@@ -155,7 +155,7 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     /// Coordinator-thread substate (step 4-E.2a). Holds everything that
     /// isn't recv- or send-exclusive nor cross-thread-shared. Subsequent
     /// 4-E.2 sub-commits migrate individual fields elsewhere.
-    pub(crate) coord: crate::server::CoordinatorState<E>,
+    pub(crate) sim_handle: crate::server::CoordinatorState<E>,
 }
 
 
@@ -233,7 +233,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             scope_retry_counts: HashMap::new(),
         };
 
-        let coord = crate::server::CoordinatorState {
+        let sim_handle = crate::server::CoordinatorState {
             user_store: UserStore::new(),
             room_store: RoomStore::new(),
             global_request_manager: GlobalRequestManager::new(),
@@ -243,7 +243,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             historian: None,
         };
 
-        Self { shared, recv, send, coord }
+        Self { shared, recv, send, sim_handle }
     }
 
     /// Returns whether or not the Server has initialized correctly and is
@@ -268,8 +268,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Registers a newly-accepted user so the world server can track their scope (adapter use only).
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
-        self.coord.user_store.insert(user_key, WorldUser::new(user_addr));
-        self.coord.user_store.register_disconnected(user_addr, user_key);
+        self.sim_handle.user_store.insert(user_key, WorldUser::new(user_addr));
+        self.sim_handle.user_store.register_disconnected(user_addr, user_key);
         // Auto-include of Replicated Resources happens in
         // `finalize_connection` — that's the point at which a Connection
         // exists in `user_connections` (required by `apply_scope_for_user`
@@ -277,7 +277,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     fn finalize_connection(&mut self, user_key: &UserKey, user_address: &SocketAddr) {
-        if !self.coord.user_store.contains(user_key) {
+        if !self.sim_handle.user_store.contains(user_key) {
             warn!("unknown user is finalizing connection...");
             return;
         };
@@ -353,8 +353,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// The recv-only socket loop now lives on [`RecvState::receive`];
     /// the cross-half decode + per-address drain + command finalization
     /// lives on [`SendState::process_recv_packets`]. This wrapper glues
-    /// them together with the coord-stage `drain_pending_handshakes`
-    /// step in between (which needs `coord.user_store`).
+    /// them together with the coordination-stage `drain_pending_handshakes`
+    /// step in between (which needs `sim_handle.user_store`).
     pub fn receive_all_packets(&mut self) {
         // Send-side bandwidth tick (the recv-side counterpart fires inside
         // `RecvState::receive`).
@@ -394,7 +394,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// 4-F.naia.c.1: coordinator-stage drain of `shared.pending_handshakes`.
     /// Recv path pushes addresses on incoming ClientConnectRequest packets;
     /// this method finalizes each one (lookup user_key via
-    /// `coord.user_store.take_disconnected`, build connection pair, register
+    /// `sim_handle.user_store.take_disconnected`, build connection pair, register
     /// shared atomic, queue ConnectionAdded). Idempotent on repeated pushes
     /// because `take_disconnected` returns None on the second call (spec
     /// Option C-2).
@@ -406,7 +406,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let pending: Vec<SocketAddr> =
             std::mem::take(&mut *self.shared.pending_handshakes.lock());
         for address in pending {
-            let Some(user_key) = self.coord.user_store.take_disconnected(&address) else {
+            let Some(user_key) = self.sim_handle.user_store.take_disconnected(&address) else {
                 // Repeat Handshake retry (already finalized) — silently
                 // skip. The Connect Response was already queued by the
                 // recv path so the client will observe the retry as
@@ -455,7 +455,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 }
                 SendStateUpdate::PriorityChanged { entity, gain } => {
                     // 4-E.2e: reserved variant. The borrow API still
-                    // writes through `coord.global_priority_mirror` and
+                    // writes through `sim_handle.global_priority_mirror` and
                     // publish-on-read carries it over. If a future
                     // commit rewires the borrow API to push here, apply
                     // the gain directly to `send.global_priority`.
@@ -572,9 +572,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         super::pipeline_handles::RecvHandle<E>,
         super::pipeline_handles::SendHandle<E>,
     ) {
-        let (coord, recv_state, send_state) = self.into_pipeline_states();
+        let (sim_handle, recv_state, send_state) = self.into_pipeline_states();
         (
-            coord,
+            sim_handle,
             super::pipeline_handles::RecvHandle { state: recv_state },
             super::pipeline_handles::SendHandle { state: send_state },
         )
@@ -590,12 +590,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// The `Arc<ServerShared<E>>` is recovered from `recv.shared`
     /// (the same Arc clone also lives on `send.shared`).
     pub fn from_pipeline_states(
-        coord: super::coord_state::CoordinatorState<E>,
+        sim_handle: super::coord_state::CoordinatorState<E>,
         recv: super::recv_state::RecvState<E>,
         send: super::send_state::SendState<E>,
     ) -> Self {
         let shared = Arc::clone(&recv.shared);
-        Self { shared, recv, send, coord }
+        Self { shared, recv, send, sim_handle }
     }
 
     /// Consume this `WorldServer` into the field-level pipeline states
@@ -627,7 +627,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // 4-E.2d: `recv_user_connections` and `send_user_connections` are
         // authoritative in both serial and pipeline modes — no dissolution
         // step needed here, just move the substates out.
-        (self.coord, self.recv, self.send)
+        (self.sim_handle, self.recv, self.send)
     }
 
     /// Advances the tick clock and returns any new tick events for this frame.
@@ -672,7 +672,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Cannot send message to Client on this Channel");
         }
 
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             #[cfg(feature = "f3_diag")]
             eprintln!(
                 "[F3-DIAG naia/WorldServer] send_message_inner user_not_found_in_user_store user={:?} channel={:?}",
@@ -756,9 +756,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             panic!("Requests can only be sent over Bidirectional, Reliable Channels");
         }
 
-        let request_id = self.coord.global_request_manager.create_request_id(user_key);
+        let request_id = self.sim_handle.global_request_manager.create_request_id(user_key);
 
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             warn!("user does not exist");
             return Err(NaiaServerError::Message("user does not exist".to_string()));
         };
@@ -805,13 +805,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         response_id: &GlobalResponseId,
         response_box: Box<dyn Message>,
     ) -> bool {
-        let Some((user_key, channel_kind, local_response_id)) = self.coord
+        let Some((user_key, channel_kind, local_response_id)) = self.sim_handle
             .global_response_manager
             .destroy_response_id(response_id)
         else {
             return false;
         };
-        let Some(user) = self.coord.user_store.get(&user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(&user_key) else {
             return false;
         };
         let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
@@ -839,7 +839,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         response_key: &ResponseReceiveKey<S>,
     ) -> Option<(UserKey, S)> {
         let request_id = response_key.request_id();
-        let (user_key, container) = self.coord.global_request_manager.destroy_request_id(&request_id)?;
+        let (user_key, container) = self.sim_handle.global_request_manager.destroy_request_id(&request_id)?;
         let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
             .ok()
             .map(|boxed_s| *boxed_s)
@@ -896,10 +896,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// # Pipeline-mode extraction (deferred — step 4-F.naia.h)
     ///
     /// The body has three logical phases:
-    ///   1. **`run_send_preamble`** — drains coord-side handoff queues
+    ///   1. **`run_send_preamble`** — drains coordination-side handoff queues
     ///      (`scope_change_queue`, `pending_auth_grants`,
     ///      `pending_send_state_updates`), publishes
-    ///      `global_priority_mirror`. Touches `self.coord.*` and
+    ///      `global_priority_mirror`. Touches `self.sim_handle.*` and
     ///      `self.shared.*` — must stay on the coordinator.
     ///   2. **Iris three-phase loop** — Phase 1+2 dirty scan +
     ///      Phase 3 per-user pack. Touches only `self.send.*` and
@@ -908,7 +908,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///      `pending_auth_grants` into per-user send-side state.
     ///      Touches `self.send.*` only.
     ///
-    /// Step 4-F.naia.h factors phase 1 into a coord-side method
+    /// Step 4-F.naia.h factors phase 1 into a coordination-side method
     /// (`WorldServer::run_send_preamble`) and moves phases 2 + 3 to
     /// `SendState::send_all_packets` so `SendHandle` can drive them
     /// from a background thread. See
@@ -930,10 +930,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // 4-F.naia.h: send-half body lives on `SendState::send_all_packets`.
         // The serial / cyberlith.d coordinator entry point preserves the
-        // original behavior by running the coord-stage preamble inline
+        // original behavior by running the coordination-stage preamble inline
         // and then delegating the send-side work. The 4-F.cyberlith.e
         // multi-thread coordinator will instead call `run_send_preamble`
-        // on the coord thread and `SendHandle::send_all_packets` on the
+        // on the Sim/main thread and `SendHandle::send_all_packets` on the
         // send thread (with a sync barrier between them).
         self.run_send_preamble(&world);
         self.send.send_all_packets(world);
@@ -941,13 +941,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// 4-F.naia.b: coordinator-side preamble for the send phase. Runs
     /// `publish global_priority` + `update_entity_scopes` + `flush_pending_auth_grants`.
-    /// Touches `coord.*` freely. Today this is called inline from
+    /// Touches `sim_handle.*` freely. Today this is called inline from
     /// `send_all_packets`; the 4-F.cyberlith.e coordinator will call this
     /// explicitly before kicking the send thread (so `SendHandle::send_all_packets`
     /// on the send thread becomes a `self.send.*` + `self.shared.*`-only method).
     pub(crate) fn run_send_preamble<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
         // 4-E.2e: publish-on-read for global_priority. The borrow API
-        // writes go into `coord.global_priority_mirror`; Iris below reads
+        // writes go into `sim_handle.global_priority_mirror`; Iris below reads
         // from `send.global_priority`. Cost is O(N entities-with-overrides)
         // — typically 0 unless the game has actively tuned priorities.
         // The future per-entity SendStateUpdate::PriorityChanged path will
@@ -955,7 +955,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // semantics simple and correct.
         self.send
             .global_priority
-            .clone_from(&self.coord.global_priority_mirror);
+            .clone_from(&self.sim_handle.global_priority_mirror);
 
         // update entity scopes
         #[cfg(feature = "bench_instrumentation")]
@@ -1109,7 +1109,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let channel_kind = ChannelKind::of::<C>();
         let message_box = M::clone_box(message);
         let container = MessageContainer::new(message_box);
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             warn!("inject_tick_buffer_message: user {:?} does not exist", user_key);
             return false;
         };
@@ -1195,7 +1195,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_to_global_entity(&world_entity)
             .expect("entity just spawned must be in global map");
 
-        if let Err(e) = self.coord.resource_registry.insert::<R>(global_entity) {
+        if let Err(e) = self.sim_handle.resource_registry.insert::<R>(global_entity) {
             self.despawn_entity_worldless(&world_entity);
             world.despawn_entity(&world_entity);
             return Err(e);
@@ -1203,7 +1203,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         self.insert_component(&mut world, &world_entity, value);
 
-        let user_keys: Vec<UserKey> = self.coord.user_store.keys_copied();
+        let user_keys: Vec<UserKey> = self.sim_handle.user_store.keys_copied();
         for user_key in user_keys {
             self.user_scope_set_entity(&user_key, &world_entity, true);
         }
@@ -1221,7 +1221,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         &mut self,
         mut world: W,
     ) -> bool {
-        let Some(global_entity) = self.coord.resource_registry.remove::<R>() else {
+        let Some(global_entity) = self.sim_handle.resource_registry.remove::<R>() else {
             return false;
         };
         let world_entity = match self.shared.global_entity_map.read()
@@ -1240,7 +1240,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// O(1): the hidden entity carrying resource `R`, or `None` if
     /// `R` is not currently inserted.
     pub fn resource_entity<R: ReplicatedComponent>(&self) -> Option<E> {
-        let global_entity = self.coord.resource_registry.entity_for::<R>()?;
+        let global_entity = self.sim_handle.resource_registry.entity_for::<R>()?;
         self.shared.global_entity_map.read().global_entity_to_entity(&global_entity)
             .ok()
     }
@@ -1252,17 +1252,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let Ok(global_entity) = self.shared.global_entity_map.read().entity_to_global_entity(world_entity) else {
             return false;
         };
-        self.coord.resource_registry.is_resource_entity(&global_entity)
+        self.sim_handle.resource_registry.is_resource_entity(&global_entity)
     }
 
     /// True iff a resource of type `R` is currently inserted.
     pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
-        self.coord.resource_registry.entity_for::<R>().is_some()
+        self.sim_handle.resource_registry.entity_for::<R>().is_some()
     }
 
     /// Number of currently-inserted resources.
     pub fn resources_count(&self) -> usize {
-        self.coord.resource_registry.len()
+        self.sim_handle.resource_registry.len()
     }
 
     /// Read-only handle to the per-resource priority state.
@@ -1300,8 +1300,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Used by the connect-flow to auto-include all resources in a new
     /// user's scope.
     pub fn resource_entities(&self) -> Vec<E> {
-        let mut out = Vec::with_capacity(self.coord.resource_registry.len());
-        for global_entity in self.coord.resource_registry.entities() {
+        let mut out = Vec::with_capacity(self.sim_handle.resource_registry.len());
+        for global_entity in self.sim_handle.resource_registry.entities() {
             if let Ok(e) = self.shared.global_entity_map.read()
                 .global_entity_to_entity(global_entity)
             {
@@ -1349,7 +1349,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             AuthOwner::Client(prev_holder_key) => {
                 // There was a client holder - only they need to transition (Granted→Denied)
                 // Other clients were already Denied, no message needed
-                if let Some(user) = self.coord.user_store.get(&prev_holder_key) {
+                if let Some(user) = self.sim_handle.user_store.get(&prev_holder_key) {
                     if let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) {
                         if send_conn
                             .base
@@ -1366,7 +1366,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             }
             AuthOwner::None => {
                 // No holder - all clients were Available, all need to transition to Denied
-                for (_user_key, user) in self.coord.user_store.iter() {
+                for (_user_key, user) in self.sim_handle.user_store.iter() {
                     if let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) {
                         if !send_conn
                             .base
@@ -1394,7 +1394,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for (_user_key, user) in self.coord.user_store.iter() {
+        for (_user_key, user) in self.sim_handle.user_store.iter() {
             if let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) {
                 // Check if entity exists on the client (as either HostEntity or RemoteEntity)
                 // After migration, the entity is a RemoteEntity on the client, but the server
@@ -1589,7 +1589,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
-        for (user_key, user) in self.coord.user_store.iter() {
+        for (user_key, user) in self.sim_handle.user_store.iter() {
             let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
                 continue;
             };
@@ -1654,7 +1654,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.shared.global_world_manager.write()
             .client_request_authority(&global_entity, &requester)?;
 
-        for (user_key, user) in self.coord.user_store.iter() {
+        for (user_key, user) in self.sim_handle.user_store.iter() {
             let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
                 continue;
             };
@@ -1792,7 +1792,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Returns whether or not a User exists for the given RoomKey
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        self.coord.user_store.contains(user_key)
+        self.sim_handle.user_store.contains(user_key)
     }
 
     /// Retrieves an UserRef that exposes read-only operations for the User
@@ -1803,7 +1803,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// when calling from a context where the key may be stale (e.g., inside a
     /// disconnect handler that received a copy of the key before disconnect was processed).
     pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
-        if self.coord.user_store.contains(user_key) {
+        if self.sim_handle.user_store.contains(user_key) {
             return UserRef::new(self, user_key);
         }
         panic!("No User exists for given Key!");
@@ -1813,7 +1813,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///
     /// Use this instead of [`user`](Self::user) when you cannot guarantee the key is still live.
     pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, E>> {
-        if self.coord.user_store.contains(user_key) {
+        if self.sim_handle.user_store.contains(user_key) {
             Some(UserRef::new(self, user_key))
         } else {
             None
@@ -1827,7 +1827,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Panics if no user exists for the given key. Prefer [`user_mut_opt`](Self::user_mut_opt)
     /// when calling from a context where the key may be stale.
     pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
-        if self.coord.user_store.contains(user_key) {
+        if self.sim_handle.user_store.contains(user_key) {
             return UserMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
@@ -1837,7 +1837,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///
     /// Use this instead of [`user_mut`](Self::user_mut) when you cannot guarantee the key is still live.
     pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, E>> {
-        if self.coord.user_store.contains(user_key) {
+        if self.sim_handle.user_store.contains(user_key) {
             Some(UserMut::new(self, user_key))
         } else {
             None
@@ -1848,7 +1848,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub fn user_keys(&self) -> Vec<UserKey> {
         let mut output = Vec::new();
 
-        for (user_key, user) in self.coord.user_store.iter() {
+        for (user_key, user) in self.sim_handle.user_store.iter() {
             if self.send.send_user_connections.contains_key(&user.address()) {
                 output.push(*user_key);
             }
@@ -1859,7 +1859,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Get the number of Users currently connected
     pub fn users_count(&self) -> usize {
-        self.coord.user_store.len()
+        self.sim_handle.user_store.len()
     }
 
     /// Returns the number of users that have fully connected (handshake complete).
@@ -1874,7 +1874,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Returns a UserScopeRef, which is used to query whether a given user has
     pub fn user_scope(&'_ self, user_key: &UserKey) -> UserScopeRef<'_, E> {
-        if self.coord.user_store.contains(user_key) {
+        if self.sim_handle.user_store.contains(user_key) {
             return UserScopeRef::new(self, user_key);
         }
         panic!("No User exists for given Key!");
@@ -1883,7 +1883,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Returns a UserScopeMut, which is used to include/exclude Entities for a
     /// given User
     pub fn user_scope_mut(&'_ mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
-        if self.coord.user_store.contains(user_key) {
+        if self.sim_handle.user_store.contains(user_key) {
             return UserScopeMut::new(self, user_key);
         }
         panic!("No User exists for given Key!");
@@ -1894,22 +1894,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Read-only handle to the sender-wide (global) priority state for `entity`.
     /// Combined multiplicatively with the per-user gain at sort time.
     ///
-    /// 4-E.2e: read target is `coord.global_priority_mirror`. The send
+    /// 4-E.2e: read target is `sim_handle.global_priority_mirror`. The send
     /// thread's read target (`send.global_priority`) is a clone refreshed
     /// at the top of `send_all_packets`.
     pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
-        self.coord.global_priority_mirror.get_ref(entity)
+        self.sim_handle.global_priority_mirror.get_ref(entity)
     }
 
     /// Mutable handle to the sender-wide (global) priority state for `entity`.
     /// Lazy-creates an entry on first write.
     ///
-    /// 4-E.2e: writes target `coord.global_priority_mirror`. The publish
+    /// 4-E.2e: writes target `sim_handle.global_priority_mirror`. The publish
     /// step at the top of the next `send_all_packets` carries the change
     /// over to `send.global_priority`. See `SendStateUpdate::PriorityChanged`
     /// for the future per-entity sync path.
     pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
-        self.coord.global_priority_mirror.get_mut(entity)
+        self.sim_handle.global_priority_mirror.get_mut(entity)
     }
 
     /// Read-only handle to the per-user priority state for `entity` on the
@@ -1968,20 +1968,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// key
     pub fn create_room(&'_ mut self) -> RoomMut<'_, E> {
         let new_room = Room::new();
-        let room_key = self.coord.room_store.insert(new_room);
+        let room_key = self.sim_handle.room_store.insert(new_room);
         RoomMut::new(self, &room_key)
     }
 
     /// Returns whether or not a Room exists for the given RoomKey
     pub fn room_exists(&self, room_key: &RoomKey) -> bool {
-        self.coord.room_store.contains(room_key)
+        self.sim_handle.room_store.contains(room_key)
     }
 
     /// Retrieves an RoomMut that exposes read and write operations for the
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
     pub fn room(&'_ self, room_key: &RoomKey) -> RoomRef<'_, E> {
-        if self.coord.room_store.contains(room_key) {
+        if self.sim_handle.room_store.contains(room_key) {
             return RoomRef::new(self, room_key);
         }
         panic!("No Room exists for given Key!");
@@ -1991,7 +1991,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Room associated with the given RoomKey.
     /// Panics if the room does not exist.
     pub fn room_mut(&'_ mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
-        if self.coord.room_store.contains(room_key) {
+        if self.sim_handle.room_store.contains(room_key) {
             return RoomMut::new(self, room_key);
         }
         panic!("No Room exists for given Key!");
@@ -1999,12 +1999,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Return a list of all the Server's Rooms' keys
     pub fn room_keys(&self) -> Vec<RoomKey> {
-        self.coord.room_store.keys()
+        self.sim_handle.room_store.keys()
     }
 
     /// Get a count of how many Rooms currently exist
     pub fn rooms_count(&self) -> usize {
-        self.coord.room_store.len()
+        self.sim_handle.room_store.len()
     }
 
     /// Returns the total number of rooms that currently exist.
@@ -2043,7 +2043,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     // Ping
     /// Gets the average Round Trip Time measured to the given User's Client
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
-        if let Some(user) = self.coord.user_store.get(user_key) {
+        if let Some(user) = self.sim_handle.user_store.get(user_key) {
             if let Some(recv_conn) = self.recv.recv_user_connections.get(&user.address()) {
                 return Some(recv_conn.ping_manager.rtt_average);
             }
@@ -2054,7 +2054,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Gets the average Jitter measured in connection to the given User's
     /// Client
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
-        if let Some(user) = self.coord.user_store.get(user_key) {
+        if let Some(user) = self.sim_handle.user_store.get(user_key) {
             if let Some(recv_conn) = self.recv.recv_user_connections.get(&user.address()) {
                 return Some(recv_conn.ping_manager.jitter_average);
             }
@@ -2070,7 +2070,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// covers ~3 seconds at 20 Hz, which is appropriate for most games.
     /// Call once at startup; calling again replaces the buffer.
     pub fn enable_historian(&mut self, max_ticks: u16) {
-        self.coord.historian = Some(crate::historian::Historian::new(max_ticks));
+        self.sim_handle.historian = Some(crate::historian::Historian::new(max_ticks));
     }
 
     /// Like `enable_historian`, but only snapshots the component kinds in
@@ -2081,7 +2081,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         max_ticks: u16,
         filter: impl IntoIterator<Item = naia_shared::ComponentKind>,
     ) {
-        self.coord.historian = Some(crate::historian::Historian::new_filtered(max_ticks, filter));
+        self.sim_handle.historian = Some(crate::historian::Historian::new_filtered(max_ticks, filter));
     }
 
     /// Record a snapshot of all replicated component values at the given tick.
@@ -2091,7 +2091,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// This is a no-op if `enable_historian()` has not been called.
     pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
         let entity_map = self.shared.global_entity_map.read();
-        if let Some(historian) = &mut self.coord.historian {
+        if let Some(historian) = &mut self.sim_handle.historian {
             historian.record_tick(
                 tick,
                 &*self.shared.global_world_manager.read(),
@@ -2104,7 +2104,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Returns a read-only reference to the Historian, or `None` if it has not
     /// been enabled via `enable_historian()`.
     pub fn historian(&self) -> Option<&crate::historian::Historian> {
-        self.coord.historian.as_ref()
+        self.sim_handle.historian.as_ref()
     }
 
     /// Returns a snapshot of per-connection diagnostics for the given user.
@@ -2113,7 +2113,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// averages or short-window estimates computed on demand; no per-tick
     /// allocation occurs.
     pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
-        let user = self.coord.user_store.get(user_key)?;
+        let user = self.sim_handle.user_store.get(user_key)?;
         let recv_conn = self.recv.recv_user_connections.get(&user.address())?;
         let send_conn = self.send.send_user_connections.get(&user.address())?;
         let pm = &recv_conn.ping_manager;
@@ -2159,7 +2159,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // send-side authoritative copy — publish-on-read at next
         // `send_all_packets` would also clear it, but doing it eagerly
         // here keeps the two copies bit-identical between ticks.
-        self.coord.global_priority_mirror.on_despawn(world_entity);
+        self.sim_handle.global_priority_mirror.on_despawn(world_entity);
         self.send.global_priority.on_despawn(world_entity);
         for layer in self.send.user_priorities.values_mut() {
             layer.on_scope_exit(world_entity);
@@ -2185,7 +2185,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Delete room cache entry
         if let Some(room_keys) = self.send.entity_room_map.remove_from_all_rooms(global_entity) {
             for room_key in room_keys {
-                if let Some(room) = self.coord.room_store.get_mut(&room_key) {
+                if let Some(room) = self.sim_handle.room_store.get_mut(&room_key) {
                     room.remove_entity(global_entity, true);
                 }
             }
@@ -2338,7 +2338,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     .entity_get_rooms(&global_entity)
                     .is_none();
                 if entity_is_roomless {
-                    let is_resource = self.coord.resource_registry.is_resource_entity(&global_entity);
+                    let is_resource = self.sim_handle.resource_registry.is_resource_entity(&global_entity);
                     let server_owned = self.shared.global_world_manager.read()
                         
                         .entity_owner(&global_entity)
@@ -2352,7 +2352,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return *in_scope;
         }
         // Default: in-scope if user and entity share a room
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             return false;
         };
         let Some(entity_rooms) = self.send.entity_room_map.entity_get_rooms(&global_entity) else {
@@ -2446,7 +2446,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) {
         let excluding_addr_opt: Option<SocketAddr> = {
             if let Some(user_key) = excluding_user_opt {
-                self.coord.user_store.get(user_key).map(|user| user.address())
+                self.sim_handle.user_store.get(user_key).map(|user| user.address())
             } else {
                 None
             }
@@ -2545,7 +2545,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 );
             };
             // Send PublishEntity action through EntityActionEvent system
-            if let Some(user) = self.coord.user_store.get(&user_key) {
+            if let Some(user) = self.sim_handle.user_store.get(&user_key) {
                 if let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) {
                     send_conn
                         .base
@@ -2596,7 +2596,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             
             .entity_owner(global_entity)
             .and_then(|o| if let EntityOwner::ClientPublic(k) = o { Some(k) } else { None })
-            .and_then(|k| self.coord.user_store.get(&k).map(|u| u.address()));
+            .and_then(|k| self.sim_handle.user_store.get(&k).map(|u| u.address()));
 
         if server_origin {
             // Send UnpublishEntity action through EntityActionEvent system
@@ -2661,7 +2661,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
-            for (user_key, user) in self.coord.user_store.iter() {
+            for (user_key, user) in self.sim_handle.user_store.iter() {
                 if let Some(client_key) = &client_origin {
                     if user_key == client_key {
                         // skip sending to origin client, will be handled below
@@ -2786,7 +2786,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
 
         // Migrate Entity from Remote -> Host connection
-        let Some(user) = self.coord.user_store.get(&user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(&user_key) else {
             panic!("user should exist");
         };
         let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
@@ -2879,7 +2879,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             // assigns initial authority to the previous owner) silently
             // fail. Snapshot first so we can re-borrow user_connections
             // mutably inside the loop.
-            let user_snapshot: Vec<(UserKey, std::net::SocketAddr)> = self.coord
+            let user_snapshot: Vec<(UserKey, std::net::SocketAddr)> = self.sim_handle
                 .user_store
                 .iter()
                 .map(|(k, u)| (*k, u.address()))
@@ -2923,7 +2923,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
-            for (_user_key, user) in self.coord.user_store.iter() {
+            for (_user_key, user) in self.sim_handle.user_store.iter() {
                 let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
                     continue;
                 };
@@ -2954,17 +2954,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        self.coord.user_store.address(user_key)
+        self.sim_handle.user_store.address(user_key)
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
     pub(crate) fn user_room_keys(&'_ self, user_key: &UserKey) -> Option<Iter<'_, RoomKey>> {
-        self.coord.user_store.room_keys_iter(user_key)
+        self.sim_handle.user_store.room_keys_iter(user_key)
     }
 
     /// Get an count of how many Rooms the given User is inside
     pub(crate) fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
-        self.coord.user_store.rooms_count(user_key)
+        self.sim_handle.user_store.rooms_count(user_key)
     }
 
     pub(crate) fn user_disconnect<W: WorldMutType<E>>(
@@ -3004,7 +3004,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     pub(crate) fn user_queue_disconnect(&mut self, user_key: &UserKey, reason: DisconnectReason) {
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             // User already disconnected, this is fine (disconnect packets may arrive multiple times)
             return;
         };
@@ -3024,7 +3024,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> WorldUser {
-        let Some(user) = self.coord.user_store.remove(user_key) else {
+        let Some(user) = self.sim_handle.user_store.remove(user_key) else {
             panic!("Attempting to delete non-existent user!");
         };
 
@@ -3056,7 +3056,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
         // Clean up all user data
         for room_key in user.room_keys() {
-            self.coord.room_store
+            self.sim_handle.room_store
                 .get_mut(room_key)
                 .unwrap()
                 .unsubscribe_user(user_key);
@@ -3072,8 +3072,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             self.send.send_io.deregister_client(&user.address());
         }
 
-        self.coord.global_request_manager.purge_user(user_key);
-        self.coord.global_response_manager.purge_user(user_key);
+        self.sim_handle.global_request_manager.purge_user(user_key);
+        self.sim_handle.global_response_manager.purge_user(user_key);
 
         user
     }
@@ -3084,7 +3084,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         user_key: &UserKey,
         world: &mut W,
     ) {
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             panic!("Attempting to despawn entities for a nonexistent user");
         };
         let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
@@ -3111,7 +3111,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub(crate) fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
         let (existed, room_change_opt) = {
             let entity_map = self.shared.global_entity_map.read();
-            self.coord.room_store.destroy(room_key, &mut self.coord.user_store, &*entity_map)
+            self.sim_handle.room_store.destroy(room_key, &mut self.sim_handle.user_store, &*entity_map)
         };
         if let Some(room_change) = room_change_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -3126,7 +3126,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Returns whether or not an User is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
-        self.coord.room_store.has_user(room_key, user_key)
+        self.sim_handle.room_store.has_user(room_key, user_key)
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
@@ -3139,7 +3139,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
         let (legacy_change, room_change) = {
             let entity_map = self.shared.global_entity_map.read();
-            self.coord.room_store.add_user(room_key, user_key, &mut self.coord.user_store, &*entity_map)
+            self.sim_handle.room_store.add_user(room_key, user_key, &mut self.sim_handle.user_store, &*entity_map)
         };
         {
             let mut q = self.shared.scope_change_queue.lock();
@@ -3155,8 +3155,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         {
             SERVER_ROOM_MOVE_CALLED.fetch_add(1, Ordering::Relaxed);
         }
-        let (legacy_change, room_change) = self.coord.room_store.remove_user::<E>(
-            room_key, user_key, &mut self.coord.user_store);
+        let (legacy_change, room_change) = self.sim_handle.room_store.remove_user::<E>(
+            room_key, user_key, &mut self.sim_handle.user_store);
         {
             let mut q = self.shared.scope_change_queue.lock();
             q.push_back(legacy_change);
@@ -3167,16 +3167,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Get a count of Users in a given Room
     pub(crate) fn room_users_count(&self, room_key: &RoomKey) -> usize {
-        self.coord.room_store.users_count(room_key)
+        self.sim_handle.room_store.users_count(room_key)
     }
 
     /// Returns an iterator of the [`UserKey`] for Users that belong in the Room
     pub(crate) fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
-        self.coord.room_store.user_keys_iter(room_key)
+        self.sim_handle.room_store.user_keys_iter(room_key)
     }
 
     pub(crate) fn room_entities(&self, room_key: &RoomKey) -> impl Iterator<Item = &GlobalEntity> {
-        self.coord.room_store.entities_iter(room_key)
+        self.sim_handle.room_store.entities_iter(room_key)
     }
 
     /// Sends a message to all connected users in a given Room using a given channel
@@ -3188,7 +3188,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ) {
         // Wrap once in Arc so per-user clones are refcount increments, not heap allocs.
         let container = MessageContainer::new(message_box);
-        let user_keys: Vec<UserKey> = self.coord.room_store.user_keys_iter(room_key).cloned().collect();
+        let user_keys: Vec<UserKey> = self.sim_handle.room_store.user_keys_iter(room_key).cloned().collect();
         for user_key in &user_keys {
             let _ = self.send_message_inner(user_key, channel_kind, container.clone());
         }
@@ -3199,7 +3199,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &GlobalEntity) -> bool {
-        self.coord.room_store.has_entity(room_key, entity)
+        self.sim_handle.room_store.has_entity(room_key, entity)
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -3208,7 +3208,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            self.coord.room_store.add_entity(room_key, world_entity, &*entity_map)
+            self.sim_handle.room_store.add_entity(room_key, world_entity, &*entity_map)
         };
         if let Some((legacy_change, room_change)) = pair_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -3222,7 +3222,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            self.coord.room_store.remove_entity(room_key, world_entity, &*entity_map)
+            self.sim_handle.room_store.remove_entity(room_key, world_entity, &*entity_map)
         };
         if let Some((legacy_change, room_change)) = pair_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -3235,7 +3235,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     /// Get a count of Entities in a given Room
     pub(crate) fn room_entities_count(&self, room_key: &RoomKey) -> usize {
-        self.coord.room_store.entities_count(room_key)
+        self.sim_handle.room_store.entities_count(room_key)
     }
 
     // Private methods
@@ -3262,7 +3262,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         // MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — drain
-        // disconnect requests queued by `CoordHandle::disconnect_user`. Collect
+        // disconnect requests queued by `SimHandle::disconnect_user`. Collect
         // while holding the lock, then call `user_queue_disconnect` without
         // the lock (it may re-lock other shared state). Runs immediately before
         // `outstanding_disconnects` is consumed so both are processed in the
@@ -3302,8 +3302,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     now,
                     &mut *entity_map,
                     &mut *self.shared.global_world_manager.write(),
-                    &mut self.coord.global_request_manager,
-                    &mut self.coord.global_response_manager,
+                    &mut self.sim_handle.global_request_manager,
+                    &mut self.sim_handle.global_response_manager,
                     world,
                     &mut self.recv.incoming_world_events,
                 ),
@@ -3332,7 +3332,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     if idx.is_valid() {
                         self.shared.idx_to_world.write()[idx.as_usize()] = Some(world_entity);
                     }
-                    let user = self.coord.user_store.get(user_key).unwrap();
+                    let user = self.sim_handle.user_store.get(user_key).unwrap();
                     let send_conn = self.send.send_user_connections.get_mut(&user.address()).unwrap();
                     send_conn
                         .base
@@ -3564,7 +3564,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     {
                         // Client-created delegated entity: remove from this connection's remote
                         // world manager, then tear down the server-side entity record entirely.
-                        let user = self.coord.user_store.get(user_key).unwrap();
+                        let user = self.sim_handle.user_store.get(user_key).unwrap();
                         let send_conn = self.send.send_user_connections.get_mut(&user.address()).unwrap();
                         send_conn
                             .base
@@ -3599,10 +3599,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // This handles entities removed from a room via room_remove_entity.
         // Clone the diff_handler Arc once for the entire loop.
         let diff_handler_arc = self.shared.global_world_manager.read().diff_handler();
-        for (_, room) in self.coord.room_store.iter_mut() {
+        for (_, room) in self.sim_handle.room_store.iter_mut() {
             while let Some((removed_user, removed_global_entity)) = room.pop_entity_removal_queue()
             {
-                let Some(user) = self.coord.user_store.get(&removed_user) else {
+                let Some(user) = self.sim_handle.user_store.get(&removed_user) else {
                     continue;
                 };
                 let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
@@ -3671,7 +3671,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         for change in changes {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
-                    let entity_list: Vec<GlobalEntity> = self.coord
+                    let entity_list: Vec<GlobalEntity> = self.sim_handle
                         .room_store
                         .get(&room_key)
                         .map(|r| r.entities().copied().collect())
@@ -3681,12 +3681,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     }
                 }
                 ScopeChange::UserLeftRoom(user_key, room_key) => {
-                    let entity_list: Vec<GlobalEntity> = self.coord
+                    let entity_list: Vec<GlobalEntity> = self.sim_handle
                         .room_store
                         .get(&room_key)
                         .map(|r| r.entities().copied().collect())
                         .unwrap_or_default();
-                    let Some(user) = self.coord.user_store.get(&user_key) else {
+                    let Some(user) = self.sim_handle.user_store.get(&user_key) else {
                         continue;
                     };
                     let user_rooms = user.room_keys().clone();
@@ -3736,7 +3736,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     }
                 }
                 ScopeChange::EntityEnteredRoom(global_entity, room_key) => {
-                    let user_keys: Vec<UserKey> = self.coord
+                    let user_keys: Vec<UserKey> = self.sim_handle
                         .room_store
                         .get(&room_key)
                         .map(|r| r.user_keys().copied().collect())
@@ -3752,7 +3752,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     unreachable!("apply_pending_room_changes must run before drain_scope_change_queue");
                 }
                 ScopeChange::ConfigureReplication(_) => {
-                    // D.2.2: only the Coord-only `CoordHandle::configure_
+                    // D.2.2: only the Coord-only `SimHandle::configure_
                     // entity_replication` pushes this variant; the legacy
                     // fused `WorldServer::configure_entity_replication`
                     // path is fully synchronous and never enqueues it.
@@ -3772,7 +3772,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // Resolve GlobalEntityIndex before any mutable borrows on self.
         let entity_idx = self.entity_global_idx(global_entity);
 
-        let Some(user) = self.coord.user_store.get(user_key) else {
+        let Some(user) = self.sim_handle.user_store.get(user_key) else {
             #[cfg(feature = "f3_diag")]
             eprintln!("[F3-DIAG naia/apply_scope_for_user] EARLY user={:?} ge={:?} reason=user_not_found", user_key, global_entity);
             return;
@@ -3850,7 +3850,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             .entity_scope_map
             .get(user_key, global_entity)
             .copied();
-        let is_resource = self.coord.resource_registry.is_resource_entity(global_entity);
+        let is_resource = self.sim_handle.resource_registry.is_resource_entity(global_entity);
         // [entity-scopes-09]: explicit include() MUST NOT bypass the room gate for
         // server-owned entities that have no rooms at all. If the entity has rooms
         // (even rooms the user isn't in), include() is a valid cross-room override
@@ -4046,7 +4046,7 @@ cfg_if! {
             ///
             /// Panics if the user does not exist.
             pub fn local_entities(&self, user_key: &UserKey) -> Vec<LocalEntity> {
-                let user = self.coord.user_store.get(user_key).expect("User does not exist");
+                let user = self.sim_handle.user_store.get(user_key).expect("User does not exist");
                 let send_conn = self.send
                     .send_user_connections
                     .get(&user.address())
@@ -4100,7 +4100,7 @@ cfg_if! {
                 user_key: &UserKey,
                 local_entity: &LocalEntity
             ) -> Option<E> {
-                let user = self.coord.user_store.get(user_key)?;
+                let user = self.sim_handle.user_store.get(user_key)?;
                 let send_conn = self.send.send_user_connections.get(&user.address())?;
                 let converter = send_conn.base.world_manager.entity_converter();
 
@@ -4120,7 +4120,7 @@ cfg_if! {
             ) -> Option<LocalEntity> {
                 let global_entity = self.shared.global_entity_map.read().entity_to_global_entity(world_entity).ok()?;
 
-                let user = self.coord.user_store.get(user_key)?;
+                let user = self.sim_handle.user_store.get(user_key)?;
                 let send_conn = self.send.send_user_connections.get(&user.address())?;
                 let converter = send_conn.base.world_manager.entity_converter();
                 let owned_entity = converter.global_entity_to_owned_entity(&global_entity).ok()?;

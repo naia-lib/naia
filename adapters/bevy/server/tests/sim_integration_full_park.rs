@@ -23,7 +23,7 @@ use std::{thread, time::Duration};
 use bevy_app::App;
 
 use naia_bevy_server::{
-    transport, CoordHandleRes, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig,
+    transport, SimHandleRes, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig,
     ServerConfig,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, TestClock};
@@ -127,9 +127,9 @@ fn unpark_without_prior_park_is_noop() {
 }
 
 #[test]
-fn coord_handle_borrowable_while_parked() {
+fn sim_handle_borrowable_while_parked() {
     // Demonstrates the cyberlith Phase E pattern: park workers, take
-    // CoordHandleRes for cross-handle work in a Sim system, put it
+    // SimHandleRes for cross-handle work in a Sim system, put it
     // back, unpark.
     let mut app = build_app();
     {
@@ -142,10 +142,10 @@ fn coord_handle_borrowable_while_parked() {
 
     let state = app.world().resource::<PluginInternalState>();
     state.park_workers();
-    // Now safely borrow the coord handle.
-    let coord_opt = app.world_mut().resource_mut::<CoordHandleRes>().0.take();
-    assert!(coord_opt.is_some(), "coord handle borrowable while parked");
-    app.world_mut().resource_mut::<CoordHandleRes>().0 = coord_opt;
+    // Now safely borrow the SimHandle.
+    let sim_handle_opt = app.world_mut().resource_mut::<SimHandleRes>().0.take();
+    assert!(sim_handle_opt.is_some(), "SimHandle borrowable while parked");
+    app.world_mut().resource_mut::<SimHandleRes>().0 = sim_handle_opt;
     let state = app.world().resource::<PluginInternalState>();
     state.unpark_workers();
 }

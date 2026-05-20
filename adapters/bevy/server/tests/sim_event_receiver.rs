@@ -47,7 +47,7 @@ fn fresh_receiver_drains_empty() {
 
 #[test]
 fn push_pending_ticks_lands_in_tick_drainer() {
-    let (coord, _recv_handle, _send_handle) =
+    let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
 
     let receiver = SimEventReceiver::<Entity>::new();
@@ -60,7 +60,7 @@ fn push_pending_ticks_lands_in_tick_drainer() {
         pending_data_packets: Vec::new(),
     };
 
-    receiver.push_from_receive_output(&coord, output);
+    receiver.push_from_receive_output(&sim_handle, output);
 
     let ticks = receiver.drain_tick_events();
     assert_eq!(ticks.len(), 2, "two pending ticks must fan out");
@@ -75,7 +75,7 @@ fn push_pending_ticks_lands_in_tick_drainer() {
 #[test]
 fn cloned_receiver_shares_state() {
     // Arc-internal: clones share the same backing storage.
-    let (coord, _recv_handle, _send_handle) =
+    let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
 
     let receiver = SimEventReceiver::<Entity>::new();
@@ -87,7 +87,7 @@ fn cloned_receiver_shares_state() {
         received_addresses: Default::default(),
         pending_data_packets: Vec::new(),
     };
-    receiver.push_from_receive_output(&coord, output);
+    receiver.push_from_receive_output(&sim_handle, output);
 
     // Clone sees the same event.
     let ticks = clone.drain_tick_events();

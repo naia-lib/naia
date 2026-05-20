@@ -67,7 +67,7 @@ fn build_app() -> App {
 #[test]
 fn empty_output_no_sink_population() {
     let mut app = build_app();
-    let (coord, _recv_handle, _send_handle) =
+    let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
@@ -80,7 +80,7 @@ fn empty_output_no_sink_population() {
 
     apply_receive_output_pipeline_with_sim_receiver(
         app.world_mut(),
-        &coord,
+        &sim_handle,
         &sim_receiver,
         output,
     );
@@ -99,7 +99,7 @@ fn empty_output_no_sink_population() {
 #[test]
 fn pending_ticks_fan_out_to_both_sinks() {
     let mut app = build_app();
-    let (coord, _recv_handle, _send_handle) =
+    let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
@@ -112,7 +112,7 @@ fn pending_ticks_fan_out_to_both_sinks() {
 
     apply_receive_output_pipeline_with_sim_receiver(
         app.world_mut(),
-        &coord,
+        &sim_handle,
         &sim_receiver,
         output,
     );
@@ -144,9 +144,9 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
     let mut app_combined = build_app();
     let mut app_legacy = build_app();
 
-    let (coord_a, _, _) =
+    let (sim_a, _, _) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
-    let (coord_b, _, _) =
+    let (sim_b, _, _) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
@@ -159,11 +159,11 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
 
     apply_receive_output_pipeline_with_sim_receiver(
         app_combined.world_mut(),
-        &coord_a,
+        &sim_a,
         &sim_receiver,
         make_output(),
     );
-    apply_receive_output_pipeline(app_legacy.world_mut(), &coord_b, make_output());
+    apply_receive_output_pipeline(app_legacy.world_mut(), &sim_b, make_output());
 
     let combined_len = app_combined
         .world()
@@ -185,7 +185,7 @@ fn cloned_sim_receiver_observes_helper_output() {
     // Arc-internal share: helper pushes through the &sim_receiver
     // handle; a clone made beforehand sees the same events.
     let mut app = build_app();
-    let (coord, _, _) =
+    let (sim_handle, _, _) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
     let sim_receiver = SimEventReceiver::<Entity>::new();
     let observer = sim_receiver.clone();
@@ -199,7 +199,7 @@ fn cloned_sim_receiver_observes_helper_output() {
 
     apply_receive_output_pipeline_with_sim_receiver(
         app.world_mut(),
-        &coord,
+        &sim_handle,
         &sim_receiver,
         output,
     );

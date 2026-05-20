@@ -4,9 +4,9 @@
 //! Bundles the three pipeline-handle pieces extracted by
 //! [`WorldServer::into_pipeline_handles`] into a single entry point that
 //! cyberlith's `GameCell::init` can call without re-implementing the split.
-//! The three handles — [`CoordHandle`], [`RecvHandle`], [`SendHandle`] —
+//! The three handles — [`SimHandle`], [`RecvHandle`], [`SendHandle`] —
 //! each become the owned state of one of cyberlith's 3 pipelined SubApps
-//! (Recv, Sim, Send) or live alongside one (the coord handle lives on the
+//! (Recv, Sim, Send) or live alongside one (the SimHandle lives on the
 //! Recv SubApp per D17).
 //!
 //! Naming note: this module is `pipeline_actors` (not `pipeline_handles`)
@@ -28,7 +28,7 @@ mod sim_event_receiver;
 mod snapshot_sender;
 mod spawn;
 
-pub use handles::CoordHandle;
+pub use handles::SimHandle;
 pub use orchestration::{
     apply_recv_to_world, configure_entity_replication, run_with_world_server,
     split_world_server,

@@ -80,7 +80,7 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 
 fn listen(app: &mut App, addr: &str) {
     let socket = local_socket(addr);
-    // Listen + run one update so the armed coord drains and the workers
+    // Listen + run one update so the armed sim_handle drains and the workers
     // start spinning.
     app.world().resource::<PluginInternalState>().listen(socket);
     app.update();

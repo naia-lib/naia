@@ -2,7 +2,7 @@
 //!
 //! Cyberlith pattern:
 //! ```ignore
-//! let addr = coord.user_address(user_key).expect("user exists");
+//! let addr = sim_handle.user_address(user_key).expect("user exists");
 //! send.send_message_to_address::<EntityAssignmentChannel, _>(&addr, &msg);
 //! ```
 //!
@@ -11,7 +11,7 @@
 //! call uses the same `MessageManager::send_message` against the same
 //! `EntityAndGlobalEntityConverter` constructed from the same
 //! `world_manager` + `global_world_manager`). The new API just removes
-//! the `coord.user_store` lookup step (caller passes the address).
+//! the `sim_handle.user_store` lookup step (caller passes the address).
 //!
 //! These tests verify the API surface itself:
 //! - Bogus address → `false` (no panic, no side effect).
@@ -54,28 +54,28 @@ fn protocol() -> naia_shared::Protocol {
 fn handles_listening(
     addr: &str,
 ) -> (
-    naia_server::pipeline_actors::CoordHandle<Entity>,
+    naia_server::pipeline_actors::SimHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
-    let (coord, recv, send) =
+    let (sim_handle, recv, send) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
     let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(Box::new(socket));
 
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);
     });
-    (coord, recv, send)
+    (sim_handle, recv, send)
 }
 
 #[test]
 fn send_message_to_unknown_address_returns_false() {
-    let (_coord, _recv, mut send) = handles_listening(next_addr());
+    let (_sim_handle, _recv, mut send) = handles_listening(next_addr());
 
     let bogus: std::net::SocketAddr = "127.0.0.1:1".parse().unwrap();
     let queued =

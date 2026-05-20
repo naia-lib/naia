@@ -10,7 +10,7 @@
 //!
 //! ```ignore
 //! // After `spawn_server_handles`:
-//! let sim_converter = SimConverter::from_coord(&coord);
+//! let sim_converter = SimConverter::from_sim(&sim_handle);
 //! sim_app.insert_resource(sim_converter);
 //! ```
 //!
@@ -25,7 +25,7 @@
 
 use bevy_ecs::{entity::Entity, resource::Resource};
 
-use naia_server::pipeline_actors::{CoordHandle, SimConverter as InnerSimConverter};
+use naia_server::pipeline_actors::{SimHandle, SimConverter as InnerSimConverter};
 use naia_bevy_shared::{EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity};
 
 /// Bevy `Resource` wrapper over the cloneable Sim-side converter.
@@ -35,11 +35,11 @@ pub struct SimConverter {
 }
 
 impl SimConverter {
-    /// Construct from a [`CoordHandle`] (which holds the shared
+    /// Construct from a [`SimHandle`] (which holds the shared
     /// `Arc<ServerShared<Entity>>` backing the converter).
-    pub fn from_coord(coord: &CoordHandle<Entity>) -> Self {
+    pub fn from_sim(sim_handle: &SimHandle<Entity>) -> Self {
         Self {
-            inner: coord.sim_converter(),
+            inner: sim_handle.sim_converter(),
         }
     }
 

@@ -28,7 +28,7 @@ use bevy_ecs::{
 
 use naia_bevy_server::{
     drain_host_sync_into_pipeline,
-    pipeline_actors::{CoordHandle, run_with_world_server, spawn_server_handles},
+    pipeline_actors::{SimHandle, run_with_world_server, spawn_server_handles},
     Plugin as ServerPlugin, RecvHandle, SendHandle, ServerConfig,
 };
 use naia_bevy_shared::{HostOwned, Protocol as BevyProtocol};
@@ -65,11 +65,11 @@ fn build_app() -> App {
 /// guard).
 fn build_handles_listening(
     addr: &str,
-) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let naia_proto: naia_shared::Protocol = protocol().into();
-    let (coord, recv, send) =
+    let (sim_handle, recv, send) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_proto);
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
@@ -77,28 +77,28 @@ fn build_handles_listening(
     let (_a, _b, ps, pr) =
         naia_server::transport::Socket::listen(Box::new(socket));
 
-    let (coord, recv, send, ()) =
-        run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) =
+        run_with_world_server(sim_handle, recv, send, |ws| {
             ws.io_load(ps, pr);
         });
-    (coord, recv, send)
+    (sim_handle, recv, send)
 }
 
 /// Returns true iff `SendStateView::live_entities` contains `entity`.
 /// Reads through the same public surface cyberlith Sim uses, which
 /// internally consults `global_world_manager` + `global_entity_map`.
-fn entity_registered(coord: &CoordHandle<Entity>, entity: Entity) -> bool {
-    coord.send_state_view().live_entities().contains(&entity)
+fn entity_registered(sim_handle: &SimHandle<Entity>, entity: Entity) -> bool {
+    sim_handle.send_state_view().live_entities().contains(&entity)
 }
 
 /// Returns true iff `SendStateView::required_snapshot_entries` contains
 /// `(entity, kind)`.
 fn component_registered(
-    coord: &CoordHandle<Entity>,
+    sim_handle: &SimHandle<Entity>,
     entity: Entity,
     kind: &ComponentKind,
 ) -> bool {
-    coord
+    sim_handle
         .send_state_view()
         .required_snapshot_entries()
         .iter()
@@ -115,7 +115,7 @@ fn sim_integration_plugin_builds() {
 #[test]
 fn insert_via_host_sync_drain_registers_component() {
     let mut app = build_app();
-    let (coord, recv, send) = build_handles_listening(next_addr());
+    let (sim_handle, recv, send) = build_handles_listening(next_addr());
 
     // Spawn a bevy entity, add HostOwned (the marker that gates
     // `on_component_added::<R>`), and insert a Position component.
@@ -129,7 +129,7 @@ fn insert_via_host_sync_drain_registers_component() {
     // pipeline `run_with_world_server` rebuild path. This mirrors what
     // cyberlith Sim does inside its host-sync system (`enable_entity_replication`
     // call site) before the drain step kicks in.
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.enable_entity_replication(&entity);
     });
 
@@ -138,15 +138,15 @@ fn insert_via_host_sync_drain_registers_component() {
     // briefly-reassembled WorldServer, which registers the component
     // record in `global_world_manager` AND attaches the
     // `PropertyMutate` callback.
-    let (coord, _recv, _send) =
-        drain_host_sync_into_pipeline(app.world_mut(), coord, recv, send);
+    let (sim_handle, _recv, _send) =
+        drain_host_sync_into_pipeline(app.world_mut(), sim_handle, recv, send);
 
     assert!(
-        entity_registered(&coord, entity),
+        entity_registered(&sim_handle, entity),
         "entity must be registered in global_world_manager after enable_entity_replication",
     );
     assert!(
-        component_registered(&coord, entity, &ComponentKind::of::<Position>()),
+        component_registered(&sim_handle, entity, &ComponentKind::of::<Position>()),
         "Position must be registered as a component record after drain",
     );
 }
@@ -154,30 +154,30 @@ fn insert_via_host_sync_drain_registers_component() {
 #[test]
 fn despawn_via_host_sync_drain_removes_record() {
     let mut app = build_app();
-    let (coord, recv, send) = build_handles_listening(next_addr());
+    let (sim_handle, recv, send) = build_handles_listening(next_addr());
 
     let entity = app.world_mut().spawn((HostOwned::new::<Singleton>(), Position::new(0.0, 0.0))).id();
     app.update();
 
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.enable_entity_replication(&entity);
     });
-    let (coord, recv, send) =
-        drain_host_sync_into_pipeline(app.world_mut(), coord, recv, send);
-    assert!(entity_registered(&coord, entity));
+    let (sim_handle, recv, send) =
+        drain_host_sync_into_pipeline(app.world_mut(), sim_handle, recv, send);
+    assert!(entity_registered(&sim_handle, entity));
 
     // Despawn the entity; on_despawn observes the RemovedComponents<HostOwned>
     // and writes HostSyncEvent::Despawn.
     app.world_mut().despawn(entity);
     app.update();
 
-    let (coord, _recv, _send) =
-        drain_host_sync_into_pipeline(app.world_mut(), coord, recv, send);
+    let (sim_handle, _recv, _send) =
+        drain_host_sync_into_pipeline(app.world_mut(), sim_handle, recv, send);
 
     // After drain the global_entity_map mapping is gone, so
     // entity_to_global_entity returns Err → entity_registered returns false.
     assert!(
-        !entity_registered(&coord, entity),
+        !entity_registered(&sim_handle, entity),
         "entity record must be removed after Despawn drain",
     );
 }
@@ -185,11 +185,11 @@ fn despawn_via_host_sync_drain_removes_record() {
 #[test]
 fn empty_host_sync_queue_is_no_op() {
     let mut app = build_app();
-    let (coord, recv, send) = build_handles_listening(next_addr());
+    let (sim_handle, recv, send) = build_handles_listening(next_addr());
     // No HostSyncEvents — drain returns the handles unchanged without
     // rebuilding WorldServer.
-    let (_coord, _recv, _send) =
-        drain_host_sync_into_pipeline(app.world_mut(), coord, recv, send);
+    let (_sim_handle, _recv, _send) =
+        drain_host_sync_into_pipeline(app.world_mut(), sim_handle, recv, send);
 }
 
 /// Plugin's `Singleton` host-tag is a private type within the crate;

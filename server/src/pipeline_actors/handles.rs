@@ -1,6 +1,14 @@
-//! `CoordHandle<E>` — bundles the coordinator-thread state with a clone
+//! `SimHandle<E>` — bundles the coordination state with a clone
 //! of the cross-thread shared init (`Arc<ServerShared<E>>`) so cyberlith's
-//! Recv SubApp can install it as a single resource.
+//! Sim app can install it as a single resource.
+//!
+//! Naming (MISSION_USER_ONLY_SEES_SIM Phase H): there is no separate
+//! coordinator thread — the coordination capability is folded into the
+//! Sim/main thread, so this handle is named `SimHandle`. The underlying
+//! per-thread state struct keeps the name [`CoordinatorState`] because it
+//! denotes the *coordination-state capability* (the third of the
+//! recv-side / send-side / coordination-side split), distinct from the
+//! handle that carries it.
 //!
 //! The `Arc<ServerShared<E>>` clone here is independent of (but identical
 //! to) the clones living on `RecvHandle::state.shared` and
@@ -20,14 +28,17 @@ use crate::server::ServerShared;
 use crate::user::{UserKey, WorldUser};
 use crate::EntityOwner;
 
-/// Coord-half of a pipeline-mode [`crate::WorldServer`].
+/// Coordination-side half of a pipeline-mode [`crate::WorldServer`],
+/// held by the Sim/main thread.
 ///
 /// Holds [`CoordinatorState`] (`user_store`, `room_store`, scope tables,
 /// historian, etc.) plus a clone of the cross-thread `Arc<ServerShared>`
-/// so the coord-side code can read shared init (`server_config`, kind
-/// tables, `global_dirty`) without going through the recv or send handle.
-pub struct CoordHandle<E: Copy + Eq + Hash + Send + Sync> {
-    /// Coordinator-thread state. Single-threaded — no internal locking.
+/// so the coordination-side code can read shared init (`server_config`,
+/// kind tables, `global_dirty`) without going through the recv or send
+/// handle.
+pub struct SimHandle<E: Copy + Eq + Hash + Send + Sync> {
+    /// Coordination-side state, owned by the Sim/main thread.
+    /// Single-threaded — no internal locking.
     pub state: CoordinatorState<E>,
     /// Cross-thread shared init + atomic cells. Cloneable `Arc` — the
     /// same allocation is also referenced by [`crate::RecvHandle::state.shared`]
@@ -35,13 +46,13 @@ pub struct CoordHandle<E: Copy + Eq + Hash + Send + Sync> {
     pub shared: Arc<ServerShared<E>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     // ============================================================
-    // Phase B.7 — coord-side read API surface for the bevy adapter
+    // Phase B.7 — coordination-side read API surface for the bevy adapter
     // pipeline bridge (`apply_receive_output_pipeline`).
     // ============================================================
     //
-    // All methods below are pure-coord-state reads — no recv/send
+    // All methods below are pure coordination-state reads — no recv/send
     // mutation. They mirror the namesake methods on `WorldServer`.
 
     /// O(1): is `world_entity` a hidden resource entity? Used by the
@@ -147,14 +158,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     //
     // `disconnect_user`: the underlying `user_queue_disconnect` (world_server.rs:3006)
     // touches recv-only state (`recv_user_connections`, `outstanding_disconnects`).
-    // It cannot run from the coord thread. Instead, we push the request to
+    // It cannot run from the Sim/main thread. Instead, we push the request to
     // `shared.pending_disconnect_requests` (LOCK ORDER #11). The recv path
     // drains it at the top of `process_disconnects`, immediately before
     // `outstanding_disconnects` is consumed, which preserves atomicity within
     // one recv tick.
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — register a
-    /// newly-accepted user so the coord state can track their scope without
+    /// newly-accepted user so the coordination state can track their scope without
     /// reassembling a `WorldServer`.
     ///
     /// Byte-identical to `WorldServer::receive_user`: inserts a `WorldUser`
@@ -242,7 +253,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// C.6 prep — number of pending `ScopeChange` entries on the
     /// cross-half `scope_change_queue`. Used by Send's preamble drain
     /// tests + cyberlith Send SubApp telemetry to observe backpressure
-    /// between the coord/cyberlith-Sim room mutations and the Send-side
+    /// between the coordination/cyberlith-Sim room mutations and the Send-side
     /// drain. O(1) lock + len().
     pub fn scope_change_queue_len(&self) -> usize {
         self.shared.scope_change_queue.lock().len()
@@ -303,7 +314,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// in the same order. No Send-side mutation; no world-hook
     /// registration; no deferred drainer work.
     ///
-    /// Replaces the `run_with_world_server(coord, recv, send, |ws|
+    /// Replaces the `run_with_world_server(sim_handle, recv, send, |ws|
     /// ws.enable_entity_replication(&entity))` reassembly pattern that
     /// cyberlith's `server_access::drain_sim_registrations` and
     /// `drain_sim_tile_registrations` use today.
@@ -443,7 +454,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// [`SendHandle::apply_pending_send_preamble`] (via a
     /// `ScopeChange::ConfigureReplication` payload) and all World-side
     /// component-hook registration to
-    /// [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`
+    /// [`SimHandle::apply_pending_world_hooks`] (or its `SendHandle`
     /// twin), which the Sim system calls with the `&mut World`.
     ///
     /// Wire-byte-identical to `WorldServer::configure_entity_replication`
@@ -659,7 +670,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
         if server_origin {
             // Resolve the owner address from PRE-transition gwm + the
-            // coord user store, exactly as `publish_entity` does before
+            // sim_handle user store, exactly as `publish_entity` does before
             // `gwm.entity_publish`. The owner MUST be a Client here.
             let entity_owner = self
                 .shared

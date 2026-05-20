@@ -119,7 +119,7 @@ pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
 pub use plugin_full::{
-    drain_recv_impl, CoordHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes,
+    drain_recv_impl, SimHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes,
     SendHandleRes, SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
 };
 pub use server::Server;

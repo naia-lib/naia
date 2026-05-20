@@ -26,15 +26,15 @@
 //! **C1 (cross-half access).** `SendHandle::process_recv_packets` below
 //! takes `&mut recv_conns` (from `RecvState::recv_user_connections`).
 //! In a fully-3-threaded design those connections live on the recv
-//! thread and `SendState` lives in coord/send territory — no single
+//! thread and `SendState` lives in coordination/send territory — no single
 //! thread holds both, so this method cannot be called in true 3-thread
-//! mode. The .e MVP keeps recv on the coord (single thread holds both
+//! mode. The .e MVP keeps recv on the coordination side (single thread holds both
 //! halves) and parallelises only sim + send.
 //!
 //! **C2 (World mutation).** The decoded entity events (spawn / insert /
 //! despawn) are applied to `&mut World` by
 //! `WorldServer::process_all_packets`, which mutates `self.send.*`
-//! while doing so. After `into_pipeline_handles`, the coord no longer
+//! while doing so. After `into_pipeline_handles`, the coordination side no longer
 //! holds a unified `WorldServer`. The .e MVP works around this by NOT
 //! calling `into_pipeline_handles` — it uses `receive_with_world`
 //! (cyberlith.d) which bundles `receive_all_packets +
@@ -84,8 +84,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// Drives the recv-only socket loop (no `SendState` access) and
     /// packages the per-tick handoff queues into a [`ReceiveOutput`] for
     /// the coordinator to thread into:
-    ///   1. `WorldServer::drain_pending_handshakes` (coord-stage; needs
-    ///      `coord.user_store`).
+    ///   1. `WorldServer::drain_pending_handshakes` (coordination-stage; needs
+    ///      `sim_handle.user_store`).
     ///   2. `SendHandle::process_recv_packets` (which consumes
     ///      `received_addresses` + `pending_data_packets` alongside a
     ///      `&mut` borrow of the recv connection map for the tick-buffer
@@ -199,7 +199,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_pings(recv_conns);
     }
 
-    /// Pipeline-mode coord-stage cross-half processing (step 4-F.naia.c.2b).
+    /// Pipeline-mode coordination-stage cross-half processing (step 4-F.naia.c.2b).
     ///
     /// Thin wrapper that forwards to [`SendState::process_recv_packets`].
     /// The coordinator pulls `received_addresses` + `pending_data_packets`
@@ -226,9 +226,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ///
     /// Thin wrapper that forwards to [`SendState::send_all_packets`].
     /// Called by the 4-F.cyberlith.e coordinator on the send thread AFTER
-    /// the coord thread has called `WorldServer::run_send_preamble` on
-    /// the reassembled server (or, once the coord/send split is taken
-    /// further, after a coord-side equivalent of the preamble runs).
+    /// the Sim/main thread has called `WorldServer::run_send_preamble` on
+    /// the reassembled server (or, once the coordination/send split is taken
+    /// further, after a coordination-side equivalent of the preamble runs).
     ///
     /// The world snapshot passed in must outlive the call. Today the
     /// only `WorldRefType + Sync` implementation that crosses thread
@@ -299,7 +299,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// `world`, installing per-component diff mutators against the
     /// (already-transitioned) gwm.
     ///
-    /// Twin of [`crate::pipeline_actors::CoordHandle::apply_pending_world_hooks`]
+    /// Twin of [`crate::pipeline_actors::SimHandle::apply_pending_world_hooks`]
     /// — both drain the same `shared.pending_world_hooks` queue, so a Sim
     /// system may call whichever handle it has in hand. The Send-side
     /// per-connection work for the same configure call drains separately
@@ -352,13 +352,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Pipeline-mode `despawn_entity_worldless`. Byte-identical to
     /// `WorldServer::despawn_entity_worldless`. Takes `&mut CoordinatorState`
     /// because the priority-mirror eviction + room-cache cleanup write
-    /// Coord-side state (pass `&mut coord_handle.state`).
+    /// Coord-side state (pass `&mut sim_handle.state`).
     pub fn despawn_entity_worldless(
         &mut self,
-        coord: &mut crate::server::coord_state::CoordinatorState<E>,
+        sim_handle: &mut crate::server::coord_state::CoordinatorState<E>,
         world_entity: &E,
     ) {
-        self.state.despawn_entity_worldless(coord, world_entity);
+        self.state.despawn_entity_worldless(sim_handle, world_entity);
     }
 
     /// C.6 prep — send a message to the user at `address` without
@@ -366,7 +366,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ///
     /// Cyberlith pattern:
     /// ```ignore
-    /// let addr = coord.user_address(user_key).expect("user exists");
+    /// let addr = sim_handle.user_address(user_key).expect("user exists");
     /// send.send_message_to_address::<EntityAssignmentChannel, _>(&addr, &msg);
     /// ```
     ///
@@ -387,21 +387,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase B.3 (2026-05-19) — convenience
     /// wrapper that resolves `user_key → SocketAddr` via the supplied
-    /// `CoordHandle` and forwards to [`send_message_to_address`].
+    /// `SimHandle` and forwards to [`send_message_to_address`].
     ///
-    /// Cyberlith pattern (no separate `coord.user_address` step):
+    /// Cyberlith pattern (no separate `sim_handle.user_address` step):
     /// ```ignore
-    /// send.send_message_to_user::<EntityAssignmentChannel, _>(&coord, user_key, &msg);
+    /// send.send_message_to_user::<EntityAssignmentChannel, _>(&sim_handle, user_key, &msg);
     /// ```
     ///
     /// Returns `false` if either:
-    /// - the `user_key` is unknown to coord's `user_store` (user never
+    /// - the `user_key` is unknown to sim_handle's `user_store` (user never
     ///   joined or was already removed), OR
     /// - no send connection exists at the resolved address (user
     ///   disconnected between the lookup and this call).
     ///
     /// Internally:
-    /// 1. `coord.user_address(user_key)` → `Option<SocketAddr>`
+    /// 1. `sim_handle.user_address(user_key)` → `Option<SocketAddr>`
     /// 2. If `None`, return `false`.
     /// 3. Otherwise forward to `send_message_to_address::<C, M>(&addr, message)`.
     ///
@@ -413,11 +413,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// [`send_message_to_address`] entry point.
     pub fn send_message_to_user<C: naia_shared::Channel, M: naia_shared::Message>(
         &mut self,
-        coord: &crate::pipeline_actors::CoordHandle<E>,
+        sim_handle: &crate::pipeline_actors::SimHandle<E>,
         user_key: &UserKey,
         message: &M,
     ) -> bool {
-        let Some(address) = coord.user_address(user_key) else {
+        let Some(address) = sim_handle.user_address(user_key) else {
             return false;
         };
         self.send_message_to_address::<C, M>(&address, message)
@@ -526,10 +526,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// Phase A.3 deviation note: `room_mut` is NOT implemented on
     /// `SendHandle`. The spec listed it, but `RoomStore` stays on
-    /// `CoordinatorState` (it's coord-thread state — user_store is its
+    /// `CoordinatorState` (it's coordination-thread state — user_store is its
     /// peer, and room membership is set via lifecycle events that arrive
     /// on the Recv SubApp). D5's send-side scope policy does not need
-    /// it. Cyberlith reaches room state via `CoordHandle` on the Recv
+    /// it. Cyberlith reaches room state via `SimHandle` on the Recv
     /// SubApp instead.
     #[doc(hidden)]
     fn _phase_a3_no_room_mut_on_send() {}
@@ -540,11 +540,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // ====================================================================
     //
     // Mirrors `WorldServer::user_scope_has_entity` (world_server.rs:2292)
-    // with one adaptation: the `coord.resource_registry.is_resource_entity`
+    // with one adaptation: the `sim_handle.resource_registry.is_resource_entity`
     // call (which lives on CoordinatorState, not accessible from SendHandle)
     // is replaced by the `is_resource: bool` parameter. The caller
     // (cyberlith's Sim tick system) pre-computes it via
-    // `CoordHandle::is_resource_entity(entity)`. All other state accesses
+    // `SimHandle::is_resource_entity(entity)`. All other state accesses
     // go through `self.state.shared` (shared global_entity_map + gwm) and
     // `self.state.entity_scope_map` / `self.state.entity_room_map` /
     // `self.state.user_room_map` (SendState send-side mirrors).
@@ -554,9 +554,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ///
     /// Mirrors `WorldServer::user_scope_has_entity` but operates against
     /// Send-side state only — no Coord state required. The one Coord-only
-    /// field accessed by the original (`coord.resource_registry`) is
+    /// field accessed by the original (`sim_handle.resource_registry`) is
     /// replaced by the `is_resource` parameter; the caller supplies it via
-    /// `CoordHandle::is_resource_entity(world_entity)` before calling here.
+    /// `SimHandle::is_resource_entity(world_entity)` before calling here.
     ///
     /// Decision logic (byte-identical to `WorldServer::user_scope_has_entity`
     /// once the `is_resource` substitution is accounted for):
