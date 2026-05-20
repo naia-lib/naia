@@ -34,19 +34,31 @@ use naia_server::{RecvHandle, SendHandle};
 /// missing components on insert) but routes through
 /// [`run_with_world_server`] instead of `ResMut<ServerImpl>`.
 ///
-/// Calling pattern (cyberlith Sim main schedule):
+/// Calling pattern (cyberlith Sim main schedule). Under
+/// `Plugin::sim_integration_full`, `RecvHandleRes` / `SendHandleRes`
+/// wrap shared park-window slots: the workers must be parked (via
+/// [`crate::PluginInternalState::park_workers`]) before taking them, and
+/// unparked after returning them. `CoordHandleRes` is a plain `Option`
+/// (coord lives only on main):
 /// ```ignore
 /// fn sim_to_host_sync(world: &mut World) {
+///     let state = world.resource::<PluginInternalState>();
+///     state.park_workers();
+///
 ///     let mut coord = world.resource_mut::<CoordHandleRes>().0.take().unwrap();
-///     let mut recv  = world.resource_mut::<RecvHandleRes>().0.take().unwrap();
-///     let mut send  = world.resource_mut::<SendHandleRes>().0.take().unwrap();
+///     let recv_slot = world.resource::<RecvHandleRes>().0.clone();
+///     let send_slot = world.resource::<SendHandleRes>().0.clone();
+///     let recv = recv_slot.lock().take().unwrap();
+///     let send = send_slot.lock().take().unwrap();
 ///
 ///     let (coord, recv, send) =
 ///         drain_host_sync_into_pipeline(world, coord, recv, send);
 ///
 ///     world.resource_mut::<CoordHandleRes>().0 = Some(coord);
-///     world.resource_mut::<RecvHandleRes>().0 = Some(recv);
-///     world.resource_mut::<SendHandleRes>().0 = Some(send);
+///     *recv_slot.lock() = Some(recv);
+///     *send_slot.lock() = Some(send);
+///
+///     world.resource::<PluginInternalState>().unpark_workers();
 /// }
 /// ```
 ///

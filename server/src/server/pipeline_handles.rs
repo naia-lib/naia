@@ -126,6 +126,53 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
         }
         tick_buffer_messages
     }
+
+    /// Test-only: manufacture a recv connection for `(address, user_key)`
+    /// (mirroring `WorldServer::finalize_connection`) and inject one
+    /// tick-buffered message into it, so a test can exercise
+    /// [`Self::receive_tick_buffer_messages`] without a full client
+    /// handshake. Returns `true` if the message was accepted by the
+    /// tick buffer.
+    ///
+    /// Used by `Plugin::sim_integration_full`'s D.3a park-window
+    /// tick-buffer drain test, which cannot complete a real handshake
+    /// because the pipeline's auth / `receive_user` connection-lifecycle
+    /// layer is a separate (D.3b) concern.
+    #[cfg(feature = "test_utils")]
+    #[doc(hidden)]
+    pub fn inject_tick_buffer_message_for_test<C: naia_shared::Channel, M: naia_shared::Message>(
+        &mut self,
+        address: std::net::SocketAddr,
+        user_key: &crate::user::UserKey,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: M,
+    ) -> bool {
+        use crate::connection::connection::new_connection_pair;
+
+        if !self.state.recv_user_connections.contains_key(&address) {
+            let gwm_guard = self.state.shared.global_world_manager.read();
+            let (recv_conn, _send_conn) = new_connection_pair(
+                &self.state.shared.server_config.connection,
+                &self.state.shared.server_config.ping,
+                &address,
+                user_key,
+                &self.state.shared.channel_kinds,
+                &*gwm_guard,
+                self.state.shared.server_config.max_replicated_entities as usize,
+            );
+            drop(gwm_guard);
+            self.state.recv_user_connections.insert(address, recv_conn);
+        }
+
+        let channel_kind = naia_shared::ChannelKind::of::<C>();
+        let container = naia_shared::MessageContainer::new(Box::new(message));
+        self.state
+            .recv_user_connections
+            .get_mut(&address)
+            .expect("connection just inserted")
+            .inject_tick_buffer_message(&channel_kind, host_tick, message_tick, container)
+    }
 }
 
 /// Send-thread handle. Owns `SendState<E>` directly.

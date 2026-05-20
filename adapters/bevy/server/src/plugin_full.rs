@@ -27,6 +27,12 @@
 //! - [`SendHandleRes`] — Sim systems take/return for cross-handle work,
 //!   between Send-worker iterations. Hands off via the same
 //!   `Option<>`-take pattern cyberlith already uses.
+//! - [`RecvHandleRes`] — Sim systems take/return the recv worker's
+//!   `RecvHandle` while workers are parked, to drain naia's per-user
+//!   tick-buffered `PlayerCommands` via
+//!   [`naia_server::RecvHandle::receive_tick_buffer_messages`] (Phase
+//!   D.3a). Wraps the worker's shared park-window slot; see the type
+//!   doc for the race-free borrow contract.
 //! - [`PluginInternalState`] — lifecycle / park / panic control surface.
 //!
 //! The Plugin is **armed but not running** until the consumer calls
@@ -109,12 +115,60 @@ impl PluginSimConfig {
 #[derive(Resource)]
 pub struct CoordHandleRes(pub Option<CoordHandle<Entity>>);
 
-/// Bevy resource holding the [`SendHandle`] while parked on the Sim
-/// app. The internal Send worker holds the handle between ticks; when
-/// the worker is parked (via [`PluginInternalState::park_workers`])
-/// the handle returns here for Sim systems to borrow.
-#[derive(Resource)]
-pub struct SendHandleRes(pub Option<SendHandle<Entity>>);
+/// Bevy resource exposing the send worker's [`SendHandle`] for the
+/// park-window borrow contract.
+///
+/// Like [`RecvHandleRes`] (and for the same reason — the internal Send
+/// worker owns the handle for its socket loop), this wraps the **same**
+/// `Arc<Mutex<…>>` park-window slot the worker borrows from. While the
+/// workers are parked the handle is guaranteed to be in the slot, so a
+/// Sim system can take it for cross-half work that needs the send half
+/// (e.g. `apply_recv_to_world`'s `process_recv_packets` decode step,
+/// `send_message_to_user`), then return it before
+/// [`PluginInternalState::unpark_workers`].
+///
+/// (D.3a promoted this from the prior `Option`-only stub to the shared
+/// slot so the recv-side tick-buffer drain — which depends on
+/// `process_recv_packets` having decoded the buffers, a send-half op —
+/// is reachable on main.)
+#[derive(Resource, Clone)]
+pub struct SendHandleRes(pub Arc<Mutex<Option<SendHandle<Entity>>>>);
+
+/// Bevy resource exposing the recv worker's [`RecvHandle`] for the
+/// park-window borrow contract (MISSION_USER_ONLY_SEES_SIM Phase D.3a).
+///
+/// # Why a shared `Arc<Mutex<Option<…>>>` (not a plain `Option` like
+/// [`CoordHandleRes`])
+///
+/// The [`CoordHandle`] lives **only** on main — no worker ever owns it —
+/// so a plain `Option` Resource is the honest representation. The
+/// [`RecvHandle`] is different: the internal Recv worker owns it for its
+/// socket loop. Park-window ownership is therefore *shared* between the
+/// worker and main: this Resource wraps the **same** `Arc<Mutex<…>>`
+/// slot the worker borrows from per-iteration. A plain `Option` would
+/// require an extra main-thread ferry system (slot → Res after park,
+/// Res → slot before unpark) that is strictly more error-prone, so we
+/// surface the shared slot directly.
+///
+/// # Borrow / drain contract (race-free)
+///
+/// 1. A Sim system calls [`PluginInternalState::park_workers`]. This
+///    blocks until **both** workers are parked at their loop top. At
+///    that point the recv worker has **deposited** its `RecvHandle`
+///    into this slot (see [`recv_worker_loop`]).
+/// 2. The Sim system takes the handle: `recv_res.0.lock().take()`,
+///    calls [`RecvHandle::receive_tick_buffer_messages`] for each tick
+///    being processed, then puts it back: `*recv_res.0.lock() = Some(h)`.
+/// 3. The Sim system calls [`PluginInternalState::unpark_workers`]. The
+///    recv worker re-claims the handle from the slot and resumes.
+///
+/// The park barrier (`parked_count` Condvar) guarantees the deposit
+/// **happens-before** `park_workers()` returns, and the re-claim
+/// **happens-after** the worker observes the cleared park flag — which
+/// itself is sequenced after `unpark_workers()` writes the slot back.
+/// No process-global mutex; the only lock is this per-plugin slot.
+#[derive(Resource, Clone)]
+pub struct RecvHandleRes(pub Arc<Mutex<Option<RecvHandle<Entity>>>>);
 
 /// Bevy `Resource` wrapper for the Sim-side
 /// [`SimEventReceiver`]`<Entity>` clone. Sim systems pull events via
@@ -228,6 +282,16 @@ pub struct PluginInternalState {
     /// `drain_armed_coord_into_resource` system to install into
     /// [`CoordHandleRes`]. Drained at most once.
     armed_coord: Mutex<Option<CoordHandle<Entity>>>,
+    /// D.3a park-window slot for the recv worker's [`RecvHandle`]. The
+    /// recv worker deposits its handle here at the park checkpoint and
+    /// re-claims it on unpark. The same `Arc` is wrapped by the
+    /// [`RecvHandleRes`] Resource so a parked-window Sim system can
+    /// take/return the handle. `None` until `listen()` spawns the worker.
+    recv_slot: Arc<Mutex<Option<RecvHandle<Entity>>>>,
+    /// D.3a park-window slot for the send worker's [`SendHandle`] —
+    /// symmetric to `recv_slot`. Wrapped by [`SendHandleRes`]. `None`
+    /// until `listen()` spawns the worker.
+    send_slot: Arc<Mutex<Option<SendHandle<Entity>>>>,
     /// Test-only: when set, workers panic on their next loop iteration
     /// (after the park checkpoint, before any other work). Used by
     /// the D.5 panic-propagation test.
@@ -264,9 +328,26 @@ impl PluginInternalState {
             workers: Mutex::new(Vec::new()),
             sim_event_receiver: Mutex::new(Some(sim_event_receiver)),
             armed_coord: Mutex::new(None),
+            recv_slot: Arc::new(Mutex::new(None)),
+            send_slot: Arc::new(Mutex::new(None)),
             #[cfg(any(test, feature = "test_time"))]
             test_panic_request: Arc::new(AtomicBool::new(false)),
         }
+    }
+
+    /// D.3a — a [`RecvHandleRes`] wrapping the **same** park-window slot
+    /// `Arc` the recv worker borrows from. The Resource and the worker
+    /// thus share ownership of the `RecvHandle`; the park barrier makes
+    /// the take/return race-free (see [`RecvHandleRes`]).
+    fn recv_handle_res(&self) -> RecvHandleRes {
+        RecvHandleRes(Arc::clone(&self.recv_slot))
+    }
+
+    /// D.3a — a [`SendHandleRes`] wrapping the same send park-window slot
+    /// `Arc` the send worker borrows from. Symmetric to
+    /// [`Self::recv_handle_res`].
+    fn send_handle_res(&self) -> SendHandleRes {
+        SendHandleRes(Arc::clone(&self.send_slot))
     }
 
     /// Test/dev hook: request that workers panic on their next loop
@@ -318,14 +399,20 @@ impl PluginInternalState {
                 ws.io_load(ps, pr);
             });
 
-        // Recv worker takes ownership of recv handle + tx side of the
-        // ReceiveOutput channel.
+        // Recv worker borrows the recv handle from the shared park-window
+        // slot per-iteration (D.3a). Seed the slot with the handle here;
+        // the worker claims it on its first iteration and re-deposits it
+        // at every park checkpoint so a parked Sim system can drain the
+        // per-user tick-buffer via `RecvHandleRes`.
+        *self.recv_slot.lock() = Some(recv);
+
         let recv_tx = self
             .recv_out_chan_tx
             .lock()
             .clone()
             .expect("recv_out_chan_tx Some in Armed state");
 
+        let recv_slot = Arc::clone(&self.recv_slot);
         let shutdown_recv = Arc::clone(&self.shutdown);
         let park_recv = Arc::clone(&self.park);
         let panic_recv = Arc::clone(&self.panic_slot);
@@ -342,9 +429,8 @@ impl PluginInternalState {
                 naia_bevy_shared::TestClock::install_shared(clock_handle_recv);
 
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let mut recv = recv;
                     recv_worker_loop(
-                        &mut recv,
+                        &recv_slot,
                         &recv_tx,
                         &shutdown_recv,
                         &park_recv,
@@ -363,13 +449,19 @@ impl PluginInternalState {
             .expect("spawn recv worker thread");
         let recv_thread = recv_join.thread().clone();
 
-        // Send worker takes ownership of send handle + SnapshotReceiver.
+        // Send worker borrows the send handle from the shared park-window
+        // slot per-iteration (D.3a), symmetric to the recv worker. Seed
+        // the slot here; the worker claims it each iteration and
+        // re-deposits at every park checkpoint.
+        *self.send_slot.lock() = Some(send);
+
         let snap_rx = self
             .snapshot_receiver
             .lock()
             .take()
             .expect("snapshot_receiver Some in Armed state");
 
+        let send_slot = Arc::clone(&self.send_slot);
         let shutdown_send = Arc::clone(&self.shutdown);
         let park_send = Arc::clone(&self.park);
         let panic_send = Arc::clone(&self.panic_slot);
@@ -386,9 +478,8 @@ impl PluginInternalState {
                 naia_bevy_shared::TestClock::install_shared(clock_handle_send);
 
                 let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    let mut send = send;
                     send_worker_loop(
-                        &mut send,
+                        &send_slot,
                         &snap_rx,
                         &shutdown_send,
                         &park_send,
@@ -439,9 +530,22 @@ impl PluginInternalState {
     /// Park both worker threads (block until both reach the top of
     /// their idle loop). After return, callers may safely
     /// `TestClock::advance(...)` or borrow handles via [`CoordHandleRes`]
-    /// without racing the workers.
+    /// / [`RecvHandleRes`] / [`SendHandleRes`] without racing the
+    /// workers.
     ///
     /// No-op when in `Armed` (workers not yet spawned) or `Stopped`.
+    ///
+    /// # Panic / exit safety
+    ///
+    /// A worker that has panicked (its `catch_unwind` body unwound) or
+    /// exited will never reach its park checkpoint, so a naive condvar
+    /// wait would deadlock. The wait therefore breaks early once every
+    /// not-yet-parked worker thread has *finished* — i.e. the live
+    /// workers are all parked and the rest are gone. A subsequent
+    /// [`Self::propagate_panic_if_any`] surfaces the captured payload.
+    /// Callers (e.g. [`drain_recv_worker_output`]) tolerate a
+    /// not-fully-parked return by finding `None` in a handle slot and
+    /// bailing.
     pub fn park_workers(&self) {
         if self.state() != State::Running {
             return;
@@ -455,7 +559,22 @@ impl PluginInternalState {
         }
         let mut g = self.park.parked_count.lock();
         while *g < expected {
-            self.park.parked_cv.wait(&mut g);
+            // Break early if the not-yet-parked workers have all
+            // finished (panicked/exited) — they will never park.
+            let finished = self
+                .workers
+                .lock()
+                .iter()
+                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
+                .count() as u32;
+            if *g + finished >= expected {
+                break;
+            }
+            // Bounded wait so a worker that finishes *after* the check
+            // above (before we re-loop) is still observed promptly.
+            self.park
+                .parked_cv
+                .wait_for(&mut g, std::time::Duration::from_millis(5));
         }
     }
 
@@ -561,12 +680,16 @@ pub(crate) fn install_full_pipelining(
         snap_receiver.clone(),
     );
 
+    let recv_handle_res = internal.recv_handle_res();
+    let send_handle_res = internal.send_handle_res();
+
     app.insert_resource(sim_converter);
     app.insert_resource(SimEventReceiverRes(sim_event_receiver));
     app.insert_resource(SnapshotSenderRes(snap_sender));
     app.insert_resource(SnapshotReceiverRes(snap_receiver));
     app.insert_resource(CoordHandleRes(None));
-    app.insert_resource(SendHandleRes(None));
+    app.insert_resource(send_handle_res);
+    app.insert_resource(recv_handle_res);
     app.insert_resource(internal);
 
     // Startup: drain the armed coord into CoordHandleRes once the
@@ -628,14 +751,36 @@ fn worker_park_checkpoint(park: &ParkControl) {
     }
 }
 
+/// Recv worker loop. The `RecvHandle` is **not** owned by this closure
+/// — it lives in the shared `recv_slot` (`Arc<Mutex<Option<…>>>`) so a
+/// parked-window Sim system can borrow it via [`RecvHandleRes`] for the
+/// per-user tick-buffer drain (D.3a).
+///
+/// Per-iteration discipline that keeps the park-window borrow race-free:
+///
+/// 1. **Park checkpoint with the handle deposited.** The handle sits in
+///    `recv_slot` whenever the worker is at the checkpoint, so once
+///    [`PluginInternalState::park_workers`] returns (worker parked +
+///    `parked_count` incremented), main is guaranteed to find the handle
+///    in the slot.
+/// 2. **Claim** the handle from the slot for the brief receive window.
+/// 3. `recv.receive()` + ship the `ReceiveOutput`.
+/// 4. **Deposit** the handle back into the slot *before* looping back to
+///    the checkpoint.
+///
+/// Because the park flag is only observed at the checkpoint (step 1), a
+/// park request that arrives mid-receive-window simply waits one short
+/// iteration until the worker has re-deposited the handle and parks.
 fn recv_worker_loop(
-    recv: &mut RecvHandle<Entity>,
+    recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
     out_tx: &Sender<ReceiveOutput<Entity>>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     loop {
+        // Park checkpoint: the handle is in `recv_slot`, so a parked Sim
+        // system can take it for `receive_tick_buffer_messages`.
         worker_park_checkpoint(park);
         if shutdown.load(Ordering::SeqCst) {
             return;
@@ -644,7 +789,24 @@ fn recv_worker_loop(
         if test_panic.load(Ordering::SeqCst) {
             panic!("test-requested recv worker panic");
         }
+
+        // Claim the handle for the brief receive window. If main has it
+        // (only possible mid-park, which the checkpoint above already
+        // gated), skip this iteration rather than block.
+        let mut recv = match recv_slot.lock().take() {
+            Some(h) => h,
+            None => {
+                thread::sleep(std::time::Duration::from_micros(100));
+                continue;
+            }
+        };
+
         let output = recv.receive();
+
+        // Re-deposit BEFORE any further checkpoint, so the handle is
+        // always parkable at the loop top.
+        *recv_slot.lock() = Some(recv);
+
         // bounded(1) — if main is behind, drop the OLDEST so newer
         // events flow. ReceiveOutput is not Clone; we use try_send +
         // drain-then-send pattern.
@@ -672,14 +834,20 @@ fn recv_worker_loop(
     }
 }
 
+/// Send worker loop. Symmetric to [`recv_worker_loop`]: the
+/// `SendHandle` lives in the shared `send_slot` so a parked-window Sim
+/// system can borrow it via [`SendHandleRes`] for cross-half work that
+/// needs the send half. Same per-iteration deposit discipline keeps the
+/// park-window borrow race-free.
 fn send_worker_loop(
-    send: &mut SendHandle<Entity>,
+    send_slot: &Arc<Mutex<Option<SendHandle<Entity>>>>,
     snap_rx: &SnapshotReceiver<Entity>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     loop {
+        // Park checkpoint: handle is in `send_slot`, borrowable by main.
         worker_park_checkpoint(park);
         if shutdown.load(Ordering::SeqCst) {
             return;
@@ -688,10 +856,22 @@ fn send_worker_loop(
         if test_panic.load(Ordering::SeqCst) {
             panic!("test-requested send worker panic");
         }
+
         if let Some(snap) = snap_rx.take_latest() {
+            // Claim the handle for the send window; if main has it
+            // (only mid-park, gated above), skip this iteration.
+            let mut send = match send_slot.lock().take() {
+                Some(h) => h,
+                None => {
+                    thread::sleep(std::time::Duration::from_micros(100));
+                    continue;
+                }
+            };
             send.apply_pending_send_preamble();
             send.apply_pending_scope_changes(&snap);
             send.send_all_packets(snap);
+            // Re-deposit before looping back to the park checkpoint.
+            *send_slot.lock() = Some(send);
         } else {
             // No snapshot pending — short sleep so we don't hot-spin.
             thread::sleep(std::time::Duration::from_micros(100));
@@ -702,14 +882,50 @@ fn send_worker_loop(
 // ─── Main-side drain system ────────────────────────────────────────────────
 
 /// Bevy system installed on the consumer Sim app. Drains
-/// `ReceiveOutput<Entity>` from the Recv worker's bounded channel and
-/// fans into the bevy `Messages<X>` buffers + the `SimEventReceiver`.
+/// `ReceiveOutput<Entity>` from the Recv worker's bounded channel, runs
+/// the cross-half receive orchestration against the Sim world, and fans
+/// the resulting events into the bevy `Messages<X>` buffers + the
+/// `SimEventReceiver`.
 ///
 /// Runs in `Update` by default (same as `process_packets` for the
 /// non-`sim_integration_full` variants).
+///
+/// # D.3a — full cross-half orchestration
+///
+/// The recv worker only runs `recv.receive()` (a recv-half socket drain
+/// with no `&mut World` and no `SendHandle`), so the `ReceiveOutput` it
+/// ships carries handshake-time world events plus the still-undecoded
+/// `received_addresses` + `pending_data_packets`. Decoding those data
+/// packets — which produces client-originated Spawn/Insert/Update world
+/// events AND fills each connection's per-user tick-buffer (the source
+/// of `receive_tick_buffer_messages`) — requires the cross-half
+/// [`pipeline_actors::apply_recv_to_world`] step, which needs `&mut
+/// World` + the coord + recv + send handles.
+///
+/// This system therefore:
+/// 1. Parks the workers (so the recv + send handles are deposited in
+///    their park-window slots and reachable on main, race-free).
+/// 2. Takes coord (from [`CoordHandleRes`]) + recv (from the
+///    [`RecvHandleRes`] slot) + send (from the [`SendHandleRes`] slot).
+/// 3. Runs `apply_recv_to_world` per `ReceiveOutput` (handshake
+///    finalization + `process_recv_packets` decode + `process_all_packets`),
+///    then `apply_receive_output_pipeline_with_sim_receiver` to fan the
+///    combined event set into bevy `Messages<X>` + the `SimEventReceiver`.
+/// 4. Returns the handles to their slots/Resource and unparks.
+///
+/// After this system runs, a *subsequent* Sim system can take the
+/// `RecvHandle` (via [`RecvHandleRes`], parking again) and call
+/// [`naia_server::RecvHandle::receive_tick_buffer_messages`] for each
+/// `TickEvent` to drain the now-decoded per-user tick-buffered messages
+/// (e.g. cyberlith's `PlayerCommands`). That tick-buffer drain is the
+/// consumer's responsibility (cyberlith Phase E.6) — naia only exposes
+/// the handle.
 pub fn drain_recv_worker_output(world: &mut World) {
-    // Pull the channel + sim_event_receiver + coord without holding
-    // an outer borrow on world.
+    use naia_bevy_shared::WorldProxyMut;
+    use naia_server::pipeline_actors::apply_recv_to_world;
+
+    // Pull the channel + sim_event_receiver without holding an outer
+    // borrow on world.
     let receiver = world
         .get_resource::<PluginInternalState>()
         .and_then(|s| s.recv_out_chan_rx.lock().as_ref().cloned());
@@ -727,20 +943,64 @@ pub fn drain_recv_worker_output(world: &mut World) {
         return;
     }
 
-    // Take the coord handle for the apply call, then put it back.
-    let coord = world
-        .resource_mut::<CoordHandleRes>()
-        .0
-        .take();
-    let Some(coord) = coord else {
-        // Coord handle in use elsewhere this frame — re-queue the
-        // outputs by dropping (next tick will pull fresh ones).
-        return;
+    // Park the workers so the recv + send handles are reachable on main,
+    // then take all three handles for the cross-half orchestration.
+    // (`park_workers` is a no-op in Armed/Stopped, in which case the
+    // handle slots are not yet populated and we bail out cleanly.)
+    let (recv_slot, send_slot) = {
+        let state = world.resource::<PluginInternalState>();
+        state.park_workers();
+        (
+            Arc::clone(&world.resource::<RecvHandleRes>().0),
+            Arc::clone(&world.resource::<SendHandleRes>().0),
+        )
     };
-    for output in outputs {
+
+    let coord_opt = world.resource_mut::<CoordHandleRes>().0.take();
+    let recv_opt = recv_slot.lock().take();
+    let send_opt = send_slot.lock().take();
+
+    if coord_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
+        // A handle was in use elsewhere this frame (or workers not
+        // running). Put back whatever we took and unpark.
+        if let Some(c) = coord_opt {
+            world.resource_mut::<CoordHandleRes>().0 = Some(c);
+        }
+        if let Some(r) = recv_opt {
+            *recv_slot.lock() = Some(r);
+        }
+        if let Some(s) = send_opt {
+            *send_slot.lock() = Some(s);
+        }
+        world.resource::<PluginInternalState>().unpark_workers();
+        return;
+    }
+
+    // Cross-half receive orchestration per ReceiveOutput.
+    let mut coord = coord_opt.unwrap();
+    let mut recv = recv_opt.unwrap();
+    let mut send = send_opt.unwrap();
+    for mut output in outputs {
+        let server_tick = coord.current_tick();
+        let (c, r, s) = apply_recv_to_world(
+            coord,
+            recv,
+            send,
+            world.proxy_mut(),
+            &mut output,
+            server_tick,
+        );
+        coord = c;
+        recv = r;
+        send = s;
         apply_receive_output_pipeline_with_sim_receiver(world, &coord, &sim_receiver, output);
     }
+
+    // Return the handles and resume the workers.
     world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+    *recv_slot.lock() = Some(recv);
+    *send_slot.lock() = Some(send);
+    world.resource::<PluginInternalState>().unpark_workers();
 }
 
 /// Bevy system that surfaces any worker panic onto the main thread.
