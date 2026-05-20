@@ -79,10 +79,10 @@
 // surfaced here via `naia-bevy-shared` (the bevy shared layer re-exports them).
 pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
-    HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
-    ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, SendPackets, SnapshotWorld,
-    Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand, WorldProxyMut, WorldToHostSync,
-    WorldUpdate,
+    HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken, Instant,
+    ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, ResponseSendKey,
+    SendPackets, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
+    WorldProxyMut, WorldToHostSync, WorldUpdate,
 };
 pub use naia_server::{
     pipeline_actors,
