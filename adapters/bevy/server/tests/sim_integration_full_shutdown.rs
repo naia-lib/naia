@@ -26,8 +26,8 @@ use bevy_app::App;
 use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, ServerConfig,
-    SnapshotSenderRes,
+    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, SendHandleRes,
+    ServerConfig, SnapshotReceiverRes, SnapshotSenderRes,
 };
 use naia_shared::SnapshotWorld;
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -74,7 +74,7 @@ fn workers_survive_many_ticks_with_no_clients() {
 }
 
 #[test]
-fn send_worker_drains_published_snapshots() {
+fn published_snapshot_drains_via_consumer_park_window() {
     let mut app = build_app();
     {
         let state = app.world().resource::<PluginInternalState>();
@@ -90,27 +90,34 @@ fn send_worker_drains_published_snapshots() {
     sender.send(SnapshotWorld::<Entity>::new());
     assert!(sender.has_pending(), "snapshot pending immediately after send");
 
-    // Under the E.6 zero-CPU-idle worker model, an idle (body-sleeping) send
-    // worker does not poll for snapshots out-of-band in test_time mode — it
-    // drains during a park window. Drive one park/unpark cycle so the worker
-    // wakes, observes the published snapshot via take_latest, and drains it.
-    // (Production / non-test_time workers poll autonomously every ~100µs, but
-    // that path is unreachable here: this crate's dev-dependency forces the
-    // test_time feature on, so these tests always run park-driven.)
+    // In test_time the send worker is a PURE PARKING SERVICE — it never drains
+    // snapshots itself (driving the send on its real-time thread made connect
+    // handshakes reorder under parallel load). The consumer (e.g. cyberlith's
+    // park window) drives the send synchronously at a deterministic point each
+    // tick: park the workers, take the SendHandle from the shared slot, flush
+    // the preamble + send the latest snapshot, return the handle, unpark. The
+    // drain is therefore synchronous — no wait loop needed.
     {
-        let state = app.world().resource::<PluginInternalState>();
+        let world = app.world();
+        let state = world.resource::<PluginInternalState>();
         state.park_workers();
+        let send_slot = world.resource::<SendHandleRes>().0.clone();
+        let snap = world.resource::<SnapshotReceiverRes>().0.take_latest();
+        let mut send = send_slot
+            .lock()
+            .take()
+            .expect("SendHandle in shared slot while workers parked");
+        send.apply_pending_send_preamble();
+        if let Some(snap) = snap {
+            send.send_all_packets(snap);
+        }
+        *send_slot.lock() = Some(send);
         state.unpark_workers();
     }
 
-    // Give the Send worker time to drain.
-    let drain_deadline = std::time::Instant::now() + Duration::from_secs(2);
-    while sender.has_pending() && std::time::Instant::now() < drain_deadline {
-        thread::sleep(Duration::from_millis(5));
-    }
     assert!(
         !sender.has_pending(),
-        "Send worker drained the published snapshot within 2s",
+        "consumer-driven park-window send drained the published snapshot",
     );
 
     app.world()

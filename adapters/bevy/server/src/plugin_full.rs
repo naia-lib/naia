@@ -1034,6 +1034,11 @@ fn recv_worker_loop(
 /// system can borrow it via [`SendHandleRes`] for cross-half work that
 /// needs the send half. Same per-iteration deposit discipline keeps the
 /// park-window borrow race-free.
+///
+/// In `test_time` this worker is a **pure parking service** (like the recv
+/// worker): the consumer drives the send synchronously inside its park
+/// window, so `snap_rx` / `send_slot` are unused here.
+#[cfg_attr(feature = "test_time", allow(unused_variables))]
 fn send_worker_loop(
     send_slot: &Arc<Mutex<Option<SendHandle<Entity>>>>,
     snap_rx: &SnapshotReceiver<Entity>,
@@ -1052,74 +1057,73 @@ fn send_worker_loop(
             panic!("test-requested send worker panic");
         }
 
-        // Don't start send work if park was requested — same reason as recv
-        // worker: send_all_packets holds time_manager.read() for its entire
-        // packet loop, which can block recv worker's time_manager.write()
-        // (in take_tick_events) for the duration. Skipping here lets the
-        // send worker reach its checkpoint without the RwLock contention.
-        if park.park.load(Ordering::SeqCst) {
-            thread::sleep(std::time::Duration::from_micros(100));
+        // In test_time the send worker is a PURE PARKING SERVICE: the consumer
+        // drives the send (preamble + scope changes + send_all_packets)
+        // synchronously inside its park window, so handshake-response and
+        // snapshot delivery occur at a deterministic point each tick rather than
+        // whenever this real-time thread happens to be scheduled. That real-time
+        // timing was load-dependent and could reorder connect handshakes under
+        // parallel test load, perturbing avatar spawn order (rapier handle
+        // assignment) → non-deterministic physics. Body-sleep until the next
+        // park (zero CPU); never touch the snapshot or the send handle.
+        #[cfg(feature = "test_time")]
+        {
+            let mut g = park.body_sleep_mu.lock();
+            while !park.park.load(Ordering::SeqCst)
+                && !shutdown.load(Ordering::SeqCst)
+                && !test_panic.load(Ordering::SeqCst)
+            {
+                park.body_sleep_cv.wait(&mut g);
+            }
+            drop(g);
             continue;
         }
 
-        // Claim the handle for the send window using `try_lock` to avoid
-        // blocking the park-checkpoint loop. If the slot is empty or
-        // contended, skip and sleep — the next iteration (after the park
-        // checkpoint if needed) will retry.
-        let snap_opt = snap_rx.take_latest();
-        let mut send = match send_slot.try_lock().and_then(|mut g| g.take()) {
-            Some(h) => h,
-            None => {
-                // Slot empty or contended: sleep and loop back to park
-                // checkpoint. If we had a snapshot, drop it (latest-wins
-                // semantics: a newer one will arrive next tick).
+        #[cfg(not(feature = "test_time"))]
+        {
+            // Don't start send work if park was requested — send_all_packets
+            // holds time_manager.read() for its entire packet loop, which can
+            // block the recv worker's time_manager.write() (in take_tick_events);
+            // skipping lets this worker reach its checkpoint without contention.
+            if park.park.load(Ordering::SeqCst) {
                 thread::sleep(std::time::Duration::from_micros(100));
                 continue;
             }
-        };
 
-        // `apply_pending_send_preamble` flushes handshake responses
-        // (ConnectResponse / Ping responses) queued by the recv worker.
-        // This must run every iteration — not just when a snapshot is
-        // present — so that the initial handshake completes before Sim
-        // generates its first snapshot.
-        send.apply_pending_send_preamble();
+            // Claim the handle via try_lock (never block the park checkpoint).
+            let snap_opt = snap_rx.take_latest();
+            let mut send = match send_slot.try_lock().and_then(|mut g| g.take()) {
+                Some(h) => h,
+                None => {
+                    thread::sleep(std::time::Duration::from_micros(100));
+                    continue;
+                }
+            };
 
-        if let Some(snap) = snap_opt {
-            send.apply_pending_scope_changes(&snap);
-            send.send_all_packets(snap);
-        } else {
-            // No snapshot this iteration — re-deposit the handle and loop
-            // back to the park checkpoint.
+            // Flush handshake responses every iteration so the initial
+            // handshake completes before Sim generates its first snapshot.
+            send.apply_pending_send_preamble();
+
+            if let Some(snap) = snap_opt {
+                send.apply_pending_scope_changes(&snap);
+                send.send_all_packets(snap);
+            } else {
+                loop {
+                    match send_slot.try_lock() {
+                        Some(mut g) => { *g = Some(send); break; }
+                        None => { thread::sleep(std::time::Duration::from_micros(100)); }
+                    }
+                }
+                thread::sleep(std::time::Duration::from_micros(100));
+                continue;
+            }
+
+            // Re-deposit before looping back to the park checkpoint.
             loop {
                 match send_slot.try_lock() {
                     Some(mut g) => { *g = Some(send); break; }
                     None => { thread::sleep(std::time::Duration::from_micros(100)); }
                 }
-            }
-            // In test_time mode: body-sleep on condvar (zero CPU, no token race).
-            // In production: short sleep keeps CPU low between sends.
-            #[cfg(feature = "test_time")]
-            {
-                let mut g = park.body_sleep_mu.lock();
-                while !park.park.load(Ordering::SeqCst)
-                    && !shutdown.load(Ordering::SeqCst)
-                    && !test_panic.load(Ordering::SeqCst)
-                {
-                    park.body_sleep_cv.wait(&mut g);
-                }
-                drop(g);
-            }
-            #[cfg(not(feature = "test_time"))]
-            thread::sleep(std::time::Duration::from_micros(100));
-            continue;
-        }
-
-        // Re-deposit before looping back to the park checkpoint.
-        loop {
-            match send_slot.try_lock() {
-                Some(mut g) => { *g = Some(send); break; }
-                None => { thread::sleep(std::time::Duration::from_micros(100)); }
             }
         }
     }
