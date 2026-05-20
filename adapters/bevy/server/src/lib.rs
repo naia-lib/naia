@@ -102,6 +102,7 @@ mod component_event_registry;
 mod components;
 mod host_sync_pipeline;
 mod plugin;
+mod plugin_full;
 #[doc(hidden)]
 mod resource_sync;
 mod server;
@@ -117,6 +118,10 @@ pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
+pub use plugin_full::{
+    CoordHandleRes, PluginInternalState, PluginSimConfig, SendHandleRes, SimEventReceiverRes,
+    SnapshotReceiverRes, SnapshotSenderRes,
+};
 pub use server::Server;
 pub use sim_converter::SimConverter;
 

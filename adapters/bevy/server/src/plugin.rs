@@ -92,19 +92,49 @@ pub struct Plugin {
     /// [`Plugin::sim_integration_with_schedule`] to register under a
     /// custom schedule like cyberlith Sim's `SimMain`.
     change_detection_schedule: Option<InternedScheduleLabel>,
+    /// MISSION_USER_ONLY_SEES_SIM Phase D: when `true`,
+    /// [`Plugin::sim_integration_full`] also constructs the three
+    /// pipeline handles, installs them + the C.6-prep facade
+    /// resources (`SimConverter`, `SimEventReceiver`, `SnapshotSender`,
+    /// `SnapshotReceiver`, `CoordHandleRes`, `SendHandleRes`,
+    /// `PluginInternalState`), and registers the main-side
+    /// `drain_recv_worker_output` + `propagate_worker_panics` systems
+    /// in `change_detection_schedule` (or `Update`).
+    full_pipelining: bool,
 }
 
 impl Plugin {
     /// Creates the plugin with the given server configuration and protocol.
     pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, false, false, false, None)
+        Self::new_impl(server_config, protocol, false, false, false, None, false)
+    }
+
+    /// MISSION_USER_ONLY_SEES_SIM Phase D — full-pipelining variant
+    /// that internally spawns Recv + Send worker threads.
+    ///
+    /// See `plugin_full.rs` for the API contract + lifecycle / park
+    /// / panic surface exposed via [`crate::PluginInternalState`].
+    pub fn sim_integration_full(
+        server_config: ServerConfig,
+        protocol: Protocol,
+        cfg: crate::plugin_full::PluginSimConfig,
+    ) -> Self {
+        Self::new_impl(
+            server_config,
+            protocol,
+            true,
+            true,
+            true,
+            cfg.change_detection_schedule,
+            true,
+        )
     }
 
     /// World-only variant. Skips full `Server` setup (auth, accept_connection,
     /// etc.) and registers a `WorldServer` instead. Used by services that
     /// proxy connections (e.g., the game cell behind a session server).
     pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, false, false, None)
+        Self::new_impl(server_config, protocol, true, false, false, None, false)
     }
 
     /// Pipeline + world-only variant (Phase 4 capacity uplift). Builds the
@@ -114,7 +144,7 @@ impl Plugin {
     /// systems (`HostSyncOwnedAddedTracking`, `HostSyncChangeTracking`,
     /// `WorldToHostSync`) remain in `Update`.
     pub fn world_only_pipeline(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, false, None)
+        Self::new_impl(server_config, protocol, true, true, false, None, false)
     }
 
     /// Phase B.7 variant: installs shared types + system sets +
@@ -127,7 +157,7 @@ impl Plugin {
     /// built) but kept in the signature for symmetry with the other
     /// constructors; callers may pass `ServerConfig::default()`.
     pub fn types_and_sets_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, true, None)
+        Self::new_impl(server_config, protocol, true, true, true, None, false)
     }
 
     /// Iris 2 (MISSION_IRIS_2 / SPEC_IRIS_2_NAIA.md §1.4) — pipelined
@@ -161,7 +191,7 @@ impl Plugin {
     /// `PropertyMutate` callback → `GlobalDirtyBitset` mark — exactly
     /// the same chain as today's Send-mirror flow.
     pub fn sim_integration(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, true, None)
+        Self::new_impl(server_config, protocol, true, true, true, None, false)
     }
 
     /// Variant of [`Plugin::sim_integration`] that registers all per-Replicate
@@ -186,6 +216,7 @@ impl Plugin {
             true,
             true,
             Some(schedule.intern()),
+            false,
         )
     }
 
@@ -196,6 +227,7 @@ impl Plugin {
         pipeline: bool,
         state_external: bool,
         change_detection_schedule: Option<InternedScheduleLabel>,
+        full_pipelining: bool,
     ) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
@@ -204,6 +236,7 @@ impl Plugin {
             pipeline,
             state_external,
             change_detection_schedule,
+            full_pipelining,
         }
     }
 }
@@ -224,11 +257,22 @@ impl PluginType for Plugin {
         // ServerImpl resource. The caller installs CoordHandle /
         // RecvHandle / SendHandle via `spawn_server_handles` and drives
         // recv/apply/send through the `apply_*_pipeline` entry points.
+        //
+        // Phase D (sim_integration_full): we DO construct the three
+        // handles here (state_external=true AND full_pipelining=true)
+        // and stash them in `PluginInternalState` for `listen()` to
+        // adopt. See `plugin_full.rs`.
         let server_impl = if self.state_external {
-            // Still need to consume `config.protocol` so the downstream
-            // `take_world_data` (above) is the only consumer; nothing
-            // else to do here.
-            let _ = config.server_config;
+            if self.full_pipelining {
+                crate::plugin_full::install_full_pipelining(
+                    app,
+                    config.server_config,
+                    config.protocol,
+                    self.change_detection_schedule,
+                );
+            } else {
+                let _ = config.server_config;
+            }
             None
         } else if !self.world_only {
             let server = Server::<Entity>::new(config.server_config, config.protocol.into());
