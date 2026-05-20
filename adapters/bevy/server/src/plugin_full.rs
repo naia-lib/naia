@@ -601,10 +601,15 @@ impl PluginInternalState {
         }
     }
 
-    /// Internal: armed coord parking slot, filled by `listen()` and
-    /// drained by the Startup `drain_armed_coord_into_resource` system
-    /// (or directly by the test if it skips Startup).
-    fn _armed_coord_take(&self) -> Option<CoordHandle<Entity>> {
+    /// Take the armed coord from the parking slot.  Filled by `listen()`
+    /// and drained by the Startup `drain_armed_coord_into_resource` system
+    /// or by consumers that need to avoid a combined `&World`/`&mut World`
+    /// borrow (e.g. cyberlith `init.rs` where the same `World` provides
+    /// both `resource::<PluginInternalState>()` and the target
+    /// `resource_mut::<CoordHandleRes>()`).
+    ///
+    /// Returns `None` once the slot has been drained (idempotent).
+    pub fn take_armed_coord(&self) -> Option<CoordHandle<Entity>> {
         self.armed_coord.lock().take()
     }
 
@@ -621,6 +626,23 @@ impl PluginInternalState {
         if let Some(c) = self.armed_coord.lock().take() {
             world.resource_mut::<CoordHandleRes>().0 = Some(c);
         }
+    }
+
+    /// Obtain a [`naia_server::pipeline_actors::SendStateView`] from the
+    /// pre-`listen()` armed coord handle.
+    ///
+    /// Called by consumers (e.g. cyberlith E.6c `init.rs`) that need to
+    /// pass `send_state_view` to `install_sim_plugins` before `listen()`
+    /// is invoked.  Must only be called while in the `Armed` state
+    /// (before `listen()`); panics if the armed handles have already been
+    /// consumed by `listen()`.
+    pub fn armed_send_state_view(
+        &self,
+    ) -> naia_server::pipeline_actors::SendStateView<Entity> {
+        let guard = self.armed_handles.lock();
+        let (coord, _, _) = guard.as_ref()
+            .expect("armed_send_state_view called after listen() — handles already moved");
+        coord.send_state_view()
     }
 }
 
@@ -951,17 +973,18 @@ pub fn drain_recv_worker_output(world: &mut World) {
         .and_then(|s| s.sim_event_receiver.lock().as_ref().cloned());
     let Some(sim_receiver) = sim_receiver else { return };
 
-    // Drain everything currently in the channel (bounded(1), so at most
-    // one item).
-    let outputs: Vec<ReceiveOutput<Entity>> = receiver.try_iter().collect();
-    if outputs.is_empty() {
-        return;
-    }
-
-    // Park the workers so the recv + send handles are reachable on main,
-    // then take all three handles for the cross-half orchestration.
-    // (`park_workers` is a no-op in Armed/Stopped, in which case the
-    // handle slots are not yet populated and we bail out cleanly.)
+    // Park the workers first so any in-flight recv.receive() iteration
+    // completes and the recv handle is deposited back in the slot before
+    // we proceed. This is critical in test mode (transport_local +
+    // TestClock) where the 100µs worker sleep may not have elapsed
+    // between TestClock::advance() and this system executing, meaning
+    // the worker's recv.receive() for the freshly-advanced tick has not
+    // yet run. By parking first, we guarantee the handle is in the slot
+    // and then call recv.receive() synchronously to pick up any packets
+    // that arrived after the worker's last iteration.
+    //
+    // `park_workers` is a no-op in Armed/Stopped state, in which case
+    // the handle slots are not yet populated and we bail out cleanly.
     let (recv_slot, send_slot) = {
         let state = world.resource::<PluginInternalState>();
         state.park_workers();
@@ -991,11 +1014,36 @@ pub fn drain_recv_worker_output(world: &mut World) {
         return;
     }
 
-    // Cross-half receive orchestration per ReceiveOutput.
     let mut coord = coord_opt.unwrap();
     let mut recv = recv_opt.unwrap();
     let mut send = send_opt.unwrap();
+
+    // Drain everything the recv worker has already shipped to the channel
+    // (bounded(1), so at most one item from prior iterations).
+    let mut outputs: Vec<ReceiveOutput<Entity>> = receiver.try_iter().collect();
+
+    // Perform a synchronous recv.receive() while workers are parked. This
+    // catches any packets that arrived after the recv worker's most recent
+    // iteration (e.g., packets delivered by process_time_queues AFTER the
+    // last worker sleep started). The resulting ReceiveOutput is appended
+    // so we process it together with any channel output below.
+    let fresh_output = recv.receive();
+    outputs.push(fresh_output);
+
+    if outputs.iter().all(|o| o.is_empty()) {
+        // Nothing to process. Return handles and unpark.
+        world.resource_mut::<CoordHandleRes>().0 = Some(coord);
+        *recv_slot.lock() = Some(recv);
+        *send_slot.lock() = Some(send);
+        world.resource::<PluginInternalState>().unpark_workers();
+        return;
+    }
+
+    // Cross-half receive orchestration per ReceiveOutput.
     for mut output in outputs {
+        if output.is_empty() {
+            continue;
+        }
         let server_tick = coord.current_tick();
         let (c, r, s) = apply_recv_to_world(
             coord,

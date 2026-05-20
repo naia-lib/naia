@@ -56,3 +56,15 @@ pub struct ReceiveOutput<E: Copy + Eq + Hash + Send + Sync> {
     /// connection map.
     pub pending_data_packets: Vec<(SocketAddr, Tick, OwnedBitReader)>,
 }
+
+impl<E: Copy + Eq + Hash + Send + Sync> ReceiveOutput<E> {
+    /// Returns true if this `ReceiveOutput` contains no events, ticks,
+    /// received addresses, or pending data packets. An empty output is
+    /// safe to skip in the cross-half orchestration pipeline.
+    pub fn is_empty(&self) -> bool {
+        self.pending_ticks.is_empty()
+            && self.received_addresses.is_empty()
+            && self.pending_data_packets.is_empty()
+            && self.world_events.is_empty()
+    }
+}
