@@ -97,19 +97,25 @@ where
 /// }
 /// ```
 ///
-/// Internally calls `WorldServer::configure_entity_replication`
-/// verbatim under a [`run_with_world_server`] reassembly. Wire output
-/// is byte-identical to the legacy path by construction (it IS the
-/// legacy path).
+/// As of Phase D.2.4 this delegates to the Coord-only
+/// [`CoordHandle::configure_entity_replication`] + eager deferred-op
+/// drains (see the D.2.4 section below). Wire output remains
+/// byte-identical to the legacy `WorldServer::configure_entity_replication`
+/// path — the B.2 test `coord_configure_entity_replication.rs` still
+/// enforces this against this exact facade, unchanged.
 ///
-/// # Why not a method on `CoordHandle`?
+/// # Historical: why B.2 originally reassembled `WorldServer`
 ///
-/// The spec (`MISSION_USER_ONLY_SEES_SIM.md` §6.2) proposed
-/// `CoordHandle::configure_entity_replication(&mut self, entity,
-/// config)` with the Send-side acknowledgment deferred to
+/// B.2 (commit `1e9cf38f`) shipped this facade as a thin wrapper around
+/// [`run_with_world_server`] that called `WorldServer::configure_entity_
+/// replication` verbatim. The spec (`MISSION_USER_ONLY_SEES_SIM.md`
+/// §6.2) had proposed a true `CoordHandle::configure_entity_replication`
+/// with the Send-side acknowledgment deferred to
 /// `apply_pending_send_preamble` via a new `ScopeChange::ConfigureReplication`
-/// variant. End-to-end audit of `WorldServer::configure_entity_replication`
-/// (`world_server.rs:1423`) found three reasons to defer that design:
+/// variant, but an end-to-end audit of `WorldServer::configure_entity_
+/// replication` (`world_server.rs:1423`) found three blockers that
+/// deferred that design to Phase D.2 (each resolved there — see the
+/// D.2.4 section):
 ///
 /// 1. The Send-side state machine is read-before-write across multiple
 ///    locks (e.g. `unpublish_entity` captures `owner_addr` from coord
@@ -137,29 +143,94 @@ where
 ///    splits the state machine across two methods and forces every
 ///    consumer to remember to call both.
 ///
-/// The pragmatic alternative shipped here: keep the wire body
-/// verbatim under reassembly, expose a single-call ergonomic
-/// surface. Cyberlith Phase C gets the consumer ergonomics it
-/// wanted (no manual `from_pipeline_states` / `split_world_server`
-/// dance) and the byte-identity is by-construction. Deferring
-/// `enable_delegation_client_owned_entity` cleanly is a follow-up
-/// (post Phase E, when the worker-thread Plugin variant takes
-/// ownership of the send loop).
+/// # Phase D.2.4 (2026-05-19) — delegates to the Coord-only API
+///
+/// As of D.2.4 this facade NO LONGER reassembles a `WorldServer` via
+/// [`run_with_world_server`]. The three D.2 blockers quoted above were
+/// resolved by D.2.1–D.2.3:
+///
+/// - **Blocker 1** (read-before-write across half-boundaries) — fixed
+///   by capturing the pre-transition gwm/user-store state into the
+///   `ScopeChange::ConfigureReplication` payload at queue-push time
+///   (see [`CoordHandle::configure_entity_replication`] and
+///   `configure_replication::ConfigureCapture`).
+/// - **Blocker 2** (`MigrateResponse`-as-first-message ordering in the
+///   client-origin delegation path) — fixed by D.2.3's explicit
+///   `HostEntityChannel::reserve_first_command` invariant, so the
+///   migration sequence can run inside the deferred Send drain.
+/// - **Blocker 3** (world component-hook registration) — fixed by the
+///   separate `pending_world_hooks` queue drained by
+///   [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`
+///   twin), which the holder of `&mut World` calls explicitly.
+///
+/// This facade now performs the full operation EAGERLY (synchronous
+/// contract): it must leave Coord + Send + World in the same state the
+/// legacy `run_with_world_server` path did, by the time it returns. So
+/// it drains the deferred Send leaf-ops and the deferred World hooks
+/// before returning rather than waiting for a future tick:
+///
+/// 1. `coord.configure_entity_replication(entity, config)` — runs the
+///    publicity decision tree once against pre-transition gwm state,
+///    applies the Coord-side gwm writes immediately, and queues the
+///    Send leaf-ops (`ScopeChange::ConfigureReplication`) plus the
+///    World hooks (`pending_world_hooks`).
+/// 2. `send.state.apply_pending_configure_replication(...)` — the
+///    NARROW Send drain. It removes ONLY `ScopeChange::ConfigureReplication`
+///    variants from `scope_change_queue` and applies their Send leaf-ops;
+///    every other variant (`EntityEnteredRoom`, `ScopeToggled`,
+///    `RoomChange`, …) is left untouched in queue order. This matches
+///    the legacy facade exactly: `WorldServer::configure_entity_replication`
+///    applied the Send work inline WITHOUT running the per-tick send
+///    preamble (no heartbeats / empty-acks / outbound flush / no
+///    `preamble_done_this_tick` flag). Calling the broader
+///    [`SendHandle::apply_pending_send_preamble`] here would introduce
+///    those extra per-tick side effects and so would NOT be
+///    byte-identical — hence the narrow entry point.
+/// 3. `coord.apply_pending_world_hooks(world)` — drains the deferred
+///    World component-hook ops onto `world`, installing the per-component
+///    diff mutators the legacy `world.entity_publish` / `entity_unpublish`
+///    / `entity_enable_delegation` calls would have installed inline.
+///
+/// `recv` is now unused by the body (the operation never touched
+/// Recv-side state) but is kept in the signature, by-position and
+/// by-type, so cyberlith's existing call site at HEAD keeps compiling.
+/// Phase E may simplify the signature later, atomically with the
+/// cyberlith call-site update.
+///
+/// Byte-identity vs the legacy path is enforced unchanged by the B.2
+/// test `coord_configure_entity_replication.rs` (it still calls this
+/// facade) plus the D.2.2 deferred-drain parity tests.
 pub fn configure_entity_replication<E, W>(
     coord: CoordHandle<E>,
     recv: RecvHandle<E>,
-    send: SendHandle<E>,
+    mut send: SendHandle<E>,
     world: &mut W,
     entity: &E,
     config: crate::world::replication_config::ReplicationConfig,
 ) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
-    E: Copy + Eq + Hash + Send + Sync,
+    E: Copy + Eq + Hash + Send + Sync + 'static,
     W: WorldMutType<E>,
 {
-    let (coord, recv, send, ()) = run_with_world_server(coord, recv, send, |ws| {
-        ws.configure_entity_replication(world, entity, config);
-    });
+    let mut coord = coord;
+
+    // 1. Coord-side gwm writes immediately; queue deferred Send + World ops.
+    coord.configure_entity_replication(entity, config);
+
+    // 2. Narrow Send drain — apply ONLY the just-queued ConfigureReplication
+    //    leaf-ops, leaving every other scope-change variant in place. No
+    //    preamble side effects (matches the legacy inline behavior).
+    let shared = Arc::clone(&send.state.shared);
+    send.state
+        .apply_pending_configure_replication(&shared.scope_change_queue);
+
+    // 3. World-side component-hook drain onto the caller's world.
+    coord.apply_pending_world_hooks(world);
+
+    // `recv` carries no state for this op; preserved in the signature for
+    // cyberlith-build-stability (see doc-comment).
+    let _ = &recv;
+
     (coord, recv, send)
 }
 
