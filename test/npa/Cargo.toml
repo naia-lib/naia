@@ -26,6 +26,7 @@ anyhow = "1.0"
 
 futures = "0.3"
 regex = "1.0"
+rayon = "1"
 
 # Step bindings library (World + step functions)
 naia-tests = { path = "../tests" }
