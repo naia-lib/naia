@@ -607,6 +607,21 @@ impl PluginInternalState {
     fn _armed_coord_take(&self) -> Option<CoordHandle<Entity>> {
         self.armed_coord.lock().take()
     }
+
+    /// Drain the armed coord parking slot into [`CoordHandleRes`] on `world`.
+    ///
+    /// Called by consumers (e.g. cyberlith E.6c `init.rs`) that drive
+    /// Startup manually before running `Update` — the
+    /// `drain_armed_into_res` closure registered in `Update` would only
+    /// fire after Startup, but `main_init` needs the coord in
+    /// `CoordHandleRes` during Startup.  This method reproduces the same
+    /// drain logic and is safe to call multiple times (a no-op once the
+    /// slot is empty).
+    pub fn drain_armed_coord_into_resource(&self, world: &mut bevy_ecs::world::World) {
+        if let Some(c) = self.armed_coord.lock().take() {
+            world.resource_mut::<CoordHandleRes>().0 = Some(c);
+        }
+    }
 }
 
 impl Drop for PluginInternalState {
