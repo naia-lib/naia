@@ -1204,7 +1204,11 @@ pub fn drain_recv_impl(
     // catches any packets that arrived after the recv worker's most recent
     // iteration (e.g., packets delivered by process_time_queues AFTER the
     // last worker sleep started).
+    #[cfg(feature = "pipeline_timing")]
+    let _t_recv = std::time::Instant::now();
     let fresh_output = recv.receive();
+    #[cfg(feature = "pipeline_timing")]
+    crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
     outputs.push(fresh_output);
 
     if outputs.iter().all(|o| o.is_empty()) {
