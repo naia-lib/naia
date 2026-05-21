@@ -1336,6 +1336,10 @@ pub fn drain_recv_worker_output(world: &mut World) {
             return;
         }
 
+        // Recv-application on the MAIN thread (the cost we want to move to the
+        // recv worker — see MISSION_PIPELINE_PERF_VALIDATION §9.y).
+        #[cfg(feature = "pipeline_timing")]
+        let _t_apply = std::time::Instant::now();
         for mut output in outputs {
             if output.is_empty() {
                 continue;
@@ -1354,6 +1358,8 @@ pub fn drain_recv_worker_output(world: &mut World) {
             send = s;
             apply_receive_output_pipeline_with_sim_receiver(world, &sim_handle, &sim_receiver, output);
         }
+        #[cfg(feature = "pipeline_timing")]
+        crate::pipeline_timing::record_apply(_t_apply.elapsed().as_nanos() as u64);
 
         world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
         *recv_slot.lock() = Some(recv);

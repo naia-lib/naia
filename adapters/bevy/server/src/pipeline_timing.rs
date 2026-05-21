@@ -75,6 +75,27 @@ pub fn record_barrier(ns: u64) {
     let _ = ns;
 }
 
+/// Record `ns` of recv-*application* (`apply_recv_to_world`) on the MAIN thread
+/// — a sub-component of the non-Sim main-thread cost we want to move to the
+/// recv worker. Distinct from `record_recv` (socket `recv.receive()`).
+#[inline(always)]
+pub fn record_apply(ns: u64) {
+    #[cfg(feature = "pipeline_timing")]
+    imp::APPLY.record(ns);
+    #[cfg(not(feature = "pipeline_timing"))]
+    let _ = ns;
+}
+
+/// Record `ns` of snapshot *publish* (world → `SnapshotSender`) on the MAIN
+/// thread — the other prime sub-component of the non-Sim main-thread cost.
+#[inline(always)]
+pub fn record_snap(ns: u64) {
+    #[cfg(feature = "pipeline_timing")]
+    imp::SNAP.record(ns);
+    #[cfg(not(feature = "pipeline_timing"))]
+    let _ = ns;
+}
+
 #[cfg(feature = "pipeline_timing")]
 mod imp {
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -113,6 +134,8 @@ mod imp {
     pub static SEND: Stage = Stage::new();
     pub static TICK: Stage = Stage::new();
     pub static BARRIER: Stage = Stage::new();
+    pub static APPLY: Stage = Stage::new();
+    pub static SNAP: Stage = Stage::new();
 
     pub fn snapshot_all() -> super::PipelineTimingReport {
         let (recv_count, recv_ns) = RECV.snapshot();
@@ -120,6 +143,8 @@ mod imp {
         let (send_count, send_ns) = SEND.snapshot();
         let (tick_count, tick_ns) = TICK.snapshot();
         let (barrier_count, barrier_ns) = BARRIER.snapshot();
+        let (apply_count, apply_ns) = APPLY.snapshot();
+        let (snap_count, snap_ns) = SNAP.snapshot();
         super::PipelineTimingReport {
             recv_count,
             recv_ns,
@@ -131,6 +156,10 @@ mod imp {
             tick_ns,
             barrier_count,
             barrier_ns,
+            apply_count,
+            apply_ns,
+            snap_count,
+            snap_ns,
         }
     }
 
@@ -140,6 +169,8 @@ mod imp {
         SEND.reset();
         TICK.reset();
         BARRIER.reset();
+        APPLY.reset();
+        SNAP.reset();
     }
 }
 
@@ -159,6 +190,10 @@ pub struct PipelineTimingReport {
     pub tick_ns: u64,
     pub barrier_count: u64,
     pub barrier_ns: u64,
+    pub apply_count: u64,
+    pub apply_ns: u64,
+    pub snap_count: u64,
+    pub snap_ns: u64,
 }
 
 /// Drain a snapshot of every stage accumulator (does not reset).
