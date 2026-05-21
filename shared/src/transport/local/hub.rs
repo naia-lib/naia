@@ -386,6 +386,27 @@ impl LocalTransportHub {
         }
     }
 
+    /// Apply a server→client link conditioner to ALL currently-registered
+    /// connections, leaving the client→server direction untouched. Pass
+    /// `None` to clear s2c conditioning everywhere. Returns the number of
+    /// connections affected.
+    ///
+    /// Test-only helper (MISSION_SNAPSHOT_DIRTY_TRIM packet-loss gate):
+    /// s2c-only loss keeps the client→server command path intact, so a
+    /// client's avatar follows an identical path with and without loss —
+    /// letting a convergence test compare the recovered confirmed-world
+    /// state against a no-loss reference.
+    pub fn set_all_server_to_client_conditioner(
+        &self,
+        server_to_client: Option<LinkConditionerConfig>,
+    ) -> usize {
+        let mut connections = self.connections.lock();
+        for conn in connections.values_mut() {
+            conn.server_to_client_conditioner = server_to_client.clone();
+        }
+        connections.len()
+    }
+
     /// Pause all traffic (drop all packets)
     pub fn pause_traffic(&self) {
         *self.traffic_paused.lock() = true;

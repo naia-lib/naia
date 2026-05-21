@@ -82,7 +82,7 @@ pub use naia_bevy_shared::{
     HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken, Instant,
     ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, ResponseSendKey,
     SendPackets, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
-    WorldProxyMut, WorldToHostSync, WorldUpdate,
+    WorldProxy, WorldProxyMut, WorldToHostSync, WorldUpdate,
 };
 pub use naia_server::{
     pipeline_actors,

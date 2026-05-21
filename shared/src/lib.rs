@@ -212,6 +212,7 @@ pub use world::sync::host_entity_channel::HostEntityChannel;
 #[cfg(feature = "e2e_debug")]
 pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
+pub use world::update::atomic_bit_set::AtomicBitSet;
 pub use world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
 pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;

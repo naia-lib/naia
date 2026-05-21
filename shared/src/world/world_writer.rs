@@ -253,12 +253,40 @@ impl WorldWriter {
                     return;
                 };
 
+                let has_global = world_manager.has_global_entity(global_entity);
+                if !has_global {
+                    // LEGITIMATE race: a Despawn superseded this Spawn in the
+                    // same window (`host_engine` removes the channel on Despawn
+                    // while the queued Spawn still drains). Degrade to Noop —
+                    // the client never sees a corpse it would immediately kill.
+                    EntityMessageType::Noop.ser(writer);
+                    if is_writing {
+                        world_manager.record_command_written(
+                            packet_index,
+                            command_id,
+                            EntityMessage::Noop,
+                        );
+                    }
+                    return;
+                }
+
                 let all_present = comp_kind_list
                     .iter()
                     .all(|k| world.has_component_of_kind(&world_entity, k));
-
-                let has_global = world_manager.has_global_entity(global_entity);
-                if !has_global || !all_present {
+                // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): a host-tracked entity
+                // MUST have every component present in the (snapshot) world — the
+                // send-side needed-set guarantees this. If this fires, the
+                // needed-set under-supplied and a reliable spawn would be SILENTLY
+                // lost as a terminal Noop in release. Surface it loudly in
+                // debug/test builds; keep the Noop as the release fallback.
+                debug_assert!(
+                    all_present,
+                    "SpawnWithComponents: entity {:?} is host-tracked but a component \
+                     is missing from the snapshot world — needed-set under-supply \
+                     (would silently drop the spawn)",
+                    global_entity,
+                );
+                if !all_present {
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
                         world_manager.record_command_written(
@@ -342,9 +370,21 @@ impl WorldWriter {
                     return;
                 };
 
-                if !world_manager.has_global_entity(global_entity)
-                    || !world.has_component_of_kind(&world_entity, component_kind)
-                {
+                let insert_has_global = world_manager.has_global_entity(global_entity);
+                // Same split as SpawnWithComponents: `!has_global` is the
+                // legitimate despawn-race Noop; `has_global && !present` is a
+                // needed-set under-supply that would silently drop the insert.
+                let insert_present = insert_has_global
+                    && world.has_component_of_kind(&world_entity, component_kind);
+                debug_assert!(
+                    !insert_has_global || insert_present,
+                    "InsertComponent: entity {:?} is host-tracked but component {:?} \
+                     is missing from the snapshot world — needed-set under-supply \
+                     (would silently drop the insert)",
+                    global_entity,
+                    component_kind,
+                );
+                if !insert_present {
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet

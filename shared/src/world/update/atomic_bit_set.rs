@@ -209,6 +209,26 @@ impl AtomicBitSet {
         mask
     }
 
+    /// Collect the indices of every set bit, in ascending order.
+    ///
+    /// Relaxed per-word loads; the returned snapshot is point-in-time
+    /// and not synchronized against concurrent `set_bit`/`clear`. Used by
+    /// the send-side needed-entity set, which is written and read on the
+    /// same thread inside the park window (no concurrency at the read).
+    pub fn collect_set_bits(&self) -> Vec<u32> {
+        let mut out = Vec::new();
+        for (word_idx, word) in self.words.iter().enumerate() {
+            let mut bits = word.load(Ordering::Relaxed);
+            let base = (word_idx * 64) as u32;
+            while bits != 0 {
+                let bit = bits.trailing_zeros();
+                out.push(base + bit);
+                bits &= bits - 1;
+            }
+        }
+        out
+    }
+
     /// Read one byte of the bitset (matches the `DiffMask::byte`
     /// little-endian byte layout).
     #[inline]

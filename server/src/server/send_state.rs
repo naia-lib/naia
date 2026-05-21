@@ -508,6 +508,36 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.preamble_done_this_tick = true;
     }
 
+    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — recompute the cross-thread
+    /// `needed_entities` bitset from every connection's in-flight
+    /// value-reading commands.
+    ///
+    /// MUST be called AFTER `apply_pending_scope_changes` (so freshly
+    /// scope-entered entities have already been `host_init`'d and appear in
+    /// each connection's `pending_outbound` set) and BEFORE the Sim-side
+    /// `SnapshotWorld` build that reads `needed_snapshot_entries`. Both run
+    /// on the same thread inside the park window, so the recompute and the
+    /// read never race.
+    ///
+    /// Result: `needed_entities` = ⋃ over users of "entities whose Spawn /
+    /// SpawnWithComponents / InsertComponent isn't yet fully delivered". The
+    /// snapshot builder unions this with `global_dirty` (component updates)
+    /// to get the full must-include set.
+    pub fn refresh_needed_entities(&mut self) {
+        let needed = &self.shared.needed_entities;
+        needed.clear();
+
+        let handler_arc = self.shared.global_world_manager.read().diff_handler();
+        let guard = handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+        for send_conn in self.send_user_connections.values() {
+            for global_entity in send_conn.base.world_manager.pending_outbound_entities() {
+                if let Some(idx) = guard.entity_to_global_idx(&global_entity) {
+                    needed.set_bit(idx.as_usize() as u32);
+                }
+            }
+        }
+    }
+
     /// C.6 prep — send a message to the user at `address` without
     /// reassembling the WorldServer.
     ///
@@ -1581,6 +1611,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             user_key,
             global_entity,
             world.has_entity(world_entity)
+        );
+        // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): under the reorder, scope
+        // application runs against the Sim world (entity-existence source of
+        // truth) BEFORE the snapshot is built, and `host_init` only fires for
+        // entities present here. So a scope-enter for an absent entity should
+        // be impossible. Surface it loudly in debug/test builds; keep the
+        // bounded re-queue as the release fallback (legit despawn-race / other
+        // consumers passing a not-yet-populated world).
+        debug_assert!(
+            world.has_entity(world_entity),
+            "apply_scope_for_user: scope-enter for entity {:?} (user {:?}) but it is \
+             absent from the world passed to scope application — see \
+             MISSION_SNAPSHOT_DIRTY_TRIM.md §4",
+            global_entity,
+            user_key,
         );
         if !world.has_entity(world_entity) {
             // Entity not yet spawned in the snapshot world — re-queue

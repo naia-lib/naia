@@ -1,5 +1,5 @@
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     hash::Hash,
 };
 
@@ -10,9 +10,10 @@ use crate::{
         update::entity_update_manager::EntityUpdateManager,
     },
     ComponentKind, ComponentKinds, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
-    EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner, GlobalWorldManagerType, HostEntity,
-    HostEntityGenerator, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
-    MessageIndex, ShortMessageIndex, WorldMutType,
+    EntityMessageReceiver, EntityMessageType, GlobalEntity, GlobalEntitySpawner,
+    GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType,
+    LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex,
+    WorldMutType,
 };
 
 /// Sequence number identifying a top-level entity command sent over the reliable channel.
@@ -34,6 +35,22 @@ pub struct HostWorldManager {
     delivered_receiver: ReliableReceiver<EntityMessage<HostEntity>>,
     delivered_engine: RemoteEngine<HostEntity>,
     incoming_events: Vec<EntityEvent>,
+
+    // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): entities with a
+    // value-reading outbound command (Spawn / SpawnWithComponents /
+    // InsertComponent) that is not yet fully delivered to this peer.
+    //
+    // These are the entities whose component VALUES must remain in the
+    // Sim→Send `SnapshotWorld` handoff: a reliable command re-reads the
+    // current world value on every (re)transmit (`world_writer.rs`
+    // SpawnWithComponents / InsertComponent), so dropping such an entity
+    // from the snapshot would write a terminal `Noop` and silently lose
+    // the spawn. Inserted when the command is queued; removed in
+    // `process_delivered_commands` once the delivered engine has caught up
+    // (entity present + all host component kinds delivered) or the host
+    // channel is gone. Component value UPDATES are NOT tracked here — they
+    // are covered by the cross-thread `GlobalDirtyBitset`.
+    pending_outbound: HashSet<GlobalEntity>,
 }
 
 impl HostWorldManager {
@@ -45,7 +62,33 @@ impl HostWorldManager {
             delivered_receiver: ReliableReceiver::new(),
             delivered_engine: RemoteEngine::new(host_type.invert()),
             incoming_events: Vec::new(),
+            pending_outbound: HashSet::new(),
         }
+    }
+
+    /// Iterator over entities with an in-flight (not-yet-fully-delivered)
+    /// value-reading command. See the `pending_outbound` field docs for
+    /// why these must stay in the `SnapshotWorld` handoff.
+    pub fn pending_outbound_entities(&self) -> impl Iterator<Item = GlobalEntity> + '_ {
+        self.pending_outbound.iter().copied()
+    }
+
+    /// True iff `host_entity`'s spawn + every host-known component kind
+    /// has been confirmed delivered (or the host channel no longer
+    /// exists). Used to retire entries from `pending_outbound`.
+    fn host_entity_fully_delivered(&self, host_entity: &HostEntity) -> bool {
+        let Some(host_channel) = self.host_engine.get_entity_channel(host_entity) else {
+            // Host channel gone (despawned / migrated) — nothing left to
+            // (re)transmit a value for.
+            return true;
+        };
+        let Some(delivered_channel) = self.get_delivered_world().get(host_entity) else {
+            return false;
+        };
+        host_channel
+            .component_kinds()
+            .iter()
+            .all(|k| delivered_channel.has_component_kind(k))
     }
 
     pub(crate) fn entity_converter_mut<'a, 'b>(
@@ -104,6 +147,8 @@ impl HostWorldManager {
         component_kinds: Vec<ComponentKind>,
     ) {
         // Static entities: NEVER register for diff-tracking — they don't change after spawn.
+        // Either path queues a value-reading command → must stay in the snapshot until acked.
+        self.pending_outbound.insert(*global_entity);
         if !component_kinds.is_empty() {
             self.host_engine.send_command(
                 converter,
@@ -153,6 +198,8 @@ impl HostWorldManager {
             }
         }
 
+        // Either path queues a value-reading command → must stay in the snapshot until acked.
+        self.pending_outbound.insert(*global_entity);
         if !component_kinds.is_empty() {
             // Coalesce Spawn + N InsertComponent into one reliable message
             self.host_engine.send_command(
@@ -173,6 +220,18 @@ impl HostWorldManager {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         command: EntityCommand,
     ) {
+        // Value-reading commands (Spawn / SpawnWithComponents /
+        // InsertComponent) re-read the world on (re)transmit, so the
+        // entity must stay in the snapshot until acked. Despawn / auth /
+        // remove commands carry no component payload — no snapshot need.
+        match command.get_type() {
+            EntityMessageType::Spawn
+            | EntityMessageType::SpawnWithComponents
+            | EntityMessageType::InsertComponent => {
+                self.pending_outbound.insert(command.entity());
+            }
+            _ => {}
+        }
         self.host_engine.send_command(converter, command);
     }
 
@@ -288,6 +347,30 @@ impl HostWorldManager {
                     // Only Auth-related messages are left here
                     // Right now it doesn't seem like we need to track auth state here
                 }
+            }
+        }
+
+        // MISSION_SNAPSHOT_DIRTY_TRIM: retire entities from `pending_outbound`
+        // whose spawn + all host component kinds are now delivered (or whose
+        // host channel is gone). This is the only removal site; it runs every
+        // recv cycle. Over-retention (an entry lingering until the next cycle)
+        // is harmless — it only keeps an already-delivered entity in the
+        // snapshot a little longer. Under-removal is never a correctness bug;
+        // missing an INSERT would be, which is why inserts hook every
+        // value-reading command-send site.
+        if !self.pending_outbound.is_empty() {
+            let settled: Vec<GlobalEntity> = self
+                .pending_outbound
+                .iter()
+                .copied()
+                .filter(|ge| match local_entity_map.global_entity_to_host_entity(ge) {
+                    Ok(host_entity) => self.host_entity_fully_delivered(&host_entity),
+                    // No host mapping → entity is gone; stop tracking it.
+                    Err(_) => true,
+                })
+                .collect();
+            for ge in settled {
+                self.pending_outbound.remove(&ge);
             }
         }
     }

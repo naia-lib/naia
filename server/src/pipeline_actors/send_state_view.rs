@@ -35,9 +35,11 @@
 //! Future optimization (deferred): trim the superset via a Send→Sim
 //! atomic snapshot of dirty bits. Out of scope for Iris 2.
 
-use std::{hash::Hash, sync::Arc};
+use std::{collections::HashSet, hash::Hash, sync::Arc};
 
-use naia_shared::{ComponentKind, EntityAndGlobalEntityConverter};
+use naia_shared::{
+    ComponentKind, EntityAndGlobalEntityConverter, GlobalEntityIndex, GlobalWorldManagerType,
+};
 
 use crate::pipeline_actors::handles::SimHandle;
 use crate::server::ServerShared;
@@ -124,6 +126,80 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             }
         }
         out
+    }
+
+    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — the **trimmed** counterpart
+    /// to [`live_entities`]: only entities the next `send_all_packets` could
+    /// read this tick.
+    ///
+    /// = `needed_entities` (in-flight value-reading commands, set send-side by
+    /// [`crate::SendState::refresh_needed_entities`]) ∪ `global_dirty`
+    /// (component value updates + drop-reflagged re-sends). Static, fully-acked
+    /// entities in stable scope drop out — that is the whole point.
+    ///
+    /// Correctness rests on `refresh_needed_entities` having run after this
+    /// tick's scope application; see `MISSION_SNAPSHOT_DIRTY_TRIM.md` §4.
+    pub fn needed_live_entities(&self) -> Vec<E> {
+        let gwm = self.shared.global_world_manager.read();
+        let gem = self.shared.global_entity_map.read();
+        let handler_arc = gwm.diff_handler();
+        let guard = handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+
+        let indices = self.needed_index_set();
+        let mut out = Vec::with_capacity(indices.len());
+        for idx in indices {
+            let Some(ge) = guard.global_entity_at(idx) else { continue; };
+            // Skip non-replicating entities (paused / mid-teardown), matching
+            // the gate `send_all_packets` Phase 1+2 applies before any read.
+            if !gwm.entity_is_replicating(&ge) {
+                continue;
+            }
+            let Ok(world_entity) = gem.global_entity_to_entity(&ge) else { continue; };
+            out.push(world_entity);
+        }
+        out
+    }
+
+    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — the **trimmed** counterpart
+    /// to [`required_snapshot_entries`]. For every needed entity (see
+    /// [`needed_live_entities`]) emits ALL of its registered `(entity, kind)`
+    /// pairs — the coherence invariant the spawn-write relies on: if an entity
+    /// is live in the snapshot, every one of its components must be present, or
+    /// `SpawnWithComponents` degrades to a terminal `Noop` (lost spawn).
+    pub fn needed_snapshot_entries(&self) -> Vec<(E, ComponentKind)> {
+        let gwm = self.shared.global_world_manager.read();
+        let gem = self.shared.global_entity_map.read();
+        let handler_arc = gwm.diff_handler();
+        let guard = handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+
+        let indices = self.needed_index_set();
+        let mut out = Vec::new();
+        for idx in indices {
+            let Some(ge) = guard.global_entity_at(idx) else { continue; };
+            let Ok(world_entity) = gem.global_entity_to_entity(&ge) else { continue; };
+            if let Some(kinds) = gwm.component_kinds(&ge) {
+                for kind in kinds {
+                    out.push((world_entity, kind));
+                }
+            }
+        }
+        out
+    }
+
+    /// Deduped union of the `needed_entities` bitset and `global_dirty`,
+    /// as `GlobalEntityIndex` values. Shared by the two `needed_*` readers.
+    fn needed_index_set(&self) -> HashSet<GlobalEntityIndex> {
+        let mut indices: HashSet<GlobalEntityIndex> = self
+            .shared
+            .needed_entities
+            .collect_set_bits()
+            .into_iter()
+            .map(GlobalEntityIndex::from)
+            .collect();
+        for idx in self.shared.global_dirty.dirty_entity_iter() {
+            indices.insert(idx);
+        }
+        indices
     }
 }
 

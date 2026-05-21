@@ -1113,14 +1113,16 @@ fn send_worker_loop(
                 }
             };
 
-            // Flush handshake responses every iteration so the initial
-            // handshake completes before Sim generates its first snapshot.
+            // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): the preamble + scope
+            // application + needed-set refresh now run on the MAIN thread inside
+            // the park window (cyberlith `do_park_window_tick` Step 7.5), BEFORE
+            // the snapshot is built — so the snapshot contains exactly what this
+            // send reads. The worker only transmits. `send_all_packets` skips its
+            // inline preamble/scope via the per-tick flags main already set.
             #[cfg(feature = "pipeline_timing")]
             let _t_send = std::time::Instant::now();
-            send.apply_pending_send_preamble();
 
             if let Some(snap) = snap_opt {
-                send.apply_pending_scope_changes(&snap);
                 send.send_all_packets(snap);
                 #[cfg(feature = "pipeline_timing")]
                 crate::pipeline_timing::record_send(_t_send.elapsed().as_nanos() as u64);

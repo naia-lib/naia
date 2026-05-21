@@ -40,7 +40,7 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 
 use naia_shared::{
-    ChannelKinds, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    AtomicBitSet, ChannelKinds, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, GlobalDirtyBitset, GlobalEntity, GlobalEntityMap, MessageKinds,
     OutgoingPacket,
 };
@@ -85,6 +85,21 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Global dirty bitset — already atomic; recv writes, send reads.
     pub global_dirty: Arc<GlobalDirtyBitset>,
+
+    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — cross-thread
+    /// "needed entity" set: entities with an in-flight value-reading
+    /// reliable command (Spawn / SpawnWithComponents / InsertComponent)
+    /// to ANY user, keyed by `GlobalEntityIndex`. Recomputed each tick by
+    /// `SendState::refresh_needed_entities` (send-side, inside the park
+    /// window) and read by `SendStateView::needed_snapshot_entries`
+    /// (Sim-side snapshot build, also inside the park window — so writer
+    /// and reader never overlap; the bitset is atomic only to satisfy the
+    /// `Sync` bound).
+    ///
+    /// The complete "what the snapshot must contain" set is this set
+    /// UNION `global_dirty` (the latter covers component value updates +
+    /// drop-reflagged re-sends). See `MISSION_SNAPSHOT_DIRTY_TRIM.md` §4.
+    pub needed_entities: Arc<AtomicBitSet>,
 
     /// Recv → send handoff queue (step 4-E.2e). LOCK ORDER position #5.
     /// `finalize_connection` pushes `ConnectionAdded` here from the recv
@@ -208,6 +223,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             component_kinds,
             client_authoritative_entities,
             global_dirty,
+            // One bit per GlobalEntityIndex (slot 0 = INVALID sentinel).
+            needed_entities: Arc::new(AtomicBitSet::new(entity_index_capacity)),
             pending_send_state_updates: Mutex::new(Vec::new()),
             scope_change_queue: Mutex::new(VecDeque::new()),
             pending_auth_grants: Mutex::new(Vec::new()),

@@ -1324,6 +1324,15 @@ impl LocalWorldManager {
             .process_delivered_commands(&mut self.entity_map, &mut self.updater);
     }
 
+    /// MISSION_SNAPSHOT_DIRTY_TRIM: entities with an in-flight value-reading
+    /// command (Spawn / SpawnWithComponents / InsertComponent) to this peer.
+    /// These must remain in the Sim→Send `SnapshotWorld` handoff so reliable
+    /// (re)transmits can re-read the current component value. See
+    /// `HostWorldManager::pending_outbound_entities`.
+    pub fn pending_outbound_entities(&self) -> impl Iterator<Item = GlobalEntity> + '_ {
+        self.host.pending_outbound_entities()
+    }
+
     /// Builds the dirty-component map for the current tick from mutation receivers and the world state.
     pub fn take_update_events<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,

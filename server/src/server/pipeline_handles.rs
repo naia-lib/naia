@@ -258,6 +258,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.apply_pending_send_preamble();
     }
 
+    /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — recompute the cross-thread
+    /// `needed_entities` set from every connection's in-flight value-reading
+    /// commands. Call AFTER [`apply_pending_scope_changes`] and BEFORE the
+    /// Sim-side `SnapshotWorld` build that reads
+    /// [`crate::SendStateView::needed_snapshot_entries`]. See
+    /// [`SendState::refresh_needed_entities`].
+    pub fn refresh_needed_entities(&mut self) {
+        self.state.refresh_needed_entities();
+    }
+
     /// C.6 prep #6 — drain entity-scope variants (`EntityEnteredRoom`,
     /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
     /// `scope_change_queue` and fan them out to user connections.
