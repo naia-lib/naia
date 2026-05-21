@@ -101,6 +101,13 @@ pub struct Plugin {
     /// `drain_recv_worker_output` + `propagate_worker_panics` systems
     /// in `change_detection_schedule` (or `Update`).
     full_pipelining: bool,
+    /// When `true`, `build` SKIPS registering the per-`Replicate` host-sync
+    /// change-tracking systems (`WorldData::add_systems[_to_schedule]`). Set
+    /// only by `sim_integration_full` from `PluginSimConfig`; all other
+    /// constructors pass `false`. MISSION_OVERLAP_FRONTIER T2 — lets an app
+    /// whose world hosts no replicated entities (cyberlith base game cell's
+    /// main world) drop ~2 no-op change-tracking systems per component type.
+    skip_host_sync_change_tracking: bool,
 }
 
 impl Plugin {
@@ -119,7 +126,7 @@ impl Plugin {
         protocol: Protocol,
         cfg: crate::plugin_full::PluginSimConfig,
     ) -> Self {
-        Self::new_impl(
+        let mut plugin = Self::new_impl(
             server_config,
             protocol,
             true,
@@ -127,7 +134,9 @@ impl Plugin {
             true,
             cfg.change_detection_schedule,
             true,
-        )
+        );
+        plugin.skip_host_sync_change_tracking = cfg.skip_main_world_host_sync;
+        plugin
     }
 
     /// World-only variant. Skips full `Server` setup (auth, accept_connection,
@@ -237,6 +246,9 @@ impl Plugin {
             state_external,
             change_detection_schedule,
             full_pipelining,
+            // Default: register host-sync change-tracking. Only
+            // `sim_integration_full` overrides this from `PluginSimConfig`.
+            skip_host_sync_change_tracking: false,
         }
     }
 }
@@ -246,10 +258,17 @@ impl PluginType for Plugin {
         let mut config = self.config.lock().deref_mut().take().unwrap();
 
         let world_data = config.protocol.take_world_data();
-        if let Some(schedule) = self.change_detection_schedule {
-            world_data.add_systems_to_schedule(app, schedule);
-        } else {
-            world_data.add_systems(app);
+        // T2: skip the per-Replicate host-sync change-tracking systems when the
+        // app's world hosts no replicated entities (they would be pure no-op
+        // dispatch). The WorldData resource is still inserted; only the
+        // on_component_added/removed systems are omitted. `world_to_host_sync`
+        // (registered separately) then drains an always-empty event buffer.
+        if !self.skip_host_sync_change_tracking {
+            if let Some(schedule) = self.change_detection_schedule {
+                world_data.add_systems_to_schedule(app, schedule);
+            } else {
+                world_data.add_systems(app);
+            }
         }
         app.insert_resource(world_data);
 

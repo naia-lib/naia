@@ -100,12 +100,29 @@ pub struct PluginSimConfig {
     /// When `None`, defaults to bevy's `Update` (matches
     /// `Plugin::sim_integration`).
     pub change_detection_schedule: Option<InternedScheduleLabel>,
+    /// When `true`, SKIP registering the per-`Replicate` host-sync
+    /// change-tracking systems (`on_component_added`/`on_component_removed`,
+    /// the `HostSyncChangeTracking` set) on this app's world.
+    ///
+    /// Default `false` (register — backward compatible). Set `true` only when
+    /// this app's world hosts **zero** replicated entities, so the ~2 systems
+    /// per component type are pure no-op dispatch. cyberlith's base game cell
+    /// sets this (Sim owns all gameplay; the main world replicates nothing);
+    /// the level-editor cell leaves it `false` (its main world DOES host
+    /// delegated tile/spawn-point entities). MISSION_OVERLAP_FRONTIER T2.
+    pub skip_main_world_host_sync: bool,
 }
 
 impl PluginSimConfig {
     /// Set the change-detection schedule label.
     pub fn with_schedule<S: ScheduleLabel>(mut self, schedule: S) -> Self {
         self.change_detection_schedule = Some(schedule.intern());
+        self
+    }
+
+    /// Skip registering host-sync change-tracking (see field docs).
+    pub fn skip_host_sync(mut self, skip: bool) -> Self {
+        self.skip_main_world_host_sync = skip;
         self
     }
 }
