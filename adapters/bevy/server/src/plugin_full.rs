@@ -237,10 +237,17 @@ struct ParkControl {
     /// guarantees `park` can never be re-set to `true` while a worker is
     /// still mid-resume.
     resumed_cv: parking_lot::Condvar,
-    /// Mutex + condvar for workers to sleep in between park windows
-    /// (test_time mode only). Workers block here when idle; `park_workers()`
-    /// signals this condvar after setting `park=true` so workers wake, loop
-    /// to `worker_park_checkpoint`, and enter the coordinated park protocol.
+    /// Mutex + condvar for workers to sleep in between park windows. Workers
+    /// block here when idle; `park_workers()` signals this condvar after setting
+    /// `park=true` so workers wake, loop to `worker_park_checkpoint`, and enter
+    /// the coordinated park protocol.
+    ///
+    /// Used by BOTH paths (MISSION_OVERLAP_FRONTIER T1 made it active-mode too):
+    ///   - not(workers_active): the worker has no other work, so it body-sleeps
+    ///     on an UNBOUNDED `wait()` until woken here.
+    ///   - workers_active: the worker idle-waits on a BOUNDED `wait_for(100µs)`
+    ///     between receive/send iterations; signalling here wakes it instantly
+    ///     instead of after up to one ~100µs poll (the park-barrier win).
     ///
     /// This is the *idle* wait, separate from the *checkpoint* wait
     /// (`resume_cv`): a body-sleeping worker isn't yet counted in
@@ -248,9 +255,7 @@ struct ParkControl {
     /// distinct lets `park_workers()` wake idlers (body_sleep_cv) without
     /// disturbing the parked-count barrier, and lets `unpark_workers()`
     /// release parked workers (resume_cv) without waking idlers.
-    #[cfg(not(workers_active))]
     body_sleep_mu: Mutex<()>,
-    #[cfg(not(workers_active))]
     body_sleep_cv: parking_lot::Condvar,
 }
 
@@ -262,9 +267,7 @@ impl ParkControl {
             parked_cv: parking_lot::Condvar::new(),
             resume_cv: parking_lot::Condvar::new(),
             resumed_cv: parking_lot::Condvar::new(),
-            #[cfg(not(workers_active))]
             body_sleep_mu: Mutex::new(()),
-            #[cfg(not(workers_active))]
             body_sleep_cv: parking_lot::Condvar::new(),
         }
     }
@@ -606,22 +609,24 @@ impl PluginInternalState {
         }
         let expected = self.workers.lock().len() as u32;
         self.park.park.store(true, Ordering::SeqCst);
-        // Parked-worker mode: wake body-sleeping workers via condvar so they
-        // loop back to the checkpoint and park.
+        // Wake body-sleeping workers via condvar so they loop back to the
+        // checkpoint and park immediately, on BOTH paths:
+        //   - Parked (deterministic) mode: the worker body-sleeps on an
+        //     UNBOUNDED `body_sleep_cv.wait()` until woken (it has no other work).
+        //   - Active mode (MISSION_OVERLAP_FRONTIER T1): the worker idle-waits on
+        //     a BOUNDED `body_sleep_cv.wait_for(100µs)` between receive/send
+        //     iterations. Signalling here wakes it instantly instead of after up
+        //     to one ~100µs poll interval — that per-worker poll latency was the
+        //     ~140µs park barrier (audit §2.4). The 100µs bound still re-polls the
+        //     socket between ticks if no park is pending (preserves receive cadence).
         //
         // Hold body_sleep_mu while notifying to prevent the classic lost-wakeup
-        // race: without the lock, notify_all() can fire AFTER a worker checks
-        // the condvar condition (finds park=false, enters wait) but BEFORE it
-        // calls wait() — the signal is lost and the worker sleeps forever.
-        // Holding the lock ensures either the worker sees park=true (set above,
-        // SeqCst) and skips wait(), or the worker is already inside wait() and
-        // will be woken. (parking_lot condvar wait releases the lock atomically.)
-        //
-        // Active-worker mode: workers poll `park` between their short
-        // thread::sleep()s, so they reach the checkpoint within one sleep
-        // interval — no explicit wakeup needed (and thread::unpark() would not
-        // wake a thread::sleep() anyway).
-        #[cfg(not(workers_active))]
+        // race: without the lock, notify_all() can fire AFTER a worker checks the
+        // condvar condition (finds park=false) but BEFORE it calls wait() — the
+        // signal is lost. Holding the lock (which the worker also holds across its
+        // park-check + wait) ensures either the worker sees park=true (set above,
+        // SeqCst) and skips the wait, or it is already inside wait() and is woken.
+        // (parking_lot condvar wait releases the lock atomically.)
         {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
@@ -1000,9 +1005,11 @@ fn recv_worker_loop(
 
         #[cfg(workers_active)]
         {
-        // Don't start a receive() if park was requested.
+        // Don't start a receive() if park was requested — loop straight back to
+        // the checkpoint (which parks immediately). No sleep: the worker is about
+        // to park, and a sleep here would just add up to 100µs to the barrier in
+        // the race window where park is set after the checkpoint returned. (T1)
         if park.park.load(Ordering::SeqCst) {
-            thread::sleep(std::time::Duration::from_micros(100));
             continue;
         }
 
@@ -1034,8 +1041,17 @@ fn recv_worker_loop(
             Err(TrySendError::Full(new_output)) => { drop(new_output); }
             Err(TrySendError::Disconnected(_)) => { return; }
         }
-        if !shutdown.load(Ordering::SeqCst) && !park.park.load(Ordering::SeqCst) {
-            thread::sleep(std::time::Duration::from_micros(100));
+        // Idle inter-iteration wait: bounded condvar wait instead of a plain
+        // sleep, so park_workers()'s body_sleep_cv.notify_all() wakes the worker
+        // instantly (cutting the park barrier); the 100µs bound preserves the
+        // socket-drain cadence between ticks when no park is pending. (T1)
+        {
+            let mut g = park.body_sleep_mu.lock();
+            if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                park.body_sleep_cv
+                    .wait_for(&mut g, std::time::Duration::from_micros(100));
+            }
+            drop(g);
         }
         } // end #[cfg(workers_active)]
     }
@@ -1098,8 +1114,9 @@ fn send_worker_loop(
             // holds time_manager.read() for its entire packet loop, which can
             // block the recv worker's time_manager.write() (in take_tick_events);
             // skipping lets this worker reach its checkpoint without contention.
+            // Loop straight back to the checkpoint (no sleep): the worker is about
+            // to park, and a sleep here would just add to the barrier wait. (T1)
             if park.park.load(Ordering::SeqCst) {
-                thread::sleep(std::time::Duration::from_micros(100));
                 continue;
             }
 
@@ -1133,7 +1150,17 @@ fn send_worker_loop(
                         None => { thread::sleep(std::time::Duration::from_micros(100)); }
                     }
                 }
-                thread::sleep(std::time::Duration::from_micros(100));
+                // Idle wait (no snapshot to transmit): bounded condvar wait so
+                // park_workers() wakes the worker instantly; 100µs bound re-polls
+                // for the next snapshot otherwise. (T1)
+                {
+                    let mut g = park.body_sleep_mu.lock();
+                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                        park.body_sleep_cv
+                            .wait_for(&mut g, std::time::Duration::from_micros(100));
+                    }
+                    drop(g);
+                }
                 continue;
             }
 
