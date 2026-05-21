@@ -1220,7 +1220,12 @@ pub fn drain_recv_impl(
         return;
     }
 
-    // Cross-half receive orchestration per ReceiveOutput.
+    // Cross-half receive orchestration per ReceiveOutput. This is the
+    // RecvApply cost (`apply_recv_to_world` on main) tracked by pipeline_timing
+    // — folded into the consumer's single park window as of
+    // MISSION_PIPELINE_BARRIER_ORCH Part A.
+    #[cfg(feature = "pipeline_timing")]
+    let _t_apply = std::time::Instant::now();
     for mut output in outputs {
         if output.is_empty() {
             continue;
@@ -1239,6 +1244,8 @@ pub fn drain_recv_impl(
         send = s;
         apply_receive_output_pipeline_with_sim_receiver(world, &sim_handle, &sim_receiver, output);
     }
+    #[cfg(feature = "pipeline_timing")]
+    crate::pipeline_timing::record_apply(_t_apply.elapsed().as_nanos() as u64);
 
     // Return the handles (no unpark — caller's responsibility).
     world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
@@ -1246,128 +1253,26 @@ pub fn drain_recv_impl(
     *send_slot.lock() = Some(send);
 }
 
-/// Bevy system installed on the consumer Sim app. Drains
-/// `ReceiveOutput<Entity>` from the Recv worker's bounded channel, runs
-/// the cross-half receive orchestration against the Sim world, and fans
-/// the resulting events into the bevy `Messages<X>` buffers + the
-/// `SimEventReceiver`.
+/// Bevy system installed on the consumer Sim app in the `Update` schedule.
 ///
-/// Runs in `Update` by default (same as `process_packets` for the
-/// non-`sim_integration_full` variants).
+/// **No-op on BOTH paths** (deterministic and active workers). The full recv
+/// drain — collect the recv worker's bounded output channel, a synchronous
+/// `recv.receive()`, and `apply_recv_to_world` cross-half orchestration — runs
+/// inside the consumer's per-tick park window via [`drain_recv_impl`] (e.g.
+/// cyberlith's `open_park_window`).
 ///
-/// In `test_time` mode this system is a no-op: the recv worker does not
-/// call `recv.receive()` (it sleeps as a pure parking service), and all
-/// recv work is done synchronously inside `drain_recv_impl`, called from
-/// the consumer's per-tick park window (e.g. cyberlith's `open_park_window`).
-/// This eliminates the double park/unpark cycle (once here, once in
-/// `open_park_window`) that caused a hard-to-reproduce race condition.
+/// History: under `workers_active` this used to park the workers itself, drain
+/// + apply, then unpark — a SECOND park on top of the consumer's park window
+/// (two barrier waits per tick). MISSION_PIPELINE_BARRIER_ORCH Part A
+/// (2026-05-20) collapsed that double park into the single park window: the
+/// active path now drains in `drain_recv_impl` exactly like the (byte-exact-
+/// tested) deterministic path always has, so this system has nothing to do.
+/// It is kept registered (still chained with `drain_armed_into_res` +
+/// `propagate_worker_panics`) to preserve the schedule shape; the per-tick
+/// dispatch cost is negligible. The earlier `test_time`-only no-op also avoided
+/// a hard-to-reproduce park/unpark token race; that is now moot on every path.
 pub fn drain_recv_worker_output(world: &mut World) {
-    // Parked (deterministic) mode: the recv worker is a pure parking service
-    // and recv.receive() is called synchronously from the consumer's park
-    // window. Skip the park+recv+unpark cycle here entirely.
-    #[cfg(not(workers_active))]
-    {
-        let _ = world;
-        return;
-    }
-
-    #[cfg(workers_active)]
-    {
-        use naia_bevy_shared::WorldProxyMut;
-        use naia_server::pipeline_actors::apply_recv_to_world;
-
-        // Pull the channel + sim_event_receiver without holding an outer
-        // borrow on world.
-        let receiver = world
-            .get_resource::<PluginInternalState>()
-            .and_then(|s| s.recv_out_chan_rx.lock().as_ref().cloned());
-        let Some(receiver) = receiver else { return };
-
-        let sim_receiver = world
-            .get_resource::<PluginInternalState>()
-            .and_then(|s| s.sim_event_receiver.lock().as_ref().cloned());
-        let Some(sim_receiver) = sim_receiver else { return };
-
-        // Park the workers first so any in-flight recv.receive() iteration
-        // completes and the recv handle is deposited back in the slot before
-        // we proceed.
-        let (recv_slot, send_slot) = {
-            let state = world.resource::<PluginInternalState>();
-            state.park_workers();
-            (
-                Arc::clone(&world.resource::<RecvHandleRes>().0),
-                Arc::clone(&world.resource::<SendHandleRes>().0),
-            )
-        };
-
-        let sim_handle_opt = world.resource_mut::<SimHandleRes>().0.take();
-        let recv_opt = recv_slot.lock().take();
-        let send_opt = send_slot.lock().take();
-
-        if sim_handle_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
-            if let Some(c) = sim_handle_opt {
-                world.resource_mut::<SimHandleRes>().0 = Some(c);
-            }
-            if let Some(r) = recv_opt {
-                *recv_slot.lock() = Some(r);
-            }
-            if let Some(s) = send_opt {
-                *send_slot.lock() = Some(s);
-            }
-            world.resource::<PluginInternalState>().unpark_workers();
-            return;
-        }
-
-        let mut sim_handle = sim_handle_opt.unwrap();
-        let mut recv = recv_opt.unwrap();
-        let mut send = send_opt.unwrap();
-
-        let mut outputs: Vec<ReceiveOutput<Entity>> = receiver.try_iter().collect();
-        #[cfg(feature = "pipeline_timing")]
-        let _t_recv = std::time::Instant::now();
-        let fresh_output = recv.receive();
-        #[cfg(feature = "pipeline_timing")]
-        crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
-        outputs.push(fresh_output);
-
-        if outputs.iter().all(|o| o.is_empty()) {
-            world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
-            *recv_slot.lock() = Some(recv);
-            *send_slot.lock() = Some(send);
-            world.resource::<PluginInternalState>().unpark_workers();
-            return;
-        }
-
-        // Recv-application on the MAIN thread (the cost we want to move to the
-        // recv worker — see MISSION_PIPELINE_PERF_VALIDATION §9.y).
-        #[cfg(feature = "pipeline_timing")]
-        let _t_apply = std::time::Instant::now();
-        for mut output in outputs {
-            if output.is_empty() {
-                continue;
-            }
-            let server_tick = sim_handle.current_tick();
-            let (c, r, s) = apply_recv_to_world(
-                sim_handle,
-                recv,
-                send,
-                world.proxy_mut(),
-                &mut output,
-                server_tick,
-            );
-            sim_handle = c;
-            recv = r;
-            send = s;
-            apply_receive_output_pipeline_with_sim_receiver(world, &sim_handle, &sim_receiver, output);
-        }
-        #[cfg(feature = "pipeline_timing")]
-        crate::pipeline_timing::record_apply(_t_apply.elapsed().as_nanos() as u64);
-
-        world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
-        *recv_slot.lock() = Some(recv);
-        *send_slot.lock() = Some(send);
-        world.resource::<PluginInternalState>().unpark_workers();
-    }
+    let _ = world;
 }
 
 /// Bevy system that surfaces any worker panic onto the main thread.
