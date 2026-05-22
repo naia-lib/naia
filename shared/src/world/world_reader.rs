@@ -111,8 +111,10 @@ impl WorldReader {
 
                 let mut kinds = Vec::with_capacity(count as usize);
                 for _ in 0..count {
-                    let converter = world_manager.entity_converter();
-                    let new_component = component_kinds.read(reader, converter)?;
+                    let new_component = {
+                        let converter = world_manager.entity_converter();
+                        component_kinds.read(reader, &converter)?
+                    };
                     let new_component_kind = new_component.kind();
                     world_manager.insert_received_component(
                         &local_entity,
@@ -143,8 +145,10 @@ impl WorldReader {
                 local_entity = world_manager.apply_entity_redirect(local_entity);
 
                 // read component
-                let converter = world_manager.entity_converter();
-                let new_component = component_kinds.read(reader, converter)?;
+                let new_component = {
+                    let converter = world_manager.entity_converter();
+                    component_kinds.read(reader, &converter)?
+                };
                 let new_component_kind = new_component.kind();
 
                 world_manager.receiver_buffer_message(

@@ -163,15 +163,18 @@ impl Connection {
         now: &Instant,
         incoming_events: &mut Events<E>,
     ) -> Vec<EntityEvent> {
-        // Receive Message Events
-        let (entity_converter, entity_waitlist) =
-            self.base.send.world_manager.get_message_processor_helpers();
-        let messages = self.base.send.message_manager.receive_messages(
-            &protocol.message_kinds,
-            now,
-            entity_converter,
-            entity_waitlist,
-        );
+        // Receive Message Events. Scope the entity-map read guard (held by the
+        // converter) so it drops before any &mut world_manager access below.
+        let messages = {
+            let (entity_converter, entity_waitlist) =
+                self.base.send.world_manager.get_message_processor_helpers();
+            self.base.send.message_manager.receive_messages(
+                &protocol.message_kinds,
+                now,
+                &entity_converter,
+                entity_waitlist,
+            )
+        };
         for (channel_kind, messages) in messages {
             for message in messages {
                 incoming_events.push_message(&channel_kind, message);

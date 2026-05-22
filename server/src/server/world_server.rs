@@ -14,7 +14,7 @@ use naia_shared::{
     AuthorityError, Channel, ChannelKind, ConnectionStats, DisconnectReason,
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, FrozenGlobalDirty,
-    GlobalDirtyBitset,
+    GlobalDirtyBitset, LocalEntityAndGlobalEntityConverter,
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, Protocol, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey,

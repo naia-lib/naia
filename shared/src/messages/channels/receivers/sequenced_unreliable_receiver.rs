@@ -105,7 +105,7 @@ impl MessageChannelReceiver for SequencedUnreliableReceiver {
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(
             message_kinds,
-            local_world_manager.entity_converter(),
+            &local_world_manager.entity_converter(),
             reader,
         )?;
         for (id, message) in id_w_msgs {

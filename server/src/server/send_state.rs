@@ -28,7 +28,7 @@ use log::warn;
 
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
+    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, LocalEntityAndGlobalEntityConverter,
     GlobalPriorityState, GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, Message,
     MessageContainer, OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate,
     SendPlan, SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState,
@@ -304,7 +304,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     &self.shared.message_kinds,
                     &server_tick,
                     &client_tick,
-                    send_conn.base.world_manager.entity_converter(),
+                    &send_conn.base.world_manager.entity_converter(),
                     &mut reader,
                 )
                 .is_err()

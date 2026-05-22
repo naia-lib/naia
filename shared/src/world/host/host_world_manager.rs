@@ -9,7 +9,7 @@ use crate::{
         sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
         update::entity_update_manager::EntityUpdateManager,
     },
-    ComponentKind, ComponentKinds, EntityCommand, EntityConverterMut, EntityEvent, EntityMessage,
+    ComponentKind, ComponentKinds, EntityCommand, EntityMapConverterMut, EntityEvent, EntityMessage,
     EntityMessageReceiver, EntityMessageType, GlobalEntity, GlobalEntitySpawner,
     GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType,
     LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex,
@@ -91,12 +91,18 @@ impl HostWorldManager {
             .all(|k| delivered_channel.has_component_kind(k))
     }
 
-    pub(crate) fn entity_converter_mut<'a, 'b>(
+    /// L3 send-state seam variant: build the converter holding a write guard on
+    /// the shared entity map (the map now lives behind `Arc<RwLock<..>>`).
+    pub(crate) fn entity_converter_mut_guarded<'a, 'b>(
         &'b mut self,
         global_world_manager: &'a dyn GlobalWorldManagerType,
-        entity_map: &'b mut LocalEntityMap,
-    ) -> EntityConverterMut<'a, 'b> {
-        EntityConverterMut::new(global_world_manager, entity_map, &mut self.entity_generator)
+        entity_map_guard: std::sync::RwLockWriteGuard<'b, LocalEntityMap>,
+    ) -> EntityMapConverterMut<'a, 'b> {
+        EntityMapConverterMut::new(
+            global_world_manager,
+            entity_map_guard,
+            &mut self.entity_generator,
+        )
     }
 
     // Collect

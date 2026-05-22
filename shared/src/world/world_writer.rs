@@ -14,7 +14,8 @@ use crate::{
     },
     BitWrite, BitWriter, CachedComponentUpdate, ComponentKind, ComponentKinds, DiffMask,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
-    Instant, MessageIndex, PacketIndex, Replicate, Serde, WorldRefType,
+    Instant, LocalEntityAndGlobalEntityConverter, MessageIndex, PacketIndex, Replicate, Serde,
+    WorldRefType,
 };
 
 /// MISSION_TICK_FLOOR Lever 3: per-(entity) update plan entry. The `u16` is the
@@ -416,13 +417,16 @@ impl WorldWriter {
                     // write local entity
                     local_entity.ser(writer);
 
-                    let mut converter = world_manager.entity_converter_mut(global_world_manager);
+                    {
+                        let mut converter =
+                            world_manager.entity_converter_mut(global_world_manager);
 
-                    // write component payload
-                    world
-                        .component_of_kind(&world_entity, component_kind)
-                        .expect("Component does not exist in World")
-                        .write(component_kinds, writer, &mut converter);
+                        // write component payload
+                        world
+                            .component_of_kind(&world_entity, component_kind)
+                            .expect("Component does not exist in World")
+                            .write(component_kinds, writer, &mut converter);
+                    }
 
                     // if we are actually writing this packet
                     if is_writing {

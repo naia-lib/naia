@@ -103,6 +103,8 @@ pub mod cmd_emission_counters {
     }
 }
 
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
+
 use log::info;
 use naia_socket_shared::Instant;
 
@@ -120,8 +122,9 @@ use crate::{
         sync::HostEntityChannel,
     },
     ChannelSender, ComponentKind, ComponentKinds, PendingComponentUpdate, DiffMask,
-    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand, EntityConverterMut,
-    EntityEvent, EntityMessage, EntityMessageType, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, HostEntity,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand,
+    EntityEvent, EntityMapConverterMut, EntityMapReadConverter, EntityMessage, EntityMessageType,
+    GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, HostEntity,
     InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex,
     OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager,
     Replicate, Tick, WorldMutType, WorldRefType,
@@ -144,7 +147,11 @@ type OutgoingEvents = (VecDeque<(CommandId, EntityCommand)>, HashMap<GlobalEntit
 
 /// Unified manager for one connection's host-side and remote-side entity state, routing commands and events between them.
 pub struct LocalWorldManager {
-    entity_map: LocalEntityMap,
+    /// L3 send-state seam: the bidirectional global↔local entity converter is
+    /// shared behind `Arc<RwLock<..>>` (decision B). transmit + recv-apply both
+    /// take a write guard (host-id reservation happens on the send path too);
+    /// park-serialized so the lock is uncontended.
+    entity_map: Arc<RwLock<LocalEntityMap>>,
     sender: ReliableSender<EntityCommand>,
     sent_command_packets: SentCommandPackets,
     receiver: ReliableReceiver<EntityMessage<OwnedLocalEntity>>,
@@ -176,7 +183,7 @@ impl LocalWorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> Self {
         Self {
-            entity_map: LocalEntityMap::new(host_type),
+            entity_map: Arc::new(RwLock::new(LocalEntityMap::new(host_type))),
             sender: ReliableSender::new(RESEND_COMMAND_RTT_FACTOR, None),
             sent_command_packets: SequenceList::new(),
             receiver: ReliableReceiver::new(),
@@ -205,23 +212,39 @@ impl LocalWorldManager {
 
     // EntityMap-focused
 
-    /// Returns a read-only entity converter backed by the internal entity map.
-    pub fn entity_converter(&self) -> &dyn LocalEntityAndGlobalEntityConverter {
-        self.entity_map.entity_converter()
+    /// Acquire a read guard on the shared entity map. Short-lived; never held
+    /// across acquiring another guard (no nesting → no deadlock).
+    #[inline]
+    fn em_read(&self) -> RwLockReadGuard<'_, LocalEntityMap> {
+        self.entity_map.read().expect("LocalEntityMap lock poisoned")
     }
 
-    /// Returns a mutable entity converter that can also allocate new host entity IDs.
+    /// Acquire a write guard on the shared entity map.
+    #[inline]
+    fn em_write(&self) -> RwLockWriteGuard<'_, LocalEntityMap> {
+        self.entity_map.write().expect("LocalEntityMap lock poisoned")
+    }
+
+    /// Returns a read-only entity converter that owns a read guard on the
+    /// shared entity map.
+    pub fn entity_converter(&self) -> EntityMapReadConverter<'_> {
+        EntityMapReadConverter::new(self.em_read())
+    }
+
+    /// Returns a mutable entity converter that can also allocate new host entity
+    /// IDs. Owns a write guard on the shared entity map.
     pub fn entity_converter_mut<'a, 'b>(
         &'b mut self,
         global_world_manager: &'a dyn GlobalWorldManagerType,
-    ) -> EntityConverterMut<'a, 'b> {
+    ) -> EntityMapConverterMut<'a, 'b> {
+        let guard = self.entity_map.write().expect("LocalEntityMap lock poisoned");
         self.host
-            .entity_converter_mut(global_world_manager, &mut self.entity_map)
+            .entity_converter_mut_guarded(global_world_manager, guard)
     }
 
     /// Returns `true` if `global_entity` is currently tracked by either the host or remote engine.
     pub fn has_global_entity(&self, global_entity: &GlobalEntity) -> bool {
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             return false;
         };
         self.has_local_entity(&local_entity)
@@ -282,9 +305,12 @@ impl LocalWorldManager {
         // we allocate a *fresh* HostEntity below — otherwise the stale ACK,
         // when it arrives, would call `on_delivered_despawn_entity` and wipe
         // the new mapping (since recycled HostEntity ids would alias).
-        if let Ok(existing_host_entity) =
-            self.entity_map.global_entity_to_host_entity(global_entity)
-        {
+        // Resolve the lookup into an owned value BEFORE the `if let` so the read
+        // guard drops at the end of this statement — otherwise the scrutinee
+        // temporary would hold the read guard through the body, and the
+        // `em_write()` below would deadlock on the same RwLock (same thread).
+        let existing_host_entity = self.em_read().global_entity_to_host_entity(global_entity);
+        if let Ok(existing_host_entity) = existing_host_entity {
             let channel_alive = self
                 .host
                 .get_host_world()
@@ -293,36 +319,36 @@ impl LocalWorldManager {
                 // Stale mapping. Drop it without recycling the id (the in-flight
                 // Despawn ACK will recycle later via the idempotent path in
                 // `HostEntityGenerator::remove_by_host_entity`).
-                self.entity_map.remove_by_global_entity(global_entity);
+                self.em_write().remove_by_global_entity(global_entity);
             }
         }
 
         if self
-            .entity_map
+            .em_read()
             .global_entity_to_host_entity(global_entity)
             .is_err()
         {
             // this is done because `host_reserve_entity()` may have been called previously!
             if is_static {
                 let host_entity = self.host.host_generate_static_entity();
-                self.entity_map
+                self.em_write()
                     .insert_with_static_host_entity(*global_entity, host_entity);
             } else {
                 let host_entity = self.host.host_generate_entity();
-                self.entity_map
+                self.em_write()
                     .insert_with_host_entity(*global_entity, host_entity);
             }
         }
 
         if is_static {
             self.host.init_static_entity_send_host_commands(
-                &self.entity_map,
+                &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
                 global_entity,
                 component_kinds,
             );
         } else {
             self.host.init_entity_send_host_commands(
-                &self.entity_map,
+                &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
                 global_entity,
                 component_kinds,
                 &mut self.updater,
@@ -357,7 +383,7 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
     ) -> Result<HostEntity, String> {
         // Validate entity exists and is remote-owned
-        let Some(local_entity_record) = self.entity_map.remove_by_global_entity(global_entity)
+        let Some(local_entity_record) = self.em_write().remove_by_global_entity(global_entity)
         else {
             return Err(format!(
                 "Entity does not exist in local entity map: {:?}",
@@ -367,7 +393,7 @@ impl LocalWorldManager {
 
         if !local_entity_record.is_remote_owned() {
             // Restore the entity record since we removed it
-            self.entity_map
+            self.em_write()
                 .insert_with_remote_entity(*global_entity, local_entity_record.remote_entity());
             return Err(format!("Entity is not remote-owned: {:?}", global_entity));
         }
@@ -376,21 +402,20 @@ impl LocalWorldManager {
         // create new host entity, insert into local entity map
         let new_host_entity = self.host.host_generate_entity();
 
-        self.entity_map
+        self.em_write()
             .insert_with_host_entity(*global_entity, new_host_entity);
 
         // CRITICAL: After migration, global_entity_to_remote_entity() must fail for this global_entity
         // remove_by_global_entity should have removed the remote mapping, but verify it's gone
         // This prevents SetAuthority from encoding via stale global->remote mapping
         // Double-check: ensure old remote mapping is completely removed from remote_to_global
-        self.entity_map
+        self.em_write()
             .remove_remote_mapping_if_exists(&old_remote_entity);
 
         // Verify the invariant: after migration, global_entity should NOT convert to remote_entity
         // This is a defensive check - if this fails, there's a bug in remove_by_global_entity
         debug_assert!(
-            self.entity_map
-                .entity_converter()
+            self.em_read()
                 .global_entity_to_remote_entity(global_entity)
                 .is_err(),
             "After migration, global_entity_to_remote_entity must fail for migrated entity"
@@ -411,7 +436,7 @@ impl LocalWorldManager {
         // BULLETPROOF: Step 4: Create new HostEntityChannel with extracted component state
         // This creates the new server-side entity channel with preserved state
         let new_host_channel =
-            HostEntityChannel::new_with_components(self.entity_map.host_type(), component_kinds);
+            HostEntityChannel::new_with_components(self.em_read().host_type(), component_kinds);
 
         // BULLETPROOF: Step 5: Insert new HostEntityChannel into HostEngine
         // This must succeed or we lose the entity channel
@@ -422,7 +447,7 @@ impl LocalWorldManager {
         // This allows old entity references to be automatically updated
         let old_entity = old_remote_entity.copy_to_owned();
         let new_entity = OwnedLocalEntity::Host { id: new_host_entity.value(), is_static: false };
-        self.entity_map
+        self.em_write()
             .install_entity_redirect(old_entity, new_entity);
 
         // BULLETPROOF: Step 7: Update all references in sent_command_packets
@@ -432,7 +457,7 @@ impl LocalWorldManager {
         // BULLETPROOF: Step 8: Clean up old remote entity
         // This removes the old client-side entity channel
         self.remote
-            .despawn_entity(&mut self.entity_map, &old_remote_entity);
+            .despawn_entity(&mut *self.entity_map.write().expect("LocalEntityMap lock poisoned"), &old_remote_entity);
 
         Ok(new_host_entity)
     }
@@ -440,7 +465,7 @@ impl LocalWorldManager {
     /// Sends an `EnableDelegation` command to the remote peer via the host engine.
     pub fn host_send_enable_delegation(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::EnableDelegation(None, *global_entity);
-        self.host.send_command(&self.entity_map, command);
+        self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
     }
 
     /// Forces the `HostEntityChannel` for `host_entity` into the Delegated state locally without sending a wire message.
@@ -487,7 +512,7 @@ impl LocalWorldManager {
             *old_remote_entity,
             *new_host_entity,
         );
-        self.host.reserve_first_command(&self.entity_map, command);
+        self.host.reserve_first_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
     }
 
     #[track_caller]
@@ -505,24 +530,24 @@ impl LocalWorldManager {
                 auth_status
             );
         }
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!("Attempting to send SetAuthority for entity which does not exist in local entity map! {:?}", global_entity);
         };
 
         let command = EntityCommand::SetAuthority(None, *global_entity, auth_status);
         if local_entity.is_host() {
-            self.host.send_command(&self.entity_map, command);
+            self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         } else {
             // For RemoteEntity, use remote.send_auth_command (similar to send_publish)
             self.remote
-                .send_auth_command(self.entity_map.entity_converter(), command);
+                .send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         }
     }
 
     /// Pre-allocates a `HostEntity` slot for `global_entity` before it is sent to the peer.
     pub fn host_reserve_entity(&mut self, global_entity: &GlobalEntity) -> HostEntity {
         self.host
-            .host_reserve_entity(&mut self.entity_map, global_entity)
+            .host_reserve_entity(&mut *self.entity_map.write().expect("LocalEntityMap lock poisoned"), global_entity)
     }
 
     /// Removes and returns any previously reserved `HostEntity` for `global_entity`, if one exists.
@@ -591,7 +616,7 @@ impl LocalWorldManager {
 
     /// Returns the [`GlobalEntity`] list for all entities currently tracked as remote-owned.
     pub fn remote_entities(&self) -> Vec<GlobalEntity> {
-        self.entity_map.remote_entities()
+        self.em_read().remote_entities()
     }
 
     #[cfg(feature = "e2e_debug")]
@@ -622,13 +647,13 @@ impl LocalWorldManager {
     /// Sends an `EnableDelegationResponse` acknowledgement to the server after receiving an `EnableDelegation` message.
     pub fn send_enable_delegation_response(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::EnableDelegationResponse(None, *global_entity);
-        self.remote.send_auth_command(&self.entity_map, command);
+        self.remote.send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
     }
 
     /// Sends a `RequestAuthority` command for `global_entity` via the remote engine.
     pub fn remote_send_request_auth(&mut self, global_entity: &GlobalEntity) {
         let command = EntityCommand::RequestAuthority(None, *global_entity);
-        self.remote.send_auth_command(&self.entity_map, command);
+        self.remote.send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
     }
 
     /// Update the RemoteEntityChannel's AuthChannel status (used after migration)
@@ -638,8 +663,7 @@ impl LocalWorldManager {
         auth_status: EntityAuthStatus,
     ) {
         let remote_entity = self
-            .entity_map
-            .entity_converter()
+            .em_read()
             .global_entity_to_remote_entity(global_entity)
             .unwrap();
         self.remote
@@ -651,7 +675,7 @@ impl LocalWorldManager {
         &self,
         global_entity: &GlobalEntity,
     ) -> Option<EntityAuthStatus> {
-        let Ok(owned) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(owned) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             return None;
         };
         let OwnedLocalEntity::Remote { .. } = owned else {
@@ -765,14 +789,14 @@ impl LocalWorldManager {
         let host_events = self.host.take_incoming_events(
             spawner,
             global_world_manager,
-            &self.entity_map,
+            &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
             world,
             incoming_host_messages,
         );
         let mut remote_events = self.remote.take_incoming_events(
             spawner,
             global_world_manager,
-            &mut self.entity_map,
+            &mut *self.entity_map.write().expect("LocalEntityMap lock poisoned"),
             component_kinds,
             world,
             now,
@@ -795,10 +819,10 @@ impl LocalWorldManager {
     ) {
         // info!("Registering authed entity: {:?}", global_entity);
 
-        if let Ok(remote_entity) = self
-            .entity_map
-            .global_entity_to_remote_entity(global_entity)
-        {
+        let remote_lookup = self
+            .em_read()
+            .global_entity_to_remote_entity(global_entity);
+        if let Ok(remote_entity) = remote_lookup {
             self.remote.register_authed_entity(&remote_entity);
         }
 
@@ -821,10 +845,10 @@ impl LocalWorldManager {
     ) {
         // info!("Deregistering delegated entity updates for {:?}", global_entity);
 
-        if let Ok(remote_entity) = self
-            .entity_map
-            .global_entity_to_remote_entity(global_entity)
-        {
+        let remote_lookup = self
+            .em_read()
+            .global_entity_to_remote_entity(global_entity);
+        if let Ok(remote_entity) = remote_lookup {
             self.remote.deregister_authed_entity(&remote_entity);
         }
 
@@ -841,7 +865,7 @@ impl LocalWorldManager {
 
     /// Notifies the remote waitlist that `global_entity`'s remote entity has been spawned.
     pub fn remote_spawn_entity(&mut self, global_entity: &GlobalEntity) {
-        let remote_entity = match self.entity_map.global_entity_to_remote_entity(global_entity) {
+        let remote_entity = match self.em_read().global_entity_to_remote_entity(global_entity) {
             Ok(e) => e,
             Err(_) => {
                 // Entity was despawned in the same message batch before spawn was processed; skip.
@@ -854,11 +878,11 @@ impl LocalWorldManager {
     /// Despawns the remote entity mapped from `global_entity` and cleans up the entity map.
     pub fn remote_despawn_entity(&mut self, global_entity: &GlobalEntity) {
         let remote_entity = self
-            .entity_map
+            .em_read()
             .global_entity_to_remote_entity(global_entity)
             .unwrap();
         self.remote
-            .despawn_entity(&mut self.entity_map, &remote_entity);
+            .despawn_entity(&mut *self.entity_map.write().expect("LocalEntityMap lock poisoned"), &remote_entity);
     }
 
     // Update-focused
@@ -918,7 +942,7 @@ impl LocalWorldManager {
         // Clean up pause state if entity was Paused (ScopeExit::Persist)
         self.paused_entities.remove(global_entity);
 
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!(
                 "Attempting to despawn entity which does not exist in local entity map! {:?}",
                 global_entity
@@ -926,10 +950,10 @@ impl LocalWorldManager {
         };
         if local_entity.is_host() {
             self.host
-                .send_command(&self.entity_map, EntityCommand::Despawn(*global_entity));
+                .send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), EntityCommand::Despawn(*global_entity));
         } else {
             self.remote
-                .send_entity_command(&self.entity_map, EntityCommand::Despawn(*global_entity));
+                .send_entity_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), EntityCommand::Despawn(*global_entity));
         }
     }
 
@@ -941,7 +965,7 @@ impl LocalWorldManager {
     /// `despawn_entity` alone must NOT be used for this purpose — it is also called
     /// from `entity_disable_delegation` (local cleanup only, no server notification).
     pub fn despawn_entity_and_notify_server(&mut self, global_entity: &GlobalEntity) {
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             return;
         };
         if !local_entity.is_host() {
@@ -980,7 +1004,7 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!("Attempting to insert component for entity which does not exist in local entity map! {:?}", global_entity);
         };
         if local_entity.is_host() {
@@ -989,12 +1013,12 @@ impl LocalWorldManager {
             self.updater
                 .register_component(global_entity, component_kind);
             self.host.send_command(
-                &self.entity_map,
+                &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
                 EntityCommand::InsertComponent(*global_entity, *component_kind),
             );
         } else {
             self.remote.send_entity_command(
-                &self.entity_map,
+                &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
                 EntityCommand::InsertComponent(*global_entity, *component_kind),
             );
         }
@@ -1006,17 +1030,17 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) {
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!("Attempting to remove component for entity which does not exist in local entity map! {:?}", global_entity);
         };
         if local_entity.is_host() {
             self.host.send_command(
-                &self.entity_map,
+                &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
                 EntityCommand::RemoveComponent(*global_entity, *component_kind),
             );
         } else {
             self.remote.send_entity_command(
-                &self.entity_map,
+                &*self.entity_map.read().expect("LocalEntityMap lock poisoned"),
                 EntityCommand::RemoveComponent(*global_entity, *component_kind),
             );
         }
@@ -1024,7 +1048,7 @@ impl LocalWorldManager {
 
     /// Sends a `Publish` command for `global_entity`, routing through host or remote engine based on ownership.
     pub fn send_publish(&mut self, host_type: HostType, global_entity: &GlobalEntity) {
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!(
                 "Attempting to publish entity which does not exist in local entity map! {:?}",
                 global_entity
@@ -1043,16 +1067,16 @@ impl LocalWorldManager {
 
         let command = EntityCommand::Publish(None, *global_entity);
         if host_owned {
-            self.host.send_command(&self.entity_map, command);
+            self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         } else {
             self.remote
-                .send_auth_command(self.entity_map.entity_converter(), command);
+                .send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         }
     }
 
     /// Sends an `Unpublish` command for `global_entity`, routing through host or remote engine based on ownership.
     pub fn send_unpublish(&mut self, host_type: HostType, global_entity: &GlobalEntity) {
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!(
                 "Attempting to publish entity which does not exist in local entity map! {:?}",
                 global_entity
@@ -1066,10 +1090,10 @@ impl LocalWorldManager {
         };
         let command = EntityCommand::Unpublish(None, *global_entity);
         if host_owned {
-            self.host.send_command(&self.entity_map, command);
+            self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         } else {
             self.remote
-                .send_auth_command(self.entity_map.entity_converter(), command);
+                .send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         }
     }
 
@@ -1084,7 +1108,7 @@ impl LocalWorldManager {
         // if is_delegated {
         //     panic!("Entity {:?} is already delegated!", global_entity);
         // }
-        let Ok(local_entity) = self.entity_map.global_entity_to_owned_entity(global_entity) else {
+        let Ok(local_entity) = self.em_read().global_entity_to_owned_entity(global_entity) else {
             panic!("Attempting to enable delegation for entity which does not exist in local entity map! {:?}", global_entity);
         };
         let host_owned = match (host_type, local_entity.is_host(), origin_is_owning_client) {
@@ -1107,7 +1131,7 @@ impl LocalWorldManager {
         if host_owned {
             // Check if entity is already Published
             let host_entity = self
-                .entity_map
+                .em_read()
                 .global_entity_to_host_entity(global_entity)
                 .expect("Host entity should exist");
 
@@ -1123,7 +1147,7 @@ impl LocalWorldManager {
             // Only send Publish if entity is NOT already Published
             if !is_published {
                 let publish_command = EntityCommand::Publish(None, *global_entity);
-                self.host.send_command(&self.entity_map, publish_command);
+                self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), publish_command);
             }
 
             // Always send EnableDelegation (this will transition Published → Delegated)
@@ -1134,13 +1158,13 @@ impl LocalWorldManager {
             );
             let enable_delegation_command = EntityCommand::EnableDelegation(None, *global_entity);
             self.host
-                .send_command(&self.entity_map, enable_delegation_command);
+                .send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), enable_delegation_command);
         } else {
             #[cfg(feature = "e2e_debug")]
             crate::e2e_trace!("[SERVER_SEND] EnableDelegation entity={:?} callsite=send_enable_delegation(remote)", global_entity);
             let command = EntityCommand::EnableDelegation(None, *global_entity);
             self.remote
-                .send_auth_command(self.entity_map.entity_converter(), command);
+                .send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         }
     }
 
@@ -1159,7 +1183,7 @@ impl LocalWorldManager {
         }
         // only server should ever be able to call this, on host-owned (server-owned) entities
         let command = EntityCommand::DisableDelegation(None, *global_entity);
-        self.host.send_command(&self.entity_map, command);
+        self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
     }
 
     /// Sends a `ReleaseAuthority` command for `global_entity`, routing through whichever engine owns it.
@@ -1167,15 +1191,15 @@ impl LocalWorldManager {
         let command = EntityCommand::ReleaseAuthority(None, *global_entity);
 
         let host_owned = self
-            .entity_map
+            .em_read()
             .global_entity_to_owned_entity(global_entity)
             .unwrap()
             .is_host();
         if host_owned {
-            self.host.send_command(&self.entity_map, command);
+            self.host.send_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         } else {
             self.remote
-                .send_auth_command(self.entity_map.entity_converter(), command);
+                .send_auth_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
         }
     }
 
@@ -1208,7 +1232,7 @@ impl LocalWorldManager {
         }
 
         // Also cleanup old entity redirects with the same TTL
-        self.entity_map.cleanup_old_redirects(now, 60);
+        self.em_write().cleanup_old_redirects(now, 60);
     }
 
     /// Collects pending outbound entity commands only — no update events.
@@ -1239,9 +1263,9 @@ impl LocalWorldManager {
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        let local_converter = self.entity_map.entity_converter();
-        self.host.is_component_updatable(local_converter, global_entity, component_kind)
-            || self.remote.is_component_updatable(local_converter, global_entity, component_kind)
+        let guard = self.entity_map.read().expect("LocalEntityMap lock poisoned");
+        self.host.is_component_updatable(&*guard, global_entity, component_kind)
+            || self.remote.is_component_updatable(&*guard, global_entity, component_kind)
     }
 
     /// Returns `true` if the per-user diff mask for this (entity, component) is currently clear.
@@ -1349,7 +1373,7 @@ impl LocalWorldManager {
     /// Advances the delivery state machine, applying any newly acknowledged host-side commands to the delivered engine.
     pub fn process_delivered_commands(&mut self) {
         self.host
-            .process_delivered_commands(&mut self.entity_map, &mut self.updater);
+            .process_delivered_commands(&mut *self.entity_map.write().expect("LocalEntityMap lock poisoned"), &mut self.updater);
     }
 
     /// MISSION_SNAPSHOT_DIRTY_TRIM: entities with an in-flight value-reading
@@ -1369,17 +1393,19 @@ impl LocalWorldManager {
         global_world_manager: &dyn GlobalWorldManagerType,
     ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         let dirty = self.updater.build_dirty_candidates_from_receivers();
-        let local_converter = self.entity_map.entity_converter();
         let mut updatable_world: HashMap<GlobalEntity, HashSet<ComponentKind>> = HashMap::new();
-        for (global_entity, kinds) in dirty {
-            if self.paused_entities.contains(&global_entity) {
-                continue;
-            }
-            for kind in kinds {
-                if self.host.is_component_updatable(local_converter, &global_entity, &kind)
-                    || self.remote.is_component_updatable(local_converter, &global_entity, &kind)
-                {
-                    updatable_world.entry(global_entity).or_default().insert(kind);
+        {
+            let guard = self.entity_map.read().expect("LocalEntityMap lock poisoned");
+            for (global_entity, kinds) in dirty {
+                if self.paused_entities.contains(&global_entity) {
+                    continue;
+                }
+                for kind in kinds {
+                    if self.host.is_component_updatable(&*guard, &global_entity, &kind)
+                        || self.remote.is_component_updatable(&*guard, &global_entity, &kind)
+                    {
+                        updatable_world.entry(global_entity).or_default().insert(kind);
+                    }
                 }
             }
         }
@@ -1391,7 +1417,7 @@ impl LocalWorldManager {
     //     spawner: &'b mut dyn GlobalEntitySpawner<E>
     // ) -> (GlobalEntityReserver<'a, 'b, 'c, E>, &'a mut EntityWaitlist<RemoteEntity>) {
     //     let remote= &mut self.remote;
-    //     let entity_map = &mut self.entity_map;
+    //     let entity_map = &mut *self.entity_map.write().expect("LocalEntityMap lock poisoned");
     //     let reserver = remote.get_message_reader_helpers(entity_map, spawner);
     //     (reserver, remote.entity_waitlist_mut())
     // }
@@ -1400,10 +1426,12 @@ impl LocalWorldManager {
     pub fn get_message_processor_helpers(
         &mut self,
     ) -> (
-        &dyn LocalEntityAndGlobalEntityConverter,
+        EntityMapReadConverter<'_>,
         &mut RemoteEntityWaitlist,
     ) {
-        let entity_converter = self.entity_map.entity_converter();
+        let entity_converter = EntityMapReadConverter::new(
+            self.entity_map.read().expect("LocalEntityMap lock poisoned"),
+        );
         let entity_waitlist = self.remote.entity_waitlist_mut();
         (entity_converter, entity_waitlist)
     }
@@ -1469,7 +1497,7 @@ impl LocalWorldManager {
     ) -> Vec<EntityCommand> {
         // Get host_entity from entity_map
         let host_entity = self
-            .entity_map
+            .em_read()
             .global_entity_to_host_entity(global_entity)
             .unwrap();
         // Extract commands from host engine
@@ -1483,7 +1511,7 @@ impl LocalWorldManager {
     ) -> HashSet<ComponentKind> {
         // Get host_entity from entity_map
         let host_entity = self
-            .entity_map
+            .em_read()
             .global_entity_to_host_entity(global_entity)
             .unwrap();
         // Get host_entity_channel from host engine
@@ -1496,13 +1524,13 @@ impl LocalWorldManager {
     pub fn remove_host_entity(&mut self, global_entity: &GlobalEntity) {
         // Lookup host_entity FIRST before removing from entity_map
         let host_entity = self
-            .entity_map
+            .em_read()
             .global_entity_to_host_entity(global_entity)
             .unwrap();
         // Remove from host engine
         self.host.remove_entity_channel(&host_entity);
         // Remove from entity_map LAST
-        self.entity_map.remove_by_global_entity(global_entity);
+        self.em_write().remove_by_global_entity(global_entity);
     }
 
     /// Registers a remote entity migrated from the host side into the remote engine with an initial component set.
@@ -1513,7 +1541,7 @@ impl LocalWorldManager {
         component_kinds: HashSet<ComponentKind>,
     ) {
         // Insert into entity_map
-        self.entity_map
+        self.em_write()
             .insert_with_remote_entity(*global_entity, remote_entity);
 
         if self.remote.has_entity_channel(&remote_entity) {
@@ -1538,7 +1566,7 @@ impl LocalWorldManager {
             }
         } else {
             // Normal Case: Create new delegated channel
-            let mut channel = RemoteEntityChannel::new_delegated(self.entity_map.host_type());
+            let mut channel = RemoteEntityChannel::new_delegated(self.em_read().host_type());
 
             // Set state to Spawned
             channel.set_spawned(0);
@@ -1555,22 +1583,22 @@ impl LocalWorldManager {
 
     /// Installs a redirect so lookups of `old` transparently resolve to `new` for a TTL period.
     pub fn install_entity_redirect(&mut self, old: OwnedLocalEntity, new: OwnedLocalEntity) {
-        self.entity_map.install_entity_redirect(old, new);
+        self.em_write().install_entity_redirect(old, new);
     }
 
     /// Returns the redirected entity for `entity` if a redirect is installed, otherwise returns `entity` unchanged.
     pub fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
-        self.entity_map.apply_entity_redirect(&entity)
+        self.em_read().apply_entity_redirect(&entity)
     }
 
     /// Re-submits `command` for `global_entity` through the remote engine after a migration.
     pub fn replay_entity_command(&mut self, global_entity: &GlobalEntity, command: EntityCommand) {
         // Send command through appropriate channel (should be remote after migration)
         let _remote_entity = self
-            .entity_map
+            .em_read()
             .global_entity_to_remote_entity(global_entity)
             .unwrap();
-        self.remote.send_entity_command(&self.entity_map, command);
+        self.remote.send_entity_command(&*self.entity_map.read().expect("LocalEntityMap lock poisoned"), command);
     }
 }
 
@@ -1590,7 +1618,7 @@ cfg_if! {
 
             /// Returns all local entities currently tracked by the entity map.
             pub fn local_entities(&self) -> Vec<LocalEntity> {
-                self.entity_map
+                self.em_read()
                 .iter()
                 .map(|(_, record)| LocalEntity::from(record.owned_entity()))
                 .collect::<Vec<LocalEntity>>()

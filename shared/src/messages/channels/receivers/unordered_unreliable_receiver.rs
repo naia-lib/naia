@@ -99,7 +99,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
 
             let message = self.read_message(
                 message_kinds,
-                local_world_manager.entity_converter(),
+                &local_world_manager.entity_converter(),
                 reader,
             )?;
             self.recv_message(local_world_manager, message);

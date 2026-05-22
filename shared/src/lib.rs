@@ -166,9 +166,9 @@ pub use world::{
     },
     entity::{
         entity_converters::{
-            EntityAndGlobalEntityConverter, EntityConverterMut, FakeEntityConverter,
-            GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
-            LocalEntityAndGlobalEntityConverterMut,
+            EntityAndGlobalEntityConverter, EntityConverterMut, EntityMapConverterMut,
+            EntityMapReadConverter, FakeEntityConverter, GlobalWorldManagerType,
+            LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
         },
         entity_message::EntityMessage,
         entity_message_receiver::EntityMessageReceiver,

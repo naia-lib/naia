@@ -5,7 +5,7 @@ use log::{debug, info, warn};
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
     AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionStats,
-    EntityAndGlobalEntityConverter,
+    EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter,
     EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
     FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message,

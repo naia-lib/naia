@@ -1,6 +1,6 @@
 use std::{
     hash::Hash,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 
 use crate::world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
@@ -290,6 +290,160 @@ impl<'a, 'b> LocalEntityAndGlobalEntityConverterMut for EntityConverterMut<'a, '
             .host_reserve_entity(self.local_entity_map, global_entity);
 
         // warn!("get_or_reserve_entity() `global_entity` {:?} is not owned by user, attempting to reserve. `host_entity`: {:?}", global_entity, host_entity);
+
+        Ok(host_entity.copy_to_owned())
+    }
+}
+
+// ── L3 send-state seam: guard-owning converters over the shared entity map ──
+//
+// `LocalWorldManager` holds `entity_map: Arc<RwLock<LocalEntityMap>>` (decision
+// B). A `&dyn` converter borrowed straight out of the guard cannot escape the
+// guard's scope, so these two wrappers OWN the guard and implement the converter
+// traits by delegating through it. `LocalEntityMap` itself implements
+// `LocalEntityAndGlobalEntityConverter`, so the read delegations are one-liners.
+
+/// Read-only converter that owns a read guard on the shared entity map.
+pub struct EntityMapReadConverter<'a> {
+    guard: RwLockReadGuard<'a, LocalEntityMap>,
+}
+
+impl<'a> EntityMapReadConverter<'a> {
+    /// Wrap a read guard on the shared entity map as a read-only converter.
+    pub fn new(guard: RwLockReadGuard<'a, LocalEntityMap>) -> Self {
+        Self { guard }
+    }
+}
+
+impl LocalEntityAndGlobalEntityConverter for EntityMapReadConverter<'_> {
+    fn global_entity_to_host_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<HostEntity, EntityDoesNotExistError> {
+        self.guard.global_entity_to_host_entity(global_entity)
+    }
+    fn global_entity_to_remote_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<RemoteEntity, EntityDoesNotExistError> {
+        self.guard.global_entity_to_remote_entity(global_entity)
+    }
+    fn global_entity_to_owned_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+        self.guard.global_entity_to_owned_entity(global_entity)
+    }
+    fn host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.guard.host_entity_to_global_entity(host_entity)
+    }
+    fn static_host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.guard.static_host_entity_to_global_entity(host_entity)
+    }
+    fn remote_entity_to_global_entity(
+        &self,
+        remote_entity: &RemoteEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.guard.remote_entity_to_global_entity(remote_entity)
+    }
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+        self.guard.apply_entity_redirect(entity)
+    }
+}
+
+/// Mutable converter that owns a write guard on the shared entity map plus a
+/// `&mut` borrow of the host entity generator (the only `&mut` need in transmit
+/// is `get_or_reserve_entity`, which reserves a host id during message
+/// serialization). Mirrors [`EntityConverterMut`] but holds the guard.
+pub struct EntityMapConverterMut<'a, 'b> {
+    global_world_manager: &'a dyn GlobalWorldManagerType,
+    guard: RwLockWriteGuard<'b, LocalEntityMap>,
+    host_entity_generator: &'b mut HostEntityGenerator,
+}
+
+impl<'a, 'b> EntityMapConverterMut<'a, 'b> {
+    /// Wrap a write guard on the shared entity map (plus the host entity
+    /// generator) as a mutable converter.
+    pub fn new(
+        global_world_manager: &'a dyn GlobalWorldManagerType,
+        guard: RwLockWriteGuard<'b, LocalEntityMap>,
+        host_entity_generator: &'b mut HostEntityGenerator,
+    ) -> Self {
+        Self {
+            global_world_manager,
+            guard,
+            host_entity_generator,
+        }
+    }
+}
+
+impl LocalEntityAndGlobalEntityConverter for EntityMapConverterMut<'_, '_> {
+    fn global_entity_to_host_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<HostEntity, EntityDoesNotExistError> {
+        self.guard.global_entity_to_host_entity(global_entity)
+    }
+    fn global_entity_to_remote_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<RemoteEntity, EntityDoesNotExistError> {
+        self.guard.global_entity_to_remote_entity(global_entity)
+    }
+    fn global_entity_to_owned_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+        self.guard.global_entity_to_owned_entity(global_entity)
+    }
+    fn host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.guard.host_entity_to_global_entity(host_entity)
+    }
+    fn static_host_entity_to_global_entity(
+        &self,
+        host_entity: &HostEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.guard.static_host_entity_to_global_entity(host_entity)
+    }
+    fn remote_entity_to_global_entity(
+        &self,
+        remote_entity: &RemoteEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.guard.remote_entity_to_global_entity(remote_entity)
+    }
+    fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+        self.guard.apply_entity_redirect(entity)
+    }
+}
+
+impl LocalEntityAndGlobalEntityConverterMut for EntityMapConverterMut<'_, '_> {
+    fn get_or_reserve_entity(
+        &mut self,
+        global_entity: &GlobalEntity,
+    ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+        if !self
+            .global_world_manager
+            .entity_can_relate_to_user(global_entity, self.host_entity_generator.get_user_key())
+        {
+            return Err(EntityDoesNotExistError);
+        }
+        let result = self.guard.global_entity_to_owned_entity(global_entity);
+        if result.is_ok() {
+            return result;
+        }
+
+        let host_entity = self
+            .host_entity_generator
+            .host_reserve_entity(&mut self.guard, global_entity);
 
         Ok(host_entity.copy_to_owned())
     }

@@ -73,7 +73,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             if message.is_fragment() {
                 self.fragment_receiver.receive(
                     message_kinds,
-                    local_world_manager.entity_converter(),
+                    &local_world_manager.entity_converter(),
                     message_index,
                     message,
                 )
@@ -106,7 +106,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
         for message in incoming_messages {
             self.receive_message(
                 message_kinds,
-                local_world_manager.entity_converter(),
+                &local_world_manager.entity_converter(),
                 message,
             );
         }
@@ -220,7 +220,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
     ) -> Result<(), SerdeErr> {
         let id_w_msgs = IndexedMessageReader::read_messages(
             message_kinds,
-            local_world_manager.entity_converter(),
+            &local_world_manager.entity_converter(),
             reader,
         )?;
         for (id, message) in id_w_msgs {
