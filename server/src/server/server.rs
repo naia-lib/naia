@@ -382,6 +382,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.transmit_send_job(world, plan);
     }
 
+    /// L3 send-state seam Step 5 — send-side ACK drain (worker-preamble
+    /// equivalent). Call before `transmit_send_job` when driving the lagged
+    /// transmit directly. See [`crate::WorldServer::drain_all_acks`].
+    pub fn drain_all_acks(&mut self) {
+        self.world_server.drain_all_acks();
+    }
+
     // Entities ──────────────────────────────────────────────────────────────
 
     /// Spawns a new entity and returns a builder for configuring it.

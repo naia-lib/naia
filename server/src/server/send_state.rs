@@ -278,12 +278,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         pending_data_packets: Vec<(SocketAddr, Tick, OwnedBitReader)>,
         server_tick: Tick,
     ) {
-        // Step 1: per-address ack drain.
-        for address in &received_addresses {
-            if let Some(send_conn) = self.send_user_connections.get_mut(address) {
-                send_conn.drain_acks(&mut []);
-            }
-        }
+        // L3 send-state seam Step 5: the per-address ACK drain moved OUT of here
+        // into the send path (`drain_all_acks`, called from `send_all_packets`
+        // for the synchronous oracle, and from the send worker's preamble before
+        // `transmit_send_job` on the active path). This makes `sent_updates`
+        // (now the worker-owned `RetransmitLedger`) single-owner: recv still
+        // pushes ACK samples via `RecvConnection::process_incoming_header`, but
+        // the consumer (`drain_acks` → `sent_updates.remove`) runs on the send
+        // side. Byte-identity holds because the drain still runs before
+        // `prepare_send_job` in the oracle, and nothing between recv-apply and
+        // send touches the ACK/`sent_updates`/`delivered` state.
 
         // Step 2: per-data-packet decode.
         for (address, client_tick, owned_reader) in pending_data_packets {
@@ -611,8 +615,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // `send_all_packets_impl`) keeps the oracle byte-identical while sharing
         // the EXACT code the active send worker runs lagged — so the deterministic
         // suites validate the real prepare/transmit logic.
+        //
+        // L3 seam Step 5: drain ACKs here (before prepare) instead of in
+        // `process_recv_packets`. Byte-identical: the drain still precedes prepare.
+        // On the active path the send worker drains in its preamble (before
+        // `transmit_send_job`); this synchronous path covers the oracle + the
+        // worker's no-plan fallback.
+        self.drain_all_acks();
         let plan = self.prepare_send_job(&world);
         self.transmit_send_job(world, plan);
+    }
+
+    /// L3 send-state seam Step 5: drain pending acked-index samples for every
+    /// connection from the cross-half ACK channel, removing acknowledged
+    /// `sent_updates` entries (now in the worker-owned `RetransmitLedger`) and
+    /// firing delivery notifications on the message + world managers. Moved out
+    /// of `process_recv_packets` so the consumer of the ACK channel runs on the
+    /// send side (single-owner `sent_updates`). Recv still pushes samples via
+    /// `RecvConnection::process_incoming_header`.
+    pub fn drain_all_acks(&mut self) {
+        for send_conn in self.send_user_connections.values_mut() {
+            send_conn.drain_acks(&mut []);
+        }
     }
 
     /// MISSION_TICK_FLOOR Lever 3 — PREPARE half. Runs at the FREEZE point on the

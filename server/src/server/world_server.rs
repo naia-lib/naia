@@ -377,8 +377,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // when the data decoder looks them up.
         self.drain_pending_handshakes();
 
-        // 3. Cross-half post-pass: per-address drain_acks + per-data-packet
-        // decode + per-address process_received_commands.
+        // 3. Cross-half post-pass: per-data-packet decode + per-address
+        // process_received_commands. The ACK drain (L3 seam Step 5) moved OUT of
+        // `process_recv_packets` so the pipeline coordinator does NOT drain — its
+        // send worker drains in its preamble (single-owner `sent_updates`). The
+        // monolithic synchronous server has no send worker, so it drains here, at
+        // the same tick position the old `process_recv_packets` step-1 drain held.
+        self.send.drain_all_acks();
         let received_addresses =
             std::mem::take(&mut self.recv.received_addresses);
         let pending_data_packets =
@@ -948,6 +953,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// [`SendState::transmit_send_job`].
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
         self.send.transmit_send_job(world, plan);
+    }
+
+    /// L3 send-state seam Step 5 — drain the ACK channel on the send side
+    /// (worker-preamble equivalent). Forwards to [`SendState::drain_all_acks`].
+    /// `send_all_packets` calls this internally; callers that drive the lagged
+    /// transmit directly (the active send worker, the harness `transmit_and_pump`)
+    /// call it before `transmit_send_job`.
+    pub fn drain_all_acks(&mut self) {
+        self.send.drain_all_acks();
     }
 
     /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): capture a frozen snapshot

@@ -1185,7 +1185,14 @@ fn send_worker_loop(
                 // concurrently — i.e. while the park still serializes (L3.2).
                 let _ = job.take_frozen_dirty();
                 match job.take_send_plan() {
-                    Some(plan) => send.transmit_send_job(job, plan),
+                    Some(plan) => {
+                        // L3 seam Step 5: drain the ACK channel in the worker
+                        // preamble (before transmit) so `sent_updates` is
+                        // consumed on the send side — single-owner. The no-plan
+                        // fallback below drains inside `send_all_packets`.
+                        send.drain_all_acks();
+                        send.transmit_send_job(job, plan);
+                    }
                     None => send.send_all_packets(job),
                 }
                 #[cfg(feature = "pipeline_timing")]

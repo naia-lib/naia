@@ -265,6 +265,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.transmit_send_job(world, plan);
     }
 
+    /// L3 send-state seam Step 5 — send-worker preamble ACK drain. The active
+    /// worker calls this before [`Self::transmit_send_job`] so the ACK channel
+    /// is consumed (and `sent_updates` trimmed) on the send side, keeping the
+    /// worker-owned `RetransmitLedger` single-owner. Forwards to
+    /// [`SendState::drain_all_acks`].
+    pub fn drain_all_acks(&mut self) {
+        self.state.drain_all_acks();
+    }
+
     /// C.6 prep — run the per-tick send preamble on `SendState` alone,
     /// without needing a world snapshot or a reassembled `WorldServer`.
     ///
