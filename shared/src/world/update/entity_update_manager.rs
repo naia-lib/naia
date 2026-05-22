@@ -242,15 +242,18 @@ impl EntityUpdateManager {
         self.clear_diff_mask(global_entity, component_kind);
     }
 
-    /// Hot-path: uses compact key for clear_diff_mask, avoids RwLock.
-    pub fn record_update_dense(
+    /// MISSION_TICK_FLOOR Lever 3: record the per-packet `sent_updates` ledger
+    /// entry WITHOUT clearing the live diff mask. On the server send path the
+    /// mask is cleared up-front in `SendState::prepare_send_job` (at the freeze
+    /// point), so the lagged transmit must not clear again — it only needs to
+    /// remember what was sent in this packet for the NACK-driven replay (the
+    /// `packet_index` only exists at transmit time).
+    pub fn record_sent_update(
         &mut self,
         now: &Instant,
         packet_index: &PacketIndex,
         global_entity: &GlobalEntity,
-        entity_idx: GlobalEntityIndex,
         component_kind: &ComponentKind,
-        kind_bit: u16,
         diff_mask: DiffMask,
     ) {
         self.last_update_packet_index = *packet_index;
@@ -260,8 +263,14 @@ impl EntityUpdateManager {
                 .insert(*packet_index, (now.clone(), HashMap::new()));
         }
         let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
-        sent_updates_map.insert((*global_entity, *component_kind), diff_mask.clone());
+        sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
+    }
 
+    /// MISSION_TICK_FLOOR Lever 3: clear the live per-user diff mask up-front
+    /// (compact-key, no RwLock). Called from `prepare_send_job` after the frozen
+    /// mask has been captured into the plan.
+    pub fn clear_diff_mask_fast(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         self.diff_handler.clear_diff_mask_fast(entity_idx, kind_bit);
     }
+
 }

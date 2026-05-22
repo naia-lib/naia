@@ -19,7 +19,7 @@ use naia_server::{
 };
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
-    FrozenGlobalDirty, Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId,
+    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, SendPlan,
     SnapshotWorld, TestClock, WorldRefType,
 };
 
@@ -1034,15 +1034,13 @@ impl Scenario {
     }
 
     /// MISSION_TICK_FLOOR Lever 3 (test support): one tick where the server
-    /// transmits a FROZEN send job (`send_all_packets_frozen`) instead of its
-    /// live world — the active send-worker lag path. Clients are pumped
-    /// (receive/process/send) so the lagged job is delivered + applied; the
-    /// server's normal live send is suppressed.
-    pub fn send_frozen_and_pump(
-        &mut self,
-        snap: SnapshotWorld<TestEntity>,
-        frozen: &FrozenGlobalDirty,
-    ) {
+    /// TRANSMITS a previously prepared [`SendPlan`] (via `transmit_send_job`)
+    /// against the supplied snapshot `world` — the active send-worker lag path.
+    /// The plan was built earlier (at the freeze point) by `prepare_send_job`
+    /// (see `Scenario::prepare_send_job`), with the live per-user masks already
+    /// cleared. Clients are pumped (receive/process/send) so the lagged job is
+    /// delivered + applied; the server's normal live send is suppressed.
+    pub fn transmit_and_pump(&mut self, snap: SnapshotWorld<TestEntity>, plan: SendPlan) {
         self.global_tick += 1;
         TestClock::advance(TICK_DURATION_MS);
         let now = Instant::now();
@@ -1056,7 +1054,18 @@ impl Scenario {
             server.receive_all_packets();
             server.process_all_packets(self.server_world.proxy_mut(), &now);
         }
-        server.send_all_packets_frozen(snap, frozen);
+        server.transmit_send_job(snap, plan);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 (test support): build a [`SendPlan`] at the
+    /// FREEZE point — i.e. right after a mutation, while the live per-user masks
+    /// still reflect this tick. Captures the per-property `DiffMask`s and clears
+    /// the live masks (so a subsequent mutation re-dirties cleanly). Pair with
+    /// [`Self::transmit_and_pump`] to drive the one-tick send lag manually.
+    pub fn prepare_send_job(&mut self) -> SendPlan {
+        let world_ref = self.server_world.proxy();
+        let server = self.server.as_mut().expect("server not started");
+        server.prepare_send_job(&world_ref)
     }
 
     pub(crate) fn take_server_events(&mut self) -> ServerEvents {

@@ -1,14 +1,14 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::hash::Hash;
 
 use log::{debug, warn};
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
-    ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds,
+    ConnectionConfig, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
     GlobalEntityIndex, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds,
-    PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, WorldMutType, WorldRefType,
-    MTU_SIZE_BYTES,
+    PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, UpdateKinds, WorldMutType,
+    WorldRefType, MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -227,15 +227,19 @@ impl Connection {
             .base.send
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
-        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> = update_events_map
+        // MISSION_TICK_FLOOR Lever 3: `write_update`'s plan entry is now
+        // `(kind_bit, DiffMask)`. The client send is synchronous (no
+        // prepare/transmit lag split), so `write_update` still live-fetches the
+        // mask for the `entity_idx INVALID` (client) arm and records+clears it
+        // there — the placeholder mask carried here is never read. `kind_bit`
+        // stays 0: PATH A/B (which need it) are server-only.
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> = update_events_map
             .into_iter()
             .filter_map(|(ge, kinds)| {
                 converter.global_entity_to_entity(&ge).ok().map(|we| {
-                    // Client has no GlobalEntityIndex; INVALID sentinel is safe because
-                    // PATH A/B optimizations require global_diff_handler=Some (server-only).
-                    let kind_map: HashMap<ComponentKind, u16> = kinds
+                    let kind_map: UpdateKinds = kinds
                         .into_iter()
-                        .map(|k| (k, 0u16))
+                        .map(|k| (k, (0u16, DiffMask::new(0))))
                         .collect();
                     (ge, GlobalEntityIndex::INVALID, we, kind_map)
                 })
@@ -284,7 +288,7 @@ impl Connection {
         converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
     ) -> bool {
         if !host_world_events.is_empty()
             || !update_list.is_empty()
@@ -337,7 +341,7 @@ impl Connection {
         entity_converter: &dyn EntityAndGlobalEntityConverter<E>,
         global_world_manager: &GlobalWorldManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
 

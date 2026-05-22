@@ -18,7 +18,7 @@ use naia_shared::{
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, Protocol, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey,
-    SharedGlobalWorldManager, Tick, WorldMutType, WorldRefType,
+    SendPlan, SharedGlobalWorldManager, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -924,33 +924,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// already exists post-4-C.1; verify the mirror is in sync before
     /// landing 4-F.naia.h.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
-        // Defense-in-depth: drainer is also called by every WorldServer::room_*
-        // method, so the queue should be empty here for in-process callers.
-        // SendState::send_all_packets also calls this — idempotent when empty.
-        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
-
-        // 4-F.naia.h: send-half body lives on `SendState::send_all_packets`.
-        // The serial / cyberlith.d coordinator entry point preserves the
-        // original behavior by running the coordination-stage preamble inline
-        // and then delegating the send-side work. The 4-F.cyberlith.e
-        // multi-thread coordinator will instead call `run_send_preamble`
-        // on the Sim/main thread and `SendHandle::send_all_packets` on the
-        // send thread (with a sync barrier between them).
-        self.run_send_preamble(&world);
-        self.send.send_all_packets(world);
+        // 4-F.naia.h: send-half body lives on `SendState`. The serial /
+        // cyberlith.d coordinator entry point runs the coordination-stage
+        // preamble inline, then prepares + transmits synchronously.
+        let plan = self.prepare_send_job(&world);
+        self.transmit_send_job(world, plan);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): transmit against a FROZEN
-    /// `global_dirty` snapshot instead of the live bitset, simulating the
-    /// active send worker's lagged transmit. Mirrors [`Self::send_all_packets`]
-    /// but iterates the frozen plan in `SendState::send_all_packets_frozen`.
-    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
-        &mut self,
-        world: W,
-        frozen: &FrozenGlobalDirty,
-    ) {
-        self.run_send_preamble(&world);
-        self.send.send_all_packets_frozen(world, frozen);
+    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half (coordination + per-user plan).
+    /// Runs the coordination-stage preamble (`run_send_preamble`) and then
+    /// `SendState::prepare_send_job`. On the active path the cyberlith pipeline
+    /// runs this on MAIN inside the park window (before the send worker transmits
+    /// the resulting plan a tick later).
+    pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
+        // Defense-in-depth: drainer is also called by every WorldServer::room_*
+        // method, so the queue should be empty here for in-process callers.
+        self.send.apply_pending_room_changes(&self.shared.scope_change_queue);
+        self.run_send_preamble(world);
+        self.send.prepare_send_job(world)
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Forwards to
+    /// [`SendState::transmit_send_job`].
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
+        self.send.transmit_send_job(world, plan);
     }
 
     /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): capture a frozen snapshot

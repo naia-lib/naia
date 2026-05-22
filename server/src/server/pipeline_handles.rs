@@ -242,17 +242,27 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_all_packets(world);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: transmit against a FROZEN `global_dirty`
-    /// snapshot captured into the send job (instead of the live bitset), so the
-    /// active send worker can transmit the previous tick's job during the next
-    /// tick's Sim without a torn read. Deterministic callers keep using
-    /// [`Self::send_all_packets`].
-    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
+    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half. Build the self-contained
+    /// per-user [`SendPlan`] at the freeze point (captures the frozen
+    /// `DiffMask`s + clears the live per-user masks). On the active path the
+    /// cyberlith pipeline calls this on MAIN inside the park window; the send
+    /// worker later transmits the plan via [`Self::transmit_send_job`].
+    pub fn prepare_send_job<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: &W,
+    ) -> naia_shared::SendPlan {
+        self.state.prepare_send_job(world)
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Serialize + send a previously
+    /// prepared [`SendPlan`], reading zero live per-user diff state. Called by
+    /// the active send worker (lagged) and by the synchronous oracle.
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(
         &mut self,
         world: W,
-        frozen: &naia_shared::FrozenGlobalDirty,
+        plan: naia_shared::SendPlan,
     ) {
-        self.state.send_all_packets_frozen(world, frozen);
+        self.state.transmit_send_job(world, plan);
     }
 
     /// C.6 prep — run the per-tick send preamble on `SendState` alone,

@@ -1,7 +1,8 @@
 //! MISSION_TICK_FLOOR Lever 3 regression gate (naia layer).
 //!
-//! Pins the correctness of the one-tick send *lag* + frozen `global_dirty`
-//! plan used by the active send worker (`SendState::send_all_packets_frozen`).
+//! Pins the correctness of the one-tick send *lag* + the prepared, self-contained
+//! send plan used by the active send worker (`SendState::prepare_send_job` on
+//! MAIN at the freeze point + `SendState::transmit_send_job` lagged).
 //!
 //! ## The bug this gates against
 //!
@@ -23,12 +24,16 @@
 //! prediction/rollback/FoW) — the cleanest observable; `parallel_send_matches_serial`
 //! proves such an entity's value tracks server mutations. Connect + spawn +
 //! initial replication go through the `Scenario` (which auto-sends normally);
-//! the LAG is driven manually via `Scenario::with_server_world_mut` (stage
-//! mutations + capture frozen snapshots, no send) + `Scenario::send_frozen_and_pump`
-//! (transmit the frozen job, no live send).
+//! the LAG is driven manually via `Scenario::with_server_world_mut` (stage the
+//! mutation) + `Scenario::prepare_send_job` (build the frozen send plan AT the
+//! freeze point — capturing each `DiffMask` and clearing the live mask) +
+//! `Scenario::transmit_and_pump` (transmit the prepared plan a tick later, the
+//! lagged send).
 //!
-//! Expected: FAILS on the buggy lag (client stuck at the N-1 value); PASSES once
-//! the frozen plan is made authoritative for the lagged send.
+//! The fix (`prepare_send_job` / `transmit_send_job`): the per-user send DECISION
+//! — including the per-property `DiffMask` — is built and the live masks cleared
+//! at the FREEZE point, so each tick's plan is self-contained and the lagged
+//! transmit reads zero live per-user diff state.
 
 #![allow(unused_imports)]
 
@@ -36,7 +41,7 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::{ReplicationConfig, ServerConfig};
-use naia_shared::{ComponentKind, FrozenGlobalDirty, Replicate, SnapshotWorld, WorldRefType};
+use naia_shared::{ComponentKind, Replicate, SnapshotWorld, WorldRefType};
 
 use naia_test_harness::{protocol, Auth, ClientKey, EntityKey, Position, Scenario, TestEntity};
 
@@ -101,27 +106,33 @@ fn lagged_send_delivers_final_consecutive_value() {
     let server_entity =
         scenario.with_server_world_mut(|_s, world| world.proxy().entities().into_iter().next().expect("server entity"));
 
-    // ── The lag: two CONSECUTIVE mutations, then stop — staged without send ──
-    let (snap1, frozen1) = scenario.with_server_world_mut(|s, world| {
+    // ── The lag: two CONSECUTIVE mutations, then stop ───────────────────────
+    // Each mutation is followed by a `prepare_send_job` AT the freeze point: it
+    // captures the dirty `DiffMask` into a self-contained plan and clears the
+    // live mask. The next mutation then re-dirties cleanly. No send happens yet.
+    scenario.with_server_world_mut(|s, world| {
         if let Some(mut pos) = s.entity_mut(world.proxy_mut(), &server_entity).component::<Position>() {
             *pos.x = V1.0;
             *pos.y = V1.1;
         }
-        (build_snap(server_entity, V1), s.freeze_global_dirty())
     });
-    let (snap2, frozen2) = scenario.with_server_world_mut(|s, world| {
+    let snap1 = build_snap(server_entity, V1);
+    let plan1 = scenario.prepare_send_job();
+
+    scenario.with_server_world_mut(|s, world| {
         if let Some(mut pos) = s.entity_mut(world.proxy_mut(), &server_entity).component::<Position>() {
             *pos.x = V2.0;
             *pos.y = V2.1;
         }
-        (build_snap(server_entity, V2), s.freeze_global_dirty())
     });
+    let snap2 = build_snap(server_entity, V2);
+    let plan2 = scenario.prepare_send_job();
 
-    // Lagged transmit of the N-1 job (sends V1, clears the per-user mask), then
-    // the N job: entity is in frozen(N) but the mask is now clear → with the
-    // bug, V2 is skipped and never sent.
-    scenario.send_frozen_and_pump(snap1, &frozen1);
-    scenario.send_frozen_and_pump(snap2, &frozen2);
+    // Lagged transmit of the N-1 plan (sends V1), then the N plan (sends V2).
+    // Each plan carries its own frozen DiffMask, so V2 is NOT dropped: the fix
+    // captured + cleared masks at the freeze points above, not at transmit time.
+    scenario.transmit_and_pump(snap1, plan1);
+    scenario.transmit_and_pump(snap2, plan2);
 
     // Flush delivery (a few ticks for the one-tick send latency). The entity is
     // no longer dirty, so live sends re-send nothing for it — the client

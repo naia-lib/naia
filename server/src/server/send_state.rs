@@ -15,8 +15,10 @@ use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
-    sync::{atomic::Ordering, Arc},
+    sync::Arc,
 };
+#[cfg(any(feature = "bench_instrumentation", feature = "e2e_debug"))]
+use std::sync::atomic::Ordering;
 
 // HashSet/HashMap imported above are used in the new mirror fields for C.6 prep #6.
 
@@ -26,10 +28,11 @@ use log::warn;
 
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, FrozenGlobalDirty, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
+    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
     GlobalPriorityState, GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, Message,
     MessageContainer, OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate,
-    Serde, SnapshotMap, Tick, Timer, UserPriorityState, WorldMutType, WorldRefType,
+    SendPlan, SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -603,32 +606,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// skips the inline preamble. Otherwise the preamble runs first
     /// for backward compatibility.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
-        self.send_all_packets_impl(world, None);
+        // The deterministic oracle prepares + transmits synchronously in the same
+        // tick. Splitting it this way (vs the pre-Lever-3 monolithic
+        // `send_all_packets_impl`) keeps the oracle byte-identical while sharing
+        // the EXACT code the active send worker runs lagged — so the deterministic
+        // suites validate the real prepare/transmit logic.
+        let plan = self.prepare_send_job(&world);
+        self.transmit_send_job(world, plan);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3: active-path transmit that iterates a FROZEN
-    /// `global_dirty` snapshot (captured into the send job at snapshot-build
-    /// time) instead of the live, concurrently-mutated bitset. This lets the
-    /// send worker transmit the *previous* tick's job during the next tick's
-    /// Sim without a torn read of `global_dirty`. The deterministic oracle
-    /// keeps calling [`Self::send_all_packets`] (frozen = `None`), sending
-    /// synchronously against the live bitset within the same tick.
-    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
-        &mut self,
-        world: W,
-        frozen: &FrozenGlobalDirty,
-    ) {
-        self.send_all_packets_impl(world, Some(frozen));
-    }
-
-    fn send_all_packets_impl<W: WorldRefType<E> + Sync>(
-        &mut self,
-        world: W,
-        frozen: Option<&FrozenGlobalDirty>,
-    ) {
+    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half. Runs at the FREEZE point on the
+    /// gameplay thread (the park window on the active path; inline for the
+    /// oracle). Drains the send preamble + scope changes, FREEZES the dirty
+    /// domain, then builds the per-user update plan: for every (user, entity,
+    /// component) to be sent it captures the per-property `DiffMask` and CLEARS
+    /// the live per-user mask. The returned [`SendPlan`] is self-contained — the
+    /// transmit half serializes it without touching any live per-user diff state,
+    /// which is what makes the one-tick send lag correct.
+    ///
+    /// `world` is only consulted by the inline scope-change drain (skipped when
+    /// the caller already ran `apply_pending_scope_changes` this tick); Phase 3A
+    /// itself reads no world values.
+    pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         #[cfg(feature = "f3_diag")]
         eprintln!(
-            "[F3-DIAG naia/SendState] send_all_packets enter send_user_conns={} preamble_done={} scope_done={}",
+            "[F3-DIAG naia/SendState] prepare_send_job enter send_user_conns={} preamble_done={} scope_done={}",
             self.send_user_connections.len(),
             self.preamble_done_this_tick,
             self.scope_changes_done_this_tick
@@ -640,21 +642,135 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         if !self.preamble_done_this_tick {
             self.apply_pending_send_preamble();
         }
-        // Reset the flag for the next tick.
         self.preamble_done_this_tick = false;
 
-        // C.6 prep #6 — entity-scope drain (publishes spawn intents
-        // into per-user `send_user_connections`). Auto-call mirrors
-        // the preamble flag pattern: if the caller already invoked
-        // `apply_pending_scope_changes` this tick, skip. Otherwise
-        // run inline. Legacy `WorldServer::send_all_packets` callers
-        // see an empty queue here (their `drain_scope_change_queue`
-        // already ran during `run_send_preamble`), so this is a
-        // wire-byte-identical no-op for them.
+        // C.6 prep #6 — entity-scope drain (publishes spawn intents into per-user
+        // `send_user_connections`). Same flag pattern as the preamble.
         if !self.scope_changes_done_this_tick {
-            self.apply_pending_scope_changes(&world);
+            self.apply_pending_scope_changes(world);
         }
         self.scope_changes_done_this_tick = false;
+
+        // MISSION_TICK_FLOOR Lever 3: freeze the dirty domain BEFORE any mask is
+        // cleared. Clearing a per-user mask decrements the live `global_dirty`
+        // refcount (`MutReceiver::clear_mask` → `notify_clean`), so both this
+        // function's Phase 3A iteration AND the transmit's Phase 1/2 iteration
+        // read this frozen copy — never the live, now-decremented bitset.
+        let frozen_dirty = self.shared.global_dirty.freeze();
+
+        // Collect and shuffle user addresses for fair priority ordering.
+        let mut user_addresses: Vec<SocketAddr> =
+            self.send_user_connections.keys().copied().collect();
+        fastrand::shuffle(&mut user_addresses);
+
+        // ── Iris Phase 3A: serial — build per-user update plan ──────────────────
+        #[cfg(feature = "bench_instrumentation")]
+        let _iris_p3a_t0 = std::time::Instant::now();
+
+        let mut per_user: Vec<(SocketAddr, SendUpdateEvents)> =
+            Vec::with_capacity(user_addresses.len());
+        {
+            let handler = self.shared.global_world_manager.read().diff_handler();
+            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+            for user_address in &user_addresses {
+                // Per-user visible-dirty entity indices from the FROZEN domain ∩
+                // this user's visibility (immune to the inline mask-clears below).
+                // Collect only the indices — the dirty WORDS are read inline from
+                // `frozen_dirty` (a local), avoiding a per-entity `Vec<u64>` alloc.
+                let indices: Vec<GlobalEntityIndex> = {
+                    let send_conn = self.send_user_connections.get(user_address).unwrap();
+                    send_conn
+                        .visibility
+                        .intersect_dirty_frozen(&frozen_dirty)
+                        .collect()
+                };
+                let send_conn = self.send_user_connections.get_mut(user_address).unwrap();
+                let mut events: SendUpdateEvents = HashMap::with_capacity(indices.len());
+                for global_idx in indices {
+                    let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+                    #[cfg(feature = "bench_instrumentation")]
+                    crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
+                        .fetch_add(1, Ordering::Relaxed);
+
+                    // Build this entity's component map once, then insert into
+                    // `events` a single time (vs an `entry()` lookup per component).
+                    let mut kinds: UpdateKinds = UpdateKinds::new();
+                    for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
+                        let mut word = *dirty_word;
+                        while word != 0 {
+                            let bit_pos = word.trailing_zeros() as usize;
+                            word &= word - 1;
+                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
+                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+                            #[cfg(feature = "bench_instrumentation")]
+                            crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
+                                .fetch_add(1, Ordering::Relaxed);
+
+                            if send_conn.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
+                                // fast path
+                            } else if send_conn.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
+                                continue;
+                            } else if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                                continue;
+                            }
+
+                            // MISSION_TICK_FLOOR Lever 3: capture the per-property
+                            // mask NOW, then clear the live mask immediately. The
+                            // captured (frozen) mask is what the lagged transmit
+                            // serializes from.
+                            let diff_mask = send_conn
+                                .base
+                                .world_manager
+                                .get_diff_mask_dense(global_idx, kind_bit)
+                                .unwrap_or_else(|| {
+                                    send_conn
+                                        .base
+                                        .world_manager
+                                        .get_diff_mask(&global_entity, &component_kind)
+                                });
+                            send_conn
+                                .base
+                                .world_manager
+                                .clear_diff_mask_dense(global_idx, kind_bit);
+
+                            kinds.insert(component_kind, (kind_bit, diff_mask));
+                        }
+                    }
+                    if !kinds.is_empty() {
+                        events.insert(global_entity, (global_idx, kinds));
+                    }
+                }
+                per_user.push((*user_address, events));
+            }
+        }
+
+        // Pre-populate user_priorities for all users (requires &mut, must be serial).
+        for user_address in &user_addresses {
+            let send_conn = self.send_user_connections.get(user_address).unwrap();
+            self.user_priorities.entry(send_conn.user_key).or_default();
+        }
+
+        #[cfg(feature = "bench_instrumentation")]
+        crate::server::world_server::bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
+            _iris_p3a_t0.elapsed().as_nanos() as u64,
+            Ordering::Relaxed,
+        );
+
+        #[cfg(feature = "f3_diag")]
+        eprintln!("[F3-DIAG naia/SendState] prepare_send_job exit users={}", per_user.len());
+
+        SendPlan { per_user, frozen_dirty }
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Runs on the send worker (a
+    /// tick later, possibly overlapping the next Sim) or inline for the oracle.
+    /// Reads ONLY the self-contained [`SendPlan`] + the snapshot `world`: it
+    /// builds `snapshot_map` and clears the per-tick wire cache by iterating the
+    /// plan's frozen dirty domain (Phase 1/2), then serializes each user's plan
+    /// using the FROZEN `DiffMask`s and records the per-packet `sent_updates`
+    /// ledger (Phase 3B). No live per-user diff state is read or cleared here.
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
+        let SendPlan { per_user, frozen_dirty } = plan;
 
         #[cfg(feature = "e2e_debug")]
         {
@@ -663,56 +779,26 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
         let now = Instant::now();
 
-        // Collect and shuffle user addresses for fair priority ordering.
-        let mut user_addresses: Vec<SocketAddr> =
-            self.send_user_connections.keys().copied().collect();
-        fastrand::shuffle(&mut user_addresses);
-
-        // ── Iris Phase 1+2: Global dirty scan + UserDependent snapshot ──────────
+        // ── Iris Phase 1+2: dirty scan (FROZEN domain) + UserDependent snapshot ──
+        // The wire-cache clear MUST stay co-located with the Phase 3B writes
+        // (below, same call): clearing here then writing there guarantees no stale
+        // PATH-A cache bytes survive across the one-tick lag.
         #[cfg(feature = "bench_instrumentation")]
         let _iris_p12_t0 = std::time::Instant::now();
-
-        // MISSION_TICK_FLOOR Lever 3: the dirty iteration domain. Both arms
-        // materialize the SAME `(global_idx, dirty_words)` order, so the wire is
-        // byte-identical to the pre-Lever-3 live path — only the source differs
-        // (frozen job copy for the lagged active send; live bitset for the
-        // synchronous deterministic oracle).
-        let dirty_plan: Vec<(GlobalEntityIndex, Vec<u64>)> = match frozen {
-            Some(f) => f
-                .dirty_entity_iter()
-                .map(|idx| (idx, f.dirty_words(idx).to_vec()))
-                .collect(),
-            None => self
-                .shared
-                .global_dirty
-                .dirty_entity_iter()
-                .map(|idx| {
-                    let words = self
-                        .shared
-                        .global_dirty
-                        .dirty_words(idx)
-                        .iter()
-                        .map(|w| w.load(Ordering::Relaxed))
-                        .collect();
-                    (idx, words)
-                })
-                .collect(),
-        };
 
         let mut snapshot_map: SnapshotMap = SnapshotMap::new();
         {
             let handler = self.shared.global_world_manager.read().diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
             let idx_to_world = self.shared.idx_to_world.read();
-            for (global_idx, dirty_words) in &dirty_plan {
-                let global_idx = *global_idx;
+            for global_idx in frozen_dirty.dirty_entity_iter() {
                 guard.clear_wire_cache_for_entity(global_idx);
                 let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                 if !self.shared.global_world_manager.read().entity_is_replicating(&global_entity) { continue; }
                 let Some(world_entity) = idx_to_world[global_idx.as_usize()] else { continue; };
                 if !world.has_entity(&world_entity) { continue; }
 
-                for (word_idx, dirty_word) in dirty_words.iter().enumerate() {
+                for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
                     let mut word = *dirty_word;
                     while word != 0 {
                         let bit_pos = word.trailing_zeros() as usize;
@@ -739,107 +825,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             Ordering::Relaxed,
         );
 
-        // ── Iris Phase 3A: serial — build per-user update_events ────────────────
-        #[cfg(feature = "bench_instrumentation")]
-        let _iris_p3a_t0 = std::time::Instant::now();
-
-        type UpdateEvents = HashMap<GlobalEntity, (GlobalEntityIndex, HashMap<ComponentKind, u16>)>;
-        let mut update_events_by_addr: HashMap<SocketAddr, UpdateEvents> = HashMap::new();
-        {
-            let handler = self.shared.global_world_manager.read().diff_handler();
-            let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
-            for user_address in &user_addresses {
-                let send_conn = self.send_user_connections.get(user_address).unwrap();
-                let mut events: UpdateEvents = HashMap::new();
-
-                // MISSION_TICK_FLOOR Lever 3: same frozen-vs-live split as
-                // Phase 1/2, intersected with this user's visibility. Order is
-                // identical to the pre-Lever-3 live path.
-                let user_dirty_plan: Vec<(GlobalEntityIndex, Vec<u64>)> = match frozen {
-                    Some(f) => send_conn
-                        .visibility
-                        .intersect_dirty_frozen(f)
-                        .map(|idx| (idx, f.dirty_words(idx).to_vec()))
-                        .collect(),
-                    None => send_conn
-                        .visibility
-                        .intersect_dirty(&*self.shared.global_dirty)
-                        .map(|idx| {
-                            let words = self
-                                .shared
-                                .global_dirty
-                                .dirty_words(idx)
-                                .iter()
-                                .map(|w| w.load(Ordering::Relaxed))
-                                .collect();
-                            (idx, words)
-                        })
-                        .collect(),
-                };
-                for (global_idx, dirty_words) in &user_dirty_plan {
-                    let global_idx = *global_idx;
-                    let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
-                    #[cfg(feature = "bench_instrumentation")]
-                    crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
-                        .fetch_add(1, Ordering::Relaxed);
-
-                    for (word_idx, dirty_word) in dirty_words.iter().enumerate() {
-                        let mut word = *dirty_word;
-                        while word != 0 {
-                            let bit_pos = word.trailing_zeros() as usize;
-                            word &= word - 1;
-                            let kind_bit = (word_idx * 64 + bit_pos) as u16;
-                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
-                            #[cfg(feature = "bench_instrumentation")]
-                            crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
-                                .fetch_add(1, Ordering::Relaxed);
-
-                            if send_conn.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
-                                // fast path
-                            } else if send_conn.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
-                                continue;
-                            } else if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
-                                continue;
-                            }
-
-                            events.entry(global_entity)
-                                .or_insert_with(|| (global_idx, HashMap::new()))
-                                .1.insert(component_kind, kind_bit);
-                        }
-                    }
-                }
-                update_events_by_addr.insert(*user_address, events);
-            }
-        }
-
-        // Pre-populate user_priorities for all users (requires &mut, must be serial).
-        for user_address in &user_addresses {
-            let send_conn = self.send_user_connections.get(user_address).unwrap();
-            self.user_priorities.entry(send_conn.user_key).or_default();
-        }
-
-        #[cfg(feature = "bench_instrumentation")]
-        crate::server::world_server::bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
-            _iris_p3a_t0.elapsed().as_nanos() as u64,
-            Ordering::Relaxed,
-        );
-
         // ── Iris Phase 3B: parallel — build packets per user ─────────────────────
         // 4-F.naia.h: RTT is sourced from `SendConnection::shared.rtt_avg_ms()`
         // (the atomic mirror refreshed in `RecvState::receive` on every pong),
         // not from the recv-side `ping_manager.rtt_average`. This removes the
         // last cross-half access from the send path.
-        let work: Vec<(SocketAddr, UpdateEvents, SendConnection, UserPriorityState<E>, f32)> =
-            user_addresses.iter()
-            .filter_map(|addr| {
-                let send_conn = self.send_user_connections.remove(addr)?;
+        let work: Vec<(SocketAddr, SendUpdateEvents, SendConnection, UserPriorityState<E>, f32)> =
+            per_user.into_iter()
+            .filter_map(|(addr, events)| {
+                let send_conn = self.send_user_connections.remove(&addr)?;
                 let user_key = send_conn.user_key;
                 let user_prio = self.user_priorities.remove(&user_key)
                     .unwrap_or_default();
-                let events = update_events_by_addr.remove(addr)
-                    .unwrap_or_default();
                 let rtt_millis = send_conn.shared.rtt_avg_ms();
-                Some((*addr, events, send_conn, user_prio, rtt_millis))
+                Some((addr, events, send_conn, user_prio, rtt_millis))
             })
             .collect();
 
@@ -871,12 +870,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 };
 
                 let initial_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
-                let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, HashMap<ComponentKind, u16>)> =
+                let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, UpdateKinds)> =
                     update_events.drain()
                         .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
                         .collect();
                 scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-                let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)> =
+                let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> =
                     scored.into_iter()
                         .filter_map(|(ge, idx, _, kinds)| {
                             idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
@@ -925,7 +924,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             self.user_priorities.insert(user_key, user_prio);
             #[cfg(feature = "f3_diag")]
             eprintln!(
-                "[F3-DIAG naia/SendState] send_all_packets emit user={:?} addr={:?} packets={}",
+                "[F3-DIAG naia/SendState] transmit_send_job emit user={:?} addr={:?} packets={}",
                 user_key, addr, packet_count
             );
             for packet in packets {
@@ -935,7 +934,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             }
         }
         #[cfg(feature = "f3_diag")]
-        eprintln!("[F3-DIAG naia/SendState] send_all_packets exit");
+        eprintln!("[F3-DIAG naia/SendState] transmit_send_job exit");
     }
 
     /// Apply pending `RoomChange` events from `scope_change_queue` to

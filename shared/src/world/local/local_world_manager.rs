@@ -858,7 +858,10 @@ impl LocalWorldManager {
 
     // Update-focused
 
-    pub(crate) fn get_diff_mask(
+    /// Returns a snapshot (clone) of the per-user diff mask for this
+    /// `(entity, component)`. The `GlobalEntity`-keyed path; the hot send loop
+    /// prefers [`Self::get_diff_mask_dense`].
+    pub fn get_diff_mask(
         &self,
         global_entity: &GlobalEntity,
         component_kind: &ComponentKind,
@@ -878,20 +881,26 @@ impl LocalWorldManager {
             .record_update(now, packet_index, global_entity, component_kind, diff_mask);
     }
 
-    /// Hot-path: uses compact key for clear_diff_mask, avoids RwLock.
-    pub(crate) fn record_update_dense(
+    /// MISSION_TICK_FLOOR Lever 3: record the per-packet `sent_updates` ledger
+    /// entry WITHOUT clearing the live mask (the server send path clears up-front
+    /// in `prepare_send_job`). See [`crate::EntityUpdateManager::record_sent_update`].
+    pub fn record_sent_update(
         &mut self,
         now: &Instant,
         packet_index: &PacketIndex,
         global_entity: &GlobalEntity,
-        entity_idx: GlobalEntityIndex,
         component_kind: &ComponentKind,
-        kind_bit: u16,
         diff_mask: DiffMask,
     ) {
-        self.updater.record_update_dense(
-            now, packet_index, global_entity, entity_idx, component_kind, kind_bit, diff_mask,
-        );
+        self.updater
+            .record_sent_update(now, packet_index, global_entity, component_kind, diff_mask);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3: clear the live per-user diff mask up-front
+    /// (compact key). Called from `SendState::prepare_send_job` after capturing
+    /// the frozen mask into the send plan.
+    pub fn clear_diff_mask_dense(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
+        self.updater.clear_diff_mask_fast(entity_idx, kind_bit);
     }
 
     // Joint router
@@ -1258,7 +1267,7 @@ impl LocalWorldManager {
 
     /// Hot-path mask snapshot with pre-resolved entity_idx + kind_bit.
     /// Returns `None` if no receiver found.
-    pub(crate) fn get_diff_mask_dense(
+    pub fn get_diff_mask_dense(
         &self,
         entity_idx: GlobalEntityIndex,
         kind_bit: u16,

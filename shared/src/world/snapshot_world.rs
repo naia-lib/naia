@@ -14,6 +14,7 @@
 use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
+    net::SocketAddr,
 };
 
 use crate::{
@@ -24,9 +25,39 @@ use crate::{
         },
         replicate::{Replicate, ReplicatedComponent},
     },
+    world::entity::global_entity::GlobalEntity,
     world::update::global_dirty_bitset::FrozenGlobalDirty,
+    world::update::global_entity_index::GlobalEntityIndex,
     world::world_type::WorldRefType,
+    world::world_writer::UpdateKinds,
 };
+
+/// MISSION_TICK_FLOOR Lever 3: per-user send DECISION for one entity — the set
+/// of component kinds to send (each with its `kind_bit` + FROZEN `DiffMask`).
+/// Keyed by `GlobalEntity`.
+pub type SendUpdateEvents = HashMap<GlobalEntity, (GlobalEntityIndex, UpdateKinds)>;
+
+/// MISSION_TICK_FLOOR Lever 3: a self-contained, frozen send job built by
+/// [`crate::SnapshotWorld`]'s producer at the FREEZE point (on the gameplay
+/// thread, in `SendState::prepare_send_job`) and transmitted later — possibly a
+/// tick later, on the send worker — by `SendState::transmit_send_job`.
+///
+/// It carries everything the lagged transmit needs so it reads ZERO live
+/// per-user diff state:
+/// - `per_user`: the per-user (shuffled-order) update plan. Each entry's
+///   `DiffMask` is the value captured at freeze time (the live mask was cleared
+///   right after capture), so serialization is immune to concurrent mutation.
+/// - `frozen_dirty`: a plain-`u64` copy of `global_dirty` taken BEFORE the masks
+///   were cleared. `transmit`'s Phase 1/2 iterates THIS (not the live, now-
+///   decremented bitset) to build `snapshot_map` + clear the per-tick wire cache.
+pub struct SendPlan {
+    /// Per-user (shuffled-order) update plan; each entry's `DiffMask` is the
+    /// value captured at freeze time (the live mask was cleared right after).
+    pub per_user: Vec<(SocketAddr, SendUpdateEvents)>,
+    /// Plain-`u64` copy of `global_dirty` taken BEFORE the masks were cleared.
+    /// `transmit`'s Phase 1/2 iterates this (not the live, decremented bitset).
+    pub frozen_dirty: FrozenGlobalDirty,
+}
 
 /// [`WorldRefType<E>`] implementation backed by a per-tick ephemeral
 /// snapshot of component values.
@@ -75,6 +106,14 @@ pub struct SnapshotWorld<E: Copy + Eq + Hash> {
     /// `global_dirty`. `None` for the deterministic oracle (which sends
     /// synchronously against the live bitset) and for all non-send uses.
     frozen_dirty: Option<FrozenGlobalDirty>,
+    /// MISSION_TICK_FLOOR Lever 3: the prepared per-user send plan (frozen
+    /// `DiffMask`s + frozen dirty domain). Attached on the gameplay thread by
+    /// `SendState::prepare_send_job` at the freeze point; consumed by the send
+    /// worker via `transmit_send_job`. Supersedes `frozen_dirty` as the
+    /// self-contained job descriptor — when present, the transmit reads zero
+    /// live per-user diff state. `None` for the deterministic oracle (which
+    /// prepares + transmits synchronously) and all non-send uses.
+    send_plan: Option<SendPlan>,
 }
 
 impl<E: Copy + Eq + Hash> Default for SnapshotWorld<E> {
@@ -90,7 +129,22 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
             components: HashMap::new(),
             live_entities: HashSet::new(),
             frozen_dirty: None,
+            send_plan: None,
         }
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3: attach the prepared per-user send plan,
+    /// turning this snapshot into a self-contained, frozen send job. Called by
+    /// `SendState::prepare_send_job` on the active path.
+    pub fn attach_send_plan(&mut self, plan: SendPlan) {
+        self.send_plan = Some(plan);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3: take the prepared send plan out of the job.
+    /// The send worker calls this, then dispatches to `transmit_send_job` when
+    /// `Some`.
+    pub fn take_send_plan(&mut self) -> Option<SendPlan> {
+        self.send_plan.take()
     }
 
     /// MISSION_TICK_FLOOR Lever 3: attach the frozen `global_dirty` rider,

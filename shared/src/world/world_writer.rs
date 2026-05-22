@@ -12,10 +12,18 @@ use crate::{
         update::global_diff_handler::GlobalDiffHandler,
         update::global_entity_index::GlobalEntityIndex,
     },
-    BitWrite, BitWriter, CachedComponentUpdate, ComponentKind, ComponentKinds,
+    BitWrite, BitWriter, CachedComponentUpdate, ComponentKind, ComponentKinds, DiffMask,
     EntityAndGlobalEntityConverter, EntityCommand, EntityMessage, EntityMessageType, GlobalEntity,
     Instant, MessageIndex, PacketIndex, Replicate, Serde, WorldRefType,
 };
+
+/// MISSION_TICK_FLOOR Lever 3: per-(entity) update plan entry. The `u16` is the
+/// `kind_bit`; the `DiffMask` is the **frozen** per-property mask captured at the
+/// freeze point (in `SendState::prepare_send_job`) — NOT a live fetch. Threading
+/// the frozen mask is what lets the lagged send worker serialize a self-contained
+/// job without reading concurrently-mutated per-user diff state. See
+/// `_AGENTS/L3_PURE_SENDJOB_FIX_HANDOFF.md`.
+pub type UpdateKinds = HashMap<ComponentKind, (u16, DiffMask)>;
 
 /// Per-tick counters for the packet-write path.
 /// Enabled via `bench_instrumentation`.
@@ -80,7 +88,7 @@ impl WorldWriter {
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
         world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: Option<&SnapshotMap>,
     ) {
         // write entity updates
@@ -842,7 +850,7 @@ impl WorldWriter {
         global_diff_handler: Option<&GlobalDiffHandler>,
         world_manager: &mut LocalWorldManager,
         has_written: &mut bool,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: Option<&SnapshotMap>,
     ) {
         let mut i = 0;
@@ -934,19 +942,27 @@ impl WorldWriter {
         entity_idx: GlobalEntityIndex,
         world_entity: &E,
         has_written: &mut bool,
-        kinds: &mut HashMap<ComponentKind, u16>,
+        kinds: &mut UpdateKinds,
         snapshot_map: Option<&SnapshotMap>,
     ) {
         let mut written_component_kinds = Vec::new();
         let component_kind_set: Vec<ComponentKind> = kinds.keys().cloned().collect();
 
         for component_kind in &component_kind_set {
-            let kind_bit = *kinds.get(component_kind).expect("kind_bit in update kinds map");
-            // Hot path: use compact-key lookup when entity_idx is valid (server).
-            // Falls back to the old GlobalEntity-keyed path on the client (entity_idx = INVALID).
+            let (kind_bit, plan_diff_mask) = kinds
+                .get(component_kind)
+                .cloned()
+                .expect("(kind_bit, DiffMask) in update kinds map");
+            // MISSION_TICK_FLOOR Lever 3: on the SERVER (entity_idx valid) the
+            // per-property `DiffMask` is the FROZEN value captured at the freeze
+            // point by `SendState::prepare_send_job` — NOT a live fetch. That is
+            // the crux of the pure send-job: the lagged transmit reads zero live
+            // per-user diff state (pre-Lever-3 this re-fetched `get_diff_mask_dense`
+            // here, which desynced under the send lag). The CLIENT send is
+            // synchronous (no lag), keeps the GlobalEntity-keyed live fetch, and
+            // carries a placeholder mask in the plan.
             let diff_mask = if entity_idx.is_valid() {
-                world_manager.get_diff_mask_dense(entity_idx, kind_bit)
-                    .unwrap_or_else(|| world_manager.get_diff_mask(global_entity, component_kind))
+                plan_diff_mask
             } else {
                 world_manager.get_diff_mask(global_entity, component_kind)
             };
@@ -1067,9 +1083,14 @@ impl WorldWriter {
             }
 
             written_component_kinds.push(*component_kind);
-            // Hot path on server (entity_idx.is_valid()): compact-key clear_diff_mask, no RwLock.
+            let _ = kind_bit;
+            // MISSION_TICK_FLOOR Lever 3: on the server the live per-user mask was
+            // already cleared in `prepare_send_job` (at the freeze point), so here
+            // we ONLY record the per-packet `sent_updates` ledger (needed for the
+            // NACK-driven replay; the packet_index only exists now). The client
+            // (entity_idx INVALID) is synchronous and still records+clears.
             if entity_idx.is_valid() {
-                world_manager.record_update_dense(now, packet_index, global_entity, entity_idx, component_kind, kind_bit, diff_mask);
+                world_manager.record_sent_update(now, packet_index, global_entity, component_kind, diff_mask);
             } else {
                 world_manager.record_update(now, packet_index, global_entity, component_kind, diff_mask);
             }

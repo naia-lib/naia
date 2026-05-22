@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     hash::Hash,
     net::SocketAddr,
 };
@@ -12,14 +12,14 @@ use crate::connection::bandwidth_accumulator::BandwidthAccumulator;
 use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::world_reader::WorldReader;
-use crate::world::world_writer::{SnapshotMap, WorldWriter};
+use crate::world::world_writer::{SnapshotMap, UpdateKinds, WorldWriter};
 use crate::{
     messages::{channels::channel_kinds::ChannelKinds, message_manager::MessageManager},
     types::{HostType, PacketIndex},
     world::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
     },
-    ComponentKind, ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
+    ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
     EntityCommand, GlobalEntity, GlobalEntityIndex, MessageKinds, PacketNotifiable, PacketType,
     StandardHeader, Tick, Timer, WorldRefType,
 };
@@ -310,7 +310,7 @@ impl BaseSendConnection {
         has_written: &mut bool,
         write_world_events: bool,
         host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         global_diff_handler: Option<&GlobalDiffHandler>,
         snapshot_map: Option<&SnapshotMap>,
     ) {
@@ -488,7 +488,7 @@ impl BaseConnection {
         has_written: &mut bool,
         write_world_events: bool,
         host_world_events: &mut VecDeque<(CommandId, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         global_diff_handler: Option<&GlobalDiffHandler>,
         snapshot_map: Option<&SnapshotMap>,
     ) {

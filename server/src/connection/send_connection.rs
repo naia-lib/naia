@@ -12,7 +12,7 @@
 //! that need both halves split-borrow the recv/send maps.
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     hash::Hash,
     net::SocketAddr,
     sync::Arc,
@@ -21,11 +21,11 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    BaseSendConnection, BitReader, BitWriter, ChannelKinds, ComponentKind, ComponentKinds,
+    BaseSendConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds,
     ConnectionVisibilityBitset, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent,
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, MessageIndex,
     MessageKinds, OutgoingPacket, PacketNotifiable, PacketType, Serde, SerdeErr, SnapshotMap,
-    StandardHeader, Tick, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    StandardHeader, Tick, UpdateKinds, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 #[cfg(feature = "bench_instrumentation")]
@@ -216,7 +216,7 @@ impl SendConnection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         rtt_millis: f32,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) {
         #[cfg(feature = "bench_instrumentation")]
@@ -295,7 +295,7 @@ impl SendConnection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) -> bool {
         let has_messages = self.base.message_manager.has_outgoing_messages();
@@ -396,7 +396,7 @@ impl SendConnection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) -> BitWriter {
         let next_packet_index = self.base.next_packet_index();
@@ -486,7 +486,7 @@ impl SendConnection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         rtt_millis: f32,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) -> (Vec<OutgoingPacket>, bool) {
         self.base.collect_messages(now, &rtt_millis);
@@ -532,7 +532,7 @@ impl SendConnection {
         global_world_manager: &GlobalWorldManager,
         time_manager: &TimeManager,
         host_world_events: &mut VecDeque<(MessageIndex, EntityCommand)>,
-        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, HashMap<ComponentKind, u16>)>,
+        update_list: &mut Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)>,
         snapshot_map: &SnapshotMap,
     ) -> Option<OutgoingPacket> {
         let has_messages = self.base.message_manager.has_outgoing_messages();

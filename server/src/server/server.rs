@@ -358,22 +358,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.send_all_packets(world);
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): send against a FROZEN
-    /// `global_dirty` snapshot — simulates the active send worker's lagged
-    /// transmit so the lag's correctness can be gated. See
-    /// [`crate::WorldServer::send_all_packets_frozen`].
-    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
+    /// MISSION_TICK_FLOOR Lever 3 — PREPARE half (test/diagnostic + active
+    /// freeze point). Build the self-contained per-user [`naia_shared::SendPlan`]
+    /// at the freeze point: capture each component's frozen `DiffMask` and clear
+    /// the live per-user mask. The transmit half then serializes it without
+    /// reading any live per-user diff state — the crux of the correct one-tick
+    /// send lag. See [`crate::WorldServer::prepare_send_job`].
+    pub fn prepare_send_job<W: WorldRefType<E> + Sync>(
         &mut self,
-        world: W,
-        frozen: &naia_shared::FrozenGlobalDirty,
-    ) {
-        self.world_server.send_all_packets_frozen(world, frozen);
+        world: &W,
+    ) -> naia_shared::SendPlan {
+        self.world_server.prepare_send_job(world)
     }
 
-    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): freeze the current
-    /// `global_dirty` to build a lagged send job's plan.
-    pub fn freeze_global_dirty(&self) -> naia_shared::FrozenGlobalDirty {
-        self.world_server.freeze_global_dirty()
+    /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Serialize + send a prepared
+    /// [`naia_shared::SendPlan`] against the snapshot `world`, reading zero live
+    /// per-user diff state. See [`crate::WorldServer::transmit_send_job`].
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: W,
+        plan: naia_shared::SendPlan,
+    ) {
+        self.world_server.transmit_send_job(world, plan);
     }
 
     // Entities ──────────────────────────────────────────────────────────────

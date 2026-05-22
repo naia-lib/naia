@@ -1175,13 +1175,17 @@ fn send_worker_loop(
             let _t_send = std::time::Instant::now();
 
             if let Some(mut job) = job_to_send {
-                // MISSION_TICK_FLOOR Lever 3: dispatch on the frozen rider. An
-                // active job carries a frozen `global_dirty` snapshot — iterate
-                // that (consistent under concurrent live-bitset mutation) rather
-                // than the live bitset. A job without a rider (not expected on
-                // this path) falls back to the live-bitset send.
-                match job.take_frozen_dirty() {
-                    Some(frozen) => send.send_all_packets_frozen(job, &frozen),
+                // MISSION_TICK_FLOOR Lever 3: dispatch on the prepared send plan.
+                // An active job carries a `SendPlan` built on MAIN at the freeze
+                // point (frozen `DiffMask`s + frozen dirty domain + live masks
+                // already cleared), so this lagged transmit reads ZERO live
+                // per-user diff state. A job without a plan (not expected on this
+                // path) falls back to a synchronous prepare+transmit, which is
+                // only consistent if the live bitset isn't being mutated
+                // concurrently — i.e. while the park still serializes (L3.2).
+                let _ = job.take_frozen_dirty();
+                match job.take_send_plan() {
+                    Some(plan) => send.transmit_send_job(job, plan),
                     None => send.send_all_packets(job),
                 }
                 #[cfg(feature = "pipeline_timing")]
