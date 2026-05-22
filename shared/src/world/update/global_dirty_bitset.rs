@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 
 use crate::world::update::global_entity_index::GlobalEntityIndex;
@@ -144,6 +145,71 @@ impl GlobalDirtyBitset {
     pub fn dirty_entity_words(&self) -> &[AtomicU64] {
         &self.dirty_entities
     }
+
+    /// Capture a plain-`u64` frozen snapshot of the current dirty state, for
+    /// the active-path send worker to iterate concurrently with the gameplay
+    /// thread mutating the live bitset for the next tick (MISSION_TICK_FLOOR
+    /// Lever 3: the "what-to-send" set must be frozen into the send job so the
+    /// lagged transmit doesn't read a torn live `global_dirty`).
+    ///
+    /// Sparse + cheap by design — built on the gameplay thread at snapshot-build
+    /// time, so it copies only the *dirty* entities' component words (O(dirty
+    /// entities), not O(capacity)). The deterministic oracle never freezes (it
+    /// sends synchronously against the live bitset within the same tick).
+    pub fn freeze(&self) -> FrozenGlobalDirty {
+        let dirty_entity_words: Vec<u64> =
+            self.dirty_entities.iter().map(|w| w.load(Ordering::Relaxed)).collect();
+        let mut component_words: HashMap<u32, Vec<u64>> = HashMap::new();
+        for idx in self.dirty_entity_iter() {
+            let words: Vec<u64> =
+                self.dirty_words(idx).iter().map(|w| w.load(Ordering::Relaxed)).collect();
+            component_words.insert(idx.as_usize() as u32, words);
+        }
+        FrozenGlobalDirty {
+            dirty_entity_words,
+            component_words,
+            zero_words: vec![0u64; self.component_stride],
+        }
+    }
+}
+
+/// Immutable, `Send + Sync` plain-`u64` snapshot of a [`GlobalDirtyBitset`]'s
+/// dirty state at one instant, produced by [`GlobalDirtyBitset::freeze`].
+///
+/// Mirrors the three reads `send_all_packets` performs against the live
+/// bitset — `dirty_entity_iter` (Phase 1/2 driver), `dirty_words` (per-entity
+/// component words), and `dirty_entity_words` (the `intersect_dirty` AND) — so
+/// the active send path can iterate a frozen "what-to-send" set instead of the
+/// live, concurrently-mutated `global_dirty`. Sparse: only dirty entities'
+/// words are stored; `dirty_words` returns a shared zero slice for the rest.
+pub struct FrozenGlobalDirty {
+    dirty_entity_words: Vec<u64>,
+    component_words: HashMap<u32, Vec<u64>>,
+    zero_words: Vec<u64>,
+}
+
+impl FrozenGlobalDirty {
+    /// Mirror of [`GlobalDirtyBitset::dirty_entity_iter`] over the frozen words.
+    pub fn dirty_entity_iter(&self) -> impl Iterator<Item = GlobalEntityIndex> + '_ {
+        self.dirty_entity_words.iter().enumerate().flat_map(|(word_idx, word)| {
+            DirtyBitIter { word: *word, base: word_idx * 64 }
+        })
+    }
+
+    /// Mirror of [`GlobalDirtyBitset::dirty_words`]: the entity's frozen
+    /// component-dirty words, or a shared zero slice if the entity was clean.
+    /// Slice length is always `component_stride` (matching the live API).
+    pub fn dirty_words(&self, entity_idx: GlobalEntityIndex) -> &[u64] {
+        self.component_words
+            .get(&(entity_idx.as_usize() as u32))
+            .map(|v| v.as_slice())
+            .unwrap_or(&self.zero_words)
+    }
+
+    /// Mirror of [`GlobalDirtyBitset::dirty_entity_words`] (plain `u64`).
+    pub fn dirty_entity_words(&self) -> &[u64] {
+        &self.dirty_entity_words
+    }
 }
 
 struct DirtyBitIter {
@@ -179,6 +245,44 @@ mod tests {
         assert!(gdb.is_component_dirty(entity, kind_bit));
         let dirty: Vec<GlobalEntityIndex> = gdb.dirty_entity_iter().collect();
         assert!(dirty.contains(&entity), "entity should appear in dirty_entity_iter");
+    }
+
+    #[test]
+    fn freeze_mirrors_live_dirty_state() {
+        // Cross 64-bit word boundaries on BOTH the entity summary (idx 70) and
+        // the component words (kind_bit 65) to exercise the multi-word layout.
+        let gdb = GlobalDirtyBitset::new(200, 130);
+        let idx1 = GlobalEntityIndex(1);
+        let idx70 = GlobalEntityIndex(70);
+        gdb.increment(idx1, 0);
+        gdb.increment(idx1, 65);
+        gdb.increment(idx70, 3);
+
+        let frozen = gdb.freeze();
+
+        // dirty_entity_iter: same set.
+        let mut live: Vec<u32> = gdb.dirty_entity_iter().map(|i| i.0).collect();
+        let mut froz: Vec<u32> = frozen.dirty_entity_iter().map(|i| i.0).collect();
+        live.sort_unstable();
+        froz.sort_unstable();
+        assert_eq!(live, froz, "frozen dirty_entity_iter must match live");
+
+        // dirty_entity_words: word-for-word equal.
+        let live_words: Vec<u64> =
+            gdb.dirty_entity_words().iter().map(|w| w.load(Ordering::Relaxed)).collect();
+        assert_eq!(live_words.as_slice(), frozen.dirty_entity_words());
+
+        // dirty_words: per-entity component words equal (incl. the word-65 bit).
+        for idx in [idx1, idx70] {
+            let live_cw: Vec<u64> =
+                gdb.dirty_words(idx).iter().map(|w| w.load(Ordering::Relaxed)).collect();
+            assert_eq!(live_cw.as_slice(), frozen.dirty_words(idx), "component words for {:?}", idx);
+        }
+
+        // A clean entity returns an all-zero stride-length slice (not a panic).
+        let clean = frozen.dirty_words(GlobalEntityIndex(5));
+        assert_eq!(clean.len(), gdb.dirty_words(GlobalEntityIndex(5)).len());
+        assert!(clean.iter().all(|w| *w == 0));
     }
 
     #[test]

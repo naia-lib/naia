@@ -19,7 +19,8 @@ use naia_server::{
 };
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
-    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, TestClock, WorldRefType,
+    FrozenGlobalDirty, Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId,
+    SnapshotWorld, TestClock, WorldRefType,
 };
 
 use crate::harness::ClientEntityMut;
@@ -1019,6 +1020,43 @@ impl Scenario {
     /// Get the current tick count
     pub fn global_tick(&self) -> usize {
         self.global_tick
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 (test support): mutate the server + its world
+    /// WITHOUT ticking or sending — so a test can stage component mutations and
+    /// capture frozen snapshots/`global_dirty` for a manual lagged send.
+    pub fn with_server_world_mut<R>(
+        &mut self,
+        f: impl FnOnce(&mut Server, &mut TestWorld) -> R,
+    ) -> R {
+        let server = self.server.as_mut().expect("server not started");
+        f(server, &mut self.server_world)
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 (test support): one tick where the server
+    /// transmits a FROZEN send job (`send_all_packets_frozen`) instead of its
+    /// live world — the active send-worker lag path. Clients are pumped
+    /// (receive/process/send) so the lagged job is delivered + applied; the
+    /// server's normal live send is suppressed.
+    pub fn send_frozen_and_pump(
+        &mut self,
+        snap: SnapshotWorld<TestEntity>,
+        frozen: &FrozenGlobalDirty,
+    ) {
+        self.global_tick += 1;
+        TestClock::advance(TICK_DURATION_MS);
+        let now = Instant::now();
+        self.hub.process_time_queues();
+        let server = self.server.as_mut().expect("server not started");
+        for (_client_key, state) in self.clients.iter_mut() {
+            let (client, world) = state.client_and_world_mut();
+            client.receive_all_packets();
+            client.process_all_packets(world.proxy_mut(), &now);
+            client.send_all_packets(world.proxy_mut());
+            server.receive_all_packets();
+            server.process_all_packets(self.server_world.proxy_mut(), &now);
+        }
+        server.send_all_packets_frozen(snap, frozen);
     }
 
     pub(crate) fn take_server_events(&mut self) -> ServerEvents {

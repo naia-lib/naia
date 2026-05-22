@@ -128,6 +128,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         out
     }
 
+    /// MISSION_TICK_FLOOR Lever 3: capture a plain-`u64` frozen snapshot of the
+    /// current `global_dirty` state, to ride along in the send job so the
+    /// active send worker can iterate a consistent "what-to-send" set while
+    /// transmitting the previous tick's job concurrently with the gameplay
+    /// thread mutating the live bitset. Must be called at snapshot-build time
+    /// (after this tick's `refresh_needed_entities`), so the frozen dirty
+    /// domain aligns with the `SnapshotWorld` value source built from the same
+    /// view. See [`naia_shared::GlobalDirtyBitset::freeze`].
+    pub fn freeze_global_dirty(&self) -> naia_shared::FrozenGlobalDirty {
+        self.shared.global_dirty.freeze()
+    }
+
     /// MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20) — the **trimmed** counterpart
     /// to [`live_entities`]: only entities the next `send_all_packets` could
     /// read this tick.

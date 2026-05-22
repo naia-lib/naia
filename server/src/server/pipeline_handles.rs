@@ -242,6 +242,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.send_all_packets(world);
     }
 
+    /// MISSION_TICK_FLOOR Lever 3: transmit against a FROZEN `global_dirty`
+    /// snapshot captured into the send job (instead of the live bitset), so the
+    /// active send worker can transmit the previous tick's job during the next
+    /// tick's Sim without a torn read. Deterministic callers keep using
+    /// [`Self::send_all_packets`].
+    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: W,
+        frozen: &naia_shared::FrozenGlobalDirty,
+    ) {
+        self.state.send_all_packets_frozen(world, frozen);
+    }
+
     /// C.6 prep — run the per-tick send preamble on `SendState` alone,
     /// without needing a world snapshot or a reassembled `WorldServer`.
     ///

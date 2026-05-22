@@ -26,10 +26,10 @@ use log::warn;
 
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalPriorityState,
-    GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer,
-    OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, Serde,
-    SnapshotMap, Tick, Timer, UserPriorityState, WorldMutType, WorldRefType,
+    EntityAuthStatus, FrozenGlobalDirty, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
+    GlobalPriorityState, GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, Message,
+    MessageContainer, OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate,
+    Serde, SnapshotMap, Tick, Timer, UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -603,6 +603,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// skips the inline preamble. Otherwise the preamble runs first
     /// for backward compatibility.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        self.send_all_packets_impl(world, None);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3: active-path transmit that iterates a FROZEN
+    /// `global_dirty` snapshot (captured into the send job at snapshot-build
+    /// time) instead of the live, concurrently-mutated bitset. This lets the
+    /// send worker transmit the *previous* tick's job during the next tick's
+    /// Sim without a torn read of `global_dirty`. The deterministic oracle
+    /// keeps calling [`Self::send_all_packets`] (frozen = `None`), sending
+    /// synchronously against the live bitset within the same tick.
+    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: W,
+        frozen: &FrozenGlobalDirty,
+    ) {
+        self.send_all_packets_impl(world, Some(frozen));
+    }
+
+    fn send_all_packets_impl<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: W,
+        frozen: Option<&FrozenGlobalDirty>,
+    ) {
         #[cfg(feature = "f3_diag")]
         eprintln!(
             "[F3-DIAG naia/SendState] send_all_packets enter send_user_conns={} preamble_done={} scope_done={}",
@@ -649,20 +672,48 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         #[cfg(feature = "bench_instrumentation")]
         let _iris_p12_t0 = std::time::Instant::now();
 
+        // MISSION_TICK_FLOOR Lever 3: the dirty iteration domain. Both arms
+        // materialize the SAME `(global_idx, dirty_words)` order, so the wire is
+        // byte-identical to the pre-Lever-3 live path — only the source differs
+        // (frozen job copy for the lagged active send; live bitset for the
+        // synchronous deterministic oracle).
+        let dirty_plan: Vec<(GlobalEntityIndex, Vec<u64>)> = match frozen {
+            Some(f) => f
+                .dirty_entity_iter()
+                .map(|idx| (idx, f.dirty_words(idx).to_vec()))
+                .collect(),
+            None => self
+                .shared
+                .global_dirty
+                .dirty_entity_iter()
+                .map(|idx| {
+                    let words = self
+                        .shared
+                        .global_dirty
+                        .dirty_words(idx)
+                        .iter()
+                        .map(|w| w.load(Ordering::Relaxed))
+                        .collect();
+                    (idx, words)
+                })
+                .collect(),
+        };
+
         let mut snapshot_map: SnapshotMap = SnapshotMap::new();
         {
             let handler = self.shared.global_world_manager.read().diff_handler();
             let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
             let idx_to_world = self.shared.idx_to_world.read();
-            for global_idx in self.shared.global_dirty.dirty_entity_iter() {
+            for (global_idx, dirty_words) in &dirty_plan {
+                let global_idx = *global_idx;
                 guard.clear_wire_cache_for_entity(global_idx);
                 let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                 if !self.shared.global_world_manager.read().entity_is_replicating(&global_entity) { continue; }
                 let Some(world_entity) = idx_to_world[global_idx.as_usize()] else { continue; };
                 if !world.has_entity(&world_entity) { continue; }
 
-                for (word_idx, dirty_word) in self.shared.global_dirty.dirty_words(global_idx).iter().enumerate() {
-                    let mut word = dirty_word.load(Ordering::Relaxed);
+                for (word_idx, dirty_word) in dirty_words.iter().enumerate() {
+                    let mut word = *dirty_word;
                     while word != 0 {
                         let bit_pos = word.trailing_zeros() as usize;
                         word &= word - 1;
@@ -701,14 +752,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 let send_conn = self.send_user_connections.get(user_address).unwrap();
                 let mut events: UpdateEvents = HashMap::new();
 
-                for global_idx in send_conn.visibility.intersect_dirty(&*self.shared.global_dirty) {
+                // MISSION_TICK_FLOOR Lever 3: same frozen-vs-live split as
+                // Phase 1/2, intersected with this user's visibility. Order is
+                // identical to the pre-Lever-3 live path.
+                let user_dirty_plan: Vec<(GlobalEntityIndex, Vec<u64>)> = match frozen {
+                    Some(f) => send_conn
+                        .visibility
+                        .intersect_dirty_frozen(f)
+                        .map(|idx| (idx, f.dirty_words(idx).to_vec()))
+                        .collect(),
+                    None => send_conn
+                        .visibility
+                        .intersect_dirty(&*self.shared.global_dirty)
+                        .map(|idx| {
+                            let words = self
+                                .shared
+                                .global_dirty
+                                .dirty_words(idx)
+                                .iter()
+                                .map(|w| w.load(Ordering::Relaxed))
+                                .collect();
+                            (idx, words)
+                        })
+                        .collect(),
+                };
+                for (global_idx, dirty_words) in &user_dirty_plan {
+                    let global_idx = *global_idx;
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                     #[cfg(feature = "bench_instrumentation")]
                     crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
                         .fetch_add(1, Ordering::Relaxed);
 
-                    for (word_idx, dirty_word) in self.shared.global_dirty.dirty_words(global_idx).iter().enumerate() {
-                        let mut word = dirty_word.load(Ordering::Relaxed);
+                    for (word_idx, dirty_word) in dirty_words.iter().enumerate() {
+                        let mut word = *dirty_word;
                         while word != 0 {
                             let bit_pos = word.trailing_zeros() as usize;
                             word &= word - 1;

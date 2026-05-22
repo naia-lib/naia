@@ -358,6 +358,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.send_all_packets(world);
     }
 
+    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): send against a FROZEN
+    /// `global_dirty` snapshot — simulates the active send worker's lagged
+    /// transmit so the lag's correctness can be gated. See
+    /// [`crate::WorldServer::send_all_packets_frozen`].
+    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: W,
+        frozen: &naia_shared::FrozenGlobalDirty,
+    ) {
+        self.world_server.send_all_packets_frozen(world, frozen);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): freeze the current
+    /// `global_dirty` to build a lagged send job's plan.
+    pub fn freeze_global_dirty(&self) -> naia_shared::FrozenGlobalDirty {
+        self.world_server.freeze_global_dirty()
+    }
+
     // Entities ──────────────────────────────────────────────────────────────
 
     /// Spawns a new entity and returns a builder for configuring it.

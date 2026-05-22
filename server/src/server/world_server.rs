@@ -13,7 +13,8 @@ use log::{info, warn};
 use naia_shared::{
     AuthorityError, Channel, ChannelKind, ConnectionStats, DisconnectReason,
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, GlobalDirtyBitset,
+    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef, FrozenGlobalDirty,
+    GlobalDirtyBitset,
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant, Message, MessageContainer, Protocol, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey,
@@ -937,6 +938,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // send thread (with a sync barrier between them).
         self.run_send_preamble(&world);
         self.send.send_all_packets(world);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): transmit against a FROZEN
+    /// `global_dirty` snapshot instead of the live bitset, simulating the
+    /// active send worker's lagged transmit. Mirrors [`Self::send_all_packets`]
+    /// but iterates the frozen plan in `SendState::send_all_packets_frozen`.
+    pub fn send_all_packets_frozen<W: WorldRefType<E> + Sync>(
+        &mut self,
+        world: W,
+        frozen: &FrozenGlobalDirty,
+    ) {
+        self.run_send_preamble(&world);
+        self.send.send_all_packets_frozen(world, frozen);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3 (test/diagnostic): capture a frozen snapshot
+    /// of the current `global_dirty` for use as a lagged send job's plan.
+    pub fn freeze_global_dirty(&self) -> FrozenGlobalDirty {
+        self.shared.global_dirty.freeze()
     }
 
     /// 4-F.naia.b: coordinator-side preamble for the send phase. Runs

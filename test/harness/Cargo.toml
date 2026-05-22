@@ -77,3 +77,7 @@ path = "contract_tests/integration_only/pipeline_recv_send_independent.rs"
 [[test]]
 name = "router_basic"
 path = "contract_tests/integration_only/router_basic.rs"
+
+[[test]]
+name = "lagged_send_drops_final_value"
+path = "contract_tests/integration_only/lagged_send_drops_final_value.rs"

@@ -71,6 +71,28 @@ impl ConnectionVisibilityBitset {
                 }
             })
     }
+
+    /// MISSION_TICK_FLOOR Lever 3: [`Self::intersect_dirty`] against a frozen
+    /// (plain-`u64`) dirty snapshot instead of the live bitset, for the active
+    /// send worker transmitting a lagged job concurrently with the gameplay
+    /// thread mutating the live `global_dirty`. Word-for-word identical AND;
+    /// only the dirty source is frozen.
+    pub fn intersect_dirty_frozen<'a>(
+        &'a self,
+        frozen: &'a crate::world::update::global_dirty_bitset::FrozenGlobalDirty,
+    ) -> impl Iterator<Item = GlobalEntityIndex> + 'a {
+        self.visible
+            .iter()
+            .zip(frozen.dirty_entity_words())
+            .enumerate()
+            .flat_map(|(word_idx, (vis_word, dirty_word))| {
+                let combined = vis_word & *dirty_word;
+                IntersectIter {
+                    word: combined,
+                    base: word_idx * 64,
+                }
+            })
+    }
 }
 
 struct IntersectIter {

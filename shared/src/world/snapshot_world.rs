@@ -24,6 +24,7 @@ use crate::{
         },
         replicate::{Replicate, ReplicatedComponent},
     },
+    world::update::global_dirty_bitset::FrozenGlobalDirty,
     world::world_type::WorldRefType,
 };
 
@@ -67,6 +68,13 @@ use crate::{
 pub struct SnapshotWorld<E: Copy + Eq + Hash> {
     components: HashMap<(E, ComponentKind), Box<dyn Replicate>>,
     live_entities: HashSet<E>,
+    /// MISSION_TICK_FLOOR Lever 3: optional frozen `global_dirty` rider. When
+    /// present, this snapshot is a self-contained send *job* — the active send
+    /// worker iterates this frozen "what-to-send" set (via
+    /// `send_all_packets_frozen`) instead of the live, concurrently-mutated
+    /// `global_dirty`. `None` for the deterministic oracle (which sends
+    /// synchronously against the live bitset) and for all non-send uses.
+    frozen_dirty: Option<FrozenGlobalDirty>,
 }
 
 impl<E: Copy + Eq + Hash> Default for SnapshotWorld<E> {
@@ -81,7 +89,23 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
         Self {
             components: HashMap::new(),
             live_entities: HashSet::new(),
+            frozen_dirty: None,
         }
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3: attach the frozen `global_dirty` rider,
+    /// turning this snapshot into a self-contained send job (see the
+    /// `frozen_dirty` field). Called by the snapshot builder on the active
+    /// path only.
+    pub fn attach_frozen_dirty(&mut self, frozen: FrozenGlobalDirty) {
+        self.frozen_dirty = Some(frozen);
+    }
+
+    /// MISSION_TICK_FLOOR Lever 3: take the frozen `global_dirty` rider out of
+    /// the job (leaving `None`). The send worker calls this, then dispatches to
+    /// `send_all_packets_frozen` when `Some` / `send_all_packets` when `None`.
+    pub fn take_frozen_dirty(&mut self) -> Option<FrozenGlobalDirty> {
+        self.frozen_dirty.take()
     }
 
     /// Marks `entity` as live (visible to `has_entity` / `entities`)

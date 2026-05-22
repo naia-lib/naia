@@ -1092,6 +1092,15 @@ fn send_worker_loop(
     park: &Arc<ParkControl>,
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
+    // MISSION_TICK_FLOOR Lever 3: one-tick send lag. The job published this
+    // cycle is buffered here and transmitted on the NEXT cycle, so the worker
+    // sends the previous tick's frozen job. With the park still in place (L3.2)
+    // this validates the frozen send produces correct (1-tick-late) wire vs the
+    // oracle; once the park is removed (L3.4) the lag is what lets the transmit
+    // overlap the next tick's Sim safely (the frozen rider prevents a torn read
+    // of the live `global_dirty`).
+    #[cfg(workers_active)]
+    let mut held_job: Option<crate::SnapshotWorld<Entity>> = None;
     loop {
         // Park checkpoint: handle is in `send_slot`, borrowable by main.
         worker_park_checkpoint(park);
@@ -1137,8 +1146,9 @@ fn send_worker_loop(
                 continue;
             }
 
-            // Claim the handle via try_lock (never block the park checkpoint).
-            let snap_opt = snap_rx.take_latest();
+            // Claim the handle FIRST — before touching the lag buffer — so a
+            // failed claim cannot drop a buffered job. try_lock never blocks the
+            // park checkpoint.
             let mut send = match send_slot.try_lock().and_then(|mut g| g.take()) {
                 Some(h) => h,
                 None => {
@@ -1147,29 +1157,53 @@ fn send_worker_loop(
                 }
             };
 
+            // MISSION_TICK_FLOOR Lever 3: one-tick lag. Buffer this cycle's
+            // freshly-published job; transmit the job buffered on the PREVIOUS
+            // cycle. `replace` returns the prior buffered job (to send now);
+            // when no new job was published, flush whatever is still buffered.
+            let job_to_send = match snap_rx.take_latest() {
+                Some(new_job) => held_job.replace(new_job),
+                None => held_job.take(),
+            };
+
             // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): the preamble + scope
-            // application + needed-set refresh now run on the MAIN thread inside
-            // the park window (cyberlith `do_park_window_tick` Step 7.5), BEFORE
-            // the snapshot is built — so the snapshot contains exactly what this
-            // send reads. The worker only transmits. `send_all_packets` skips its
-            // inline preamble/scope via the per-tick flags main already set.
+            // application + needed-set refresh run on the MAIN thread inside the
+            // park window (cyberlith `do_park_window_tick` Step 7.5), BEFORE the
+            // snapshot is built — so the snapshot contains exactly what this send
+            // reads. The worker only transmits.
             #[cfg(feature = "pipeline_timing")]
             let _t_send = std::time::Instant::now();
 
-            if let Some(snap) = snap_opt {
-                send.send_all_packets(snap);
+            if let Some(mut job) = job_to_send {
+                // MISSION_TICK_FLOOR Lever 3: dispatch on the frozen rider. An
+                // active job carries a frozen `global_dirty` snapshot — iterate
+                // that (consistent under concurrent live-bitset mutation) rather
+                // than the live bitset. A job without a rider (not expected on
+                // this path) falls back to the live-bitset send.
+                match job.take_frozen_dirty() {
+                    Some(frozen) => send.send_all_packets_frozen(job, &frozen),
+                    None => send.send_all_packets(job),
+                }
                 #[cfg(feature = "pipeline_timing")]
                 crate::pipeline_timing::record_send(_t_send.elapsed().as_nanos() as u64);
-            } else {
+
+                // Re-deposit before looping back to the park checkpoint.
                 loop {
                     match send_slot.try_lock() {
                         Some(mut g) => { *g = Some(send); break; }
                         None => { thread::sleep(std::time::Duration::from_micros(100)); }
                     }
                 }
-                // Idle wait (no snapshot to transmit): bounded condvar wait so
-                // park_workers() wakes the worker instantly; 100µs bound re-polls
-                // for the next snapshot otherwise. (T1)
+            } else {
+                // Nothing buffered yet (one-tick warmup) or nothing to send:
+                // re-deposit and bounded idle-wait so park_workers() wakes us
+                // instantly; the 100µs bound re-polls for the next job. (T1)
+                loop {
+                    match send_slot.try_lock() {
+                        Some(mut g) => { *g = Some(send); break; }
+                        None => { thread::sleep(std::time::Duration::from_micros(100)); }
+                    }
+                }
                 {
                     let mut g = park.body_sleep_mu.lock();
                     if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
@@ -1179,14 +1213,6 @@ fn send_worker_loop(
                     drop(g);
                 }
                 continue;
-            }
-
-            // Re-deposit before looping back to the park checkpoint.
-            loop {
-                match send_slot.try_lock() {
-                    Some(mut g) => { *g = Some(send); break; }
-                    None => { thread::sleep(std::time::Duration::from_micros(100)); }
-                }
             }
         }
     }
