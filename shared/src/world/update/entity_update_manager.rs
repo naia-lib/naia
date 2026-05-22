@@ -2,24 +2,17 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     net::SocketAddr,
-    time::Duration,
 };
 
 use crate::world::update::user_diff_handler::UserDiffHandler;
 use crate::{
     ComponentKind, DiffMask, EntityAndGlobalEntityConverter, GlobalEntity, GlobalEntityIndex,
-    GlobalWorldManagerType, Instant, PacketIndex, WorldRefType,
+    GlobalWorldManagerType, WorldRefType,
 };
-
-const DROP_UPDATE_RTT_FACTOR: f32 = 1.5;
-
-type SentUpdatesMap = HashMap<PacketIndex, (Instant, HashMap<(GlobalEntity, ComponentKind), DiffMask>)>;
 
 pub struct EntityUpdateManager {
     address: Option<SocketAddr>,
     diff_handler: UserDiffHandler,
-    sent_updates: SentUpdatesMap,
-    last_update_packet_index: PacketIndex,
 }
 
 impl EntityUpdateManager {
@@ -30,8 +23,6 @@ impl EntityUpdateManager {
         Self {
             address: *address,
             diff_handler: UserDiffHandler::new(global_world_manager),
-            sent_updates: HashMap::new(),
-            last_update_packet_index: 0,
         }
     }
 
@@ -166,104 +157,6 @@ impl EntityUpdateManager {
 
     pub fn diff_mask_is_clear(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
         self.diff_handler.diff_mask_is_clear(entity, component_kind)
-    }
-
-    // Collect
-
-    pub fn handle_dropped_update_packets(&mut self, now: &Instant, rtt_millis: &f32) {
-        let drop_duration = Duration::from_millis((DROP_UPDATE_RTT_FACTOR * rtt_millis) as u64);
-
-        {
-            let mut dropped_packets = Vec::new();
-            for (packet_index, (time_sent, _)) in &self.sent_updates {
-                let elapsed_since_send = time_sent.elapsed(now);
-                if elapsed_since_send > drop_duration {
-                    dropped_packets.push(*packet_index);
-                }
-            }
-
-            for packet_index in dropped_packets {
-                self.dropped_update_cleanup(packet_index);
-            }
-        }
-    }
-
-    fn dropped_update_cleanup(&mut self, dropped_packet_index: PacketIndex) {
-        if let Some((_, diff_mask_map)) = self.sent_updates.remove(&dropped_packet_index) {
-            for (component_index, diff_mask) in &diff_mask_map {
-                let (entity, component) = component_index;
-                if !self.diff_handler_has_component(entity, component) {
-                    continue;
-                }
-                let mut new_diff_mask = diff_mask.clone();
-
-                // walk from dropped packet up to most recently sent packet
-                if dropped_packet_index != self.last_update_packet_index {
-                    let mut packet_index = dropped_packet_index.wrapping_add(1);
-                    while packet_index != self.last_update_packet_index {
-                        if let Some((_, diff_mask_map)) = self.sent_updates.get(&packet_index) {
-                            if let Some(next_diff_mask) = diff_mask_map.get(component_index) {
-                                new_diff_mask.nand(next_diff_mask);
-                            }
-                        }
-
-                        packet_index = packet_index.wrapping_add(1);
-                    }
-                }
-
-                self.or_diff_mask(entity, component, &new_diff_mask);
-            }
-        }
-    }
-
-    pub fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
-        self.sent_updates.remove(&packet_index);
-    }
-
-    pub fn record_update(
-        &mut self,
-        now: &Instant,
-        packet_index: &PacketIndex,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-        diff_mask: DiffMask,
-    ) {
-        self.last_update_packet_index = *packet_index;
-
-        // place diff mask in a special transmission record - like map
-        if !self.sent_updates.contains_key(packet_index) {
-            self.sent_updates
-                .insert(*packet_index, (now.clone(), HashMap::new()));
-        }
-        let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
-        sent_updates_map.insert((*global_entity, *component_kind), diff_mask.clone());
-
-        // having copied the diff mask for this update, clear the component
-        self.clear_diff_mask(global_entity, component_kind);
-    }
-
-    /// MISSION_TICK_FLOOR Lever 3: record the per-packet `sent_updates` ledger
-    /// entry WITHOUT clearing the live diff mask. On the server send path the
-    /// mask is cleared up-front in `SendState::prepare_send_job` (at the freeze
-    /// point), so the lagged transmit must not clear again — it only needs to
-    /// remember what was sent in this packet for the NACK-driven replay (the
-    /// `packet_index` only exists at transmit time).
-    pub fn record_sent_update(
-        &mut self,
-        now: &Instant,
-        packet_index: &PacketIndex,
-        global_entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-        diff_mask: DiffMask,
-    ) {
-        self.last_update_packet_index = *packet_index;
-
-        if !self.sent_updates.contains_key(packet_index) {
-            self.sent_updates
-                .insert(*packet_index, (now.clone(), HashMap::new()));
-        }
-        let (_, sent_updates_map) = self.sent_updates.get_mut(packet_index).unwrap();
-        sent_updates_map.insert((*global_entity, *component_kind), diff_mask);
     }
 
     /// MISSION_TICK_FLOOR Lever 3: clear the live per-user diff mask up-front

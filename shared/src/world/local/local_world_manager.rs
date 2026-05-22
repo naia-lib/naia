@@ -108,6 +108,7 @@ use naia_socket_shared::Instant;
 
 use crate::world::sync::RemoteEntityChannel;
 use crate::world::update::entity_update_manager::EntityUpdateManager;
+use crate::world::update::retransmit_ledger::RetransmitLedger;
 use crate::{
     messages::channels::receivers::reliable_receiver::ReliableReceiver,
     sequence_list::SequenceList,
@@ -151,6 +152,9 @@ pub struct LocalWorldManager {
     host: HostWorldManager,
     remote: RemoteWorldManager,
     updater: EntityUpdateManager,
+    /// Worker-owned retransmit ledger (sent_updates + last_update_packet_index),
+    /// carved out of `EntityUpdateManager` in the L3 send-state seam.
+    retransmit: RetransmitLedger,
 
     /// Entities with ScopeExit::Persist that are currently out-of-scope.
     /// Replication is frozen for these entities until re-entry.
@@ -180,6 +184,7 @@ impl LocalWorldManager {
             host: HostWorldManager::new(host_type, user_key),
             remote: RemoteWorldManager::new(host_type),
             updater: EntityUpdateManager::new(address, global_world_manager),
+            retransmit: RetransmitLedger::new(),
 
             paused_entities: HashSet::new(),
 
@@ -877,13 +882,16 @@ impl LocalWorldManager {
         component_kind: &ComponentKind,
         diff_mask: DiffMask,
     ) {
-        self.updater
-            .record_update(now, packet_index, global_entity, component_kind, diff_mask);
+        // Client synchronous path: record the per-packet ledger entry, then
+        // clear the live mask (the client has no separate freeze-point clear).
+        self.retransmit
+            .record_sent_update(now, packet_index, global_entity, component_kind, diff_mask);
+        self.updater.clear_diff_mask(global_entity, component_kind);
     }
 
     /// MISSION_TICK_FLOOR Lever 3: record the per-packet `sent_updates` ledger
     /// entry WITHOUT clearing the live mask (the server send path clears up-front
-    /// in `prepare_send_job`). See [`crate::EntityUpdateManager::record_sent_update`].
+    /// in `prepare_send_job`). See `RetransmitLedger::record_sent_update`.
     pub fn record_sent_update(
         &mut self,
         now: &Instant,
@@ -892,7 +900,7 @@ impl LocalWorldManager {
         component_kind: &ComponentKind,
         diff_mask: DiffMask,
     ) {
-        self.updater
+        self.retransmit
             .record_sent_update(now, packet_index, global_entity, component_kind, diff_mask);
     }
 
@@ -1176,7 +1184,18 @@ impl LocalWorldManager {
     /// Processes dropped packet TTLs and handles update-packet retransmit logic for the current tick.
     pub fn collect_messages(&mut self, now: &Instant, rtt_millis: &f32) {
         self.handle_dropped_command_packets(now);
-        self.updater.handle_dropped_update_packets(now, rtt_millis);
+        // Drop detection lives on the worker-owned retransmit ledger; the masks
+        // of timed-out packets are folded (NACK-replay) and re-set here on the
+        // diff handler via an atomic `or` (the smell — transmit mutating
+        // diff-state — is dissolved in Step 3, when the `or` goes through the
+        // shared `Arc<ReplicationLedger>` instead of `&mut self.updater`).
+        let dropped = self.retransmit.collect_dropped_masks(now, rtt_millis);
+        for (entity, component, new_diff_mask) in dropped {
+            if !self.updater.diff_handler_has_component(&entity, &component) {
+                continue;
+            }
+            self.updater.or_diff_mask(&entity, &component, &new_diff_mask);
+        }
     }
 
     fn handle_dropped_command_packets(&mut self, now: &Instant) {
@@ -1558,7 +1577,7 @@ impl LocalWorldManager {
 impl PacketNotifiable for LocalWorldManager {
     fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
         self.host_notify_packet_delivered(packet_index);
-        self.updater.notify_packet_delivered(packet_index);
+        self.retransmit.notify_packet_delivered(packet_index);
     }
 }
 
