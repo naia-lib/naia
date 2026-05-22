@@ -68,7 +68,7 @@ impl EntityUpdateManager {
     }
 
     pub fn or_diff_mask(
-        &mut self,
+        &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
         new_diff_mask: &DiffMask,
@@ -85,7 +85,7 @@ impl EntityUpdateManager {
         self.diff_handler.diff_mask_snapshot(entity, component_kind)
     }
 
-    pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         self.diff_handler.clear_diff_mask(entity, component_kind);
     }
 
@@ -162,7 +162,7 @@ impl EntityUpdateManager {
     /// MISSION_TICK_FLOOR Lever 3: clear the live per-user diff mask up-front
     /// (compact-key, no RwLock). Called from `prepare_send_job` after the frozen
     /// mask has been captured into the plan.
-    pub fn clear_diff_mask_fast(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
+    pub fn clear_diff_mask_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         self.diff_handler.clear_diff_mask_fast(entity_idx, kind_bit);
     }
 

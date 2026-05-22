@@ -907,7 +907,7 @@ impl LocalWorldManager {
     /// MISSION_TICK_FLOOR Lever 3: clear the live per-user diff mask up-front
     /// (compact key). Called from `SendState::prepare_send_job` after capturing
     /// the frozen mask into the send plan.
-    pub fn clear_diff_mask_dense(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
+    pub fn clear_diff_mask_dense(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         self.updater.clear_diff_mask_fast(entity_idx, kind_bit);
     }
 

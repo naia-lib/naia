@@ -341,7 +341,7 @@ impl UserDiffHandler {
     }
 
     pub fn or_diff_mask(
-        &mut self,
+        &self,
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
         other_mask: &DiffMask,
@@ -357,7 +357,7 @@ impl UserDiffHandler {
         receiver.or_mask(other_mask);
     }
 
-    pub fn clear_diff_mask(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
+    pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
         let (entity_idx, kind_bit) = self.entity_kind_to_key
             .get(&(*entity, *component_kind))
             .copied()
@@ -370,7 +370,7 @@ impl UserDiffHandler {
     }
 
     /// Hot-path clear: O(1) array access, no hashing, no RwLock.
-    pub fn clear_diff_mask_fast(&mut self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
+    pub fn clear_diff_mask_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let slot = entity_idx.as_usize() * self.kind_count + kind_bit as usize;
         if let Some(Some(receiver)) = self.receivers_dense.get(slot) {
             receiver.clear_mask();
