@@ -709,6 +709,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         .collect()
                 };
                 let send_conn = self.send_user_connections.get_mut(user_address).unwrap();
+                // L3 seam: take ONE coarse read guard on this user's diff-ledger
+                // for the whole Phase 3A gate loop, instead of one guard per
+                // entry op (which regressed avg_tick ~135µs at 16p — thousands of
+                // uncontended RwLock acquire/releases on the gameplay thread).
+                // The entry ops below are `&self` atomics on the guarded handler;
+                // the only NON-ledger gate is the cold-path `is_component_updatable`
+                // (reads entity_map + host/remote — a different lock, no nesting).
+                let ledger = send_conn.base.world_manager.replication_ledger();
+                let diff = ledger.read_guard();
                 let mut events: SendUpdateEvents = HashMap::with_capacity(indices.len());
                 for global_idx in indices {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
@@ -730,9 +739,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
                                 .fetch_add(1, Ordering::Relaxed);
 
-                            if send_conn.base.world_manager.is_component_dirty_and_delivered_dense(global_idx, kind_bit) {
+                            if diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
                                 // fast path
-                            } else if send_conn.base.world_manager.diff_mask_is_clear_dense(global_idx, kind_bit) {
+                            } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
                                 continue;
                             } else if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
                                 continue;
@@ -742,20 +751,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             // mask NOW, then clear the live mask immediately. The
                             // captured (frozen) mask is what the lagged transmit
                             // serializes from.
-                            let diff_mask = send_conn
-                                .base
-                                .world_manager
-                                .get_diff_mask_dense(global_idx, kind_bit)
+                            let diff_mask = diff
+                                .diff_mask_snapshot_fast(global_idx, kind_bit)
                                 .unwrap_or_else(|| {
-                                    send_conn
-                                        .base
-                                        .world_manager
-                                        .get_diff_mask(&global_entity, &component_kind)
+                                    diff.diff_mask_snapshot(&global_entity, &component_kind)
                                 });
-                            send_conn
-                                .base
-                                .world_manager
-                                .clear_diff_mask_dense(global_idx, kind_bit);
+                            diff.clear_diff_mask_fast(global_idx, kind_bit);
 
                             kinds.insert(component_kind, (kind_bit, diff_mask));
                         }

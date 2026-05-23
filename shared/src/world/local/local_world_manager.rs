@@ -887,6 +887,13 @@ impl LocalWorldManager {
 
     // Update-focused
 
+    /// Clone an `Arc` handle to the shared replication diff-ledger. Used by
+    /// `SendState::prepare_send_job` to take ONE coarse read guard per user
+    /// across the Phase 3A gate loop (instead of one guard per entry op).
+    pub fn replication_ledger(&self) -> std::sync::Arc<crate::world::update::replication_ledger::ReplicationLedger> {
+        self.updater.ledger()
+    }
+
     /// Returns a snapshot (clone) of the per-user diff mask for this
     /// `(entity, component)`. The `GlobalEntity`-keyed path; the hot send loop
     /// prefers [`Self::get_diff_mask_dense`].

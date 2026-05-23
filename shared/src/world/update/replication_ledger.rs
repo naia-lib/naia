@@ -145,4 +145,14 @@ impl ReplicationLedger {
     fn read(&self) -> std::sync::RwLockReadGuard<'_, UserDiffHandler> {
         self.handler.read().expect("ReplicationLedger lock poisoned")
     }
+
+    /// Acquire the read guard explicitly, so a hot batch of entry ops (e.g.
+    /// `prepare_send_job`'s per-user Phase 3A gate loop) can take ONE coarse
+    /// guard instead of one per call. Callers operate directly on the returned
+    /// [`UserDiffHandler`] (its entry ops are `&self` atomic). Hold it only
+    /// across reads/atomic-ops — never across `register_component`
+    /// /`deregister_component` (write guard) on the same ledger (deadlock).
+    pub fn read_guard(&self) -> std::sync::RwLockReadGuard<'_, UserDiffHandler> {
+        self.read()
+    }
 }
