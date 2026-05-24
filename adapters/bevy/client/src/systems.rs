@@ -198,7 +198,14 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                     event_writer.write(bevy_events::SpawnEntityEvent::<T>::new(entity));
                 }
                 for entity in spawned_entities {
-                    world.entity_mut(entity).insert(ServerOwned);
+                    // The entity can already be gone by the time we mark it
+                    // (spawn+despawn churn) — guard like the auth events below
+                    // rather than `entity_mut`-panic the whole client.
+                    if world.get_entity(entity).is_ok() {
+                        world.entity_mut(entity).insert(ServerOwned);
+                    } else {
+                        warn!("Spawned an entity that no longer exists! {:?}", entity);
+                    }
                 }
             }
 
