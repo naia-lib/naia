@@ -640,17 +640,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         // 4-E.2b: the single write-guard site for `time_manager`. Hold the
         // write guard only long enough to advance the clock + read the
-        // resulting tick, then drop it before touching `self.recv`.
-        let new_tick = {
+        // resulting tick(s), then drop it before touching `self.recv`.
+        // Drain ALL ticks due at `now` (grid catch-up).
+        {
             let mut tm = self.shared.time_manager.write();
-            if tm.recv_server_tick(now) {
-                Some(tm.current_tick())
-            } else {
-                None
+            while tm.recv_server_tick(now) {
+                let tick = tm.current_tick();
+                self.recv.incoming_tick_events.push_tick(tick);
             }
-        };
-        if let Some(tick) = new_tick {
-            self.recv.incoming_tick_events.push_tick(tick);
         }
         std::mem::replace(&mut self.recv.incoming_tick_events, TickEvents::new())
     }

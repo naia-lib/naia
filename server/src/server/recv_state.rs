@@ -265,16 +265,15 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// (step 4-F.naia.c.2b — recv-side equivalent of
     /// `WorldServer::take_tick_events`).
     pub fn take_tick_events(&mut self, now: &naia_shared::Instant) -> TickEvents {
-        let new_tick = {
+        // Drain ALL ticks due at `now` (grid catch-up): `recv_server_tick`
+        // advances the grid by one interval per call, so loop until it reports
+        // no more are due.
+        {
             let mut tm = self.shared.time_manager.write();
-            if tm.recv_server_tick(now) {
-                Some(tm.current_tick())
-            } else {
-                None
+            while tm.recv_server_tick(now) {
+                let tick = tm.current_tick();
+                self.incoming_tick_events.push_tick(tick);
             }
-        };
-        if let Some(tick) = new_tick {
-            self.incoming_tick_events.push_tick(tick);
         }
         std::mem::replace(&mut self.incoming_tick_events, TickEvents::new())
     }
