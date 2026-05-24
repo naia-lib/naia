@@ -884,9 +884,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         #[cfg(feature = "bench_instrumentation")]
         let _iris_p3b_t0 = std::time::Instant::now();
 
-        use rayon::prelude::*;
+        // Serial, not parallel (MISSION_CAPACITY 2026-05-24): per-user
+        // `build_all_packets` is small relative to a rayon fork-join, and the
+        // server runs deliberately oversubscribed (N cells ≫ C cores) so there
+        // are no idle cores for intra-cell parallelism to exploit. Measured: a
+        // rayon `into_par_iter` here cost +47–59% of TRUE per-cell W (worker
+        // spin/coordination) AND was *slower* on send-stage wall than serial,
+        // at a heavy-send upper bound (all in-scope entities/tick). Output is
+        // order-identical (`parallel_send_matches_serial` is the oracle).
         let results: Vec<(SocketAddr, Vec<OutgoingPacket>, SendConnection, UserPriorityState<E>)> =
-            work.into_par_iter()
+            work.into_iter()
             .map(|(addr, mut update_events, mut send_conn, mut user_prio, rtt_millis)| {
                 let mut hook = SendStatePriorityHook {
                     global: global_priority,
