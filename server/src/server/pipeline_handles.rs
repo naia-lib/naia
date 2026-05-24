@@ -79,6 +79,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
         self.state
     }
 
+    /// Awaitable readiness of the recv transport, if event-driven. The
+    /// recv worker extracts this once at spawn to block on packet arrival
+    /// instead of polling. `None` for poll-only socket transports. See
+    /// [`crate::transport::PacketReceiver::readiness`].
+    pub fn readiness(&self) -> Option<crate::transport::PacketReadiness> {
+        self.state.readiness()
+    }
+
     /// Pipeline-mode recv step (step 4-F.naia.c.2b).
     ///
     /// Drives the recv-only socket loop (no `SendState` access) and

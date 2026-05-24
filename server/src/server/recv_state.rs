@@ -113,6 +113,12 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 }
 
 impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
+    /// Awaitable readiness of the recv transport, if event-driven (see
+    /// [`crate::transport::PacketReceiver::readiness`]).
+    pub fn readiness(&self) -> Option<crate::transport::PacketReadiness> {
+        self.recv_io.readiness()
+    }
+
     /// Recv-only socket-read loop (step 4-F.naia.c.2b).
     ///
     /// Body of `WorldServer::receive_all_packets`'s recv-side work,

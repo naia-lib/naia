@@ -274,10 +274,26 @@ struct ParkControl {
     /// release parked workers (resume_cv) without waking idlers.
     body_sleep_mu: Mutex<()>,
     body_sleep_cv: parking_lot::Condvar,
+    /// Event-driven control wake (workers_active): an awaitable, coalescing
+    /// `bounded(1)` signal the recv worker selects on alongside the
+    /// transport's packet-readiness. Every site that must wake an idle
+    /// worker — `park_workers`, `Drop` (shutdown), test-panic — pings it
+    /// via [`Self::ping_control`]. This is the async sibling of
+    /// `body_sleep_cv`: the active worker no longer polls a 100µs condvar,
+    /// so park/shutdown can no longer be observed "within one poll" — they
+    /// must explicitly wake it. The `not(workers_active)` (deterministic)
+    /// path still uses `body_sleep_cv` and ignores this.
+    control_tx: smol::channel::Sender<()>,
+    // Only read by the event-driven worker select (workers_active); the
+    // deterministic path waits on `body_sleep_cv` instead.
+    #[cfg_attr(not(workers_active), allow(dead_code))]
+    control_rx: smol::channel::Receiver<()>,
 }
 
 impl ParkControl {
     fn new() -> Self {
+        // bounded(1) ⇒ coalescing: at most one pending wake token.
+        let (control_tx, control_rx) = smol::channel::bounded(1);
         Self {
             park: AtomicBool::new(false),
             parked_count: Mutex::new(0),
@@ -286,7 +302,16 @@ impl ParkControl {
             resumed_cv: parking_lot::Condvar::new(),
             body_sleep_mu: Mutex::new(()),
             body_sleep_cv: parking_lot::Condvar::new(),
+            control_tx,
+            control_rx,
         }
+    }
+
+    /// Wake the event-driven recv worker (coalescing; drop-if-full and
+    /// drop-if-closed are both fine — a buffered token already guarantees
+    /// the wake, and a closed channel means the worker is gone).
+    fn ping_control(&self) {
+        let _ = self.control_tx.try_send(());
     }
 }
 
@@ -431,6 +456,9 @@ impl PluginInternalState {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
         }
+        // Wake the event-driven (workers_active) worker so it loops back and
+        // observes the panic request.
+        self.park.ping_control();
     }
 
     fn state(&self) -> State {
@@ -469,6 +497,12 @@ impl PluginInternalState {
             naia_server::pipeline_actors::run_with_world_server(sim_handle, recv, send, |ws| {
                 ws.io_load(ps, pr);
             });
+
+        // Extract the transport's event-driven readiness (Some for the
+        // in-process PacketChannel every cell uses; None for poll-only
+        // sockets) before the handle is deposited — the recv worker selects
+        // on it instead of polling.
+        let recv_readiness = recv.readiness();
 
         // Recv worker borrows the recv handle from the shared park-window
         // slot per-iteration (D.3a). Seed the slot with the handle here;
@@ -512,6 +546,7 @@ impl PluginInternalState {
                         &recv_tx,
                         &shutdown_recv,
                         &park_recv,
+                        recv_readiness,
                         #[cfg(any(test, feature = "test_time"))]
                         &test_panic_recv,
                     );
@@ -648,6 +683,12 @@ impl PluginInternalState {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
         }
+        // Event-driven (workers_active) path: the active worker blocks in a
+        // `future::or` rather than the 100µs condvar poll, so wake it
+        // explicitly. The bounded(1) token is buffered if it's mid-drain
+        // (no lost wakeup); `park` is already SeqCst-set above so the woken
+        // worker observes it at the checkpoint.
+        self.park.ping_control();
         // Time spent blocked here is the "park barrier wait" — the main thread
         // waiting for the workers to reach their checkpoint. Large per-tick
         // ⇒ the workers' tick work landed on the main critical path
@@ -792,6 +833,10 @@ impl Drop for PluginInternalState {
             let _g = self.park.body_sleep_mu.lock();
             self.park.body_sleep_cv.notify_all();
         }
+        // Wake the event-driven (workers_active) recv worker so it leaves its
+        // `future::or` and observes `shutdown` at the loop top — otherwise it
+        // would block until the 5s join deadline.
+        self.park.ping_control();
         let mut workers = std::mem::take(&mut *self.workers.lock());
 
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -963,6 +1008,7 @@ fn recv_worker_loop(
     out_tx: &Sender<ReceiveOutput<Entity>>,
     shutdown: &Arc<AtomicBool>,
     park: &Arc<ParkControl>,
+    readiness: Option<naia_server::transport::PacketReadiness>,
     #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
 ) {
     loop {
@@ -1058,17 +1104,44 @@ fn recv_worker_loop(
             Err(TrySendError::Full(new_output)) => { drop(new_output); }
             Err(TrySendError::Disconnected(_)) => { return; }
         }
-        // Idle inter-iteration wait: bounded condvar wait instead of a plain
-        // sleep, so park_workers()'s body_sleep_cv.notify_all() wakes the worker
-        // instantly (cutting the park barrier); the 100µs bound preserves the
-        // socket-drain cadence between ticks when no park is pending. (T1)
-        {
-            let mut g = park.body_sleep_mu.lock();
-            if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                park.body_sleep_cv
-                    .wait_for(&mut g, std::time::Duration::from_micros(100));
+        // Idle inter-iteration wait.
+        match &readiness {
+            // Event-driven (in-process PacketChannel): block with ZERO CPU
+            // until either the transport signals a packet may be ready OR a
+            // control wake (park / shutdown / test-panic) fires. This
+            // eliminates the 100µs idle-poll storm: under oversubscription
+            // the cell is fed only ~once per 5ms service loop, so ~98% of
+            // the old polls were wasted wakeups.
+            //
+            // Lost-wakeup-free: async-channel `recv()` re-checks the buffer
+            // before parking, and both signals are bounded(1) coalescing —
+            // a ping that lands between this worker's drain and its next
+            // wait leaves a buffered token, so the freshly-created future
+            // resolves immediately. The per-tick park-window drain remains
+            // the authoritative safety net (≤1-tick dwell ceiling).
+            Some(readiness) => {
+                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    smol::block_on(smol::future::or(readiness.wait(), async {
+                        let _ = park.control_rx.recv().await;
+                    }));
+                }
+                // Clear the token(s) that woke us so the next iteration's
+                // wait starts fresh (data is drained by recv.receive() at
+                // the loop top; any packet that arrives after this re-pings).
+                readiness.drain();
+                while park.control_rx.try_recv().is_ok() {}
             }
-            drop(g);
+            // Poll-only transport (raw socket, no awaitable readiness): keep
+            // the bounded condvar poll — park_workers()'s body_sleep_cv wake
+            // still cuts the park barrier; the 100µs bound drains the socket.
+            None => {
+                let mut g = park.body_sleep_mu.lock();
+                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                    park.body_sleep_cv
+                        .wait_for(&mut g, std::time::Duration::from_micros(100));
+                }
+                drop(g);
+            }
         }
         } // end #[cfg(workers_active)]
     }

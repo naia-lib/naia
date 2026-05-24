@@ -25,8 +25,8 @@ mod channel;
 pub use channel::PacketChannel;
 
 pub use inner::{
-    AuthReceiver, AuthSender, ListenResult, PacketReceiver, PacketSender, RecvError, SendError,
-    Socket,
+    AuthReceiver, AuthSender, ListenResult, PacketReadiness, PacketReceiver, PacketSender,
+    RecvError, SendError, Socket,
 };
 mod inner {
 
@@ -85,10 +85,55 @@ mod inner {
         }
     }
 
+    /// Awaitable readiness signal for event-driven transports.
+    ///
+    /// Wraps a coalescing `bounded(1)` channel that the matching sender
+    /// pings on every `send`. A consumer (the pipeline recv worker) can
+    /// `wait().await` to block with zero CPU until a packet *may* be
+    /// available, instead of polling `receive()` on a timer. Cloneable so
+    /// the worker can hold its own handle.
+    #[derive(Clone)]
+    pub struct PacketReadiness(smol::channel::Receiver<()>);
+
+    impl PacketReadiness {
+        /// Construct from the receiving half of a sender-pinged `()` channel.
+        pub fn new(rx: smol::channel::Receiver<()>) -> Self {
+            Self(rx)
+        }
+
+        /// Resolve when the transport may have data (or the signal channel
+        /// closed — e.g. the sender was dropped on shutdown). The caller
+        /// must then drain via `receive()` and re-check its own
+        /// park/shutdown state; a spurious wake is harmless.
+        pub async fn wait(&self) {
+            let _ = self.0.recv().await;
+        }
+
+        /// Clear any buffered readiness tokens so a burst of packets that
+        /// produced multiple pings collapses into a single wake (the
+        /// coalescing `bounded(1)` buffer means at most one is ever held,
+        /// but draining keeps the contract explicit).
+        pub fn drain(&self) {
+            while self.0.try_recv().is_ok() {}
+        }
+    }
+
     /// Polls for the next incoming packet from any connected client.
     pub trait PacketReceiver: PacketReceiverClone + Send + Sync {
         /// Receives a packet from the Server Socket
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;
+
+        /// Awaitable readiness, for transports that can signal it cheaply.
+        ///
+        /// `Some` ⇒ this transport pings a readiness channel on every
+        /// inbound packet (in-process [`PacketChannel`]); a consumer may
+        /// block on [`PacketReadiness::wait`] instead of polling
+        /// `receive()`. `None` (the default) ⇒ poll-only — raw blocking
+        /// socket transports (UDP/WebRTC) have no awaitable readiness
+        /// without async socket I/O, so their consumers must keep polling.
+        fn readiness(&self) -> Option<PacketReadiness> {
+            None
+        }
     }
 
     /// Used to clone Box<dyn PacketReceiver>

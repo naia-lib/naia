@@ -80,6 +80,13 @@ impl RecvIo {
         self.packet_receiver = Some(packet_receiver);
     }
 
+    /// Awaitable readiness of the loaded transport, if it supports
+    /// event-driven signalling (in-process channel ⇒ `Some`; poll-only
+    /// sockets ⇒ `None`). See [`crate::transport::PacketReceiver::readiness`].
+    pub fn readiness(&self) -> Option<crate::transport::PacketReadiness> {
+        self.packet_receiver.as_ref().and_then(|r| r.readiness())
+    }
+
     pub fn recv_reader(&mut self) -> Result<Option<(SocketAddr, OwnedBitReader)>, NaiaServerError> {
         let receive_result = self
             .packet_receiver
