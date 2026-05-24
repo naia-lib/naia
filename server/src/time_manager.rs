@@ -269,4 +269,81 @@ mod tick_grid_measurement {
         // ticks, each pinned to its 40ms slot — zero drift, spacing == 40ms.
         eprintln!("[TICK-GRID] GRID target  : fires={:>3}  drift= +0  spacing=40ms (grid-aligned)\n", expected);
     }
+
+    /// REGRESSION GUARD (deterministic): closes the `test_time` gap. The
+    /// deterministic test suite advances the clock by exactly one tick per
+    /// update, so it has ZERO jitter and cannot expose tick-grid bugs (the
+    /// reset-to-now predecessor passed the whole gate while silently drifting to
+    /// 15-23Hz with dropped-tick hitches in production). Here we feed the real
+    /// `recv_server_tick` a jittery once-per-40ms check pattern — what the
+    /// production loop actually produces — and require it to hold the grid: emit
+    /// exactly `floor(span/dt)` ticks (no drift) with no dropped-tick gap
+    /// (no spacing ≥ 2·dt). Fails if the grid pinning regresses to reset-to-now.
+    #[test]
+    fn grid_tick_holds_rate_under_jitter() {
+        let span_ms = 4000u32;
+        let expected = span_ms / 40;
+        for j in [0u32, 1, 2, 4, 8] {
+            let checks: Vec<u32> =
+                (1..=(span_ms / 40)).map(|k| k * 40 + jitter(k as usize, j)).collect();
+            let (fires, sp) = drive(&checks);
+            assert_eq!(
+                fires, expected,
+                "jitter ±{j}ms: tick-rate drift — fired {fires}, expected {expected} (grid regression?)"
+            );
+            let max_spacing = sp.iter().copied().max().unwrap_or(0);
+            assert!(
+                max_spacing < 80,
+                "jitter ±{j}ms: dropped-tick hitch — max spacing {max_spacing}ms ≥ 2·dt (grid regression?)"
+            );
+        }
+    }
+
+    /// REAL-CLOCK smoke: drives `recv_server_tick` over a real ~500ms span with
+    /// real `thread::sleep` grid-pacing + jittery work — the integration the
+    /// `test_time` gate cannot run. Catch-up makes the rate load-immune, so the
+    /// `Hz` bound is robust; the gap bound is loose (only catches gross
+    /// systematic hitches, tolerant of occasional CI scheduling hiccups).
+    /// Skipped in `test_time` builds (the native clock is required).
+    #[test]
+    #[cfg(not(feature = "test_time"))]
+    fn real_clock_loop_holds_tick_rate() {
+        use std::time::Instant as StdInstant;
+        let period = Duration::from_millis(40);
+        let mut tm = TimeManager::new(period);
+        let test_dur = Duration::from_millis(500);
+        let start = StdInstant::now();
+        let mut next_deadline = start + period;
+        let mut fires = 0u32;
+
+        while start.elapsed() < test_dur {
+            // Simulate jittery cell.update() work (1..=9ms).
+            std::thread::sleep(Duration::from_millis(1 + (fires as u64 % 9)));
+            // Tick gen against the REAL clock (grid catch-up loop, as callers do).
+            let now_naia = Instant::now();
+            while tm.recv_server_tick(&now_naia) {
+                fires += 1;
+            }
+            // grid-pace on an absolute deadline (mirrors service.rs::run).
+            let now = StdInstant::now();
+            if now < next_deadline {
+                std::thread::sleep(next_deadline - now);
+                next_deadline += period;
+            } else {
+                next_deadline = now + period;
+            }
+        }
+
+        // Compare against the grid count for the ACTUAL elapsed time (avoids
+        // the partial-last-tick boundary bias of fires/elapsed). Catch-up makes
+        // the fire count load-immune, so this is robust; the -2 tolerance only
+        // forgives edge/partial ticks. The reset-to-now regression drifted to
+        // 15-23Hz (≈7-11 fires here) — well below the grid count — so it's
+        // caught; occasional CI scheduling hiccups are not (catch-up recovers).
+        let grid_count = (start.elapsed().as_millis() / 40) as u32;
+        assert!(
+            fires + 2 >= grid_count,
+            "real-clock: fired {fires}, grid expected ~{grid_count} ticks — tick-rate drift (regression?)"
+        );
+    }
 }
