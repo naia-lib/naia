@@ -1514,11 +1514,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
         // Snapshot `UserKey → SocketAddr` once (avoids repeated
         // `send_user_connections` reverse-scans inside the per-change loop).
-        let user_addresses: HashMap<UserKey, SocketAddr> = self
-            .send_user_connections
-            .iter()
-            .map(|(addr, conn)| (conn.user_key, *addr))
-            .collect();
+        // Only needed when there ARE scope changes to apply — on the common
+        // no-scope-change tick `drained` is empty and the per-change loop below
+        // is a no-op, so skip the build entirely (`HashMap::new()` doesn't
+        // allocate until first insert). Byte-identical. (CAPACITY_MICROOPT_AUDIT #2.)
+        let user_addresses: HashMap<UserKey, SocketAddr> = if drained.is_empty() {
+            HashMap::new()
+        } else {
+            self.send_user_connections
+                .iter()
+                .map(|(addr, conn)| (conn.user_key, *addr))
+                .collect()
+        };
 
         #[cfg(feature = "f3_diag")]
         {
@@ -1770,19 +1777,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // counter for this (user, entity) pair so a future re-queue
         // starts fresh.
         self.scope_retry_counts.remove(&(*user_key, *global_entity));
-        if self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_is_public_and_owned_by_user(user_key, global_entity)
-        {
+        // One `global_world_manager` read for the owner-based gates below (was
+        // three separate `.read()` acquisitions + two `entity_owner` calls for
+        // the same entity, here and at `server_owned_roomless_non_resource`).
+        // Byte-identical — same values, single guard. (CAPACITY_MICROOPT_AUDIT.)
+        let (public_owned, owner) = {
+            let gwm = self.shared.global_world_manager.read();
+            (
+                gwm.entity_is_public_and_owned_by_user(user_key, global_entity),
+                gwm.entity_owner(global_entity),
+            )
+        };
+        if public_owned {
             return;
         }
         if matches!(
-            self.shared
-                .global_world_manager
-                .read()
-                .entity_owner(global_entity),
+            owner,
             Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
         ) {
             return;
@@ -1815,11 +1825,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .entity_room_map
             .entity_get_rooms(global_entity)
             .is_none();
-        let server_owned_roomless_non_resource = self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_owner(global_entity)
+        let server_owned_roomless_non_resource = owner
             .map(|o| o.is_server())
             .unwrap_or(false)
             && !is_resource
