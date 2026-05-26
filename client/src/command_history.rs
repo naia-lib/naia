@@ -73,4 +73,19 @@ impl<T: Clone> CommandHistory<T> {
     pub fn most_recent_tick(&self) -> Option<Tick> {
         self.buffer.back().map(|(tick, _)| *tick)
     }
+
+    /// Non-consuming lookup of the buffered command at `tick`, or `None` if it
+    /// isn't present (never buffered, or already pruned by [`Self::replays`]).
+    ///
+    /// Unlike `replays`, this does not mutate the buffer — so a reader that
+    /// trails the prediction front (the client-confirmed re-simulation) can
+    /// re-derive a past tick's command without disturbing the rollback-replay
+    /// buffer. Callers must read BEFORE the rollback prunes the tick (the
+    /// confirmed re-sim runs in `HandleTickEvents`, before the `Rollback` set).
+    pub fn get(&self, tick: &Tick) -> Option<&T> {
+        self.buffer
+            .iter()
+            .find(|(t, _)| t == tick)
+            .map(|(_, command)| command)
+    }
 }
