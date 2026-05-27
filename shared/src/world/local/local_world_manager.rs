@@ -728,6 +728,73 @@ impl LocalWorldManager {
             .push((tick, *local_entity, component_update));
     }
 
+    /// Applies ONLY the buffered updates of `component_kind` to `world`, draining
+    /// them from the incoming buffer so the later full apply
+    /// ([`Self::take_incoming_events`]) does not re-apply them. All other buffered
+    /// updates are left intact for that later apply.
+    ///
+    /// This realizes an input-early / state-late split: a client can apply a specific
+    /// *input* component (e.g. a remote avatar's command) to the world BEFORE ticking
+    /// its simulation, then reconcile the remaining *state* afterward. The buffer is
+    /// filled by packet decode (which runs before the tick), so by the time a tick is
+    /// being reconstructed the relevant input has been received and persists on the
+    /// component.
+    pub fn apply_received_updates_of_kind<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+        &mut self,
+        component_kind: &ComponentKind,
+        world_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        world: &mut W,
+    ) {
+        let updates = std::mem::take(&mut self.incoming_updates);
+        let Ok(entity_map) = self.entity_map.read() else {
+            self.incoming_updates = updates;
+            return;
+        };
+
+        // (a) Diff updates of this kind.
+        let mut kept = Vec::with_capacity(updates.len());
+        for (tick, local_entity, update) in updates {
+            if update.kind != *component_kind {
+                kept.push((tick, local_entity, update));
+                continue;
+            }
+            let Ok(global_entity) = entity_map.owned_entity_to_global_entity(&local_entity) else {
+                continue;
+            };
+            let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity) else {
+                continue;
+            };
+            let _ =
+                world.component_apply_update(&*entity_map, &world_entity, component_kind, update);
+        }
+
+        // (b) Full-value (re)inserts of this kind. SnapshotWorld-style replication
+        // delivers some components — notably infrequently-changing inputs — as a
+        // full-value insert rather than a diff, so they land in `incoming_components`,
+        // not `incoming_updates`. Only drain an entry once its entity resolves;
+        // otherwise leave it for the full apply (it may be waitlisted on scope).
+        let insert_keys: Vec<(OwnedLocalEntity, ComponentKind)> = self
+            .incoming_components
+            .keys()
+            .filter(|(_local, kind)| kind == component_kind)
+            .copied()
+            .collect();
+        for key in insert_keys {
+            let Ok(global_entity) = entity_map.owned_entity_to_global_entity(&key.0) else {
+                continue;
+            };
+            let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity) else {
+                continue;
+            };
+            if let Some(component) = self.incoming_components.remove(&key) {
+                world.insert_boxed_component(&world_entity, component);
+            }
+        }
+
+        drop(entity_map);
+        self.incoming_updates = kept;
+    }
+
     /// Drains all buffered incoming messages and update events, applies them to `world`, and returns the resulting [`EntityEvent`]s.
     pub fn take_incoming_events<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         &mut self,

@@ -4,14 +4,16 @@ use bevy_ecs::{
     entity::Entity,
     resource::Resource,
     system::{ResMut, SystemParam},
+    world::{Mut, World},
 };
 
 use naia_bevy_shared::{
     Channel, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
     GlobalEntity, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
+    WorldProxyMut,
 };
 use naia_client::{
-    shared::{GameInstant, SocketConfig},
+    shared::{GameInstant, ReplicatedComponent, SocketConfig},
     transport::Socket,
     Client as NaiaClient, ConnectionStats, ConnectionStatus, EntityPriorityMut, EntityPriorityRef,
     NaiaClientError,
@@ -228,4 +230,22 @@ impl<'w, T: Send + Sync + 'static> EntityAndGlobalEntityConverter<Entity> for Cl
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         self.client.client.entity_to_global_entity(entity)
     }
+}
+
+/// Applies ONLY component `R`'s freshly-decoded-but-not-yet-applied updates to the
+/// world, draining them so the later full apply (`ProcessPackets`) does not redo them.
+/// All other buffered updates are left for that later apply.
+///
+/// Intended for an exclusive system running between decode (`HandleTickEvents`) and the
+/// full apply: it makes a specific *input* component (e.g. a remote avatar's command)
+/// available on the world before a tick, while the remaining *state* reconciles
+/// afterward. `T` is the protocol marker.
+pub fn apply_received_updates_of_kind<T: Send + Sync + 'static, R: ReplicatedComponent>(
+    world: &mut World,
+) {
+    world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
+        client
+            .client
+            .apply_received_updates_of_kind::<R, _>(world.proxy_mut());
+    });
 }

@@ -73,6 +73,7 @@ impl<'b> BitReader<'b> {
 
 // OwnedBitReader
 
+#[derive(Clone)]
 pub struct OwnedBitReader {
     state: BitReaderState,
     buffer: Box<[u8]>,

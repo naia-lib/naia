@@ -8,6 +8,7 @@ use crate::{
 };
 
 /// A serialised component-field update payload together with its [`ComponentKind`] tag.
+#[derive(Clone)]
 pub struct PendingComponentUpdate {
     /// The kind of component this update applies to.
     pub kind: ComponentKind,

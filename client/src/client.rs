@@ -1509,6 +1509,41 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
+    /// Applies ONLY the buffered updates for component `R` to `world`, draining them
+    /// from the receive buffer so the later full apply ([`Self::process_all_packets`])
+    /// does not re-apply them. All other buffered updates are left for that later
+    /// apply.
+    ///
+    /// This exposes the gap naia maintains between **decode** (packets are read and
+    /// buffered in `take_tick_events`, before the `HandleTickEvents` set) and **apply**
+    /// (`process_all_packets`, after). It lets a client apply a specific *input*
+    /// component (e.g. a remote avatar's command) to the world BEFORE ticking its
+    /// simulation, then reconcile the remaining *state* afterward — the input-early /
+    /// state-late split a client-confirmed re-simulation needs.
+    pub fn apply_received_updates_of_kind<R: ReplicatedComponent, W: WorldMutType<E>>(
+        &mut self,
+        mut world: W,
+    ) {
+        let component_kind = ComponentKind::of::<R>();
+        let Self {
+            server_connection,
+            global_entity_map,
+            ..
+        } = self;
+        let Some(connection) = server_connection.as_mut() else {
+            return;
+        };
+        connection
+            .base
+            .send
+            .world_manager
+            .apply_received_updates_of_kind::<E, W>(
+                &component_kind,
+                &*global_entity_map,
+                &mut world,
+            );
+    }
+
     /// Removes a Component from an Entity
     pub(crate) fn remove_component<R: ReplicatedComponent, W: WorldMutType<E>>(
         &mut self,
