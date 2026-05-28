@@ -34,6 +34,11 @@ pub struct Connection {
     /// Small buffer when receiving updates (entity actions, entity updates) from the server
     /// to make sure we receive them in order
     jitter_buffer: JitterBuffer,
+    /// Highest server tick whose data packet has actually been delivered (buffered).
+    /// Used in `Bypass` mode to cap the receiving tick at delivery, so the client
+    /// never reconstructs a tick whose authoritative state hasn't arrived. `Real`
+    /// mode relies on the jitter buffer + latency margin instead and ignores this.
+    last_received_server_tick: Option<Tick>,
 }
 
 impl Connection {
@@ -58,6 +63,7 @@ impl Connection {
             time_manager,
             tick_buffer: TickBufferSender::new(channel_kinds),
             jitter_buffer: JitterBuffer::new(jitter_buffer_type),
+            last_received_server_tick: None,
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
         };
@@ -108,7 +114,23 @@ impl Connection {
         );
         self.jitter_buffer
             .add_item(*incoming_tick, reader.to_owned());
+        // Track the highest delivered server tick (monotonic) for the bypass
+        // receiving-tick cap.
+        let newer = match self.last_received_server_tick {
+            Some(last) => naia_shared::sequence_greater_than(*incoming_tick, last),
+            None => true,
+        };
+        if newer {
+            self.last_received_server_tick = Some(*incoming_tick);
+        }
         Ok(())
+    }
+
+    /// Highest server tick whose data has actually been delivered (buffered), or
+    /// `None` if nothing has arrived yet. Used by `take_tick_events` to cap the
+    /// receiving tick in `Bypass` mode.
+    pub fn last_received_server_tick(&self) -> Option<Tick> {
+        self.last_received_server_tick
     }
 
     /// Read the packets (raw bits) from the jitter buffer that correspond to the

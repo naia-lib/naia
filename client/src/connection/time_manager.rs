@@ -249,6 +249,7 @@ impl TimeManager {
     pub(crate) fn collect_ticks(
         &mut self,
         now: &Instant,
+        receiving_tick_ceiling: Option<Tick>,
     ) -> TickRanges {
         // updates client_receiving_tick
         // returns (Some(start_tick, end_tick), None) if a client_receiving_tick has incremented
@@ -286,6 +287,28 @@ impl TimeManager {
                 &client_receiving_target,
                 millis_elapsed,
             );
+        }
+
+        // Cap the receiving tick at delivery (Bypass mode). The clock-estimated
+        // receiving tick can outrun actual packet delivery; the confirmed timeline
+        // must never reconstruct a tick whose authoritative state hasn't arrived, or
+        // it re-derives from stale data. Hold at the latest delivered tick — but never
+        // move backwards (we can't un-emit already-processed ticks), so this only ever
+        // delays advancement, never rewinds. `Real` mode passes `None` and is unaffected
+        // (its jitter buffer + latency margin keep the estimate behind delivery).
+        // Correctness invariant: the confirmed timeline must never reconstruct a
+        // tick whose authoritative state hasn't been delivered. Production (Real
+        // jitter + RTT margin) keeps the clock estimate behind delivery naturally;
+        // the deterministic harness has zero margin so we enforce it explicitly.
+        if let Some(ceiling) = receiving_tick_ceiling {
+            if sequence_greater_than(self.client_receiving_tick, ceiling) {
+                self.client_receiving_tick =
+                    if sequence_greater_than(ceiling, prev_client_receiving_tick) {
+                        ceiling
+                    } else {
+                        prev_client_receiving_tick
+                    };
+            }
         }
 
         // Client Sending

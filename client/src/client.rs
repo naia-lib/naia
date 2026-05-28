@@ -388,8 +388,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return TickEvents::default();
         };
 
-        let (receiving_tick_happened, sending_tick_happened) =
-            connection.time_manager.collect_ticks(now);
+        // Cap the receiving tick at the latest delivered server tick — a universal
+        // correctness invariant: the confirmed timeline must never reconstruct a tick
+        // whose authoritative state hasn't been received (deterministic; aligns with
+        // the netcode contract that confirmed[T] is a bit-identical reconstruction of
+        // server[T], which requires T's data). In real-net production the jitter +
+        // latency margin already keeps the clock estimate behind delivery so this
+        // rarely fires; in deterministic test_time it actively prevents the race
+        // where the clock estimate reaches T before T's packet arrives.
+        let receiving_tick_ceiling = connection.last_received_server_tick();
+
+        let (receiving_tick_happened, sending_tick_happened) = connection
+            .time_manager
+            .collect_ticks(now, receiving_tick_ceiling);
 
         // If jitter buffer is in bypass mode, process packets immediately regardless of tick
         // Otherwise, only process on tick boundaries
