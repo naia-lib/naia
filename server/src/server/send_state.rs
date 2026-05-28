@@ -1988,6 +1988,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             return;
         }
 
+        // Order matters: register the component GLOBALLY before propagating to
+        // per-user scopes. The per-user `insert_component` below triggers
+        // `UserDiffHandler::register_component` calls that depend on the global
+        // MutChannel existing — without it, `global_handler.receiver` returns
+        // None and the per-user notifier is never attached, so mutations on this
+        // component for already-in-scope users never reach the per-user diff
+        // mask. Symptom: late-inserted components silently never replicate.
+        self.shared
+            .global_world_manager
+            .write()
+            .insert_component_record(&global_entity, &component_kind);
+        self.shared
+            .global_world_manager
+            .write()
+            .insert_component_diff_handler(&self.shared.component_kinds, &global_entity, component);
+
         // Inlined `insert_new_component_into_entity_scopes(.., None)`:
         // add component to connections already tracking entity.
         for (_addr, send_conn) in self.send_user_connections.iter_mut() {
@@ -2000,16 +2016,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .world_manager
                 .insert_component(&global_entity, &component_kind);
         }
-
-        // update in world manager
-        self.shared
-            .global_world_manager
-            .write()
-            .insert_component_record(&global_entity, &component_kind);
-        self.shared
-            .global_world_manager
-            .write()
-            .insert_component_diff_handler(&self.shared.component_kinds, &global_entity, component);
 
         // if entity is delegated, convert over
         if self

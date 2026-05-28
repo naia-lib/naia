@@ -2440,11 +2440,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             return;
         }
 
-        self.insert_new_component_into_entity_scopes(&global_entity, &component_kind, None);
-
-        // update in world manager
+        // Order matters: register the component GLOBALLY before propagating to
+        // per-user scopes. `insert_new_component_into_entity_scopes` triggers
+        // per-user `UserDiffHandler::register_component` calls that depend on
+        // the global MutChannel existing — without it, `global_handler.receiver`
+        // returns None and the per-user notifier is never attached, so mutations
+        // on this component for already-in-scope users never reach the per-user
+        // diff mask. Symptom: late-inserted components (e.g. NetworkedLastCommand
+        // added to an avatar after the entity was already in scope for the
+        // observer) silently never replicate their value changes.
         self.shared.global_world_manager.write().insert_component_record(
-            // &self.shared.component_kinds,
             &global_entity,
             &component_kind,
         );
@@ -2453,6 +2458,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
             &global_entity,
             component,
         );
+        self.insert_new_component_into_entity_scopes(&global_entity, &component_kind, None);
 
         // if entity is delegated, convert over
         if self.shared.global_world_manager.read()
