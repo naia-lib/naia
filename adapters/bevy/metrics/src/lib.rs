@@ -23,17 +23,18 @@
 //! [`NaiaClientMetricsPlugin`]. Both can be enabled simultaneously for
 //! listen-server setups.
 
-#[cfg(feature = "server")]
-mod server_plugin;
-#[cfg(feature = "client")]
-mod client_plugin;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "server")] {
+        mod server_plugin;
+        pub use server_plugin::NaiaServerMetricsPlugin;
+    }
+}
 
-#[cfg(feature = "server")]
-pub use server_plugin::NaiaServerMetricsPlugin;
-#[cfg(feature = "client")]
-pub use client_plugin::NaiaClientMetricsPlugin;
-
-#[cfg(feature = "client")]
-pub use naia_bevy_client::DefaultClientTag;
-#[cfg(feature = "client")]
-pub type DefaultClientMetricsPlugin = NaiaClientMetricsPlugin<DefaultClientTag>;
+cfg_if::cfg_if! {
+    if #[cfg(feature = "client")] {
+        mod client_plugin;
+        pub use client_plugin::NaiaClientMetricsPlugin;
+        pub use naia_bevy_client::DefaultClientTag;
+        pub type DefaultClientMetricsPlugin = NaiaClientMetricsPlugin<DefaultClientTag>;
+    }
+}
