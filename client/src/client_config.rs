@@ -25,23 +25,12 @@ pub struct ClientConfig {
 
 impl Default for ClientConfig {
     fn default() -> Self {
-        // Under `test_time`, default to `Bypass`: the deterministic `TestClock` makes
-        // production-style jitter smoothing meaningless (and racy with delivery), so
-        // the client should follow delivery directly. The receiving-tick cap in
-        // `time_manager::collect_ticks` enforces "don't reconstruct an unreceived
-        // tick" universally — together with `Bypass` this gives a fully deterministic
-        // confirmed timeline in tests. Production builds keep `Real` + RTT margins.
-        #[cfg(feature = "test_time")]
-        let jitter_buffer = JitterBufferType::Bypass;
-        #[cfg(not(feature = "test_time"))]
-        let jitter_buffer = JitterBufferType::Real;
-
         Self {
             connection: ConnectionConfig::default(),
             send_handshake_interval: Duration::from_millis(250),
             ping_interval: Duration::from_secs(1),
             handshake_pings: 10,
-            jitter_buffer,
+            jitter_buffer: JitterBufferType::Real,
         }
     }
 }
