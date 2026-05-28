@@ -1538,6 +1538,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     ScopeChange::EntityEnteredRoom(e, r) => format!("EntityEnteredRoom({:?},{:?})", e, r),
                     ScopeChange::ScopeToggled(u, e, b) => format!("ScopeToggled({:?},{:?},{})", u, e, b),
                     ScopeChange::RoomChange(_) => "RoomChange".to_string(),
+                    ScopeChange::ConfigureReplication(_) => "ConfigureReplication".to_string(),
                 }).collect::<Vec<_>>(),
             );
         }

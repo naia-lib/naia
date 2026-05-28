@@ -3699,6 +3699,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 ScopeChange::EntityEnteredRoom(e, r) => format!("EntityEnteredRoom({:?},{:?})", e, r),
                 ScopeChange::ScopeToggled(u, e, b) => format!("ScopeToggled({:?},{:?},{})", u, e, b),
                 ScopeChange::RoomChange(_) => "RoomChange(_)".to_string(),
+                ScopeChange::ConfigureReplication(_) => "ConfigureReplication(_)".to_string(),
             }).collect();
             eprintln!("[F3-DIAG naia/WorldServer] drain_scope_change_queue draining {} variants: {:?}", changes.len(), summary);
         }
