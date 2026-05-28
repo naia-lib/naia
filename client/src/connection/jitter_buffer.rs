@@ -43,12 +43,26 @@ impl JitterBuffer {
         }
     }
 
-    /// Pop an item from the buffer if the tick has elapsed (Real mode)
-    /// or immediately (Bypass mode)
+    /// Pop an item from the buffer if its server tick has elapsed (`tick <=
+    /// current_tick`). Both modes honor this bound — under `Bypass` the storage
+    /// is a FIFO `VecDeque`, but the bound is still required for correctness:
+    /// applying a snapshot for tick T+1 before the confirmed timeline has
+    /// re-simulated tick T pollutes the world with future-tick state and breaks
+    /// the deterministic re-sim. The receiving-tick cap in
+    /// `time_manager::collect_ticks` keeps `current_tick <= last_delivered`, so
+    /// this peek-then-pop is sufficient (packets arrive in server-tick order
+    /// over a reliable in-order channel, so the front of the FIFO is the oldest
+    /// undelivered tick).
     pub fn pop_item(&mut self, current_tick: Tick) -> Option<(Tick, OwnedBitReader)> {
         match self {
             JitterBuffer::Real(queue) => queue.pop_item(current_tick),
-            JitterBuffer::Bypass(queue) => queue.pop_front(),
+            JitterBuffer::Bypass(queue) => {
+                let front_tick = queue.front().map(|(t, _)| *t)?;
+                if naia_shared::sequence_greater_than(front_tick, current_tick) {
+                    return None;
+                }
+                queue.pop_front()
+            }
         }
     }
 }
