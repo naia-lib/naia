@@ -1,26 +1,28 @@
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr};
 
-use regex::Regex;
-
 use super::server_addr::ServerAddr;
 
+// ICE candidate format (RFC 8839 §5.1):
+//   "candidate:<foundation> <component> <transport> <priority> <addr> <port> typ <type> ..."
+// Fields are space-separated; address is at offset 4, port at offset 5.
+// Using a regex for this pulled in the full regex + aho-corasick crates (~200 KB wasm code).
 pub fn candidate_to_addr(candidate_str: &str) -> ServerAddr {
-    let pattern = Regex::new(r"\b(?P<ip_addr>(?:[0-9]{1,3}\.){3}[0-9]{1,3}|(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))) (?P<port>[0-9]{1,5})\b")
-        .expect("failed to compile regex pattern");
+    let mut parts = candidate_str.split_whitespace();
+    let _ = parts.next(); // candidate:<foundation>
+    let _ = parts.next(); // component
+    let _ = parts.next(); // transport
+    let _ = parts.next(); // priority
+    let addr_str = parts.next().expect("missing address in ICE candidate");
+    let port_str = parts.next().expect("missing port in ICE candidate");
 
-    let captures = pattern
-        .captures(candidate_str)
-        .expect("regex failed to find SocketAddr string");
-
-    let port = &captures["port"].parse::<u16>().expect("not a valid port..");
-    if let Ok(ip_addr) = captures["ip_addr"].parse::<Ipv6Addr>() {
-        ServerAddr::Found(SocketAddr::new(IpAddr::V6(ip_addr), *port))
+    let port: u16 = port_str.parse().expect("not a valid port");
+    if let Ok(ip_addr) = addr_str.parse::<Ipv6Addr>() {
+        ServerAddr::Found(SocketAddr::new(IpAddr::V6(ip_addr), port))
     } else {
-        let ip_addr = captures["ip_addr"]
+        let ip_addr = addr_str
             .parse::<Ipv4Addr>()
-            .expect("not a valid ip address..");
-
-        ServerAddr::Found(SocketAddr::new(IpAddr::V4(ip_addr), *port))
+            .expect("not a valid ip address");
+        ServerAddr::Found(SocketAddr::new(IpAddr::V4(ip_addr), port))
     }
 }
 
