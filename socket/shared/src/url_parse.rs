@@ -1,12 +1,106 @@
 use std::net::SocketAddr;
 
-use url::Url;
+// Minimal URL parser for naia-socket-shared — replaces the `url` crate entirely.
+//
+// Why: `url` → `idna` → `icu_normalizer_data + icu_properties_data` pulls ~600 KB
+// of ICU Unicode lookup tables into the wasm binary.  Game servers use ASCII
+// hostnames (IPs or simple domain names), so full IDNA/Unicode URL parsing is
+// dead weight on every platform.
+//
+// What we actually need from a server URL (`ws://host:port` / `http://host:port`):
+//   – Display (to build the session URL string from a base + endpoint path)
+//   – path_segments / query / fragment guards in `parse_server_url`
+//   – host + port for native DNS resolution in `url_to_socket_addr`
+//
+// All of that is achievable with simple ASCII string parsing.
+
+#[derive(Debug, Clone)]
+pub struct Url {
+    original: String,
+}
+
+impl std::fmt::Display for Url {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.original)
+    }
+}
+
+impl Url {
+    /// Byte offset just past the authority (`scheme://host:port`).
+    /// Returns `original.len()` if there is no path/query/fragment.
+    fn authority_end(&self) -> usize {
+        let s = self.original.as_str();
+        let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
+        s[after_scheme..]
+            .find(['/', '?', '#'])
+            .map(|i| after_scheme + i)
+            .unwrap_or(s.len())
+    }
+
+    pub fn path_segments(&self) -> Option<impl Iterator<Item = &str>> {
+        let s = self.original.as_str();
+        let auth_end = self.authority_end();
+        if auth_end >= s.len() || s.as_bytes()[auth_end] != b'/' {
+            return None;
+        }
+        let path = &s[auth_end + 1..];
+        let path_end = path.find(['?', '#']).unwrap_or(path.len());
+        Some(path[..path_end].split('/').filter(|seg| !seg.is_empty()))
+    }
+
+    pub fn query(&self) -> Option<&str> {
+        let s = self.original.as_str();
+        s.find('?').and_then(|i| {
+            let q = &s[i + 1..];
+            let q = q.find('#').map(|j| &q[..j]).unwrap_or(q);
+            if q.is_empty() { None } else { Some(q) }
+        })
+    }
+
+    pub fn fragment(&self) -> Option<&str> {
+        let s = self.original.as_str();
+        s.find('#').and_then(|i| {
+            let f = &s[i + 1..];
+            if f.is_empty() { None } else { Some(f) }
+        })
+    }
+
+    pub fn scheme(&self) -> &str {
+        let s = self.original.as_str();
+        s.find("://").map(|i| &s[..i]).unwrap_or("")
+    }
+
+    /// Host string (without port), or empty string if not parseable.
+    pub fn host_str(&self) -> &str {
+        let s = self.original.as_str();
+        let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
+        let authority = &s[after_scheme..self.authority_end()];
+        // Strip port: find last ':' that is after any ']' (IPv6 bracket close).
+        let bracket_end = authority.rfind(']').unwrap_or(0);
+        if let Some(colon) = authority[bracket_end..].rfind(':') {
+            &authority[..bracket_end + colon]
+        } else {
+            authority
+        }
+    }
+
+    /// Explicit port from the URL, or `None` if not present.
+    pub fn port(&self) -> Option<u16> {
+        let s = self.original.as_str();
+        let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
+        let authority = &s[after_scheme..self.authority_end()];
+        let bracket_end = authority.rfind(']').unwrap_or(0);
+        authority[bracket_end..].rfind(':').and_then(|colon| {
+            authority[bracket_end + colon + 1..].parse().ok()
+        })
+    }
+}
 
 pub fn parse_server_url(server_url_str: &str) -> Url {
-    let url = Url::parse(server_url_str).expect("server_url_str is not a valid URL!");
+    let url = Url { original: server_url_str.to_string() };
+
     if let Some(path_segments) = url.path_segments() {
-        let path_segment_count = path_segments.count();
-        if path_segment_count > 1 {
+        if path_segments.count() > 1 {
             log::error!("server_url_str must not include a path");
             panic!("");
         }
@@ -24,29 +118,30 @@ pub fn parse_server_url(server_url_str: &str) -> Url {
 }
 
 cfg_if! {
-    if #[cfg(not(target_arch = "wasm32"))]
-    {
+    if #[cfg(not(target_arch = "wasm32"))] {
         pub fn url_to_socket_addr(url: &Url) -> SocketAddr {
-            const SOCKET_PARSE_FAIL_STR: &str = "could not get SocketAddr from input URL";
+            use std::net::ToSocketAddrs;
 
-            match url.socket_addrs(|| match url.scheme() {
-                "http" => Some(80),
-                "https" => Some(443),
-                _ => None,
-            }) {
-                Ok(addr_list) => {
-                    if addr_list.is_empty() {
-                        log::error!("{}", SOCKET_PARSE_FAIL_STR);
-                        panic!("");
-                    }
+            let host = url.host_str();
+            let port = url.port().unwrap_or_else(|| match url.scheme() {
+                "http" | "ws" => 80,
+                "https" | "wss" => 443,
+                _ => 0,
+            });
 
-                    *addr_list.first().expect(SOCKET_PARSE_FAIL_STR)
-                }
-                Err(err) => {
+            let addrs: Vec<SocketAddr> = format!("{}:{}", host, port)
+                .to_socket_addrs()
+                .unwrap_or_else(|err| {
                     log::error!("URL -> SocketAddr parse fails with: {:?}", err);
                     panic!("");
-                }
+                })
+                .collect();
+
+            if addrs.is_empty() {
+                log::error!("could not get SocketAddr from input URL");
+                panic!("");
             }
+            addrs[0]
         }
     } else {
         pub fn url_to_socket_addr(_url: &Url) -> SocketAddr {
