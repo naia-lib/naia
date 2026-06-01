@@ -153,6 +153,14 @@ pub enum TrackedClientEvent {
 }
 
 pub struct Scenario {
+    /// OS thread the scenario was created on. naia's `TestClock` is
+    /// thread-local; if the scenario is later ticked on a different thread
+    /// (e.g. inside `rayon::ThreadPool::install` or `std::thread::spawn`)
+    /// WITHOUT a shared clock handle installed, the simulated clock silently
+    /// diverges and corrupts server↔client time-sync. `tick()` guards against
+    /// this by comparing the live thread + `TestClock::is_shared()`.
+    created_thread: std::thread::ThreadId,
+
     hub: LocalTransportHub,
     server: Option<Server>,
     server_world: TestWorld,
@@ -229,6 +237,7 @@ impl Scenario {
         let hub = LocalTransportHub::new(server_addr);
 
         Self {
+            created_thread: std::thread::current().id(),
             hub,
             server: None,
             server_world: TestWorld::default(),
@@ -991,7 +1000,30 @@ impl Scenario {
     ///   the current tick are available for matching and registration.
     ///
     /// Update simulation without draining events (for expect() to handle events)
+    /// Guard against the thread-local-`TestClock` footgun: if the scenario is
+    /// being ticked on a thread other than the one it was created on, the
+    /// simulated clock is a *different* (thread-local) clock unless a shared
+    /// handle was explicitly installed — which silently corrupts time-sync.
+    /// Fail loudly instead. (Origin: `parallel_send_matches_serial` ran its
+    /// tick loop inside `rayon pool.install` on a worker thread, diverging the
+    /// clock and stranding one client's updates.)
+    fn assert_clock_thread(&self) {
+        let current = std::thread::current().id();
+        assert!(
+            current == self.created_thread || TestClock::is_shared(),
+            "Scenario clock footgun: created on {:?} but ticking on {:?} without a \
+             shared TestClock. naia's TestClock is thread-local — driving a Scenario \
+             across threads (rayon pool.install, std::thread::spawn, …) diverges the \
+             simulated clock and corrupts server↔client time-sync. Either run the \
+             Scenario on a single thread, or share the clock across threads via \
+             TestClock::shareable_handle() + install_shared() (+ detach_shared() cleanup).",
+            self.created_thread,
+            current,
+        );
+    }
+
     fn tick(&mut self) {
+        self.assert_clock_thread();
         // Increment tick counter
         self.global_tick += 1;
 
@@ -1041,6 +1073,7 @@ impl Scenario {
     /// cleared. Clients are pumped (receive/process/send) so the lagged job is
     /// delivered + applied; the server's normal live send is suppressed.
     pub fn transmit_and_pump(&mut self, snap: SnapshotWorld<TestEntity>, plan: SendPlan) {
+        self.assert_clock_thread();
         self.global_tick += 1;
         TestClock::advance(TICK_DURATION_MS);
         let now = Instant::now();

@@ -111,6 +111,16 @@ impl TestClock {
     pub fn detach_shared() {
         SHARED_OVERRIDE.with(|s| *s.borrow_mut() = None);
     }
+
+    /// Returns `true` if a shared clock handle is installed on the calling
+    /// thread (via [`install_shared`](Self::install_shared)). The clock is
+    /// otherwise thread-local, so a harness that drives a deterministic
+    /// scenario across threads (rayon pool, `std::thread::spawn`, …) MUST
+    /// share the clock or it silently diverges. Lets such a harness assert the
+    /// clock is actually shared before running on a non-owning thread.
+    pub fn is_shared() -> bool {
+        SHARED_OVERRIDE.with(|s| s.borrow().is_some())
+    }
 }
 
 /// Represents a specific moment in simulated test time
