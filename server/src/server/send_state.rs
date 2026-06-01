@@ -718,16 +718,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 // (reads entity_map + host/remote — a different lock, no nesting).
                 let ledger = send_conn.base.world_manager.replication_ledger();
                 let diff = ledger.read_guard();
-                let mut events: SendUpdateEvents = HashMap::with_capacity(indices.len());
+                let mut events: SendUpdateEvents = Vec::with_capacity(indices.len());
                 for global_idx in indices {
                     let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
                     #[cfg(feature = "bench_instrumentation")]
                     crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
                         .fetch_add(1, Ordering::Relaxed);
 
-                    // Build this entity's component map once, then insert into
-                    // `events` a single time (vs an `entry()` lookup per component).
-                    let mut kinds: UpdateKinds = UpdateKinds::new();
+                    // Build this entity's component list in kind_bit ascending order
+                    // (dirty_words iteration is LSB-first = ascending kind_bit).
+                    let mut kinds: UpdateKinds = Vec::new();
                     for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
                         let mut word = *dirty_word;
                         while word != 0 {
@@ -758,11 +758,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 });
                             diff.clear_diff_mask_fast(global_idx, kind_bit);
 
-                            kinds.insert(component_kind, (kind_bit, diff_mask));
+                            kinds.push((component_kind, kind_bit, diff_mask));
                         }
                     }
                     if !kinds.is_empty() {
-                        events.insert(global_entity, (global_idx, kinds));
+                        events.push((global_entity, global_idx, kinds));
                     }
                 }
                 per_user.push((*user_address, events));
@@ -901,10 +901,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     converter: global_entity_map,
                 };
 
-                let initial_entities: Vec<GlobalEntity> = update_events.keys().copied().collect();
+                let initial_entities: Vec<GlobalEntity> =
+                    update_events.iter().map(|(ge, _, _)| *ge).collect();
                 let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, UpdateKinds)> =
-                    update_events.drain()
-                        .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
+                    update_events.drain(..)
+                        .map(|(ge, idx, kinds)| (ge, idx, hook.advance(&ge), kinds))
                         .collect();
                 #[cfg(feature = "bench_instrumentation")]
                 let _sort_only_t0 = std::time::Instant::now();

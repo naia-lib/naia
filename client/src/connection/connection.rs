@@ -262,11 +262,11 @@ impl Connection {
             .into_iter()
             .filter_map(|(ge, kinds)| {
                 converter.global_entity_to_entity(&ge).ok().map(|we| {
-                    let kind_map: UpdateKinds = kinds
+                    let kind_vec: UpdateKinds = kinds
                         .into_iter()
-                        .map(|k| (k, (0u16, DiffMask::new(0))))
+                        .map(|k| (k, 0u16, DiffMask::new(0)))
                         .collect();
-                    (ge, GlobalEntityIndex::INVALID, we, kind_map)
+                    (ge, GlobalEntityIndex::INVALID, we, kind_vec)
                 })
             })
             .collect();

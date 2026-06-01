@@ -18,13 +18,18 @@ use crate::{
     WorldRefType,
 };
 
-/// MISSION_TICK_FLOOR Lever 3: per-(entity) update plan entry. The `u16` is the
-/// `kind_bit`; the `DiffMask` is the **frozen** per-property mask captured at the
-/// freeze point (in `SendState::prepare_send_job`) — NOT a live fetch. Threading
-/// the frozen mask is what lets the lagged send worker serialize a self-contained
-/// job without reading concurrently-mutated per-user diff state. See
+/// MISSION_TICK_FLOOR Lever 3: per-(entity) update plan entry. Each tuple is
+/// `(ComponentKind, kind_bit, DiffMask)`. Ordered by `kind_bit` ascending
+/// (insertion order from `prepare_send_job`'s dirty-word scan). Vec instead of
+/// HashMap: eliminates per-(entity,user,tick) HashMap construction + key-collect
+/// + lookup + remove allocations in the hot `write_update` path.
+///
+/// The `u16` is the `kind_bit`; the `DiffMask` is the **frozen** per-property
+/// mask captured at the freeze point — NOT a live fetch. Threading the frozen
+/// mask is what lets the lagged send worker serialize a self-contained job
+/// without reading concurrently-mutated per-user diff state. See
 /// `_AGENTS/L3_PURE_SENDJOB_FIX_HANDOFF.md`.
-pub type UpdateKinds = HashMap<ComponentKind, (u16, DiffMask)>;
+pub type UpdateKinds = Vec<(ComponentKind, u16, DiffMask)>;
 
 /// Per-tick counters for the packet-write path.
 /// Enabled via `bench_instrumentation`.
@@ -949,14 +954,17 @@ impl WorldWriter {
         kinds: &mut UpdateKinds,
         snapshot_map: Option<&SnapshotMap>,
     ) {
-        let mut written_component_kinds = Vec::new();
-        let component_kind_set: Vec<ComponentKind> = kinds.keys().cloned().collect();
+        // Vec<(ComponentKind, kind_bit, DiffMask)> — iterate in insertion order
+        // (kind_bit ascending from prepare_send_job). Track how many entries we
+        // successfully serialize; drain that prefix after the loop. Entries left
+        // in the Vec (overflow case) are picked up in the next build_one_packet
+        // call. Eliminates the per-(entity,user,tick) key-collect + HashMap lookup
+        // + written-kinds Vec + HashMap-remove dance of the old HashMap path.
+        let mut written_count = 0usize;
 
-        for component_kind in &component_kind_set {
-            let (kind_bit, plan_diff_mask) = kinds
-                .get(component_kind)
-                .cloned()
-                .expect("(kind_bit, DiffMask) in update kinds map");
+        for (component_kind, kind_bit, plan_diff_mask) in kinds.iter() {
+            let component_kind = *component_kind;
+            let kind_bit = *kind_bit;
             // MISSION_TICK_FLOOR Lever 3: on the SERVER (entity_idx valid) the
             // per-property `DiffMask` is the FROZEN value captured at the freeze
             // point by `SendState::prepare_send_job` — NOT a live fetch. That is
@@ -966,9 +974,9 @@ impl WorldWriter {
             // synchronous (no lag), keeps the GlobalEntity-keyed live fetch, and
             // carries a placeholder mask in the plan.
             let diff_mask = if entity_idx.is_valid() {
-                plan_diff_mask
+                plan_diff_mask.clone()
             } else {
-                world_manager.get_diff_mask(global_entity, component_kind)
+                world_manager.get_diff_mask(global_entity, &component_kind)
             };
 
             // When `global_diff_handler` is `Some` (server path), attempt PATH A or PATH B.
@@ -980,7 +988,7 @@ impl WorldWriter {
             if let Some(gdh) = global_diff_handler {
                 let is_user_dep = gdh
                     .is_component_user_dependent(entity_idx, kind_bit)
-                    .unwrap_or_else(|| component_kinds.is_user_dependent(component_kind));
+                    .unwrap_or_else(|| component_kinds.is_user_dependent(&component_kind));
                 if !is_user_dep {
                     // ── PATH A: UserIndependent ─────────────────────────────────
                     // Bytes are identical for all users with the same DiffMask.
@@ -1000,7 +1008,7 @@ impl WorldWriter {
                                 let mut temp = BitWriter::new();
                                 true.ser(&mut temp);
                                 component_kind.ser(component_kinds, &mut temp);
-                                world.component_of_kind(world_entity, component_kind)
+                                world.component_of_kind(world_entity, &component_kind)
                                     .expect("Component does not exist in World")
                                     .write_update(&diff_mask, &mut temp, &mut converter);
                                 let c = CachedComponentUpdate::capture(&temp)
@@ -1014,7 +1022,7 @@ impl WorldWriter {
                         counter.count_bits(cached.bit_count);
                         if counter.overflowed() {
                             if !*has_written {
-                                Self::warn_overflow_update(component_kinds.kind_to_name(component_kind), cached.bit_count, writer.bits_free());
+                                Self::warn_overflow_update(component_kinds.kind_to_name(&component_kind), cached.bit_count, writer.bits_free());
                             }
                             break;
                         }
@@ -1032,7 +1040,7 @@ impl WorldWriter {
                     // serialize from the snapshot, never from ECS directly.
                     // Phase 1+2 guarantees every entry is present. If somehow missing,
                     // optimized_write stays false and the two-pass path below handles it.
-                    if let Some(snapshot_entry) = sm.get(&(*global_entity, *component_kind)) {
+                    if let Some(snapshot_entry) = sm.get(&(*global_entity, component_kind)) {
                         let snapshot: &dyn Replicate = snapshot_entry.as_ref();
 
                         let mut converter = world_manager.entity_converter_mut(global_world_manager);
@@ -1044,7 +1052,7 @@ impl WorldWriter {
                         snapshot.write_update(&diff_mask, &mut counter, &mut converter);
                         if counter.overflowed() {
                             if !*has_written {
-                                Self::warn_overflow_update(component_kinds.kind_to_name(component_kind), counter.bits_needed(), writer.bits_free());
+                                Self::warn_overflow_update(component_kinds.kind_to_name(&component_kind), counter.bits_needed(), writer.bits_free());
                             }
                             break;
                         }
@@ -1068,12 +1076,12 @@ impl WorldWriter {
                 let mut counter = writer.counter();
                 true.ser(&mut counter);
                 component_kind.ser(component_kinds, &mut counter);
-                world.component_of_kind(world_entity, component_kind)
+                world.component_of_kind(world_entity, &component_kind)
                     .expect("Component does not exist in World")
                     .write_update(&diff_mask, &mut counter, &mut converter);
                 if counter.overflowed() {
                     if !*has_written {
-                        let component_name = component_kinds.kind_to_name(component_kind);
+                        let component_name = component_kinds.kind_to_name(&component_kind);
                         Self::warn_overflow_update(component_name, counter.bits_needed(), writer.bits_free());
                     }
                     break;
@@ -1081,28 +1089,27 @@ impl WorldWriter {
                 *has_written = true;
                 true.ser(writer);
                 component_kind.ser(component_kinds, writer);
-                world.component_of_kind(world_entity, component_kind)
+                world.component_of_kind(world_entity, &component_kind)
                     .expect("Component does not exist in World")
                     .write_update(&diff_mask, writer, &mut converter);
             }
 
-            written_component_kinds.push(*component_kind);
-            let _ = kind_bit;
+            written_count += 1;
             // MISSION_TICK_FLOOR Lever 3: on the server the live per-user mask was
             // already cleared in `prepare_send_job` (at the freeze point), so here
             // we ONLY record the per-packet `sent_updates` ledger (needed for the
             // NACK-driven replay; the packet_index only exists now). The client
             // (entity_idx INVALID) is synchronous and still records+clears.
             if entity_idx.is_valid() {
-                world_manager.record_sent_update(now, packet_index, global_entity, component_kind, diff_mask);
+                world_manager.record_sent_update(now, packet_index, global_entity, &component_kind, diff_mask);
             } else {
-                world_manager.record_update(now, packet_index, global_entity, component_kind, diff_mask);
+                world_manager.record_update(now, packet_index, global_entity, &component_kind, diff_mask);
             }
         }
 
-        for component_kind in &written_component_kinds {
-            kinds.remove(component_kind);
-        }
+        // Drain the successfully-written prefix. Remaining entries (overflow case)
+        // stay for the next build_one_packet call.
+        kinds.drain(..written_count);
     }
 
     fn warn_overflow_update(component_name: String, bits_needed: u32, bits_free: u32) {

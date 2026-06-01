@@ -32,10 +32,13 @@ use crate::{
     world::world_writer::UpdateKinds,
 };
 
-/// MISSION_TICK_FLOOR Lever 3: per-user send DECISION for one entity — the set
-/// of component kinds to send (each with its `kind_bit` + FROZEN `DiffMask`).
-/// Keyed by `GlobalEntity`.
-pub type SendUpdateEvents = HashMap<GlobalEntity, (GlobalEntityIndex, UpdateKinds)>;
+/// MISSION_TICK_FLOOR Lever 3: per-user send DECISION — the list of entities to
+/// send for one user (each with its `GlobalEntityIndex` + per-component
+/// `UpdateKinds`). Vec instead of HashMap: the per-user entity set is iterated
+/// fully each tick (drain → score → sort → build), so there is no lookup by key;
+/// eliminating the HashMap construction + insert allocations saves ~25% of
+/// iris_phase3_build at high player counts.
+pub type SendUpdateEvents = Vec<(GlobalEntity, GlobalEntityIndex, UpdateKinds)>;
 
 /// MISSION_TICK_FLOOR Lever 3: a self-contained, frozen send job built by
 /// [`crate::SnapshotWorld`]'s producer at the FREEZE point (on the gameplay
