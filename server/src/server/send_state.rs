@@ -906,7 +906,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     update_events.drain()
                         .map(|(ge, (idx, kinds))| (ge, idx, hook.advance(&ge), kinds))
                         .collect();
+                #[cfg(feature = "bench_instrumentation")]
+                let _sort_only_t0 = std::time::Instant::now();
                 scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+                #[cfg(feature = "bench_instrumentation")]
+                crate::server::world_server::bench_iris_counters::NS_PHASE3_SORT_ONLY
+                    .fetch_add(_sort_only_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
                 let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> =
                     scored.into_iter()
                         .filter_map(|(ge, idx, _, kinds)| {

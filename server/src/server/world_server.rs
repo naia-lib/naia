@@ -72,15 +72,17 @@ pub mod bench_scope_counters {
 ///
 /// - `iris_phase12`: one-shot global dirty scan + UserDependent ECS snapshot
 /// - `iris_phase3_build`: per-user intersect_dirty + diff-mask filter → events HashMap (sum)
-/// - `iris_phase3_sort`: per-user priority advance + sort + update_list build (sum)
+/// - `iris_phase3_sort`: per-user phase-3B total: score + sort + update_list + build_all_packets (sum)
+/// - `iris_phase3_sort_only`: per-user sort call only (subset of phase3_sort)
 /// - `iris_phase3_entity_visits`: total (user × entity) pairs entering the dirty_words scan
 /// - `iris_phase3_component_visits`: total inner-loop iterations reaching the diff_mask check
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_iris_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    #[doc(hidden)] pub static NS_PHASE12:      AtomicU64 = AtomicU64::new(0);
-    #[doc(hidden)] pub static NS_PHASE3_BUILD: AtomicU64 = AtomicU64::new(0);
-    #[doc(hidden)] pub static NS_PHASE3_SORT:  AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_PHASE12:           AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_PHASE3_BUILD:       AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_PHASE3_SORT:        AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)] pub static NS_PHASE3_SORT_ONLY:   AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static N_PHASE3_ENTITY_VISITS:    AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static N_PHASE3_COMPONENT_VISITS: AtomicU64 = AtomicU64::new(0);
 
@@ -89,6 +91,7 @@ pub mod bench_iris_counters {
         NS_PHASE12.store(0, Ordering::Relaxed);
         NS_PHASE3_BUILD.store(0, Ordering::Relaxed);
         NS_PHASE3_SORT.store(0, Ordering::Relaxed);
+        NS_PHASE3_SORT_ONLY.store(0, Ordering::Relaxed);
         N_PHASE3_ENTITY_VISITS.store(0, Ordering::Relaxed);
         N_PHASE3_COMPONENT_VISITS.store(0, Ordering::Relaxed);
     }
@@ -99,6 +102,10 @@ pub mod bench_iris_counters {
             NS_PHASE3_BUILD.load(Ordering::Relaxed),
             NS_PHASE3_SORT.load(Ordering::Relaxed),
         )
+    }
+    /// Returns the sort-call-only nanoseconds (subset of `phase3_sort`).
+    pub fn snapshot_sort_only() -> u64 {
+        NS_PHASE3_SORT_ONLY.load(Ordering::Relaxed)
     }
     /// Returns `(entity_visits, component_visits)` — iteration counts for the Phase 3 inner loops.
     pub fn snapshot_visits() -> (u64, u64) {
