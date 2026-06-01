@@ -34,11 +34,21 @@ impl ChannelTickBufferSender {
             self.last_sent = *client_sending_tick;
             self.never_sent = true;
 
-            // Loop through outstanding messages and add them to the outgoing list
+            // Loop through outstanding messages and add each that is individually
+            // reachable (tick <= client_sending_tick) to the outgoing list.
+            // `sending_messages` iterates newest-tick-first ("front big"), so a
+            // message newer than the sending tick is NOT a stop condition — older
+            // messages behind it may still be sendable. Use `continue`, not `break`:
+            // breaking here dropped the oldest message of any multi-tick batch
+            // whenever the sending↔receivable gap was tight enough that
+            // `server_receivable_tick` pruned it before the newest became sendable
+            // (e.g. a 3-tick batch under the deterministic delivery-bounded clock,
+            // whose gap is ~2 ticks). Sending each message the tick it becomes
+            // individually reachable is timing-robust and the server de-dups by
+            // (tick, message_index), so the extra retransmits are harmless.
             for (message_tick, message_map) in self.sending_messages.iter() {
                 if sequence_greater_than(*message_tick, *client_sending_tick) {
-                    warn!("Sending message that is more recent than client sending tick! This shouldn't be possible.");
-                    break;
+                    continue;
                 }
 
                 let messages = message_map.collect_messages();
