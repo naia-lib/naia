@@ -25,6 +25,19 @@ impl GameInstant {
         Self { millis }
     }
 
+    /// Creates a `GameInstant` directly from a raw millisecond value.
+    ///
+    /// The symmetric inverse of [`as_millis`](Self::as_millis): the value is
+    /// wrapped into `[0, GAME_TIME_LIMIT)` exactly as [`add_millis`](Self::add_millis)
+    /// and [`sub_millis`](Self::sub_millis) do, so the wrapping invariant always
+    /// holds. Useful for reconstructing an instant from a serialized/known
+    /// timestamp and for constructing fixed instants in tests without a clock.
+    pub fn from_millis(millis: u32) -> Self {
+        Self {
+            millis: millis % GAME_TIME_LIMIT,
+        }
+    }
+
     /// Returns the duration elapsed since `previous_instant` (assumed to be in the past).
     pub fn time_since(&self, previous_instant: &GameInstant) -> GameDuration {
         let previous_millis = previous_instant.millis;
@@ -183,6 +196,16 @@ mod wrapping_diff_tests {
         let result = a.offset_from(&b);
 
         assert_eq!(result, 2);
+    }
+
+    #[test]
+    fn from_millis_round_trips_and_wraps() {
+        // In-range value round-trips through as_millis.
+        assert_eq!(GameInstant::from_millis(12345).as_millis(), 12345);
+        // At/over the wrap boundary it folds into [0, GAME_TIME_LIMIT).
+        assert_eq!(GameInstant::from_millis(GAME_TIME_LIMIT).as_millis(), 0);
+        assert_eq!(GameInstant::from_millis(GAME_TIME_LIMIT + 7).as_millis(), 7);
+        assert_eq!(GameInstant::from_millis(u32::MAX).as_millis(), u32::MAX % GAME_TIME_LIMIT);
     }
 
     #[test]
