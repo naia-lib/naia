@@ -21,7 +21,24 @@ pub struct Url {
 
 impl std::fmt::Display for Url {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.original)
+        write!(f, "{}", self.original)?;
+        // Normalize a bare-authority URL ("http://host:port") to a single "/"
+        // path, matching the `url` crate this parser replaced
+        // (`Url::parse("http://h:p").to_string()` == "http://h:p/").
+        //
+        // Display's documented job is to build the signaling URL by
+        // concatenating a base with an endpoint path — both the wasm_bindgen
+        // (`format!("{}{}", base, rtc_endpoint_path)`) and miniquad
+        // (`address + rtc_path` in naia_socket.js) backends join with NO
+        // separator and rely on the base ending in "/". Without this, a base
+        // like "http://127.0.0.1:14196" + "api/session_connect" produced the
+        // invalid URL "http://127.0.0.1:14196api/session_connect", so the
+        // browser's XMLHttpRequest.open() threw and the WebRTC signaling POST
+        // was never sent (handshake stuck on "Identity Token not set").
+        if self.authority_end() == self.original.len() {
+            write!(f, "/")?;
+        }
+        Ok(())
     }
 }
 
@@ -147,5 +164,47 @@ cfg_if! {
         pub fn url_to_socket_addr(_url: &Url) -> SocketAddr {
             panic!("should not need this method for Wasm apps");
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_server_url;
+
+    // The session-URL builders concatenate base + endpoint path with no
+    // separator (wasm_bindgen `format!("{}{}", base, path)`, miniquad
+    // `address + rtc_path`), so a bare-authority base MUST Display with a
+    // trailing "/". Regression guard for the `url` → minimal-parser swap that
+    // dropped this and broke WebRTC signaling ("Identity Token not set").
+    #[test]
+    fn bare_authority_displays_with_trailing_slash() {
+        assert_eq!(
+            parse_server_url("http://127.0.0.1:14196").to_string(),
+            "http://127.0.0.1:14196/"
+        );
+        // Concatenation with an endpoint path yields a valid URL.
+        let base = parse_server_url("http://127.0.0.1:14196");
+        assert_eq!(
+            format!("{}{}", base, "api/session_connect"),
+            "http://127.0.0.1:14196/api/session_connect"
+        );
+    }
+
+    #[test]
+    fn existing_trailing_slash_is_not_doubled() {
+        assert_eq!(
+            parse_server_url("http://127.0.0.1:14196/").to_string(),
+            "http://127.0.0.1:14196/"
+        );
+    }
+
+    #[test]
+    fn single_path_segment_is_preserved() {
+        // parse_server_url permits a single path segment; Display must not
+        // append another slash.
+        assert_eq!(
+            parse_server_url("https://example.com/base").to_string(),
+            "https://example.com/base"
+        );
     }
 }
