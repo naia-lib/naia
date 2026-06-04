@@ -23,6 +23,17 @@ pub struct RemoteWorldWaitlist {
     insert_waitlist_map: HashMap<(RemoteEntity, ComponentKind), WaitlistHandle>,
     update_waitlist_store: WaitlistStore<(Tick, RemoteEntity, ComponentKind, ComponentFieldUpdate)>,
     update_waitlist_map: HashMap<(RemoteEntity, ComponentKind), HashMap<u8, WaitlistHandle>>,
+    // A component update whose OWN target entity has not yet been spawned
+    // locally. Held — waiting on that entity — until it spawns, then applied in
+    // tick order. This is the base case of the same causal-ordering invariant
+    // the relation waitlists enforce ("apply an update only once the entities it
+    // depends on exist"): an update's most fundamental dependency is the entity
+    // it targets. Without this, an update that arrives before its entity's
+    // spawn (send-side ordering imperfection, network reordering, or
+    // loss+retransmit interleaving) would hit the `owned_entity_to_global_entity`
+    // unwrap. Releasing on `spawn_entity` reuses the existing machinery.
+    update_self_waitlist_store:
+        WaitlistStore<(Tick, RemoteEntity, ComponentKind, PendingComponentUpdate)>,
 }
 
 impl RemoteWorldWaitlist {
@@ -33,6 +44,7 @@ impl RemoteWorldWaitlist {
             insert_waitlist_map: HashMap::new(),
             update_waitlist_store: WaitlistStore::new(),
             update_waitlist_map: HashMap::new(),
+            update_self_waitlist_store: WaitlistStore::new(),
         }
     }
 
@@ -201,28 +213,49 @@ impl RemoteWorldWaitlist {
                     handle_map.insert(field_id, handle);
                 }
             }
-            // if it exists, apply the ready part of the component update
+            // The ready part has no unresolved entity-RELATION dependencies — but
+            // it still depends on its OWN target entity existing. Apply it now if
+            // that entity is spawned; otherwise buffer it (waiting on its own
+            // entity) so it applies the moment the spawn lands, rather than
+            // unwrapping a missing entity. See `update_self_waitlist_store`.
             if let Some(ready_update) = ready_update_opt {
-                let global_entity = local_converter
-                    .owned_entity_to_global_entity(&local_entity)
-                    .unwrap();
-                let world_entity = world_converter
-                    .global_entity_to_entity(&global_entity)
-                    .unwrap();
-                if world
-                    .component_apply_update(
-                        local_converter,
-                        &world_entity,
-                        &component_kind,
-                        ready_update,
-                    )
-                    .is_err()
-                {
-                    warn!("Remote World Manager: cannot read malformed component update message");
-                    continue;
-                }
+                match local_converter.owned_entity_to_global_entity(&local_entity) {
+                    Ok(global_entity) => {
+                        let world_entity = world_converter
+                            .global_entity_to_entity(&global_entity)
+                            .unwrap();
+                        if world
+                            .component_apply_update(
+                                local_converter,
+                                &world_entity,
+                                &component_kind,
+                                ready_update,
+                            )
+                            .is_err()
+                        {
+                            warn!("Remote World Manager: cannot read malformed component update message");
+                            continue;
+                        }
 
-                output.push((tick, local_entity, component_kind));
+                        output.push((tick, local_entity, component_kind));
+                    }
+                    Err(_) => {
+                        // Target entity not spawned locally yet — defer.
+                        let OwnedLocalEntity::Remote { .. } = local_entity else {
+                            warn!("Remote World Manager: update for a non-remote unspawned entity; dropping");
+                            continue;
+                        };
+                        let remote_entity = local_entity.take_remote();
+                        let mut deps = HashSet::new();
+                        deps.insert(remote_entity);
+                        self.entity_waitlist.queue(
+                            in_scope_entities,
+                            &deps,
+                            &mut self.update_self_waitlist_store,
+                            (tick, remote_entity, component_kind, ready_update),
+                        );
+                    }
+                }
             }
         }
         output
@@ -275,6 +308,58 @@ impl RemoteWorldWaitlist {
                     .is_err()
                 {
                     warn!("Remote World Manager: cannot read malformed complete waitlisted component update message");
+                    continue;
+                }
+
+                output.push((tick, remote_entity, component_kind));
+            }
+        }
+
+        output
+    }
+
+    /// Flush updates that were buffered waiting on their OWN target entity to be
+    /// spawned (see `update_self_waitlist_store`). Released by `spawn_entity`
+    /// when that entity comes into scope. Applied in ascending tick order so a
+    /// later update's value wins (each carries absolute field values).
+    pub(crate) fn process_self_waitlist_updates<
+        E: Copy + Eq + Hash + Send + Sync,
+        W: WorldMutType<E>,
+    >(
+        &mut self,
+        local_converter: &dyn LocalEntityAndGlobalEntityConverter,
+        world_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        world: &mut W,
+        now: &Instant,
+    ) -> Vec<(Tick, RemoteEntity, ComponentKind)> {
+        let mut output = Vec::new();
+        if let Some(mut list) = self
+            .entity_waitlist
+            .collect_ready_items(now, &mut self.update_self_waitlist_store)
+        {
+            list.sort_by_key(|(tick, _, _, _)| *tick);
+            for (tick, remote_entity, component_kind, ready_update) in list {
+                // The entity is now in scope (that is what released this item),
+                // but guard defensively against a despawn racing the release.
+                let Ok(global_entity) =
+                    local_converter.remote_entity_to_global_entity(&remote_entity)
+                else {
+                    continue;
+                };
+                let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity)
+                else {
+                    continue;
+                };
+                if world
+                    .component_apply_update(
+                        local_converter,
+                        &world_entity,
+                        &component_kind,
+                        ready_update,
+                    )
+                    .is_err()
+                {
+                    warn!("Remote World Manager: cannot read malformed self-waitlisted component update message");
                     continue;
                 }
 

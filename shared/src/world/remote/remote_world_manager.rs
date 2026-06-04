@@ -555,6 +555,7 @@ impl RemoteWorldManager {
             incoming_updates,
         );
         self.process_waitlist_updates(local_converter, world_converter, world, now);
+        self.process_self_waitlist_updates(local_converter, world_converter, world, now);
     }
 
     /// Process component updates from raw bits for a given entity
@@ -595,6 +596,31 @@ impl RemoteWorldManager {
         for (tick, remote_entity, component_kind) in
             self.waitlist
                 .process_waitlist_updates(local_converter, world_converter, world, now)
+        {
+            let global_entity = local_converter
+                .remote_entity_to_global_entity(&remote_entity)
+                .unwrap();
+            self.incoming_events.push(EntityEvent::UpdateComponent(
+                tick,
+                global_entity,
+                component_kind,
+            ));
+        }
+    }
+
+    /// Emit `UpdateComponent` events for updates that were buffered waiting on
+    /// their own target entity to spawn, and have now been applied. Mirrors
+    /// `process_waitlist_updates`.
+    fn process_self_waitlist_updates<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+        &mut self,
+        local_converter: &dyn LocalEntityAndGlobalEntityConverter,
+        world_converter: &dyn EntityAndGlobalEntityConverter<E>,
+        world: &mut W,
+        now: &Instant,
+    ) {
+        for (tick, remote_entity, component_kind) in
+            self.waitlist
+                .process_self_waitlist_updates(local_converter, world_converter, world, now)
         {
             let global_entity = local_converter
                 .remote_entity_to_global_entity(&remote_entity)
