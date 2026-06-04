@@ -571,6 +571,44 @@ impl BenchWorld {
         }
     }
 
+    /// Spawn `count` mutable [`HaloUnit`] entities and add them to the room, but
+    /// do NOT drive catch-up ticks. Returns the index of the first new unit in
+    /// `server_entities`. Unlike `spawn_halo_scene`, this leaves the spawn→ACK
+    /// window OPEN: a caller that `mutate`s + `tick`s these units over the next
+    /// few ticks exercises the send-gate's pre-delivery path (the cyberlith
+    /// "avatar enters FoW scope while moving" case). Used by the Phase-H
+    /// send-gate measurement example.
+    pub fn spawn_halo_units_no_catchup(&mut self, count: usize) -> usize {
+        let first = self.server_entities.len();
+        for i in 0..count {
+            let entity = {
+                let mut em = self.server.spawn_entity(self.server_world.proxy_mut());
+                let id = em.id();
+                em.insert_component(HaloUnit::new(i as i16, 0, 0));
+                id
+            };
+            self.server.room_mut(&self.room_key).add_entity(&entity);
+            self.server_entities.push(entity);
+        }
+        first
+    }
+
+    /// Mutate `count` [`HaloUnit`] entities starting at `start` (increment facing).
+    #[inline]
+    pub fn mutate_halo_units_range(&mut self, start: usize, count: usize) {
+        let end = (start + count).min(self.server_entities.len());
+        for i in start..end {
+            let entity = self.server_entities[i];
+            if let Some(mut unit) = self
+                .server
+                .entity_mut(self.server_world.proxy_mut(), &entity)
+                .component::<HaloUnit>()
+            {
+                *unit.facing = unit.facing.wrapping_add(1);
+            }
+        }
+    }
+
     /// Mutate the first `count` [`HaloUnit`] entities (increment facing by 1).
     /// Call before `tick()` to drive an active-workload scenario.
     #[inline]

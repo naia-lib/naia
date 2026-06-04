@@ -78,13 +78,39 @@ pub mod bench_scope_counters {
 /// - `iris_phase3_component_visits`: total inner-loop iterations reaching the diff_mask check
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_iris_counters {
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
     #[doc(hidden)] pub static NS_PHASE12:           AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_PHASE3_BUILD:       AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_PHASE3_SORT:        AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static NS_PHASE3_SORT_ONLY:   AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static N_PHASE3_ENTITY_VISITS:    AtomicU64 = AtomicU64::new(0);
     #[doc(hidden)] pub static N_PHASE3_COMPONENT_VISITS: AtomicU64 = AtomicU64::new(0);
+
+    // ── Phase H deferred-followup: send-gate measurement ──────────────────────
+    // When true, the Phase-3A send gate (`send_state.rs`) is FORCED to skip the
+    // single-lookup fast path (`is_receiver_dirty_and_delivered_fast`) and run
+    // the 6+-HashMap `is_component_updatable_for_entity` chain for EVERY visited
+    // component — i.e. "close the fast-path bypass". The A/B delta on
+    // `steady_state_active` is the recurring per-tick CPU tax of hardening the
+    // gate. Off by default; flipped by the measurement harness only.
+    #[doc(hidden)] pub static FORCE_SLOW_GATE: AtomicBool = AtomicBool::new(false);
+    /// When true, the gate cross-checks each fast-path emission against the
+    /// ground-truth `is_component_updatable_for_entity` to count leaks/suppressions.
+    /// Kept OFF during the (b) timing A/B so that extra call never skews timings.
+    #[doc(hidden)] pub static MEASURE_LEAK: AtomicBool = AtomicBool::new(false);
+    /// Updates emitted via the single-lookup FAST path (dirty+delivered flag).
+    #[doc(hidden)] pub static N_FAST_EMIT:       AtomicU64 = AtomicU64::new(0);
+    /// Updates emitted via the SLOW path (`is_component_updatable` == true but the
+    /// fast flag was not set — e.g. before the InsertComponent ACK, or forced-slow).
+    #[doc(hidden)] pub static N_SLOW_EMIT:       AtomicU64 = AtomicU64::new(0);
+    /// Updates emitted via the FAST path for a component the ground-truth
+    /// `is_component_updatable_for_entity` says is NOT yet delivered — i.e. a
+    /// pre-delivery ("redundant") update the receiver-side waitlist must buffer.
+    #[doc(hidden)] pub static N_FASTPATH_LEAK:   AtomicU64 = AtomicU64::new(0);
+    /// Dirty+visible updates the gate SUPPRESSED because the insert was not yet
+    /// delivered (`is_component_updatable` == false on the slow path) — the
+    /// bandwidth the gate currently saves vs. a no-gate send.
+    #[doc(hidden)] pub static N_GATE_SUPPRESSED: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all Iris phase counters to zero.
     pub fn reset() {
@@ -94,6 +120,27 @@ pub mod bench_iris_counters {
         NS_PHASE3_SORT_ONLY.store(0, Ordering::Relaxed);
         N_PHASE3_ENTITY_VISITS.store(0, Ordering::Relaxed);
         N_PHASE3_COMPONENT_VISITS.store(0, Ordering::Relaxed);
+        N_FAST_EMIT.store(0, Ordering::Relaxed);
+        N_SLOW_EMIT.store(0, Ordering::Relaxed);
+        N_FASTPATH_LEAK.store(0, Ordering::Relaxed);
+        N_GATE_SUPPRESSED.store(0, Ordering::Relaxed);
+    }
+    /// Sets the force-slow-gate toggle (see [`FORCE_SLOW_GATE`]).
+    pub fn set_force_slow_gate(v: bool) {
+        FORCE_SLOW_GATE.store(v, Ordering::Relaxed);
+    }
+    /// Sets the leak-measurement toggle (see [`MEASURE_LEAK`]).
+    pub fn set_measure_leak(v: bool) {
+        MEASURE_LEAK.store(v, Ordering::Relaxed);
+    }
+    /// Returns `(fast_emit, slow_emit, fastpath_leak, gate_suppressed)`.
+    pub fn snapshot_gate() -> (u64, u64, u64, u64) {
+        (
+            N_FAST_EMIT.load(Ordering::Relaxed),
+            N_SLOW_EMIT.load(Ordering::Relaxed),
+            N_FASTPATH_LEAK.load(Ordering::Relaxed),
+            N_GATE_SUPPRESSED.load(Ordering::Relaxed),
+        )
     }
     /// Returns `(phase12_ns, phase3_build_ns, phase3_sort_ns)`.
     pub fn snapshot() -> (u64, u64, u64) {

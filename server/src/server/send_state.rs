@@ -739,12 +739,50 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
                                 .fetch_add(1, Ordering::Relaxed);
 
-                            if diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
+                            // Phase H deferred-followup measurement: `force_slow`
+                            // skips the single-lookup fast path so every component
+                            // pays the 6+-HashMap `is_component_updatable_for_entity`
+                            // chain — the A/B isolates the CPU tax of hardening the
+                            // gate. Const-false (folded away) outside bench builds.
+                            #[cfg(feature = "bench_instrumentation")]
+                            let force_slow = crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
+                                .load(Ordering::Relaxed);
+                            #[cfg(not(feature = "bench_instrumentation"))]
+                            let force_slow = false;
+
+                            if !force_slow && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
                                 // fast path
+                                #[cfg(feature = "bench_instrumentation")]
+                                {
+                                    use crate::server::world_server::bench_iris_counters as bic;
+                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                                        bic::N_FAST_EMIT.fetch_add(1, Ordering::Relaxed);
+                                        // Ground-truth: did the fast flag emit a pre-delivery update?
+                                        if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                                            bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
+                                        }
+                                    }
+                                }
                             } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
                                 continue;
                             } else if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                                #[cfg(feature = "bench_instrumentation")]
+                                {
+                                    use crate::server::world_server::bench_iris_counters as bic;
+                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                                        bic::N_GATE_SUPPRESSED.fetch_add(1, Ordering::Relaxed);
+                                    }
+                                }
                                 continue;
+                            } else {
+                                // slow-path emit (delivered; fast flag not yet set, or forced-slow)
+                                #[cfg(feature = "bench_instrumentation")]
+                                {
+                                    use crate::server::world_server::bench_iris_counters as bic;
+                                    if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
+                                        bic::N_SLOW_EMIT.fetch_add(1, Ordering::Relaxed);
+                                    }
+                                }
                             }
 
                             // MISSION_TICK_FLOOR Lever 3: capture the per-property
