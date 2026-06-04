@@ -232,20 +232,25 @@ impl<'w, T: Send + Sync + 'static> EntityAndGlobalEntityConverter<Entity> for Cl
     }
 }
 
-/// Applies ONLY component `R`'s freshly-decoded-but-not-yet-applied updates to the
-/// world, draining them so the later full apply (`ProcessPackets`) does not redo them.
-/// All other buffered updates are left for that later apply.
+/// Drains component `R`'s freshly-decoded-but-not-yet-applied updates from the receive
+/// buffer, applies each to the world in tick order, and returns the resulting value per
+/// update as `(Tick, Entity, R)`. Drained entries are not redone by the later full apply
+/// (`ProcessPackets`); all other buffered updates and inserts are left for that apply.
 ///
 /// Intended for an exclusive system running between decode (`HandleTickEvents`) and the
-/// full apply: it makes a specific *input* component (e.g. a remote avatar's command)
-/// available on the world before a tick, while the remaining *state* reconciles
-/// afterward. `T` is the protocol marker.
-pub fn apply_received_updates_of_kind<T: Send + Sync + 'static, R: ReplicatedComponent>(
+/// full apply: it exposes a remote *input* component's PER-TICK history (e.g. a remote
+/// avatar's command at each tick it changed) before a tick, so a deterministic
+/// re-simulation can re-derive each catch-up tick with that tick's own input, while the
+/// remaining *state* reconciles afterward. `T` is the protocol marker. See
+/// [`naia_shared::LocalWorldManager::take_received_updates_of_kind`].
+pub fn take_received_updates_of_kind<T: Send + Sync + 'static, R: ReplicatedComponent>(
     world: &mut World,
-) {
+) -> Vec<(Tick, Entity, R)> {
+    let mut result = Vec::new();
     world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
-        client
+        result = client
             .client
-            .apply_received_updates_of_kind::<R, _>(world.proxy_mut());
+            .take_received_updates_of_kind::<R, _>(world.proxy_mut());
     });
+    result
 }

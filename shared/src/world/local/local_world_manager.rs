@@ -127,7 +127,7 @@ use crate::{
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, HostEntity,
     InScopeEntities, LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex,
     OwnedLocalEntity, PacketNotifiable, ReliableSender, RemoteEntity, RemoteWorldManager,
-    Replicate, Tick, WorldMutType, WorldRefType,
+    Replicate, ReplicatedComponent, Tick, WorldMutType, WorldRefType,
 };
 
 cfg_if! {
@@ -728,33 +728,57 @@ impl LocalWorldManager {
             .push((tick, *local_entity, component_update));
     }
 
-    /// Applies ONLY the buffered updates of `component_kind` to `world`, draining
-    /// them from the incoming buffer so the later full apply
-    /// ([`Self::take_incoming_events`]) does not re-apply them. All other buffered
-    /// updates are left intact for that later apply.
+    /// Drains the freshly-decoded-but-not-yet-applied UPDATES of component kind
+    /// `R` from the incoming buffer, applies each to `world` IN TICK ORDER, and
+    /// returns a copy of the resulting component value per update as a typed
+    /// `(Tick, E, R)`. Drained entries are removed so the later full apply
+    /// ([`Self::take_incoming_events`]) does not re-apply them; all other buffered
+    /// updates — and ALL buffered inserts (`incoming_components`) — are left
+    /// untouched for that later apply.
     ///
-    /// This realizes an input-early / state-late split: a client can apply a specific
-    /// *input* component (e.g. a remote avatar's command) to the world BEFORE ticking
-    /// its simulation, then reconcile the remaining *state* afterward. The buffer is
-    /// filled by packet decode (which runs before the tick), so by the time a tick is
-    /// being reconstructed the relevant input has been received and persists on the
-    /// component.
-    pub fn apply_received_updates_of_kind<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
+    /// This is a pure mechanism: naia neither knows nor cares that `R` is an
+    /// "input". It exposes the gap naia maintains between **decode** (packets are
+    /// read and buffered before the tick) and **apply** (after). A deterministic
+    /// re-simulation needs not just the *latest* value of a remote input component
+    /// but its value AT EACH tick it changed — so it can re-derive every confirmed
+    /// tick in a multi-tick catch-up batch with that tick's own input, rather than
+    /// smearing the latest value across the whole batch. Returning the per-tick
+    /// `(Tick, E, R)` series is exactly that: the caller indexes it by tick.
+    ///
+    /// Materialization: `R` is not `Clone`, so each value is captured via the
+    /// supported owned-copy path (`copy_to_box` → downcast). Updates are applied
+    /// cumulatively in buffer order (already tick-sequenced by the client jitter
+    /// buffer), so the world is left holding the latest applied value — identical
+    /// to the previous apply path; live readers are unaffected.
+    ///
+    /// Inserts are intentionally excluded: a `SnapshotWorld`-style full-value
+    /// delivery (scope-entry bundle / re-scope) lands in `incoming_components` and
+    /// carries NO tick, so it cannot participate in tick-indexed reconstruction.
+    /// The normal [`Self::take_incoming_events`] path spawns the entity and seeds
+    /// the component from it. (Empirically — instrumented 2026-06-03 against the
+    /// remote-avatar desync suite — in-scope steady-state changes arrive 100% as
+    /// tick-tagged updates here; the insert path is scope-entry only.)
+    pub fn take_received_updates_of_kind<E, W, R>(
         &mut self,
-        component_kind: &ComponentKind,
         world_converter: &dyn EntityAndGlobalEntityConverter<E>,
         world: &mut W,
-    ) {
+    ) -> Vec<(Tick, E, R)>
+    where
+        E: Copy + Eq + Hash + Send + Sync,
+        W: WorldMutType<E>,
+        R: ReplicatedComponent,
+    {
+        let component_kind = ComponentKind::of::<R>();
         let updates = std::mem::take(&mut self.incoming_updates);
         let Ok(entity_map) = self.entity_map.read() else {
             self.incoming_updates = updates;
-            return;
+            return Vec::new();
         };
 
-        // (a) Diff updates of this kind.
+        let mut out: Vec<(Tick, E, R)> = Vec::new();
         let mut kept = Vec::with_capacity(updates.len());
         for (tick, local_entity, update) in updates {
-            if update.kind != *component_kind {
+            if update.kind != component_kind {
                 kept.push((tick, local_entity, update));
                 continue;
             }
@@ -764,35 +788,26 @@ impl LocalWorldManager {
             let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity) else {
                 continue;
             };
-            let _ =
-                world.component_apply_update(&*entity_map, &world_entity, component_kind, update);
-        }
-
-        // (b) Full-value (re)inserts of this kind. SnapshotWorld-style replication
-        // delivers some components — notably infrequently-changing inputs — as a
-        // full-value insert rather than a diff, so they land in `incoming_components`,
-        // not `incoming_updates`. Only drain an entry once its entity resolves;
-        // otherwise leave it for the full apply (it may be waitlisted on scope).
-        let insert_keys: Vec<(OwnedLocalEntity, ComponentKind)> = self
-            .incoming_components
-            .keys()
-            .filter(|(_local, kind)| kind == component_kind)
-            .copied()
-            .collect();
-        for key in insert_keys {
-            let Ok(global_entity) = entity_map.owned_entity_to_global_entity(&key.0) else {
+            if world
+                .component_apply_update(&*entity_map, &world_entity, &component_kind, update)
+                .is_err()
+            {
                 continue;
-            };
-            let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity) else {
-                continue;
-            };
-            if let Some(component) = self.incoming_components.remove(&key) {
-                world.insert_boxed_component(&world_entity, component);
+            }
+            // Capture the freshly-applied value as an owned, typed `R`. `Replicate`
+            // is not `Clone`; `copy_to_box` + `to_boxed_any().downcast` is the
+            // supported owned-copy path. The downcast is infallible here (kind
+            // already matched), but we tolerate failure rather than panic.
+            if let Some(component_ref) = world.component::<R>(&world_entity) {
+                if let Ok(boxed_r) = component_ref.copy_to_box().to_boxed_any().downcast::<R>() {
+                    out.push((tick, world_entity, *boxed_r));
+                }
             }
         }
 
         drop(entity_map);
         self.incoming_updates = kept;
+        out
     }
 
     /// Drains all buffered incoming messages and update events, applies them to `world`, and returns the resulting [`EntityEvent`]s.
