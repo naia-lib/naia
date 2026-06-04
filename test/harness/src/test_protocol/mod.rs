@@ -157,6 +157,23 @@ impl Velocity {
 #[replicate(immutable)]
 pub struct ImmutableLabel;
 
+/// Value-carrying immutable (seed-only) component. Its `Property` values are
+/// serialized once at spawn/insert to seed each new observer, but it is never
+/// diff-tracked — so the host may mutate it every tick without producing
+/// updates to existing observers. Exercises the seed-only-replication primitive.
+#[derive(Replicate)]
+#[replicate(immutable)]
+pub struct ImmutableSeed {
+    pub a: Property<u16>,
+    pub b: Property<u16>,
+}
+
+impl ImmutableSeed {
+    pub fn new(a: u16, b: u16) -> Self {
+        Self::new_complete(a, b)
+    }
+}
+
 // ========================================================================
 // Replicated Resource test types — server↔client singletons.
 // ========================================================================
@@ -206,6 +223,7 @@ pub fn protocol() -> Protocol {
         .add_component::<Position>()
         .add_component::<Velocity>()
         .add_component::<ImmutableLabel>()
+        .add_component::<ImmutableSeed>()
         .add_resource::<TestScore>()
         .add_resource::<TestMatchState>()
         .add_resource::<TestPlayerSelection>()
@@ -249,4 +267,72 @@ pub fn protocol() -> Protocol {
         )
         .enable_client_authoritative_entities()
         .build()
+}
+
+#[cfg(test)]
+mod immutable_seed_tests {
+    //! Value-carrying immutable (seed-only) replication primitive.
+    //!
+    //! An immutable component carries its `Property` values once at spawn/insert
+    //! (to seed each new observer) but is never diff-tracked. These tests pin the
+    //! two load-bearing behaviors: the value survives the spawn write→read
+    //! round-trip, and the host may mutate the component every tick despite never
+    //! receiving a `PropertyMutator`.
+
+    use super::{protocol, ImmutableSeed};
+    use naia_shared::{FakeEntityConverter, Replicate};
+
+    #[test]
+    fn immutable_seed_is_flagged_immutable() {
+        let seed = ImmutableSeed::new(220, 75);
+        assert!(
+            seed.is_immutable(),
+            "a #[replicate(immutable)] component with Property fields must still report is_immutable()"
+        );
+    }
+
+    #[test]
+    fn seed_value_round_trips_through_spawn_write() {
+        // Serialize EXACTLY as SpawnWithComponents does (Replicate::write =
+        // kind tag + each Property value), then read it back through the
+        // protocol's component reader — proving the seed value crosses the wire
+        // rather than arriving as Default (the bug that sank the immutable
+        // presence-only approach).
+        let protocol = protocol();
+        let kinds = &protocol.component_kinds;
+
+        let seed = ImmutableSeed::new(220, 75);
+        let mut writer = naia_shared::BitWriter::new();
+        let mut write_converter = FakeEntityConverter;
+        seed.write(kinds, &mut writer, &mut write_converter);
+
+        let owned = writer.to_owned_reader();
+        let mut reader = owned.borrow();
+        let boxed = kinds
+            .read(&mut reader, &FakeEntityConverter)
+            .expect("immutable seed component should deserialize");
+
+        let read_back = boxed
+            .to_any()
+            .downcast_ref::<ImmutableSeed>()
+            .expect("read-back component should be an ImmutableSeed");
+        assert_eq!(*read_back.a, 220, "seed field `a` must survive the wire");
+        assert_eq!(*read_back.b, 75, "seed field `b` must survive the wire");
+    }
+
+    #[test]
+    fn host_may_mutate_every_tick_without_a_mutator() {
+        // Immutable components are never registered for diff-tracking, so they
+        // never receive a PropertyMutator. The host sim mutates the live value
+        // every tick (each new observer is seeded with the current value at
+        // spawn). This must be a clean no-op on dirty-tracking — no panic, no
+        // warn spam — and the value must update in place.
+        let mut seed = ImmutableSeed::new(0, 0);
+        for i in 1..=100u16 {
+            *seed.a = i;
+            *seed.b = i.wrapping_mul(2);
+        }
+        assert_eq!(*seed.a, 100);
+        assert_eq!(*seed.b, 200);
+    }
 }

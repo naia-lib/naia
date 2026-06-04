@@ -51,6 +51,22 @@ impl<T: Serde> Property<T> {
         }
     }
 
+    /// Create a new host-owned Property for an *immutable* (seed-only)
+    /// component. Identical to [`Self::host_owned`] except its `mutate()`
+    /// tolerates the permanent absence of a `PropertyMutator`: immutable
+    /// components are deliberately never registered for diff-tracking (see
+    /// `host_world_manager::init_entity_send_host_commands` /
+    /// `global_world_manager::insert_component_diff_handler`), so they never
+    /// receive a mutator — yet the host sim may freely mutate the value every
+    /// tick. Each new observer is seeded with the *current* value (re-read at
+    /// spawn/insert), and existing observers never see an update. This is the
+    /// value-carrying seed-only replication primitive.
+    pub fn immutable_host_owned(value: T, mutator_index: u8) -> Self {
+        Self {
+            inner: PropertyImpl::HostOwned(HostOwnedProperty::new_immutable(value, mutator_index)),
+        }
+    }
+
     /// Given a cursor into incoming packet data, initializes the Property with
     /// the synced value
     pub fn new_read(reader: &mut BitReader) -> Result<Self, SerdeErr> {
@@ -351,6 +367,11 @@ pub struct HostOwnedProperty<T: Serde> {
     inner: T,
     mutator: Option<PropertyMutator>,
     index: u8,
+    /// `true` for Properties of an immutable (seed-only) component, which are
+    /// never diff-tracked and thus never receive a mutator. Tells `mutate()`
+    /// that a missing mutator is by-design, not the bug the warning guards
+    /// against. Mutable components leave this `false`.
+    immutable: bool,
 }
 
 impl<T: Serde> HostOwnedProperty<T> {
@@ -360,6 +381,18 @@ impl<T: Serde> HostOwnedProperty<T> {
             inner: value,
             mutator: None,
             index: mutator_index,
+            immutable: false,
+        }
+    }
+
+    /// Create a new HostOwnedProperty for an immutable (seed-only) component —
+    /// see [`Property::immutable_host_owned`].
+    pub fn new_immutable(value: T, mutator_index: u8) -> Self {
+        Self {
+            inner: value,
+            mutator: None,
+            index: mutator_index,
+            immutable: true,
         }
     }
 
@@ -378,7 +411,14 @@ impl<T: Serde> HostOwnedProperty<T> {
 
     pub fn mutate(&mut self) {
         let Some(mutator) = &mut self.mutator else {
-            warn!("Host Property should have a mutator immediately after creation.");
+            // Immutable (seed-only) components are never diff-tracked, so the
+            // permanent absence of a mutator is expected — the host sim mutates
+            // the value every tick and each new observer is seeded with the
+            // current value at spawn. Only a *mutable* component reaching here
+            // is a bug (mutated before its mutator was installed).
+            if !self.immutable {
+                warn!("Host Property should have a mutator immediately after creation.");
+            }
             return;
         };
         mutator.mutate(self.index);

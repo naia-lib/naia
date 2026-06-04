@@ -82,13 +82,18 @@ pub fn replicate_impl(
     let builder_name = format_ident!("{}Builder", replica_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);
 
-    // Immutability validation: #[replicate(immutable)] forbids Property<T>/EntityProperty fields.
+    // Immutability validation: #[replicate(immutable)] permits `Property<T>`
+    // fields (their value is serialized once at spawn/insert to seed each new
+    // observer — the value-carrying seed-only primitive) but still forbids
+    // `EntityProperty`, whose remote-entity relations require the per-field
+    // diff/update machinery that immutable components deliberately skip.
     if is_immutable {
         for prop in &properties {
-            if matches!(prop, Property::Normal(_) | Property::Entity(_)) {
+            if matches!(prop, Property::Entity(_)) {
                 panic!(
-                    "immutable Replicate cannot hold Property<T> or EntityProperty — use plain T \
-                     fields instead (compile error from #[replicate(immutable)] validation)"
+                    "immutable Replicate cannot hold EntityProperty — entity relations require \
+                     diff-tracking, which immutable (seed-only) components skip. Use a plain field \
+                     or Property<T> (compile error from #[replicate(immutable)] validation)"
                 );
             }
         }
@@ -135,7 +140,8 @@ pub fn replicate_impl(
     };
 
     // Methods
-    let new_complete_method = get_new_complete_method(&enum_name, &properties, &struct_type);
+    let new_complete_method =
+        get_new_complete_method(&enum_name, &properties, &struct_type, is_immutable);
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
     let builder_new_method = get_builder_new_method(
         &typed_generics,
@@ -817,7 +823,16 @@ pub fn get_new_complete_method(
     enum_name: &Ident,
     properties: &[Property],
     struct_type: &StructType,
+    is_immutable: bool,
 ) -> TokenStream {
+    // Immutable (seed-only) components are never diff-tracked, so their host
+    // Properties never receive a mutator — construct them via the variant whose
+    // `mutate()` tolerates that (no per-tick "missing mutator" warning).
+    let host_ctor = if is_immutable {
+        quote! { immutable_host_owned }
+    } else {
+        quote! { host_owned }
+    };
     let mut args = quote! {};
     for property in properties.iter() {
         match property {
@@ -864,12 +879,12 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                            #field_name: Property::<#field_type>::host_owned(#field_name, #enum_name::#uppercase_variant_name as u8)
+                            #field_name: Property::<#field_type>::#host_ctor(#field_name, #enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     StructType::TupleStruct => {
                         quote! {
-                            Property::<#field_type>::host_owned(#field_name, #enum_name::#uppercase_variant_name as u8)
+                            Property::<#field_type>::#host_ctor(#field_name, #enum_name::#uppercase_variant_name as u8)
                         }
                     }
                     _ => {

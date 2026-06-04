@@ -4,4 +4,4 @@ error: proc-macro derive panicked
 5 | #[derive(Replicate)]
   |          ^^^^^^^^^
   |
-  = help: message: immutable Replicate cannot hold Property<T> or EntityProperty — use plain T fields instead (compile error from #[replicate(immutable)] validation)
+  = help: message: immutable Replicate cannot hold EntityProperty — entity relations require diff-tracking, which immutable (seed-only) components skip. Use a plain field or Property<T> (compile error from #[replicate(immutable)] validation)
