@@ -1,6 +1,6 @@
 use std::{collections::VecDeque, mem};
 
-use log::{info, warn};
+use log::{trace, warn};
 
 use naia_serde::{BitReader, Serde, SerdeErr};
 use naia_socket_shared::Instant;
@@ -58,7 +58,7 @@ impl UnorderedUnreliableReceiver {
             );
             return;
         } else {
-            info!("Received message {:?}!", message.name());
+            trace!("Received message {:?}!", message.name());
         }
 
         self.incoming_messages.push_back(message);

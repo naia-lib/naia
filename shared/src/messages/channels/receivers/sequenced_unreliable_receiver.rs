@@ -1,6 +1,6 @@
 use std::mem;
 
-use log::{info, warn};
+use log::{trace, warn};
 
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
@@ -56,7 +56,7 @@ impl SequencedUnreliableReceiver {
             );
             return;
         } else {
-            info!("Received message {:?}!", message.name());
+            trace!("Received message {:?}!", message.name());
         }
 
         self.arrange_message(message_index, message);

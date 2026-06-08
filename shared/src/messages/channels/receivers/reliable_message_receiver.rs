@@ -1,4 +1,4 @@
-use log::{info, warn};
+use log::{trace, warn};
 
 use naia_serde::{BitReader, SerdeErr};
 use naia_socket_shared::Instant;
@@ -97,7 +97,7 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
             );
             return;
         } else {
-            info!("Received message {:?}!", full_message.name());
+            trace!("Received message {:?}!", full_message.name());
         }
 
         let incoming_messages =
