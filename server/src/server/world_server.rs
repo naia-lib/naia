@@ -165,6 +165,16 @@ pub mod bench_iris_counters {
 
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);
+/// Tick-buffered data packets that were actually DECODED (applied to the recv
+/// connection's tick buffer), counted per packet in `process_recv_packets`.
+/// Pairs with [`SERVER_RX_FRAMES`] (packets read off the socket): the ratio
+/// `SERVER_RX_PACKETS_DECODED / SERVER_RX_FRAMES` must stay ≈1. A persistent
+/// shortfall means arrived command packets are being lost before decode — the
+/// exact failure mode of the bounded(1) recv-output-channel drop bug fixed in
+/// `plugin_full.rs` (the worker pulled packets off the socket then dropped the
+/// `ReceiveOutput` carrying them). Kept as a permanent regression sentinel.
+#[cfg(feature = "e2e_debug")]
+pub static SERVER_RX_PACKETS_DECODED: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_TX_FRAMES: AtomicUsize = AtomicUsize::new(0);
 #[cfg(feature = "e2e_debug")]

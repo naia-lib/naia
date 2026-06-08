@@ -320,6 +320,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 continue;
             }
 
+            // Regression sentinel (see SERVER_RX_PACKETS_DECODED): a tick-buffered
+            // data packet was successfully decoded and applied. The ratio of this
+            // to SERVER_RX_FRAMES (packets read off the socket) must stay ≈1.
+            #[cfg(feature = "e2e_debug")]
+            crate::server::world_server::SERVER_RX_PACKETS_DECODED
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+
             // Send-side: decode message/world section.
             if send_conn
                 .read_data_section(

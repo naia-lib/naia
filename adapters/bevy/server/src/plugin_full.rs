@@ -71,11 +71,7 @@ use bevy_ecs::{
     schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
     world::World,
 };
-use crossbeam_channel::{bounded, Receiver, Sender};
-// `TrySendError` is only used on the active receive path (the parked recv
-// worker is a pure parking service and never sends output).
-#[cfg(workers_active)]
-use crossbeam_channel::TrySendError;
+use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -404,7 +400,25 @@ impl PluginInternalState {
         snapshot_sender: SnapshotSender<Entity>,
         snapshot_receiver: SnapshotReceiver<Entity>,
     ) -> Self {
-        let (tx, rx) = bounded::<ReceiveOutput<Entity>>(1);
+        // UNBOUNDED: the recv worker calls `recv.receive()` (which destructively
+        // drains command packets off the socket into a `ReceiveOutput`) once per
+        // wakeup, but the main-side consumer (`drain_recv_impl`) only drains this
+        // channel once per park window (≈ once per service tick). When packets
+        // arrive in a burst, the worker produces several outputs between drains.
+        // A bounded(1) channel here silently `drop()`ed every output past the
+        // first — and because those outputs already held packets pulled OFF the
+        // socket, the drain's safety-net `recv.receive()` could not recover them:
+        // the tick-buffered PlayerCommands were permanently lost (measured ~93–98%
+        // loss under sustained input → the avatar barely moved). Unbounded never
+        // drops; the drain's `try_iter().collect()` empties it in FIFO order each
+        // cycle, so ordering — and determinism — are preserved. Memory is self-
+        // limiting: at most one drain-interval's worth of outputs accumulates.
+        // NOTE: this path is exercised ONLY when workers are active (live/async);
+        // under `test_time` the workers are pure parking services and the consumer
+        // drives `recv.receive()` synchronously, so the determinism harness never
+        // touched the dropping `try_send` — that is why the gate stayed green while
+        // live movement was broken.
+        let (tx, rx) = unbounded::<ReceiveOutput<Entity>>();
         Self {
             state: AtomicU8::new(State::Armed as u8),
             armed_handles: Mutex::new(Some((sim_handle, recv, send))),
@@ -1098,11 +1112,12 @@ fn recv_worker_loop(
             }
         }
 
-        // bounded(1) channel — drop newer output if full.
-        match out_tx.try_send(output) {
-            Ok(()) => {}
-            Err(TrySendError::Full(new_output)) => { drop(new_output); }
-            Err(TrySendError::Disconnected(_)) => { return; }
+        // Unbounded channel: NEVER drop a `ReceiveOutput`. It already holds
+        // command packets pulled off the socket; dropping it would lose them
+        // (see channel construction in `new_armed`). `send` only errors if the
+        // receiver hung up (plugin teardown) — exit cleanly in that case.
+        if out_tx.send(output).is_err() {
+            return;
         }
         // Idle inter-iteration wait.
         match &readiness {
@@ -1352,8 +1367,9 @@ pub fn drain_recv_impl(
     let mut recv = recv_opt.unwrap();
     let mut send = send_opt.unwrap();
 
-    // Drain everything the recv worker has already shipped to the channel
-    // (bounded(1), so at most one item from prior iterations).
+    // Drain everything the recv worker has shipped to the channel since the
+    // last park window. The channel is unbounded, so this collects ALL outputs
+    // produced between drains in FIFO order — none were dropped (see `new_armed`).
     let mut outputs: Vec<ReceiveOutput<Entity>> = receiver.try_iter().collect();
 
     // Perform a synchronous recv.receive() while workers are parked. This
