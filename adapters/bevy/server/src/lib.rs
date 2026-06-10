@@ -80,9 +80,10 @@
 pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
     HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken, Instant,
-    ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, ResponseSendKey,
-    SendPackets, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
-    WorldProxy, WorldProxyMut, WorldToHostSync, WorldUpdate,
+    ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper, Replicate,
+    ReplicateBundle, ReplicatedComponent, ResponseSendKey, SendPackets, SnapshotWorld, Tick,
+    TranslateWorldEvents, WorldMutType, WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef,
+    WorldRefType, WorldToHostSync, WorldUpdate,
 };
 pub use naia_server::{
     pipeline_actors,
