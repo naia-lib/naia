@@ -2,7 +2,7 @@ use std::{any::Any, collections::HashMap, marker::PhantomData};
 
 use bevy_ecs::{entity::Entity, message::Messages, resource::Resource, world::World};
 
-use log::warn;
+use log::trace;
 
 use naia_bevy_shared::{ComponentKind, Replicate, Tick};
 
@@ -61,7 +61,14 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
                 if let Some(component_handler) = self.component_handlers.get_mut(&kind) {
                     component_handler.handle_inserts(world, entities);
                 } else {
-                    warn!("No insert event handler for ComponentKind: {:?}", kind);
+                    // No event-based handler registered for this kind. This is
+                    // routine, NOT an error: a component can be replicated and
+                    // materialized onto the entity (read later by Query) without
+                    // an insert-event system — e.g. deterministic seed state read
+                    // by the sim, or components only some app modes handle. naia
+                    // still inserts the component; only the optional event is
+                    // absent. trace, don't warn, so the default console stays quiet.
+                    trace!("No insert event handler for ComponentKind: {:?}", kind);
                 }
             }
         }
@@ -71,7 +78,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             let updates = events.take_updates().unwrap();
             for (kind, entities) in updates {
                 let Some(handler) = self.component_handlers.get_mut(&kind) else {
-                    warn!("No update event handler for ComponentKind: {:?}", kind);
+                    trace!("No update event handler for ComponentKind: {:?}", kind);
                     continue;
                 };
                 handler.handle_updates(world, entities);
@@ -83,7 +90,7 @@ impl<T: Send + Sync + 'static> ComponentEventRegistry<T> {
             let removes = events.take_removes().unwrap();
             for (kind, entities) in removes {
                 let Some(handler) = self.component_handlers.get_mut(&kind) else {
-                    warn!("No remove event handler for ComponentKind: {:?}", kind);
+                    trace!("No remove event handler for ComponentKind: {:?}", kind);
                     continue;
                 };
                 handler.handle_removes(world, entities);
