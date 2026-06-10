@@ -462,6 +462,37 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
     sim_receiver: &SimEventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
+    apply_receive_output_pipeline_with_sim_receiver_split(world, None, sim_handle, sim_receiver, output)
+}
+
+/// Dual-target variant of [`apply_receive_output_pipeline_with_sim_receiver`].
+///
+/// When the consumer hosts replicated entities on a world OTHER than the
+/// coordinator world (e.g. cyberlith's editor cells, whose client-published
+/// entities live on the Sim SubApp world), pass that world as `entity_world`.
+/// The fan-out then splits by scope:
+///
+/// - **`entity_world`** receives everything entity-scoped: the
+///   Spawn/Despawn/Publish/Unpublish `Messages<X>` buffers, the
+///   `ClientOwned`/`HostOwned` marker mutations (Delegate / AuthGrant /
+///   AuthReset arms), the `SpawnEntityEvent` `has_entity` existence check,
+///   and the `ComponentEventRegistry::receive_events` tail (so
+///   `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /
+///   `RemoveComponentEvent<C>` fire into `entity_world`'s buffers — which
+///   must therefore have the registry + Messages registered).
+/// - **`world`** (the coordinator) keeps everything connection-scoped:
+///   Tick / Connect / Disconnect / Error / Message / Request / Auth events.
+///
+/// `entity_world: None` collapses to the single-world behavior,
+/// byte-identical to [`apply_receive_output_pipeline_with_sim_receiver`].
+/// `SimEventReceiver` pushes are unchanged in both modes.
+pub fn apply_receive_output_pipeline_with_sim_receiver_split(
+    world: &mut World,
+    mut entity_world: Option<&mut World>,
+    sim_handle: &SimHandle<Entity>,
+    sim_receiver: &SimEventReceiver<Entity>,
+    output: ReceiveOutput<Entity>,
+) {
     // Fire one bevy `TickEvent` + push one SimTickEvent per server
     // tick that the recv path advanced.
     if !output.pending_ticks.is_empty() {
@@ -565,6 +596,14 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
         event_writer.write(bevy_events::AuthEvents::from(&mut events));
     }
 
+    // ── Entity-scoped fan-out below: target the entity world (the world
+    // that `apply_recv_to_world` mutated), which is `world` itself in the
+    // single-world mode and the caller-provided split target otherwise.
+    let ew: &mut World = match entity_world.as_deref_mut() {
+        Some(w) => w,
+        None => world,
+    };
+
     // Spawn Entity Event — apply the same resource-entity +
     // client-owned filters as the legacy path. Same suppression in
     // the sim_receiver matches `push_from_receive_output` semantics.
@@ -574,7 +613,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
             if sim_handle.is_resource_entity(&entity) {
                 continue;
             }
-            if !world.proxy().has_entity(&entity) {
+            if !ew.proxy().has_entity(&entity) {
                 continue;
             }
             if let EntityOwner::Client(user_key) = sim_handle.entity_owner(&entity) {
@@ -582,7 +621,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
             }
         }
         {
-            let mut event_writer = world
+            let mut event_writer = ew
                 .get_resource_mut::<Messages<bevy_events::SpawnEntityEvent>>()
                 .unwrap();
             for &(user_key, entity) in &client_spawned_entities {
@@ -591,14 +630,14 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
             }
         }
         for (user_key, entity) in client_spawned_entities {
-            world.entity_mut(entity).insert(ClientOwned(user_key));
+            ew.entity_mut(entity).insert(ClientOwned(user_key));
         }
     }
 
     // Despawn Entity Event — resource-entity filter; same in both
     // sinks per `push_from_receive_output`.
     if events.has::<naia_events::DespawnEntityEvent>() {
-        let mut event_writer = world
+        let mut event_writer = ew
             .get_resource_mut::<Messages<bevy_events::DespawnEntityEvent>>()
             .unwrap();
         for (user_key, entity) in events.read::<naia_events::DespawnEntityEvent>() {
@@ -612,7 +651,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
 
     // Publish Entity Event
     if events.has::<naia_events::PublishEntityEvent>() {
-        let mut event_writer = world
+        let mut event_writer = ew
             .get_resource_mut::<Messages<bevy_events::PublishEntityEvent>>()
             .unwrap();
         for (user_key, entity) in events.read::<naia_events::PublishEntityEvent>() {
@@ -623,7 +662,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
 
     // Unpublish Entity Event
     if events.has::<naia_events::UnpublishEntityEvent>() {
-        let mut event_writer = world
+        let mut event_writer = ew
             .get_resource_mut::<Messages<bevy_events::UnpublishEntityEvent>>()
             .unwrap();
         for (user_key, entity) in events.read::<naia_events::UnpublishEntityEvent>() {
@@ -636,8 +675,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
     // (SimEventReceiver does not surface this event type).
     if events.has::<naia_events::DelegateEntityEvent>() {
         for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
-            world
-                .entity_mut(entity)
+            ew.entity_mut(entity)
                 .insert(HostOwned::new::<Singleton>());
         }
     }
@@ -645,22 +683,25 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
     // Entity Auth Grant Event
     if events.has::<naia_events::EntityAuthGrantEvent>() {
         for (_, entity) in events.read::<naia_events::EntityAuthGrantEvent>() {
-            world.entity_mut(entity).remove::<HostOwned>();
+            ew.entity_mut(entity).remove::<HostOwned>();
         }
     }
 
     // Entity Auth Reset Event
     if events.has::<naia_events::EntityAuthResetEvent>() {
         for entity in events.read::<naia_events::EntityAuthResetEvent>() {
-            if let Ok(mut entity_mut) = world.get_entity_mut(entity) {
+            if let Ok(mut entity_mut) = ew.get_entity_mut(entity) {
                 entity_mut.insert(HostOwned::new::<Singleton>());
             }
         }
     }
 
     // Component / Bundle events — same registry call as the legacy
-    // path (lesson 11 of `feedback_naia_4f_operational`).
-    world.resource_scope(|world, mut registry: Mut<ComponentEventRegistry>| {
-        registry.receive_events(world, &mut events);
+    // path (lesson 11 of `feedback_naia_4f_operational`). Fires into the
+    // entity world's registry + Messages buffers (in split mode the entity
+    // world MUST have a `ComponentEventRegistry` with the replicated
+    // component kinds registered, or this `resource_scope` panics).
+    ew.resource_scope(|ew, mut registry: Mut<ComponentEventRegistry>| {
+        registry.receive_events(ew, &mut events);
     });
 }

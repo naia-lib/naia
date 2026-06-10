@@ -121,6 +121,7 @@ mod systems;
 pub use app_ext::AppRegisterComponentEvents;
 pub use apply_receive_output::{
     apply_receive_output_pipeline, apply_receive_output_pipeline_with_sim_receiver,
+    apply_receive_output_pipeline_with_sim_receiver_split,
 };
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use component_event_registry::ComponentEventRegistry;
@@ -128,7 +129,7 @@ pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
 pub use plugin_full::{
-    drain_recv_impl, SimHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes,
+    drain_recv_impl, drain_recv_impl_split, SimHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes,
     SendHandleRes, SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
 };
 pub use server::Server;

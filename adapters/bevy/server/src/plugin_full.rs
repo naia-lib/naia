@@ -83,7 +83,7 @@ use naia_server::{
     RecvHandle, ReceiveOutput, SendHandle, ServerConfig,
 };
 
-use crate::apply_receive_output_pipeline_with_sim_receiver;
+use crate::apply_receive_output_pipeline_with_sim_receiver_split;
 use crate::sim_converter::SimConverter;
 
 // ─── PluginSimConfig ────────────────────────────────────────────────────────
@@ -1333,6 +1333,34 @@ pub fn drain_recv_impl(
     recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
     send_slot: &Arc<Mutex<Option<SendHandle<Entity>>>>,
 ) {
+    drain_recv_impl_split(world, None, recv_slot, send_slot)
+}
+
+/// Dual-target variant of [`drain_recv_impl`].
+///
+/// `entity_world` is the world that hosts client-published replicated
+/// entities when that world is NOT the coordinator world (e.g. cyberlith's
+/// editor cells, whose replicated entities live on the Sim SubApp world).
+/// When `Some`, the recv apply targets it for everything entity-scoped:
+///
+/// - `apply_recv_to_world`'s world proxy (entity spawns/despawns, component
+///   insert/update/remove, publish + delegation arms) mutates `entity_world`;
+/// - the entity-scoped event fan-out (Spawn/Despawn/Publish/Unpublish
+///   Messages, `ClientOwned`/`HostOwned` marker mutations, and the
+///   `ComponentEventRegistry` tail) fires into `entity_world` — see
+///   [`apply_receive_output_pipeline_with_sim_receiver_split`].
+///
+/// Connection-scoped state stays on `world` (the coordinator): the
+/// `PluginInternalState` / handle-slot reads, and the Tick / Connect /
+/// Disconnect / Error / Message / Request / Auth event buffers.
+///
+/// `entity_world: None` is byte-identical to [`drain_recv_impl`].
+pub fn drain_recv_impl_split(
+    world: &mut World,
+    mut entity_world: Option<&mut World>,
+    recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
+    send_slot: &Arc<Mutex<Option<SendHandle<Entity>>>>,
+) {
     use naia_bevy_shared::WorldProxyMut;
     use naia_server::pipeline_actors::apply_recv_to_world;
 
@@ -1401,18 +1429,36 @@ pub fn drain_recv_impl(
             continue;
         }
         let server_tick = sim_handle.current_tick();
-        let (c, r, s) = apply_recv_to_world(
-            sim_handle,
-            recv,
-            send,
-            world.proxy_mut(),
-            &mut output,
-            server_tick,
-        );
+        // Entity ops mutate the entity world (the coordinator world itself
+        // in single-world mode).
+        let (c, r, s) = match entity_world.as_deref_mut() {
+            Some(ew) => apply_recv_to_world(
+                sim_handle,
+                recv,
+                send,
+                ew.proxy_mut(),
+                &mut output,
+                server_tick,
+            ),
+            None => apply_recv_to_world(
+                sim_handle,
+                recv,
+                send,
+                world.proxy_mut(),
+                &mut output,
+                server_tick,
+            ),
+        };
         sim_handle = c;
         recv = r;
         send = s;
-        apply_receive_output_pipeline_with_sim_receiver(world, &sim_handle, &sim_receiver, output);
+        apply_receive_output_pipeline_with_sim_receiver_split(
+            world,
+            entity_world.as_deref_mut(),
+            &sim_handle,
+            &sim_receiver,
+            output,
+        );
     }
     #[cfg(feature = "pipeline_timing")]
     crate::pipeline_timing::record_apply(_t_apply.elapsed().as_nanos() as u64);
