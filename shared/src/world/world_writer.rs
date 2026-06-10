@@ -284,37 +284,55 @@ impl WorldWriter {
                     return;
                 }
 
-                let all_present = comp_kind_list
+                let present_count = comp_kind_list
                     .iter()
-                    .all(|k| world.has_component_of_kind(&world_entity, k));
-                // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): a host-tracked entity
-                // MUST have every component present in the (snapshot) world — the
-                // send-side needed-set guarantees this. If this fires, the
-                // needed-set under-supplied and a reliable spawn would be SILENTLY
-                // lost as a terminal Noop in release. Surface it loudly in
-                // debug/test builds; keep the Noop as the release fallback.
-                debug_assert!(
-                    all_present,
-                    "SpawnWithComponents: entity {:?} is host-tracked but a component \
-                     is missing from the snapshot world — needed-set under-supply \
-                     (would silently drop the spawn)",
-                    global_entity,
-                );
+                    .filter(|k| world.has_component_of_kind(&world_entity, k))
+                    .count();
+                let all_present = present_count == comp_kind_list.len();
                 if !all_present {
-                    // Terminal data loss: the Noop below is RECORDED as this
-                    // command's delivery, so the spawn is permanently dropped
-                    // for this peer. Always-loud (not debug_assert-gated —
-                    // downstream workspaces disable debug-assertions even in
-                    // dev profiles) and rare by construction: it only fires on
-                    // a needed-set/snapshot-registry under-supply, never in a
-                    // healthy steady state.
-                    if is_writing {
+                    // Two distinct states reach here (measured 2026-06-10,
+                    // cyberlith f5_world_disconnect vs the baked-floor bug):
+                    //
+                    // - NONE of the kinds present: the sim entity was torn down
+                    //   wholesale in this same window (disconnect/despawn race —
+                    //   the snapshot builder skips a despawned entity's every
+                    //   component while the queued Spawn still drains and the
+                    //   global record outlives the sim entity by a beat). Same
+                    //   legitimacy class as the `!has_global` arm above:
+                    //   converge to a quiet Noop; a Despawn/teardown follows.
+                    //
+                    // - SOME present, some missing: genuine needed-set or
+                    //   snapshot-registry under-supply (e.g. a Replicate
+                    //   component missing its snapshot registration — the
+                    //   2026-06-10 "baked floor vanished" bug). The Noop below
+                    //   is RECORDED as this command's delivery, so the spawn is
+                    //   permanently lost for this peer. Loud in debug/test AND
+                    //   release (downstream workspaces disable debug-assertions
+                    //   even in dev profiles).
+                    //
+                    // A needed-set bug that under-supplied an entity WHOLESALE
+                    // would look like the first state — naia cannot tell them
+                    // apart here, so hosts keep their own seam guard (cyberlith:
+                    // the `build_snapshot_input` warn-once + the d4 floor
+                    // delivery gates).
+                    let partial = present_count > 0;
+                    debug_assert!(
+                        !partial,
+                        "SpawnWithComponents: entity {:?} is host-tracked but only \
+                         {present_count}/{} component kinds are in the snapshot world — \
+                         needed-set/snapshot-registry under-supply (would silently \
+                         drop the spawn)",
+                        global_entity,
+                        comp_kind_list.len(),
+                    );
+                    if partial && is_writing {
                         log::warn!(
                             "SpawnWithComponents for {:?} degraded to a TERMINAL Noop: \
-                             {} component kind(s) missing from the snapshot world \
+                             only {}/{} component kinds present in the snapshot world \
                              (needed-set or snapshot-registry under-supply) — \
                              the entity will never spawn on this peer",
                             global_entity,
+                            present_count,
                             comp_kind_list.len(),
                         );
                     }

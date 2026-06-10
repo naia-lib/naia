@@ -1778,21 +1778,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             global_entity,
             world.has_entity(world_entity)
         );
-        // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): under the reorder, scope
-        // application runs against the Sim world (entity-existence source of
-        // truth) BEFORE the snapshot is built, and `host_init` only fires for
-        // entities present here. So a scope-enter for an absent entity should
-        // be impossible. Surface it loudly in debug/test builds; keep the
-        // bounded re-queue as the release fallback (legit despawn-race / other
-        // consumers passing a not-yet-populated world).
-        debug_assert!(
-            world.has_entity(world_entity),
-            "apply_scope_for_user: scope-enter for entity {:?} (user {:?}) but it is \
-             absent from the world passed to scope application — see \
-             MISSION_SNAPSHOT_DIRTY_TRIM.md §4",
-            global_entity,
-            user_key,
-        );
+        // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): under the game-cell
+        // orchestrator's reorder, scope application runs against the Sim world
+        // (entity-existence source of truth) BEFORE the snapshot is built, so
+        // a scope-enter for an absent entity is a same-tick transient at
+        // worst. Measured 2026-06-10: OTHER consumers of this same cell
+        // machinery (cyberlith's level editor creating entities mid-session)
+        // legitimately scope-enter entities one tick before they spawn into
+        // the world passed here — so absence is NOT asserted at entry; the
+        // bounded re-queue below converges it. The real invariant — the
+        // entity must EVENTUALLY appear — is enforced loudly at re-queue
+        // exhaustion.
         if !world.has_entity(world_entity) {
             // Entity not yet spawned in the snapshot world — re-queue
             // for next tick, but only up to `SCOPE_RETRY_MAX` times per
@@ -1802,6 +1798,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             let current = self.scope_retry_counts.get(&key).copied().unwrap_or(0);
             match scope_retry_decision(current) {
                 None => {
+                    // Exhaustion = the entity never appeared: the scope-enter
+                    // (and the entity's spawn for this user) is permanently
+                    // dropped for this peer. This IS the bug condition the
+                    // entry-time transient is not. It stays warn-only (no
+                    // debug_assert) for now because one KNOWN consumer defect
+                    // fires it: cyberlith's level-editor cell hosts delegated
+                    // NetworkedSpawnPoint entities in its MAIN world while
+                    // scope application receives the SIM world, so those
+                    // scope-enters always exhaust (measured 2026-06-10,
+                    // le17). Promote to a debug_assert once that flow routes
+                    // main-world-hosted entities correctly.
                     warn!(
                         "apply_scope_for_user: dropping ScopeToggled for \
                          user={:?} entity={:?} after {} retries — target \
