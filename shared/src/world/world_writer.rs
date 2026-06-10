@@ -301,6 +301,23 @@ impl WorldWriter {
                     global_entity,
                 );
                 if !all_present {
+                    // Terminal data loss: the Noop below is RECORDED as this
+                    // command's delivery, so the spawn is permanently dropped
+                    // for this peer. Always-loud (not debug_assert-gated —
+                    // downstream workspaces disable debug-assertions even in
+                    // dev profiles) and rare by construction: it only fires on
+                    // a needed-set/snapshot-registry under-supply, never in a
+                    // healthy steady state.
+                    if is_writing {
+                        log::warn!(
+                            "SpawnWithComponents for {:?} degraded to a TERMINAL Noop: \
+                             {} component kind(s) missing from the snapshot world \
+                             (needed-set or snapshot-registry under-supply) — \
+                             the entity will never spawn on this peer",
+                            global_entity,
+                            comp_kind_list.len(),
+                        );
+                    }
                     EntityMessageType::Noop.ser(writer);
                     if is_writing {
                         world_manager.record_command_written(
@@ -399,6 +416,19 @@ impl WorldWriter {
                     component_kind,
                 );
                 if !insert_present {
+                    // Same terminal-loss warn as SpawnWithComponents: only the
+                    // under-supply case is loud; the `!has_global` despawn race
+                    // is a legitimate quiet Noop.
+                    if is_writing && insert_has_global {
+                        log::warn!(
+                            "InsertComponent for {:?} ({:?}) degraded to a TERMINAL \
+                             Noop: component missing from the snapshot world \
+                             (needed-set or snapshot-registry under-supply) — \
+                             the insert will never reach this peer",
+                            global_entity,
+                            component_kind,
+                        );
+                    }
                     EntityMessageType::Noop.ser(writer);
 
                     // if we are actually writing this packet
