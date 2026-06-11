@@ -141,12 +141,7 @@ impl UdpPacketReceiver {
 impl PacketReceiver for UdpPacketReceiver {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        match self
-            .socket
-            .as_ref()
-            .lock()
-            .recv_from(&mut self.buffer)
-        {
+        match self.socket.as_ref().lock().recv_from(&mut self.buffer) {
             Ok((recv_len, address)) => Ok(Some((address, &self.buffer[..recv_len]))),
             Err(ref e) => {
                 let kind = e.kind();

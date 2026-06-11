@@ -40,7 +40,10 @@ pub trait ReplicateBuilder: Send + Sync + Named {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr>;
     /// Create new Component Update from incoming bit stream
-    fn read_create_update(&self, reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr>;
+    fn read_create_update(
+        &self,
+        reader: &mut BitReader,
+    ) -> Result<PendingComponentUpdate, SerdeErr>;
     /// Split a Component update into Waiting and Ready updates
     fn split_update(
         &self,
@@ -66,11 +69,21 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     /// meaning its serialized bytes differ per connection and cannot be cached
     /// in a shared `CachedComponentUpdate`. Default: false.
     /// The derive macro overrides to `true` for any component with ≥1 EntityProperty field.
-    fn has_entity_properties() -> bool where Self: Sized { false }
+    fn has_entity_properties() -> bool
+    where
+        Self: Sized,
+    {
+        false
+    }
     /// Upper bound on this component's serialized bit length (all fields dirty).
     /// Returns `u32::MAX` if not precisely known (sentinel — skips the 512-bit assertion).
     /// The derive macro may override with a precise sum via `ConstBitLength` impls.
-    fn max_bit_length() -> u32 where Self: Sized { u32::MAX }
+    fn max_bit_length() -> u32
+    where
+        Self: Sized,
+    {
+        u32::MAX
+    }
     /// Gets the ComponentKind of this type
     fn kind(&self) -> ComponentKind;
     /// Returns a shared `Any` reference for downcasting.

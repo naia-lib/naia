@@ -1,6 +1,6 @@
 use naia_bevy_client::EntityAuthStatus;
-use namako_engine::{given, then, when};
 use namako_engine::codegen::AssertOutcome;
+use namako_engine::{given, then, when};
 
 use crate::world::{BevyMutCtx, BevyRefCtx, ClientKey};
 
@@ -64,7 +64,8 @@ fn given_entity_configured_as_delegated(ctx: &mut BevyMutCtx) {
 
 #[given("the server inserts TestPlayerSelection as a delegable resource")]
 fn given_server_inserts_player_selection_delegable(ctx: &mut BevyMutCtx) {
-    ctx.harness_mut().server_insert_player_selection_delegated(0);
+    ctx.harness_mut()
+        .server_insert_player_selection_delegated(0);
     // Tick until the client has it (resource mirror appears)
     let last_client = ctx.harness_mut().last_client_key().expect("no client");
     // Give time for the resource to replicate
@@ -106,23 +107,27 @@ fn when_server_mutates_position_42_42(ctx: &mut BevyMutCtx) {
 
 #[when("the server grants authority to the client")]
 fn when_server_grants_authority_to_client(ctx: &mut BevyMutCtx) {
-    ctx.harness_mut().server_give_authority_to_client(ClientKey(0));
+    ctx.harness_mut()
+        .server_give_authority_to_client(ClientKey(0));
 }
 
 #[when("the client requests authority for the entity")]
 fn when_client_requests_entity_authority(ctx: &mut BevyMutCtx) {
     let last_client = ctx.harness_mut().last_client_key().expect("no client");
-    ctx.harness_mut().client_request_entity_authority(last_client);
+    ctx.harness_mut()
+        .client_request_entity_authority(last_client);
 }
 
 #[when("the first client requests authority for the entity")]
 fn when_first_client_requests_entity_authority(ctx: &mut BevyMutCtx) {
-    ctx.harness_mut().client_request_entity_authority(ClientKey(0));
+    ctx.harness_mut()
+        .client_request_entity_authority(ClientKey(0));
 }
 
 #[when("the second client requests authority for the entity")]
 fn when_second_client_requests_entity_authority(ctx: &mut BevyMutCtx) {
-    ctx.harness_mut().client_request_entity_authority(ClientKey(1));
+    ctx.harness_mut()
+        .client_request_entity_authority(ClientKey(1));
 }
 
 // ── When — resources ──────────────────────────────────────────────────────────
@@ -145,7 +150,8 @@ fn when_server_mutates_score_7_2(ctx: &mut BevyMutCtx) {
 #[when("the client requests authority for TestPlayerSelection")]
 fn when_client_requests_player_selection_authority(ctx: &mut BevyMutCtx) {
     let last_client = ctx.harness_mut().last_client_key().expect("no client");
-    ctx.harness_mut().client_request_player_selection_authority(last_client);
+    ctx.harness_mut()
+        .client_request_player_selection_authority(last_client);
 }
 
 // ── Then — connection ──────────────────────────────────────────────────────────
@@ -169,42 +175,66 @@ fn then_client_connected(ctx: &BevyRefCtx) {
 #[then("the client is not connected")]
 fn then_client_not_connected(ctx: &BevyRefCtx) {
     let key = ctx.last_client_key().expect("no client");
-    assert!(!ctx.client_is_connected(key), "client should not be connected");
+    assert!(
+        !ctx.client_is_connected(key),
+        "client should not be connected"
+    );
 }
 
 #[then("the server has observed ConnectEvent")]
 fn then_server_observed_connect(ctx: &BevyRefCtx) {
-    assert!(ctx.server_connect_count() > 0, "server should have observed ConnectEvent");
+    assert!(
+        ctx.server_connect_count() > 0,
+        "server should have observed ConnectEvent"
+    );
 }
 
 #[then("the server has observed DisconnectEvent")]
 fn then_server_observed_disconnect(ctx: &BevyRefCtx) {
-    assert!(ctx.server_disconnect_count() > 0, "server should have observed DisconnectEvent");
+    assert!(
+        ctx.server_disconnect_count() > 0,
+        "server should have observed DisconnectEvent"
+    );
 }
 
 #[then("the client has observed ConnectEvent")]
 fn then_client_observed_connect(ctx: &BevyRefCtx) {
     let key = ctx.last_client_key().expect("no client");
-    assert!(ctx.client_connect_count(key) > 0, "client should have observed ConnectEvent");
+    assert!(
+        ctx.client_connect_count(key) > 0,
+        "client should have observed ConnectEvent"
+    );
 }
 
 #[then("the client has observed DisconnectEvent")]
 fn then_client_observed_disconnect(ctx: &BevyRefCtx) {
     let key = ctx.last_client_key().expect("no client");
-    assert!(ctx.client_disconnect_count(key) > 0, "client should have observed DisconnectEvent");
+    assert!(
+        ctx.client_disconnect_count(key) > 0,
+        "client should have observed DisconnectEvent"
+    );
 }
 
 #[then("the server observed ConnectEvent before DisconnectEvent")]
 fn then_server_connect_before_disconnect(ctx: &BevyRefCtx) {
     assert!(ctx.server_connect_count() > 0, "server needs ConnectEvent");
-    assert!(ctx.server_disconnect_count() > 0, "server needs DisconnectEvent");
+    assert!(
+        ctx.server_disconnect_count() > 0,
+        "server needs DisconnectEvent"
+    );
 }
 
 #[then("the client observed ConnectEvent before DisconnectEvent")]
 fn then_client_connect_before_disconnect(ctx: &BevyRefCtx) {
     let key = ctx.last_client_key().expect("no client");
-    assert!(ctx.client_connect_count(key) > 0, "client needs ConnectEvent");
-    assert!(ctx.client_disconnect_count(key) > 0, "client needs DisconnectEvent");
+    assert!(
+        ctx.client_connect_count(key) > 0,
+        "client needs ConnectEvent"
+    );
+    assert!(
+        ctx.client_disconnect_count(key) > 0,
+        "client needs DisconnectEvent"
+    );
 }
 
 // ── Then — entity ──────────────────────────────────────────────────────────────
@@ -347,7 +377,8 @@ fn then_server_player_selection_denied(ctx: &BevyRefCtx) -> AssertOutcome<()> {
             AssertOutcome::Pending
         }
         Some(other) => AssertOutcome::Failed(format!(
-            "expected Denied (client holds authority) for TestPlayerSelection, got {:?}", other
+            "expected Denied (client holds authority) for TestPlayerSelection, got {:?}",
+            other
         )),
         None => AssertOutcome::Pending,
     }

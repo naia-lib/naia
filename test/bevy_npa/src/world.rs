@@ -12,34 +12,28 @@ use bevy_ecs::{
 };
 use parking_lot::Mutex as ParkingMutex;
 
-use naia_bevy_server::{
-    ReplicationConfig, RoomKey,
-    ServerCommandsExt,
-    events::{AuthEvents, ConnectEvent, DisconnectEvent},
-    Plugin as ServerPlugin, Server, ServerConfig, UserKey,
-};
 use naia_bevy_client::{
-    ClientCommandsExt,
-    EntityAuthStatus,
     events::{
-        ConnectEvent as ClientConnectEvent,
-        DisconnectEvent as ClientDisconnectEvent,
-        DespawnEntityEvent,
-        EntityAuthDeniedEvent,
-        EntityAuthGrantedEvent,
+        ConnectEvent as ClientConnectEvent, DespawnEntityEvent,
+        DisconnectEvent as ClientDisconnectEvent, EntityAuthDeniedEvent, EntityAuthGrantedEvent,
         SpawnEntityEvent,
     },
-    Plugin as ClientPlugin, Client, ClientConfig,
+    Client, ClientCommandsExt, ClientConfig, EntityAuthStatus, Plugin as ClientPlugin,
+};
+use naia_bevy_server::{
+    events::{AuthEvents, ConnectEvent, DisconnectEvent},
+    Plugin as ServerPlugin, ReplicationConfig, RoomKey, Server, ServerCommandsExt, ServerConfig,
+    UserKey,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
-use naia_server::transport::local::{LocalServerSocket, Socket as ServerSocket};
 use naia_client::transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket};
+use naia_server::transport::local::{LocalServerSocket, Socket as ServerSocket};
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
     ChannelDirection, ChannelMode, ReliableSettings,
 };
-use naia_test_harness::{
-    test_protocol::{Auth, Position, ReliableChannel, TestPlayerSelection, TestScore},
+use naia_test_harness::test_protocol::{
+    Auth, Position, ReliableChannel, TestPlayerSelection, TestScore,
 };
 
 use namako_engine::codegen::AssertOutcome;
@@ -131,12 +125,8 @@ fn sys_server_disconnect(
     }
 }
 
-fn sys_server_resource_authority(
-    server: Server,
-    mut state: ResMut<ServerState>,
-) {
-    state.player_selection_authority =
-        server.resource_authority_status::<TestPlayerSelection>();
+fn sys_server_resource_authority(server: Server, mut state: ResMut<ServerState>) {
+    state.player_selection_authority = server.resource_authority_status::<TestPlayerSelection>();
 }
 
 // ── Client systems ────────────────────────────────────────────────────────────
@@ -233,19 +223,20 @@ impl BevyTestHarness {
         let hub_for_startup = hub.clone();
 
         let mut server_app = App::new();
-        server_app
-            .add_plugins(ServerPlugin::new(ServerConfig::default(), bevy_protocol()));
-        naia_bevy_server::AppRegisterComponentEvents::add_resource_events::<TestScore>(&mut server_app);
-        naia_bevy_server::AppRegisterComponentEvents::add_resource_events::<TestPlayerSelection>(&mut server_app);
+        server_app.add_plugins(ServerPlugin::new(ServerConfig::default(), bevy_protocol()));
+        naia_bevy_server::AppRegisterComponentEvents::add_resource_events::<TestScore>(
+            &mut server_app,
+        );
+        naia_bevy_server::AppRegisterComponentEvents::add_resource_events::<TestPlayerSelection>(
+            &mut server_app,
+        );
         server_app
             .init_resource::<ServerState>()
             .add_systems(
                 Startup,
                 move |mut server: Server, mut state: ResMut<ServerState>| {
-                    let socket = ServerSocket::new(
-                        LocalServerSocket::new(hub_for_startup.clone()),
-                        None,
-                    );
+                    let socket =
+                        ServerSocket::new(LocalServerSocket::new(hub_for_startup.clone()), None);
                     server.listen(socket);
                     let room = server.create_room();
                     state.room_key = Some(room.key());
@@ -302,35 +293,38 @@ impl BevyTestHarness {
 
         let mut app = App::new();
         app.add_plugins(ClientPlugin::<ClientSingleton>::new(cfg, bevy_protocol()));
-        naia_bevy_client::AppRegisterComponentEvents::add_resource_events::<ClientSingleton, TestScore>(&mut app);
-        naia_bevy_client::AppRegisterComponentEvents::add_resource_events::<ClientSingleton, TestPlayerSelection>(&mut app);
+        naia_bevy_client::AppRegisterComponentEvents::add_resource_events::<
+            ClientSingleton,
+            TestScore,
+        >(&mut app);
+        naia_bevy_client::AppRegisterComponentEvents::add_resource_events::<
+            ClientSingleton,
+            TestPlayerSelection,
+        >(&mut app);
         app.init_resource::<ClientState>()
-            .add_systems(
-                Startup,
-                move |mut client: Client<ClientSingleton>| {
-                    let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
-                        hub.register_client();
-                    let addr_cell = LocalAddrCell::new();
-                    addr_cell.set_sync(hub.server_addr());
-                    let identity_token =
-                        Arc::new(ParkingMutex::new(None::<naia_shared::IdentityToken>));
-                    let rejection_code = Arc::new(ParkingMutex::new(None::<u16>));
-                    let inner_socket = LocalClientSocket::new_with_tokens(
-                        client_addr,
-                        hub.server_addr(),
-                        auth_req_tx,
-                        auth_resp_rx,
-                        client_data_tx,
-                        client_data_rx,
-                        addr_cell,
-                        identity_token,
-                        rejection_code,
-                    );
-                    let socket = ClientSocket::new(inner_socket, None);
-                    client.auth(Auth::new("test_user", "password"));
-                    client.connect(socket);
-                },
-            )
+            .add_systems(Startup, move |mut client: Client<ClientSingleton>| {
+                let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
+                    hub.register_client();
+                let addr_cell = LocalAddrCell::new();
+                addr_cell.set_sync(hub.server_addr());
+                let identity_token =
+                    Arc::new(ParkingMutex::new(None::<naia_shared::IdentityToken>));
+                let rejection_code = Arc::new(ParkingMutex::new(None::<u16>));
+                let inner_socket = LocalClientSocket::new_with_tokens(
+                    client_addr,
+                    hub.server_addr(),
+                    auth_req_tx,
+                    auth_resp_rx,
+                    client_data_tx,
+                    client_data_rx,
+                    addr_cell,
+                    identity_token,
+                    rejection_code,
+                );
+                let socket = ClientSocket::new(inner_socket, None);
+                client.auth(Auth::new("test_user", "password"));
+                client.connect(socket);
+            })
             .add_systems(
                 Update,
                 (
@@ -357,15 +351,25 @@ impl BevyTestHarness {
     // ── State accessors — connection ──────────────────────────────────────────
 
     pub fn server_connected_count(&self) -> usize {
-        self.server_app.world().resource::<ServerState>().connected_user_keys.len()
+        self.server_app
+            .world()
+            .resource::<ServerState>()
+            .connected_user_keys
+            .len()
     }
 
     pub fn server_connect_count(&self) -> u32 {
-        self.server_app.world().resource::<ServerState>().connect_count
+        self.server_app
+            .world()
+            .resource::<ServerState>()
+            .connect_count
     }
 
     pub fn server_disconnect_count(&self) -> u32 {
-        self.server_app.world().resource::<ServerState>().disconnect_count
+        self.server_app
+            .world()
+            .resource::<ServerState>()
+            .disconnect_count
     }
 
     pub fn client_is_connected(&self, key: ClientKey) -> bool {
@@ -400,9 +404,12 @@ impl BevyTestHarness {
                 .copied()
                 .expect("no connected users to disconnect")
         };
-        let _ = self.server_app.world_mut().run_system_once(
-            move |mut server: Server| { server.user_mut(&user_key).disconnect(); },
-        );
+        let _ = self
+            .server_app
+            .world_mut()
+            .run_system_once(move |mut server: Server| {
+                server.user_mut(&user_key).disconnect();
+            });
     }
 
     // ── State accessors — entity ──────────────────────────────────────────────
@@ -421,7 +428,12 @@ impl BevyTestHarness {
 
     pub fn client_has_entity(&self, key: ClientKey) -> bool {
         self.client_app(key)
-            .map(|app| app.world().resource::<ClientState>().last_spawned_entity.is_some())
+            .map(|app| {
+                app.world()
+                    .resource::<ClientState>()
+                    .last_spawned_entity
+                    .is_some()
+            })
             .unwrap_or(false)
     }
 
@@ -439,13 +451,21 @@ impl BevyTestHarness {
 
     pub fn client_auth_granted_event_count(&self, key: ClientKey) -> u32 {
         self.client_app(key)
-            .map(|app| app.world().resource::<ClientState>().auth_granted_event_count)
+            .map(|app| {
+                app.world()
+                    .resource::<ClientState>()
+                    .auth_granted_event_count
+            })
             .unwrap_or(0)
     }
 
     pub fn client_auth_denied_event_count(&self, key: ClientKey) -> u32 {
         self.client_app(key)
-            .map(|app| app.world().resource::<ClientState>().auth_denied_event_count)
+            .map(|app| {
+                app.world()
+                    .resource::<ClientState>()
+                    .auth_denied_event_count
+            })
             .unwrap_or(0)
     }
 
@@ -457,13 +477,20 @@ impl BevyTestHarness {
     }
 
     pub fn server_player_selection_authority(&self) -> Option<EntityAuthStatus> {
-        self.server_app.world().resource::<ServerState>().player_selection_authority
+        self.server_app
+            .world()
+            .resource::<ServerState>()
+            .player_selection_authority
     }
 
     // ── Imperative server operations ──────────────────────────────────────────
 
     pub fn server_spawn_entity(&mut self) -> Entity {
-        let entity = self.server_app.world_mut().spawn(Position::new(0.0, 0.0)).id();
+        let entity = self
+            .server_app
+            .world_mut()
+            .spawn(Position::new(0.0, 0.0))
+            .id();
         let _ = self.server_app.world_mut().run_system_once(
             move |mut commands: Commands, mut server: Server, mut state: ResMut<ServerState>| {
                 // Use server-side CommandsExt::enable_replication explicitly
@@ -496,56 +523,63 @@ impl BevyTestHarness {
     }
 
     pub fn server_scope_entity_for_all_clients(&mut self, entity: Entity) {
-        let room_key = self.server_app
+        let room_key = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .room_key
             .expect("no room created");
-        let user_keys: Vec<UserKey> = self.server_app
+        let user_keys: Vec<UserKey> = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .connected_user_keys
             .clone();
-        let _ = self.server_app.world_mut().run_system_once(
-            move |mut server: Server| {
+        let _ = self
+            .server_app
+            .world_mut()
+            .run_system_once(move |mut server: Server| {
                 server.room_mut(&room_key).add_entity(&entity);
                 for user_key in &user_keys {
                     server.room_mut(&room_key).add_user(user_key);
                 }
-            },
-        );
+            });
     }
 
     pub fn server_configure_delegated(&mut self) {
-        let entity = self.server_app
+        let entity = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .last_entity
             .expect("no entity spawned");
-        let _ = self.server_app.world_mut().run_system_once(
-            move |mut commands: Commands| {
+        let _ = self
+            .server_app
+            .world_mut()
+            .run_system_once(move |mut commands: Commands| {
                 // Use server-side CommandsExt::configure_replication explicitly
                 naia_bevy_server::CommandsExt::configure_replication(
                     &mut commands.entity(entity),
                     ReplicationConfig::delegated(),
                 );
-            },
-        );
+            });
         naia_shared::TestClock::advance(60);
         self.server_app.update(); // flush WorldOpCommand + fire tick to send delegation to client
-        // Let clients receive the delegation notification.
+                                  // Let clients receive the delegation notification.
         for (_, app) in &mut self.client_apps {
             app.update();
         }
     }
 
     pub fn server_give_authority_to_client(&mut self, client_key: ClientKey) {
-        let entity = self.server_app
+        let entity = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .last_entity
             .expect("no entity spawned");
-        let user_key = self.server_app
+        let user_key = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .connected_user_keys
@@ -566,7 +600,8 @@ impl BevyTestHarness {
     }
 
     pub fn server_disable_replication(&mut self) {
-        let entity = self.server_app
+        let entity = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .last_entity
@@ -584,12 +619,14 @@ impl BevyTestHarness {
     }
 
     pub fn server_update_position(&mut self, x: f32, y: f32) {
-        let entity = self.server_app
+        let entity = self
+            .server_app
             .world()
             .resource::<ServerState>()
             .last_entity
             .expect("no entity spawned");
-        let mut pos = self.server_app
+        let mut pos = self
+            .server_app
             .world_mut()
             .get_mut::<Position>(entity)
             .expect("entity has no Position");
@@ -598,11 +635,12 @@ impl BevyTestHarness {
     }
 
     pub fn server_insert_score(&mut self, home: u32, away: u32) {
-        let _ = self.server_app.world_mut().run_system_once(
-            move |mut commands: Commands| {
+        let _ = self
+            .server_app
+            .world_mut()
+            .run_system_once(move |mut commands: Commands| {
                 commands.replicate_resource(TestScore::new(home, away));
-            },
-        );
+            });
         naia_shared::TestClock::advance(60);
         self.server_app.update();
     }
@@ -614,14 +652,15 @@ impl BevyTestHarness {
     }
 
     pub fn server_insert_player_selection_delegated(&mut self, selected_id: u16) {
-        let _ = self.server_app.world_mut().run_system_once(
-            move |mut commands: Commands| {
+        let _ = self
+            .server_app
+            .world_mut()
+            .run_system_once(move |mut commands: Commands| {
                 commands.replicate_resource(TestPlayerSelection::new(selected_id));
                 commands.configure_replicated_resource::<TestPlayerSelection>(
                     ReplicationConfig::delegated(),
                 );
-            },
-        );
+            });
         naia_shared::TestClock::advance(60);
         self.server_app.update();
     }
@@ -629,9 +668,13 @@ impl BevyTestHarness {
     // ── Imperative client operations ──────────────────────────────────────────
 
     pub fn client_request_entity_authority(&mut self, key: ClientKey) {
-        let pos = self.client_apps.iter().position(|(k, _)| *k == key)
+        let pos = self
+            .client_apps
+            .iter()
+            .position(|(k, _)| *k == key)
             .expect("client not found");
-        let entity = self.client_apps[pos].1
+        let entity = self.client_apps[pos]
+            .1
             .world()
             .resource::<ClientState>()
             .last_spawned_entity
@@ -647,8 +690,8 @@ impl BevyTestHarness {
         );
         naia_shared::TestClock::advance(60);
         self.client_apps[pos].1.update(); // fire tick + send packet
-        // Flush the request through the server so sequential calls from different
-        // clients are processed in order (prevents non-deterministic grant/deny).
+                                          // Flush the request through the server so sequential calls from different
+                                          // clients are processed in order (prevents non-deterministic grant/deny).
         naia_shared::TestClock::advance(60);
         self.server_app.update();
         for (_, app) in &mut self.client_apps {
@@ -657,13 +700,17 @@ impl BevyTestHarness {
     }
 
     pub fn client_request_player_selection_authority(&mut self, key: ClientKey) {
-        let pos = self.client_apps.iter().position(|(k, _)| *k == key)
+        let pos = self
+            .client_apps
+            .iter()
+            .position(|(k, _)| *k == key)
             .expect("client not found");
-        let _ = self.client_apps[pos].1.world_mut().run_system_once(
-            |mut commands: Commands| {
+        let _ = self.client_apps[pos]
+            .1
+            .world_mut()
+            .run_system_once(|mut commands: Commands| {
                 commands.request_resource_authority::<ClientSingleton, TestPlayerSelection>();
-            },
-        );
+            });
         naia_shared::TestClock::advance(60);
         self.client_apps[pos].1.update(); // fire tick + send packet
     }
@@ -671,7 +718,10 @@ impl BevyTestHarness {
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     fn client_app(&self, key: ClientKey) -> Option<&App> {
-        self.client_apps.iter().find(|(k, _)| *k == key).map(|(_, app)| app)
+        self.client_apps
+            .iter()
+            .find(|(k, _)| *k == key)
+            .map(|(_, app)| app)
     }
 }
 
@@ -765,13 +815,27 @@ impl<'a> BevyRefCtx<'a> {
 
     // ── Connection accessors ──────────────────────────────────────────────────
 
-    pub fn server_connected_count(&self) -> usize { self.h().server_connected_count() }
-    pub fn server_connect_count(&self) -> u32 { self.h().server_connect_count() }
-    pub fn server_disconnect_count(&self) -> u32 { self.h().server_disconnect_count() }
-    pub fn client_is_connected(&self, key: ClientKey) -> bool { self.h().client_is_connected(key) }
-    pub fn client_connect_count(&self, key: ClientKey) -> u32 { self.h().client_connect_count(key) }
-    pub fn client_disconnect_count(&self, key: ClientKey) -> u32 { self.h().client_disconnect_count(key) }
-    pub fn last_client_key(&self) -> Option<ClientKey> { self.h().last_client_key() }
+    pub fn server_connected_count(&self) -> usize {
+        self.h().server_connected_count()
+    }
+    pub fn server_connect_count(&self) -> u32 {
+        self.h().server_connect_count()
+    }
+    pub fn server_disconnect_count(&self) -> u32 {
+        self.h().server_disconnect_count()
+    }
+    pub fn client_is_connected(&self, key: ClientKey) -> bool {
+        self.h().client_is_connected(key)
+    }
+    pub fn client_connect_count(&self, key: ClientKey) -> u32 {
+        self.h().client_connect_count(key)
+    }
+    pub fn client_disconnect_count(&self, key: ClientKey) -> u32 {
+        self.h().client_disconnect_count(key)
+    }
+    pub fn last_client_key(&self) -> Option<ClientKey> {
+        self.h().last_client_key()
+    }
 
     // ── Entity accessors ──────────────────────────────────────────────────────
 

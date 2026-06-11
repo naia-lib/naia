@@ -24,9 +24,7 @@ use naia_bevy_server::{
     pipeline_actors::{run_with_world_server, spawn_server_handles},
     Plugin as ServerPlugin, ServerConfig, SimConverter,
 };
-use naia_bevy_shared::{
-    EntityAndGlobalEntityConverter, EntityProperty, Protocol as BevyProtocol,
-};
+use naia_bevy_shared::{EntityAndGlobalEntityConverter, EntityProperty, Protocol as BevyProtocol};
 use naia_test_harness::test_protocol::Position;
 
 fn protocol() -> naia_shared::Protocol {
@@ -123,11 +121,12 @@ fn entity_property_set_byte_identical_between_sim_converter_and_world_server() {
     prop_sim.set(&sim_converter, &entity);
 
     // Build EntityProperty via WorldServer.
-    let (_sim_handle, _recv, _send, prop_ws_inner) = run_with_world_server(sim_handle, recv, send, |ws| {
-        let mut prop_ws = EntityProperty::new_for_message();
-        prop_ws.set(ws, &entity);
-        prop_ws.get_inner()
-    });
+    let (_sim_handle, _recv, _send, prop_ws_inner) =
+        run_with_world_server(sim_handle, recv, send, |ws| {
+            let mut prop_ws = EntityProperty::new_for_message();
+            prop_ws.set(ws, &entity);
+            prop_ws.get_inner()
+        });
 
     // Inner GlobalEntity is the wire-payload generator for
     // EntityProperty. Identical inner state ⇒ identical wire bytes.

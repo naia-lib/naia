@@ -190,12 +190,7 @@ impl<E: Copy + Eq + Hash> SnapshotWorld<E> {
     /// entity live as a side effect (to maintain the
     /// "entity-with-a-component-is-live" invariant required by
     /// `has_entity`).
-    pub fn insert_component(
-        &mut self,
-        entity: E,
-        kind: ComponentKind,
-        value: Box<dyn Replicate>,
-    ) {
+    pub fn insert_component(&mut self, entity: E, kind: ComponentKind, value: Box<dyn Replicate>) {
         self.live_entities.insert(entity);
         self.components.insert((entity, kind), value);
     }
@@ -342,20 +337,36 @@ mod tests {
     }
 
     impl Named for TestPosition {
-        fn protocol_name() -> &'static str { "TestPosition" }
-        fn name(&self) -> String { "TestPosition".to_string() }
+        fn protocol_name() -> &'static str {
+            "TestPosition"
+        }
+        fn name(&self) -> String {
+            "TestPosition".to_string()
+        }
     }
     impl Named for TestPositionBuilder {
-        fn protocol_name() -> &'static str { "TestPosition" }
-        fn name(&self) -> String { "TestPosition".to_string() }
+        fn protocol_name() -> &'static str {
+            "TestPosition"
+        }
+        fn name(&self) -> String {
+            "TestPosition".to_string()
+        }
     }
     impl Named for TestVelocity {
-        fn protocol_name() -> &'static str { "TestVelocity" }
-        fn name(&self) -> String { "TestVelocity".to_string() }
+        fn protocol_name() -> &'static str {
+            "TestVelocity"
+        }
+        fn name(&self) -> String {
+            "TestVelocity".to_string()
+        }
     }
     impl Named for TestVelocityBuilder {
-        fn protocol_name() -> &'static str { "TestVelocity" }
-        fn name(&self) -> String { "TestVelocity".to_string() }
+        fn protocol_name() -> &'static str {
+            "TestVelocity"
+        }
+        fn name(&self) -> String {
+            "TestVelocity".to_string()
+        }
     }
 
     macro_rules! impl_test_builder {
@@ -386,20 +397,37 @@ mod tests {
                 }
             }
             impl Replicate for $val {
-                fn kind(&self) -> ComponentKind { ComponentKind::of::<$val>() }
-                fn to_any(&self) -> &dyn Any { self }
-                fn to_any_mut(&mut self) -> &mut dyn Any { self }
-                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> { self }
+                fn kind(&self) -> ComponentKind {
+                    ComponentKind::of::<$val>()
+                }
+                fn to_any(&self) -> &dyn Any {
+                    self
+                }
+                fn to_any_mut(&mut self) -> &mut dyn Any {
+                    self
+                }
+                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+                    self
+                }
                 fn copy_to_box(&self) -> Box<dyn Replicate> {
                     // Field-by-field copy avoids requiring Clone bound on the type itself.
                     Box::new(unsafe { std::ptr::read(self as *const $val) })
                 }
                 fn create_builder() -> Box<dyn ReplicateBuilder>
-                where Self: Sized
-                { Box::new($builder) }
-                fn diff_mask_size(&self) -> u8 { 0 }
-                fn dyn_ref(&self) -> ReplicaDynRef<'_> { ReplicaDynRef::new(self) }
-                fn dyn_mut(&mut self) -> ReplicaDynMut<'_> { ReplicaDynMut::new(self) }
+                where
+                    Self: Sized,
+                {
+                    Box::new($builder)
+                }
+                fn diff_mask_size(&self) -> u8 {
+                    0
+                }
+                fn dyn_ref(&self) -> ReplicaDynRef<'_> {
+                    ReplicaDynRef::new(self)
+                }
+                fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
+                    ReplicaDynMut::new(self)
+                }
                 fn mirror(&mut self, _other: &dyn Replicate) {}
                 fn mirror_single_field(&mut self, _idx: u8, _other: &dyn Replicate) {}
                 fn set_mutator(&mut self, _m: &PropertyMutator) {}
@@ -408,24 +436,32 @@ mod tests {
                     _ck: &ComponentKinds,
                     _w: &mut dyn BitWrite,
                     _c: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-                ) {}
+                ) {
+                }
                 fn write_update(
                     &self,
                     _dm: &DiffMask,
                     _w: &mut dyn BitWrite,
                     _c: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-                ) {}
+                ) {
+                }
                 fn read_apply_update(
                     &mut self,
                     _c: &dyn LocalEntityAndGlobalEntityConverter,
                     _u: PendingComponentUpdate,
-                ) -> Result<(), SerdeErr> { Ok(()) }
+                ) -> Result<(), SerdeErr> {
+                    Ok(())
+                }
                 fn read_apply_field_update(
                     &mut self,
                     _c: &dyn LocalEntityAndGlobalEntityConverter,
                     _u: ComponentFieldUpdate,
-                ) -> Result<(), SerdeErr> { Ok(()) }
-                fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> { None }
+                ) -> Result<(), SerdeErr> {
+                    Ok(())
+                }
+                fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
+                    None
+                }
                 fn relations_complete(&mut self, _c: &dyn LocalEntityAndGlobalEntityConverter) {}
                 fn publish(&mut self, _m: &PropertyMutator) {}
                 fn unpublish(&mut self) {}
@@ -433,7 +469,8 @@ mod tests {
                     &mut self,
                     _a: &EntityAuthAccessor,
                     _m: Option<&PropertyMutator>,
-                ) {}
+                ) {
+                }
                 fn disable_delegation(&mut self) {}
                 fn localize(&mut self) {}
             }
@@ -458,8 +495,11 @@ mod tests {
     fn insert_component_marks_entity_live() {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         let e: E = 7;
-        snap.insert_component(e, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 1, y: 2 }));
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 1, y: 2 }),
+        );
         assert!(snap.has_entity(&e));
         assert_eq!(snap.live_entity_count(), 1);
         assert_eq!(snap.component_count(), 1);
@@ -469,8 +509,11 @@ mod tests {
     fn has_component_and_has_component_of_kind() {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         let e: E = 42;
-        snap.insert_component(e, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 10, y: 20 }));
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 10, y: 20 }),
+        );
 
         assert!(snap.has_component::<TestPosition>(&e));
         assert!(!snap.has_component::<TestVelocity>(&e));
@@ -486,10 +529,15 @@ mod tests {
     fn component_returns_downcast_typed_ref() {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         let e: E = 1;
-        snap.insert_component(e, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 5, y: 9 }));
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 5, y: 9 }),
+        );
 
-        let r = snap.component::<TestPosition>(&e).expect("component present");
+        let r = snap
+            .component::<TestPosition>(&e)
+            .expect("component present");
         assert_eq!(r.x, 5);
         assert_eq!(r.y, 9);
 
@@ -501,8 +549,11 @@ mod tests {
     fn component_of_kind_returns_dyn_ref() {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         let e: E = 2;
-        snap.insert_component(e, ComponentKind::of::<TestVelocity>(),
-                              Box::new(TestVelocity { dx: 100 }));
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestVelocity>(),
+            Box::new(TestVelocity { dx: 100 }),
+        );
 
         let dyn_ref = snap
             .component_of_kind(&e, &ComponentKind::of::<TestVelocity>())
@@ -529,13 +580,22 @@ mod tests {
     fn mark_despawned_cascades_component_removal() {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         let e: E = 3;
-        snap.insert_component(e, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 1, y: 1 }));
-        snap.insert_component(e, ComponentKind::of::<TestVelocity>(),
-                              Box::new(TestVelocity { dx: 9 }));
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 1, y: 1 }),
+        );
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestVelocity>(),
+            Box::new(TestVelocity { dx: 9 }),
+        );
         let other: E = 4;
-        snap.insert_component(other, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 7, y: 7 }));
+        snap.insert_component(
+            other,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 7, y: 7 }),
+        );
 
         assert_eq!(snap.component_count(), 3);
         assert_eq!(snap.live_entity_count(), 2);
@@ -556,10 +616,16 @@ mod tests {
     fn remove_component_leaves_entity_live() {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         let e: E = 11;
-        snap.insert_component(e, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 1, y: 1 }));
-        snap.insert_component(e, ComponentKind::of::<TestVelocity>(),
-                              Box::new(TestVelocity { dx: 2 }));
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 1, y: 1 }),
+        );
+        snap.insert_component(
+            e,
+            ComponentKind::of::<TestVelocity>(),
+            Box::new(TestVelocity { dx: 2 }),
+        );
 
         snap.remove_component(e, &ComponentKind::of::<TestPosition>());
 
@@ -574,8 +640,11 @@ mod tests {
         let mut snap: SnapshotWorld<E> = SnapshotWorld::new();
         snap.mark_live(1);
         snap.mark_live(2);
-        snap.insert_component(3, ComponentKind::of::<TestPosition>(),
-                              Box::new(TestPosition { x: 0, y: 0 }));
+        snap.insert_component(
+            3,
+            ComponentKind::of::<TestPosition>(),
+            Box::new(TestPosition { x: 0, y: 0 }),
+        );
 
         let mut es = snap.entities();
         es.sort();

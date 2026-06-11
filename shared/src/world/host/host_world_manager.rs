@@ -9,8 +9,8 @@ use crate::{
         sync::{HostEngine, HostEntityChannel, RemoteEngine, RemoteEntityChannel},
         update::entity_update_manager::EntityUpdateManager,
     },
-    ComponentKind, ComponentKinds, EntityCommand, EntityMapConverterMut, EntityEvent, EntityMessage,
-    EntityMessageReceiver, EntityMessageType, GlobalEntity, GlobalEntitySpawner,
+    ComponentKind, ComponentKinds, EntityCommand, EntityEvent, EntityMapConverterMut,
+    EntityMessage, EntityMessageReceiver, EntityMessageType, GlobalEntity, GlobalEntitySpawner,
     GlobalWorldManagerType, HostEntity, HostEntityGenerator, HostType,
     LocalEntityAndGlobalEntityConverter, LocalEntityMap, MessageIndex, ShortMessageIndex,
     WorldMutType,
@@ -369,11 +369,13 @@ impl HostWorldManager {
                 .pending_outbound
                 .iter()
                 .copied()
-                .filter(|ge| match local_entity_map.global_entity_to_host_entity(ge) {
-                    Ok(host_entity) => self.host_entity_fully_delivered(&host_entity),
-                    // No host mapping → entity is gone; stop tracking it.
-                    Err(_) => true,
-                })
+                .filter(
+                    |ge| match local_entity_map.global_entity_to_host_entity(ge) {
+                        Ok(host_entity) => self.host_entity_fully_delivered(&host_entity),
+                        // No host mapping → entity is gone; stop tracking it.
+                        Err(_) => true,
+                    },
+                )
                 .collect();
             for ge in settled {
                 self.pending_outbound.remove(&ge);
@@ -404,29 +406,42 @@ impl HostWorldManager {
                     if let Some(global_entity) =
                         local_entity_map.global_entity_from_host(&host_entity)
                     {
-                        self.incoming_events.push(EntityEvent::Despawn(*global_entity));
+                        self.incoming_events
+                            .push(EntityEvent::Despawn(*global_entity));
                     }
                 }
                 EntityMessage::InsertComponent(_, _) => {
-                    unreachable!("Server never sends InsertComponent to the originating HostWorldManager");
+                    unreachable!(
+                        "Server never sends InsertComponent to the originating HostWorldManager"
+                    );
                 }
                 EntityMessage::RemoveComponent(_, _) => {
-                    unreachable!("Server never sends RemoveComponent to the originating HostWorldManager");
+                    unreachable!(
+                        "Server never sends RemoveComponent to the originating HostWorldManager"
+                    );
                 }
                 EntityMessage::Publish(_, _) => {
                     unreachable!("Server never sends Publish to the originating HostWorldManager");
                 }
                 EntityMessage::Unpublish(_, _) => {
-                    unreachable!("Server never sends Unpublish to the originating HostWorldManager");
+                    unreachable!(
+                        "Server never sends Unpublish to the originating HostWorldManager"
+                    );
                 }
                 EntityMessage::EnableDelegation(_, _) => {
-                    unreachable!("Server never sends EnableDelegation to the originating HostWorldManager");
+                    unreachable!(
+                        "Server never sends EnableDelegation to the originating HostWorldManager"
+                    );
                 }
                 EntityMessage::DisableDelegation(_, _) => {
-                    unreachable!("Server never sends DisableDelegation to the originating HostWorldManager");
+                    unreachable!(
+                        "Server never sends DisableDelegation to the originating HostWorldManager"
+                    );
                 }
                 EntityMessage::SetAuthority(_, _, _) => {
-                    unreachable!("Server never sends SetAuthority to the originating HostWorldManager");
+                    unreachable!(
+                        "Server never sends SetAuthority to the originating HostWorldManager"
+                    );
                 }
                 EntityMessage::MigrateResponse(_sub_id, client_host_entity, new_remote_entity) => {
                     // Client receives MigrateResponse from server telling it to migrate
@@ -519,7 +534,6 @@ impl HostWorldManager {
     pub(crate) fn remove_entity_channel(&mut self, entity: &HostEntity) -> HostEntityChannel {
         self.host_engine.remove_entity_channel(entity)
     }
-
 }
 // NOTE: on_delivered_migrate_response was removed (2026-05-10). The entity migration path
 // requires RemoteWorldManager drain/extract/despawn APIs that do not exist. Any future

@@ -2,8 +2,7 @@ use naia_serde::{BitReader, OwnedBitReader};
 
 use crate::{
     world::component::component_kinds::ComponentKind,
-    world::component::replicate::SplitUpdateResult,
-    ComponentKinds,
+    world::component::replicate::SplitUpdateResult, ComponentKinds,
     LocalEntityAndGlobalEntityConverter,
 };
 

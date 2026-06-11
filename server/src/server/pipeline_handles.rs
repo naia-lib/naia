@@ -102,8 +102,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
         self.state.receive();
         let world_events = self.state.take_world_events();
         let mut tick_events = self.state.take_tick_events(&Instant::now());
-        let pending_ticks: Vec<Tick> =
-            tick_events.read::<crate::events::TickEvent>().collect();
+        let pending_ticks: Vec<Tick> = tick_events.read::<crate::events::TickEvent>().collect();
         let received_addresses = std::mem::take(&mut self.state.received_addresses);
         let pending_data_packets = std::mem::take(&mut self.state.pending_data_packets);
         ReceiveOutput {
@@ -200,10 +199,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// Pipeline-mode periodic ping dispatch (step 4-F.naia.c.2c).
     /// Thin wrapper that forwards to [`SendState::send_pings`].
-    pub fn send_pings(
-        &mut self,
-        recv_conns: &mut HashMap<SocketAddr, RecvConnection>,
-    ) {
+    pub fn send_pings(&mut self, recv_conns: &mut HashMap<SocketAddr, RecvConnection>) {
         self.state.send_pings(recv_conns);
     }
 
@@ -337,10 +333,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Idempotent within a tick: the per-tick flag causes the
     /// subsequent `send_all_packets` to skip its auto-call. See
     /// [`SendState::apply_pending_scope_changes`] for the full body.
-    pub fn apply_pending_scope_changes<W: naia_shared::WorldRefType<E>>(
-        &mut self,
-        world: &W,
-    ) {
+    pub fn apply_pending_scope_changes<W: naia_shared::WorldRefType<E>>(&mut self, world: &W) {
         self.state.apply_pending_scope_changes(world);
     }
 
@@ -386,7 +379,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         world_entity: &E,
         component: &mut dyn naia_shared::Replicate,
     ) {
-        self.state.insert_component_worldless(world_entity, component);
+        self.state
+            .insert_component_worldless(world_entity, component);
     }
 
     /// Pipeline-mode `remove_component_worldless`. Byte-identical to
@@ -396,7 +390,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         world_entity: &E,
         component_kind: &naia_shared::ComponentKind,
     ) {
-        self.state.remove_component_worldless(world_entity, component_kind);
+        self.state
+            .remove_component_worldless(world_entity, component_kind);
     }
 
     /// Pipeline-mode `despawn_entity_worldless`. Byte-identical to
@@ -408,7 +403,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         sim_handle: &mut crate::server::coord_state::CoordinatorState<E>,
         world_entity: &E,
     ) {
-        self.state.despawn_entity_worldless(sim_handle, world_entity);
+        self.state
+            .despawn_entity_worldless(sim_handle, world_entity);
     }
 
     /// C.6 prep — send a message to the user at `address` without
@@ -526,15 +522,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state
             .entity_scope_map
             .insert(*user_key, global_entity, is_contained);
-        self.state
-            .shared
-            .scope_change_queue
-            .lock()
-            .push_back(crate::server::scope_change::ScopeChange::ScopeToggled(
+        self.state.shared.scope_change_queue.lock().push_back(
+            crate::server::scope_change::ScopeChange::ScopeToggled(
                 *user_key,
                 global_entity,
                 is_contained,
-            ));
+            ),
+        );
     }
 
     /// Set a per-user explicit scope bit for `world_entity`.
@@ -677,11 +671,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         }
 
         // Check explicit include/exclude.
-        if let Some(in_scope) = self
-            .state
-            .entity_scope_map
-            .get(user_key, &global_entity)
-        {
+        if let Some(in_scope) = self.state.entity_scope_map.get(user_key, &global_entity) {
             if *in_scope {
                 // [entity-scopes-09]: explicit include() cannot bypass the
                 // room gate for server-owned non-resource entities that have
@@ -709,11 +699,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         }
 
         // Default: in-scope if user and entity share a room.
-        let Some(entity_rooms) = self
-            .state
-            .entity_room_map
-            .entity_get_rooms(&global_entity)
-        else {
+        let Some(entity_rooms) = self.state.entity_room_map.entity_get_rooms(&global_entity) else {
             return false;
         };
         let Some(user_rooms) = self.state.user_room_map.get(user_key) else {

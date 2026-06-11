@@ -39,13 +39,19 @@ impl GlobalDirtyBitset {
         let ent_count = capacity.div_ceil(64).max(1);
 
         let mut ref_counts = Vec::with_capacity(rc_count);
-        for _ in 0..rc_count { ref_counts.push(AtomicU32::new(0)); }
+        for _ in 0..rc_count {
+            ref_counts.push(AtomicU32::new(0));
+        }
 
         let mut dirty_components = Vec::with_capacity(comp_count);
-        for _ in 0..comp_count { dirty_components.push(AtomicU64::new(0)); }
+        for _ in 0..comp_count {
+            dirty_components.push(AtomicU64::new(0));
+        }
 
         let mut dirty_entities = Vec::with_capacity(ent_count);
-        for _ in 0..ent_count { dirty_entities.push(AtomicU64::new(0)); }
+        for _ in 0..ent_count {
+            dirty_entities.push(AtomicU64::new(0));
+        }
 
         Self {
             ref_counts,
@@ -62,17 +68,22 @@ impl GlobalDirtyBitset {
     /// if the entity's component word was zero, sets dirty_entities bit.
     pub fn increment(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let ei = entity_idx.as_usize();
-        if ei == 0 || ei >= self.capacity { return; }
+        if ei == 0 || ei >= self.capacity {
+            return;
+        }
 
         let rc_idx = ei * self.component_count + kind_bit as usize;
-        if rc_idx >= self.ref_counts.len() { return; }
+        if rc_idx >= self.ref_counts.len() {
+            return;
+        }
 
         let prev_rc = self.ref_counts[rc_idx].fetch_add(1, Ordering::Relaxed);
         if prev_rc == 0 {
             // 0→1: mark this component dirty.
             let word_idx = ei * self.component_stride + (kind_bit as usize) / 64;
             let bit = (kind_bit as u64) % 64;
-            let prev_word = self.dirty_components[word_idx].fetch_or(1u64 << bit, Ordering::Relaxed);
+            let prev_word =
+                self.dirty_components[word_idx].fetch_or(1u64 << bit, Ordering::Relaxed);
             if prev_word == 0 {
                 // This entity had no dirty components before — set entity summary bit.
                 let ent_word = ei / 64;
@@ -87,23 +98,28 @@ impl GlobalDirtyBitset {
     /// if all component words for the entity become zero, clears dirty_entities bit.
     pub fn decrement(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         let ei = entity_idx.as_usize();
-        if ei == 0 || ei >= self.capacity { return; }
+        if ei == 0 || ei >= self.capacity {
+            return;
+        }
 
         let rc_idx = ei * self.component_count + kind_bit as usize;
-        if rc_idx >= self.ref_counts.len() { return; }
+        if rc_idx >= self.ref_counts.len() {
+            return;
+        }
 
         let prev_rc = self.ref_counts[rc_idx].fetch_sub(1, Ordering::Relaxed);
         if prev_rc == 1 {
             // 1→0: clear this component's dirty bit.
             let word_idx = ei * self.component_stride + (kind_bit as usize) / 64;
             let bit = (kind_bit as u64) % 64;
-            let prev_word = self.dirty_components[word_idx].fetch_and(!(1u64 << bit), Ordering::Relaxed);
+            let prev_word =
+                self.dirty_components[word_idx].fetch_and(!(1u64 << bit), Ordering::Relaxed);
             let after_clear = prev_word & !(1u64 << bit);
             if after_clear == 0 {
                 // This component word is now zero; check all words for this entity.
                 let entity_fully_clean = (0..self.component_stride).all(|w| {
-                    self.dirty_components[ei * self.component_stride + w]
-                        .load(Ordering::Relaxed) == 0
+                    self.dirty_components[ei * self.component_stride + w].load(Ordering::Relaxed)
+                        == 0
                 });
                 if entity_fully_clean {
                     let ent_word = ei / 64;
@@ -117,18 +133,28 @@ impl GlobalDirtyBitset {
     /// Returns `true` if this (entity, kind) is dirty for any user. O(1).
     pub fn is_component_dirty(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) -> bool {
         let ei = entity_idx.as_usize();
-        if ei == 0 || ei >= self.capacity { return false; }
+        if ei == 0 || ei >= self.capacity {
+            return false;
+        }
         let rc_idx = ei * self.component_count + kind_bit as usize;
-        if rc_idx >= self.ref_counts.len() { return false; }
+        if rc_idx >= self.ref_counts.len() {
+            return false;
+        }
         self.ref_counts[rc_idx].load(Ordering::Relaxed) > 0
     }
 
     /// Iterates entities with any dirty component. O(capacity / 64).
     pub fn dirty_entity_iter(&self) -> impl Iterator<Item = GlobalEntityIndex> + '_ {
-        self.dirty_entities.iter().enumerate().flat_map(|(word_idx, word_cell)| {
-            let word = word_cell.load(Ordering::Relaxed);
-            DirtyBitIter { word, base: word_idx * 64 }
-        })
+        self.dirty_entities
+            .iter()
+            .enumerate()
+            .flat_map(|(word_idx, word_cell)| {
+                let word = word_cell.load(Ordering::Relaxed);
+                DirtyBitIter {
+                    word,
+                    base: word_idx * 64,
+                }
+            })
     }
 
     /// Returns the component-level dirty words for one entity.
@@ -157,12 +183,18 @@ impl GlobalDirtyBitset {
     /// entities), not O(capacity)). The deterministic oracle never freezes (it
     /// sends synchronously against the live bitset within the same tick).
     pub fn freeze(&self) -> FrozenGlobalDirty {
-        let dirty_entity_words: Vec<u64> =
-            self.dirty_entities.iter().map(|w| w.load(Ordering::Relaxed)).collect();
+        let dirty_entity_words: Vec<u64> = self
+            .dirty_entities
+            .iter()
+            .map(|w| w.load(Ordering::Relaxed))
+            .collect();
         let mut component_words: HashMap<u32, Vec<u64>> = HashMap::new();
         for idx in self.dirty_entity_iter() {
-            let words: Vec<u64> =
-                self.dirty_words(idx).iter().map(|w| w.load(Ordering::Relaxed)).collect();
+            let words: Vec<u64> = self
+                .dirty_words(idx)
+                .iter()
+                .map(|w| w.load(Ordering::Relaxed))
+                .collect();
             component_words.insert(idx.as_usize() as u32, words);
         }
         FrozenGlobalDirty {
@@ -191,9 +223,13 @@ pub struct FrozenGlobalDirty {
 impl FrozenGlobalDirty {
     /// Mirror of [`GlobalDirtyBitset::dirty_entity_iter`] over the frozen words.
     pub fn dirty_entity_iter(&self) -> impl Iterator<Item = GlobalEntityIndex> + '_ {
-        self.dirty_entity_words.iter().enumerate().flat_map(|(word_idx, word)| {
-            DirtyBitIter { word: *word, base: word_idx * 64 }
-        })
+        self.dirty_entity_words
+            .iter()
+            .enumerate()
+            .flat_map(|(word_idx, word)| DirtyBitIter {
+                word: *word,
+                base: word_idx * 64,
+            })
     }
 
     /// Mirror of [`GlobalDirtyBitset::dirty_words`]: the entity's frozen
@@ -244,7 +280,10 @@ mod tests {
 
         assert!(gdb.is_component_dirty(entity, kind_bit));
         let dirty: Vec<GlobalEntityIndex> = gdb.dirty_entity_iter().collect();
-        assert!(dirty.contains(&entity), "entity should appear in dirty_entity_iter");
+        assert!(
+            dirty.contains(&entity),
+            "entity should appear in dirty_entity_iter"
+        );
     }
 
     #[test]
@@ -268,15 +307,26 @@ mod tests {
         assert_eq!(live, froz, "frozen dirty_entity_iter must match live");
 
         // dirty_entity_words: word-for-word equal.
-        let live_words: Vec<u64> =
-            gdb.dirty_entity_words().iter().map(|w| w.load(Ordering::Relaxed)).collect();
+        let live_words: Vec<u64> = gdb
+            .dirty_entity_words()
+            .iter()
+            .map(|w| w.load(Ordering::Relaxed))
+            .collect();
         assert_eq!(live_words.as_slice(), frozen.dirty_entity_words());
 
         // dirty_words: per-entity component words equal (incl. the word-65 bit).
         for idx in [idx1, idx70] {
-            let live_cw: Vec<u64> =
-                gdb.dirty_words(idx).iter().map(|w| w.load(Ordering::Relaxed)).collect();
-            assert_eq!(live_cw.as_slice(), frozen.dirty_words(idx), "component words for {:?}", idx);
+            let live_cw: Vec<u64> = gdb
+                .dirty_words(idx)
+                .iter()
+                .map(|w| w.load(Ordering::Relaxed))
+                .collect();
+            assert_eq!(
+                live_cw.as_slice(),
+                frozen.dirty_words(idx),
+                "component words for {:?}",
+                idx
+            );
         }
 
         // A clean entity returns an all-zero stride-length slice (not a panic).
@@ -296,7 +346,10 @@ mod tests {
 
         assert!(!gdb.is_component_dirty(entity, kind_bit));
         let dirty: Vec<GlobalEntityIndex> = gdb.dirty_entity_iter().collect();
-        assert!(!dirty.contains(&entity), "entity should be absent after decrement to zero");
+        assert!(
+            !dirty.contains(&entity),
+            "entity should be absent after decrement to zero"
+        );
     }
 
     #[test]
@@ -339,13 +392,19 @@ mod tests {
 
         // User A disconnects
         gdb.decrement(entity, kind_bit);
-        assert!(gdb.is_component_dirty(entity, kind_bit), "still dirty with user B");
+        assert!(
+            gdb.is_component_dirty(entity, kind_bit),
+            "still dirty with user B"
+        );
         let dirty: Vec<GlobalEntityIndex> = gdb.dirty_entity_iter().collect();
         assert!(dirty.contains(&entity));
 
         // User B disconnects
         gdb.decrement(entity, kind_bit);
-        assert!(!gdb.is_component_dirty(entity, kind_bit), "clean after both disconnect");
+        assert!(
+            !gdb.is_component_dirty(entity, kind_bit),
+            "clean after both disconnect"
+        );
         let dirty: Vec<GlobalEntityIndex> = gdb.dirty_entity_iter().collect();
         assert!(!dirty.contains(&entity));
     }

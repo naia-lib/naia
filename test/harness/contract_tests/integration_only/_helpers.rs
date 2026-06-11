@@ -1,8 +1,17 @@
-#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_must_use,
+    unused_mut,
+    dead_code,
+    for_loops_over_fallibles
+)]
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::RoomKey;
 use naia_shared::Protocol;
-use naia_test_harness::{Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent};
+use naia_test_harness::{
+    Auth, ClientKey, ExpectCtx, Scenario, ServerAuthEvent, ServerConnectEvent,
+};
 use std::time::Duration;
 
 // ============================================================================

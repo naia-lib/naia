@@ -15,9 +15,9 @@
 use std::collections::HashSet;
 use std::net::SocketAddr;
 
-use naia_shared::{BigMapKey, GlobalEntitySpawner, Protocol};
 #[allow(unused_imports)]
 use naia_shared::DisconnectReason;
+use naia_shared::{BigMapKey, GlobalEntitySpawner, Protocol};
 
 use crate::events::world_events::WorldEvents;
 use crate::server::receive_output::ReceiveOutput;
@@ -25,8 +25,7 @@ use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
 use super::{
-    SimHandle, RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer,
-    spawn_server_handles,
+    drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent, SimHandle,
 };
 
 /// Compile-time assertion that `T: Send`.
@@ -78,7 +77,10 @@ fn make_empty_receive_output() -> ReceiveOutput<u64> {
 fn drain_lifecycle_on_empty_output_returns_empty_vec() {
     let mut output = make_empty_receive_output();
     let events = drain_lifecycle(&mut output);
-    assert!(events.is_empty(), "no lifecycle events expected: {events:?}");
+    assert!(
+        events.is_empty(),
+        "no lifecycle events expected: {events:?}"
+    );
 }
 
 #[test]
@@ -99,9 +101,10 @@ fn drain_lifecycle_translates_connect_disconnect_error() {
         .push_disconnection(&user_b, addr_b, DisconnectReason::ClientDisconnected);
     output
         .world_events
-        .push_error(NaiaServerError::Wrapped(Box::new(
-            std::io::Error::new(std::io::ErrorKind::Other, "boom"),
-        )));
+        .push_error(NaiaServerError::Wrapped(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "boom",
+        ))));
 
     let events = drain_lifecycle(&mut output);
     assert_eq!(events.len(), 3, "expected 3 lifecycle events: {events:?}");
@@ -111,7 +114,11 @@ fn drain_lifecycle_translates_connect_disconnect_error() {
         other => panic!("expected Connected, got {other:?}"),
     }
     match &events[1] {
-        RecvLifecycleEvent::Disconnected { user_key, address, reason } => {
+        RecvLifecycleEvent::Disconnected {
+            user_key,
+            address,
+            reason,
+        } => {
             assert_eq!(*user_key, user_b);
             assert_eq!(*address, addr_b);
             assert!(matches!(reason, DisconnectReason::ClientDisconnected));
@@ -129,7 +136,10 @@ fn drain_lifecycle_translates_connect_disconnect_error() {
 
     // After drain, the WorldEvents lists should be empty (mem::take semantics).
     let leftover = drain_lifecycle(&mut output);
-    assert!(leftover.is_empty(), "second drain should be empty: {leftover:?}");
+    assert!(
+        leftover.is_empty(),
+        "second drain should be empty: {leftover:?}"
+    );
 }
 
 #[test]
@@ -168,8 +178,7 @@ mod tick_buffer_test_protocol {
 #[test]
 fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     use naia_shared::{
-        ChannelDirection, ChannelKind, ChannelMode, Message, MessageContainer,
-        TickBufferSettings,
+        ChannelDirection, ChannelKind, ChannelMode, Message, MessageContainer, TickBufferSettings,
     };
 
     use tick_buffer_test_protocol::{TestTick, TestTickBufferedChannel};
@@ -193,7 +202,9 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     // arm and return false silently).
     let registered_channels = recv.state.shared.channel_kinds.all_names();
     assert!(
-        registered_channels.iter().any(|n| n.contains("TestTickBufferedChannel")),
+        registered_channels
+            .iter()
+            .any(|n| n.contains("TestTickBufferedChannel")),
         "channel_kinds should contain TestTickBufferedChannel, saw {registered_channels:?}",
     );
 
@@ -232,18 +243,16 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
         .recv_user_connections
         .get_mut(&address)
         .expect("connection just inserted");
-    let injected = recv_conn.inject_tick_buffer_message(
-        &channel_kind,
-        &host_tick,
-        &message_tick,
-        container,
+    let injected =
+        recv_conn.inject_tick_buffer_message(&channel_kind, &host_tick, &message_tick, container);
+    assert!(
+        injected,
+        "tick-buffer inject_message should accept the message"
     );
-    assert!(injected, "tick-buffer inject_message should accept the message");
 
     // Drain via the helper under test.
     let mut messages = drain_tick_buffer(&mut recv, message_tick);
-    let decoded: Vec<(UserKey, TestTick)> =
-        messages.read::<TestTickBufferedChannel, TestTick>();
+    let decoded: Vec<(UserKey, TestTick)> = messages.read::<TestTickBufferedChannel, TestTick>();
     assert_eq!(decoded.len(), 1, "expected exactly one decoded message");
     assert_eq!(decoded[0].0, user_key);
     assert_eq!(decoded[0].1.value, 7);
@@ -253,7 +262,10 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     let mut messages_again = drain_tick_buffer(&mut recv, message_tick);
     let decoded_again: Vec<(UserKey, TestTick)> =
         messages_again.read::<TestTickBufferedChannel, TestTick>();
-    assert!(decoded_again.is_empty(), "tick buffer should drain to empty");
+    assert!(
+        decoded_again.is_empty(),
+        "tick buffer should drain to empty"
+    );
 }
 
 /// Integration test for SimHandle room-ops deferred-drain path (§ 5.4).
@@ -282,7 +294,10 @@ fn sim_handle_room_ops_deferred_drain_path() {
     // Register a user so room_add_user can subscribe it.
     let user_key = UserKey::from_u64(1);
     let user_addr: SocketAddr = "127.0.0.1:9001".parse().unwrap();
-    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle
+        .state
+        .user_store
+        .insert(user_key, WorldUser::new(user_addr));
 
     // Coord-side room ops — all push-only, no drain.
     let rk = sim_handle.create_room();
@@ -300,7 +315,8 @@ fn sim_handle_room_ops_deferred_drain_path() {
     }
 
     // Drain via apply_pending_room_changes — same path as send_all_packets.
-    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
+    send.state
+        .apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // entity_room_map must have entity 42u64 in room rk.
     let erm_rooms = send.state.entity_room_map.entity_get_rooms(&global_entity);
@@ -357,7 +373,11 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
 
     // Manufacture a client-owned, PUBLIC entity (ClientPublic) in gwm.
     let world_entity: u64 = 77;
-    let global_entity = sim_handle.shared.global_entity_map.write().spawn(world_entity, None);
+    let global_entity = sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(world_entity, None);
     sim_handle
         .shared
         .global_world_manager
@@ -551,12 +571,19 @@ fn send_handle_scope_checks_pending_and_mark_handled() {
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
 
     // Register entity 10u64 in global_entity_map.
-    sim_handle.shared.global_entity_map.write().spawn(10u64, None);
+    sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(10u64, None);
 
     // Register a user.
     let user_key = UserKey::from_u64(1);
     let user_addr: SocketAddr = "127.0.0.1:20001".parse().unwrap();
-    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle
+        .state
+        .user_store
+        .insert(user_key, WorldUser::new(user_addr));
 
     // Coord room ops — push-only.
     let rk = sim_handle.create_room();
@@ -571,7 +598,8 @@ fn send_handle_scope_checks_pending_and_mark_handled() {
     );
 
     // Drain via apply_pending_room_changes — same path as send_all_packets preamble.
-    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
+    send.state
+        .apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // After drain, pending must contain the (room, user, entity) tuple.
     let pending_after = send.scope_checks_pending();
@@ -607,12 +635,19 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
 
     // Register entity 42u64 as a server-owned entity.
     let world_entity: u64 = 42;
-    let global_entity = sim_handle.shared.global_entity_map.write().spawn(world_entity, None);
+    let global_entity = sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(world_entity, None);
     let idx = sim_handle
         .shared
         .global_world_manager
         .write()
-        .insert_entity_record(&global_entity, crate::world::entity_owner::EntityOwner::Server);
+        .insert_entity_record(
+            &global_entity,
+            crate::world::entity_owner::EntityOwner::Server,
+        );
     if idx.is_valid() {
         sim_handle.shared.idx_to_world.write()[idx.as_usize()] = Some(world_entity);
     }
@@ -620,7 +655,10 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
     // Register a user.
     let user_key = UserKey::from_u64(2);
     let user_addr: SocketAddr = "127.0.0.1:20002".parse().unwrap();
-    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle
+        .state
+        .user_store
+        .insert(user_key, WorldUser::new(user_addr));
 
     // Put the entity in a room so it is not roomless (avoids the roomless
     // server-owned gate that would veto explicit include on non-resources).
@@ -629,11 +667,15 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
     sim_handle.room_add_entity(&rk, &world_entity);
 
     // Drain pending room changes so entity_room_map + user_room_map are current.
-    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
+    send.state
+        .apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // Set explicit include.
     let set_ok = send.user_scope_set_entity(&user_key, &world_entity, true);
-    assert!(set_ok, "user_scope_set_entity should return true for a registered entity");
+    assert!(
+        set_ok,
+        "user_scope_set_entity should return true for a registered entity"
+    );
 
     // user_scope_has_entity must return true (is_resource=false, entity is in a room).
     assert!(
@@ -666,8 +708,16 @@ fn send_handle_user_scope_has_entity_room_default() {
     // Register two entities.
     let entity_in_room: u64 = 100;
     let entity_not_in_room: u64 = 200;
-    let ge_in = sim_handle.shared.global_entity_map.write().spawn(entity_in_room, None);
-    let ge_out = sim_handle.shared.global_entity_map.write().spawn(entity_not_in_room, None);
+    let ge_in = sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(entity_in_room, None);
+    let ge_out = sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(entity_not_in_room, None);
     for ge in [ge_in, ge_out] {
         let idx = sim_handle
             .shared
@@ -682,7 +732,10 @@ fn send_handle_user_scope_has_entity_room_default() {
     // Register a user.
     let user_key = UserKey::from_u64(3);
     let user_addr: SocketAddr = "127.0.0.1:20003".parse().unwrap();
-    sim_handle.state.user_store.insert(user_key, WorldUser::new(user_addr));
+    sim_handle
+        .state
+        .user_store
+        .insert(user_key, WorldUser::new(user_addr));
 
     // Only entity_in_room goes into the room with the user.
     let rk = sim_handle.create_room();
@@ -694,7 +747,8 @@ fn send_handle_user_scope_has_entity_room_default() {
     sim_handle.room_add_entity(&rk2, &entity_not_in_room);
 
     // Drain pending room changes.
-    send.state.apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
+    send.state
+        .apply_pending_room_changes(&sim_handle.shared.scope_change_queue);
 
     // entity_in_room: in same room as user → in-scope by default.
     assert!(

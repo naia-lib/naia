@@ -49,13 +49,7 @@ fn protocol() -> naia_shared::Protocol {
     bevy_proto.into()
 }
 
-fn handles_listening(
-    addr: &str,
-) -> (
-    SimHandle<Entity>,
-    RecvHandle<Entity>,
-    SendHandle<Entity>,
-) {
+fn handles_listening(addr: &str) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let (sim_handle, recv, send) =
@@ -80,12 +74,16 @@ fn spawn_replicating_entity(
     recv: RecvHandle<Entity>,
     send: SendHandle<Entity>,
     bevy_world: &mut World,
-) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>, Entity) {
+) -> (
+    SimHandle<Entity>,
+    RecvHandle<Entity>,
+    SendHandle<Entity>,
+    Entity,
+) {
     let entity = bevy_world.spawn(Position::new(1.0, 2.0)).id();
-    let (sim_handle, recv, send, ()) =
-        run_with_world_server(sim_handle, recv, send, |ws| {
-            ws.enable_entity_replication(&entity);
-        });
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
+        ws.enable_entity_replication(&entity);
+    });
     (sim_handle, recv, send, entity)
 }
 

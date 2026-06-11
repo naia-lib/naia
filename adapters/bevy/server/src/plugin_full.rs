@@ -77,10 +77,10 @@ use parking_lot::Mutex;
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::{
     pipeline_actors::{
-        spawn_server_handles, SimHandle, SimEventReceiver, SnapshotReceiver, SnapshotSender,
+        spawn_server_handles, SimEventReceiver, SimHandle, SnapshotReceiver, SnapshotSender,
     },
     shared::Protocol as NaiaProtocol,
-    RecvHandle, ReceiveOutput, SendHandle, ServerConfig,
+    ReceiveOutput, RecvHandle, SendHandle, ServerConfig,
 };
 
 use crate::apply_receive_output_pipeline_with_sim_receiver;
@@ -814,11 +814,10 @@ impl PluginInternalState {
     /// is invoked.  Must only be called while in the `Armed` state
     /// (before `listen()`); panics if the armed handles have already been
     /// consumed by `listen()`.
-    pub fn armed_send_state_view(
-        &self,
-    ) -> naia_server::pipeline_actors::SendStateView<Entity> {
+    pub fn armed_send_state_view(&self) -> naia_server::pipeline_actors::SendStateView<Entity> {
         let guard = self.armed_handles.lock();
-        let (sim_handle, _, _) = guard.as_ref()
+        let (sim_handle, _, _) = guard
+            .as_ref()
             .expect("armed_send_state_view called after listen() — handles already moved");
         sim_handle.send_state_view()
     }
@@ -869,9 +868,7 @@ impl Drop for PluginInternalState {
                         log::warn!("naia plugin worker {name} panicked during shutdown");
                     }
                 } else {
-                    log::warn!(
-                        "naia plugin worker {name} did not exit within 5s; leaking thread",
-                    );
+                    log::warn!("naia plugin worker {name} did not exit within 5s; leaking thread",);
                 }
             }
         }
@@ -1082,82 +1079,87 @@ fn recv_worker_loop(
 
         #[cfg(workers_active)]
         {
-        // Don't start a receive() if park was requested — loop straight back to
-        // the checkpoint (which parks immediately). No sleep: the worker is about
-        // to park, and a sleep here would just add up to 100µs to the barrier in
-        // the race window where park is set after the checkpoint returned. (T1)
-        if park.park.load(Ordering::SeqCst) {
-            continue;
-        }
-
-        let mut recv = match recv_slot.try_lock().and_then(|mut g| g.take()) {
-            Some(h) => h,
-            None => {
-                thread::sleep(std::time::Duration::from_micros(100));
+            // Don't start a receive() if park was requested — loop straight back to
+            // the checkpoint (which parks immediately). No sleep: the worker is about
+            // to park, and a sleep here would just add up to 100µs to the barrier in
+            // the race window where park is set after the checkpoint returned. (T1)
+            if park.park.load(Ordering::SeqCst) {
                 continue;
             }
-        };
 
-        #[cfg(feature = "pipeline_timing")]
-        let _t_recv = std::time::Instant::now();
-        let output = recv.receive();
-        #[cfg(feature = "pipeline_timing")]
-        crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
-
-        // Re-deposit using try_lock spin (never blocks park checkpoint).
-        loop {
-            match recv_slot.try_lock() {
-                Some(mut g) => { *g = Some(recv); break; }
-                None => { thread::sleep(std::time::Duration::from_micros(100)); }
-            }
-        }
-
-        // Unbounded channel: NEVER drop a `ReceiveOutput`. It already holds
-        // command packets pulled off the socket; dropping it would lose them
-        // (see channel construction in `new_armed`). `send` only errors if the
-        // receiver hung up (plugin teardown) — exit cleanly in that case.
-        if out_tx.send(output).is_err() {
-            return;
-        }
-        // Idle inter-iteration wait.
-        match &readiness {
-            // Event-driven (in-process PacketChannel): block with ZERO CPU
-            // until either the transport signals a packet may be ready OR a
-            // control wake (park / shutdown / test-panic) fires. This
-            // eliminates the 100µs idle-poll storm: under oversubscription
-            // the cell is fed only ~once per 5ms service loop, so ~98% of
-            // the old polls were wasted wakeups.
-            //
-            // Lost-wakeup-free: async-channel `recv()` re-checks the buffer
-            // before parking, and both signals are bounded(1) coalescing —
-            // a ping that lands between this worker's drain and its next
-            // wait leaves a buffered token, so the freshly-created future
-            // resolves immediately. The per-tick park-window drain remains
-            // the authoritative safety net (≤1-tick dwell ceiling).
-            Some(readiness) => {
-                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                    smol::block_on(smol::future::or(readiness.wait(), async {
-                        let _ = park.control_rx.recv().await;
-                    }));
+            let mut recv = match recv_slot.try_lock().and_then(|mut g| g.take()) {
+                Some(h) => h,
+                None => {
+                    thread::sleep(std::time::Duration::from_micros(100));
+                    continue;
                 }
-                // Clear the token(s) that woke us so the next iteration's
-                // wait starts fresh (data is drained by recv.receive() at
-                // the loop top; any packet that arrives after this re-pings).
-                readiness.drain();
-                while park.control_rx.try_recv().is_ok() {}
-            }
-            // Poll-only transport (raw socket, no awaitable readiness): keep
-            // the bounded condvar poll — park_workers()'s body_sleep_cv wake
-            // still cuts the park barrier; the 100µs bound drains the socket.
-            None => {
-                let mut g = park.body_sleep_mu.lock();
-                if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                    park.body_sleep_cv
-                        .wait_for(&mut g, std::time::Duration::from_micros(100));
+            };
+
+            #[cfg(feature = "pipeline_timing")]
+            let _t_recv = std::time::Instant::now();
+            let output = recv.receive();
+            #[cfg(feature = "pipeline_timing")]
+            crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
+
+            // Re-deposit using try_lock spin (never blocks park checkpoint).
+            loop {
+                match recv_slot.try_lock() {
+                    Some(mut g) => {
+                        *g = Some(recv);
+                        break;
+                    }
+                    None => {
+                        thread::sleep(std::time::Duration::from_micros(100));
+                    }
                 }
-                drop(g);
             }
-        }
+
+            // Unbounded channel: NEVER drop a `ReceiveOutput`. It already holds
+            // command packets pulled off the socket; dropping it would lose them
+            // (see channel construction in `new_armed`). `send` only errors if the
+            // receiver hung up (plugin teardown) — exit cleanly in that case.
+            if out_tx.send(output).is_err() {
+                return;
+            }
+            // Idle inter-iteration wait.
+            match &readiness {
+                // Event-driven (in-process PacketChannel): block with ZERO CPU
+                // until either the transport signals a packet may be ready OR a
+                // control wake (park / shutdown / test-panic) fires. This
+                // eliminates the 100µs idle-poll storm: under oversubscription
+                // the cell is fed only ~once per 5ms service loop, so ~98% of
+                // the old polls were wasted wakeups.
+                //
+                // Lost-wakeup-free: async-channel `recv()` re-checks the buffer
+                // before parking, and both signals are bounded(1) coalescing —
+                // a ping that lands between this worker's drain and its next
+                // wait leaves a buffered token, so the freshly-created future
+                // resolves immediately. The per-tick park-window drain remains
+                // the authoritative safety net (≤1-tick dwell ceiling).
+                Some(readiness) => {
+                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                        smol::block_on(smol::future::or(readiness.wait(), async {
+                            let _ = park.control_rx.recv().await;
+                        }));
+                    }
+                    // Clear the token(s) that woke us so the next iteration's
+                    // wait starts fresh (data is drained by recv.receive() at
+                    // the loop top; any packet that arrives after this re-pings).
+                    readiness.drain();
+                    while park.control_rx.try_recv().is_ok() {}
+                }
+                // Poll-only transport (raw socket, no awaitable readiness): keep
+                // the bounded condvar poll — park_workers()'s body_sleep_cv wake
+                // still cuts the park barrier; the 100µs bound drains the socket.
+                None => {
+                    let mut g = park.body_sleep_mu.lock();
+                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
+                        park.body_sleep_cv
+                            .wait_for(&mut g, std::time::Duration::from_micros(100));
+                    }
+                    drop(g);
+                }
+            }
         } // end #[cfg(workers_active)]
     }
 }
@@ -1289,8 +1291,13 @@ fn send_worker_loop(
                 // Re-deposit before looping back to the park checkpoint.
                 loop {
                     match send_slot.try_lock() {
-                        Some(mut g) => { *g = Some(send); break; }
-                        None => { thread::sleep(std::time::Duration::from_micros(100)); }
+                        Some(mut g) => {
+                            *g = Some(send);
+                            break;
+                        }
+                        None => {
+                            thread::sleep(std::time::Duration::from_micros(100));
+                        }
                     }
                 }
             } else {
@@ -1299,8 +1306,13 @@ fn send_worker_loop(
                 // instantly; the 100µs bound re-polls for the next job. (T1)
                 loop {
                     match send_slot.try_lock() {
-                        Some(mut g) => { *g = Some(send); break; }
-                        None => { thread::sleep(std::time::Duration::from_micros(100)); }
+                        Some(mut g) => {
+                            *g = Some(send);
+                            break;
+                        }
+                        None => {
+                            thread::sleep(std::time::Duration::from_micros(100));
+                        }
                     }
                 }
                 {
@@ -1344,7 +1356,9 @@ pub fn drain_recv_impl(
     let sim_receiver = world
         .get_resource::<PluginInternalState>()
         .and_then(|s| s.sim_event_receiver.lock().as_ref().cloned());
-    let Some(sim_receiver) = sim_receiver else { return };
+    let Some(sim_receiver) = sim_receiver else {
+        return;
+    };
 
     let sim_handle_opt = world.resource_mut::<SimHandleRes>().0.take();
     let recv_opt = recv_slot.lock().take();

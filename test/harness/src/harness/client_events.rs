@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::{debug, warn};
 
-use naia_client::{NaiaClientError, TickEvents, Events as NaiaClientEvents};
+use naia_client::{Events as NaiaClientEvents, NaiaClientError, TickEvents};
 use naia_shared::{
     handshake::RejectReason, ChannelKind, ComponentKind, GlobalResponseId, LocalEntity,
     MessageContainer, MessageKind, OwnedLocalEntity, Replicate, Tick, WorldRefType,
@@ -36,7 +36,6 @@ pub struct ClientEvents {
     client_ticks: Vec<Tick>,
     server_ticks: Vec<Tick>,
 }
-
 
 impl ClientEvents {
     pub fn new(
@@ -211,9 +210,7 @@ impl ClientEvents {
     }
 
     pub fn has_insert_for_entity(&self, entity_key: &EntityKey) -> bool {
-        self.inserts
-            .values()
-            .any(|v| v.contains(entity_key))
+        self.inserts.values().any(|v| v.contains(entity_key))
     }
 
     pub fn has_remove_for_entity(&self, entity_key: &EntityKey) -> bool {

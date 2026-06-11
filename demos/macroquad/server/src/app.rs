@@ -140,7 +140,8 @@ impl App {
             // self.server.entity_property(assigment_message).set(&entity_id);
 
             self.server
-                .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message).unwrap();
+                .send_message::<EntityAssignmentChannel, _>(&user_key, &assignment_message)
+                .unwrap();
         }
 
         // Disconnect Events

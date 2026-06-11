@@ -79,8 +79,8 @@
 // surfaced here via `naia-bevy-shared` (the bevy shared layer re-exports them).
 pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
-    HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken, Instant,
-    ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, ResponseSendKey,
+    HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
+    Instant, ProcessPackets, Random, ReceivePackets, Replicate, ReplicateBundle, ResponseSendKey,
     SendPackets, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
     WorldProxy, WorldProxyMut, WorldToHostSync, WorldUpdate,
 };
@@ -91,13 +91,16 @@ pub use naia_server::{
         FileBitWriter, ResponseReceiveKey, SerdeErr, SignedInteger, SignedVariableInteger,
         SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
-    transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, ScopeExit, SendHandle,
-    ReplicationConfig, RoomKey, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
+    transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, ReplicationConfig,
+    RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
     WorldServer,
 };
 
 #[cfg(feature = "bench_instrumentation")]
-pub use naia_server::{bench_iris_counters, bench_send_counters, bench_scope_counters, bench_serde_counters, bench_take_events_counters, bench_write_counters};
+pub use naia_server::{
+    bench_iris_counters, bench_scope_counters, bench_send_counters, bench_serde_counters,
+    bench_take_events_counters, bench_write_counters,
+};
 
 pub mod events;
 pub mod pipeline_timing;
@@ -127,8 +130,8 @@ pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
 pub use plugin_full::{
-    drain_recv_impl, SimHandleRes, PluginInternalState, PluginSimConfig, RecvHandleRes,
-    SendHandleRes, SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
+    drain_recv_impl, PluginInternalState, PluginSimConfig, RecvHandleRes, SendHandleRes,
+    SimEventReceiverRes, SimHandleRes, SnapshotReceiverRes, SnapshotSenderRes,
 };
 pub use server::Server;
 pub use sim_converter::SimConverter;

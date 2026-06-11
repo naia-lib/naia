@@ -85,14 +85,8 @@ impl GlobalResponseManager {
         let id = GlobalResponseId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
-        self.map.insert(
-            id,
-            (
-                *user_key,
-                *channel_kind,
-                *local_response_id,
-            ),
-        );
+        self.map
+            .insert(id, (*user_key, *channel_kind, *local_response_id));
 
         id
     }

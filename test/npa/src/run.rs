@@ -130,10 +130,19 @@ fn closest_scenario_keys(
 ) -> Vec<String> {
     let mut scored: Vec<(usize, &str)> = scenarios
         .iter()
-        .map(|s| (levenshtein(target, &s.scenario_key), s.scenario_key.as_str()))
+        .map(|s| {
+            (
+                levenshtein(target, &s.scenario_key),
+                s.scenario_key.as_str(),
+            )
+        })
         .collect();
     scored.sort_by_key(|(d, _)| *d);
-    scored.into_iter().take(n).map(|(_, k)| k.to_string()).collect()
+    scored
+        .into_iter()
+        .take(n)
+        .map(|(_, k)| k.to_string())
+        .collect()
 }
 
 /// Standard Levenshtein edit distance.
@@ -146,9 +155,7 @@ fn levenshtein(a: &str, b: &str) -> usize {
         curr[0] = i + 1;
         for (j, cb) in b.iter().enumerate() {
             let cost = if ca == cb { 0 } else { 1 };
-            curr[j + 1] = (curr[j] + 1)
-                .min(prev[j + 1] + 1)
-                .min(prev[j] + cost);
+            curr[j + 1] = (curr[j] + 1).min(prev[j + 1] + 1).min(prev[j] + cost);
         }
         std::mem::swap(&mut prev, &mut curr);
     }
@@ -206,10 +213,9 @@ fn run_scenario(
                     matches,
                 };
 
-                let exec_result =
-                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        futures::executor::block_on((e.func)(&mut world, context))
-                    }));
+                let exec_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    futures::executor::block_on((e.func)(&mut world, context))
+                }));
 
                 match exec_result {
                     Ok(()) => StepResult {
@@ -280,10 +286,7 @@ pub fn run(args: RunArgs) -> Result<()> {
 
     // Optional single-scenario filter (--scenario-key)
     if let Some(target_key) = args.scenario_key.as_ref() {
-        let matched = plan
-            .scenarios
-            .iter()
-            .any(|s| s.scenario_key == *target_key);
+        let matched = plan.scenarios.iter().any(|s| s.scenario_key == *target_key);
         if !matched {
             let suggestions = closest_scenario_keys(target_key, &plan.scenarios, 3);
             let hint = if suggestions.is_empty() {
@@ -291,11 +294,7 @@ pub fn run(args: RunArgs) -> Result<()> {
             } else {
                 format!("\n  Closest matches:\n    {}", suggestions.join("\n    "))
             };
-            bail!(
-                "--scenario-key not found in plan: {:?}{}",
-                target_key,
-                hint
-            );
+            bail!("--scenario-key not found in plan: {:?}{}", target_key, hint);
         }
         plan.scenarios.retain(|s| s.scenario_key == *target_key);
     }
@@ -306,7 +305,9 @@ pub fn run(args: RunArgs) -> Result<()> {
 
     let skip_hash_check = std::path::Path::new(".tesaki/skip_hash_check").exists();
     if skip_hash_check {
-        eprintln!("[naia_npa] .tesaki/skip_hash_check present — skipping step_registry_hash validation");
+        eprintln!(
+            "[naia_npa] .tesaki/skip_hash_check present — skipping step_registry_hash validation"
+        );
     } else if plan.header.step_registry_hash != current_registry.step_registry_hash {
         bail!(
             "Plan step_registry_hash ({}) does not match current manifest ({}). \
@@ -335,7 +336,9 @@ pub fn run(args: RunArgs) -> Result<()> {
         if let Some(j) = args.jobs {
             builder = builder.num_threads(j);
         }
-        builder.build().context("Failed to build rayon thread pool")?
+        builder
+            .build()
+            .context("Failed to build rayon thread pool")?
     };
 
     let dt = Arc::clone(&dispatch_table);
@@ -347,7 +350,11 @@ pub fn run(args: RunArgs) -> Result<()> {
             .map(|scenario| {
                 let result = run_scenario(scenario, &dt);
                 let done = ctr.fetch_add(1, Ordering::Relaxed) + 1;
-                let status = if result.status == ScenarioStatus::Passed { "✓" } else { "✗" };
+                let status = if result.status == ScenarioStatus::Passed {
+                    "✓"
+                } else {
+                    "✗"
+                };
                 eprintln!("[{done}/{total} {status}] {}", scenario.scenario_key);
                 result
             })
@@ -385,6 +392,9 @@ pub fn run(args: RunArgs) -> Result<()> {
         bail!("Run failed: {} scenario(s) did not pass", failed_count);
     }
 
-    eprintln!("✓ Run complete ({total} scenarios). Output: {}", args.output.display());
+    eprintln!(
+        "✓ Run complete ({total} scenarios). Output: {}",
+        args.output.display()
+    );
     Ok(())
 }

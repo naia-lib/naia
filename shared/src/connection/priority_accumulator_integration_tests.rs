@@ -41,7 +41,9 @@ fn advance(t: &Instant, ms: u32) -> Instant {
 #[test]
 fn a_bdd_1_bandwidth_cap_bounds_tick_bytes() {
     init_clock();
-    let cfg = BandwidthConfig { target_bytes_per_sec: 64_000 };
+    let cfg = BandwidthConfig {
+        target_bytes_per_sec: 64_000,
+    };
     let mut acc = BandwidthAccumulator::new(&cfg);
 
     // Initial warm-up: baseline tick accrues nothing.
@@ -73,7 +75,11 @@ fn a_bdd_1_bandwidth_cap_bounds_tick_bytes() {
         bytes_this_tick
     );
     // Must have stopped the burst — nowhere near 10K packets.
-    assert!(packets_this_tick < 10, "expected burst gated; got {} packets", packets_this_tick);
+    assert!(
+        packets_this_tick < 10,
+        "expected burst gated; got {} packets",
+        packets_this_tick
+    );
 }
 
 // ============================================================================
@@ -88,7 +94,9 @@ fn a_bdd_1_bandwidth_cap_bounds_tick_bytes() {
 #[test]
 fn a_bdd_2_queue_drains_over_ticks() {
     init_clock();
-    let cfg = BandwidthConfig { target_bytes_per_sec: 64_000 };
+    let cfg = BandwidthConfig {
+        target_bytes_per_sec: 64_000,
+    };
     let mut acc = BandwidthAccumulator::new(&cfg);
     const MTU: u32 = 430;
 
@@ -112,8 +120,16 @@ fn a_bdd_2_queue_drains_over_ticks() {
     // Budget accrued over 120 ticks of 17ms at 64000 B/s = 130_560 bytes.
     // Every tick may also add one MTU overshoot → 120 * 430 extra on top.
     // Within that bound, total_bytes should be steadily growing, proving drain.
-    assert!(total_packets > 200, "expected sustained drain; got {} packets", total_packets);
-    assert!(total_packets < 400, "overshoot-bounded; got {} packets", total_packets);
+    assert!(
+        total_packets > 200,
+        "expected sustained drain; got {} packets",
+        total_packets
+    );
+    assert!(
+        total_packets < 400,
+        "overshoot-bounded; got {} packets",
+        total_packets
+    );
 }
 
 // ============================================================================
@@ -158,13 +174,19 @@ fn a_bdd_4_default_budget_does_not_defer_light_traffic() {
     now = advance(&now, 17);
     acc.accumulate(&now);
     const MTU: u32 = 430;
-    assert!(acc.can_spend(MTU), "one MTU packet must fit in default budget");
+    assert!(
+        acc.can_spend(MTU),
+        "one MTU packet must fit in default budget"
+    );
     acc.spend(MTU);
 
     // Next tick, another MTU still fits — 1067 - 430 = 637 leftover + 1067 new = 1704.
     now = advance(&now, 17);
     acc.accumulate(&now);
-    assert!(acc.can_spend(MTU), "second MTU must fit after surplus carry");
+    assert!(
+        acc.can_spend(MTU),
+        "second MTU must fit after surplus carry"
+    );
 }
 
 // ============================================================================
@@ -186,10 +208,14 @@ fn a_bdd_7_low_catches_up_to_high_within_bounded_ticks() {
     // A Low message aging for T ticks has weight ~0.5 * T. For Low to tie a
     // single-tick-aged High message: 0.5 * T >= 10.0 → T >= 20.
     let high_weight_after_1_tick = ChannelCriticality::High.base_gain() * 1.0;
-    let low_catchup_ticks = (high_weight_after_1_tick / ChannelCriticality::Low.base_gain()).ceil() as u32;
+    let low_catchup_ticks =
+        (high_weight_after_1_tick / ChannelCriticality::Low.base_gain()).ceil() as u32;
     assert_eq!(low_catchup_ticks, 20);
     // Starvation-free: bounded by a deterministic constant, not unbounded.
-    assert!(low_catchup_ticks <= 60, "catch-up bounded within one second of ticks");
+    assert!(
+        low_catchup_ticks <= 60,
+        "catch-up bounded within one second of ticks"
+    );
 }
 
 // ============================================================================
@@ -223,8 +249,11 @@ fn b_bdd_1_unsent_entity_accumulator_carries_across_tick() {
         m1.boost_once(-10.0);
     }
     assert_eq!(global.get_ref(1).accumulated(), 0.0);
-    assert_eq!(global.get_ref(2).accumulated(), 10.0,
-        "unsent entity 2 must retain its accumulated priority (compound-and-retain)");
+    assert_eq!(
+        global.get_ref(2).accumulated(),
+        10.0,
+        "unsent entity 2 must retain its accumulated priority (compound-and-retain)"
+    );
 }
 
 // ============================================================================
@@ -271,7 +300,11 @@ fn b_bdd_3_effective_gain_default_when_missing() {
     // Neither layer has an entry for entity 42.
     let g = global.get_ref(42).gain().unwrap_or(1.0);
     let u = user.get_ref(42).gain().unwrap_or(1.0);
-    assert_eq!(g * u, 1.0, "missing layers collapse to default 1.0 × 1.0 = 1.0");
+    assert_eq!(
+        g * u,
+        1.0,
+        "missing layers collapse to default 1.0 × 1.0 = 1.0"
+    );
 }
 
 // ============================================================================
@@ -321,9 +354,21 @@ fn b_bdd_9_scope_exit_evicts_only_that_users_layer() {
     // X's scope excludes entity 1 → evict from user_x only.
     user_x.on_scope_exit(&1);
 
-    assert_eq!(user_x.get_ref(1).gain(), None, "X's per-user entry must be evicted");
-    assert_eq!(user_y.get_ref(1).gain(), Some(7.0), "Y's per-user entry untouched");
-    assert_eq!(global.get_ref(1).gain(), Some(3.0), "global layer untouched");
+    assert_eq!(
+        user_x.get_ref(1).gain(),
+        None,
+        "X's per-user entry must be evicted"
+    );
+    assert_eq!(
+        user_y.get_ref(1).gain(),
+        Some(7.0),
+        "Y's per-user entry untouched"
+    );
+    assert_eq!(
+        global.get_ref(1).gain(),
+        Some(3.0),
+        "global layer untouched"
+    );
 }
 
 // ============================================================================
@@ -342,7 +387,11 @@ fn b_bdd_10_despawn_evicts_global_entry() {
     global.on_despawn(&1);
 
     assert_eq!(global.get_ref(1).gain(), None, "despawn must clear gain");
-    assert_eq!(global.get_ref(1).accumulated(), 0.0, "despawn must clear accumulator");
+    assert_eq!(
+        global.get_ref(1).accumulated(),
+        0.0,
+        "despawn must clear accumulator"
+    );
 }
 
 // ============================================================================
@@ -355,7 +404,10 @@ fn b_bdd_5_reset_on_send_preserves_gain() {
     use std::collections::HashMap;
     let mut entries: HashMap<u32, EntityPriorityData> = HashMap::new();
     {
-        let mut m = EntityPriorityMut { entries: &mut entries, entity: 1 };
+        let mut m = EntityPriorityMut {
+            entries: &mut entries,
+            entity: 1,
+        };
         m.set_gain(3.0);
         m.boost_once(100.0);
         assert_eq!(m.accumulated(), 100.0);
@@ -366,7 +418,14 @@ fn b_bdd_5_reset_on_send_preserves_gain() {
     // stored data. Here we reproduce that via a fresh handle call sequence.
     entries.get_mut(&1).unwrap().accumulated = 0.0;
 
-    let m2 = EntityPriorityMut { entries: &mut entries, entity: 1 };
+    let m2 = EntityPriorityMut {
+        entries: &mut entries,
+        entity: 1,
+    };
     assert_eq!(m2.accumulated(), 0.0, "reset-on-send zeroed accumulator");
-    assert_eq!(m2.gain(), Some(3.0), "reset-on-send did NOT touch gain override");
+    assert_eq!(
+        m2.gain(),
+        Some(3.0),
+        "reset-on-send did NOT touch gain override"
+    );
 }

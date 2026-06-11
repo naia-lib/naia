@@ -1,6 +1,8 @@
 use std::{collections::HashMap, net::SocketAddr, sync::Mutex};
 
-use crate::{CachedComponentUpdate, ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType};
+use crate::{
+    CachedComponentUpdate, ComponentKind, ComponentKinds, GlobalEntity, GlobalWorldManagerType,
+};
 
 use crate::world::update::global_entity_index::GlobalEntityIndex;
 use crate::world::update::mut_channel::{MutChannel, MutReceiver, MutReceiverBuilder, MutSender};
@@ -15,7 +17,9 @@ pub struct ComponentFlags {
 
 impl ComponentFlags {
     fn new(kind_count: usize) -> Self {
-        Self { user_dependent: vec![false; kind_count] }
+        Self {
+            user_dependent: vec![false; kind_count],
+        }
     }
 
     fn set_user_dependent(&mut self, kind_bit: u16, value: bool) {
@@ -138,8 +142,13 @@ impl GlobalDiffHandler {
     }
 
     /// Returns `true` if a mutation channel is registered for `(global_entity, component_kind)`.
-    pub fn has_component(&self, global_entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
-        self.mut_receiver_builders.contains_key(&(*global_entity, *component_kind))
+    pub fn has_component(
+        &self,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        self.mut_receiver_builders
+            .contains_key(&(*global_entity, *component_kind))
     }
 
     /// Creates a `MutSender`/`MutReceiverBuilder` pair for `(global_entity, component_kind)` and returns the sender.
@@ -232,8 +241,15 @@ impl GlobalDiffHandler {
 
     /// Returns the cached pre-serialized update for `(entity_idx, kind_bit, key)`, or `None` on miss/invalidation.
     /// O(1) slot calculation, no HashMap, no double-RwLock. Called by PATH A in `write_update`.
-    pub fn get_wire_cache(&self, entity_idx: GlobalEntityIndex, kind_bit: u16, key: u64) -> Option<CachedComponentUpdate> {
-        if self.max_kind_count == 0 { return None; }
+    pub fn get_wire_cache(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+        key: u64,
+    ) -> Option<CachedComponentUpdate> {
+        if self.max_kind_count == 0 {
+            return None;
+        }
         let slot = self.wire_cache_slot(entity_idx, kind_bit);
         let cache = self.wire_cache.lock().ok()?;
         match cache.get(slot)? {
@@ -244,8 +260,16 @@ impl GlobalDiffHandler {
 
     /// Stores a cached pre-serialized update for `(entity_idx, kind_bit, key)`.
     /// O(1). Only called after a PATH A cache miss — single-threaded packet-build path.
-    pub fn set_wire_cache(&self, entity_idx: GlobalEntityIndex, kind_bit: u16, key: u64, update: CachedComponentUpdate) {
-        if self.max_kind_count == 0 { return; }
+    pub fn set_wire_cache(
+        &self,
+        entity_idx: GlobalEntityIndex,
+        kind_bit: u16,
+        key: u64,
+        update: CachedComponentUpdate,
+    ) {
+        if self.max_kind_count == 0 {
+            return;
+        }
         let slot = self.wire_cache_slot(entity_idx, kind_bit);
         if let Ok(mut cache) = self.wire_cache.lock() {
             if let Some(entry) = cache.get_mut(slot) {
@@ -258,7 +282,9 @@ impl GlobalDiffHandler {
     /// Called at the start of each send cycle (Phase 1+2) for every dirty entity
     /// so Phase 3 always re-serializes with the current component values.
     pub fn clear_wire_cache_for_entity(&self, entity_idx: GlobalEntityIndex) {
-        if self.max_kind_count == 0 { return; }
+        if self.max_kind_count == 0 {
+            return;
+        }
         let kind_count = self.max_kind_count as usize;
         let base = entity_idx.as_usize() * kind_count;
         if let Ok(mut cache) = self.wire_cache.lock() {
@@ -342,7 +368,11 @@ impl GlobalDiffHandler {
     /// `false` if not, or `None` if the entity or kind_bit is out of range.
     /// O(1) array access — replaces `ComponentKinds::is_user_dependent()` HashSet lookup
     /// in the Phase-2 dirty scan hot path.
-    pub fn is_component_user_dependent(&self, idx: GlobalEntityIndex, kind_bit: u16) -> Option<bool> {
+    pub fn is_component_user_dependent(
+        &self,
+        idx: GlobalEntityIndex,
+        kind_bit: u16,
+    ) -> Option<bool> {
         self.idx_to_components
             .get(idx.0 as usize)
             .and_then(|flags| flags.user_dependent.get(kind_bit as usize))
@@ -374,7 +404,9 @@ mod wire_cache_tests {
         let update = make_update(8);
 
         gdh.set_wire_cache(entity_idx, 0, 0x01, update);
-        let got = gdh.get_wire_cache(entity_idx, 0, 0x01).expect("should hit after set");
+        let got = gdh
+            .get_wire_cache(entity_idx, 0, 0x01)
+            .expect("should hit after set");
         assert_eq!(got.bit_count, 8);
         assert_eq!(got.bytes[0], 0xAB);
     }
@@ -384,7 +416,10 @@ mod wire_cache_tests {
         let mut gdh = make_gdh(4);
         let entity_idx = gdh.alloc_entity(GlobalEntity::from_u64(1));
         gdh.set_wire_cache(entity_idx, 0, 0x01, make_update(8));
-        assert!(gdh.get_wire_cache(entity_idx, 0, 0x02).is_none(), "different key must miss");
+        assert!(
+            gdh.get_wire_cache(entity_idx, 0, 0x02).is_none(),
+            "different key must miss"
+        );
     }
 
     #[test]
@@ -396,7 +431,10 @@ mod wire_cache_tests {
         }
         gdh.clear_wire_cache_for_entity(entity_idx);
         for k in 0..4u16 {
-            assert!(gdh.get_wire_cache(entity_idx, k, 0x01).is_none(), "slot {k} should be None after clear");
+            assert!(
+                gdh.get_wire_cache(entity_idx, k, 0x01).is_none(),
+                "slot {k} should be None after clear"
+            );
         }
     }
 
@@ -411,6 +449,9 @@ mod wire_cache_tests {
         let idx_b = gdh.alloc_entity(ge_b);
         // The free-list may recycle idx_a for ge_b (depends on LIFO order).
         // Either way, the slot must be clear — no stale A data.
-        assert!(gdh.get_wire_cache(idx_b, 0, 0x01).is_none(), "recycled slot must be None");
+        assert!(
+            gdh.get_wire_cache(idx_b, 0, 0x01).is_none(),
+            "recycled slot must be None"
+        );
     }
 }

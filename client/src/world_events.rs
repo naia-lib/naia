@@ -4,7 +4,8 @@ use std::{
 
 use naia_shared::{
     handshake::RejectReason, Channel, ChannelKind, ComponentKind, DisconnectReason,
-    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey, Tick,
+    GlobalResponseId, Message, MessageContainer, MessageKind, Replicate, Request, ResponseSendKey,
+    Tick,
 };
 
 use crate::NaiaClientError;
@@ -154,7 +155,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_disconnection(&mut self, socket_addr: &SocketAddr, reason: DisconnectReason) {
+    pub(crate) fn push_disconnection(
+        &mut self,
+        socket_addr: &SocketAddr,
+        reason: DisconnectReason,
+    ) {
         self.disconnections.push((*socket_addr, reason));
         self.empty = false;
     }
@@ -232,7 +237,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
     }
 
     pub(crate) fn push_insert(&mut self, world_entity: E, component_kind: ComponentKind) {
-        self.inserts.entry(component_kind).or_insert_with(|| Vec::new());
+        self.inserts
+            .entry(component_kind)
+            .or_insert_with(|| Vec::new());
         let list = self.inserts.get_mut(&component_kind).unwrap();
         list.push(world_entity);
         self.empty = false;

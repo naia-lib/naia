@@ -92,11 +92,7 @@ impl EntityUpdateManager {
             .or_diff_mask(entity, component_kind, new_diff_mask);
     }
 
-    pub fn get_diff_mask(
-        &self,
-        entity: &GlobalEntity,
-        component_kind: &ComponentKind,
-    ) -> DiffMask {
+    pub fn get_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> DiffMask {
         self.ledger.diff_mask_snapshot(entity, component_kind)
     }
 
@@ -128,7 +124,8 @@ impl EntityUpdateManager {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        self.ledger.is_receiver_dirty_and_delivered(entity, component_kind)
+        self.ledger
+            .is_receiver_dirty_and_delivered(entity, component_kind)
     }
 
     /// Hot-path version: no GlobalEntity→idx resolution, no RwLock.
@@ -138,7 +135,8 @@ impl EntityUpdateManager {
         entity_idx: GlobalEntityIndex,
         kind_bit: u16,
     ) -> bool {
-        self.ledger.is_receiver_dirty_and_delivered_fast(entity_idx, kind_bit)
+        self.ledger
+            .is_receiver_dirty_and_delivered_fast(entity_idx, kind_bit)
     }
 
     /// Hot-path diff mask clear check: direct compact-key lookup.
@@ -165,11 +163,17 @@ impl EntityUpdateManager {
         self.ledger.dirty_candidates_count()
     }
 
-    pub fn build_dirty_candidates_from_receivers(&self) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
+    pub fn build_dirty_candidates_from_receivers(
+        &self,
+    ) -> HashMap<GlobalEntity, HashSet<ComponentKind>> {
         self.ledger.dirty_receiver_candidates()
     }
 
-    pub fn diff_mask_is_clear(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub fn diff_mask_is_clear(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
         self.ledger.diff_mask_is_clear(entity, component_kind)
     }
 
@@ -179,5 +183,4 @@ impl EntityUpdateManager {
     pub fn clear_diff_mask_fast(&self, entity_idx: GlobalEntityIndex, kind_bit: u16) {
         self.ledger.clear_diff_mask_fast(entity_idx, kind_bit);
     }
-
 }

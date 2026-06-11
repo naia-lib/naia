@@ -44,10 +44,7 @@ impl<'a> ExpectCtx<'a> {
         client_key: ClientKey,
         f: impl FnOnce(&mut ClientExpectCtx<'_>) -> R,
     ) -> R {
-        let client_events = self
-            .client_events_map
-            .entry(client_key)
-            .or_default();
+        let client_events = self.client_events_map.entry(client_key).or_default();
 
         let mut client_expect = ClientExpectCtx::new(self.scenario, client_key, client_events);
         f(&mut client_expect)

@@ -1,11 +1,11 @@
 #![cfg(feature = "client")]
 
-use std::marker::PhantomData;
 use bevy_app::{App, Plugin, Update};
 use bevy_ecs::prelude::IntoScheduleConfigs;
 use naia_bevy_client::Client;
 use naia_bevy_shared::SendPackets;
 use naia_metrics::emit_client_connection_stats;
+use std::marker::PhantomData;
 
 /// Bevy plugin that emits naia client metrics once per tick, immediately
 /// after naia's [`SendPackets`] system.

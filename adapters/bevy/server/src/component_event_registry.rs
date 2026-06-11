@@ -17,8 +17,7 @@ use crate::{
     server::ServerImpl,
 };
 
-#[derive(Resource)]
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct ComponentEventRegistry {
     bundle_registry: BundleEventRegistry,
     component_handlers: HashMap<ComponentKind, Box<dyn ComponentEventHandler>>,

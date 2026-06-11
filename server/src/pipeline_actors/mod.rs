@@ -30,17 +30,15 @@ mod spawn;
 
 pub use handles::SimHandle;
 pub use orchestration::{
-    apply_recv_to_world, configure_entity_replication, run_with_world_server,
-    split_world_server,
+    apply_recv_to_world, configure_entity_replication, run_with_world_server, split_world_server,
 };
-pub use recv_helpers::{RecvLifecycleEvent, drain_lifecycle, drain_tick_buffer};
+pub use recv_helpers::{drain_lifecycle, drain_tick_buffer, RecvLifecycleEvent};
 pub use router::TickMessageRouter;
 pub use send_state_view::SendStateView;
 pub use sim_converter::SimConverter;
 pub use sim_event_receiver::{
-    SimConnectEvent, SimDespawnEntityEvent, SimDisconnectEvent, SimErrorEvent,
-    SimEventReceiver, SimPublishEntityEvent, SimSpawnEntityEvent, SimTickEvent,
-    SimUnpublishEntityEvent,
+    SimConnectEvent, SimDespawnEntityEvent, SimDisconnectEvent, SimErrorEvent, SimEventReceiver,
+    SimPublishEntityEvent, SimSpawnEntityEvent, SimTickEvent, SimUnpublishEntityEvent,
 };
 pub use snapshot_sender::{SnapshotReceiver, SnapshotSender};
 pub use spawn::spawn_server_handles;

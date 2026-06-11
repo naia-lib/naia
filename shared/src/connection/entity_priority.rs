@@ -86,9 +86,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
 
     /// Current per-tick gain override. `None` means the default (1.0) applies.
     pub fn gain(&self) -> Option<f32> {
-        self.entries
-            .get(&self.entity)
-            .and_then(|s| s.gain_override)
+        self.entries.get(&self.entity).and_then(|s| s.gain_override)
     }
 
     /// Returns `true` if a per-tick gain override is currently active.
@@ -101,10 +99,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     /// Set a persistent per-tick gain override for this layer. Stays in effect
     /// until `reset()` or another `set_gain()` call. Lazy-creates the entry.
     pub fn set_gain(&mut self, gain: f32) -> &mut Self {
-        self.entries
-            .entry(self.entity)
-            .or_default()
-            .gain_override = Some(gain);
+        self.entries.entry(self.entity).or_default().gain_override = Some(gain);
         self
     }
 
@@ -112,10 +107,7 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     /// Multiple calls in one tick sum additively. Lazy-creates the entry.
     /// Persists across ticks until the entity is sent (then reset to 0).
     pub fn boost_once(&mut self, amount: f32) -> &mut Self {
-        self.entries
-            .entry(self.entity)
-            .or_default()
-            .accumulated += amount;
+        self.entries.entry(self.entity).or_default().accumulated += amount;
         self
     }
 

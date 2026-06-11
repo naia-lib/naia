@@ -80,7 +80,8 @@ impl TimeManager {
             // Steady state / brief catch-up: advance the grid by exactly one
             // interval so tick N stays at epoch + N·interval.
             self.record_tick_duration(self.tick_interval_millis);
-            self.last_tick_instant.add_millis(self.tick_interval_millis as u32);
+            self.last_tick_instant
+                .add_millis(self.tick_interval_millis as u32);
         }
         self.last_tick_game_instant = self.game_time_now();
         self.current_tick = self.current_tick.wrapping_add(1);
@@ -236,10 +237,15 @@ mod tick_grid_measurement {
         let expected = span_ms / 40; // 100 grid ticks
 
         // OLD: ~5ms poll with ±1ms jitter.
-        let old: Vec<u32> = (1..=(span_ms / 5)).map(|k| k * 5 + jitter(k as usize, 1)).collect();
+        let old: Vec<u32> = (1..=(span_ms / 5))
+            .map(|k| k * 5 + jitter(k as usize, 1))
+            .collect();
         let (old_fires, old_sp) = drive(&old);
 
-        eprintln!("\n[TICK-GRID] span={}ms  expected grid ticks = {}", span_ms, expected);
+        eprintln!(
+            "\n[TICK-GRID] span={}ms  expected grid ticks = {}",
+            span_ms, expected
+        );
         eprintln!(
             "[TICK-GRID] OLD 5ms-poll : fires={:>3}  drift={:>+3}  spacing(min..max)={:?}  >=80ms gaps={}",
             old_fires,
@@ -250,8 +256,9 @@ mod tick_grid_measurement {
 
         // NEW: one check per 40ms loop, work-offset jitter ±J.
         for j in [1u32, 2, 4, 8] {
-            let new: Vec<u32> =
-                (1..=(span_ms / 40)).map(|k| k * 40 + jitter(k as usize, j)).collect();
+            let new: Vec<u32> = (1..=(span_ms / 40))
+                .map(|k| k * 40 + jitter(k as usize, j))
+                .collect();
             let (new_fires, new_sp) = drive(&new);
             let effective_hz = new_fires as f32 / (span_ms as f32 / 1000.0);
             eprintln!(
@@ -267,7 +274,10 @@ mod tick_grid_measurement {
 
         // The GRID target (floor((now-epoch)/dt)) would emit exactly `expected`
         // ticks, each pinned to its 40ms slot — zero drift, spacing == 40ms.
-        eprintln!("[TICK-GRID] GRID target  : fires={:>3}  drift= +0  spacing=40ms (grid-aligned)\n", expected);
+        eprintln!(
+            "[TICK-GRID] GRID target  : fires={:>3}  drift= +0  spacing=40ms (grid-aligned)\n",
+            expected
+        );
     }
 
     /// REGRESSION GUARD (deterministic): closes the `test_time` gap. The
@@ -284,8 +294,9 @@ mod tick_grid_measurement {
         let span_ms = 4000u32;
         let expected = span_ms / 40;
         for j in [0u32, 1, 2, 4, 8] {
-            let checks: Vec<u32> =
-                (1..=(span_ms / 40)).map(|k| k * 40 + jitter(k as usize, j)).collect();
+            let checks: Vec<u32> = (1..=(span_ms / 40))
+                .map(|k| k * 40 + jitter(k as usize, j))
+                .collect();
             let (fires, sp) = drive(&checks);
             assert_eq!(
                 fires, expected,

@@ -265,7 +265,10 @@ mod tests {
     #[test]
     fn read_write_33_bits() {
         // 33 bits spans the 32-bit word boundary in the new implementation.
-        use crate::{bit_reader::BitReader, bit_writer::{BitWrite, BitWriter}};
+        use crate::{
+            bit_reader::BitReader,
+            bit_writer::{BitWrite, BitWriter},
+        };
         let mut writer = BitWriter::with_max_capacity();
         // write 33 known bits: alternating pattern
         for i in 0..33usize {
@@ -281,7 +284,10 @@ mod tests {
     #[test]
     fn read_write_64_bits_exact() {
         // exactly 2 words — tests two full-word flushes
-        use crate::{bit_reader::BitReader, bit_writer::{BitWrite, BitWriter}};
+        use crate::{
+            bit_reader::BitReader,
+            bit_writer::{BitWrite, BitWriter},
+        };
         let mut writer = BitWriter::with_max_capacity();
         for i in 0..64usize {
             writer.write_bit(i % 5 < 2);
@@ -296,7 +302,10 @@ mod tests {
     #[test]
     fn read_write_5_bytes_via_write_byte_then_read_bit() {
         // mix write_byte (8 aligned) with read_bit to verify no endian confusion
-        use crate::{bit_reader::BitReader, bit_writer::{BitWrite, BitWriter}};
+        use crate::{
+            bit_reader::BitReader,
+            bit_writer::{BitWrite, BitWriter},
+        };
         let data: &[u8] = &[0b10110001, 0b01001110, 0b11010101, 0b00110011, 0b11111010];
         let mut writer = BitWriter::with_max_capacity();
         for &b in data {
@@ -307,7 +316,11 @@ mod tests {
         for &b in data {
             for bit in 0..8usize {
                 let expected = (b >> bit) & 1 != 0;
-                assert_eq!(reader.read_bit().unwrap(), expected, "byte {b:#010b} bit {bit}");
+                assert_eq!(
+                    reader.read_bit().unwrap(),
+                    expected,
+                    "byte {b:#010b} bit {bit}"
+                );
             }
         }
     }
@@ -545,10 +558,7 @@ mod tests {
     fn read_n_known_bits(reader: &mut crate::bit_reader::BitReader, n: u32) {
         for i in 0..n {
             let expected = i % 3 == 0;
-            assert_eq!(
-                reader.read_bit().unwrap(), expected,
-                "bit {i} mismatch"
-            );
+            assert_eq!(reader.read_bit().unwrap(), expected, "bit {i} mismatch");
         }
     }
 
@@ -574,8 +584,11 @@ mod tests {
             let mut reader = BitReader::new(&buf);
             // Read preamble
             for i in 0..align {
-                assert_eq!(reader.read_bit().unwrap(), i % 2 == 0,
-                    "align={align} preamble bit {i}");
+                assert_eq!(
+                    reader.read_bit().unwrap(),
+                    i % 2 == 0,
+                    "align={align} preamble bit {i}"
+                );
             }
             // Read cached data
             read_n_known_bits(&mut reader, DATA_BITS);

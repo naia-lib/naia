@@ -5,8 +5,8 @@
 
 use crate::steps::prelude::*;
 
-use naia_test_harness::{EntityKey, Position};
 use crate::steps::world_helpers::last_entity_mut;
+use naia_test_harness::{EntityKey, Position};
 
 // ──────────────────────────────────────────────────────────────────────
 // Entity-delegation preconditions (multi-client + named delegation)
@@ -24,9 +24,11 @@ fn given_server_spawns_delegated_entity_in_scope_for_both_clients(ctx: &mut Test
     let client_b = named_client_mut(ctx, "B");
     let entity_key = spawn_delegated_entity_in_scope(ctx, &[client_a, client_b]);
     let scenario = ctx.scenario_mut();
-    scenario.spec_expect("entity-delegation-06: replicated to both clients", |ectx|
+    scenario.spec_expect("entity-delegation-06: replicated to both clients", |ectx| {
         (ectx.client(client_a, |c| c.has_entity(&entity_key))
-            && ectx.client(client_b, |c| c.has_entity(&entity_key))).then_some(()));
+            && ectx.client(client_b, |c| c.has_entity(&entity_key)))
+        .then_some(())
+    });
     scenario.allow_flexible_next();
 }
 
@@ -38,8 +40,10 @@ fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorl
     let client_a = named_client_mut(ctx, "A");
     let entity_key = spawn_delegated_entity_in_scope(ctx, &[client_a]);
     let scenario = ctx.scenario_mut();
-    scenario.spec_expect("entity-delegation-17: replicated to client A", |ectx|
-        ectx.client(client_a, |c| c.has_entity(&entity_key)).then_some(()));
+    scenario.spec_expect("entity-delegation-17: replicated to client A", |ectx| {
+        ectx.client(client_a, |c| c.has_entity(&entity_key))
+            .then_some(())
+    });
     scenario.allow_flexible_next();
 }
 
@@ -50,9 +54,7 @@ fn given_server_spawns_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorl
 /// give-authority-on-out-of-scope negative test (`give_authority` must return
 /// `Err(NotInScope)` rather than panicking).
 #[given("the server spawns a delegated entity not in scope of any client")]
-fn given_server_spawns_delegated_entity_not_in_scope_of_any_client(
-    ctx: &mut TestWorldMut,
-) {
+fn given_server_spawns_delegated_entity_not_in_scope_of_any_client(ctx: &mut TestWorldMut) {
     use naia_server::ReplicationConfig as ServerReplicationConfig;
     let scenario = ctx.scenario_mut();
     let (entity_key, ()) = scenario.mutate(|mctx| {
@@ -117,4 +119,3 @@ fn given_client_a_is_denied_authority(ctx: &mut TestWorldMut) {
     );
     scenario.allow_flexible_next();
 }
-

@@ -19,10 +19,10 @@ use crate::{
         },
         sync::{RemoteEngine, RemoteEntityChannel},
     },
-    ComponentKind, ComponentKinds, PendingComponentUpdate, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityCommand, EntityMessage, EntityMessageReceiver, GlobalEntity,
-    GlobalEntitySpawner, GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter,
-    LocalEntityMap, MessageIndex, OwnedLocalEntity, Replicate, Tick, WorldMutType,
+    ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityCommand,
+    EntityMessage, EntityMessageReceiver, GlobalEntity, GlobalEntitySpawner,
+    GlobalWorldManagerType, HostType, LocalEntityAndGlobalEntityConverter, LocalEntityMap,
+    MessageIndex, OwnedLocalEntity, PendingComponentUpdate, Replicate, Tick, WorldMutType,
 };
 
 cfg_if! {
@@ -155,7 +155,8 @@ impl RemoteWorldManager {
         let Some(authed_entities) = self.authed_entities_opt.as_ref() else {
             return false;
         };
-        let Ok(remote_entity) = local_converter.global_entity_to_remote_entity(global_entity) else {
+        let Ok(remote_entity) = local_converter.global_entity_to_remote_entity(global_entity)
+        else {
             return false;
         };
         if !authed_entities.contains(&remote_entity) {
@@ -422,11 +423,15 @@ impl RemoteWorldManager {
                 }
                 EntityMessage::SetAuthority(_, remote_entity, auth_status) => {
                     // Update the stored auth status so get_entity_auth_status() reflects the new value
-                    self.remote_engine.receive_set_auth_status(remote_entity, auth_status);
-                    let Some(global_entity) = local_entity_map.global_entity_from_remote(&remote_entity) else {
+                    self.remote_engine
+                        .receive_set_auth_status(remote_entity, auth_status);
+                    let Some(global_entity) =
+                        local_entity_map.global_entity_from_remote(&remote_entity)
+                    else {
                         continue;
                     };
-                    self.incoming_events.push(EntityEvent::SetAuthority(*global_entity, auth_status));
+                    self.incoming_events
+                        .push(EntityEvent::SetAuthority(*global_entity, auth_status));
                 }
                 msg => {
                     // let msg_type = msg.get_type();
@@ -447,7 +452,6 @@ impl RemoteWorldManager {
         component_kind: &ComponentKind,
     ) {
         if let Some(remote_entity_set) = component.relations_waiting() {
-
             self.waitlist.waitlist_queue_entity(
                 &self.remote_engine,
                 entity,
@@ -618,10 +622,12 @@ impl RemoteWorldManager {
         world: &mut W,
         now: &Instant,
     ) {
-        for (tick, remote_entity, component_kind) in
-            self.waitlist
-                .process_self_waitlist_updates(local_converter, world_converter, world, now)
-        {
+        for (tick, remote_entity, component_kind) in self.waitlist.process_self_waitlist_updates(
+            local_converter,
+            world_converter,
+            world,
+            now,
+        ) {
             let global_entity = local_converter
                 .remote_entity_to_global_entity(&remote_entity)
                 .unwrap();

@@ -36,9 +36,7 @@ fn when_server_removes_delegated_entity_from_client_a_scope(ctx: &mut TestWorldM
 /// result (Ok/Err/panic) into the scenario instead of unwrapping. Used
 /// by `[common-01]` negative scenarios that assert `give_authority`
 /// returns `Err` (e.g. `NotInScope`) rather than panicking.
-#[when(
-    "the server attempts to give authority to client {client} for the delegated entity"
-)]
+#[when("the server attempts to give authority to client {client} for the delegated entity")]
 fn when_server_attempts_give_authority(ctx: &mut TestWorldMut, name: ClientName) {
     use std::panic::{catch_unwind, AssertUnwindSafe};
     let client_key = named_client_mut(ctx, name.as_ref());
@@ -344,7 +342,8 @@ fn when_server_sends_large_message_reliable(ctx: &mut TestWorldMut) {
     let result = catch_unwind(AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                server.send_message::<ReliableChannel, _>(&client_key, &LargeTestMessage::new(5000));
+                server
+                    .send_message::<ReliableChannel, _>(&client_key, &LargeTestMessage::new(5000));
             });
         });
     }));
@@ -359,12 +358,7 @@ fn when_server_sends_large_message_reliable(ctx: &mut TestWorldMut) {
 /// `entity` is "A" or "B"; resolves via [`entity_label_to_key_storage`].
 /// Used by B-BDD-8 (per-entity convergence under cross-entity reorder).
 #[when("the server mutates entity {entity}'s component to x={int} y={int}")]
-fn when_server_mutates_entity_component(
-    ctx: &mut TestWorldMut,
-    label: EntityRef,
-    x: i32,
-    y: i32,
-) {
+fn when_server_mutates_entity_component(ctx: &mut TestWorldMut, label: EntityRef, x: i32, y: i32) {
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let entity_key: EntityKey = scenario

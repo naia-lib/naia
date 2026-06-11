@@ -103,15 +103,24 @@ fn lagged_send_delivers_final_consecutive_value() {
     }
 
     // Resolve the server-side world entity (single entity in this scenario).
-    let server_entity =
-        scenario.with_server_world_mut(|_s, world| world.proxy().entities().into_iter().next().expect("server entity"));
+    let server_entity = scenario.with_server_world_mut(|_s, world| {
+        world
+            .proxy()
+            .entities()
+            .into_iter()
+            .next()
+            .expect("server entity")
+    });
 
     // ── The lag: two CONSECUTIVE mutations, then stop ───────────────────────
     // Each mutation is followed by a `prepare_send_job` AT the freeze point: it
     // captures the dirty `DiffMask` into a self-contained plan and clears the
     // live mask. The next mutation then re-dirties cleanly. No send happens yet.
     scenario.with_server_world_mut(|s, world| {
-        if let Some(mut pos) = s.entity_mut(world.proxy_mut(), &server_entity).component::<Position>() {
+        if let Some(mut pos) = s
+            .entity_mut(world.proxy_mut(), &server_entity)
+            .component::<Position>()
+        {
             *pos.x = V1.0;
             *pos.y = V1.1;
         }
@@ -120,7 +129,10 @@ fn lagged_send_delivers_final_consecutive_value() {
     let plan1 = scenario.prepare_send_job();
 
     scenario.with_server_world_mut(|s, world| {
-        if let Some(mut pos) = s.entity_mut(world.proxy_mut(), &server_entity).component::<Position>() {
+        if let Some(mut pos) = s
+            .entity_mut(world.proxy_mut(), &server_entity)
+            .component::<Position>()
+        {
             *pos.x = V2.0;
             *pos.y = V2.1;
         }

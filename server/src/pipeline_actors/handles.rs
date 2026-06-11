@@ -173,8 +173,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     /// disconnected-users map so the subsequent handshake can look it up via
     /// `user_store.take_disconnected`.
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
-        self.state.user_store.insert(user_key, WorldUser::new(user_addr));
-        self.state.user_store.register_disconnected(user_addr, user_key);
+        self.state
+            .user_store
+            .insert(user_key, WorldUser::new(user_addr));
+        self.state
+            .user_store
+            .register_disconnected(user_addr, user_key);
     }
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — request a
@@ -209,10 +213,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     pub fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
         let (existed, room_change_opt) = {
             let entity_map = self.shared.global_entity_map.read();
-            self.state.room_store.destroy(room_key, &mut self.state.user_store, &*entity_map)
+            self.state
+                .room_store
+                .destroy(room_key, &mut self.state.user_store, &*entity_map)
         };
         if let Some(room_change) = room_change_opt {
-            self.shared.scope_change_queue.lock().push_back(ScopeChange::RoomChange(room_change));
+            self.shared
+                .scope_change_queue
+                .lock()
+                .push_back(ScopeChange::RoomChange(room_change));
         }
         existed
     }
@@ -221,7 +230,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         let (legacy_change, room_change) = {
             let entity_map = self.shared.global_entity_map.read();
-            self.state.room_store.add_user(room_key, user_key, &mut self.state.user_store, &*entity_map)
+            self.state.room_store.add_user(
+                room_key,
+                user_key,
+                &mut self.state.user_store,
+                &*entity_map,
+            )
         };
         let mut q = self.shared.scope_change_queue.lock();
         q.push_back(legacy_change);
@@ -230,8 +244,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
 
     /// Remove a user from a room. Push-only; Send drains on next tick.
     pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
-        let (legacy_change, room_change) = self.state.room_store.remove_user::<E>(
-            room_key, user_key, &mut self.state.user_store);
+        let (legacy_change, room_change) =
+            self.state
+                .room_store
+                .remove_user::<E>(room_key, user_key, &mut self.state.user_store);
         let mut q = self.shared.scope_change_queue.lock();
         q.push_back(legacy_change);
         q.push_back(ScopeChange::RoomChange(room_change));
@@ -241,7 +257,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            self.state.room_store.add_entity(room_key, world_entity, &*entity_map)
+            self.state
+                .room_store
+                .add_entity(room_key, world_entity, &*entity_map)
         };
         if let Some((legacy_change, room_change)) = pair_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -272,7 +290,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            self.state.room_store.remove_entity(room_key, world_entity, &*entity_map)
+            self.state
+                .room_store
+                .remove_entity(room_key, world_entity, &*entity_map)
         };
         if let Some((legacy_change, room_change)) = pair_opt {
             let mut q = self.shared.scope_change_queue.lock();
@@ -391,10 +411,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     /// Used by the host-sync drain's auth gate (skip insert/remove/despawn
     /// when a client holds authority). Returns `None` when the entity is
     /// not in the global map.
-    pub fn entity_authority_status(
-        &self,
-        world_entity: &E,
-    ) -> Option<EntityAuthStatus> {
+    pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
         let global_entity = match self
             .shared
             .global_entity_map

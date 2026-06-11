@@ -1,6 +1,8 @@
 use std::{collections::HashMap, hash::Hash};
 
-use crate::connection::entity_priority::{EntityPriorityData, EntityPriorityMut, EntityPriorityRef};
+use crate::connection::entity_priority::{
+    EntityPriorityData, EntityPriorityMut, EntityPriorityRef,
+};
 use crate::world::entity::global_entity::GlobalEntity;
 
 /// Per-tick hook the send loop calls to (a) advance accumulators for dirty
@@ -130,7 +132,10 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
 
     /// Read accumulator without advancing.
     pub fn accumulated(&self, entity: &E) -> f32 {
-        self.entries.get(entity).map(|d| d.accumulated).unwrap_or(0.0)
+        self.entries
+            .get(entity)
+            .map(|d| d.accumulated)
+            .unwrap_or(0.0)
     }
 
     /// Reset the accumulator to 0 and stamp `last_sent_tick`. Called for each

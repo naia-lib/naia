@@ -1,4 +1,11 @@
-#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_must_use,
+    unused_mut,
+    dead_code,
+    for_loops_over_fallibles
+)]
 
 use std::time::Duration;
 
@@ -9,20 +16,20 @@ use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response,
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    EntityCommandMessage, ExpectCtx, LargeTestMessage, Position, Scenario, ServerAuthEvent, 
+    EntityCommandMessage, ExpectCtx, LargeTestMessage, Position, Scenario, ServerAuthEvent,
     ServerConnectEvent, ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
 use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
-    TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
-    UnreliableChannel,
+    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
+    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
 };
 
 mod _helpers;
-use _helpers::{client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config};
-
+use _helpers::{
+    client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
+};
 
 // ============================================================================
 // Messaging Tests
@@ -71,17 +78,23 @@ fn messaging_01_user_errors_return_result() {
     let oversized_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                server.send_message::<UnreliableChannel, _>(&client_a_key, &LargeTestMessage::new(1000))
+                server.send_message::<UnreliableChannel, _>(
+                    &client_a_key,
+                    &LargeTestMessage::new(1000),
+                )
             })
         })
     }));
 
     let oversized_handled = oversized_result.is_ok();
 
-    scenario.spec_expect("messaging-01.t1: user-initiated errors handled gracefully", |_ctx| {
-        // send_request returns Result, oversized messages don't panic
-        (request_returns_result && oversized_handled).then_some(())
-    });
+    scenario.spec_expect(
+        "messaging-01.t1: user-initiated errors handled gracefully",
+        |_ctx| {
+            // send_request returns Result, oversized messages don't panic
+            (request_returns_result && oversized_handled).then_some(())
+        },
+    );
 }
 
 /// Remote/untrusted input must not cause panics
@@ -120,7 +133,11 @@ fn messaging_02_remote_input_no_panic() {
 
     scenario.expect(|ctx| {
         ctx.client(client_a_key, |client| {
-            client.read_message::<ReliableChannel, TestMessage>().next().is_some().then_some(())
+            client
+                .read_message::<ReliableChannel, TestMessage>()
+                .next()
+                .is_some()
+                .then_some(())
         })
     });
 
@@ -128,12 +145,13 @@ fn messaging_02_remote_input_no_panic() {
     // We inject random garbage that mimics a packet but is invalid (e.g. invalid header)
     let malformed_no_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
-            let garbage = vec![123, 234, 0, 0, 1, 1]; 
+            let garbage = vec![123, 234, 0, 0, 1, 1];
             let _ = ctx.inject_client_packet(&client_a_key, garbage);
         });
         // Tick to process the packet
         scenario.expect_msg("process malformed packet", |_| Some(()));
-    })).is_ok();
+    }))
+    .is_ok();
 
     // Disconnect client (simulates network failure)
     scenario.mutate(|ctx| {
@@ -143,7 +161,8 @@ fn messaging_02_remote_input_no_panic() {
     });
 
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| !c.connection_status().is_connected()).then_some(())
+        ctx.client(client_a_key, |c| !c.connection_status().is_connected())
+            .then_some(())
     });
 
     // Test: sending to disconnected client should NOT panic (harness returns () on send)
@@ -163,10 +182,13 @@ fn messaging_02_remote_input_no_panic() {
         });
     });
 
-    scenario.spec_expect("messaging-02.t1: remote/network errors handled without panic", |_ctx| {
-        // System remained stable through unexpected state transitions and malformed injection
-        malformed_no_panic.then_some(())
-    });
+    scenario.spec_expect(
+        "messaging-02.t1: remote/network errors handled without panic",
+        |_ctx| {
+            // System remained stable through unexpected state transitions and malformed injection
+            malformed_no_panic.then_some(())
+        },
+    );
 }
 
 /// Unreliable channels reject messages requiring fragmentation
@@ -197,15 +219,20 @@ fn messaging_15_unreliable_fragmentation_limit() {
     let send_no_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         scenario.mutate(|ctx| {
             ctx.server(|server| {
-                server.send_message::<UnreliableChannel, _>(&client_a_key, &LargeTestMessage::new(1000));
+                server.send_message::<UnreliableChannel, _>(
+                    &client_a_key,
+                    &LargeTestMessage::new(1000),
+                );
             })
         })
-    })).is_ok();
+    }))
+    .is_ok();
 
     // Verify system handled oversized unreliable message without panic
-    scenario.spec_expect("messaging-15.t1: unreliable channels reject fragmentation without panic", |_ctx| {
-        send_no_panic.then_some(())
-    });
+    scenario.spec_expect(
+        "messaging-15.t1: unreliable channels reject fragmentation without panic",
+        |_ctx| send_no_panic.then_some(()),
+    );
 }
 
 /// Reliable channels can fragment messages up to MAX_RELIABLE_MESSAGE_FRAGMENTS
@@ -242,10 +269,13 @@ fn messaging_16_reliable_fragmentation_allowed() {
     scenario.until(50.ticks()).expect(|_ctx| Some(()));
 
     // Verify send succeeded without panic (reliable channels CAN fragment)
-    scenario.spec_expect("messaging-16.t1: reliable channels allow fragmentation within bound", |_ctx| {
-        // System handled large reliable message without panic (fragmentation worked)
-        Some(())
-    });
+    scenario.spec_expect(
+        "messaging-16.t1: reliable channels allow fragmentation within bound",
+        |_ctx| {
+            // System handled large reliable message without panic (fragmentation worked)
+            Some(())
+        },
+    );
 }
 
 /// EntityProperty messages buffer until entity is mapped
@@ -274,16 +304,18 @@ fn messaging_18_entity_property_message_buffering() {
     // Spawn entity and send message (both in one mutate)
     let entity = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let entity = server.spawn(|mut e| {
-                e.insert_component(Position::new(10.0, 20.0));
-                e.enter_room(&room_key);
-            }).0;
-            
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(10.0, 20.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+
             // Send message with EntityProperty (will be buffered since entity not in scope)
             let mut cmd = EntityCommandMessage::new("buffered_command");
             server.set_entity_property(&mut cmd.target, &entity);
             server.send_message::<ReliableChannel, _>(&client_a_key, &cmd);
-            
+
             entity
         })
     });
@@ -294,22 +326,30 @@ fn messaging_18_entity_property_message_buffering() {
     // Include entity in scope
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
         })
     });
 
     // Wait for entity + check for buffered message (merged into spec_expect)
-    scenario.spec_expect("messaging-18.t1: EntityProperty messages buffer until entity mapped", |ctx| {
-        let has_entity = ctx.client(client_a_key, |c| c.has_entity(&entity));
-        if has_entity {
-            let msgs: Vec<_> = ctx.client(client_a_key, |client| {
-                client.read_message::<ReliableChannel, EntityCommandMessage>().collect()
-            });
-            (msgs.len() == 1 && msgs[0].command == "buffered_command").then_some(())
-        } else {
-            None
-        }
-    });
+    scenario.spec_expect(
+        "messaging-18.t1: EntityProperty messages buffer until entity mapped",
+        |ctx| {
+            let has_entity = ctx.client(client_a_key, |c| c.has_entity(&entity));
+            if has_entity {
+                let msgs: Vec<_> = ctx.client(client_a_key, |client| {
+                    client
+                        .read_message::<ReliableChannel, EntityCommandMessage>()
+                        .collect()
+                });
+                (msgs.len() == 1 && msgs[0].command == "buffered_command").then_some(())
+            } else {
+                None
+            }
+        },
+    );
 }
 
 /// EntityProperty message buffering enforces TTL (60 seconds)
@@ -341,16 +381,18 @@ fn messaging_19_entity_property_ttl() {
     // Spawn entity and send message (merged into one mutate)
     let entity = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let entity = server.spawn(|mut e| {
-                e.insert_component(Position::new(5.0, 5.0));
-                e.enter_room(&room_key);
-            }).0;
-            
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(5.0, 5.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
+
             // Send message with EntityProperty (will be buffered)
             let mut cmd = EntityCommandMessage::new("ttl_test");
             server.set_entity_property(&mut cmd.target, &entity);
             server.send_message::<ReliableChannel, _>(&client_a_key, &cmd);
-            
+
             entity
         })
     });
@@ -362,22 +404,30 @@ fn messaging_19_entity_property_ttl() {
     // Include entity in scope (after TTL expired)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
         })
     });
 
     // Wait for entity replication and verify message dropped (with more ticks since we advanced so far)
-    scenario.until(200.ticks()).spec_expect("messaging-19.t1: EntityProperty messages beyond TTL are dropped", |ctx| {
-        let replicated = ctx.client(client_a_key, |c| c.has_entity(&entity));
-        if replicated {
-            let msgs = ctx.client(client_a_key, |client| {
-                client.read_message::<ReliableChannel, EntityCommandMessage>().collect::<Vec<_>>()
-            });
-            (replicated && msgs.is_empty()).then_some(())
-        } else {
-            None
-        }
-    });
+    scenario.until(200.ticks()).spec_expect(
+        "messaging-19.t1: EntityProperty messages beyond TTL are dropped",
+        |ctx| {
+            let replicated = ctx.client(client_a_key, |c| c.has_entity(&entity));
+            if replicated {
+                let msgs = ctx.client(client_a_key, |client| {
+                    client
+                        .read_message::<ReliableChannel, EntityCommandMessage>()
+                        .collect::<Vec<_>>()
+                });
+                (replicated && msgs.is_empty()).then_some(())
+            } else {
+                None
+            }
+        },
+    );
 }
 
 /// EntityProperty message buffering enforces capacity caps
@@ -413,10 +463,12 @@ fn messaging_20_entity_property_buffer_caps() {
 
     let entity = scenario.mutate(|ctx| {
         ctx.server(|server| {
-            let entity = server.spawn(|mut e| {
-                e.insert_component(Position::new(7.0, 8.0));
-                e.enter_room(&room_key);
-            }).0;
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(7.0, 8.0));
+                    e.enter_room(&room_key);
+                })
+                .0;
 
             // Send MORE than 128 EntityCommandMessages (buffered since entity not yet in client scope)
             for i in 0..MESSAGES_TO_SEND {
@@ -435,7 +487,10 @@ fn messaging_20_entity_property_buffer_caps() {
     // Include entity in scope — entity spawn triggers waitlist release
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
         })
     });
 
@@ -443,33 +498,41 @@ fn messaging_20_entity_property_buffer_caps() {
     // may span two ticks (entity spawn in tick T, waitlist drain in tick T+1).
     let mut all_received: Vec<String> = Vec::new();
 
-    scenario.until(500.ticks()).spec_expect("messaging-20.t1: EntityProperty buffer enforces per-entity cap with FIFO eviction", |ctx| {
-        let replicated = ctx.client(client_a_key, |c| c.has_entity(&entity));
-        if replicated {
-            let batch: Vec<String> = ctx.client(client_a_key, |client| {
-                client.read_message::<UnorderedChannel, EntityCommandMessage>()
-                    .map(|msg| msg.command.clone())
-                    .collect()
-            });
-            all_received.extend(batch);
+    scenario.until(500.ticks()).spec_expect(
+        "messaging-20.t1: EntityProperty buffer enforces per-entity cap with FIFO eviction",
+        |ctx| {
+            let replicated = ctx.client(client_a_key, |c| c.has_entity(&entity));
+            if replicated {
+                let batch: Vec<String> = ctx.client(client_a_key, |client| {
+                    client
+                        .read_message::<UnorderedChannel, EntityCommandMessage>()
+                        .map(|msg| msg.command.clone())
+                        .collect()
+                });
+                all_received.extend(batch);
 
-            if all_received.len() == PER_ENTITY_CAP {
-                // FIFO eviction: oldest 2 (cmd_0, cmd_1) dropped; newest 128 (cmd_2..cmd_129) kept
-                let evicted_cmd_0 = !all_received.contains(&"cmd_0".to_string());
-                let evicted_cmd_1 = !all_received.contains(&"cmd_1".to_string());
-                let has_cmd_2 = all_received.contains(&"cmd_2".to_string());
-                let has_cmd_129 = all_received.contains(&"cmd_129".to_string());
-                let fifo_ok = evicted_cmd_0 && evicted_cmd_1 && has_cmd_2 && has_cmd_129;
-                fifo_ok.then_some(())
-            } else if all_received.len() > PER_ENTITY_CAP {
-                panic!("messaging-20.t1: received {} messages, expected cap of {}", all_received.len(), PER_ENTITY_CAP);
+                if all_received.len() == PER_ENTITY_CAP {
+                    // FIFO eviction: oldest 2 (cmd_0, cmd_1) dropped; newest 128 (cmd_2..cmd_129) kept
+                    let evicted_cmd_0 = !all_received.contains(&"cmd_0".to_string());
+                    let evicted_cmd_1 = !all_received.contains(&"cmd_1".to_string());
+                    let has_cmd_2 = all_received.contains(&"cmd_2".to_string());
+                    let has_cmd_129 = all_received.contains(&"cmd_129".to_string());
+                    let fifo_ok = evicted_cmd_0 && evicted_cmd_1 && has_cmd_2 && has_cmd_129;
+                    fifo_ok.then_some(())
+                } else if all_received.len() > PER_ENTITY_CAP {
+                    panic!(
+                        "messaging-20.t1: received {} messages, expected cap of {}",
+                        all_received.len(),
+                        PER_ENTITY_CAP
+                    );
+                } else {
+                    None
+                }
             } else {
                 None
             }
-        } else {
-            None
-        }
-    });
+        },
+    );
 }
 
 /// Misusing channel types (e.g., sending too-large message) yields defined failure
@@ -549,11 +612,7 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     // connection so that ClientIdentifyRequest (with the mismatched protocol_id)
     // gets sent and the server emits ProtocolMismatch.
     scenario.expect(|ctx| {
-        ctx.server(|server| {
-            server
-                .read_event::<ServerAuthEvent<Auth>>()
-                .map(|_| ())
-        })
+        ctx.server(|server| server.read_event::<ServerAuthEvent<Auth>>().map(|_| ()))
     });
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -572,17 +631,23 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
         })
     });
 
-    assert!(reject_event_received, "Client should receive rejection event");
+    assert!(
+        reject_event_received,
+        "Client should receive rejection event"
+    );
 
     // Verify connection is rejected before any message exchange.
     // `is_rejected()` is tick-scoped; use the persistent `reject_event_received` flag instead.
-    scenario.spec_expect("messaging-04.t1: mismatched protocol_id rejects connection before message exchange", |ctx| {
-        let client_not_connected = !ctx.client(client_key, |client| {
-            client.connection_status().is_connected()
-        });
-        // reject_event_received was asserted true above; client must also be disconnected.
-        (reject_event_received && client_not_connected).then_some(())
-    });
+    scenario.spec_expect(
+        "messaging-04.t1: mismatched protocol_id rejects connection before message exchange",
+        |ctx| {
+            let client_not_connected = !ctx.client(client_key, |client| {
+                client.connection_status().is_connected()
+            });
+            // reject_event_received was asserted true above; client must also be disconnected.
+            (reject_event_received && client_not_connected).then_some(())
+        },
+    );
 }
 
 /// Matched protocol_id enables successful messaging
@@ -616,15 +681,18 @@ fn matched_protocol_id_enables_successful_messaging() {
     });
 
     // Verify message received by server, proving channel compatibility
-    scenario.spec_expect("messaging-04.t2: matched protocol_id guarantees channel compatibility", |ctx| {
-        ctx.server(|server| {
-            server
-                .read_message::<UnreliableChannel, TestMessage>()
-                .next()
-                .is_some()
-                .then_some(())
-        })
-    });
+    scenario.spec_expect(
+        "messaging-04.t2: matched protocol_id guarantees channel compatibility",
+        |ctx| {
+            ctx.server(|server| {
+                server
+                    .read_message::<UnreliableChannel, TestMessage>()
+                    .next()
+                    .is_some()
+                    .then_some(())
+            })
+        },
+    );
 }
 
 /// Request timeouts are surfaced and cleaned up
@@ -812,18 +880,21 @@ fn unordered_unreliable_channel_shows_best_effort_semantics() {
     });
 
     // Verify client receives some messages (best-effort, may not receive all)
-    scenario.expect_msg("messaging-06.t1: receiver tolerates best-effort delivery", |ctx| {
-        let messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<UnreliableChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-06.t1: receiver tolerates best-effort delivery",
+        |ctx| {
+            let messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<UnreliableChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        // With local transport (no loss), should receive all
-        // But unreliable channel semantics allow some loss
-        // Just verify we received at least some messages
-        (!messages.is_empty()).then_some(())
-    });
+            // With local transport (no loss), should receive all
+            // But unreliable channel semantics allow some loss
+            // Just verify we received at least some messages
+            (!messages.is_empty()).then_some(())
+        },
+    );
 }
 
 /// Multi-type mapping across messages, components, and channels
@@ -984,20 +1055,23 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
     });
 
     // Verify client receives latest sequence (U10) and doesn't revert
-    scenario.expect_msg("messaging-07.t1: never rolls back after newer state", |ctx| {
-        let messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<SequencedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-07.t1: never rolls back after newer state",
+        |ctx| {
+            let messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<SequencedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        // Should have latest (10) and not revert to older values
-        if messages.last().copied() == Some(10) {
-            Some(())
-        } else {
-            None
-        }
-    });
+            // Should have latest (10) and not revert to older values
+            if messages.last().copied() == Some(10) {
+                Some(())
+            } else {
+                None
+            }
+        },
+    );
 }
 
 /// Client-to-server request yields exactly one response
@@ -1033,18 +1107,21 @@ fn client_to_server_request_yields_exactly_one_response() {
     });
 
     // Server receives request and sends response
-    let response_id = scenario.expect_msg("messaging-08.pre: server receives request reliably", |ctx| {
-        ctx.server(|server| {
-            for (client_key, response_id, request) in
-                server.read_request::<RequestResponseChannel, TestRequest>()
-            {
-                if client_key == client_a_key && request.query == "query" {
-                    return Some(response_id);
+    let response_id = scenario.expect_msg(
+        "messaging-08.pre: server receives request reliably",
+        |ctx| {
+            ctx.server(|server| {
+                for (client_key, response_id, request) in
+                    server.read_request::<RequestResponseChannel, TestRequest>()
+                {
+                    if client_key == client_a_key && request.query == "query" {
+                        return Some(response_id);
+                    }
                 }
-            }
-            None
-        })
-    });
+                None
+            })
+        },
+    );
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -1054,12 +1131,15 @@ fn client_to_server_request_yields_exactly_one_response() {
     });
 
     // Wait for client to receive the response (must use expect to wait for network propagation)
-    scenario.expect_msg("messaging-08.t1: client observes exactly one response", |ctx| {
-        ctx.client(client_a_key, |c| {
-            // Check if response is available - expect will retry until it is
-            c.has_response(&response_key).then_some(())
-        })
-    });
+    scenario.expect_msg(
+        "messaging-08.t1: client observes exactly one response",
+        |ctx| {
+            ctx.client(client_a_key, |c| {
+                // Check if response is available - expect will retry until it is
+                c.has_response(&response_key).then_some(())
+            })
+        },
+    );
 
     // Verify client receives exactly one response
     scenario.mutate(|ctx| {
@@ -1137,7 +1217,9 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
 
     // Wait for A's response to propagate
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_response(&response_key_a).then_some(()))
+        ctx.client(client_a_key, |c| {
+            c.has_response(&response_key_a).then_some(())
+        })
     });
 
     // Client B sends request
@@ -1354,7 +1436,9 @@ fn reliable_point_to_point_request_response() {
 
     // Wait for client A to receive the response (must use expect to wait for network propagation)
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_response(&response_key).then_some(()))
+        ctx.client(client_a_key, |c| {
+            c.has_response(&response_key).then_some(())
+        })
     });
 
     // Verify A receives exactly one response with correct content
@@ -1395,8 +1479,9 @@ fn reliable_server_to_clients_broadcast_respects_rooms() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let (room_r_key, room_s_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
+    let (room_r_key, room_s_key) = scenario.mutate(|ctx| {
+        ctx.server(|server| (server.create_room().key(), server.create_room().key()))
+    });
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -1666,19 +1751,22 @@ fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
     });
 
     // Verify client receives exactly one A, B, C (order not guaranteed)
-    scenario.expect_msg("messaging-08.t1: dedupes and delivers all messages", |ctx| {
-        let messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<UnorderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-08.t1: dedupes and delivers all messages",
+        |ctx| {
+            let messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<UnorderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        // Should have all three values, but order may differ
-        let has_all = messages.contains(&1) && messages.contains(&2) && messages.contains(&3);
-        let exactly_three = messages.len() == 3;
+            // Should have all three values, but order may differ
+            let has_all = messages.contains(&1) && messages.contains(&2) && messages.contains(&3);
+            let exactly_three = messages.len() == 3;
 
-        (has_all && exactly_three).then_some(())
-    });
+            (has_all && exactly_three).then_some(())
+        },
+    );
 }
 
 /// Ordered reliable channel ignores duplicated packets
@@ -1715,15 +1803,18 @@ fn ordered_reliable_channel_ignores_duplicated_packets() {
 
     // Note: Local transport doesn't duplicate packets, but reliable channels should handle duplicates
     // Verify client receives exactly one A and one B in order
-    scenario.expect_msg("messaging-09.t1: delivers in send order despite duplicates", |ctx| {
-        let messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-09.t1: delivers in send order despite duplicates",
+        |ctx| {
+            let messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<OrderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        (messages == vec![1, 2]).then_some(())
-    });
+            (messages == vec![1, 2]).then_some(())
+        },
+    );
 }
 
 /// Ordered reliable channel keeps order under latency and reordering
@@ -1760,15 +1851,18 @@ fn ordered_reliable_channel_keeps_order_under_latency_and_reordering() {
     });
 
     // Verify client receives exactly one A, B, C in order
-    scenario.expect_msg("messaging-09.t1: delivers in send order despite reordering", |ctx| {
-        let messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-09.t1: delivers in send order despite reordering",
+        |ctx| {
+            let messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<OrderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        (messages == vec![1, 2, 3]).then_some(())
-    });
+            (messages == vec![1, 2, 3]).then_some(())
+        },
+    );
 }
 
 /// Per-channel ordering
@@ -1825,40 +1919,43 @@ fn per_channel_ordering() {
     });
 
     // Verify both A and B receive messages in correct order per channel
-    scenario.expect_msg("messaging-09.t1: each channel preserves its own order", |ctx| {
-        let a_ordered: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
-        let a_unordered: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<UnorderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-09.t1: each channel preserves its own order",
+        |ctx| {
+            let a_ordered: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<OrderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
+            let a_unordered: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<UnorderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        let b_ordered: Vec<u32> = ctx.client(client_b_key, |c| {
-            c.read_message::<OrderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
-        let b_unordered: Vec<u32> = ctx.client(client_b_key, |c| {
-            c.read_message::<UnorderedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+            let b_ordered: Vec<u32> = ctx.client(client_b_key, |c| {
+                c.read_message::<OrderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
+            let b_unordered: Vec<u32> = ctx.client(client_b_key, |c| {
+                c.read_message::<UnorderedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        // OrderedChannel should preserve order: 1, 2, 3
-        let a_ordered_correct = a_ordered == vec![1, 2, 3];
-        let b_ordered_correct = b_ordered == vec![1, 2, 3];
+            // OrderedChannel should preserve order: 1, 2, 3
+            let a_ordered_correct = a_ordered == vec![1, 2, 3];
+            let b_ordered_correct = b_ordered == vec![1, 2, 3];
 
-        // UnorderedChannel may be in any order, but should contain both values
-        let a_unordered_has_both = a_unordered.contains(&10) && a_unordered.contains(&20);
-        let b_unordered_has_both = b_unordered.contains(&10) && b_unordered.contains(&20);
+            // UnorderedChannel may be in any order, but should contain both values
+            let a_unordered_has_both = a_unordered.contains(&10) && a_unordered.contains(&20);
+            let b_unordered_has_both = b_unordered.contains(&10) && b_unordered.contains(&20);
 
-        (a_ordered_correct && b_ordered_correct && a_unordered_has_both && b_unordered_has_both)
-            .then_some(())
-    });
+            (a_ordered_correct && b_ordered_correct && a_unordered_has_both && b_unordered_has_both)
+                .then_some(())
+        },
+    );
 }
 
 /// Sequenced reliable channel only exposes the latest message in a stream
@@ -1895,21 +1992,24 @@ fn sequenced_reliable_channel_only_exposes_the_latest_message_in_a_stream() {
     });
 
     // Verify client receives S3 (latest) and not older states
-    scenario.expect_msg("messaging-10.t1: exposes only latest, never rolls back", |ctx| {
-        let messages: Vec<u32> = ctx.client(client_a_key, |c| {
-            c.read_message::<SequencedChannel, TestMessage>()
-                .map(|m| m.value)
-                .collect()
-        });
+    scenario.expect_msg(
+        "messaging-10.t1: exposes only latest, never rolls back",
+        |ctx| {
+            let messages: Vec<u32> = ctx.client(client_a_key, |c| {
+                c.read_message::<SequencedChannel, TestMessage>()
+                    .map(|m| m.value)
+                    .collect()
+            });
 
-        // Sequenced channel should only expose latest (S3)
-        // May receive multiple, but should end with S3
-        if messages.last().copied() == Some(3) && messages.contains(&3) {
-            Some(())
-        } else {
-            None
-        }
-    });
+            // Sequenced channel should only expose latest (S3)
+            // May receive multiple, but should end with S3
+            if messages.last().copied() == Some(3) && messages.contains(&3) {
+                Some(())
+            } else {
+                None
+            }
+        },
+    );
 }
 
 /// Serialization failures are surfaced without poisoning the connection
@@ -2037,10 +2137,12 @@ fn tick_buffered_channel_groups_messages_by_tick() {
     });
 
     // Wait until server has advanced past tick_t2
-    scenario.until(50.ticks()).expect_msg("server advanced past t2", |ctx| {
-        let now = ctx.server(|s| s.current_tick());
-        naia_shared::sequence_greater_than(now, tick_t2).then_some(())
-    });
+    scenario
+        .until(50.ticks())
+        .expect_msg("server advanced past t2", |ctx| {
+            let now = ctx.server(|s| s.current_tick());
+            naia_shared::sequence_greater_than(now, tick_t2).then_some(())
+        });
 
     // Server receives messages grouped by tick
     // Messages for T+1 should not be exposed before T is processed
@@ -2170,21 +2272,39 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
     let (accepted, rejected_beyond, rejected_far) = scenario.mutate(|ctx| {
         ctx.server(|server| {
             let a = server.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
-                &client_a_key, &tick_t0, &tick_at_max, &TestMessage::new(100),
+                &client_a_key,
+                &tick_t0,
+                &tick_at_max,
+                &TestMessage::new(100),
             );
             let b = server.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
-                &client_a_key, &tick_t0, &tick_beyond_max, &TestMessage::new(200),
+                &client_a_key,
+                &tick_t0,
+                &tick_beyond_max,
+                &TestMessage::new(200),
             );
             let c = server.inject_tick_buffer_message::<TickBufferedChannel, TestMessage>(
-                &client_a_key, &tick_t0, &tick_far_ahead, &TestMessage::new(300),
+                &client_a_key,
+                &tick_t0,
+                &tick_far_ahead,
+                &TestMessage::new(300),
             );
             (a, b, c)
         })
     });
 
-    assert!(accepted, "messaging-15-a.t2: boundary message should be accepted by insert()");
-    assert!(!rejected_beyond, "messaging-15-a.t3: beyond-boundary message should be rejected by insert()");
-    assert!(!rejected_far, "messaging-15-a.t1: far-ahead message should be rejected by insert()");
+    assert!(
+        accepted,
+        "messaging-15-a.t2: boundary message should be accepted by insert()"
+    );
+    assert!(
+        !rejected_beyond,
+        "messaging-15-a.t3: beyond-boundary message should be rejected by insert()"
+    );
+    assert!(
+        !rejected_far,
+        "messaging-15-a.t1: far-ahead message should be rejected by insert()"
+    );
 
     // Boundary tick: expect 1 message delivered
     let at_max_messages = scenario.mutate(|ctx| {
@@ -2194,8 +2314,15 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
         })
     });
 
-    assert_eq!(at_max_messages.len(), 1, "messaging-15-a.t2: boundary message delivered");
-    assert_eq!(at_max_messages[0].1.value, 100, "messaging-15-a.t2: correct message value");
+    assert_eq!(
+        at_max_messages.len(),
+        1,
+        "messaging-15-a.t2: boundary message delivered"
+    );
+    assert_eq!(
+        at_max_messages[0].1.value, 100,
+        "messaging-15-a.t2: correct message value"
+    );
 
     // Beyond-boundary tick: expect 0 messages
     let beyond_messages = scenario.mutate(|ctx| {
@@ -2205,7 +2332,11 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
         })
     });
 
-    assert_eq!(beyond_messages.len(), 0, "messaging-15-a.t3: beyond-boundary message dropped");
+    assert_eq!(
+        beyond_messages.len(),
+        0,
+        "messaging-15-a.t3: beyond-boundary message dropped"
+    );
 
     // Far-ahead tick: expect 0 messages
     let far_messages = scenario.mutate(|ctx| {
@@ -2215,9 +2346,16 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
         })
     });
 
-    assert_eq!(far_messages.len(), 0, "messaging-15-a.t1: far-ahead message dropped silently");
+    assert_eq!(
+        far_messages.len(),
+        0,
+        "messaging-15-a.t1: far-ahead message dropped silently"
+    );
 
-    scenario.spec_expect("messaging-15-a: tick-buffer discard boundaries enforced without panic", |_ctx| Some(()));
+    scenario.spec_expect(
+        "messaging-15-a: tick-buffer discard boundaries enforced without panic",
+        |_ctx| Some(()),
+    );
 }
 
 // ============================================================================
@@ -2263,9 +2401,10 @@ fn request_id_uniqueness() {
     // The keys are opaque but framework ensures uniqueness
     let _ = (key1, key2);
 
-    scenario.expect_msg("messaging-21.t1: multiple requests have distinct IDs", |ctx| {
-        ctx.client(client_a_key, |_c| Some(()))
-    });
+    scenario.expect_msg(
+        "messaging-21.t1: multiple requests have distinct IDs",
+        |ctx| ctx.client(client_a_key, |_c| Some(())),
+    );
 }
 
 // ============================================================================
@@ -2306,7 +2445,10 @@ fn response_matching_to_request() {
     // Server receives request and sends response
     let response_id = scenario.expect_msg("messaging-22.pre: server receives request", |ctx| {
         ctx.server(|server| {
-            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|(_, response_id, _request)| response_id)
+            server
+                .read_request::<RequestResponseChannel, TestRequest>()
+                .next()
+                .map(|(_, response_id, _request)| response_id)
         })
     });
 
@@ -2318,9 +2460,14 @@ fn response_matching_to_request() {
     });
 
     // Wait for client to have response
-    scenario.expect_msg("messaging-22.t1: response delivered to correct handler", |ctx| {
-        ctx.client(client_a_key, |c| c.has_response(&response_key).then_some(()))
-    });
+    scenario.expect_msg(
+        "messaging-22.t1: response delivered to correct handler",
+        |ctx| {
+            ctx.client(client_a_key, |c| {
+                c.has_response(&response_key).then_some(())
+            })
+        },
+    );
 
     // Client receives response matched to request
     scenario.mutate(|ctx| {
@@ -2360,14 +2507,13 @@ fn request_timeout_semantics() {
     // Send request
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            let _ = client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"));
+            let _ = client
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"));
         });
     });
 
     // Verify request was sent (timeout behavior is framework-handled)
-    scenario.expect(|ctx| {
-        ctx.client(client_a_key, |_c| Some(()))
-    });
+    scenario.expect(|ctx| ctx.client(client_a_key, |_c| Some(())));
 }
 
 // ============================================================================
@@ -2399,7 +2545,8 @@ fn disconnect_cancels_pending_requests() {
     // Client sends request
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            let _ = client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"));
+            let _ = client
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("query"));
         });
     });
 
@@ -2411,9 +2558,7 @@ fn disconnect_cancels_pending_requests() {
     });
 
     // Verify disconnect
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
 }
 
 // ============================================================================
@@ -2454,7 +2599,10 @@ fn request_deduplication() {
     // Server receives and responds
     let response_id = scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|(_, response_id, _request)| response_id)
+            server
+                .read_request::<RequestResponseChannel, TestRequest>()
+                .next()
+                .map(|(_, response_id, _request)| response_id)
         })
     });
 
@@ -2467,7 +2615,9 @@ fn request_deduplication() {
 
     // Wait for client to have response
     scenario.expect(|ctx| {
-        ctx.client(client_a_key, |c| c.has_response(&response_key).then_some(()))
+        ctx.client(client_a_key, |c| {
+            c.has_response(&response_key).then_some(())
+        })
     });
 
     // Response received exactly once
@@ -2508,15 +2658,20 @@ fn rpc_ordering_on_ordered_channel() {
     // Send multiple requests in order
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            let _ = client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("first"));
-            let _ = client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("second"));
+            let _ = client
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("first"));
+            let _ = client
+                .send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("second"));
         });
     });
 
     // Verify requests are received (ordering is framework guarantee)
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|_| ())
+            server
+                .read_request::<RequestResponseChannel, TestRequest>()
+                .next()
+                .map(|_| ())
         })
     });
 }
@@ -2550,14 +2705,19 @@ fn fire_and_forget_request() {
     // Client sends request (ignoring the response key = fire-and-forget pattern)
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
-            let _ = client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new("fire_forget"));
+            let _ = client.send_request::<RequestResponseChannel, TestRequest>(&TestRequest::new(
+                "fire_forget",
+            ));
         });
     });
 
     // Verify request was sent
     scenario.expect(|ctx| {
         ctx.server(|server| {
-            server.read_request::<RequestResponseChannel, TestRequest>().next().map(|_| ())
+            server
+                .read_request::<RequestResponseChannel, TestRequest>()
+                .next()
+                .map(|_| ())
         })
     });
 }

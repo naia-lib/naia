@@ -6,8 +6,7 @@ use crate::{
     messages::{
         channels::receivers::{
             ordered_reliable_receiver::OrderedArranger,
-            sequenced_reliable_receiver::SequencedArranger,
-            ReceiverArranger,
+            sequenced_reliable_receiver::SequencedArranger, ReceiverArranger,
         },
         message::Message,
         message_kinds::{MessageKind, MessageKinds},
@@ -80,11 +79,17 @@ fn extract(mc: MessageContainer) -> u32 {
 
 // Process a single-slot message (start == end) and return the extracted IDs.
 fn ordered_send(arr: &mut OrderedArranger, idx: u16, id: u32) -> Vec<u32> {
-    arr.process(idx, idx, stub(id)).into_iter().map(extract).collect()
+    arr.process(idx, idx, stub(id))
+        .into_iter()
+        .map(extract)
+        .collect()
 }
 
 fn sequenced_send(arr: &mut SequencedArranger, idx: u16, id: u32) -> Vec<u32> {
-    arr.process(idx, idx, stub(id)).into_iter().map(extract).collect()
+    arr.process(idx, idx, stub(id))
+        .into_iter()
+        .map(extract)
+        .collect()
 }
 
 // ---------------------------------------------------------------------------
@@ -163,7 +168,10 @@ fn sequenced_drops_older() {
     let mut arr = SequencedArranger::new();
     assert_eq!(sequenced_send(&mut arr, 5, 50), vec![50]);
     for i in 0u16..5 {
-        assert!(sequenced_send(&mut arr, i, i as u32).is_empty(), "stale idx={i}");
+        assert!(
+            sequenced_send(&mut arr, i, i as u32).is_empty(),
+            "stale idx={i}"
+        );
     }
 }
 
@@ -184,9 +192,9 @@ fn sequenced_wraparound() {
     assert_eq!(sequenced_send(&mut arr, 32767, 1), vec![1]); // newest = 32767
     assert_eq!(sequenced_send(&mut arr, 65534, 2), vec![2]); // newest = u16::MAX - 1
     assert_eq!(sequenced_send(&mut arr, u16::MAX, 3), vec![3]); // newest = u16::MAX
-    // 0 is newer than u16::MAX in wrapping sequence space
+                                                                // 0 is newer than u16::MAX in wrapping sequence space
     assert_eq!(sequenced_send(&mut arr, 0, 4), vec![4]); // newest = 0
-    // u16::MAX is now stale (behind 0 in wrapping space)
+                                                         // u16::MAX is now stale (behind 0 in wrapping space)
     assert!(sequenced_send(&mut arr, u16::MAX, 5).is_empty());
 }
 
@@ -203,7 +211,9 @@ mod ordered_prop {
         let mut indices: Vec<u16> = (0..n as u16).collect();
         let mut s = seed;
         for i in (1..n).rev() {
-            s = s.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+            s = s
+                .wrapping_mul(6364136223846793005)
+                .wrapping_add(1442695040888963407);
             let j = (s as usize) % (i + 1);
             indices.swap(i, j);
         }

@@ -23,7 +23,10 @@ impl OrderedReliableReceiver {
     /// Creates a new `OrderedReliableReceiver` capped at `max_messages_per_tick` deliveries per tick.
     pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
         Self::with_arranger_and_cap(
-            OrderedArranger { messages_received: 0, buffer: VecDeque::new() },
+            OrderedArranger {
+                messages_received: 0,
+                buffer: VecDeque::new(),
+            },
             max_messages_per_tick,
         )
     }
@@ -50,7 +53,10 @@ pub struct OrderedArranger {
 #[cfg(test)]
 impl OrderedArranger {
     pub(crate) fn new() -> Self {
-        Self { buffer: VecDeque::new(), messages_received: 0 }
+        Self {
+            buffer: VecDeque::new(),
+            messages_received: 0,
+        }
     }
 }
 

@@ -9,9 +9,10 @@ use crate::{
         main_events::{AuthEvent, ConnectEvent, ErrorEvent, MainEvent, MainEvents},
         world_events::{
             DelegateEntityEvent, DespawnEntityEvent, EntityAuthDeniedEvent, EntityAuthGrantEvent,
-            EntityAuthResetEvent, InsertComponentEvent, MessageEvent, MessagesMap, PublishEntityEvent,
-            RemoveComponentEvent, RemovesMap, RemovesSyntheticMap, RequestEvent, RequestsMap,
-            SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent, WorldEvent, WorldEvents,
+            EntityAuthResetEvent, InsertComponentEvent, MessageEvent, MessagesMap,
+            PublishEntityEvent, RemoveComponentEvent, RemovesMap, RemovesSyntheticMap,
+            RequestEvent, RequestsMap, SpawnEntityEvent, UnpublishEntityEvent,
+            UpdateComponentEvent, WorldEvent, WorldEvents,
         },
     },
     user::UserKey,

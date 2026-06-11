@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use anyhow::{Context, Result, bail};
+use anyhow::{bail, Context, Result};
 use clap::Subcommand;
 use serde::{Deserialize, Serialize};
 
@@ -71,16 +71,22 @@ fn scenario_registry() -> HashMap<&'static str, fn() -> naia_test_harness::Trace
     use naia_test_harness::scenarios;
     let mut map: HashMap<&'static str, fn() -> naia_test_harness::Trace> = HashMap::new();
     map.insert("contract06_scope_entry", scenarios::contract06_scope_entry);
-    map.insert("contract07_component_update", scenarios::contract07_component_update);
-    map.insert("contract10_delegation_grant", scenarios::contract10_delegation_grant);
+    map.insert(
+        "contract07_component_update",
+        scenarios::contract07_component_update,
+    );
+    map.insert(
+        "contract10_delegation_grant",
+        scenarios::contract10_delegation_grant,
+    );
     map
 }
 
 fn run_scenario(key: &str) -> Result<naia_test_harness::Trace> {
     let registry = scenario_registry();
-    let f = registry
-        .get(key)
-        .with_context(|| format!("Unknown scenario key '{key}'. Register it in scenario_registry()"))?;
+    let f = registry.get(key).with_context(|| {
+        format!("Unknown scenario key '{key}'. Register it in scenario_registry()")
+    })?;
     Ok(f())
 }
 
@@ -93,8 +99,12 @@ fn record(key: &str) -> Result<()> {
         .iter()
         .map(|p| GoldenPacket {
             direction: match p.direction {
-                naia_test_harness::TraceDirection::ClientToServer => GoldenDirection::ClientToServer,
-                naia_test_harness::TraceDirection::ServerToClient => GoldenDirection::ServerToClient,
+                naia_test_harness::TraceDirection::ClientToServer => {
+                    GoldenDirection::ClientToServer
+                }
+                naia_test_harness::TraceDirection::ServerToClient => {
+                    GoldenDirection::ServerToClient
+                }
             },
             hex: hex_encode(&p.bytes),
         })
@@ -111,8 +121,7 @@ fn record(key: &str) -> Result<()> {
 
     let path = golden_path(key);
     let json = serde_json::to_string_pretty(&golden)?;
-    fs::write(&path, &json)
-        .with_context(|| format!("Cannot write golden trace to {path:?}"))?;
+    fs::write(&path, &json).with_context(|| format!("Cannot write golden trace to {path:?}"))?;
 
     eprintln!(
         "Wrote {} packets to {}",
@@ -139,10 +148,9 @@ fn check() -> Result<()> {
             continue;
         }
 
-        let json = fs::read_to_string(&path)
-            .with_context(|| format!("Cannot read {path:?}"))?;
-        let golden: GoldenTrace = serde_json::from_str(&json)
-            .with_context(|| format!("Cannot parse {path:?}"))?;
+        let json = fs::read_to_string(&path).with_context(|| format!("Cannot read {path:?}"))?;
+        let golden: GoldenTrace =
+            serde_json::from_str(&json).with_context(|| format!("Cannot parse {path:?}"))?;
         let key = &golden.scenario_key;
 
         eprint!("Checking '{key}'... ");

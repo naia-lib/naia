@@ -252,9 +252,7 @@ fn then_server_has_no_connected_users(ctx: &TestWorldRef) {
 
 /// Then the client is connected.
 #[then("the client is connected")]
-fn then_client_is_connected(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_is_connected(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     if ctx.client_is_connected(client_key) {
         AssertOutcome::Passed(())
@@ -265,9 +263,7 @@ fn then_client_is_connected(
 
 /// Then the client is not connected.
 #[then("the client is not connected")]
-fn then_client_is_not_connected(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_is_not_connected(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     if !ctx.client_is_connected(client_key) {
         AssertOutcome::Passed(())
@@ -402,9 +398,7 @@ fn then_handled_idempotently(ctx: &TestWorldRef) {
 /// "client received fresh state" — full per-entity verification is
 /// covered by the entity-replication scenarios.
 #[then("it receives fresh entity spawns for all in-scope entities")]
-fn then_receives_fresh_entity_spawns(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_receives_fresh_entity_spawns(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     if ctx.client_is_connected(client_key) {
         AssertOutcome::Passed(())
@@ -432,9 +426,7 @@ fn then_no_prior_session_state(ctx: &TestWorldRef) {
 /// Polls until `client_tick()` returns Some. Covers
 /// [time-ticks-03.t1] (ConnectEvent implies tick sync complete).
 #[then("the client tick is available")]
-fn then_client_tick_is_available(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_tick_is_available(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     ctx.client(client_key, |c| {
         if c.client_tick().is_some() {
@@ -450,9 +442,7 @@ fn then_client_tick_is_available(
 /// Covers [time-ticks-04.t1] (client knows server's current tick at
 /// connect time).
 #[then("the server tick is known to the client")]
-fn then_server_tick_is_known_to_client(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_server_tick_is_known_to_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     ctx.client(client_key, |c| {
         if c.server_tick().is_some() {
@@ -469,14 +459,32 @@ fn then_entity_spawns_with_correct_values(ctx: &TestWorldRef) -> AssertOutcome<(
     use naia_test_harness::{Position, Velocity};
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
-    let exp_p: (f32, f32) = ctx.scenario().bdd_get(SPAWN_POSITION_VALUE_KEY).expect("no pos");
-    let exp_v: (f32, f32) = ctx.scenario().bdd_get(SPAWN_VELOCITY_VALUE_KEY).expect("no vel");
+    let exp_p: (f32, f32) = ctx
+        .scenario()
+        .bdd_get(SPAWN_POSITION_VALUE_KEY)
+        .expect("no pos");
+    let exp_v: (f32, f32) = ctx
+        .scenario()
+        .bdd_get(SPAWN_VELOCITY_VALUE_KEY)
+        .expect("no vel");
     ctx.client(client_key, |client| {
-        let Some(e) = client.entity(&entity_key) else { return AssertOutcome::Pending; };
-        let Some(p) = e.component::<Position>() else { return AssertOutcome::Pending; };
-        let Some(v) = e.component::<Velocity>() else { return AssertOutcome::Pending; };
-        let ok = (*p.x - exp_p.0).abs() < f32::EPSILON && (*p.y - exp_p.1).abs() < f32::EPSILON
-            && (*v.vx - exp_v.0).abs() < f32::EPSILON && (*v.vy - exp_v.1).abs() < f32::EPSILON;
-        if ok { AssertOutcome::Passed(()) } else { AssertOutcome::Pending }
+        let Some(e) = client.entity(&entity_key) else {
+            return AssertOutcome::Pending;
+        };
+        let Some(p) = e.component::<Position>() else {
+            return AssertOutcome::Pending;
+        };
+        let Some(v) = e.component::<Velocity>() else {
+            return AssertOutcome::Pending;
+        };
+        let ok = (*p.x - exp_p.0).abs() < f32::EPSILON
+            && (*p.y - exp_p.1).abs() < f32::EPSILON
+            && (*v.vx - exp_v.0).abs() < f32::EPSILON
+            && (*v.vy - exp_v.1).abs() < f32::EPSILON;
+        if ok {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Pending
+        }
     })
 }

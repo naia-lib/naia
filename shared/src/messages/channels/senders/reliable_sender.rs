@@ -139,7 +139,13 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
             if let Some(t) = last_sent_opt.as_ref() {
                 new_min = Some(match new_min {
                     None => t.clone(),
-                    Some(cur) => if t < &cur { t.clone() } else { cur },
+                    Some(cur) => {
+                        if t < &cur {
+                            t.clone()
+                        } else {
+                            cur
+                        }
+                    }
                 });
             }
         }

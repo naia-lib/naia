@@ -11,12 +11,7 @@
 //! `RecvConnection` for the recv-only methods. Composite call sites
 //! that need both halves split-borrow the recv/send maps.
 
-use std::{
-    collections::VecDeque,
-    hash::Hash,
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr, sync::Arc};
 
 use log::warn;
 
@@ -105,8 +100,7 @@ impl SendConnection {
             ack_send,
             ..
         } = &mut self.base;
-        let mut base_notifiables: [&mut dyn PacketNotifiable; 2] =
-            [message_manager, world_manager];
+        let mut base_notifiables: [&mut dyn PacketNotifiable; 2] = [message_manager, world_manager];
         ack_send.drain_samples(&mut base_notifiables, extras);
     }
 
@@ -120,7 +114,8 @@ impl SendConnection {
     ) -> StandardHeader {
         let last_rx = self.shared.remote_ack_seq();
         let ack_bits = self.shared.remote_ack_bitfield();
-        self.base.write_header_with(packet_type, last_rx, ack_bits, writer)
+        self.base
+            .write_header_with(packet_type, last_rx, ack_bits, writer)
     }
 
     /// Finalize delivered commands after receive — runs once per recv cycle
@@ -175,12 +170,7 @@ impl SendConnection {
                     &channel_kind,
                     &local_response_id,
                 );
-                incoming_events.push_request(
-                    &user_key,
-                    &channel_kind,
-                    global_response_id,
-                    request,
-                );
+                incoming_events.push_request(&user_key, &channel_kind, global_response_id, request);
             }
         }
         for (global_request_id, response) in responses {
@@ -226,8 +216,10 @@ impl SendConnection {
         let t = std::time::Instant::now();
         self.base.collect_messages(now, &rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_COLLECT_MESSAGES
-            .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+        bench_send_counters::NS_COLLECT_MESSAGES.fetch_add(
+            t.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         // Collect outgoing entity commands only. Update events are pre-built by the
         // three-phase Iris loop in WorldServer::send_all_packets and passed in directly.
@@ -238,8 +230,10 @@ impl SendConnection {
             .world_manager
             .take_outgoing_commands(now, &rtt_millis);
         #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_TAKE_OUTGOING_EVENTS
-            .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+        bench_send_counters::NS_TAKE_OUTGOING_EVENTS.fetch_add(
+            t.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
         #[cfg(feature = "e2e_debug")]
         {
             use crate::server::world_server::{
@@ -281,8 +275,10 @@ impl SendConnection {
             self.base.mark_sent();
         }
         #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_SEND_PACKET_LOOP
-            .fetch_add(t.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+        bench_send_counters::NS_SEND_PACKET_LOOP.fetch_add(
+            t.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -355,8 +351,10 @@ impl SendConnection {
                 snapshot_map,
             );
             #[cfg(feature = "bench_instrumentation")]
-            bench_send_counters::NS_WRITE_PACKET
-                .fetch_add(t_write.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+            bench_send_counters::NS_WRITE_PACKET.fetch_add(
+                t_write.elapsed().as_nanos() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
 
             let packet = writer.to_packet();
             let packet_bytes = packet.slice().len() as u32;
@@ -378,8 +376,10 @@ impl SendConnection {
                 }
             }
             #[cfg(feature = "bench_instrumentation")]
-            bench_send_counters::NS_IO_SEND
-                .fetch_add(t_io.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+            bench_send_counters::NS_IO_SEND.fetch_add(
+                t_io.elapsed().as_nanos() as u64,
+                std::sync::atomic::Ordering::Relaxed,
+            );
 
             return true;
         }
@@ -428,7 +428,9 @@ impl SendConnection {
             .count();
 
         let diff_handler_arc = global_world_manager.diff_handler();
-        let diff_handler_guard = diff_handler_arc.read().expect("GlobalDiffHandler lock poisoned");
+        let diff_handler_guard = diff_handler_arc
+            .read()
+            .expect("GlobalDiffHandler lock poisoned");
         #[cfg(feature = "bench_instrumentation")]
         let t_base_write = std::time::Instant::now();
         self.base.write_packet(
@@ -449,8 +451,10 @@ impl SendConnection {
             Some(snapshot_map),
         );
         #[cfg(feature = "bench_instrumentation")]
-        bench_send_counters::NS_WRITE_UPDATES
-            .fetch_add(t_base_write.elapsed().as_nanos() as u64, std::sync::atomic::Ordering::Relaxed);
+        bench_send_counters::NS_WRITE_UPDATES.fetch_add(
+            t_base_write.elapsed().as_nanos() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
 
         #[cfg(feature = "e2e_debug")]
         {
@@ -493,8 +497,10 @@ impl SendConnection {
         snapshot_map: &SnapshotMap,
     ) -> (Vec<OutgoingPacket>, bool) {
         self.base.collect_messages(now, &rtt_millis);
-        let mut host_world_events =
-            self.base.world_manager.take_outgoing_commands(now, &rtt_millis);
+        let mut host_world_events = self
+            .base
+            .world_manager
+            .take_outgoing_commands(now, &rtt_millis);
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();

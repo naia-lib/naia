@@ -59,7 +59,10 @@ impl HostEngine {
                 if self.entity_channels.remove(&host_entity).is_some() {
                     self.incoming_events.push(msg);
                 } else {
-                    warn!("host_engine: Despawn for unknown entity {:?}, discarding", host_entity);
+                    warn!(
+                        "host_engine: Despawn for unknown entity {:?}, discarding",
+                        host_entity
+                    );
                 }
                 return;
             }
@@ -74,7 +77,10 @@ impl HostEngine {
         let Some(entity_channel) = self.entity_channels.get_mut(&host_entity) else {
             // Discard messages for unknown entities — this can happen with reordered or stale
             // packets from a buggy/lagging client after the entity has been despawned.
-            warn!("host_engine: message for unknown entity {:?}, discarding", host_entity);
+            warn!(
+                "host_engine: message for unknown entity {:?}, discarding",
+                host_entity
+            );
             return;
         };
 
@@ -111,9 +117,11 @@ impl HostEngine {
                     panic!("Cannot spawn an entity that already exists in the engine");
                 }
                 let component_kinds = match &command {
-                    EntityCommand::SpawnWithComponents(_, kinds) => {
-                        kinds.iter().cloned().collect::<std::collections::HashSet<_>>()
-                    }
+                    EntityCommand::SpawnWithComponents(_, kinds) => kinds
+                        .iter()
+                        .cloned()
+                        .collect::<std::collections::HashSet<_>>(
+                    ),
                     _ => unreachable!(),
                 };
                 self.entity_channels.insert(

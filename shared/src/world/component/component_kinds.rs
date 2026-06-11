@@ -1,12 +1,14 @@
-use std::{any::TypeId, collections::{HashMap, HashSet}};
+use std::{
+    any::TypeId,
+    collections::{HashMap, HashSet},
+};
 
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
-use crate::{
-    PendingComponentUpdate, LocalEntityAndGlobalEntityConverter,
-    Replicate, ReplicateBuilder,
-};
 use crate::world::component::replicate::SplitUpdateResult;
+use crate::{
+    LocalEntityAndGlobalEntityConverter, PendingComponentUpdate, Replicate, ReplicateBuilder,
+};
 
 type NetId = u16;
 
@@ -166,7 +168,8 @@ impl ComponentKinds {
                 max_bits <= 512,
                 "Component {} serializes to {} bits, exceeding the 512-bit \
                  CachedComponentUpdate ceiling. Slim the component before registering.",
-                std::any::type_name::<C>(), max_bits
+                std::any::type_name::<C>(),
+                max_bits
             );
         }
         if C::has_entity_properties() {
@@ -208,16 +211,17 @@ impl ComponentKinds {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<Box<dyn Replicate>, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        self
-            .kind_to_builder(&component_kind)
+        self.kind_to_builder(&component_kind)
             .read(reader, converter)
     }
 
     /// Reads a component kind tag then deserializes an initial-create update payload from `reader`.
-    pub fn read_create_update(&self, reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr> {
+    pub fn read_create_update(
+        &self,
+        reader: &mut BitReader,
+    ) -> Result<PendingComponentUpdate, SerdeErr> {
         let component_kind: ComponentKind = ComponentKind::de(self, reader)?;
-        self
-            .kind_to_builder(&component_kind)
+        self.kind_to_builder(&component_kind)
             .read_create_update(reader)
     }
 
@@ -228,15 +232,13 @@ impl ComponentKinds {
         component_kind: &ComponentKind,
         update: PendingComponentUpdate,
     ) -> SplitUpdateResult {
-        self
-            .kind_to_builder(component_kind)
+        self.kind_to_builder(component_kind)
             .split_update(converter, update)
     }
 
     /// Returns the protocol name for `component_kind`. Panics if not registered.
     pub fn kind_to_name(&self, component_kind: &ComponentKind) -> String {
-        self
-            .kind_map
+        self.kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
@@ -252,8 +254,7 @@ impl ComponentKinds {
     }
 
     fn kind_to_net_id(&self, component_kind: &ComponentKind) -> NetId {
-        self
-            .kind_map
+        self.kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",
@@ -265,12 +266,13 @@ impl ComponentKinds {
     /// `DirtyQueue` u64 mask, max 64). Returns `None` for unregistered
     /// kinds.
     pub fn net_id_of(&self, component_kind: &ComponentKind) -> Option<u16> {
-        self.kind_map.get(component_kind).map(|(net_id, _, _)| *net_id)
+        self.kind_map
+            .get(component_kind)
+            .map(|(net_id, _, _)| *net_id)
     }
 
     fn kind_to_builder(&self, component_kind: &ComponentKind) -> &dyn ReplicateBuilder {
-        self
-            .kind_map
+        self.kind_map
             .get(component_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_component()` function!",

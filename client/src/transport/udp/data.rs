@@ -210,12 +210,7 @@ impl PacketReceiver for UdpPacketReceiver {
         let TransportAddr::Found(server_addr) = self.server_addr() else {
             return Ok(None);
         };
-        match self
-            .socket
-            .as_ref()
-            .lock()
-            .recv_from(&mut self.buffer)
-        {
+        match self.socket.as_ref().lock().recv_from(&mut self.buffer) {
             Ok((recv_len, address)) => {
                 if address == server_addr {
                     Ok(Some(&self.buffer[..recv_len]))

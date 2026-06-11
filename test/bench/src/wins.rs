@@ -22,10 +22,26 @@ const STEADY_STATE_IDLE: &str = "scenarios/halo_btb_16v16/steady_state_idle";
 const CLIENT_RECEIVE_ACTIVE: &str = "scenarios/halo_btb_16v16/client_receive_active";
 
 const PHASE_THRESHOLDS: &[(&str, f64, &str)] = &[
-    ("tick/idle_matrix/u_x_n/16u_10000e",           3_000_000.0,   "Phase 3 mutable idle"),
-    ("tick/idle_matrix_immutable/u_x_n/16u_10000e", 400_000.0,     "Phase 4 immutable idle"),
-    ("spawn/paint_rect/entities/1000",               28_000_000.0,  "Phase 6 paint_rect/1000"),
-    ("spawn/paint_rect/entities/5000",               220_000_000.0, "Phase 6 paint_rect/5000"),
+    (
+        "tick/idle_matrix/u_x_n/16u_10000e",
+        3_000_000.0,
+        "Phase 3 mutable idle",
+    ),
+    (
+        "tick/idle_matrix_immutable/u_x_n/16u_10000e",
+        400_000.0,
+        "Phase 4 immutable idle",
+    ),
+    (
+        "spawn/paint_rect/entities/1000",
+        28_000_000.0,
+        "Phase 6 paint_rect/1000",
+    ),
+    (
+        "spawn/paint_rect/entities/5000",
+        220_000_000.0,
+        "Phase 6 paint_rect/5000",
+    ),
 ];
 
 pub fn run(results: &[BenchResult]) -> AssertOutcome {
@@ -65,7 +81,11 @@ fn check_win_2_idle_flat(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOut
         "[{}] Win-2 idle O(1):   tick/idle 100→10000 ratio {:.2}× (≤ {:.1}×)  [{}ns → {}ns]",
         verdict, ratio, threshold, small.median_ns as u64, large.median_ns as u64
     );
-    if ratio <= threshold { out.pass += 1; } else { out.fail += 1; }
+    if ratio <= threshold {
+        out.pass += 1;
+    } else {
+        out.fail += 1;
+    }
 }
 
 fn check_win_3_dirty_receiver(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
@@ -84,7 +104,11 @@ fn check_win_3_dirty_receiver(idx: &BTreeMap<&str, &BenchResult>, out: &mut Asse
         "[{}] Win-3 push model:  tick/active 10→1000 mutations ratio {:.1}× (≤ {:.0}×)",
         verdict, ratio, threshold
     );
-    if ratio <= threshold { out.pass += 1; } else { out.fail += 1; }
+    if ratio <= threshold {
+        out.pass += 1;
+    } else {
+        out.fail += 1;
+    }
 }
 
 fn check_win_4_coalesced_beats_burst(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
@@ -104,7 +128,11 @@ fn check_win_4_coalesced_beats_burst(idx: &BTreeMap<&str, &BenchResult>, out: &m
                 "[{}] Win-4 coalesced:  spawn/coalesced/spawn/burst = {:.2}× (≤ {:.2}×) at N={} [{}ns vs {}ns; both idle-after-build]",
                 verdict, ratio, threshold, n, coalesced.median_ns as u64, burst.median_ns as u64
             );
-            if pass { out.pass += 1; } else { out.fail += 1; }
+            if pass {
+                out.pass += 1;
+            } else {
+                out.fail += 1;
+            }
             checked = true;
             break;
         }
@@ -115,7 +143,10 @@ fn check_win_4_coalesced_beats_burst(idx: &BTreeMap<&str, &BenchResult>, out: &m
     }
 }
 
-fn check_win_5_immutable_beats_mutable(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
+fn check_win_5_immutable_beats_mutable(
+    idx: &BTreeMap<&str, &BenchResult>,
+    out: &mut AssertOutcome,
+) {
     let mutable = idx
         .iter()
         .find(|(k, _)| {
@@ -136,7 +167,11 @@ fn check_win_5_immutable_beats_mutable(idx: &BTreeMap<&str, &BenchResult>, out: 
             return;
         }
     };
-    let verdict = if immutable.median_ns <= mutable.median_ns * 1.05 { "PASS" } else { "FAIL" };
+    let verdict = if immutable.median_ns <= mutable.median_ns * 1.05 {
+        "PASS"
+    } else {
+        "FAIL"
+    };
     println!(
         "[{}] Win-5 immutable:   immutable_idle ({}ns) ≤ mutable_idle ({}ns) × 1.05",
         verdict, immutable.median_ns as u64, mutable.median_ns as u64
@@ -160,7 +195,11 @@ fn check_phase_thresholds(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOu
             "[{}] Phase-thr {label:30}: {:>12.0} ns ≤ {:>12.0} ns",
             verdict, r.median_ns, threshold_ns,
         );
-        if pass { out.pass += 1; } else { out.fail += 1; }
+        if pass {
+            out.pass += 1;
+        } else {
+            out.fail += 1;
+        }
     }
 }
 
@@ -169,7 +208,13 @@ fn check_halo_idle_budget(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOu
 }
 
 fn check_halo_client_keepup(idx: &BTreeMap<&str, &BenchResult>, out: &mut AssertOutcome) {
-    check_threshold(idx, CLIENT_RECEIVE_ACTIVE, 4_000_000.0, "Halo.client_keepup", out);
+    check_threshold(
+        idx,
+        CLIENT_RECEIVE_ACTIVE,
+        4_000_000.0,
+        "Halo.client_keepup",
+        out,
+    );
 }
 
 fn check_threshold(
@@ -189,7 +234,11 @@ fn check_threshold(
         "[{}] {label:30}: {:>12.0} ns ≤ {:>12.0} ns",
         verdict, r.median_ns, threshold_ns,
     );
-    if pass { out.pass += 1; } else { out.fail += 1; }
+    if pass {
+        out.pass += 1;
+    } else {
+        out.fail += 1;
+    }
 }
 
 fn lookup<'a>(

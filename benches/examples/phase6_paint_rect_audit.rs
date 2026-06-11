@@ -68,7 +68,16 @@ fn main() {
     println!("─────────────────────────────────────");
     println!(
         "{:>5} {:>3} | {:>10} {:>10} {:>8} {:>10} {:>10} {:>8} | {:>10} | {:>10}",
-        "N", "K", "spawn_wc", "spawn", "despawn", "insert_c", "remove_c", "noop", "payload", "verdict"
+        "N",
+        "K",
+        "spawn_wc",
+        "spawn",
+        "despawn",
+        "insert_c",
+        "remove_c",
+        "noop",
+        "payload",
+        "verdict"
     );
     println!(
         "──────────┼─────────────────────────────────────────────────────────────────┼────────────┼─────────"
@@ -81,7 +90,7 @@ fn main() {
         (10, 2),
         (100, 1),
         (100, 2),
-        (256, 2),  // canonical PaintRect of 16×16 tile-rect, 2 components
+        (256, 2), // canonical PaintRect of 16×16 tile-rect, 2 components
         (1_000, 2),
     ];
 

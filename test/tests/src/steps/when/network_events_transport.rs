@@ -23,7 +23,9 @@ fn when_server_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     scenario.clear_operation_result();
     let oversized: Vec<u8> = (0u16..1000).map(|i| (i % 256) as u8).collect();
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_key, oversized.clone()); });
+        scenario.mutate(|ctx| {
+            let _ = ctx.inject_client_packet(&client_key, oversized.clone());
+        });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -43,7 +45,9 @@ fn when_client_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
     scenario.clear_operation_result();
     let oversized: Vec<u8> = (0u16..1000).map(|i| (i % 256) as u8).collect();
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| { let _ = ctx.inject_server_packet(&client_key, oversized.clone()); });
+        scenario.mutate(|ctx| {
+            let _ = ctx.inject_server_packet(&client_key, oversized.clone());
+        });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -60,8 +64,8 @@ fn when_client_receives_packet_exceeding_mtu(ctx: &mut TestWorldMut) {
 /// remain operational (graceful packet loss handling).
 #[when("packets from the client are dropped by the transport")]
 fn when_packets_from_client_dropped(ctx: &mut TestWorldMut) {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
     use naia_test_harness::LinkConditionerConfig;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -84,8 +88,8 @@ fn when_packets_from_client_dropped(ctx: &mut TestWorldMut) {
 /// When packets from the server are dropped by the transport.
 #[when("packets from the server are dropped by the transport")]
 fn when_packets_from_server_dropped(ctx: &mut TestWorldMut) {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
     use naia_test_harness::LinkConditionerConfig;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -162,8 +166,8 @@ fn when_client_receives_duplicate_packets(ctx: &mut TestWorldMut) {
 /// induce reordering. Ticks 10 times.
 #[when("the server receives packets in a different order than sent")]
 fn when_server_receives_packets_reordered(ctx: &mut TestWorldMut) {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
     use naia_test_harness::LinkConditionerConfig;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -186,8 +190,8 @@ fn when_server_receives_packets_reordered(ctx: &mut TestWorldMut) {
 /// When the client receives packets in a different order than sent.
 #[when("the client receives packets in a different order than sent")]
 fn when_client_receives_packets_reordered(ctx: &mut TestWorldMut) {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
     use naia_test_harness::LinkConditionerConfig;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -215,14 +219,16 @@ fn when_client_receives_packets_reordered(ctx: &mut TestWorldMut) {
 /// independence proof.
 #[when("the same application logic runs on each transport")]
 fn when_same_application_logic_runs(ctx: &mut TestWorldMut) {
-    use std::panic::{catch_unwind, AssertUnwindSafe};
     use naia_test_harness::test_protocol::{TestMessage, UnreliableChannel};
+    use std::panic::{catch_unwind, AssertUnwindSafe};
     ctx.scenario_mut().clear_operation_result();
     let result = catch_unwind(AssertUnwindSafe(|| {
         let client_key = connect_named_client(ctx, "IdealClient", "test_user", None);
         let scenario = ctx.scenario_mut();
         scenario.mutate(|c| {
-            c.server(|s| s.send_message::<UnreliableChannel, _>(&client_key, &TestMessage::new(100)));
+            c.server(|s| {
+                s.send_message::<UnreliableChannel, _>(&client_key, &TestMessage::new(100))
+            });
         });
         tick_n(ctx, 5);
     }));
@@ -315,11 +321,11 @@ fn when_client_attempts_connection_rejected(ctx: &mut TestWorldMut) {
 /// replication even when the server enqueues scope entries before rejecting.
 #[when("a client is rejected after being placed in entity scope")]
 fn when_client_rejected_after_scope_placement(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
-    use naia_client::{ClientConfig, JitterBufferType};
-    use naia_test_harness::{Auth, ClientRejectEvent, EntityKey, TrackedClientEvent};
     use crate::steps::world_helpers::LAST_ENTITY_KEY;
     use crate::steps::world_helpers_connect::expect_server_auth_for_key;
+    use naia_client::{ClientConfig, JitterBufferType};
+    use naia_test_harness::{Auth, ClientRejectEvent, EntityKey, TrackedClientEvent};
+    use std::time::Duration;
 
     let _entity_key: EntityKey = ctx
         .scenario_mut()
@@ -353,7 +359,9 @@ fn when_client_rejected_after_scope_placement(ctx: &mut TestWorldMut) {
         });
     });
     scenario.expect(|c| {
-        c.client(client_key, |client| client.read_event::<ClientRejectEvent>())
+        c.client(client_key, |client| {
+            client.read_event::<ClientRejectEvent>()
+        })
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Reject);
     scenario.allow_flexible_next();
@@ -392,7 +400,9 @@ fn when_server_receives_malformed_packet(ctx: &mut TestWorldMut) {
     let client_key = scenario.last_client();
     let malformed = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_key, malformed.clone()); });
+        scenario.mutate(|ctx| {
+            let _ = ctx.inject_client_packet(&client_key, malformed.clone());
+        });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -412,7 +422,9 @@ fn when_client_receives_malformed_packet(ctx: &mut TestWorldMut) {
     let client_key = scenario.last_client();
     let malformed = vec![0xFF, 0xFE, 0x00, 0x01, 0x02, 0x03, 0xFF, 0xFF];
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| { let _ = ctx.inject_server_packet(&client_key, malformed.clone()); });
+        scenario.mutate(|ctx| {
+            let _ = ctx.inject_server_packet(&client_key, malformed.clone());
+        });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -445,7 +457,9 @@ fn when_server_receives_data_packet_with_corrupted_body(ctx: &mut TestWorldMut) 
     packet.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xFF, 0x00, 0xAA, 0x55]);
 
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_key, packet.clone()); });
+        scenario.mutate(|ctx| {
+            let _ = ctx.inject_client_packet(&client_key, packet.clone());
+        });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }
@@ -474,7 +488,9 @@ fn when_client_receives_data_packet_with_corrupted_body(ctx: &mut TestWorldMut) 
     packet.extend_from_slice(&[0xDE, 0xAD, 0xBE, 0xEF, 0xFF, 0x00, 0xAA, 0x55]);
 
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.mutate(|ctx| { let _ = ctx.inject_server_packet(&client_key, packet.clone()); });
+        scenario.mutate(|ctx| {
+            let _ = ctx.inject_server_packet(&client_key, packet.clone());
+        });
         for _ in 0..3 {
             scenario.mutate(|_| {});
         }

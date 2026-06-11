@@ -1,4 +1,11 @@
-#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_must_use,
+    unused_mut,
+    dead_code,
+    for_loops_over_fallibles
+)]
 
 use std::time::Duration;
 
@@ -7,15 +14,13 @@ use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{Protocol, Tick};
 
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDespawnEntityEvent, ClientDisconnectEvent,
-    ClientKey, ClientRejectEvent, EntityOwner, ExpectCtx, Position, Scenario,
-    ServerAuthEvent, ServerConnectEvent,
-    ToTicks,
+    protocol, Auth, ClientConnectEvent, ClientDespawnEntityEvent, ClientDisconnectEvent, ClientKey,
+    ClientRejectEvent, EntityOwner, ExpectCtx, Position, Scenario, ServerAuthEvent,
+    ServerConnectEvent, ToTicks,
 };
 
 mod _helpers;
 use _helpers::{client_connect, server_and_client_connected, test_client_config};
-
 
 // ============================================================================
 // Entity Ownership Tests
@@ -61,9 +66,7 @@ fn client_owned_entity_migrates_to_server_owned_delegated() {
 
     // t1: Before delegation, owner is Client(A) on server side
     scenario.expect(|ctx| {
-        let owner = ctx.server(|server| {
-            server.entity(&entity_e).map(|e| e.owner())
-        });
+        let owner = ctx.server(|server| server.entity(&entity_e).map(|e| e.owner()));
         (owner == Some(EntityOwner::Client(client_a_key))).then_some(())
     });
 
@@ -78,11 +81,11 @@ fn client_owned_entity_migrates_to_server_owned_delegated() {
 
     // t1: After delegation, owner is Server (not Client(A))
     scenario.expect(|ctx| {
-        let owner = ctx.server(|server| {
-            server.entity(&entity_e).map(|e| e.owner())
-        });
+        let owner = ctx.server(|server| server.entity(&entity_e).map(|e| e.owner()));
         let config = ctx.server(|server| {
-            server.entity(&entity_e).and_then(|e| e.replication_config())
+            server
+                .entity(&entity_e)
+                .and_then(|e| e.replication_config())
         });
         let owner_is_server = owner == Some(EntityOwner::Server);
         let config_is_delegated = config == Some(ReplicationConfig::delegated());
@@ -100,11 +103,11 @@ fn client_owned_entity_migrates_to_server_owned_delegated() {
 
     // t2: Owner remains Server even after reconfigure to Public
     scenario.expect(|ctx| {
-        let owner = ctx.server(|server| {
-            server.entity(&entity_e).map(|e| e.owner())
-        });
+        let owner = ctx.server(|server| server.entity(&entity_e).map(|e| e.owner()));
         let config = ctx.server(|server| {
-            server.entity(&entity_e).and_then(|e| e.replication_config())
+            server
+                .entity(&entity_e)
+                .and_then(|e| e.replication_config())
         });
         let owner_still_server = owner == Some(EntityOwner::Server);
         let config_is_public = config == Some(ReplicationConfig::public());
@@ -161,9 +164,8 @@ fn private_entity_owner_retains_across_scope_changes() {
 
     // B must not see the Private entity
     // Private entities cannot be replicated to non-owner clients
-    let b_has_entity = scenario.mutate(|ctx| {
-        ctx.client(client_b_key, |b| b.entity(&entity_e).is_some())
-    });
+    let b_has_entity =
+        scenario.mutate(|ctx| ctx.client(client_b_key, |b| b.entity(&entity_e).is_some()));
     assert!(!b_has_entity, "Non-owner B must not see Private entity");
 
     // Server attempts to include B in scope for entity_e — must be a no-op for Private entities
@@ -172,7 +174,10 @@ fn private_entity_owner_retains_across_scope_changes() {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
                 entity_mut.enter_room(&room_key);
             }
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -251,7 +256,10 @@ fn owner_retains_entity_when_non_owner_leaves_scope() {
             if let Some(mut entity_mut) = server.entity_mut(&entity_e) {
                 entity_mut.enter_room(&room_key);
             }
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity_e);
         });
     });
 
@@ -265,7 +273,10 @@ fn owner_retains_entity_when_non_owner_leaves_scope() {
     // Server excludes B from scope — B should lose (despawn) the entity
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_b_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 

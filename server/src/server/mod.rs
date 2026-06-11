@@ -34,8 +34,8 @@ pub use coord_state::CoordinatorState;
 pub mod send_state_update;
 pub use send_state_update::SendStateUpdate;
 
-pub(crate) mod scope_checks_cache;
-pub(crate) mod scope_change;
 pub(crate) mod configure_replication;
 pub(crate) mod room_store;
+pub(crate) mod scope_change;
+pub(crate) mod scope_checks_cache;
 pub(crate) mod user_store;

@@ -6,7 +6,6 @@
 use crate::steps::prelude::*;
 use crate::steps::world_helpers::tick_n;
 
-
 // ──────────────────────────────────────────────────────────────────────
 // Common — operational/disconnect/multi-command preconditions
 // ──────────────────────────────────────────────────────────────────────
@@ -22,12 +21,23 @@ fn given_connected_client_with_replicated_entities(ctx: &mut TestWorldMut) {
     connect_client(ctx);
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
-    let (entity_key, _) = scenario.mutate(|c| c.server(|s|
-        s.spawn(|mut e| { e.insert_component(Position::new(100.0, 200.0)); })));
-    scenario.mutate(|c| c.server(|s| {
-        s.room_mut(&room_key).expect("room exists").add_entity(&entity_key);
-    }));
-    for _ in 0..50 { scenario.mutate(|_| {}); }
+    let (entity_key, _) = scenario.mutate(|c| {
+        c.server(|s| {
+            s.spawn(|mut e| {
+                e.insert_component(Position::new(100.0, 200.0));
+            })
+        })
+    });
+    scenario.mutate(|c| {
+        c.server(|s| {
+            s.room_mut(&room_key)
+                .expect("room exists")
+                .add_entity(&entity_key);
+        })
+    });
+    for _ in 0..50 {
+        scenario.mutate(|_| {});
+    }
     scenario.allow_flexible_next();
 }
 
@@ -52,17 +62,36 @@ fn given_multiple_scope_operations_same_tick(ctx: &mut TestWorldMut) {
     let client_key = connect_named_client(ctx, "ScopeTestClient", "scope_user", None);
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
-    let (entity_key, _) = scenario.mutate(|c| c.server(|s|
-        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0)); })));
-    scenario.mutate(|c| c.server(|s| {
-        s.room_mut(&room_key).expect("room exists").add_entity(&entity_key);
-    }));
+    let (entity_key, _) = scenario.mutate(|c| {
+        c.server(|s| {
+            s.spawn(|mut e| {
+                e.insert_component(Position::new(0.0, 0.0));
+            })
+        })
+    });
+    scenario.mutate(|c| {
+        c.server(|s| {
+            s.room_mut(&room_key)
+                .expect("room exists")
+                .add_entity(&entity_key);
+        })
+    });
     scenario.trace_clear();
     scenario.mutate(|c| {
-        for (label, op) in [("scope_op_include_1", "in"), ("scope_op_exclude_2", "ex"), ("scope_op_include_3", "in")] {
+        for (label, op) in [
+            ("scope_op_include_1", "in"),
+            ("scope_op_exclude_2", "ex"),
+            ("scope_op_include_3", "in"),
+        ] {
             c.trace_push(label);
-            c.server(|s| if let Some(mut scope) = s.user_scope_mut(&client_key) {
-                if op == "in" { scope.include(&entity_key); } else { scope.exclude(&entity_key); }
+            c.server(|s| {
+                if let Some(mut scope) = s.user_scope_mut(&client_key) {
+                    if op == "in" {
+                        scope.include(&entity_key);
+                    } else {
+                        scope.exclude(&entity_key);
+                    }
+                }
             });
         }
     });
@@ -109,7 +138,6 @@ fn given_commands_arriving_out_of_order(ctx: &mut TestWorldMut) {
     scenario.record_ok();
     scenario.allow_flexible_next();
 }
-
 
 // ──────────────────────────────────────────────────────────────────────
 // Tick advancement

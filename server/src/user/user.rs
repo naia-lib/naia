@@ -88,7 +88,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
     /// The disconnect is processed at the next tick; a `DisconnectEvent` will
     /// fire once the connection is torn down.
     pub fn disconnect(&mut self) {
-        self.server.user_queue_disconnect(&self.key, naia_shared::DisconnectReason::Kicked);
+        self.server
+            .user_queue_disconnect(&self.key, naia_shared::DisconnectReason::Kicked);
     }
 
     // Rooms

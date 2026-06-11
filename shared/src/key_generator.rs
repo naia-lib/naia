@@ -46,7 +46,10 @@ impl<K: From<u16> + Into<u16> + Copy> KeyGenerator<K> {
 
         // Create a new key
         let output = self.next_new_key;
-        self.next_new_key = self.next_new_key.checked_add(1).expect("KeyGenerator exhausted: all u16 keys are in use");
+        self.next_new_key = self
+            .next_new_key
+            .checked_add(1)
+            .expect("KeyGenerator exhausted: all u16 keys are in use");
         K::from(output)
     }
 

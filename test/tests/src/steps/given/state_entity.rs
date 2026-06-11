@@ -69,7 +69,6 @@ fn given_entity_without_any_replicated_components(ctx: &mut TestWorldMut) {
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
 }
 
-
 // ──────────────────────────────────────────────────────────────────────
 // Entity replication preconditions
 // ──────────────────────────────────────────────────────────────────────
@@ -81,8 +80,8 @@ fn given_entity_without_any_replicated_components(ctx: &mut TestWorldMut) {
 /// GlobalEntity-stability tests).
 #[given("a server-owned entity exists with a replicated component")]
 fn given_server_owned_entity_with_replicated_component(ctx: &mut TestWorldMut) {
-    use naia_test_harness::Position;
     use crate::steps::world_helpers::{INITIAL_ENTITY_KEY, LAST_COMPONENT_VALUE_KEY};
+    use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let entity_key = scenario.mutate(|mctx| {
         let (entity_key, _) = mctx.server(|server| {
@@ -159,7 +158,6 @@ fn given_client_modifies_component_locally(ctx: &mut TestWorldMut) {
     scenario.bdd_store(CLIENT_LOCAL_VALUE_KEY, local_value);
 }
 
-
 // ──────────────────────────────────────────────────────────────────────
 // Multi-entity preconditions (priority accumulator)
 // ──────────────────────────────────────────────────────────────────────
@@ -235,26 +233,44 @@ fn given_entity_not_in_scope_with_130_entity_commands(ctx: &mut TestWorldMut) {
     "two server-owned entities A and B exist each with a replicated component in-scope for the client"
 )]
 fn given_two_entities_a_b_in_scope(ctx: &mut TestWorldMut) {
-    use naia_test_harness::Position;
     use crate::steps::world_helpers::{ENTITY_A_KEY, ENTITY_B_KEY};
+    use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let room_key = scenario.last_room();
-    let mut spawn = || scenario.mutate(|c| c.server(|s|
-        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0)); }))).0;
+    let mut spawn = || {
+        scenario
+            .mutate(|c| {
+                c.server(|s| {
+                    s.spawn(|mut e| {
+                        e.insert_component(Position::new(0.0, 0.0));
+                    })
+                })
+            })
+            .0
+    };
     let (a, b) = (spawn(), spawn());
-    scenario.mutate(|c| c.server(|s| {
-        for ek in [&a, &b] { if let Some(mut e) = s.entity_mut(ek) { e.enter_room(&room_key); } }
-        if let Some(mut scope) = s.user_scope_mut(&client_key) {
-            scope.include(&a); scope.include(&b);
-        }
-    }));
+    scenario.mutate(|c| {
+        c.server(|s| {
+            for ek in [&a, &b] {
+                if let Some(mut e) = s.entity_mut(ek) {
+                    e.enter_room(&room_key);
+                }
+            }
+            if let Some(mut scope) = s.user_scope_mut(&client_key) {
+                scope.include(&a);
+                scope.include(&b);
+            }
+        })
+    });
     scenario.bdd_store(ENTITY_A_KEY, a);
     scenario.bdd_store(ENTITY_B_KEY, b);
-    scenario.expect(|ectx| ectx.client(client_key, |c|
-        (c.has_entity(&a) && c.has_entity(&b)).then_some(())));
+    scenario.expect(|ectx| {
+        ectx.client(client_key, |c| {
+            (c.has_entity(&a) && c.has_entity(&b)).then_some(())
+        })
+    });
 }
-
 
 // ──────────────────────────────────────────────────────────────────────
 // Static entity preconditions
@@ -318,4 +334,3 @@ fn given_client_static_entity_exists(ctx: &mut TestWorldMut) {
     scenario.expect(|ectx| ectx.server(|s| s.has_entity(&entity_key).then_some(())));
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
 }
-

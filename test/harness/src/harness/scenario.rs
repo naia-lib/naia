@@ -9,8 +9,8 @@ use parking_lot::Mutex as ParkingMutex;
 
 use naia_client::{
     transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
-    Client as NaiaClient, ClientConfig, TickEvents as ClientTickEvents,
-    Events as ClientWorldEvents,
+    Client as NaiaClient, ClientConfig, Events as ClientWorldEvents,
+    TickEvents as ClientTickEvents,
 };
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{
@@ -19,8 +19,8 @@ use naia_server::{
 };
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
-    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, SendPlan,
-    SnapshotWorld, TestClock, WorldRefType,
+    Instant, LinkConditionerConfig, LocalEntity, Protocol, ProtocolId, SendPlan, SnapshotWorld,
+    TestClock, WorldRefType,
 };
 
 use crate::harness::ClientEntityMut;
@@ -657,8 +657,7 @@ impl Scenario {
         #[cfg(feature = "e2e_debug")]
         {
             let client_keys: Vec<ClientKey> = self.clients.keys().copied().collect();
-            let entity_keys: Vec<EntityKey> =
-                self.entity_registry.all_entity_keys().collect();
+            let entity_keys: Vec<EntityKey> = self.entity_registry.all_entity_keys().collect();
             if entity_keys.is_empty() {
                 eprintln!(
                     "[expect-timeout auto-dump] no registered entities to dump (label: {})",
@@ -709,7 +708,8 @@ impl Scenario {
     /// Used when `require_auth = false` so no ServerAuthEvent fires to establish the mapping.
     pub(crate) fn map_connect_event_by_addr(&mut self, user_key: &UserKey) -> Option<ClientKey> {
         let user_addr = self.server.as_ref()?.user_address(user_key)?;
-        let client_key = self.client_to_addr_map
+        let client_key = self
+            .client_to_addr_map
             .iter()
             .find(|(_, addr)| **addr == user_addr)
             .map(|(k, _)| *k)?;
@@ -1355,14 +1355,22 @@ impl Scenario {
         self.server_entity_remove_history.contains(entity_key)
     }
 
-    pub(crate) fn client_insert_ever_fired(&self, client_key: &ClientKey, entity_key: &EntityKey) -> bool {
+    pub(crate) fn client_insert_ever_fired(
+        &self,
+        client_key: &ClientKey,
+        entity_key: &EntityKey,
+    ) -> bool {
         self.client_entity_insert_history
             .get(client_key)
             .map(|s| s.contains(entity_key))
             .unwrap_or(false)
     }
 
-    pub(crate) fn client_remove_ever_fired(&self, client_key: &ClientKey, entity_key: &EntityKey) -> bool {
+    pub(crate) fn client_remove_ever_fired(
+        &self,
+        client_key: &ClientKey,
+        entity_key: &EntityKey,
+    ) -> bool {
         self.client_entity_remove_history
             .get(client_key)
             .map(|s| s.contains(entity_key))
@@ -1751,10 +1759,7 @@ mod tests {
 
         let snap = scenario.diff_handler_snapshot();
         assert_eq!(snap.global_receivers, 0, "no components registered yet");
-        assert!(
-            snap.user_receivers.is_empty(),
-            "no users connected yet"
-        );
+        assert!(snap.user_receivers.is_empty(), "no users connected yet");
         assert!(
             snap.per_component_kind.is_empty(),
             "no component kinds registered yet"

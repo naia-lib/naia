@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use std::{ops::DerefMut};
+use std::ops::DerefMut;
 
 use bevy_app::{App, Plugin as PluginType, Startup, Update};
 use bevy_ecs::{
@@ -352,8 +352,7 @@ impl PluginType for Plugin {
         // Recv/translate/send systems are driven by the pipeline coordinator
         // in pipeline mode — skip registering them in `Update`.
         if !self.pipeline {
-            app
-                .add_systems(Update, receive_packets.in_set(ReceivePackets))
+            app.add_systems(Update, receive_packets.in_set(ReceivePackets))
                 .add_systems(Update, process_packets.in_set(ProcessPackets))
                 .add_systems(Update, translate_world_events.in_set(TranslateWorldEvents))
                 .add_systems(Update, translate_tick_events.in_set(TranslateTickEvents))

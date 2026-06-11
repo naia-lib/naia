@@ -16,10 +16,8 @@ use super::{
     NaiaServerSocketError,
 };
 
-type ClientAuthSender =
-    channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
-type ClientMsgReceiver =
-    channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
+type ClientAuthSender = channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
+type ClientMsgReceiver = channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
 type SenderChannelReceiver = channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>;
 type AuthListenResult = (
     Box<dyn AuthSender>,
@@ -52,10 +50,7 @@ impl Socket {
         Self::setup_sender_loop(config, from_client_receiver, sender_receiver)
     }
     /// Listens on the Socket for incoming communication from Clients
-    pub fn listen_with_auth(
-        server_addrs: &ServerAddrs,
-        config: &SocketConfig,
-    ) -> AuthListenResult {
+    pub fn listen_with_auth(server_addrs: &ServerAddrs, config: &SocketConfig) -> AuthListenResult {
         let (from_client_auth_sender, from_client_auth_receiver) = channel::unbounded();
         let (to_session_all_auth_sender, to_session_all_auth_receiver) = channel::unbounded();
         let from_client_auth_sender = Some(from_client_auth_sender);

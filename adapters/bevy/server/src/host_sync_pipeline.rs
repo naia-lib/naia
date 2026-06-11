@@ -109,9 +109,7 @@ pub fn drain_host_sync_into_pipeline(
     for event in host_component_events {
         match event {
             HostSyncEvent::Insert(_host_id, entity, component_kind) => {
-                if sim_handle.entity_authority_status(&entity)
-                    == Some(EntityAuthStatus::Denied)
-                {
+                if sim_handle.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                     // Client holds auth — skip (client driver will apply
                     // the insert via the receive path).
                     continue;
@@ -124,23 +122,16 @@ pub fn drain_host_sync_into_pipeline(
                     // — same tolerant behavior as the non-pipelined path.
                     continue;
                 };
-                send.insert_component_worldless(
-                    &entity,
-                    DerefMut::deref_mut(&mut component_mut),
-                );
+                send.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
             }
             HostSyncEvent::Remove(_host_id, entity, component_kind) => {
-                if sim_handle.entity_authority_status(&entity)
-                    == Some(EntityAuthStatus::Denied)
-                {
+                if sim_handle.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                     continue;
                 }
                 send.remove_component_worldless(&entity, &component_kind);
             }
             HostSyncEvent::Despawn(_host_id, entity) => {
-                if sim_handle.entity_authority_status(&entity)
-                    == Some(EntityAuthStatus::Denied)
-                {
+                if sim_handle.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {
                     continue;
                 }
                 send.despawn_entity_worldless(&mut sim_handle.state, &entity);

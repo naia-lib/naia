@@ -11,14 +11,14 @@
 //! so the send thread runs without contending with the recv or
 //! coordinator threads for connection state.
 
+#[cfg(any(feature = "bench_instrumentation", feature = "e2e_debug"))]
+use std::sync::atomic::Ordering;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
     hash::Hash,
     net::SocketAddr,
     sync::Arc,
 };
-#[cfg(any(feature = "bench_instrumentation", feature = "e2e_debug"))]
-use std::sync::atomic::Ordering;
 
 // HashSet/HashMap imported above are used in the new mirror fields for C.6 prep #6.
 
@@ -28,11 +28,11 @@ use log::warn;
 
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, LocalEntityAndGlobalEntityConverter,
-    GlobalPriorityState, GlobalEntitySpawner, GlobalWorldManagerType, HostType, Instant, Message,
-    MessageContainer, OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate,
-    SendPlan, SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState,
-    WorldMutType, WorldRefType,
+    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner,
+    GlobalPriorityState, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, Message, MessageContainer, OutgoingPacket,
+    OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan, SendUpdateEvents, Serde,
+    SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -200,10 +200,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `&mut self.recv.recv_user_connections`. Pipeline mode: called by
     /// the coordinator with `&mut recv_handle.state.recv_user_connections`
     /// either standalone or alongside `process_recv_packets`.
-    pub fn send_pings(
-        &mut self,
-        recv_conns: &mut HashMap<SocketAddr, RecvConnection>,
-    ) {
+    pub fn send_pings(&mut self, recv_conns: &mut HashMap<SocketAddr, RecvConnection>) {
         if !self.ping_timer.ringing() {
             return;
         }
@@ -339,10 +336,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 )
                 .is_err()
             {
-                warn!(
-                    "Server Error: cannot decode data section from {}",
-                    address
-                );
+                warn!("Server Error: cannot decode data section from {}", address);
                 continue;
             }
 
@@ -727,7 +721,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 let diff = ledger.read_guard();
                 let mut events: SendUpdateEvents = Vec::with_capacity(indices.len());
                 for global_idx in indices {
-                    let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
+                    let Some(global_entity) = guard.global_entity_at(global_idx) else {
+                        continue;
+                    };
                     #[cfg(feature = "bench_instrumentation")]
                     crate::server::world_server::bench_iris_counters::N_PHASE3_ENTITY_VISITS
                         .fetch_add(1, Ordering::Relaxed);
@@ -735,13 +731,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // Build this entity's component list in kind_bit ascending order
                     // (dirty_words iteration is LSB-first = ascending kind_bit).
                     let mut kinds: UpdateKinds = Vec::new();
-                    for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
+                    for (word_idx, dirty_word) in
+                        frozen_dirty.dirty_words(global_idx).iter().enumerate()
+                    {
                         let mut word = *dirty_word;
                         while word != 0 {
                             let bit_pos = word.trailing_zeros() as usize;
                             word &= word - 1;
                             let kind_bit = (word_idx * 64 + bit_pos) as u16;
-                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
+                            let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
+                                continue;
+                            };
                             #[cfg(feature = "bench_instrumentation")]
                             crate::server::world_server::bench_iris_counters::N_PHASE3_COMPONENT_VISITS
                                 .fetch_add(1, Ordering::Relaxed);
@@ -752,12 +752,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             // chain — the A/B isolates the CPU tax of hardening the
                             // gate. Const-false (folded away) outside bench builds.
                             #[cfg(feature = "bench_instrumentation")]
-                            let force_slow = crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
-                                .load(Ordering::Relaxed);
+                            let force_slow =
+                                crate::server::world_server::bench_iris_counters::FORCE_SLOW_GATE
+                                    .load(Ordering::Relaxed);
                             #[cfg(not(feature = "bench_instrumentation"))]
                             let force_slow = false;
 
-                            if !force_slow && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit) {
+                            if !force_slow
+                                && diff.is_receiver_dirty_and_delivered_fast(global_idx, kind_bit)
+                            {
                                 // fast path
                                 #[cfg(feature = "bench_instrumentation")]
                                 {
@@ -765,14 +768,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                     if bic::MEASURE_LEAK.load(Ordering::Relaxed) {
                                         bic::N_FAST_EMIT.fetch_add(1, Ordering::Relaxed);
                                         // Ground-truth: did the fast flag emit a pre-delivery update?
-                                        if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                                        if !send_conn
+                                            .base
+                                            .world_manager
+                                            .is_component_updatable_for_entity(
+                                                &global_entity,
+                                                &component_kind,
+                                            )
+                                        {
                                             bic::N_FASTPATH_LEAK.fetch_add(1, Ordering::Relaxed);
                                         }
                                     }
                                 }
                             } else if diff.diff_mask_is_clear_fast(global_idx, kind_bit) {
                                 continue;
-                            } else if !send_conn.base.world_manager.is_component_updatable_for_entity(&global_entity, &component_kind) {
+                            } else if !send_conn
+                                .base
+                                .world_manager
+                                .is_component_updatable_for_entity(&global_entity, &component_kind)
+                            {
                                 #[cfg(feature = "bench_instrumentation")]
                                 {
                                     use crate::server::world_server::bench_iris_counters as bic;
@@ -821,15 +835,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
 
         #[cfg(feature = "bench_instrumentation")]
-        crate::server::world_server::bench_iris_counters::NS_PHASE3_BUILD.fetch_add(
-            _iris_p3a_t0.elapsed().as_nanos() as u64,
-            Ordering::Relaxed,
-        );
+        crate::server::world_server::bench_iris_counters::NS_PHASE3_BUILD
+            .fetch_add(_iris_p3a_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         #[cfg(feature = "f3_diag")]
-        eprintln!("[F3-DIAG naia/SendState] prepare_send_job exit users={}", per_user.len());
+        eprintln!(
+            "[F3-DIAG naia/SendState] prepare_send_job exit users={}",
+            per_user.len()
+        );
 
-        SendPlan { per_user, frozen_dirty }
+        SendPlan {
+            per_user,
+            frozen_dirty,
+        }
     }
 
     /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Runs on the send worker (a
@@ -840,7 +858,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// using the FROZEN `DiffMask`s and records the per-packet `sent_updates`
     /// ledger (Phase 3B). No live per-user diff state is read or cleared here.
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
-        let SendPlan { per_user, frozen_dirty } = plan;
+        let SendPlan {
+            per_user,
+            frozen_dirty,
+        } = plan;
 
         #[cfg(feature = "e2e_debug")]
         {
@@ -863,21 +884,43 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             let idx_to_world = self.shared.idx_to_world.read();
             for global_idx in frozen_dirty.dirty_entity_iter() {
                 guard.clear_wire_cache_for_entity(global_idx);
-                let Some(global_entity) = guard.global_entity_at(global_idx) else { continue; };
-                if !self.shared.global_world_manager.read().entity_is_replicating(&global_entity) { continue; }
-                let Some(world_entity) = idx_to_world[global_idx.as_usize()] else { continue; };
-                if !world.has_entity(&world_entity) { continue; }
+                let Some(global_entity) = guard.global_entity_at(global_idx) else {
+                    continue;
+                };
+                if !self
+                    .shared
+                    .global_world_manager
+                    .read()
+                    .entity_is_replicating(&global_entity)
+                {
+                    continue;
+                }
+                let Some(world_entity) = idx_to_world[global_idx.as_usize()] else {
+                    continue;
+                };
+                if !world.has_entity(&world_entity) {
+                    continue;
+                }
 
-                for (word_idx, dirty_word) in frozen_dirty.dirty_words(global_idx).iter().enumerate() {
+                for (word_idx, dirty_word) in
+                    frozen_dirty.dirty_words(global_idx).iter().enumerate()
+                {
                     let mut word = *dirty_word;
                     while word != 0 {
                         let bit_pos = word.trailing_zeros() as usize;
                         word &= word - 1;
                         let kind_bit = (word_idx * 64 + bit_pos) as u16;
-                        let Some(component_kind) = guard.kind_for_bit(kind_bit) else { continue; };
-                        if !world.has_component_of_kind(&world_entity, &component_kind) { continue; }
+                        let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
+                            continue;
+                        };
+                        if !world.has_component_of_kind(&world_entity, &component_kind) {
+                            continue;
+                        }
 
-                        if guard.is_component_user_dependent(global_idx, kind_bit).unwrap_or(false) {
+                        if guard
+                            .is_component_user_dependent(global_idx, kind_bit)
+                            .unwrap_or(false)
+                        {
                             let snap = world
                                 .component_of_kind(&world_entity, &component_kind)
                                 .expect("component verified above")
@@ -890,32 +933,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
 
         #[cfg(feature = "bench_instrumentation")]
-        crate::server::world_server::bench_iris_counters::NS_PHASE12.fetch_add(
-            _iris_p12_t0.elapsed().as_nanos() as u64,
-            Ordering::Relaxed,
-        );
+        crate::server::world_server::bench_iris_counters::NS_PHASE12
+            .fetch_add(_iris_p12_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // ── Iris Phase 3B: parallel — build packets per user ─────────────────────
         // 4-F.naia.h: RTT is sourced from `SendConnection::shared.rtt_avg_ms()`
         // (the atomic mirror refreshed in `RecvState::receive` on every pong),
         // not from the recv-side `ping_manager.rtt_average`. This removes the
         // last cross-half access from the send path.
-        let work: Vec<(SocketAddr, SendUpdateEvents, SendConnection, UserPriorityState<E>, f32)> =
-            per_user.into_iter()
+        let work: Vec<(
+            SocketAddr,
+            SendUpdateEvents,
+            SendConnection,
+            UserPriorityState<E>,
+            f32,
+        )> = per_user
+            .into_iter()
             .filter_map(|(addr, events)| {
                 let send_conn = self.send_user_connections.remove(&addr)?;
                 let user_key = send_conn.user_key;
-                let user_prio = self.user_priorities.remove(&user_key)
-                    .unwrap_or_default();
+                let user_prio = self.user_priorities.remove(&user_key).unwrap_or_default();
                 let rtt_millis = send_conn.shared.rtt_avg_ms();
                 Some((addr, events, send_conn, user_prio, rtt_millis))
             })
             .collect();
 
-        let channel_kinds     = &self.shared.channel_kinds;
-        let message_kinds     = &self.shared.message_kinds;
-        let component_kinds   = &self.shared.component_kinds;
-        let gwm_guard         = self.shared.global_world_manager.read();
+        let channel_kinds = &self.shared.channel_kinds;
+        let message_kinds = &self.shared.message_kinds;
+        let component_kinds = &self.shared.component_kinds;
+        let gwm_guard = self.shared.global_world_manager.read();
         let gwm: &GlobalWorldManager = &*gwm_guard;
         let global_entity_map_guard = self.shared.global_entity_map.read();
         let global_entity_map: &GlobalEntityMap<E> = &*global_entity_map_guard;
@@ -923,8 +969,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let idx_to_world: &Vec<Option<E>> = &*idx_to_world_guard;
         let time_manager_guard = self.shared.time_manager.read();
         let time_manager: &TimeManager = &*time_manager_guard;
-        let global_priority   = &self.global_priority;
-        let snapshot_map_ref  = &snapshot_map;
+        let global_priority = &self.global_priority;
+        let snapshot_map_ref = &snapshot_map;
 
         #[cfg(feature = "bench_instrumentation")]
         let _iris_p3b_t0 = std::time::Instant::now();
@@ -937,66 +983,74 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // spin/coordination) AND was *slower* on send-stage wall than serial,
         // at a heavy-send upper bound (all in-scope entities/tick). Output is
         // order-identical (`parallel_send_matches_serial` is the oracle).
-        let results: Vec<(SocketAddr, Vec<OutgoingPacket>, SendConnection, UserPriorityState<E>)> =
-            work.into_iter()
-            .map(|(addr, mut update_events, mut send_conn, mut user_prio, rtt_millis)| {
-                let mut hook = SendStatePriorityHook {
-                    global: global_priority,
-                    user: &mut user_prio,
-                    converter: global_entity_map,
-                };
+        let results: Vec<(
+            SocketAddr,
+            Vec<OutgoingPacket>,
+            SendConnection,
+            UserPriorityState<E>,
+        )> = work
+            .into_iter()
+            .map(
+                |(addr, mut update_events, mut send_conn, mut user_prio, rtt_millis)| {
+                    let mut hook = SendStatePriorityHook {
+                        global: global_priority,
+                        user: &mut user_prio,
+                        converter: global_entity_map,
+                    };
 
-                let initial_entities: Vec<GlobalEntity> =
-                    update_events.iter().map(|(ge, _, _)| *ge).collect();
-                let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, UpdateKinds)> =
-                    update_events.drain(..)
-                        .map(|(ge, idx, kinds)| (ge, idx, hook.advance(&ge), kinds))
-                        .collect();
-                #[cfg(feature = "bench_instrumentation")]
-                let _sort_only_t0 = std::time::Instant::now();
-                scored.sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
-                #[cfg(feature = "bench_instrumentation")]
-                crate::server::world_server::bench_iris_counters::NS_PHASE3_SORT_ONLY
-                    .fetch_add(_sort_only_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
-                let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> =
-                    scored.into_iter()
-                        .filter_map(|(ge, idx, _, kinds)| {
-                            idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
-                        })
-                        .collect();
+                    let initial_entities: Vec<GlobalEntity> =
+                        update_events.iter().map(|(ge, _, _)| *ge).collect();
+                    let mut scored: Vec<(GlobalEntity, GlobalEntityIndex, f32, UpdateKinds)> =
+                        update_events
+                            .drain(..)
+                            .map(|(ge, idx, kinds)| (ge, idx, hook.advance(&ge), kinds))
+                            .collect();
+                    #[cfg(feature = "bench_instrumentation")]
+                    let _sort_only_t0 = std::time::Instant::now();
+                    scored
+                        .sort_by(|a, b| b.2.partial_cmp(&a.2).unwrap_or(std::cmp::Ordering::Equal));
+                    #[cfg(feature = "bench_instrumentation")]
+                    crate::server::world_server::bench_iris_counters::NS_PHASE3_SORT_ONLY
+                        .fetch_add(_sort_only_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                    let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> =
+                        scored
+                            .into_iter()
+                            .filter_map(|(ge, idx, _, kinds)| {
+                                idx_to_world[idx.as_usize()].map(|we| (ge, idx, we, kinds))
+                            })
+                            .collect();
 
-                let (packets, _) = send_conn.build_all_packets(
-                    channel_kinds,
-                    message_kinds,
-                    component_kinds,
-                    &now,
-                    &world,
-                    global_entity_map,
-                    gwm,
-                    time_manager,
-                    rtt_millis,
-                    &mut update_list,
-                    snapshot_map_ref,
-                );
+                    let (packets, _) = send_conn.build_all_packets(
+                        channel_kinds,
+                        message_kinds,
+                        component_kinds,
+                        &now,
+                        &world,
+                        global_entity_map,
+                        gwm,
+                        time_manager,
+                        rtt_millis,
+                        &mut update_list,
+                        snapshot_map_ref,
+                    );
 
-                let current_tick = time_manager.current_tick();
-                let remaining: HashSet<GlobalEntity> =
-                    update_list.iter().map(|(ge, _, _, _)| *ge).collect();
-                for ge in &initial_entities {
-                    if !remaining.contains(ge) {
-                        hook.reset_after_send(ge, current_tick as u32);
+                    let current_tick = time_manager.current_tick();
+                    let remaining: HashSet<GlobalEntity> =
+                        update_list.iter().map(|(ge, _, _, _)| *ge).collect();
+                    for ge in &initial_entities {
+                        if !remaining.contains(ge) {
+                            hook.reset_after_send(ge, current_tick as u32);
+                        }
                     }
-                }
 
-                (addr, packets, send_conn, user_prio)
-            })
+                    (addr, packets, send_conn, user_prio)
+                },
+            )
             .collect();
 
         #[cfg(feature = "bench_instrumentation")]
-        crate::server::world_server::bench_iris_counters::NS_PHASE3_SORT.fetch_add(
-            _iris_p3b_t0.elapsed().as_nanos() as u64,
-            Ordering::Relaxed,
-        );
+        crate::server::world_server::bench_iris_counters::NS_PHASE3_SORT
+            .fetch_add(_iris_p3b_t0.elapsed().as_nanos() as u64, Ordering::Relaxed);
 
         // ── Serial flush + re-insert ──────────────────────────────────────────────
         for (addr, packets, send_conn, user_prio) in results {
@@ -1052,22 +1106,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
         for change in drained {
             match change {
-                RoomChange::UserAdded { room_key, user_key, entities_in_room } => {
+                RoomChange::UserAdded {
+                    room_key,
+                    user_key,
+                    entities_in_room,
+                } => {
                     self.scope_checks_cache.on_user_added_to_room(
-                        room_key, user_key, entities_in_room);
+                        room_key,
+                        user_key,
+                        entities_in_room,
+                    );
                     // C.6 prep #6 — mirror coordination-side user_store room
                     // membership onto SendState so apply_pending_scope_changes
                     // can resolve `user.room_keys()` without coordination-side access.
-                    self.user_room_map.entry(user_key)
+                    self.user_room_map
+                        .entry(user_key)
                         .or_default()
                         .insert(room_key);
-                    self.room_users_map.entry(room_key)
+                    self.room_users_map
+                        .entry(room_key)
                         .or_default()
                         .insert(user_key);
                 }
                 RoomChange::UserRemoved { room_key, user_key } => {
-                    self.scope_checks_cache.on_user_removed_from_room(
-                        room_key, user_key);
+                    self.scope_checks_cache
+                        .on_user_removed_from_room(room_key, user_key);
                     if let Some(set) = self.user_room_map.get_mut(&user_key) {
                         set.remove(&room_key);
                         if set.is_empty() {
@@ -1078,25 +1141,44 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         set.remove(&user_key);
                     }
                 }
-                RoomChange::EntityAdded { room_key, world_entity, global_entity, users_in_room } => {
-                    self.entity_room_map.entity_add_room(&global_entity, &room_key);
+                RoomChange::EntityAdded {
+                    room_key,
+                    world_entity,
+                    global_entity,
+                    users_in_room,
+                } => {
+                    self.entity_room_map
+                        .entity_add_room(&global_entity, &room_key);
                     self.scope_checks_cache.on_entity_added_to_room(
-                        room_key, world_entity, users_in_room);
-                    self.room_entities_map.entry(room_key)
+                        room_key,
+                        world_entity,
+                        users_in_room,
+                    );
+                    self.room_entities_map
+                        .entry(room_key)
                         .or_default()
                         .insert(global_entity, world_entity);
                 }
-                RoomChange::EntityRemoved { room_key, world_entity, global_entity } => {
-                    self.entity_room_map.remove_from_room(&global_entity, &room_key);
-                    self.scope_checks_cache.on_entity_removed_from_room(
-                        room_key, world_entity);
+                RoomChange::EntityRemoved {
+                    room_key,
+                    world_entity,
+                    global_entity,
+                } => {
+                    self.entity_room_map
+                        .remove_from_room(&global_entity, &room_key);
+                    self.scope_checks_cache
+                        .on_entity_removed_from_room(room_key, world_entity);
                     if let Some(map) = self.room_entities_map.get_mut(&room_key) {
                         map.remove(&global_entity);
                     }
                 }
-                RoomChange::RoomDestroyed { room_key, removed_entities } => {
+                RoomChange::RoomDestroyed {
+                    room_key,
+                    removed_entities,
+                } => {
                     for (_world_entity, global_entity) in &removed_entities {
-                        self.entity_room_map.remove_from_room(global_entity, &room_key);
+                        self.entity_room_map
+                            .remove_from_room(global_entity, &room_key);
                     }
                     self.scope_checks_cache.on_room_destroyed(room_key);
                     // Drop room from mirrors. user_room_map: every user
@@ -1222,7 +1304,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     if owner_addr == Some(*addr) {
                         continue;
                     }
-                    if send_conn.base.world_manager.has_global_entity(&global_entity) {
+                    if send_conn
+                        .base
+                        .world_manager
+                        .has_global_entity(&global_entity)
+                    {
                         send_conn.base.world_manager.despawn_entity(&global_entity);
                         send_conn.clear_entity_visible(entity_idx);
                     }
@@ -1252,7 +1338,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
                         continue;
                     };
-                    if !send_conn.base.world_manager.has_global_entity(&global_entity) {
+                    if !send_conn
+                        .base
+                        .world_manager
+                        .has_global_entity(&global_entity)
+                    {
                         continue;
                     }
                     send_conn.base.world_manager.send_enable_delegation(
@@ -1274,13 +1364,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             ConfigureSendOp::DisableDelegationFanout { global_entity } => {
                 // Mirror `entity_disable_delegation`'s per-connection
                 // fan-out (world_server.rs:2926).
-                let addrs: Vec<SocketAddr> =
-                    self.send_user_connections.keys().copied().collect();
+                let addrs: Vec<SocketAddr> = self.send_user_connections.keys().copied().collect();
                 for addr in addrs {
                     let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
                         continue;
                     };
-                    if !send_conn.base.world_manager.has_global_entity(&global_entity) {
+                    if !send_conn
+                        .base
+                        .world_manager
+                        .has_global_entity(&global_entity)
+                    {
                         continue;
                     }
                     send_conn
@@ -1381,7 +1474,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .write()
             .migrate_entity_to_server(global_entity);
 
-        if self.entity_scope_map.get(&user_key, global_entity).is_none() {
+        if self
+            .entity_scope_map
+            .get(&user_key, global_entity)
+            .is_none()
+        {
             self.entity_scope_map.insert(user_key, *global_entity, true);
         }
 
@@ -1457,7 +1554,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .write()
                 .client_request_authority(global_entity, &requester);
             if result.is_err() {
-                panic!("failed to grant authority of client-owned delegated entity to creating user");
+                panic!(
+                    "failed to grant authority of client-owned delegated entity to creating user"
+                );
             }
             let user_snapshot: Vec<(UserKey, SocketAddr)> = self
                 .send_user_connections
@@ -1469,7 +1568,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
                     continue;
                 };
-                if !send_conn.base.world_manager.has_global_entity(global_entity) {
+                if !send_conn
+                    .base
+                    .world_manager
+                    .has_global_entity(global_entity)
+                {
                     continue;
                 }
                 let new_status = if uk == *client_key {
@@ -1488,15 +1591,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Resolve a connection address for a `UserKey` via the per-connection
     /// `user_key` cache (the coordination user store is not reachable here).
     fn addr_for_user_key(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        self.send_user_connections
-            .iter()
-            .find_map(|(addr, conn)| {
-                if &conn.user_key == user_key {
-                    Some(*addr)
-                } else {
-                    None
-                }
-            })
+        self.send_user_connections.iter().find_map(|(addr, conn)| {
+            if &conn.user_key == user_key {
+                Some(*addr)
+            } else {
+                None
+            }
+        })
     }
 
     /// C.6 prep #6 — drain entity-scope variants (`EntityEnteredRoom`,
@@ -1583,14 +1684,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             eprintln!(
                 "[F3-DIAG naia/SendState] apply_pending_scope_changes drained={} variants={:?}",
                 drained.len(),
-                drained.iter().map(|c| match c {
-                    ScopeChange::UserEnteredRoom(u, r) => format!("UserEnteredRoom({:?},{:?})", u, r),
-                    ScopeChange::UserLeftRoom(u, r) => format!("UserLeftRoom({:?},{:?})", u, r),
-                    ScopeChange::EntityEnteredRoom(e, r) => format!("EntityEnteredRoom({:?},{:?})", e, r),
-                    ScopeChange::ScopeToggled(u, e, b) => format!("ScopeToggled({:?},{:?},{})", u, e, b),
-                    ScopeChange::RoomChange(_) => "RoomChange".to_string(),
-                    ScopeChange::ConfigureReplication(_) => "ConfigureReplication".to_string(),
-                }).collect::<Vec<_>>(),
+                drained
+                    .iter()
+                    .map(|c| match c {
+                        ScopeChange::UserEnteredRoom(u, r) =>
+                            format!("UserEnteredRoom({:?},{:?})", u, r),
+                        ScopeChange::UserLeftRoom(u, r) => format!("UserLeftRoom({:?},{:?})", u, r),
+                        ScopeChange::EntityEnteredRoom(e, r) =>
+                            format!("EntityEnteredRoom({:?},{:?})", e, r),
+                        ScopeChange::ScopeToggled(u, e, b) =>
+                            format!("ScopeToggled({:?},{:?},{})", u, e, b),
+                        ScopeChange::RoomChange(_) => "RoomChange".to_string(),
+                        ScopeChange::ConfigureReplication(_) => "ConfigureReplication".to_string(),
+                    })
+                    .collect::<Vec<_>>(),
             );
         }
         for change in drained {
@@ -1629,8 +1736,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     let Some(addr) = user_addresses.get(&user_key).copied() else {
                         continue;
                     };
-                    let diff_handler_arc =
-                        self.shared.global_world_manager.read().diff_handler();
+                    let diff_handler_arc = self.shared.global_world_manager.read().diff_handler();
                     let Some(send_conn) = self.send_user_connections.get_mut(&addr) else {
                         continue;
                     };
@@ -1642,13 +1748,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 continue;
                             }
                         }
-                        if !send_conn.base.world_manager.has_global_entity(global_entity) {
+                        if !send_conn
+                            .base
+                            .world_manager
+                            .has_global_entity(global_entity)
+                        {
                             continue;
                         }
                         let entity_idx = {
-                            let guard = diff_handler_arc.read()
+                            let guard = diff_handler_arc
+                                .read()
                                 .expect("GlobalDiffHandler lock poisoned");
-                            guard.entity_to_global_idx(global_entity)
+                            guard
+                                .entity_to_global_idx(global_entity)
                                 .unwrap_or(GlobalEntityIndex::INVALID)
                         };
                         let scope_exit = self
@@ -1688,7 +1800,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                                 .global_entity_to_entity(&global_entity)
                                 .ok()
                         });
-                    let Some(world_entity) = world_entity_opt else { continue; };
+                    let Some(world_entity) = world_entity_opt else {
+                        continue;
+                    };
                     for user_key in &user_keys {
                         self.apply_scope_for_user(
                             world,
@@ -1706,7 +1820,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         .read()
                         .global_entity_to_entity(&global_entity)
                         .ok();
-                    let Some(world_entity) = world_entity_opt else { continue; };
+                    let Some(world_entity) = world_entity_opt else {
+                        continue;
+                    };
                     self.apply_scope_for_user(
                         world,
                         &user_addresses,
@@ -1816,11 +1932,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     self.shared
                         .scope_change_queue
                         .lock()
-                        .push_back(ScopeChange::ScopeToggled(
-                            *user_key,
-                            *global_entity,
-                            true,
-                        ));
+                        .push_back(ScopeChange::ScopeToggled(*user_key, *global_entity, true));
                 }
             }
             return;
@@ -1851,25 +1963,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
 
         let currently_visible = send_conn.visibility.is_set(entity_idx);
-        let is_tracked = send_conn.base.world_manager.has_global_entity(global_entity);
+        let is_tracked = send_conn
+            .base
+            .world_manager
+            .has_global_entity(global_entity);
         let currently_paused = is_tracked && !currently_visible;
 
-        let in_common_room = if let Some(entity_rooms) =
-            self.entity_room_map.entity_get_rooms(global_entity)
-        {
-            // user.room_keys() ↔ user_room_map
-            let user_rooms = self.user_room_map.get(user_key);
-            match user_rooms {
-                Some(user_rooms) => entity_rooms.intersection(user_rooms).next().is_some(),
-                None => false,
-            }
-        } else {
-            false
-        };
-        let explicit = self
-            .entity_scope_map
-            .get(user_key, global_entity)
-            .copied();
+        let in_common_room =
+            if let Some(entity_rooms) = self.entity_room_map.entity_get_rooms(global_entity) {
+                // user.room_keys() ↔ user_room_map
+                let user_rooms = self.user_room_map.get(user_key);
+                match user_rooms {
+                    Some(user_rooms) => entity_rooms.intersection(user_rooms).next().is_some(),
+                    None => false,
+                }
+            } else {
+                false
+            };
+        let explicit = self.entity_scope_map.get(user_key, global_entity).copied();
         // See doc-comment deviation #1: resource_registry not reachable
         // here; treat as `false`. Resources publish via their own path.
         let is_resource = false;
@@ -1877,11 +1988,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .entity_room_map
             .entity_get_rooms(global_entity)
             .is_none();
-        let server_owned_roomless_non_resource = owner
-            .map(|o| o.is_server())
-            .unwrap_or(false)
-            && !is_resource
-            && entity_is_roomless;
+        let server_owned_roomless_non_resource =
+            owner.map(|o| o.is_server()).unwrap_or(false) && !is_resource && entity_is_roomless;
         let should_be_in_scope = match explicit {
             Some(true) if server_owned_roomless_non_resource => false,
             Some(in_scope) => in_scope,
@@ -2059,7 +2167,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         // Inlined `insert_new_component_into_entity_scopes(.., None)`:
         // add component to connections already tracking entity.
         for (_addr, send_conn) in self.send_user_connections.iter_mut() {
-            let has_entity = send_conn.base.world_manager.has_global_entity(&global_entity);
+            let has_entity = send_conn
+                .base
+                .world_manager
+                .has_global_entity(&global_entity);
             if !has_entity {
                 continue;
             }
@@ -2101,7 +2212,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
         // Inlined `remove_component_from_all_connections`.
         for (_, send_conn) in self.send_user_connections.iter_mut() {
-            if !send_conn.base.world_manager.has_global_entity(&global_entity) {
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(&global_entity)
+            {
                 continue;
             }
             send_conn
@@ -2190,7 +2305,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             self.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
         }
         for (_, send_conn) in self.send_user_connections.iter_mut() {
-            if !send_conn.base.world_manager.has_global_entity(global_entity) {
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
                 continue;
             }
             send_conn.base.world_manager.despawn_entity(global_entity);
@@ -2213,9 +2332,7 @@ struct SendStatePriorityHook<'a, E: Copy + Eq + Hash + Send + Sync> {
     converter: &'a GlobalEntityMap<E>,
 }
 
-impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook
-    for SendStatePriorityHook<'a, E>
-{
+impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePriorityHook<'a, E> {
     fn advance(&mut self, entity: &GlobalEntity) -> f32 {
         let Ok(world_entity) = self.converter.global_entity_to_entity(entity) else {
             return 0.0;

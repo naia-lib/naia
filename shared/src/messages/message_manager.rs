@@ -121,33 +121,35 @@ impl MessageManager {
 
             match &channel_settings.mode {
                 ChannelMode::UnorderedUnreliable => {
-                    channel_receivers.insert(
-                        channel_kind,
-                        Box::new(UnorderedUnreliableReceiver::new()),
-                    );
+                    channel_receivers
+                        .insert(channel_kind, Box::new(UnorderedUnreliableReceiver::new()));
                 }
                 ChannelMode::SequencedUnreliable => {
-                    channel_receivers.insert(
-                        channel_kind,
-                        Box::new(SequencedUnreliableReceiver::new()),
-                    );
+                    channel_receivers
+                        .insert(channel_kind, Box::new(SequencedUnreliableReceiver::new()));
                 }
                 ChannelMode::UnorderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(UnorderedReliableReceiver::with_cap(settings.max_messages_per_tick)),
+                        Box::new(UnorderedReliableReceiver::with_cap(
+                            settings.max_messages_per_tick,
+                        )),
                     );
                 }
                 ChannelMode::SequencedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(SequencedReliableReceiver::with_cap(settings.max_messages_per_tick)),
+                        Box::new(SequencedReliableReceiver::with_cap(
+                            settings.max_messages_per_tick,
+                        )),
                     );
                 }
                 ChannelMode::OrderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(OrderedReliableReceiver::with_cap(settings.max_messages_per_tick)),
+                        Box::new(OrderedReliableReceiver::with_cap(
+                            settings.max_messages_per_tick,
+                        )),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {
@@ -307,9 +309,7 @@ impl MessageManager {
                 (*k, gain)
             })
             .collect();
-        ordered.sort_by(|a, b| {
-            b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-        });
+        ordered.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
 
         for (channel_kind, _gain) in &ordered {
             let channel = self.channel_senders.get_mut(channel_kind).unwrap();
@@ -340,9 +340,7 @@ impl MessageManager {
             if let Some(message_indices) =
                 channel.write_messages(message_kinds, converter, writer, has_written)
             {
-                self.packet_to_message_map
-                    .entry(packet_index)
-                    .or_default();
+                self.packet_to_message_map.entry(packet_index).or_default();
                 let channel_list = self.packet_to_message_map.get_mut(&packet_index).unwrap();
                 channel_list.push((*channel_kind, message_indices));
             }
@@ -407,9 +405,7 @@ impl MessageManager {
     }
 
     /// Retrieve all requests from the channel buffers
-    pub fn receive_requests_and_responses(
-        &mut self,
-    ) -> RequestsAndResponsesOut {
+    pub fn receive_requests_and_responses(&mut self) -> RequestsAndResponsesOut {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {

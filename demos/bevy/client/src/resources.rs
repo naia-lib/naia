@@ -19,8 +19,7 @@ impl OwnedEntity {
     }
 }
 
-#[derive(Resource)]
-#[derive(Default)]
+#[derive(Resource, Default)]
 pub struct Global {
     pub owned_entity: Option<OwnedEntity>,
     pub cursor_entity: Option<Entity>,
@@ -38,4 +37,3 @@ pub struct Global {
     pub response_keys: HashSet<ResponseReceiveKey<BasicResponse>>,
     pub request_index: u8,
 }
-

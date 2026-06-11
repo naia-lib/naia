@@ -17,7 +17,6 @@ cfg_if! {
     } else {}
 }
 
-
 mod conditioner;
 pub use conditioner::ConditionedPacketReceiver;
 

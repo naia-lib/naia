@@ -78,25 +78,24 @@ impl App {
                 }
             }
             Ok(None) => {
-                if self.message_count < 10
-                    && self.timer.ringing() {
-                        self.timer.reset();
+                if self.message_count < 10 && self.timer.ringing() {
+                    self.timer.reset();
 
-                        let message_to_server: String = PING_MSG.to_string();
+                    let message_to_server: String = PING_MSG.to_string();
 
-                        let server_addr = match self.packet_receiver.server_addr() {
-                            ServerAddr::Found(addr) => addr.to_string(),
-                            _ => "".to_string(),
-                        };
-                        info!("Client send -> {}: {}", server_addr, message_to_server);
+                    let server_addr = match self.packet_receiver.server_addr() {
+                        ServerAddr::Found(addr) => addr.to_string(),
+                        _ => "".to_string(),
+                    };
+                    info!("Client send -> {}: {}", server_addr, message_to_server);
 
-                        match self.packet_sender.send(message_to_server.as_bytes()) {
-                            Ok(()) => {}
-                            Err(error) => {
-                                info!("Client Send Error: {}", error);
-                            }
+                    match self.packet_sender.send(message_to_server.as_bytes()) {
+                        Ok(()) => {}
+                        Err(error) => {
+                            info!("Client Send Error: {}", error);
                         }
                     }
+                }
             }
             Err(err) => {
                 info!("Client Error: {}", err);

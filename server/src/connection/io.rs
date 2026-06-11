@@ -182,8 +182,9 @@ impl SendIo {
             monitor.record_packet(address, payload.len());
         }
 
-        self.outgoing_bytes_this_tick =
-            self.outgoing_bytes_this_tick.saturating_add(payload.len() as u64);
+        self.outgoing_bytes_this_tick = self
+            .outgoing_bytes_this_tick
+            .saturating_add(payload.len() as u64);
 
         self.packet_sender
             .as_ref()

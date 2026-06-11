@@ -103,14 +103,30 @@ fn bit_width_scales_with_registered_kind_count() {
         let mut kinds = ComponentKinds::new();
         // We only need *some* type to register; reuse the bench protocol's
         // distinct types. n is bounded by our 8 available types.
-        if n >= 1 { kinds.add_component::<BenchComponent>(); }
-        if n >= 2 { kinds.add_component::<BenchImmutableComponent>(); }
-        if n >= 3 { kinds.add_component::<Position>(); }
-        if n >= 4 { kinds.add_component::<Velocity>(); }
-        if n >= 5 { kinds.add_component::<Rotation>(); }
-        if n >= 6 { kinds.add_component::<PositionQ>(); }
-        if n >= 7 { kinds.add_component::<VelocityQ>(); }
-        if n >= 8 { kinds.add_component::<RotationQ>(); }
+        if n >= 1 {
+            kinds.add_component::<BenchComponent>();
+        }
+        if n >= 2 {
+            kinds.add_component::<BenchImmutableComponent>();
+        }
+        if n >= 3 {
+            kinds.add_component::<Position>();
+        }
+        if n >= 4 {
+            kinds.add_component::<Velocity>();
+        }
+        if n >= 5 {
+            kinds.add_component::<Rotation>();
+        }
+        if n >= 6 {
+            kinds.add_component::<PositionQ>();
+        }
+        if n >= 7 {
+            kinds.add_component::<VelocityQ>();
+        }
+        if n >= 8 {
+            kinds.add_component::<RotationQ>();
+        }
         ser_bit_count(&kinds, ComponentKind::of::<BenchComponent>())
     }
     // 1 kind → 0 bits (degenerate; nothing to disambiguate).
@@ -131,25 +147,43 @@ fn round_trip_works_at_every_bit_width_tier() {
     for n in 1..=8usize {
         let mut kinds = ComponentKinds::new();
         let mut registered: Vec<ComponentKind> = Vec::new();
-        macro_rules! add { ($t:ty) => {{
-            kinds.add_component::<$t>();
-            registered.push(ComponentKind::of::<$t>());
-        }}; }
-        if n >= 1 { add!(BenchComponent); }
-        if n >= 2 { add!(BenchImmutableComponent); }
-        if n >= 3 { add!(Position); }
-        if n >= 4 { add!(Velocity); }
-        if n >= 5 { add!(Rotation); }
-        if n >= 6 { add!(PositionQ); }
-        if n >= 7 { add!(VelocityQ); }
-        if n >= 8 { add!(RotationQ); }
+        macro_rules! add {
+            ($t:ty) => {{
+                kinds.add_component::<$t>();
+                registered.push(ComponentKind::of::<$t>());
+            }};
+        }
+        if n >= 1 {
+            add!(BenchComponent);
+        }
+        if n >= 2 {
+            add!(BenchImmutableComponent);
+        }
+        if n >= 3 {
+            add!(Position);
+        }
+        if n >= 4 {
+            add!(Velocity);
+        }
+        if n >= 5 {
+            add!(Rotation);
+        }
+        if n >= 6 {
+            add!(PositionQ);
+        }
+        if n >= 7 {
+            add!(VelocityQ);
+        }
+        if n >= 8 {
+            add!(RotationQ);
+        }
         for kind in &registered {
             let mut writer = BitWriter::with_max_capacity();
             kind.ser(&kinds, &mut writer);
             let bytes = writer.to_bytes();
             let mut reader = BitReader::new(&bytes);
-            let decoded = ComponentKind::de(&kinds, &mut reader)
-                .expect("round-trip should not error");
+            let decoded =
+                ComponentKind::de(&kinds, &mut reader).expect("round-trip should not error");
             assert_eq!(decoded, *kind, "round-trip mismatch with n={n}");
         }
     }

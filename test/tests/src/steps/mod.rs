@@ -23,8 +23,8 @@ pub mod world_helpers;
 pub mod world_helpers_connect;
 
 pub mod given;
-pub mod when;
 pub mod then;
+pub mod when;
 
 // ──────────────────────────────────────────────────────────────────────
 // Contract-aligned modules (phase A pre-refactor — being migrated to

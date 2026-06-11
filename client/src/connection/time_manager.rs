@@ -405,8 +405,7 @@ impl TimeManager {
         let tick_diff = wrapping_diff(self.server_tick, tick);
         let tick_diff_duration =
             ((tick_diff as f32) * self.server_tick_duration_avg).round() as i32;
-        self
-            .server_tick_instant
+        self.server_tick_instant
             .add_signed_millis(tick_diff_duration)
     }
 
@@ -415,15 +414,12 @@ impl TimeManager {
     }
 
     pub(crate) fn get_interp(&self, tick: Tick, instant: &GameInstant) -> f32 {
-        
-        (self.tick_to_instant(tick).offset_from(instant) as f32)
-            / self.server_tick_duration_avg
+        (self.tick_to_instant(tick).offset_from(instant) as f32) / self.server_tick_duration_avg
     }
 
     pub(crate) fn instant_from_interp(&self, tick: Tick, interp: f32) -> GameInstant {
         let tick_length_interped = (interp * self.server_tick_duration_avg).round() as i32;
-        self
-            .tick_to_instant(tick)
+        self.tick_to_instant(tick)
             .add_signed_millis(tick_length_interped)
     }
 }
@@ -464,8 +460,7 @@ fn instant_to_tick(
 ) -> Tick {
     let offset_ms = server_tick_instant.offset_from(instant);
     let offset_ticks_f32 = (offset_ms as f32) / server_tick_duration_avg;
-    (*server_tick)
-        .wrapping_add_signed(offset_ticks_f32 as i16)
+    (*server_tick).wrapping_add_signed(offset_ticks_f32 as i16)
 }
 
 fn get_client_receiving_target(

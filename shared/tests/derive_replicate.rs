@@ -289,7 +289,9 @@ mod has_entity_props_tests {
     }
     impl PureDataComp {
         #[allow(dead_code)]
-        pub fn new() -> Self { Self::new_complete(false) }
+        pub fn new() -> Self {
+            Self::new_complete(false)
+        }
     }
 
     #[derive(Replicate)]
@@ -298,7 +300,9 @@ mod has_entity_props_tests {
     }
     impl EntityRefComp {
         #[allow(dead_code)]
-        pub fn new() -> Self { Self::new_complete() }
+        pub fn new() -> Self {
+            Self::new_complete()
+        }
     }
 
     #[test]

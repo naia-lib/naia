@@ -47,7 +47,6 @@ fn round_trip<T: Serde + std::fmt::Debug + PartialEq>(value: &T) -> u32 {
     bits_via_counter
 }
 
-
 // ----- Derive: struct (named fields) -----
 
 #[derive(SerdeInternal, Clone, PartialEq, Debug)]
@@ -59,7 +58,11 @@ struct NamedFields {
 
 #[test]
 fn struct_named_bit_length_matches_ser_and_round_trips() {
-    let v = NamedFields { a: 7, b: 0xABCD, c: true };
+    let v = NamedFields {
+        a: 7,
+        b: 0xABCD,
+        c: true,
+    };
     let bits = round_trip(&v);
     assert_eq!(v.bit_length(), bits, "struct bit_length tracks ser exactly");
     // Theoretical min: u8 + u16 + bool = 8 + 16 + 1 = 25 bits.
@@ -111,9 +114,7 @@ enum_with_n_variants!(Enum5, V0, V1, V2, V3, V4);
 enum_with_n_variants!(Enum7, V0, V1, V2, V3, V4, V5, V6);
 enum_with_n_variants!(Enum8, V0, V1, V2, V3, V4, V5, V6, V7);
 enum_with_n_variants!(Enum9, V0, V1, V2, V3, V4, V5, V6, V7, V8);
-enum_with_n_variants!(
-    Enum16, V0, V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15
-);
+enum_with_n_variants!(Enum16, V0, V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15);
 enum_with_n_variants!(
     Enum17, V0, V1, V2, V3, V4, V5, V6, V7, V8, V9, V10, V11, V12, V13, V14, V15, V16
 );
@@ -173,7 +174,10 @@ fn enum_with_payloads_bit_length_matches_ser_and_round_trips() {
         WithPayloads::Empty,
         WithPayloads::OneByte(0xAB),
         WithPayloads::Pair(0xBEEF, true),
-        WithPayloads::Named { x: -1, y: 0xDEADBEEF },
+        WithPayloads::Named {
+            x: -1,
+            y: 0xDEADBEEF,
+        },
     ];
     for v in &cases {
         let bits = round_trip(v);
@@ -189,7 +193,10 @@ fn unsigned_fixed_width_round_trips_and_matches_const_bit_length() {
     let bits = round_trip(&v);
     assert_eq!(bits, 7);
     assert_eq!(v.bit_length(), 7);
-    assert_eq!(<UnsignedInteger<7> as ConstBitLength>::const_bit_length(), 7);
+    assert_eq!(
+        <UnsignedInteger<7> as ConstBitLength>::const_bit_length(),
+        7
+    );
 }
 
 #[test]
@@ -199,7 +206,10 @@ fn signed_fixed_width_round_trips_and_matches_const_bit_length() {
     // sign bit + 10 magnitude bits.
     assert_eq!(bits, 11);
     assert_eq!(v.bit_length(), 11);
-    assert_eq!(<SignedInteger<10> as ConstBitLength>::const_bit_length(), 11);
+    assert_eq!(
+        <SignedInteger<10> as ConstBitLength>::const_bit_length(),
+        11
+    );
 }
 
 // ----- Number primitives: variable-width -----
@@ -343,7 +353,8 @@ fn const_bit_length_agrees_with_bit_length_for_fixed_types() {
             let const_bits = <$t as ConstBitLength>::const_bit_length();
             let inst_bits = v.bit_length();
             assert_eq!(
-                const_bits, inst_bits,
+                const_bits,
+                inst_bits,
                 "{} ConstBitLength must match instance bit_length",
                 stringify!($t)
             );

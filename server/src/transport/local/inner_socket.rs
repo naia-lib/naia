@@ -1,5 +1,5 @@
-use std::sync::Arc;
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 use naia_shared::transport::local::LocalTransportHub;
 

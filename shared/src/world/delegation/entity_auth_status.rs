@@ -188,7 +188,10 @@ mod tests {
             EntityAuthStatus::Denied,
         ] {
             let s = HostEntityAuthStatus::new(HostType::Client, status);
-            assert!(!s.can_request(), "client must not re-request from {status:?}");
+            assert!(
+                !s.can_request(),
+                "client must not re-request from {status:?}"
+            );
         }
     }
 

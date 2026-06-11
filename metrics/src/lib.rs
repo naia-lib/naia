@@ -24,9 +24,9 @@
 //! For Bevy apps, use [`naia-bevy-metrics`] instead — it handles emission
 //! automatically via a plugin.
 
+mod client;
 pub mod names;
 mod server;
-mod client;
 
-pub use server::{emit_server_aggregates, emit_server_connection_stats};
 pub use client::emit_client_connection_stats;
+pub use server::{emit_server_aggregates, emit_server_connection_stats};

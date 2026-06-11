@@ -24,32 +24,50 @@ pub enum OwnedLocalEntity {
 impl OwnedLocalEntity {
     /// Creates a dynamic `Host` variant from a [`HostEntity`].
     pub fn new_host(id: HostEntity) -> Self {
-        Self::Host { id: id.value(), is_static: false }
+        Self::Host {
+            id: id.value(),
+            is_static: false,
+        }
     }
 
     /// Creates a dynamic `Host` variant from a raw `u16` ID.
     pub fn new_host_dynamic(id: u16) -> Self {
-        Self::Host { id, is_static: false }
+        Self::Host {
+            id,
+            is_static: false,
+        }
     }
 
     /// Creates a static `Host` variant from a raw `u16` ID.
     pub fn new_host_static(id: u16) -> Self {
-        Self::Host { id, is_static: true }
+        Self::Host {
+            id,
+            is_static: true,
+        }
     }
 
     /// Creates a `Remote` variant from a [`RemoteEntity`], preserving its `is_static` flag.
     pub fn new_remote(id: RemoteEntity) -> Self {
-        Self::Remote { id: id.value(), is_static: id.is_static() }
+        Self::Remote {
+            id: id.value(),
+            is_static: id.is_static(),
+        }
     }
 
     /// Creates a dynamic `Remote` variant from a raw `u16` ID.
     pub fn new_remote_dynamic(id: u16) -> Self {
-        Self::Remote { id, is_static: false }
+        Self::Remote {
+            id,
+            is_static: false,
+        }
     }
 
     /// Creates a static `Remote` variant from a raw `u16` ID.
     pub fn new_remote_static(id: u16) -> Self {
-        Self::Remote { id, is_static: true }
+        Self::Remote {
+            id,
+            is_static: true,
+        }
     }
 
     /// Returns `true` if this is a `Host` variant.
@@ -124,12 +142,14 @@ impl OwnedLocalEntity {
         converter: &dyn LocalEntityAndGlobalEntityConverter,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match self {
-            OwnedLocalEntity::Host { id, is_static: true } => {
-                converter.static_host_entity_to_global_entity(&HostEntity::new(*id))
-            }
-            OwnedLocalEntity::Host { id, is_static: false } => {
-                converter.host_entity_to_global_entity(&HostEntity::new(*id))
-            }
+            OwnedLocalEntity::Host {
+                id,
+                is_static: true,
+            } => converter.static_host_entity_to_global_entity(&HostEntity::new(*id)),
+            OwnedLocalEntity::Host {
+                id,
+                is_static: false,
+            } => converter.host_entity_to_global_entity(&HostEntity::new(*id)),
             OwnedLocalEntity::Remote { id, is_static } => {
                 let remote = if *is_static {
                     RemoteEntity::new_static(*id)
@@ -145,7 +165,11 @@ impl OwnedLocalEntity {
         let OwnedLocalEntity::Remote { id, is_static } = self else {
             panic!("Expected RemoteEntity")
         };
-        if *is_static { RemoteEntity::new_static(*id) } else { RemoteEntity::new(*id) }
+        if *is_static {
+            RemoteEntity::new_static(*id)
+        } else {
+            RemoteEntity::new(*id)
+        }
     }
 
     pub(crate) fn to_reversed(self) -> OwnedLocalEntity {
@@ -159,9 +183,15 @@ impl OwnedLocalEntity {
     pub fn host(&self) -> HostEntity {
         match self {
             OwnedLocalEntity::Host { id, is_static } => {
-                if *is_static { HostEntity::new_static(*id) } else { HostEntity::new(*id) }
+                if *is_static {
+                    HostEntity::new_static(*id)
+                } else {
+                    HostEntity::new(*id)
+                }
             }
-            OwnedLocalEntity::Remote { .. } => panic!("Expected OwnedLocalEntity::Host, found OwnedLocalEntity::Remote"),
+            OwnedLocalEntity::Remote { .. } => {
+                panic!("Expected OwnedLocalEntity::Host, found OwnedLocalEntity::Remote")
+            }
         }
     }
 
@@ -169,9 +199,15 @@ impl OwnedLocalEntity {
     pub fn remote(&self) -> RemoteEntity {
         match self {
             OwnedLocalEntity::Remote { id, is_static } => {
-                if *is_static { RemoteEntity::new_static(*id) } else { RemoteEntity::new(*id) }
+                if *is_static {
+                    RemoteEntity::new_static(*id)
+                } else {
+                    RemoteEntity::new(*id)
+                }
             }
-            OwnedLocalEntity::Host { .. } => panic!("Expected OwnedLocalEntity::Remote, found OwnedLocalEntity::Host"),
+            OwnedLocalEntity::Host { .. } => {
+                panic!("Expected OwnedLocalEntity::Remote, found OwnedLocalEntity::Host")
+            }
         }
     }
 }
@@ -187,12 +223,18 @@ pub struct HostEntity {
 impl HostEntity {
     /// Creates a dynamic host entity with the given `id`.
     pub fn new(id: u16) -> Self {
-        Self { id, is_static: false }
+        Self {
+            id,
+            is_static: false,
+        }
     }
 
     /// Creates a static host entity with the given `id`.
     pub fn new_static(id: u16) -> Self {
-        Self { id, is_static: true }
+        Self {
+            id,
+            is_static: true,
+        }
     }
 
     /// Returns the raw `u16` wire ID.
@@ -207,7 +249,11 @@ impl HostEntity {
 
     /// Converts this host entity into the equivalent [`RemoteEntity`] with the same ID and static flag.
     pub fn to_remote(self) -> RemoteEntity {
-        if self.is_static { RemoteEntity::new_static(self.id) } else { RemoteEntity::new(self.id) }
+        if self.is_static {
+            RemoteEntity::new_static(self.id)
+        } else {
+            RemoteEntity::new(self.id)
+        }
     }
 
     /// Serializes the entity ID into the bit stream (ID only; authority messages use dynamic entities).
@@ -218,7 +264,10 @@ impl HostEntity {
     /// Deserializes a dynamic host entity from the bit stream.
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
-        Ok(Self { id: value as u16, is_static: false }) // authority messages only use dynamic entities
+        Ok(Self {
+            id: value as u16,
+            is_static: false,
+        }) // authority messages only use dynamic entities
     }
 
     /// Returns the encoded bit length of this entity's ID.
@@ -228,17 +277,26 @@ impl HostEntity {
 
     /// Wraps this entity as an `OwnedLocalEntity::Host`, preserving the `is_static` flag.
     pub fn copy_to_owned(&self) -> OwnedLocalEntity {
-        OwnedLocalEntity::Host { id: self.value(), is_static: self.is_static }
+        OwnedLocalEntity::Host {
+            id: self.value(),
+            is_static: self.is_static,
+        }
     }
 
     /// Wraps this entity as a dynamic `OwnedLocalEntity::Host` (forcing `is_static = false`).
     pub fn copy_to_owned_dynamic(&self) -> OwnedLocalEntity {
-        OwnedLocalEntity::Host { id: self.value(), is_static: false }
+        OwnedLocalEntity::Host {
+            id: self.value(),
+            is_static: false,
+        }
     }
 
     /// Wraps this entity as a static `OwnedLocalEntity::Host` (forcing `is_static = true`).
     pub fn copy_to_owned_static(&self) -> OwnedLocalEntity {
-        OwnedLocalEntity::Host { id: self.value(), is_static: true }
+        OwnedLocalEntity::Host {
+            id: self.value(),
+            is_static: true,
+        }
     }
 }
 
@@ -252,12 +310,18 @@ pub struct RemoteEntity {
 impl RemoteEntity {
     /// Creates a dynamic remote entity with the given `id`.
     pub fn new(id: u16) -> Self {
-        Self { id, is_static: false }
+        Self {
+            id,
+            is_static: false,
+        }
     }
 
     /// Creates a static remote entity with the given `id`.
     pub fn new_static(id: u16) -> Self {
-        Self { id, is_static: true }
+        Self {
+            id,
+            is_static: true,
+        }
     }
 
     /// Returns the raw `u16` wire ID.
@@ -272,7 +336,11 @@ impl RemoteEntity {
 
     /// Converts this remote entity into the equivalent [`HostEntity`] with the same ID and static flag.
     pub fn to_host(self) -> HostEntity {
-        if self.is_static { HostEntity::new_static(self.id) } else { HostEntity::new(self.id) }
+        if self.is_static {
+            HostEntity::new_static(self.id)
+        } else {
+            HostEntity::new(self.id)
+        }
     }
 
     /// Serializes only the entity ID into the bit stream (authority messages always use dynamic entities).
@@ -283,11 +351,17 @@ impl RemoteEntity {
     /// Deserializes a dynamic remote entity from the bit stream.
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
-        Ok(Self { id: value as u16, is_static: false })
+        Ok(Self {
+            id: value as u16,
+            is_static: false,
+        })
     }
 
     /// Wraps this entity as an `OwnedLocalEntity::Remote`, preserving the `is_static` flag.
     pub fn copy_to_owned(&self) -> OwnedLocalEntity {
-        OwnedLocalEntity::Remote { id: self.id, is_static: self.is_static }
+        OwnedLocalEntity::Remote {
+            id: self.id,
+            is_static: self.is_static,
+        }
     }
 }

@@ -18,7 +18,9 @@ impl SequencedReliableReceiver {
 
     pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
         Self::with_arranger_and_cap(
-            SequencedArranger { newest_received_message_index: 0 },
+            SequencedArranger {
+                newest_received_message_index: 0,
+            },
             max_messages_per_tick,
         )
     }
@@ -32,7 +34,9 @@ pub struct SequencedArranger {
 #[cfg(test)]
 impl SequencedArranger {
     pub(crate) fn new() -> Self {
-        Self { newest_received_message_index: 0 }
+        Self {
+            newest_received_message_index: 0,
+        }
     }
 }
 

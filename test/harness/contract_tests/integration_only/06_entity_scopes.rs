@@ -1,4 +1,11 @@
-#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_must_use,
+    unused_mut,
+    dead_code,
+    for_loops_over_fallibles
+)]
 
 use std::time::Duration;
 
@@ -15,14 +22,14 @@ use naia_test_harness::{
 
 // Test protocol types (channels and messages)
 use naia_test_harness::test_protocol::{
-    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel,
-    TestMessage, TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel,
-    UnreliableChannel,
+    OrderedChannel, ReliableChannel, RequestResponseChannel, SequencedChannel, TestMessage,
+    TestRequest, TestResponse, TickBufferedChannel, UnorderedChannel, UnreliableChannel,
 };
 
 mod _helpers;
-use _helpers::{client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config};
-
+use _helpers::{
+    client_connect, server_and_client_connected, server_and_client_disconnected, test_client_config,
+};
 
 // ============================================================================
 // Entity Scopes Tests
@@ -42,8 +49,9 @@ fn entities_only_replicate_when_room_scope_match() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
+    let (room1_key, room2_key) = scenario.mutate(|ctx| {
+        ctx.server(|server| (server.create_room().key(), server.create_room().key()))
+    });
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -131,8 +139,9 @@ fn moving_user_between_rooms_updates_scope() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
+    let (room1_key, room2_key) = scenario.mutate(|ctx| {
+        ctx.server(|server| (server.create_room().key(), server.create_room().key()))
+    });
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -227,8 +236,9 @@ fn moving_entity_between_rooms_updates_scope() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
+    let (room1_key, room2_key) = scenario.mutate(|ctx| {
+        ctx.server(|server| (server.create_room().key(), server.create_room().key()))
+    });
 
     let client_a_key = client_connect(
         &mut scenario,
@@ -529,7 +539,6 @@ fn entity_in_multiple_rooms_projects_correctly() {
     });
 }
 
-
 /// Authority releases when holder goes OutOfScope
 /// Contract: [entity-scopes-06], [entity-scopes-07]
 ///
@@ -542,10 +551,22 @@ fn authority_releases_when_holder_goes_out_of_scope() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
-        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
-        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
 
     // Spawn entity, include both A and B
     let entity_e = scenario.mutate(|ctx| {
@@ -554,15 +575,22 @@ fn authority_releases_when_holder_goes_out_of_scope() {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity);
             entity
         })
     });
 
     scenario.expect(|ctx| {
-        (ctx.client(client_a_key, |c| c.has_entity(&entity_e)) &&
-         ctx.client(client_b_key, |c| c.has_entity(&entity_e))).then_some(())
+        (ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            && ctx.client(client_b_key, |c| c.has_entity(&entity_e)))
+        .then_some(())
     });
 
     // Enable delegation
@@ -576,7 +604,10 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
-        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        })
+        .then_some(())
     });
 
     // Give authority to A
@@ -591,15 +622,22 @@ fn authority_releases_when_holder_goes_out_of_scope() {
     // Verify A has Granted, B has Denied
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
-        let a_granted = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted));
-        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        let a_granted = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)
+        });
+        let b_denied = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied)
+        });
         (a_granted && b_denied).then_some(())
     });
 
     // Remove E from A's scope (A loses entity)
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.user_scope_mut(&client_a_key).unwrap().exclude(&entity_e);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .exclude(&entity_e);
         });
     });
 
@@ -607,7 +645,9 @@ fn authority_releases_when_holder_goes_out_of_scope() {
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
         let a_no_entity = !ctx.client(client_a_key, |c| c.has_entity(&entity_e));
-        let b_available = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        let b_available = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        });
         (a_no_entity && b_available).then_some(())
     });
 }
@@ -783,10 +823,22 @@ fn authority_releases_when_holder_disconnects() {
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
 
-    let client_a_key = client_connect(&mut scenario, &room_key, "Client A",
-        Auth::new("client_a", "pass"), test_client_config(), test_protocol.clone());
-    let client_b_key = client_connect(&mut scenario, &room_key, "Client B",
-        Auth::new("client_b", "pass"), test_client_config(), test_protocol);
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
 
     // Spawn entity, include both A and B
     let entity_e = scenario.mutate(|ctx| {
@@ -795,15 +847,22 @@ fn authority_releases_when_holder_disconnects() {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
-            server.user_scope_mut(&client_b_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            server
+                .user_scope_mut(&client_b_key)
+                .unwrap()
+                .include(&entity);
             entity
         })
     });
 
     scenario.expect(|ctx| {
-        (ctx.client(client_a_key, |c| c.has_entity(&entity_e)) &&
-         ctx.client(client_b_key, |c| c.has_entity(&entity_e))).then_some(())
+        (ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            && ctx.client(client_b_key, |c| c.has_entity(&entity_e)))
+        .then_some(())
     });
 
     // Enable delegation
@@ -817,7 +876,10 @@ fn authority_releases_when_holder_disconnects() {
 
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
-        ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)).then_some(())
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        })
+        .then_some(())
     });
 
     // Give authority to A
@@ -832,8 +894,12 @@ fn authority_releases_when_holder_disconnects() {
     // Verify A has Granted, B has Denied
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
-        let a_granted = ctx.client(client_a_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted));
-        let b_denied = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied));
+        let a_granted = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)
+        });
+        let b_denied = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied)
+        });
         (a_granted && b_denied).then_some(())
     });
 
@@ -848,7 +914,9 @@ fn authority_releases_when_holder_disconnects() {
     scenario.expect(|ctx| {
         use naia_shared::EntityAuthStatus;
         let entity_exists = ctx.server(|server| server.has_entity(&entity_e));
-        let b_available = ctx.client(client_b_key, |c| c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available));
+        let b_available = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        });
         (entity_exists && b_available).then_some(())
     });
 }
@@ -952,8 +1020,9 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
 
-    let (room1_key, room2_key) = scenario
-        .mutate(|ctx| ctx.server(|server| (server.create_room().key(), server.create_room().key())));
+    let (room1_key, room2_key) = scenario.mutate(|ctx| {
+        ctx.server(|server| (server.create_room().key(), server.create_room().key()))
+    });
 
     let client_a_key = client_connect(
         &mut scenario,

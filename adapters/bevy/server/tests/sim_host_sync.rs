@@ -145,23 +145,24 @@ fn handle_direct_insert_matches_legacy() {
             // Legacy oracle: reassemble WorldServer and run the same body.
             use naia_bevy_shared::{WorldMutType, WorldProxyMut};
             use std::ops::DerefMut;
-            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
-                if !ws.is_listening() {
-                    return;
-                }
-                for event in events {
-                    if let HostSyncEvent::Insert(_h, e, kind) = event {
-                        if ws.entity_authority_status(&e) == Some(EntityAuthStatus::Denied) {
-                            continue;
-                        }
-                        let mut proxy = WorldProxyMut::proxy_mut(sim_app.world_mut());
-                        let Some(mut cm) = proxy.component_mut_of_kind(&e, &kind) else {
-                            continue;
-                        };
-                        ws.insert_component_worldless(&e, DerefMut::deref_mut(&mut cm));
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
+                    if !ws.is_listening() {
+                        return;
                     }
-                }
-            });
+                    for event in events {
+                        if let HostSyncEvent::Insert(_h, e, kind) = event {
+                            if ws.entity_authority_status(&e) == Some(EntityAuthStatus::Denied) {
+                                continue;
+                            }
+                            let mut proxy = WorldProxyMut::proxy_mut(sim_app.world_mut());
+                            let Some(mut cm) = proxy.component_mut_of_kind(&e, &kind) else {
+                                continue;
+                            };
+                            ws.insert_component_worldless(&e, DerefMut::deref_mut(&mut cm));
+                        }
+                    }
+                });
             (sim_handle, recv, send)
         };
 
@@ -208,19 +209,20 @@ fn handle_direct_remove_matches_legacy() {
             write_events(sim_app.world_mut(), events);
             drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send)
         } else {
-            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
-                if !ws.is_listening() {
-                    return;
-                }
-                for event in events {
-                    if let HostSyncEvent::Remove(_h, e, kind) = event {
-                        if ws.entity_authority_status(&e) == Some(EntityAuthStatus::Denied) {
-                            continue;
-                        }
-                        ws.remove_component_worldless(&e, &kind);
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
+                    if !ws.is_listening() {
+                        return;
                     }
-                }
-            });
+                    for event in events {
+                        if let HostSyncEvent::Remove(_h, e, kind) = event {
+                            if ws.entity_authority_status(&e) == Some(EntityAuthStatus::Denied) {
+                                continue;
+                            }
+                            ws.remove_component_worldless(&e, &kind);
+                        }
+                    }
+                });
             (sim_handle, recv, send)
         };
 
@@ -251,19 +253,20 @@ fn handle_direct_despawn_matches_legacy_and_clears_state() {
             write_events(sim_app.world_mut(), events);
             drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send)
         } else {
-            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
-                if !ws.is_listening() {
-                    return;
-                }
-                for event in events {
-                    if let HostSyncEvent::Despawn(_h, e) = event {
-                        if ws.entity_authority_status(&e) == Some(EntityAuthStatus::Denied) {
-                            continue;
-                        }
-                        ws.despawn_entity_worldless(&e);
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
+                    if !ws.is_listening() {
+                        return;
                     }
-                }
-            });
+                    for event in events {
+                        if let HostSyncEvent::Despawn(_h, e) = event {
+                            if ws.entity_authority_status(&e) == Some(EntityAuthStatus::Denied) {
+                                continue;
+                            }
+                            ws.despawn_entity_worldless(&e);
+                        }
+                    }
+                });
             (sim_handle, recv, send)
         };
 
@@ -358,6 +361,9 @@ fn empty_queue_is_noop() {
         drain_host_sync_into_pipeline(sim_app.world_mut(), sim_handle, recv, send);
 
     let after = observe(&sim_handle, &entity);
-    assert_eq!(before, after, "empty queue must leave shared state untouched");
+    assert_eq!(
+        before, after,
+        "empty queue must leave shared state untouched"
+    );
     assert!(matches!(after.owner, EntityOwner::Server));
 }

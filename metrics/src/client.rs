@@ -1,5 +1,5 @@
-use naia_shared::ConnectionStats;
 use crate::names;
+use naia_shared::ConnectionStats;
 
 /// Emit the five client-side connection gauges.
 ///

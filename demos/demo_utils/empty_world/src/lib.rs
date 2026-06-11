@@ -1,6 +1,6 @@
 use naia_shared::{
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, PendingComponentUpdate,
-    EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter,
+    GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, PendingComponentUpdate,
     ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
     ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
 };

@@ -22,20 +22,16 @@ pub fn multi_user_contention(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     for &k in USER_COUNTS {
-        group.bench_with_input(
-            BenchmarkId::new("users", k),
-            &k,
-            |b, &k| {
-                b.iter_batched(
-                    || BenchWorldBuilder::new().users(k).entities(1_000).build(),
-                    |mut world| {
-                        world.request_authority_all_clients(0);
-                        world.tick();
-                    },
-                    BatchSize::LargeInput,
-                )
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("users", k), &k, |b, &k| {
+            b.iter_batched(
+                || BenchWorldBuilder::new().users(k).entities(1_000).build(),
+                |mut world| {
+                    world.request_authority_all_clients(0);
+                    world.tick();
+                },
+                BatchSize::LargeInput,
+            )
+        });
     }
     group.finish();
 }

@@ -1,7 +1,11 @@
-use bevy_ecs::{entity::Entity, message::Messages, world::{Mut, World}};
+use bevy_ecs::{
+    entity::Entity,
+    message::Messages,
+    world::{Mut, World},
+};
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
 use naia_server::{
-    pipeline_actors::{SimHandle, SimEventReceiver},
+    pipeline_actors::{SimEventReceiver, SimHandle},
     EntityOwner, Events, ReceiveOutput,
 };
 
@@ -135,9 +139,7 @@ pub fn apply_receive_output(
             if !world.proxy().has_entity(&entity) {
                 continue;
             }
-            if let EntityOwner::Client(user_key) =
-                server.entity_owner(world.proxy(), &entity)
-            {
+            if let EntityOwner::Client(user_key) = server.entity_owner(world.proxy(), &entity) {
                 client_spawned_entities.push((user_key, entity));
             }
         }

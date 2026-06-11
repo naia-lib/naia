@@ -142,11 +142,9 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
         let entity = self.id();
         self.commands().queue(WorldOpCommand::new(move |world| {
             world.resource_scope(|world, mut client: Mut<ClientWrapper<T>>| {
-                client.client.configure_entity_replication(
-                    &mut world.proxy_mut(),
-                    &entity,
-                    config,
-                );
+                client
+                    .client
+                    .configure_entity_replication(&mut world.proxy_mut(), &entity, config);
             });
         }));
         self

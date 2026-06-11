@@ -45,11 +45,9 @@ impl RoomStore {
         self.rooms.get_mut(key)
     }
 
-
     pub(super) fn len(&self) -> usize {
         self.rooms.len()
     }
-
 
     pub(super) fn iter_mut(&mut self) -> impl Iterator<Item = (RoomKey, &mut Room)> {
         self.rooms.iter_mut()
@@ -75,10 +73,7 @@ impl RoomStore {
             .unwrap_or(0)
     }
 
-    pub(super) fn user_keys_iter(
-        &self,
-        room_key: &RoomKey,
-    ) -> impl Iterator<Item = &UserKey> {
+    pub(super) fn user_keys_iter(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
         self.rooms
             .get(room_key)
             .map(|r| r.user_keys())
@@ -86,10 +81,7 @@ impl RoomStore {
             .flatten()
     }
 
-    pub(super) fn entities_iter(
-        &self,
-        room_key: &RoomKey,
-    ) -> impl Iterator<Item = &GlobalEntity> {
+    pub(super) fn entities_iter(&self, room_key: &RoomKey) -> impl Iterator<Item = &GlobalEntity> {
         self.rooms
             .get(room_key)
             .map(|r| r.entities())

@@ -43,7 +43,10 @@ pub(crate) enum RoomChange<E: Copy + Eq + Hash + Send + Sync> {
     },
 
     /// User removed from a room — Send drops all (room, user, *) tuples.
-    UserRemoved { room_key: RoomKey, user_key: UserKey },
+    UserRemoved {
+        room_key: RoomKey,
+        user_key: UserKey,
+    },
 
     /// Entity added to a room — Send must:
     ///   1. entity_room_map.entity_add_room(&global_entity, &room_key)

@@ -234,12 +234,8 @@ impl BenchWorld {
         if uncapped_bandwidth {
             server_config.connection.bandwidth.target_bytes_per_sec = u32::MAX;
         }
-        let mut server: NaiaServer<BenchEntity> =
-            NaiaServer::new(server_config, protocol.clone());
-        server.listen(ServerSocket::new(
-            LocalServerSocket::new(hub.clone()),
-            None,
-        ));
+        let mut server: NaiaServer<BenchEntity> = NaiaServer::new(server_config, protocol.clone());
+        server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
 
         let mut server_world = World::default();
 
@@ -541,7 +537,9 @@ impl BenchWorld {
             let mut last_reported = 0usize;
             for tick_n in 0..REPLICATE_TIMEOUT {
                 self.tick();
-                let min_visible = self.clients.iter()
+                let min_visible = self
+                    .clients
+                    .iter()
                     .map(|(client, world)| client.entities(&world.proxy()).len())
                     .min()
                     .unwrap_or(0);
@@ -646,7 +644,8 @@ impl BenchWorld {
 
         // Full server step (produces outgoing packets for all clients).
         self.server.receive_all_packets();
-        self.server.process_all_packets(self.server_world.proxy_mut(), &now);
+        self.server
+            .process_all_packets(self.server_world.proxy_mut(), &now);
         self.server.send_all_packets(self.server_world.proxy());
 
         // Time only the target client's receive path.

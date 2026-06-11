@@ -257,14 +257,23 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// `is_static = false` → delta-tracked.
     ///
     /// Returns `true` if inserted, `false` if `R` was already present.
-    pub fn insert_resource<R: naia_shared::ReplicatedComponent>(&mut self, value: R, is_static: bool) -> bool {
+    pub fn insert_resource<R: naia_shared::ReplicatedComponent>(
+        &mut self,
+        value: R,
+        is_static: bool,
+    ) -> bool {
         let scenario = self.ctx.scenario_mut();
         let (server, world, _, _) = scenario.split_for_server_mut();
-        server.insert_resource(world.proxy_mut(), value, is_static).is_ok()
+        server
+            .insert_resource(world.proxy_mut(), value, is_static)
+            .is_ok()
     }
 
     /// Insert a static Replicated Resource (no diff-tracking after insertion).
-    pub fn insert_static_resource<R: naia_shared::ReplicatedComponent>(&mut self, value: R) -> bool {
+    pub fn insert_static_resource<R: naia_shared::ReplicatedComponent>(
+        &mut self,
+        value: R,
+    ) -> bool {
         self.insert_resource(value, true)
     }
 
@@ -350,7 +359,6 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         let (server, _) = scenario.server_and_registry()?;
         server.resource_authority_status::<R>()
     }
-
 
     /// Accept connection for a client
     ///

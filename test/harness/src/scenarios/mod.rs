@@ -33,7 +33,8 @@ fn connect_one_client(scenario: &mut Scenario) -> crate::harness::ClientKey {
         ..Default::default()
     };
 
-    let client_key = scenario.client_start("Client", Auth::new("user", "password"), cfg, protocol());
+    let client_key =
+        scenario.client_start("Client", Auth::new("user", "password"), cfg, protocol());
 
     scenario.expect(|ctx| {
         ctx.server(|s| {
@@ -65,7 +66,9 @@ fn connect_one_client(scenario: &mut Scenario) -> crate::harness::ClientKey {
     let room_key = scenario.last_room();
     scenario.mutate(|ctx| {
         ctx.server(|s| {
-            s.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            s.room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
 
@@ -99,7 +102,9 @@ pub fn contract06_scope_entry() -> Trace {
     let (entity_key, ()): (EntityKey, ()) = scenario.mutate(|ctx| {
         ctx.server(|s| {
             s.spawn(|mut entity| {
-                entity.insert_component(Position::new(0.0, 0.0)).enter_room(&room_key);
+                entity
+                    .insert_component(Position::new(0.0, 0.0))
+                    .enter_room(&room_key);
             })
         })
     });
@@ -138,7 +143,9 @@ pub fn contract07_component_update() -> Trace {
     let (entity_key, ()): (EntityKey, ()) = scenario.mutate(|ctx| {
         ctx.server(|s| {
             s.spawn(|mut entity| {
-                entity.insert_component(Position::new(0.0, 0.0)).enter_room(&room_key);
+                entity
+                    .insert_component(Position::new(0.0, 0.0))
+                    .enter_room(&room_key);
             })
         })
     });

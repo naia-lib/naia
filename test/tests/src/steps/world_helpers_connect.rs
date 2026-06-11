@@ -13,8 +13,8 @@ use naia_test_harness::{
     TrackedServerEvent,
 };
 
-use crate::{TestWorldMut, TestWorldRef};
 use crate::steps::world_helpers::{client_key_storage, LAST_ENTITY_KEY};
+use crate::{TestWorldMut, TestWorldRef};
 
 /// Connect a test client by short label ("A", "B", ...).
 ///
@@ -109,7 +109,9 @@ pub fn reject_named_client(
     expect_server_auth_for(scenario, client_key);
     scenario.mutate(|c| c.server(|s| s.reject_connection(&client_key)));
     scenario.expect(|c| {
-        c.client(client_key, |client| client.read_event::<ClientRejectEvent>())
+        c.client(client_key, |client| {
+            client.read_event::<ClientRejectEvent>()
+        })
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Reject);
     scenario.allow_flexible_next();
@@ -146,7 +148,9 @@ fn expect_server_connect_for(scenario: &mut crate::Scenario, client_key: crate::
 
 fn expect_client_connect(scenario: &mut crate::Scenario, client_key: crate::ClientKey) {
     scenario.expect(|c| {
-        c.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+        c.client(client_key, |client| {
+            client.read_event::<ClientConnectEvent>()
+        })
     });
 }
 
@@ -179,15 +183,25 @@ pub fn spawn_delegated_entity_in_scope(
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
-    let (entity_key, ()) = scenario.mutate(|c| c.server(|s|
-        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0))
-            .configure_replication(SRC::delegated()).enter_room(&room_key); })));
+    let (entity_key, ()) = scenario.mutate(|c| {
+        c.server(|s| {
+            s.spawn(|mut e| {
+                e.insert_component(Position::new(0.0, 0.0))
+                    .configure_replication(SRC::delegated())
+                    .enter_room(&room_key);
+            })
+        })
+    });
     let clients_v: Vec<crate::ClientKey> = clients.to_vec();
-    scenario.mutate(|c| c.server(|s| {
-        for ck in &clients_v {
-            if let Some(mut scope) = s.user_scope_mut(ck) { scope.include(&entity_key); }
-        }
-    }));
+    scenario.mutate(|c| {
+        c.server(|s| {
+            for ck in &clients_v {
+                if let Some(mut scope) = s.user_scope_mut(ck) {
+                    scope.include(&entity_key);
+                }
+            }
+        })
+    });
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     entity_key
 }
@@ -203,13 +217,20 @@ pub fn spawn_position_entity_in_scope(
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
     let (entity_key, ()) = scenario.mutate(|c| {
-        c.server(|s| s.spawn(|mut e| {
-            e.insert_component(Position::new(0.0, 0.0)).enter_room(&room_key);
-        }))
+        c.server(|s| {
+            s.spawn(|mut e| {
+                e.insert_component(Position::new(0.0, 0.0))
+                    .enter_room(&room_key);
+            })
+        })
     });
-    scenario.mutate(|c| c.server(|s| {
-        if let Some(mut scope) = s.user_scope_mut(&client_key) { scope.include(&entity_key); }
-    }));
+    scenario.mutate(|c| {
+        c.server(|s| {
+            if let Some(mut scope) = s.user_scope_mut(&client_key) {
+                scope.include(&entity_key);
+            }
+        })
+    });
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     entity_key
 }
@@ -224,12 +245,17 @@ pub fn assert_server_position_eq(
     entity_key: naia_test_harness::EntityKey,
     expected: (f32, f32),
 ) -> namako_engine::codegen::AssertOutcome<()> {
-    use namako_engine::codegen::AssertOutcome;
     use naia_test_harness::Position;
+    use namako_engine::codegen::AssertOutcome;
     ctx.server(|server| {
-        let Some(entity) = server.entity(&entity_key) else { return AssertOutcome::Pending; };
-        let Some(pos) = entity.component::<Position>() else { return AssertOutcome::Pending; };
-        if (*pos.x - expected.0).abs() < f32::EPSILON && (*pos.y - expected.1).abs() < f32::EPSILON {
+        let Some(entity) = server.entity(&entity_key) else {
+            return AssertOutcome::Pending;
+        };
+        let Some(pos) = entity.component::<Position>() else {
+            return AssertOutcome::Pending;
+        };
+        if (*pos.x - expected.0).abs() < f32::EPSILON && (*pos.y - expected.1).abs() < f32::EPSILON
+        {
             AssertOutcome::Passed(())
         } else {
             AssertOutcome::Pending
@@ -244,12 +270,17 @@ pub fn assert_client_position_eq(
     entity_key: naia_test_harness::EntityKey,
     expected: (f32, f32),
 ) -> namako_engine::codegen::AssertOutcome<()> {
-    use namako_engine::codegen::AssertOutcome;
     use naia_test_harness::Position;
+    use namako_engine::codegen::AssertOutcome;
     ctx.client(client_key, |client| {
-        let Some(entity) = client.entity(&entity_key) else { return AssertOutcome::Pending; };
-        let Some(pos) = entity.component::<Position>() else { return AssertOutcome::Pending; };
-        if (*pos.x - expected.0).abs() < f32::EPSILON && (*pos.y - expected.1).abs() < f32::EPSILON {
+        let Some(entity) = client.entity(&entity_key) else {
+            return AssertOutcome::Pending;
+        };
+        let Some(pos) = entity.component::<Position>() else {
+            return AssertOutcome::Pending;
+        };
+        if (*pos.x - expected.0).abs() < f32::EPSILON && (*pos.y - expected.1).abs() < f32::EPSILON
+        {
             AssertOutcome::Passed(())
         } else {
             AssertOutcome::Pending
@@ -376,7 +407,9 @@ pub fn connect_named_client(
     }
 
     scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+        ctx.client(client_key, |client| {
+            client.read_event::<ClientConnectEvent>()
+        })
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Connect);
 
@@ -398,11 +431,11 @@ pub fn connect_client_with_latency(
     label: &str,
     latency_ms: u32,
 ) -> crate::ClientKey {
-    use std::time::Duration;
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{
         Auth, ClientConnectEvent, LinkConditionerConfig, ServerAuthEvent, ServerConnectEvent,
     };
+    use std::time::Duration;
     let scenario = ctx.scenario_mut();
     let test_protocol = protocol();
     let room_key = scenario.last_room();
@@ -426,16 +459,24 @@ pub fn connect_client_with_latency(
     scenario.expect(|ctx| {
         ctx.server(|server| {
             if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key { return Some(incoming_key); }
+                if incoming_key == client_key {
+                    return Some(incoming_key);
+                }
             }
             None
         })
     });
-    scenario.mutate(|ctx| { ctx.server(|server| { server.accept_connection(&client_key); }); });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
     scenario.expect(|ctx| {
         ctx.server(|server| {
             if let Some(incoming_key) = server.read_event::<ServerConnectEvent>() {
-                if incoming_key == client_key { return Some(()); }
+                if incoming_key == client_key {
+                    return Some(());
+                }
             }
             None
         })
@@ -443,11 +484,16 @@ pub fn connect_client_with_latency(
     scenario.track_server_event(TrackedServerEvent::Connect);
     scenario.mutate(|ctx| {
         ctx.server(|server| {
-            server.room_mut(&room_key).expect("room exists").add_user(&client_key);
+            server
+                .room_mut(&room_key)
+                .expect("room exists")
+                .add_user(&client_key);
         });
     });
     scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientConnectEvent>())
+        ctx.client(client_key, |client| {
+            client.read_event::<ClientConnectEvent>()
+        })
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Connect);
     scenario.allow_flexible_next();

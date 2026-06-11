@@ -42,7 +42,9 @@ impl FragmentReceiver {
         let fragment_index = fragment.index();
         let fragment_total = fragment.total().as_usize();
 
-        self.map.entry(fragment_id).or_insert_with(|| (0, None, vec![Box::new([]); fragment_total]));
+        self.map
+            .entry(fragment_id)
+            .or_insert_with(|| (0, None, vec![Box::new([]); fragment_total]));
         let (fragments_received, first_message_id_opt, fragment_list) =
             self.map.get_mut(&fragment_id).unwrap();
 
@@ -69,7 +71,10 @@ impl FragmentReceiver {
             Err(e) => {
                 // Reassembled bytes are unreadable — peer sent a malformed fragmented
                 // message. Discard the whole sequence rather than crashing.
-                warn!("Discarding malformed reassembled fragment (id={:?}, {}); dropping message.", fragment_id, e);
+                warn!(
+                    "Discarding malformed reassembled fragment (id={:?}, {}); dropping message.",
+                    fragment_id, e
+                );
                 return None;
             }
         };

@@ -97,14 +97,20 @@ pub trait LocalEntityAndGlobalEntityConverter {
         owned_entity: &OwnedLocalEntity,
     ) -> Result<GlobalEntity, EntityDoesNotExistError> {
         match owned_entity {
-            OwnedLocalEntity::Host { id, is_static: true } => {
-                self.static_host_entity_to_global_entity(&HostEntity::new(*id))
-            }
-            OwnedLocalEntity::Host { id, is_static: false } => {
-                self.host_entity_to_global_entity(&HostEntity::new(*id))
-            }
+            OwnedLocalEntity::Host {
+                id,
+                is_static: true,
+            } => self.static_host_entity_to_global_entity(&HostEntity::new(*id)),
+            OwnedLocalEntity::Host {
+                id,
+                is_static: false,
+            } => self.host_entity_to_global_entity(&HostEntity::new(*id)),
             OwnedLocalEntity::Remote { id, is_static } => {
-                let remote = if *is_static { RemoteEntity::new_static(*id) } else { RemoteEntity::new(*id) };
+                let remote = if *is_static {
+                    RemoteEntity::new_static(*id)
+                } else {
+                    RemoteEntity::new(*id)
+                };
                 self.remote_entity_to_global_entity(&remote)
             }
         }
@@ -135,7 +141,10 @@ impl LocalEntityAndGlobalEntityConverter for FakeEntityConverter {
         &self,
         _global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        Ok(OwnedLocalEntity::Host { id: 0, is_static: false })
+        Ok(OwnedLocalEntity::Host {
+            id: 0,
+            is_static: false,
+        })
     }
 
     fn host_entity_to_global_entity(
@@ -169,7 +178,10 @@ impl LocalEntityAndGlobalEntityConverterMut for FakeEntityConverter {
         &mut self,
         _global_entity: &GlobalEntity,
     ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
-        Ok(OwnedLocalEntity::Host { id: 0, is_static: false })
+        Ok(OwnedLocalEntity::Host {
+            id: 0,
+            is_static: false,
+        })
     }
 }
 
