@@ -300,7 +300,11 @@ impl<'w> Server<'w> {
     }
 
     //// Messages ////
-    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) -> Result<(), NaiaServerError> {
+    pub fn send_message<C: Channel, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        message: &M,
+    ) -> Result<(), NaiaServerError> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.send_message::<C, M>(user_key, message),
             ServerImpl::Full(server) => server.send_message::<C, M>(user_key, message),
@@ -466,10 +470,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn global_entity_priority_mut(
-        &mut self,
-        entity: Entity,
-    ) -> EntityPriorityMut<'_, Entity> {
+    pub fn global_entity_priority_mut(&mut self, entity: Entity) -> EntityPriorityMut<'_, Entity> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.global_entity_priority_mut(entity),
             ServerImpl::Full(server) => server.global_entity_priority_mut(entity),
@@ -618,8 +619,6 @@ impl<'w> Server<'w> {
         }
     }
 
-
-
     pub(crate) fn disable_replication(&mut self, entity: &Entity) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.disable_entity_replication(entity),
@@ -741,10 +740,7 @@ impl<'w> Server<'w> {
     /// `resource_scope` (so the caller doesn't need to reach for the
     /// private wrapper), then delegates to
     /// [`crate::apply_receive_output::apply_receive_output`].
-    pub fn apply_receive_output(
-        world: &mut World,
-        output: naia_server::ReceiveOutput<Entity>,
-    ) {
+    pub fn apply_receive_output(world: &mut World, output: naia_server::ReceiveOutput<Entity>) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             crate::apply_receive_output::apply_receive_output(world, &mut *server, output);
         });

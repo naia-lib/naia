@@ -10,10 +10,7 @@ use std::{hash::Hash, sync::Arc};
 
 use naia_shared::Protocol;
 
-use crate::{
-    RecvHandle, SendHandle, ServerConfig, WorldServer,
-    server::ServerShared,
-};
+use crate::{server::ServerShared, RecvHandle, SendHandle, ServerConfig, WorldServer};
 
 use super::SimHandle;
 
@@ -45,6 +42,9 @@ where
     let ws = WorldServer::<E>::new(server_config, protocol);
     let (coord_state, recv, send) = ws.into_pipeline_handles();
     let shared: Arc<ServerShared<E>> = Arc::clone(&recv.state.shared);
-    let sim_handle = SimHandle { state: coord_state, shared };
+    let sim_handle = SimHandle {
+        state: coord_state,
+        shared,
+    };
     (sim_handle, recv, send)
 }

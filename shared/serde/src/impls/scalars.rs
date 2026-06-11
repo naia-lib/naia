@@ -267,11 +267,7 @@ impl Serde for i8 {
         let byte = [reader.read_byte()?];
         let mut container = [0_i8];
         unsafe {
-            std::ptr::copy_nonoverlapping(
-                byte.as_ptr() as *const i8,
-                container.as_mut_ptr(),
-                1,
-            )
+            std::ptr::copy_nonoverlapping(byte.as_ptr() as *const i8, container.as_mut_ptr(), 1)
         }
         Ok(container[0])
     }

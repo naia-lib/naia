@@ -8,11 +8,11 @@
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};
-use naia_server::ServerConfig;
 use naia_server::ReplicationConfig;
+use naia_server::ServerConfig;
 use naia_shared::EntityAuthStatus;
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientKey, ServerAuthEvent, ServerConnectEvent, Scenario,
+    protocol, Auth, ClientConnectEvent, ClientKey, Scenario, ServerAuthEvent, ServerConnectEvent,
     TestMatchState, TestScore,
 };
 
@@ -240,9 +240,7 @@ fn remove_resource_propagates_to_client() {
     settle(&mut scenario, 20);
 
     // Client sees it
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |c| c.has_resource::<TestScore>().then_some(()))
-    });
+    scenario.expect(|ctx| ctx.client(client_key, |c| c.has_resource::<TestScore>().then_some(())));
 
     scenario.mutate(|ctx| {
         ctx.server(|server| {
@@ -254,10 +252,9 @@ fn remove_resource_propagates_to_client() {
 
     // Client no longer sees it
     scenario.expect(|ctx| {
-        ctx.client(
-            client_key,
-            |c| (!c.has_resource::<TestScore>()).then_some(()),
-        )
+        ctx.client(client_key, |c| {
+            (!c.has_resource::<TestScore>()).then_some(())
+        })
     });
 }
 
@@ -362,9 +359,8 @@ fn per_field_diff_one_field_sends_fewer_bytes_than_two() {
             });
         });
         // mutate(|_|{}) is one tick. Capture bytes for THIS tick only.
-        let bytes_under_test = scenario.mutate(|ctx| {
-            ctx.server(|s| s.server_outgoing_bytes_last_tick())
-        });
+        let bytes_under_test =
+            scenario.mutate(|ctx| ctx.server(|s| s.server_outgoing_bytes_last_tick()));
 
         // Settle so the test cleanup is clean.
         for _ in 0..5 {
@@ -408,9 +404,7 @@ fn delegated_resource_supports_client_authority_request() {
     settle(&mut scenario, 30);
 
     // Sanity: client should observe the resource before delegation kicks in.
-    scenario.expect(|ctx| {
-        ctx.client(client_key, |c| c.has_resource::<TestScore>().then_some(()))
-    });
+    scenario.expect(|ctx| ctx.client(client_key, |c| c.has_resource::<TestScore>().then_some(())));
 
     // Configure for delegation.
     scenario.mutate(|ctx| {
@@ -433,16 +427,19 @@ fn delegated_resource_supports_client_authority_request() {
     });
 
     // Initial state: server-authoritative (no client holds yet)
-    let server_status = scenario.mutate(|ctx| {
-        ctx.server(|server| server.has_resource::<TestScore>())
-    });
+    let server_status =
+        scenario.mutate(|ctx| ctx.server(|server| server.has_resource::<TestScore>()));
     assert!(server_status);
 
     // Client requests authority.
     scenario.mutate(|ctx| {
         ctx.client(client_key, |c| {
             let res = c.request_resource_authority::<TestScore>();
-            assert!(res.is_ok(), "request_resource_authority should succeed: {:?}", res);
+            assert!(
+                res.is_ok(),
+                "request_resource_authority should succeed: {:?}",
+                res
+            );
         });
     });
     settle(&mut scenario, 30);
@@ -535,9 +532,8 @@ fn late_joining_client_observes_pre_existing_resource() {
         })
     });
     scenario.mutate(|ctx| ctx.server(|server| server.accept_connection(&client_key)));
-    scenario.expect(|ctx| {
-        ctx.server(|server| server.read_event::<ServerConnectEvent>().map(|_| ()))
-    });
+    scenario
+        .expect(|ctx| ctx.server(|server| server.read_event::<ServerConnectEvent>().map(|_| ())));
     scenario.mutate(|ctx| {
         ctx.server(|server| {
             server

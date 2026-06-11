@@ -148,7 +148,10 @@ impl LocalEntityMap {
             );
         }
         if self.host_to_global.contains_key(&host_entity) {
-            panic!("Cannot overwrite inserted static host entity {:?}", host_entity);
+            panic!(
+                "Cannot overwrite inserted static host entity {:?}",
+                host_entity
+            );
         }
 
         self.global_to_local.insert(
@@ -195,7 +198,7 @@ impl LocalEntityMap {
         self.host_to_global.get(host_entity)
     }
 
-/// Removes the record for `global_entity` and cleans up the reverse index, returning the record if it existed.
+    /// Removes the record for `global_entity` and cleans up the reverse index, returning the record if it existed.
     pub fn remove_by_global_entity(
         &mut self,
         global_entity: &GlobalEntity,

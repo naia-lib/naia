@@ -141,7 +141,8 @@ impl App {
 
                         let new_message = StringMessage::new(new_message_contents);
                         self.server
-                            .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message).unwrap();
+                            .send_message::<UnorderedReliableChannel, _>(&user_key, &new_message)
+                            .unwrap();
                     }
                 }
 

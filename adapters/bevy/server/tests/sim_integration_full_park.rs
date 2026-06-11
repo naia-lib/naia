@@ -23,8 +23,8 @@ use std::{thread, time::Duration};
 use bevy_app::App;
 
 use naia_bevy_server::{
-    transport, SimHandleRes, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig,
-    ServerConfig,
+    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, ServerConfig,
+    SimHandleRes,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, TestClock};
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
@@ -144,7 +144,10 @@ fn sim_handle_borrowable_while_parked() {
     state.park_workers();
     // Now safely borrow the SimHandle.
     let sim_handle_opt = app.world_mut().resource_mut::<SimHandleRes>().0.take();
-    assert!(sim_handle_opt.is_some(), "SimHandle borrowable while parked");
+    assert!(
+        sim_handle_opt.is_some(),
+        "SimHandle borrowable while parked"
+    );
     app.world_mut().resource_mut::<SimHandleRes>().0 = sim_handle_opt;
     let state = app.world().resource::<PluginInternalState>();
     state.unpark_workers();

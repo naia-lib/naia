@@ -5,7 +5,6 @@
 
 use crate::steps::prelude::*;
 
-
 // ──────────────────────────────────────────────────────────────────────
 // Observability — RTT preconditions
 // ──────────────────────────────────────────────────────────────────────
@@ -48,7 +47,6 @@ fn given_link_high_jitter_loss(ctx: &mut TestWorldMut) {
     let adverse = LinkConditionerConfig::new(100, 50, 0.1);
     scenario.configure_link_conditioner(&client_key, Some(adverse.clone()), Some(adverse));
 }
-
 
 /// Given the link has 20 percent packet loss.
 ///

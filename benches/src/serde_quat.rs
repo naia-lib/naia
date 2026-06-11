@@ -18,7 +18,9 @@ impl BenchQuat {
     const MAX_SIZE: f32 = 32.0;
 
     pub fn new(x: f32, y: f32, z: f32, w: f32) -> Self {
-        Self { inner: [x, y, z, w] }
+        Self {
+            inner: [x, y, z, w],
+        }
     }
 
     pub fn get(&self) -> [f32; 4] {
@@ -43,7 +45,9 @@ impl ConstBitLength for SkipComponent {
 impl Serde for BenchQuat {
     fn ser(&self, writer: &mut dyn BitWrite) {
         let q = self.inner;
-        let len = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3]).sqrt().max(1e-12);
+        let len = (q[0] * q[0] + q[1] * q[1] + q[2] * q[2] + q[3] * q[3])
+            .sqrt()
+            .max(1e-12);
         let q = [q[0] / len, q[1] / len, q[2] / len, q[3] / len];
 
         let mut biggest_value = f32::MIN;
@@ -77,9 +81,8 @@ impl Serde for BenchQuat {
             SkipComponent::W => q[3] < 0.0,
         };
 
-        let components = components.map(|c| {
-            SignedInteger::<{ Self::BITS }>::new((c * Self::MAX_SIZE).round() as i128)
-        });
+        let components = components
+            .map(|c| SignedInteger::<{ Self::BITS }>::new((c * Self::MAX_SIZE).round() as i128));
 
         skip_component.ser(writer);
         skipped_is_negative.ser(writer);

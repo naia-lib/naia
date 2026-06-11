@@ -10,10 +10,8 @@ use crate::steps::world_helpers::{last_entity_ref, named_client_ref};
 
 /// Then the entity spawns on the client with the replicated component.
 #[then("the entity spawns on the client with the replicated component")]
-fn then_entity_spawns_on_client_with_replicated_component(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{Position};
+fn then_entity_spawns_on_client_with_replicated_component(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::Position;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -35,7 +33,8 @@ fn then_client_observes_component_update(ctx: &TestWorldRef) -> AssertOutcome<()
     use crate::steps::world_helpers_connect::assert_client_position_eq;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
-    let expected: (f32, f32) = ctx.scenario()
+    let expected: (f32, f32) = ctx
+        .scenario()
         .bdd_get(LAST_COMPONENT_VALUE_KEY)
         .expect("No component value stored");
     assert_client_position_eq(ctx, client_key, entity_key, expected)
@@ -51,7 +50,8 @@ fn then_client_observes_server_value(ctx: &TestWorldRef) -> AssertOutcome<()> {
     use crate::steps::world_helpers_connect::assert_client_position_eq;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
-    let server_value: (f32, f32) = ctx.scenario()
+    let server_value: (f32, f32) = ctx
+        .scenario()
         .bdd_get(LAST_COMPONENT_VALUE_KEY)
         .expect("No server component value stored");
     assert_client_position_eq(ctx, client_key, entity_key, server_value)
@@ -62,9 +62,7 @@ fn then_client_observes_server_value(ctx: &TestWorldRef) -> AssertOutcome<()> {
 /// EntityKey is the harness abstraction over Naia's GlobalEntity.
 /// Stable identity throughout an entity's lifetime is the contract.
 #[then("the entity GlobalEntity remains unchanged")]
-fn then_entity_global_entity_remains_unchanged(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_global_entity_remains_unchanged(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let initial: naia_test_harness::EntityKey = ctx
         .scenario()
         .bdd_get(INITIAL_ENTITY_KEY)
@@ -113,31 +111,18 @@ fn then_client_eventually_observes_all_spawned(
 
 /// Then the global priority gain on the last entity is {float}.
 #[then("the global priority gain on the last entity is {float}")]
-fn then_global_gain_on_last_entity_is(
-    ctx: &TestWorldRef,
-    expected: f32,
-) -> AssertOutcome<()> {
+fn then_global_gain_on_last_entity_is(ctx: &TestWorldRef, expected: f32) -> AssertOutcome<()> {
     let entity_key = last_entity_ref(ctx);
     ctx.server(|server| match server.global_entity_gain(&entity_key) {
-        Some(g) if (g - expected).abs() < f32::EPSILON => {
-            AssertOutcome::Passed(())
-        }
-        Some(g) => AssertOutcome::Failed(format!(
-            "global gain is {} but expected {}",
-            g, expected
-        )),
-        None => AssertOutcome::Failed(format!(
-            "no gain override is set (expected {})",
-            expected
-        )),
+        Some(g) if (g - expected).abs() < f32::EPSILON => AssertOutcome::Passed(()),
+        Some(g) => AssertOutcome::Failed(format!("global gain is {} but expected {}", g, expected)),
+        None => AssertOutcome::Failed(format!("no gain override is set (expected {})", expected)),
     })
 }
 
 /// Then the client eventually sees the last entity.
 #[then("the client eventually sees the last entity")]
-fn then_client_eventually_sees_last_entity(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_eventually_sees_last_entity(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -189,9 +174,7 @@ fn then_client_eventually_observes_entity_at(
 /// Confirms ScopeExit::Persist prevented the Despawn when the entity
 /// went out-of-scope.
 #[then("the client still has the entity")]
-fn then_client_still_has_entity(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_still_has_entity(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -217,9 +200,14 @@ fn then_client_entity_position_still_zero(ctx: &TestWorldRef) -> AssertOutcome<(
         let Some(entity) = client.entity(&entity_key) else {
             return AssertOutcome::Failed("Entity absent despite ScopeExit::Persist".into());
         };
-        let Some(pos) = entity.component::<Position>() else { return AssertOutcome::Pending; };
-        if (*pos.x).abs() < f32::EPSILON { AssertOutcome::Passed(()) }
-        else { AssertOutcome::Failed(format!("Position leaked while out-of-scope: x={}", *pos.x)) }
+        let Some(pos) = entity.component::<Position>() else {
+            return AssertOutcome::Pending;
+        };
+        if (*pos.x).abs() < f32::EPSILON {
+            AssertOutcome::Passed(())
+        } else {
+            AssertOutcome::Failed(format!("Position leaked while out-of-scope: x={}", *pos.x))
+        }
     })
 }
 
@@ -228,10 +216,8 @@ fn then_client_entity_position_still_zero(ctx: &TestWorldRef) -> AssertOutcome<(
 /// Polling — confirms accumulated updates from the Paused period
 /// arrive after re-entry.
 #[then("the client entity position becomes 100.0")]
-fn then_client_entity_position_becomes_hundred(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{Position};
+fn then_client_entity_position_becomes_hundred(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::Position;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -251,10 +237,8 @@ fn then_client_entity_position_becomes_hundred(
 
 /// Then the client entity has ImmutableLabel.
 #[then("the client entity has ImmutableLabel")]
-fn then_client_entity_has_label(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{ImmutableLabel};
+fn then_client_entity_has_label(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::ImmutableLabel;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -271,10 +255,8 @@ fn then_client_entity_has_label(
 
 /// Then the client entity does not have ImmutableLabel.
 #[then("the client entity does not have ImmutableLabel")]
-fn then_client_entity_no_label(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
-    use naia_test_harness::{ImmutableLabel};
+fn then_client_entity_no_label(ctx: &TestWorldRef) -> AssertOutcome<()> {
+    use naia_test_harness::ImmutableLabel;
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -349,9 +331,7 @@ fn then_entity_out_of_scope_for_client_b(ctx: &TestWorldRef) {
 /// Polling variant of the above — used after an unpublish where the
 /// scope removal propagates asynchronously.
 #[then("the entity becomes out-of-scope for client B")]
-fn then_entity_becomes_out_of_scope_for_client_b(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_becomes_out_of_scope_for_client_b(ctx: &TestWorldRef) -> AssertOutcome<()> {
     if !check_entity_in_scope(ctx, "B") {
         AssertOutcome::Passed(())
     } else {
@@ -394,7 +374,8 @@ fn then_client_observes_replication_config(
             match entity.replication_config() {
                 Some(config) if config == expected => AssertOutcome::Passed(()),
                 Some(other) => AssertOutcome::Failed(format!(
-                    "Expected replication_config {:?}, got {:?}", expected, other
+                    "Expected replication_config {:?}, got {:?}",
+                    expected, other
                 )),
                 None => AssertOutcome::Pending,
             }
@@ -453,8 +434,6 @@ fn then_client_matchstate_phase_equals(ctx: &TestWorldRef, expected: u8) -> Asse
     }
 }
 
-
-
 /// Then the client's MatchState is absent.
 #[then("the client's MatchState is absent")]
 fn then_client_has_no_matchstate(ctx: &TestWorldRef) -> AssertOutcome<()> {
@@ -492,7 +471,10 @@ fn then_server_score_away_equals(ctx: &TestWorldRef, expected: u32) -> AssertOut
 
 /// Then the server's PlayerSelection.selected_id equals {int}.
 #[then("the server's PlayerSelection.selected_id equals {int}")]
-fn then_server_playerselection_selected_id_equals(ctx: &TestWorldRef, expected: u16) -> AssertOutcome<()> {
+fn then_server_playerselection_selected_id_equals(
+    ctx: &TestWorldRef,
+    expected: u16,
+) -> AssertOutcome<()> {
     use naia_test_harness::TestPlayerSelection;
     match ctx.server(|server| server.resource::<TestPlayerSelection, _, _>(|r| *r.selected_id)) {
         Some(v) if v == expected => AssertOutcome::Passed(()),
@@ -518,7 +500,9 @@ fn then_alice_auth_granted(ctx: &TestWorldRef) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
     use naia_test_harness::TestPlayerSelection;
     let key = ctx.last_client();
-    match ctx.client(key, |c| c.resource_authority_status::<TestPlayerSelection>()) {
+    match ctx.client(key, |c| {
+        c.resource_authority_status::<TestPlayerSelection>()
+    }) {
         Some(EntityAuthStatus::Granted) => AssertOutcome::Passed(()),
         _ => AssertOutcome::Pending,
     }
@@ -539,7 +523,6 @@ fn then_alice_no_longer_has_playerselection(ctx: &TestWorldRef) -> AssertOutcome
         AssertOutcome::Pending
     }
 }
-
 
 /// Then replication eventually converges despite packet loss.
 ///

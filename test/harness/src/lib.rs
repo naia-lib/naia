@@ -4,8 +4,8 @@ pub mod test_protocol;
 
 pub use harness::{
     ClientExpectCtx, ClientKey, DiffHandlerSnapshot, EntityKey, EntityOwner, ExpectCtx,
-    ExpectResult, OperationResult, Scenario, ServerExpectCtx, Trace, TraceDirection, TraceEvent,
-    TracePacket, ToTicks, TrackedClientEvent, TrackedServerEvent,
+    ExpectResult, OperationResult, Scenario, ServerExpectCtx, ToTicks, Trace, TraceDirection,
+    TraceEvent, TracePacket, TrackedClientEvent, TrackedServerEvent,
 };
 pub use naia_shared::handshake::RejectReason;
 pub use naia_shared::LinkConditionerConfig;

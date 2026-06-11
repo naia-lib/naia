@@ -29,9 +29,9 @@ use naia_bevy_server::{
     transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, SendHandleRes,
     ServerConfig, SnapshotReceiverRes, SnapshotSenderRes,
 };
-use naia_shared::SnapshotWorld;
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
+use naia_shared::SnapshotWorld;
 
 use naia_test_harness::test_protocol::Position;
 
@@ -88,7 +88,10 @@ fn published_snapshot_drains_via_consumer_park_window() {
     // constructible; we use a synthetic empty world.
     let sender = app.world().resource::<SnapshotSenderRes>().0.clone();
     sender.send(SnapshotWorld::<Entity>::new());
-    assert!(sender.has_pending(), "snapshot pending immediately after send");
+    assert!(
+        sender.has_pending(),
+        "snapshot pending immediately after send"
+    );
 
     // In test_time the send worker is a PURE PARKING SERVICE — it never drains
     // snapshots itself (driving the send on its real-time thread made connect

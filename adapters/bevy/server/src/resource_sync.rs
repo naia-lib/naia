@@ -256,10 +256,7 @@ fn sync_resource_outgoing<R: ReplicatedResource>(world: &mut World) {
 /// Mirrors `naia_shared::Replicate::set_mutator` semantics — uses the
 /// same trait method, just with a `SyncMutator<R>` instead of the
 /// usual NaiaPropertyMutator that the entity-component side uses.
-pub(crate) fn wire_sync_mutator<R: Replicate>(
-    value: &mut R,
-    tracker: &SyncDirtyTracker<R>,
-) {
+pub(crate) fn wire_sync_mutator<R: Replicate>(value: &mut R, tracker: &SyncDirtyTracker<R>) {
     let sync = SyncMutator::<R>::new(tracker);
     let mutator = PropertyMutator::new(sync);
     value.set_mutator(&mutator);
@@ -274,18 +271,17 @@ pub(crate) fn wire_sync_mutator<R: Replicate>(
 /// function panics if `add_resource_events::<R>()` wasn't called first
 /// — the missing `SyncDirtyTracker<R>` indicates the user forgot to
 /// register, and we'd silently fail otherwise.
-pub(crate) fn install_bevy_resource_mirror<R: ReplicatedResource>(
-    world: &mut World,
-    mut value: R,
-) {
-    let tracker = world.get_resource::<SyncDirtyTracker<R>>().unwrap_or_else(|| {
-        panic!(
-            "naia replicate_resource: missing SyncDirtyTracker<{0}>. \
+pub(crate) fn install_bevy_resource_mirror<R: ReplicatedResource>(world: &mut World, mut value: R) {
+    let tracker = world
+        .get_resource::<SyncDirtyTracker<R>>()
+        .unwrap_or_else(|| {
+            panic!(
+                "naia replicate_resource: missing SyncDirtyTracker<{0}>. \
              You must call `app.add_resource_events::<{0}>()` before \
              `commands.replicate_resource(...)`.",
-            std::any::type_name::<R>()
-        )
-    });
+                std::any::type_name::<R>()
+            )
+        });
     wire_sync_mutator::<R>(&mut value, tracker);
     world.insert_resource(value);
 }

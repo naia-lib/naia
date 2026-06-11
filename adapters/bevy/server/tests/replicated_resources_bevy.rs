@@ -37,11 +37,11 @@ use naia_bevy_server::{
     ServerCommandsExt, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
-use naia_client::transport::local::{
-    LocalAddrCell, LocalClientSocket, Socket as ClientSocket,
-};
+use naia_client::transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket};
 use naia_server::transport::local::{LocalServerSocket, Socket as ServerSocket};
-use naia_shared::{transport::local::LocalTransportHub, ChannelDirection, ChannelMode, ReliableSettings};
+use naia_shared::{
+    transport::local::LocalTransportHub, ChannelDirection, ChannelMode, ReliableSettings,
+};
 use naia_test_harness::test_protocol::{Auth, ReliableChannel, TestScore};
 
 const FAKE_SERVER_ADDR: &str = "127.0.0.1:14191";
@@ -156,8 +156,7 @@ impl BevyHarness {
             })
             .add_systems(
                 Update,
-                (sys_server_auth, sys_server_connect)
-                    .in_set(naia_bevy_shared::HandleWorldEvents),
+                (sys_server_auth, sys_server_connect).in_set(naia_bevy_shared::HandleWorldEvents),
             );
         server_app.update();
 
@@ -175,13 +174,8 @@ impl BevyHarness {
             .init_resource::<ClientConnected>()
             .init_resource::<EventCounters>()
             .add_systems(Startup, move |mut client: Client<Main>| {
-                let (
-                    client_addr,
-                    auth_req_tx,
-                    auth_resp_rx,
-                    client_data_tx,
-                    client_data_rx,
-                ) = hub_for_client.register_client();
+                let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
+                    hub_for_client.register_client();
                 let addr_cell = LocalAddrCell::new();
                 addr_cell.set_sync(hub_for_client.server_addr());
                 let identity_token = Arc::new(Mutex::new(None::<naia_shared::IdentityToken>));
@@ -239,13 +233,13 @@ impl BevyHarness {
         // queued Command is applied (Bevy applies queued Commands at
         // apply_deferred, which run_system doesn't trigger).
         let value_cell = parking_lot::Mutex::new(Some(value));
-        let id = self.server_app.register_system(
-            move |mut commands: bevy_ecs::system::Commands| {
-                if let Some(v) = value_cell.lock().take() {
-                    commands.replicate_resource(v);
-                }
-            },
-        );
+        let id =
+            self.server_app
+                .register_system(move |mut commands: bevy_ecs::system::Commands| {
+                    if let Some(v) = value_cell.lock().take() {
+                        commands.replicate_resource(v);
+                    }
+                });
         self.server_app
             .world_mut()
             .run_system(id)
@@ -338,13 +332,13 @@ fn f5_echo_prevention_server_authoritative() {
 
     // Server mutates the resource (one Property field).
     let cell = parking_lot::Mutex::new(Some(()));
-    let id = h.server_app.register_system(
-        move |mut score: bevy_ecs::system::ResMut<TestScore>| {
+    let id = h
+        .server_app
+        .register_system(move |mut score: bevy_ecs::system::ResMut<TestScore>| {
             if cell.lock().take().is_some() {
                 *score.home = 99;
             }
-        },
-    );
+        });
     h.server_app.world_mut().run_system(id).expect("mutate");
     h.server_app.update();
     h.tick_n(60);
@@ -355,7 +349,10 @@ fn f5_echo_prevention_server_authoritative() {
         .world()
         .get_resource::<TestScore>()
         .expect("Res<TestScore> on client");
-    assert_eq!(*score.home, 99, "incoming server update should reach client");
+    assert_eq!(
+        *score.home, 99,
+        "incoming server update should reach client"
+    );
 
     // Echo-prevention assertion: client should see EXACTLY ONE
     // UpdateResourceEvent. If echo were happening, the server would
@@ -397,15 +394,15 @@ fn f3_disconnect_with_resource_authority_reverts_to_available() {
     h.tick_n(40);
 
     let cell = parking_lot::Mutex::new(Some(()));
-    let id = h.server_app.register_system(
-        move |mut commands: bevy_ecs::system::Commands| {
+    let id = h
+        .server_app
+        .register_system(move |mut commands: bevy_ecs::system::Commands| {
             if cell.lock().take().is_some() {
                 commands.configure_replicated_resource::<TestScore>(
                     naia_bevy_server::ReplicationConfig::delegated(),
                 );
             }
-        },
-    );
+        });
     h.server_app.world_mut().run_system(id).expect("configure");
     h.server_app.update();
     h.tick_n(80);

@@ -117,8 +117,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Auth grants deferred one tick to ensure entity registration on the
     /// client side. Drained at the end of `send_all_packets` Phase 3.
-    pub(crate) pending_auth_grants:
-        Mutex<Vec<(UserKey, GlobalEntity, EntityAuthStatus)>>,
+    pub(crate) pending_auth_grants: Mutex<Vec<(UserKey, GlobalEntity, EntityAuthStatus)>>,
 
     /// 4-F.naia.c.1: outbound packets queued by the recv path because the
     /// recv thread doesn't own `SendState::send_io`. Used for Handshake
@@ -126,8 +125,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// `send_all_packets` via `flush_pending_outbound_packets`. LOCK ORDER
     /// position #8 (after `pending_auth_grants`, before `pending_handshakes`).
     /// Briefly-held Mutex on push/drain — no hot-path contention.
-    pub(crate) pending_outbound_packets:
-        Mutex<Vec<(SocketAddr, OutgoingPacket)>>,
+    pub(crate) pending_outbound_packets: Mutex<Vec<(SocketAddr, OutgoingPacket)>>,
 
     /// 4-F.naia.c.1: addresses for which the recv path observed a Handshake
     /// `ClientConnectRequest` packet. Recv pushes (one entry per inbound

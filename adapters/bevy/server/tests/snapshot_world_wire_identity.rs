@@ -35,9 +35,7 @@ use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{Plugin as ServerPlugin, ServerConfig};
 use naia_bevy_shared::{Protocol, WorldProxy, WorldRefType};
-use naia_shared::{
-    BitWriter, ComponentKind, FakeEntityConverter, SnapshotWorld,
-};
+use naia_shared::{BitWriter, ComponentKind, FakeEntityConverter, SnapshotWorld};
 use naia_test_harness::test_protocol::Position;
 
 fn protocol() -> Protocol {
@@ -68,10 +66,7 @@ fn read_position(world_view: &impl WorldRefType<Entity>, entity: Entity) -> Opti
 /// state for a fixed set of (entity, component) pairs. The "equivalent"
 /// here means: for the (entity, Position) pairs in `entries`, the
 /// snapshot returns the same value the bevy world holds.
-fn snapshot_mirror(
-    app: &App,
-    entries: &[Entity],
-) -> SnapshotWorld<Entity> {
+fn snapshot_mirror(app: &App, entries: &[Entity]) -> SnapshotWorld<Entity> {
     use naia_shared::Replicate;
 
     let mut snap: SnapshotWorld<Entity> = SnapshotWorld::new();
@@ -182,7 +177,9 @@ fn lifecycle_spawn_insert_mutate_remove_despawn_all_parity() {
     assert!(!snap.has_component::<Position>(&entity));
 
     // 2. Insert Position. Both views agree on presence + value.
-    app.world_mut().entity_mut(entity).insert(Position::new(1.0, 2.0));
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(Position::new(1.0, 2.0));
     let snap = snapshot_mirror(&app, &[entity]);
     let bevy_view = app.world().proxy();
     assert_eq!(read_position(&bevy_view, entity), Some((1.0, 2.0)));
@@ -340,7 +337,10 @@ fn dyn_write_bytes_match_across_views() {
     );
 
     // Sanity: bytes are non-empty (we actually wrote something).
-    assert!(!bevy_bytes.is_empty(), "serialized output must not be empty");
+    assert!(
+        !bevy_bytes.is_empty(),
+        "serialized output must not be empty"
+    );
 }
 
 #[test]

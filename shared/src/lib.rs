@@ -22,15 +22,15 @@ cfg_if! {
 }
 
 pub use naia_derive::{Channel, Message, MessageBevy, Replicate, ReplicateBevy};
-pub use naia_serde::{
-    BitCounter, BitReader, BitWrite, BitWriter, CachedComponentUpdate, ConstBitLength, FileBitWriter, OutgoingPacket, OwnedBitReader,
-    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
-    SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger, SignedVariableFloat,
-    SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
-    UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
-};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_serde::bench_serde_counters;
+pub use naia_serde::{
+    BitCounter, BitReader, BitWrite, BitWriter, CachedComponentUpdate, ConstBitLength,
+    FileBitWriter, OutgoingPacket, OwnedBitReader, Serde, SerdeBevyClient, SerdeBevyServer,
+    SerdeBevyShared, SerdeErr, SerdeFloatConversion, SerdeIntegerConversion, SerdeInternal,
+    SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat,
+    UnsignedInteger, UnsignedVariableFloat, UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
+};
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,
     Random, SocketConfig, TimeQueue,
@@ -109,10 +109,10 @@ pub use connection::{
     encoder::Encoder,
     entity_priority::{EntityPriorityMut, EntityPriorityRef},
     loss_monitor::LossMonitor,
-    priority_state::{GlobalPriorityState, OutgoingPriorityHook, UserPriorityState},
     packet_notifiable::PacketNotifiable,
     packet_type::PacketType,
     ping_store::{PingIndex, PingStore},
+    priority_state::{GlobalPriorityState, OutgoingPriorityHook, UserPriorityState},
     standard_header::StandardHeader,
 };
 pub use messages::{
@@ -154,10 +154,7 @@ pub use world::{
             ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
             ReplicaRefTrait, ReplicaRefWrapper,
         },
-        replicate::{
-            Replicate, Replicate as ReplicateBevy, ReplicateBuilder,
-            ReplicatedComponent,
-        },
+        replicate::{Replicate, Replicate as ReplicateBevy, ReplicateBuilder, ReplicatedComponent},
     },
     delegation::{
         auth_channel::EntityAuthAccessor,
@@ -180,7 +177,7 @@ pub use world::{
     },
     host::host_world_manager::HostWorldManager,
     remote::remote_world_manager::RemoteWorldManager,
-    resource::{ResourceKinds, ResourceRegistry, resource_registry::ResourceAlreadyExists},
+    resource::{resource_registry::ResourceAlreadyExists, ResourceKinds, ResourceRegistry},
     shared_global_world_manager::SharedGlobalWorldManager,
     world_type::{WorldMutType, WorldRefType},
 };
@@ -195,17 +192,19 @@ pub use protocol::{Protocol, ProtocolPlugin};
 pub use protocol_id::ProtocolId;
 pub use types::{DisconnectReason, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
-pub use world::publicity::Publicity;
-pub use world::entity_index::{LocalEntityIndex, KeyGenerator32};
 pub use world::entity_event::EntityEvent;
+pub use world::entity_index::{KeyGenerator32, LocalEntityIndex};
 pub use world::host::host_entity_generator::HostEntityGenerator;
 pub use world::host::host_world_manager::SubCommandId;
 pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};
 pub use world::local::local_entity_map::LocalEntityMap;
+#[cfg(feature = "bench_instrumentation")]
+pub use world::local::local_world_manager::bench_take_events_counters;
+#[cfg(feature = "bench_instrumentation")]
+pub use world::local::local_world_manager::cmd_emission_counters;
 pub use world::local::local_world_manager::LocalWorldManager;
+pub use world::publicity::Publicity;
 pub use world::snapshot_world::{SendPlan, SendUpdateEvents, SnapshotWorld};
-pub use world::world_reader::WorldReader;
-pub use world::world_writer::{SnapshotMap, UpdateKinds};
 pub use world::sync::auth_channel::EntityAuthChannelState;
 pub use world::sync::authority_error::AuthorityError;
 pub use world::sync::host_entity_channel::HostEntityChannel;
@@ -214,22 +213,20 @@ pub use world::sync::remote_entity_channel::EntityChannelState;
 pub use world::sync::remote_entity_channel::RemoteEntityChannel;
 pub use world::update::atomic_bit_set::AtomicBitSet;
 pub use world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
+pub use world::update::connection_visibility_bitset::ConnectionVisibilityBitset;
 pub use world::update::diff_mask::DiffMask;
 pub use world::update::global_diff_handler::GlobalDiffHandler;
 pub use world::update::global_dirty_bitset::{FrozenGlobalDirty, GlobalDirtyBitset};
-pub use world::update::connection_visibility_bitset::ConnectionVisibilityBitset;
 pub use world::update::global_entity_index::GlobalEntityIndex;
-pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
 pub use world::update::mut_channel::{DirtyNotifier, DirtyQueue, DirtySet};
-#[cfg(feature = "bench_instrumentation")]
-pub use world::local::local_world_manager::bench_take_events_counters;
-#[cfg(feature = "bench_instrumentation")]
-pub use world::local::local_world_manager::cmd_emission_counters;
+pub use world::update::mut_channel::{MutChannelType, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
 pub use world::update::user_diff_handler::dirty_scan_counters;
+pub use world::world_reader::WorldReader;
 #[cfg(feature = "bench_instrumentation")]
 pub use world::world_writer::bench_write_counters;
+pub use world::world_writer::{SnapshotMap, UpdateKinds};
 pub use wrapping_number::{
     sequence_equal_or_greater_than, sequence_equal_or_less_than, sequence_greater_than,
     sequence_less_than, wrapping_diff,

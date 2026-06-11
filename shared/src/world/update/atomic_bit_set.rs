@@ -167,9 +167,7 @@ impl AtomicBitSet {
 
     /// True iff every word is zero.
     pub fn is_clear(&self) -> bool {
-        self.words
-            .iter()
-            .all(|w| w.load(Ordering::Relaxed) == 0)
+        self.words.iter().all(|w| w.load(Ordering::Relaxed) == 0)
     }
 
     /// OR-merge another `DiffMask` (variable-length byte array, wire
@@ -266,7 +264,6 @@ impl AtomicBitSet {
         let bits = word.load(Ordering::Relaxed);
         ((bits >> (byte_in_word * 8)) & 0xFF) as u8
     }
-
 }
 
 #[cfg(test)]
@@ -312,7 +309,7 @@ mod tests {
         // First bit in word 0; clears all → was_clear true.
         let m = AtomicBitSet::new(128);
         assert!(m.set_bit(70)); // word 1
-        // Second bit in same word: not was_clear.
+                                // Second bit in same word: not was_clear.
         assert!(!m.set_bit(80));
         // Setting bit in word 0 while word 1 has bits: not was_clear.
         assert!(!m.set_bit(0));

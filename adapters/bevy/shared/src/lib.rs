@@ -1,25 +1,22 @@
 pub use bevy_ecs;
 
 pub use naia_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, AuthorityError, BitReader, BitWrite,
-    BitWriter,
-    BandwidthConfig, Channel, ChannelDirection, ChannelKind, ChannelMode, ComponentFieldUpdate,
-    ComponentKind, ComponentKinds, PendingComponentUpdate, CompressionConfig, CompressionMode,
-    ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityAuthAccessor,
-    EntityAuthStatus, EntityDoesNotExistError, EntityProperty, FakeEntityConverter, FileBitWriter,
-    GameInstant, GlobalEntity, HostEntity, HostEntityAuthStatus, IdentityToken, Instant,
-    LinkConditionerConfig,
+    sequence_greater_than, sequence_less_than, wrapping_diff, AuthorityError, BandwidthConfig,
+    BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelKind, ChannelMode,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, CompressionConfig, CompressionMode,
+    ConstBitLength, DiffMask, EntityAndGlobalEntityConverter, EntityAuthAccessor, EntityAuthStatus,
+    EntityDoesNotExistError, EntityProperty, FakeEntityConverter, FileBitWriter, GameInstant,
+    GlobalEntity, HostEntity, HostEntityAuthStatus, IdentityToken, Instant, LinkConditionerConfig,
     LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntityMap,
     MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
-    OwnedBitReader, Property, PropertyMutate, PropertyMutator, Random, ReliableSettings,
-    RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicaDynRefWrapper, ReplicaRefWrapper,
-    ReplicatedComponent, ReplicateBevy as Replicate, ReplicateBuilder,
-    Request, ResourceAlreadyExists, ResourceKinds, ResourceRegistry, Response, ResponseReceiveKey,
+    OwnedBitReader, PendingComponentUpdate, Property, PropertyMutate, PropertyMutator, Random,
+    ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicaDynRefWrapper,
+    ReplicaRefWrapper, ReplicateBevy as Replicate, ReplicateBuilder, ReplicatedComponent, Request,
+    ResourceAlreadyExists, ResourceKinds, ResourceRegistry, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
-    SnapshotWorld,
-    Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
-    UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    SnapshotWorld, Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger,
+    UnsignedVariableFloat, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
 };
 
 mod bundle;
@@ -40,15 +37,15 @@ pub use bundle::ReplicateBundle;
 pub use replicated_resource::ReplicatedResource;
 pub use world_op_command::WorldOpCommand;
 
+pub use change_detection::{on_despawn, on_host_owned_added, HostSyncEvent};
+pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
+pub use components::{HostOwned, HostOwnedMap};
 /// Re-export of `naia_shared::TestClock` for bevy-app integration
 /// tests that need to drive naia ticks deterministically. Available
 /// only with the `test_time` feature on this crate (or transitively
 /// via `naia-bevy-server` / `naia-bevy-client`).
 #[cfg(all(feature = "test_time", not(target_arch = "wasm32")))]
 pub use naia_shared::TestClock;
-pub use change_detection::{on_despawn, on_host_owned_added, HostSyncEvent};
-pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
-pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
 pub use protocol::Protocol;
 pub use protocol_plugin::ProtocolPlugin;

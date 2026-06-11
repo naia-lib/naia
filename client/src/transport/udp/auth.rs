@@ -138,9 +138,7 @@ impl PendingRequest {
 
                     Ok((status_code, id_token))
                 }
-                Err(ureq::Error::Status(code, _response)) => {
-                    Ok((code, String::new()))
-                }
+                Err(ureq::Error::Status(code, _response)) => Ok((code, String::new())),
                 Err(e) => Err(format!("{}", e)),
             };
             let _ = tx.send(response_result);

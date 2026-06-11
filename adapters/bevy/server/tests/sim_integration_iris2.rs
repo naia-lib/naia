@@ -21,14 +21,11 @@
 use std::time::Duration;
 
 use bevy_app::{App, Update};
-use bevy_ecs::{
-    entity::Entity,
-    system::Commands,
-};
+use bevy_ecs::{entity::Entity, system::Commands};
 
 use naia_bevy_server::{
     drain_host_sync_into_pipeline,
-    pipeline_actors::{SimHandle, run_with_world_server, spawn_server_handles},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
     Plugin as ServerPlugin, RecvHandle, SendHandle, ServerConfig,
 };
 use naia_bevy_shared::{HostOwned, Protocol as BevyProtocol};
@@ -74,13 +71,11 @@ fn build_handles_listening(
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
-    let (_a, _b, ps, pr) =
-        naia_server::transport::Socket::listen(Box::new(socket));
+    let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(Box::new(socket));
 
-    let (sim_handle, recv, send, ()) =
-        run_with_world_server(sim_handle, recv, send, |ws| {
-            ws.io_load(ps, pr);
-        });
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
+        ws.io_load(ps, pr);
+    });
     (sim_handle, recv, send)
 }
 
@@ -88,7 +83,10 @@ fn build_handles_listening(
 /// Reads through the same public surface cyberlith Sim uses, which
 /// internally consults `global_world_manager` + `global_entity_map`.
 fn entity_registered(sim_handle: &SimHandle<Entity>, entity: Entity) -> bool {
-    sim_handle.send_state_view().live_entities().contains(&entity)
+    sim_handle
+        .send_state_view()
+        .live_entities()
+        .contains(&entity)
 }
 
 /// Returns true iff `SendStateView::required_snapshot_entries` contains
@@ -119,7 +117,10 @@ fn insert_via_host_sync_drain_registers_component() {
 
     // Spawn a bevy entity, add HostOwned (the marker that gates
     // `on_component_added::<R>`), and insert a Position component.
-    let entity = app.world_mut().spawn((HostOwned::new::<Singleton>(), Position::new(1.0, 2.0))).id();
+    let entity = app
+        .world_mut()
+        .spawn((HostOwned::new::<Singleton>(), Position::new(1.0, 2.0)))
+        .id();
 
     // Run a frame so the change-tracking systems fire and write
     // `HostSyncEvent::Insert` into the Messages buffer.
@@ -156,7 +157,10 @@ fn despawn_via_host_sync_drain_removes_record() {
     let mut app = build_app();
     let (sim_handle, recv, send) = build_handles_listening(next_addr());
 
-    let entity = app.world_mut().spawn((HostOwned::new::<Singleton>(), Position::new(0.0, 0.0))).id();
+    let entity = app
+        .world_mut()
+        .spawn((HostOwned::new::<Singleton>(), Position::new(0.0, 0.0)))
+        .id();
     app.update();
 
     let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {

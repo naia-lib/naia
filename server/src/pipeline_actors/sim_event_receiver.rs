@@ -55,9 +55,7 @@ use naia_shared::{
     Channel, ChannelKind, DisconnectReason, Message, MessageContainer, MessageKind, Tick,
 };
 
-use crate::{
-    events::Events, server::receive_output::ReceiveOutput, user::UserKey, EntityOwner,
-};
+use crate::{events::Events, server::receive_output::ReceiveOutput, user::UserKey, EntityOwner};
 
 use super::handles::SimHandle;
 
@@ -337,7 +335,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
 
     /// Push a single connect event into the connect buffer.
     pub fn push_connect(&self, user_key: UserKey) {
-        self.inner.connects.lock().push(SimConnectEvent { user_key });
+        self.inner
+            .connects
+            .lock()
+            .push(SimConnectEvent { user_key });
     }
 
     /// Push a single disconnect event into the disconnect buffer.

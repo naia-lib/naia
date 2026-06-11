@@ -597,4 +597,3 @@ fn then_server_observes_remove_component_event(ctx: &TestWorldRef) -> AssertOutc
         }
     })
 }
-

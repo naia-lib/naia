@@ -261,7 +261,11 @@ impl MainServer {
             // Send multiple times for reliability (like client does)
             for _ in 0..10 {
                 let disconnect_packet = self.handshake_manager.write_disconnect();
-                if self.send_io.send_packet(&address, disconnect_packet).is_err() {
+                if self
+                    .send_io
+                    .send_packet(&address, disconnect_packet)
+                    .is_err()
+                {
                     log::warn!("Server Error: Cannot send disconnect packet to {}", address);
                     break;
                 }
@@ -398,7 +402,8 @@ impl MainServer {
                                     validate_packet,
                                 )) => {
                                     self.finalize_connection(&user_key, &address);
-                                    if self.send_io.send_packet(&address, validate_packet).is_err() {
+                                    if self.send_io.send_packet(&address, validate_packet).is_err()
+                                    {
                                         // Same rationale as SendPacket above: client retries.
                                         warn!(
                                             "Server Error: Cannot send validation packet to {}",

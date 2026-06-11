@@ -418,7 +418,9 @@ impl RemoteEntityChannel {
     }
 
     pub(crate) fn insert_component(&mut self, component_kind: ComponentKind) {
-        self.component_channels.entry(component_kind).or_insert_with(RemoteComponentChannel::new);
+        self.component_channels
+            .entry(component_kind)
+            .or_insert_with(RemoteComponentChannel::new);
     }
 
     pub(crate) fn remove_component(&mut self, component_kind: ComponentKind) {
@@ -469,4 +471,3 @@ impl RemoteEntityChannel {
 
 use crate::world::sync::auth_channel::AuthChannel;
 use crate::world::sync::ordered_ids::OrderedIds;
-

@@ -5,8 +5,8 @@
 
 use crate::steps::prelude::*;
 
-use naia_test_harness::EntityKey;
 use crate::steps::world_helpers::last_entity_mut;
+use naia_test_harness::EntityKey;
 
 // ──────────────────────────────────────────────────────────────────────
 // Authority/scope/ownership preconditions
@@ -20,20 +20,35 @@ use crate::steps::world_helpers::last_entity_mut;
 /// authority is undefined for non-delegated entities.
 #[given("the server spawns a non-delegated entity in-scope for client A")]
 fn given_server_spawns_non_delegated_entity_in_scope_for_client_a(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::named_client_mut;
     use naia_server::ReplicationConfig as SRC;
     use naia_test_harness::{ClientKey, Position};
-    use crate::steps::world_helpers::named_client_mut;
     let client_a: ClientKey = named_client_mut(ctx, "A");
     let scenario = ctx.scenario_mut();
     let room_key = scenario.last_room();
-    let (entity_key, ()) = scenario.mutate(|c| c.server(|s|
-        s.spawn(|mut e| { e.insert_component(Position::new(0.0, 0.0))
-            .configure_replication(SRC::public()).enter_room(&room_key); })));
-    scenario.mutate(|c| c.server(|s| {
-        if let Some(mut scope) = s.user_scope_mut(&client_a) { scope.include(&entity_key); }
-    }));
-    scenario.spec_expect("entity-authority-01: non-delegated entity replicated", |ectx|
-        ectx.client(client_a, |c| c.has_entity(&entity_key)).then_some(()));
+    let (entity_key, ()) = scenario.mutate(|c| {
+        c.server(|s| {
+            s.spawn(|mut e| {
+                e.insert_component(Position::new(0.0, 0.0))
+                    .configure_replication(SRC::public())
+                    .enter_room(&room_key);
+            })
+        })
+    });
+    scenario.mutate(|c| {
+        c.server(|s| {
+            if let Some(mut scope) = s.user_scope_mut(&client_a) {
+                scope.include(&entity_key);
+            }
+        })
+    });
+    scenario.spec_expect(
+        "entity-authority-01: non-delegated entity replicated",
+        |ectx| {
+            ectx.client(client_a, |c| c.has_entity(&entity_key))
+                .then_some(())
+        },
+    );
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     scenario.allow_flexible_next();
 }
@@ -62,11 +77,14 @@ fn given_server_has_observed_spawn_event_for_client_a(ctx: &mut TestWorldMut) {
     let client_a = named_client_mut(ctx, "A");
     let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    scenario.spec_expect("server-events-09: entity in scope for client A", |ectx|
-        ectx.server(|s| s.user_scope(&client_a)
-            .map(|scope| scope.has(&entity_key))
-            .unwrap_or(false)
-            .then_some(())));
+    scenario.spec_expect("server-events-09: entity in scope for client A", |ectx| {
+        ectx.server(|s| {
+            s.user_scope(&client_a)
+                .map(|scope| scope.has(&entity_key))
+                .unwrap_or(false)
+                .then_some(())
+        })
+    });
     scenario.allow_flexible_next();
 }
 
@@ -82,16 +100,25 @@ fn given_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut T
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let room_key = scenario.last_room();
-    let entity_key = scenario.mutate(|c| c.client(client_key, |cl|
-        cl.spawn(|mut e| { e.configure_replication(Publicity::Public).insert_component(Position::new(0.0, 0.0)); })));
+    let entity_key = scenario.mutate(|c| {
+        c.client(client_key, |cl| {
+            cl.spawn(|mut e| {
+                e.configure_replication(Publicity::Public)
+                    .insert_component(Position::new(0.0, 0.0));
+            })
+        })
+    });
     scenario.expect(|ectx| ectx.server(|s| s.has_entity(&entity_key).then_some(())));
-    scenario.mutate(|c| c.server(|s| {
-        if let Some(mut e) = s.entity_mut(&entity_key) { e.enter_room(&room_key); }
-    }));
+    scenario.mutate(|c| {
+        c.server(|s| {
+            if let Some(mut e) = s.entity_mut(&entity_key) {
+                e.enter_room(&room_key);
+            }
+        })
+    });
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     scenario.bdd_store(LAST_COMPONENT_VALUE_KEY, (0.0_f32, 0.0_f32));
 }
-
 
 // ──────────────────────────────────────────────────────────────────────
 // Scope-exit (Persist) entity preconditions
@@ -157,7 +184,6 @@ fn given_persist_entity_with_label(ctx: &mut TestWorldMut) {
     });
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
 }
-
 
 // ──────────────────────────────────────────────────────────────────────
 // Entity-scope preconditions
@@ -336,7 +362,6 @@ fn given_entity_not_in_any_room(ctx: &mut TestWorldMut) {
     scenario.mutate(|_| {});
 }
 
-
 /// Given the entity is not in the client's room.
 ///
 /// Places the stored entity into a fresh isolated room, ensuring no shared
@@ -390,7 +415,8 @@ fn given_entity_in_client_a_room_only(ctx: &mut TestWorldMut) {
     let entity_key = scenario.mutate(|mctx| {
         mctx.server(|server| {
             let (ek, _) = server.spawn(|mut e| {
-                e.insert_component(Position::new(0.0, 0.0)).enter_room(&room_a);
+                e.insert_component(Position::new(0.0, 0.0))
+                    .enter_room(&room_a);
             });
             if let Some(mut scope) = server.user_scope_mut(&client_a) {
                 scope.include(&ek);

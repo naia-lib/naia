@@ -7,8 +7,8 @@ use bevy_ecs::{
     system::SystemState,
 };
 
-use naia_client::{shared::GlobalResponseId, NaiaClientError, Events};
 use naia_client::DisconnectReason;
+use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind, ReplicateBundle, Request,

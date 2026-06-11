@@ -1,2 +1,2 @@
-mod fragment;
 mod channel_ordering;
+mod fragment;

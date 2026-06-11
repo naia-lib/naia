@@ -8,9 +8,9 @@ use log::warn;
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalWorldManagerType};
 
+use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::global_dirty_bitset::GlobalDirtyBitset;
 use crate::world::update::global_entity_index::GlobalEntityIndex;
-use crate::world::update::global_diff_handler::GlobalDiffHandler;
 use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
 
 // Diagnostic counters for the perf-upgrade project. These measure how much
@@ -21,9 +21,12 @@ use crate::world::update::mut_channel::{DirtyNotifier, DirtySet, MutReceiver};
 #[cfg(feature = "bench_instrumentation")]
 pub mod dirty_scan_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    #[doc(hidden)] pub static SCAN_CALLS: AtomicU64 = AtomicU64::new(0);
-    #[doc(hidden)] pub static RECEIVERS_VISITED: AtomicU64 = AtomicU64::new(0);
-    #[doc(hidden)] pub static DIRTY_RESULTS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static SCAN_CALLS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static RECEIVERS_VISITED: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static DIRTY_RESULTS: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all scan counters to zero.
     pub fn reset() {
@@ -178,7 +181,10 @@ impl UserDiffHandler {
         // point (component registration goes through the same ComponentKinds
         // that issued the receiver above). Bail with a no-op if not.
         let Some(kind_bit) = kind_bit else {
-            warn!("UserDiffHandler: kind_bit unresolved for {:?}; notifier not attached", component_kind);
+            warn!(
+                "UserDiffHandler: kind_bit unresolved for {:?}; notifier not attached",
+                component_kind
+            );
             return;
         };
         let Some(entity_idx) = entity_idx else {
@@ -208,7 +214,11 @@ impl UserDiffHandler {
 
         // Server path: dirty_set is None — pass a dead Weak so DirtyNotifier's
         // set.upgrade() returns None and push/cancel are no-ops.
-        let dirty_set_weak = self.dirty_set.as_ref().map(Arc::downgrade).unwrap_or_else(Weak::new);
+        let dirty_set_weak = self
+            .dirty_set
+            .as_ref()
+            .map(Arc::downgrade)
+            .unwrap_or_else(Weak::new);
         receiver.attach_notifier(DirtyNotifier::new(
             entity_idx,
             kind_bit,
@@ -219,11 +229,14 @@ impl UserDiffHandler {
         self.ensure_dense_capacity(entity_idx);
         let slot = self.slot(entity_idx, kind_bit);
         self.receivers_dense[slot] = Some(receiver);
-        self.entity_kind_to_key.insert((*entity, *component_kind), (entity_idx, kind_bit));
+        self.entity_kind_to_key
+            .insert((*entity, *component_kind), (entity_idx, kind_bit));
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.remove(&(*entity, *component_kind)) else {
+        let Some((entity_idx, kind_bit)) =
+            self.entity_kind_to_key.remove(&(*entity, *component_kind))
+        else {
             // Never registered (or already deregistered) — nothing to clean up.
             return;
         };
@@ -249,7 +262,8 @@ impl UserDiffHandler {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> DiffMask {
-        let (entity_idx, kind_bit) = self.entity_kind_to_key
+        let (entity_idx, kind_bit) = self
+            .entity_kind_to_key
             .get(&(*entity, *component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
@@ -265,7 +279,11 @@ impl UserDiffHandler {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
+        let Some((entity_idx, kind_bit)) = self
+            .entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
+        else {
             return true;
         };
         let slot = self.slot(entity_idx, kind_bit);
@@ -293,7 +311,11 @@ impl UserDiffHandler {
     /// Marks the receiver for `(entity, component_kind)` as delivered.
     /// Called by the delivery-confirmation path when a spawn/insert ACK arrives.
     pub fn mark_receiver_delivered(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
+        let Some((entity_idx, kind_bit)) = self
+            .entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
+        else {
             return;
         };
         let slot = self.slot(entity_idx, kind_bit);
@@ -308,7 +330,11 @@ impl UserDiffHandler {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
+        let Some((entity_idx, kind_bit)) = self
+            .entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
+        else {
             return false;
         };
         let slot = self.slot(entity_idx, kind_bit);
@@ -361,7 +387,8 @@ impl UserDiffHandler {
         component_kind: &ComponentKind,
         other_mask: &DiffMask,
     ) {
-        let (entity_idx, kind_bit) = self.entity_kind_to_key
+        let (entity_idx, kind_bit) = self
+            .entity_kind_to_key
             .get(&(*entity, *component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
@@ -373,7 +400,8 @@ impl UserDiffHandler {
     }
 
     pub fn clear_diff_mask(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        let (entity_idx, kind_bit) = self.entity_kind_to_key
+        let (entity_idx, kind_bit) = self
+            .entity_kind_to_key
             .get(&(*entity, *component_kind))
             .copied()
             .expect("Should not call this unless we're sure there's a receiver");
@@ -399,7 +427,8 @@ impl UserDiffHandler {
 
     #[cfg(feature = "test_utils")]
     pub fn dirty_candidates_count(&self) -> usize {
-        self.receivers_dense.iter()
+        self.receivers_dense
+            .iter()
             .filter_map(|slot| slot.as_ref())
             .filter(|r| !r.diff_mask_is_clear())
             .count()
@@ -486,7 +515,10 @@ mod dense_receiver_tests {
         for entity_raw in 1u32..=32 {
             for kind_bit in 0u16..kind_count as u16 {
                 let slot = entity_raw as usize * kind_count + kind_bit as usize;
-                assert!(seen.insert(slot), "collision at entity={entity_raw} kind_bit={kind_bit}");
+                assert!(
+                    seen.insert(slot),
+                    "collision at entity={entity_raw} kind_bit={kind_bit}"
+                );
             }
         }
     }
@@ -505,7 +537,10 @@ mod dense_receiver_tests {
             // Every slot for this entity_idx must be in bounds.
             for kind_bit in 0..kind_count {
                 let slot = entity_idx.as_usize() * kind_count + kind_bit;
-                assert!(slot < vec.len(), "slot {slot} out of bounds after grow for entity={entity_raw}");
+                assert!(
+                    slot < vec.len(),
+                    "slot {slot} out of bounds after grow for entity={entity_raw}"
+                );
             }
         }
         // After 32 entities at stride 4: need 33 * 4 = 132 slots.
@@ -529,13 +564,18 @@ mod dense_receiver_tests {
         // Free A — clear all its slots.
         for kb in 0..kind_count {
             let s = idx_a.as_usize() * kind_count + kb;
-            if s < vec.len() { vec[s] = None; }
+            if s < vec.len() {
+                vec[s] = None;
+            }
         }
 
         // B gets the recycled index 3.
         let idx_b = GlobalEntityIndex(3);
         let slot_b = idx_b.as_usize() * kind_count + 2;
-        assert!(vec[slot_b].is_none(), "slot must be None after free, not alias A's value");
+        assert!(
+            vec[slot_b].is_none(),
+            "slot must be None after free, not alias A's value"
+        );
 
         // Register B at the same slot.
         vec[slot_b] = Some(99u32);

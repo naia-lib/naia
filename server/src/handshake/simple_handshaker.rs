@@ -88,9 +88,7 @@ impl Handshaker for HandshakeManager {
                     ))
                 }
             }
-            HandshakeHeader::ClientConnectRequest => {
-                Ok(HandshakeAction::ForwardPacket)
-            }
+            HandshakeHeader::ClientConnectRequest => Ok(HandshakeAction::ForwardPacket),
             HandshakeHeader::Disconnect => {
                 if self.verify_disconnect_request(address, reader) {
                     // Get the user_key for this address to disconnect

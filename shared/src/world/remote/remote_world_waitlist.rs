@@ -12,9 +12,9 @@ use crate::{
         entity::in_scope_entities::InScopeEntities,
         remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistHandle, WaitlistStore},
     },
-    ComponentFieldUpdate, ComponentKind, ComponentKinds, PendingComponentUpdate,
-    EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity,
-    RemoteEntity, Replicate, Tick, WorldMutType,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter,
+    LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, PendingComponentUpdate, RemoteEntity,
+    Replicate, Tick, WorldMutType,
 };
 
 pub struct RemoteWorldWaitlist {
@@ -201,7 +201,9 @@ impl RemoteWorldWaitlist {
                         (tick, remote_entity, component_kind, waiting_field_update),
                     );
                     let component_field_key = (remote_entity, component_kind);
-                    self.update_waitlist_map.entry(component_field_key).or_default();
+                    self.update_waitlist_map
+                        .entry(component_field_key)
+                        .or_default();
                     let handle_map = self
                         .update_waitlist_map
                         .get_mut(&component_field_key)

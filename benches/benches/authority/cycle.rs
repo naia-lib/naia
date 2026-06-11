@@ -27,7 +27,13 @@ pub fn authority_grant_revoke_cycle(c: &mut Criterion) {
 
     group.bench_function(bench!("grant_revoke_cycle"), |b| {
         b.iter_batched(
-            || BenchWorldBuilder::new().users(1).entities(10).delegated().build(),
+            || {
+                BenchWorldBuilder::new()
+                    .users(1)
+                    .entities(10)
+                    .delegated()
+                    .build()
+            },
             |mut world| {
                 world.give_authority_on_entity(0);
                 let ok1 = world.tick_until_client_auth_granted(100);

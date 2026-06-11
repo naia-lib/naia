@@ -27,7 +27,4 @@ use crate::Replicate;
 /// implement this trait directly.
 pub trait ReplicatedResource: Replicate + Resource + Component<Mutability = Mutable> {}
 
-impl<T> ReplicatedResource for T where
-    T: Replicate + Resource + Component<Mutability = Mutable>
-{
-}
+impl<T> ReplicatedResource for T where T: Replicate + Resource + Component<Mutability = Mutable> {}

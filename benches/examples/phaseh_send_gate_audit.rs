@@ -96,9 +96,20 @@ fn main() {
         let fast_med = median(&mut fast);
         let slow_med = median(&mut slow);
         let visits_per_tick = (UNIT_COUNT * PLAYERS) as f64; // dirty component-visits / tick
-        println!("(b) CLOSING THE FAST-PATH BYPASS — server send phase (srv_tx), {} samples/arm:", fast.len());
-        println!("    fast-path (current)  : median {:>7.2} µs   mean {:>7.2} µs", fast_med as f64 / 1e3, mean(&fast) / 1e3);
-        println!("    forced-slow (hardened): median {:>7.2} µs   mean {:>7.2} µs", slow_med as f64 / 1e3, mean(&slow) / 1e3);
+        println!(
+            "(b) CLOSING THE FAST-PATH BYPASS — server send phase (srv_tx), {} samples/arm:",
+            fast.len()
+        );
+        println!(
+            "    fast-path (current)  : median {:>7.2} µs   mean {:>7.2} µs",
+            fast_med as f64 / 1e3,
+            mean(&fast) / 1e3
+        );
+        println!(
+            "    forced-slow (hardened): median {:>7.2} µs   mean {:>7.2} µs",
+            slow_med as f64 / 1e3,
+            mean(&slow) / 1e3
+        );
         let delta = slow_med as f64 - fast_med as f64;
         println!(
             "    Δ per tick           : {:>+7.2} µs  ({:+.1}%)   ≈ {:.1} ns / dirty-component-visit (×{} visits)",
@@ -136,7 +147,10 @@ fn main() {
         println!("     slow-path emits : {slow_emit}");
         println!("     PRE-DELIVERY LEAKS (redundant updates the receiver must buffer): {leak}");
         println!("     gate-suppressed : {suppressed}");
-        println!("     server outgoing : median {} B/tick", median(&mut bytes));
+        println!(
+            "     server outgoing : median {} B/tick",
+            median(&mut bytes)
+        );
         println!();
     }
 
@@ -153,7 +167,9 @@ fn main() {
         let start = w.spawn_halo_units_no_catchup(UNIT_COUNT);
         gate::set_force_slow_gate(false);
         gate::set_measure_leak(true);
-        println!("(a2) SCOPE-ENTRY WINDOW — 32 units spawned, mutated every tick while replicating:");
+        println!(
+            "(a2) SCOPE-ENTRY WINDOW — 32 units spawned, mutated every tick while replicating:"
+        );
         println!("     tick |  fast | slow | LEAK | suppressed | out B");
         let mut total_suppressed = 0u64;
         let mut total_leak = 0u64;

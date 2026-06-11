@@ -80,8 +80,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     /// Returns an iterator over `(K, &V)` pairs in arbitrary order.
     #[allow(clippy::type_complexity)]
     pub fn iter<'a>(&'a self) -> Map<Iter<'a, u64, V>, fn((&'a u64, &'a V)) -> (K, &'a V)> {
-        self
-            .inner
+        self.inner
             .iter()
             .map(|(key, value)| (K::from_u64(*key), value))
     }
@@ -91,8 +90,7 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     pub fn iter_mut<'a>(
         &'a mut self,
     ) -> Map<IterMut<'a, u64, V>, fn((&'a u64, &'a mut V)) -> (K, &'a mut V)> {
-        self
-            .inner
+        self.inner
             .iter_mut()
             .map(|(key, value)| (K::from_u64(*key), value))
     }

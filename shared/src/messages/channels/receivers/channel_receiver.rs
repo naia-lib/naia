@@ -39,7 +39,5 @@ pub trait MessageChannelReceiver: ChannelReceiver<MessageContainer> {
     ) -> Result<(), SerdeErr>;
 
     /// Drains and returns all pending request/response pairs from this channel's internal buffer.
-    fn receive_requests_and_responses(
-        &mut self,
-    ) -> RequestsAndResponses;
+    fn receive_requests_and_responses(&mut self) -> RequestsAndResponses;
 }

@@ -20,7 +20,11 @@ fn round_trip(entity: OwnedLocalEntity) -> OwnedLocalEntity {
 fn dynamic_host_id_lt_128_costs_10_bits() {
     // is_host=1, is_static=0, varint<7>(5)=8 bits → total 10
     let e = OwnedLocalEntity::new_host_dynamic(5);
-    assert_eq!(bit_length_of(e), 10, "dynamic host id=5 should cost 10 bits");
+    assert_eq!(
+        bit_length_of(e),
+        10,
+        "dynamic host id=5 should cost 10 bits"
+    );
 }
 
 #[test]
@@ -43,7 +47,11 @@ fn remote_entity_costs_10_bits() {
     // Remote carries is_static so static and dynamic entities with the same
     // numeric ID are distinguishable as hash-map keys on the receiving side.
     let e = OwnedLocalEntity::new_remote_dynamic(42);
-    assert_eq!(bit_length_of(e), 10, "remote entity id=42 should cost 10 bits");
+    assert_eq!(
+        bit_length_of(e),
+        10,
+        "remote entity id=42 should cost 10 bits"
+    );
 }
 
 #[test]
@@ -56,8 +64,10 @@ fn round_trips_all_host_combinations() {
                 OwnedLocalEntity::new_host_dynamic(id)
             };
             let decoded = round_trip(original);
-            assert_eq!(decoded, original,
-                "round-trip failed for Host {{ id: {id}, is_static: {is_static} }}");
+            assert_eq!(
+                decoded, original,
+                "round-trip failed for Host {{ id: {id}, is_static: {is_static} }}"
+            );
         }
     }
 }
@@ -72,8 +82,10 @@ fn round_trips_remote_entities() {
                 OwnedLocalEntity::new_remote_dynamic(id)
             };
             let decoded = round_trip(original);
-            assert_eq!(decoded, original,
-                "round-trip failed for Remote {{ id: {id}, is_static: {is_static} }}");
+            assert_eq!(
+                decoded, original,
+                "round-trip failed for Remote {{ id: {id}, is_static: {is_static} }}"
+            );
         }
     }
 }
@@ -86,8 +98,10 @@ fn static_split_saves_8_bits_per_dynamic_ref_when_tiles_push_ids_to_10k() {
     // → 1 is_host + 1 is_static + 8-bit varint = 10 bits per unit ref.
     // Net: 8 bits saved per dynamic entity reference.
     let without_split = OwnedLocalEntity::new_host_dynamic(10_000);
-    let with_split    = OwnedLocalEntity::new_host_dynamic(0);
+    let with_split = OwnedLocalEntity::new_host_dynamic(0);
     let saved = bit_length_of(without_split) - bit_length_of(with_split);
-    assert_eq!(saved, 8,
-        "splitting pools saves 8 bits/dynamic-ref when tiles push IDs to 10K+");
+    assert_eq!(
+        saved, 8,
+        "splitting pools saves 8 bits/dynamic-ref when tiles push IDs to 10K+"
+    );
 }

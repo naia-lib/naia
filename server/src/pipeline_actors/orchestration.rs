@@ -59,13 +59,19 @@ pub fn run_with_world_server<E, R>(
 where
     E: Copy + Eq + Hash + Send + Sync,
 {
-    let SimHandle { state: coord_state, shared: _coord_shared } = sim_handle;
+    let SimHandle {
+        state: coord_state,
+        shared: _coord_shared,
+    } = sim_handle;
     let mut ws = WorldServer::from_pipeline_states(coord_state, recv.state, send.state);
     let result = f(&mut ws);
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
     (
-        SimHandle { state: coord_state, shared },
+        SimHandle {
+            state: coord_state,
+            shared,
+        },
         RecvHandle { state: recv_state },
         SendHandle { state: send_state },
         result,
@@ -242,16 +248,17 @@ where
 /// must re-package the result via this function (since the
 /// `Arc<ServerShared>` is `pub(crate)` to outside callers, they can't
 /// rebuild `SimHandle` manually).
-pub fn split_world_server<E>(
-    ws: WorldServer<E>,
-) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
+pub fn split_world_server<E>(ws: WorldServer<E>) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync,
 {
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
     (
-        SimHandle { state: coord_state, shared },
+        SimHandle {
+            state: coord_state,
+            shared,
+        },
         RecvHandle { state: recv_state },
         SendHandle { state: send_state },
     )
@@ -286,7 +293,10 @@ where
     E: Copy + Eq + Hash + Send + Sync,
     W: WorldMutType<E>,
 {
-    let SimHandle { state: coord_state, shared: _coord_shared } = sim_handle;
+    let SimHandle {
+        state: coord_state,
+        shared: _coord_shared,
+    } = sim_handle;
     let mut ws = WorldServer::from_pipeline_states(coord_state, recv.state, send.state);
 
     // Pre-stuff the already-collected handshake-time world events from
@@ -341,7 +351,10 @@ where
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
     (
-        SimHandle { state: coord_state, shared },
+        SimHandle {
+            state: coord_state,
+            shared,
+        },
         RecvHandle { state: recv_state },
         SendHandle { state: send_state },
     )

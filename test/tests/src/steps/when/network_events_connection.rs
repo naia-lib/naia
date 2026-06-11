@@ -38,7 +38,9 @@ fn when_server_disconnects(ctx: &mut TestWorldMut) {
     scenario.track_server_event(TrackedServerEvent::Disconnect);
 
     scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientDisconnectEvent>())
+        ctx.client(client_key, |client| {
+            client.read_event::<ClientDisconnectEvent>()
+        })
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Disconnect);
 
@@ -131,4 +133,3 @@ fn when_traffic_exchanged_multiple_windows(ctx: &mut TestWorldMut) {
 fn when_client_reconnects_with_latency(ctx: &mut TestWorldMut, latency_ms: u32) {
     connect_client_with_latency(ctx, "ReconnectedClient", latency_ms);
 }
-

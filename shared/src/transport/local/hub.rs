@@ -1,8 +1,4 @@
-use std::{
-    collections::HashMap,
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use parking_lot::Mutex;
 
@@ -91,9 +87,7 @@ impl LocalTransportHub {
     }
 
     /// Register a new client connection and return its address and channel handles
-    pub fn register_client(
-        &self,
-    ) -> ClientChannels {
+    pub fn register_client(&self) -> ClientChannels {
         // Generate unique client address
         let client_id = {
             let mut id = self.next_client_id.lock();
@@ -127,9 +121,7 @@ impl LocalTransportHub {
             server_to_client_queue: Arc::new(Mutex::new(TimeQueue::new())),
         };
 
-        self.connections
-            .lock()
-            .insert(client_addr, connection);
+        self.connections.lock().insert(client_addr, connection);
 
         (
             client_addr,

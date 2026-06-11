@@ -73,9 +73,10 @@ fn sim_mark_static_matches_legacy() {
         if sim_path {
             sim_handle.mark_entity_as_static(&entity);
         } else {
-            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
-                ws.mark_entity_as_static(&entity);
-            });
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
+                    ws.mark_entity_as_static(&entity);
+                });
             // Read back via the legacy WorldServer path.
             let (_sim_handle, _recv, _send, is_static) =
                 run_with_world_server(sim_handle, recv, send, |ws| ws.entity_is_static(&entity));
@@ -119,7 +120,10 @@ fn sim_mark_static_observable_via_world_server() {
     );
 
     sim_handle.mark_entity_as_static(&entity);
-    assert!(sim_handle.entity_is_static(&entity), "Coord query reflects flag");
+    assert!(
+        sim_handle.entity_is_static(&entity),
+        "Coord query reflects flag"
+    );
 
     let (_sim_handle, _recv, _send, is_static) =
         run_with_world_server(sim_handle, recv, send, |ws| ws.entity_is_static(&entity));

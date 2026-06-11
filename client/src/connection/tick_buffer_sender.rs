@@ -110,9 +110,7 @@ impl TickBufferSender {
                 host_tick,
                 has_written,
             ) {
-                self.packet_to_channel_map
-                    .entry(packet_index)
-                    .or_default();
+                self.packet_to_channel_map.entry(packet_index).or_default();
                 let channel_list = self.packet_to_channel_map.get_mut(&packet_index).unwrap();
                 channel_list.push((*channel_kind, message_indices));
             }

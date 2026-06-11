@@ -38,11 +38,14 @@ pub type UpdateKinds = Vec<(ComponentKind, u16, DiffMask)>;
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_write_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    #[doc(hidden)] pub static N_SCOPE_ENTRY_SPAWNS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static N_SCOPE_ENTRY_SPAWNS: AtomicU64 = AtomicU64::new(0);
     /// PATH A wire-cache hits: bytes replayed from cache, zero ECS reads.
-    #[doc(hidden)] pub static N_PATH_A_CACHE_HITS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static N_PATH_A_CACHE_HITS: AtomicU64 = AtomicU64::new(0);
     /// PATH A wire-cache misses: ECS read + serialize + store into cache.
-    #[doc(hidden)] pub static N_PATH_A_CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static N_PATH_A_CACHE_MISSES: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all write counters to zero.
     pub fn reset() {
@@ -126,7 +129,6 @@ impl WorldWriter {
             world_events,
         );
     }
-
 
     #[allow(clippy::too_many_arguments)]
     fn write_commands<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
@@ -359,8 +361,7 @@ impl WorldWriter {
                 count.ser(writer);
 
                 {
-                    let mut converter =
-                        world_manager.entity_converter_mut(global_world_manager);
+                    let mut converter = world_manager.entity_converter_mut(global_world_manager);
                     for component_kind in comp_kind_list.iter() {
                         world
                             .component_of_kind(&world_entity, component_kind)
@@ -379,7 +380,8 @@ impl WorldWriter {
                         ),
                     );
                     #[cfg(feature = "bench_instrumentation")]
-                    bench_write_counters::N_SCOPE_ENTRY_SPAWNS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                    bench_write_counters::N_SCOPE_ENTRY_SPAWNS
+                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                 }
             }
             EntityCommand::Despawn(global_entity) => {
@@ -423,8 +425,8 @@ impl WorldWriter {
                 // Same split as SpawnWithComponents: `!has_global` is the
                 // legitimate despawn-race Noop; `has_global && !present` is a
                 // needed-set under-supply that would silently drop the insert.
-                let insert_present = insert_has_global
-                    && world.has_component_of_kind(&world_entity, component_kind);
+                let insert_present =
+                    insert_has_global && world.has_component_of_kind(&world_entity, component_kind);
                 debug_assert!(
                     !insert_has_global || insert_present,
                     "InsertComponent: entity {:?} is host-tracked but component {:?} \
@@ -1043,20 +1045,28 @@ impl WorldWriter {
                     // Cache hit: replay stored bytes, zero ECS reads.
                     // Cache miss: one ECS read, one serialize, store for future users/ticks.
                     if let Some(diff_mask_key) = diff_mask.as_key() {
-                        let cached: CachedComponentUpdate = match gdh.get_wire_cache(entity_idx, kind_bit, diff_mask_key) {
+                        let cached: CachedComponentUpdate = match gdh.get_wire_cache(
+                            entity_idx,
+                            kind_bit,
+                            diff_mask_key,
+                        ) {
                             Some(c) => {
                                 #[cfg(feature = "bench_instrumentation")]
-                                bench_write_counters::N_PATH_A_CACHE_HITS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                bench_write_counters::N_PATH_A_CACHE_HITS
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                                 c
                             }
                             None => {
                                 #[cfg(feature = "bench_instrumentation")]
-                                bench_write_counters::N_PATH_A_CACHE_MISSES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                let mut converter = world_manager.entity_converter_mut(global_world_manager);
+                                bench_write_counters::N_PATH_A_CACHE_MISSES
+                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                let mut converter =
+                                    world_manager.entity_converter_mut(global_world_manager);
                                 let mut temp = BitWriter::new();
                                 true.ser(&mut temp);
                                 component_kind.ser(component_kinds, &mut temp);
-                                world.component_of_kind(world_entity, &component_kind)
+                                world
+                                    .component_of_kind(world_entity, &component_kind)
                                     .expect("Component does not exist in World")
                                     .write_update(&diff_mask, &mut temp, &mut converter);
                                 let c = CachedComponentUpdate::capture(&temp)
@@ -1070,7 +1080,11 @@ impl WorldWriter {
                         counter.count_bits(cached.bit_count);
                         if counter.overflowed() {
                             if !*has_written {
-                                Self::warn_overflow_update(component_kinds.kind_to_name(&component_kind), cached.bit_count, writer.bits_free());
+                                Self::warn_overflow_update(
+                                    component_kinds.kind_to_name(&component_kind),
+                                    cached.bit_count,
+                                    writer.bits_free(),
+                                );
                             }
                             break;
                         }
@@ -1080,7 +1094,6 @@ impl WorldWriter {
                         optimized_write = true;
                     }
                     // else: diff mask > 8 bytes (unreachable for all registered components) — fall through to two-pass
-
                 } else if let Some(sm) = snapshot_map {
                     // ── PATH B: UserDependent ───────────────────────────────────
                     // EntityProperty fields resolve per-user local entity IDs — bytes differ per user.
@@ -1091,7 +1104,8 @@ impl WorldWriter {
                     if let Some(snapshot_entry) = sm.get(&(*global_entity, component_kind)) {
                         let snapshot: &dyn Replicate = snapshot_entry.as_ref();
 
-                        let mut converter = world_manager.entity_converter_mut(global_world_manager);
+                        let mut converter =
+                            world_manager.entity_converter_mut(global_world_manager);
 
                         // Counter pass
                         let mut counter = writer.counter();
@@ -1100,7 +1114,11 @@ impl WorldWriter {
                         snapshot.write_update(&diff_mask, &mut counter, &mut converter);
                         if counter.overflowed() {
                             if !*has_written {
-                                Self::warn_overflow_update(component_kinds.kind_to_name(&component_kind), counter.bits_needed(), writer.bits_free());
+                                Self::warn_overflow_update(
+                                    component_kinds.kind_to_name(&component_kind),
+                                    counter.bits_needed(),
+                                    writer.bits_free(),
+                                );
                             }
                             break;
                         }
@@ -1124,20 +1142,26 @@ impl WorldWriter {
                 let mut counter = writer.counter();
                 true.ser(&mut counter);
                 component_kind.ser(component_kinds, &mut counter);
-                world.component_of_kind(world_entity, &component_kind)
+                world
+                    .component_of_kind(world_entity, &component_kind)
                     .expect("Component does not exist in World")
                     .write_update(&diff_mask, &mut counter, &mut converter);
                 if counter.overflowed() {
                     if !*has_written {
                         let component_name = component_kinds.kind_to_name(&component_kind);
-                        Self::warn_overflow_update(component_name, counter.bits_needed(), writer.bits_free());
+                        Self::warn_overflow_update(
+                            component_name,
+                            counter.bits_needed(),
+                            writer.bits_free(),
+                        );
                     }
                     break;
                 }
                 *has_written = true;
                 true.ser(writer);
                 component_kind.ser(component_kinds, writer);
-                world.component_of_kind(world_entity, &component_kind)
+                world
+                    .component_of_kind(world_entity, &component_kind)
                     .expect("Component does not exist in World")
                     .write_update(&diff_mask, writer, &mut converter);
             }
@@ -1149,9 +1173,21 @@ impl WorldWriter {
             // NACK-driven replay; the packet_index only exists now). The client
             // (entity_idx INVALID) is synchronous and still records+clears.
             if entity_idx.is_valid() {
-                world_manager.record_sent_update(now, packet_index, global_entity, &component_kind, diff_mask);
+                world_manager.record_sent_update(
+                    now,
+                    packet_index,
+                    global_entity,
+                    &component_kind,
+                    diff_mask,
+                );
             } else {
-                world_manager.record_update(now, packet_index, global_entity, &component_kind, diff_mask);
+                world_manager.record_update(
+                    now,
+                    packet_index,
+                    global_entity,
+                    &component_kind,
+                    diff_mask,
+                );
             }
         }
 

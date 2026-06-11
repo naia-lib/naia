@@ -19,25 +19,21 @@ pub fn active_room_tick(c: &mut Criterion) {
     group.measurement_time(Duration::from_secs(5));
 
     for &k in MUTATION_COUNTS {
-        group.bench_with_input(
-            BenchmarkId::new("mutations", k),
-            &k,
-            |b, &k| {
-                b.iter_batched(
-                    || {
-                        BenchWorldBuilder::new()
-                            .users(1)
-                            .entities(FIXED_ENTITY_COUNT)
-                            .build()
-                    },
-                    |mut world| {
-                        world.mutate_entities(k);
-                        world.tick();
-                    },
-                    BatchSize::LargeInput,
-                )
-            },
-        );
+        group.bench_with_input(BenchmarkId::new("mutations", k), &k, |b, &k| {
+            b.iter_batched(
+                || {
+                    BenchWorldBuilder::new()
+                        .users(1)
+                        .entities(FIXED_ENTITY_COUNT)
+                        .build()
+                },
+                |mut world| {
+                    world.mutate_entities(k);
+                    world.tick();
+                },
+                BatchSize::LargeInput,
+            )
+        });
     }
     group.finish();
 }

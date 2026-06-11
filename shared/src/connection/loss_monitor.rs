@@ -8,7 +8,7 @@ const WINDOW: usize = 64;
 pub struct LossMonitor {
     outcomes: [bool; WINDOW], // true = acked, false = lost
     write_pos: usize,
-    total: usize,      // number of valid entries, capped at WINDOW
+    total: usize,       // number of valid entries, capped at WINDOW
     acked_count: usize, // number of acked entries in the valid window
 }
 
@@ -97,7 +97,11 @@ mod tests {
     fn fifty_percent_loss() {
         let mut m = LossMonitor::new();
         for i in 0..64 {
-            if i % 2 == 0 { m.record_acked(); } else { m.record_lost(); }
+            if i % 2 == 0 {
+                m.record_acked();
+            } else {
+                m.record_lost();
+            }
         }
         assert!((m.packet_loss_pct() - 0.5).abs() < 1e-6);
     }
@@ -106,9 +110,13 @@ mod tests {
     fn window_evicts_oldest_entries() {
         let mut m = LossMonitor::new();
         // Fill with 64 losses, then add 64 acks — loss should drop to 0.
-        for _ in 0..64 { m.record_lost(); }
+        for _ in 0..64 {
+            m.record_lost();
+        }
         assert_eq!(m.packet_loss_pct(), 1.0);
-        for _ in 0..64 { m.record_acked(); }
+        for _ in 0..64 {
+            m.record_acked();
+        }
         assert_eq!(m.packet_loss_pct(), 0.0);
     }
 }

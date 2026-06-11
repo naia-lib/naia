@@ -53,7 +53,9 @@ fn when_client_attempts_write_to_server_owned_entity(ctx: &mut TestWorldMut) {
             }
         });
     });
-    for _ in 0..20 { scenario.mutate(|_| {}); }
+    for _ in 0..20 {
+        scenario.mutate(|_| {});
+    }
     let final_value = read_server_position(scenario, entity_key);
     let rejected = (original.0 - final_value.0).abs() < f32::EPSILON
         && (original.1 - final_value.1).abs() < f32::EPSILON;
@@ -113,9 +115,9 @@ fn when_client_updates_replicated_component(ctx: &mut TestWorldMut) {
 /// channel direction is enforced.
 #[when("the client sends on a server-to-client channel")]
 fn when_client_sends_on_server_to_client_channel(ctx: &mut TestWorldMut) {
+    use crate::steps::world_helpers::panic_payload_to_string;
     use naia_test_harness::test_protocol::{ServerToClientChannel, TestMessage};
     use std::panic::{catch_unwind, AssertUnwindSafe};
-    use crate::steps::world_helpers::panic_payload_to_string;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
@@ -170,9 +172,7 @@ fn query_rtt_capturing_panic(ctx: &mut TestWorldMut) {
     let client_key = scenario.last_client();
     scenario.clear_operation_result();
     let result = catch_unwind(AssertUnwindSafe(|| {
-        scenario.expect(|ctx| {
-            ctx.client(client_key, |client| Some(client.rtt()))
-        });
+        scenario.expect(|ctx| ctx.client(client_key, |client| Some(client.rtt())));
     }));
     match result {
         Ok(_) => scenario.record_ok(),
@@ -279,15 +279,27 @@ fn when_alice_requests_authority(ctx: &mut TestWorldMut) {
     use naia_test_harness::TestPlayerSelection;
     let client_key: ClientKey = named_client_mut(ctx, "alice");
     let scenario = ctx.scenario_mut();
-    scenario.mutate(|c| c.server(|s| {
-        assert!(s.configure_resource::<TestPlayerSelection>(naia_server::ReplicationConfig::delegated()));
-    }));
-    scenario.expect(|c| c.client(client_key, |cl|
-        (cl.resource_authority_status::<TestPlayerSelection>() == Some(EntityAuthStatus::Available))
-            .then_some(())));
-    scenario.mutate(|c| c.client(client_key, |cl| {
-        assert!(cl.request_resource_authority::<TestPlayerSelection>().is_ok());
-    }));
+    scenario.mutate(|c| {
+        c.server(|s| {
+            assert!(s.configure_resource::<TestPlayerSelection>(
+                naia_server::ReplicationConfig::delegated()
+            ));
+        })
+    });
+    scenario.expect(|c| {
+        c.client(client_key, |cl| {
+            (cl.resource_authority_status::<TestPlayerSelection>()
+                == Some(EntityAuthStatus::Available))
+            .then_some(())
+        })
+    });
+    scenario.mutate(|c| {
+        c.client(client_key, |cl| {
+            assert!(cl
+                .request_resource_authority::<TestPlayerSelection>()
+                .is_ok());
+        })
+    });
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -400,7 +412,9 @@ fn when_alice_mutates_player_selection(ctx: &mut TestWorldMut, value: u16) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|mctx| {
         mctx.client(alice_key, |cl| {
-            cl.mutate_resource::<TestPlayerSelection, _, _>(|r| { *r.selected_id = value; });
+            cl.mutate_resource::<TestPlayerSelection, _, _>(|r| {
+                *r.selected_id = value;
+            });
         });
     });
 }
@@ -413,7 +427,9 @@ fn when_alice_releases_authority(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|mctx| {
         mctx.client(alice_key, |cl| {
-            assert!(cl.release_resource_authority::<TestPlayerSelection>().is_ok());
+            assert!(cl
+                .release_resource_authority::<TestPlayerSelection>()
+                .is_ok());
         });
     });
 }
@@ -428,7 +444,7 @@ fn when_alice_releases_authority(ctx: &mut TestWorldMut) {
 /// that tick under `TICK_BUFFER_TICK_KEY`. Used by messaging-13.
 #[when("the client sends 3 tick-buffered messages for the same tick")]
 fn when_client_sends_3_tick_buffered_messages_same_tick(ctx: &mut TestWorldMut) {
-    use naia_test_harness::test_protocol::{TickBufferedChannel, TestMessage};
+    use naia_test_harness::test_protocol::{TestMessage, TickBufferedChannel};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let tick: naia_shared::Tick =
@@ -454,7 +470,7 @@ fn when_client_sends_3_tick_buffered_messages_same_tick(ctx: &mut TestWorldMut) 
 /// total count under `ENTITY_COMMAND_COUNT_KEY`. Used by messaging-20.
 #[when("the client collects all entity-command messages")]
 fn when_client_collects_entity_command_messages(ctx: &mut TestWorldMut) {
-    use naia_test_harness::test_protocol::{UnorderedChannel, EntityCommandMessage};
+    use naia_test_harness::test_protocol::{EntityCommandMessage, UnorderedChannel};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     let entity_key: naia_test_harness::EntityKey = scenario
@@ -508,8 +524,14 @@ fn when_client_spawns_client_owned_entity_with_replicated_component(ctx: &mut Te
     use naia_test_harness::Position;
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
-    let entity_key = scenario.mutate(|c| c.client(client_key, |cl|
-        cl.spawn(|mut e| { e.configure_replication(Publicity::Public).insert_component(Position::new(0.0, 0.0)); })));
+    let entity_key = scenario.mutate(|c| {
+        c.client(client_key, |cl| {
+            cl.spawn(|mut e| {
+                e.configure_replication(Publicity::Public)
+                    .insert_component(Position::new(0.0, 0.0));
+            })
+        })
+    });
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
 }
 

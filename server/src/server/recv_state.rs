@@ -15,8 +15,8 @@ use std::{
 use log::warn;
 
 use naia_shared::{
-    handshake::HandshakeHeader, BitReader, DisconnectReason, OwnedBitReader, PacketType,
-    Serde, SerdeErr, StandardHeader, Tick, Timer,
+    handshake::HandshakeHeader, BitReader, DisconnectReason, OwnedBitReader, PacketType, Serde,
+    SerdeErr, StandardHeader, Tick, Timer,
 };
 
 use crate::{
@@ -96,7 +96,10 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Construct a new `RecvState` with default timers seeded from the
     /// shared `ServerShared<E>` server-config Arc.
     pub fn new(shared: Arc<ServerShared<E>>, recv_io: RecvIo) -> Self {
-        let disconnect_timeout = shared.server_config.connection.disconnection_timeout_duration;
+        let disconnect_timeout = shared
+            .server_config
+            .connection
+            .disconnection_timeout_duration;
         Self {
             timeout_timer: Timer::new(disconnect_timeout),
             addrs_with_new_packets: HashSet::new(),
@@ -167,15 +170,16 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                     match header.packet_type {
                         PacketType::Data => {
                             self.addrs_with_new_packets.insert(address);
-                            if self.read_data_packet(&address, &header, &mut reader).is_err() {
+                            if self
+                                .read_data_packet(&address, &header, &mut reader)
+                                .is_err()
+                            {
                                 warn!("Server Error: cannot read malformed packet");
                                 continue;
                             }
                         }
                         PacketType::Heartbeat => {
-                            if let Some(recv_conn) =
-                                self.recv_user_connections.get_mut(&address)
-                            {
+                            if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                             }
                             continue;
@@ -195,17 +199,13 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                                 .lock()
                                 .push((address, response.to_packet()));
 
-                            if let Some(recv_conn) =
-                                self.recv_user_connections.get_mut(&address)
-                            {
+                            if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                             }
                             continue;
                         }
                         PacketType::Pong => {
-                            if let Some(recv_conn) =
-                                self.recv_user_connections.get_mut(&address)
-                            {
+                            if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                                 let tm = self.shared.time_manager.read();
                                 recv_conn.ping_manager.process_pong(&*tm, &mut reader);
@@ -221,8 +221,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                         }
                         PacketType::Handshake => {
                             let handshake_header_result = HandshakeHeader::de(&mut reader);
-                            let Ok(HandshakeHeader::ClientConnectRequest) =
-                                handshake_header_result
+                            let Ok(HandshakeHeader::ClientConnectRequest) = handshake_header_result
                             else {
                                 warn!(
                                     "Server Error: received invalid handshake packet: {:?}",
@@ -236,8 +235,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 
                             // Queue the Connect Response on
                             // `pending_outbound_packets`.
-                            let packet =
-                                HandshakeManager::write_connect_response().to_packet();
+                            let packet = HandshakeManager::write_connect_response().to_packet();
                             self.shared
                                 .pending_outbound_packets
                                 .lock()
@@ -326,7 +324,8 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 
         let client_tick = Tick::de(reader)?;
         let owned = reader.to_owned();
-        self.pending_data_packets.push((*address, client_tick, owned));
+        self.pending_data_packets
+            .push((*address, client_tick, owned));
 
         Ok(())
     }

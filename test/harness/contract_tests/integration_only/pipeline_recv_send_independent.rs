@@ -85,8 +85,11 @@ fn into_pipeline_handles_returns_three_way() {
 
     // Recover the server. Reassembly clones the `Arc<ServerShared<E>>`
     // out of `recv.shared` — both halves carry the same Arc clone.
-    let ws2: WorldServer<u64> =
-        WorldServer::from_pipeline_states(coord, recv_handle.into_state(), send_handle.into_state());
+    let ws2: WorldServer<u64> = WorldServer::from_pipeline_states(
+        coord,
+        recv_handle.into_state(),
+        send_handle.into_state(),
+    );
 
     assert_eq!(
         ws2.is_listening(),
@@ -229,16 +232,31 @@ fn pipeline_recv_send_independent() {
 struct EmptyWorld;
 
 impl naia_shared::WorldRefType<u64> for EmptyWorld {
-    fn has_entity(&self, _world_entity: &u64) -> bool { false }
-    fn entities(&self) -> Vec<u64> { Vec::new() }
-    fn has_component<R: naia_shared::ReplicatedComponent>(&self, _e: &u64) -> bool { false }
-    fn has_component_of_kind(&self, _e: &u64, _k: &naia_shared::ComponentKind) -> bool { false }
+    fn has_entity(&self, _world_entity: &u64) -> bool {
+        false
+    }
+    fn entities(&self) -> Vec<u64> {
+        Vec::new()
+    }
+    fn has_component<R: naia_shared::ReplicatedComponent>(&self, _e: &u64) -> bool {
+        false
+    }
+    fn has_component_of_kind(&self, _e: &u64, _k: &naia_shared::ComponentKind) -> bool {
+        false
+    }
     fn component<'a, R: naia_shared::ReplicatedComponent>(
-        &'a self, _e: &u64,
-    ) -> Option<naia_shared::ReplicaRefWrapper<'a, R>> { None }
+        &'a self,
+        _e: &u64,
+    ) -> Option<naia_shared::ReplicaRefWrapper<'a, R>> {
+        None
+    }
     fn component_of_kind<'a>(
-        &'a self, _e: &u64, _k: &naia_shared::ComponentKind,
-    ) -> Option<naia_shared::ReplicaDynRefWrapper<'a>> { None }
+        &'a self,
+        _e: &u64,
+        _k: &naia_shared::ComponentKind,
+    ) -> Option<naia_shared::ReplicaDynRefWrapper<'a>> {
+        None
+    }
 }
 
 #[test]

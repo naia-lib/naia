@@ -84,4 +84,3 @@ pub fn message_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenS
     let shared_crate_name = quote! { naia_bevy_shared };
     message_impl(input, shared_crate_name, false, false)
 }
-

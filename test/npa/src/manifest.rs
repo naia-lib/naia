@@ -4,7 +4,9 @@
 
 use anyhow::Result;
 use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
-use namako_engine::npap::{BindingSignature, CustomParameterDef, SemanticBinding, SemanticStepRegistry};
+use namako_engine::npap::{
+    BindingSignature, CustomParameterDef, SemanticBinding, SemanticStepRegistry,
+};
 
 use naia_tests::TestWorld;
 
@@ -71,8 +73,14 @@ fn collect_bindings_from_inventory<W: WorldInventory>() -> Vec<SemanticBinding> 
 /// Regexes must mirror the `#[param(regex = ...)]` attributes in vocab.rs exactly.
 fn naia_custom_parameters() -> Vec<CustomParameterDef> {
     vec![
-        CustomParameterDef { name: "client".to_string(), regex: r"[A-Za-z][A-Za-z0-9_]*".to_string() },
-        CustomParameterDef { name: "entity".to_string(), regex: r"[A-Za-z][A-Za-z0-9_]*".to_string() },
+        CustomParameterDef {
+            name: "client".to_string(),
+            regex: r"[A-Za-z][A-Za-z0-9_]*".to_string(),
+        },
+        CustomParameterDef {
+            name: "entity".to_string(),
+            regex: r"[A-Za-z][A-Za-z0-9_]*".to_string(),
+        },
     ]
 }
 

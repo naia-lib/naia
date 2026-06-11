@@ -1,5 +1,5 @@
-use std::hash::Hash;
 use crate::{RoomKey, UserKey};
+use std::hash::Hash;
 
 /// Push-based mirror of the `(room, user, entity)` tuples produced by
 /// `WorldServer::scope_checks()`. Replaces the per-tick
@@ -178,10 +178,7 @@ mod tests {
         cache.on_user_added_to_room(rk(0), uk(0), [10u32, 20]);
         cache.on_user_added_to_room(rk(0), uk(1), [10u32, 20]);
         cache.on_user_removed_from_room(rk(0), uk(0));
-        assert_eq!(
-            snapshot(&cache),
-            expected(&[(rk(0), &[uk(1)], &[10, 20])])
-        );
+        assert_eq!(snapshot(&cache), expected(&[(rk(0), &[uk(1)], &[10, 20])]));
     }
 
     #[test]
@@ -330,21 +327,37 @@ mod tests {
     ) {
         for change in changes {
             match change {
-                RoomChange::UserAdded { room_key, user_key, entities_in_room } => {
+                RoomChange::UserAdded {
+                    room_key,
+                    user_key,
+                    entities_in_room,
+                } => {
                     cache.on_user_added_to_room(room_key, user_key, entities_in_room);
                 }
                 RoomChange::UserRemoved { room_key, user_key } => {
                     cache.on_user_removed_from_room(room_key, user_key);
                 }
-                RoomChange::EntityAdded { room_key, world_entity, global_entity, users_in_room } => {
+                RoomChange::EntityAdded {
+                    room_key,
+                    world_entity,
+                    global_entity,
+                    users_in_room,
+                } => {
                     erm.entity_add_room(&global_entity, &room_key);
                     cache.on_entity_added_to_room(room_key, world_entity, users_in_room);
                 }
-                RoomChange::EntityRemoved { room_key, world_entity, global_entity } => {
+                RoomChange::EntityRemoved {
+                    room_key,
+                    world_entity,
+                    global_entity,
+                } => {
                     erm.remove_from_room(&global_entity, &room_key);
                     cache.on_entity_removed_from_room(room_key, world_entity);
                 }
-                RoomChange::RoomDestroyed { room_key, removed_entities } => {
+                RoomChange::RoomDestroyed {
+                    room_key,
+                    removed_entities,
+                } => {
                     for (_world_entity, global_entity) in &removed_entities {
                         erm.remove_from_room(global_entity, &room_key);
                     }
@@ -438,9 +451,18 @@ mod tests {
             }],
         );
 
-        assert!(cache.as_slice().is_empty(), "cache should be empty after room destroyed");
-        assert!(erm.entity_get_rooms(&ge(10)).is_none(), "entity_room_map should be clean for ge(10)");
-        assert!(erm.entity_get_rooms(&ge(20)).is_none(), "entity_room_map should be clean for ge(20)");
+        assert!(
+            cache.as_slice().is_empty(),
+            "cache should be empty after room destroyed"
+        );
+        assert!(
+            erm.entity_get_rooms(&ge(10)).is_none(),
+            "entity_room_map should be clean for ge(10)"
+        );
+        assert!(
+            erm.entity_get_rooms(&ge(20)).is_none(),
+            "entity_room_map should be clean for ge(20)"
+        );
     }
 
     #[test]
@@ -479,9 +501,17 @@ mod tests {
         };
 
         // Verify 1 RoomChange was drained and 1 non-RoomChange was preserved.
-        assert_eq!(drained.len(), 1, "exactly one RoomChange should have been drained");
+        assert_eq!(
+            drained.len(),
+            1,
+            "exactly one RoomChange should have been drained"
+        );
         let remaining: Vec<_> = q.lock().drain(..).collect();
-        assert_eq!(remaining.len(), 1, "the sentinel UserEnteredRoom should remain");
+        assert_eq!(
+            remaining.len(),
+            1,
+            "the sentinel UserEnteredRoom should remain"
+        );
         assert!(
             matches!(remaining[0], ScopeChange::UserEnteredRoom(..)),
             "preserved variant should be UserEnteredRoom"

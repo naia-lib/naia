@@ -13,8 +13,8 @@ pub mod loss_monitor;
 pub mod packet_notifiable;
 pub mod packet_type;
 pub mod ping_store;
-pub mod priority_state;
 #[cfg(test)]
 mod priority_accumulator_integration_tests;
+pub mod priority_state;
 pub mod sequence_buffer;
 pub mod standard_header;

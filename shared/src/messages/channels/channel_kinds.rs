@@ -121,14 +121,14 @@ impl ChannelKinds {
     }
 
     fn net_id_to_kind(&self, net_id: &NetId) -> ChannelKind {
-        *self.net_id_map.get(net_id).expect(
-            "Must properly initialize Channel with Protocol via `add_channel()` function!",
-        )
+        *self
+            .net_id_map
+            .get(net_id)
+            .expect("Must properly initialize Channel with Protocol via `add_channel()` function!")
     }
 
     fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
-        self
-            .kind_map
+        self.kind_map
             .get(channel_kind)
             .expect(
                 "Must properly initialize Component with Protocol via `add_channel()` function!",

@@ -16,7 +16,7 @@ use naia_bevy_client::{
         MessageEvents, PublishEntityEvent, RejectEvent, RemoveComponentEvent, RequestEvents,
         SpawnEntityEvent, UnpublishEntityEvent, UpdateComponentEvent,
     },
-    sequence_greater_than, Client, CommandsExt, Random, Replicate, Publicity, Tick,
+    sequence_greater_than, Client, CommandsExt, Publicity, Random, Replicate, Tick,
 };
 
 use naia_bevy_demo_shared::{

@@ -12,10 +12,11 @@ use naia_bevy_shared::{
     Request, ResponseSendKey, Tick,
 };
 
-use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
 use naia_server::DisconnectReason;
+use naia_server::{shared::GlobalResponseId, Events, NaiaServerError, UserKey};
 
-type RequestsInner = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
+type RequestsInner =
+    HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
 
 // ConnectEvent
 #[derive(bevy_ecs::message::Message)]
@@ -308,9 +309,6 @@ pub struct RemoveResourceEvent<R: Replicate> {
 
 impl<R: Replicate> RemoveResourceEvent<R> {
     pub fn new(user_key: UserKey, resource: R) -> Self {
-        Self {
-            user_key,
-            resource,
-        }
+        Self { user_key, resource }
     }
 }

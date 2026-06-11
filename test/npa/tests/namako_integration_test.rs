@@ -6,10 +6,10 @@
 //!
 //! Run with: `cargo test -p naia_npa --test namako_integration_test`
 
+use std::env;
 use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, Output};
-use std::env;
 
 /// Get the naia_npa crate directory (CARGO_MANIFEST_DIR = naia/test/npa/)
 fn crate_dir() -> PathBuf {

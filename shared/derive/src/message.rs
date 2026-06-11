@@ -772,12 +772,8 @@ fn enum_message_impl(
     let clone_method = get_enum_clone_method(&variants);
     let relations_waiting_method = get_enum_relations_waiting_method(&variants);
     let relations_complete_method = get_enum_relations_complete_method(&variants);
-    let builder_read_method = get_enum_builder_read_method(
-        enum_name,
-        &variants,
-        bits_needed,
-        &untyped_generics,
-    );
+    let builder_read_method =
+        get_enum_builder_read_method(enum_name, &variants, bits_needed, &untyped_generics);
 
     let builder_create_method = get_builder_create_method(&builder_name, &turbofish);
     let builder_new_method = get_builder_new_method(
@@ -1029,13 +1025,17 @@ fn get_enum_relations_waiting_method(variants: &[EnumVariant]) -> TokenStream {
                     quote! { Self::#vname(..) => {} }
                 } else {
                     // Bind each field positionally: EP fields by name, normal fields as _
-                    let pattern: Vec<TokenStream> = v.fields.iter().map(|f| {
-                        let n = &f.name;
-                        match &f.kind {
-                            FieldKind::EntityProperty => quote! { #n },
-                            FieldKind::Normal(_) => quote! { _ },
-                        }
-                    }).collect();
+                    let pattern: Vec<TokenStream> = v
+                        .fields
+                        .iter()
+                        .map(|f| {
+                            let n = &f.name;
+                            match &f.kind {
+                                FieldKind::EntityProperty => quote! { #n },
+                                FieldKind::Normal(_) => quote! { _ },
+                            }
+                        })
+                        .collect();
                     quote! {
                         Self::#vname(#(#pattern),*) => { #(#collects)* }
                     }
@@ -1084,13 +1084,17 @@ fn get_enum_relations_complete_method(variants: &[EnumVariant]) -> TokenStream {
                 if ep_fields.is_empty() {
                     quote! { Self::#vname(..) => {} }
                 } else {
-                    let pattern: Vec<TokenStream> = v.fields.iter().map(|f| {
-                        let n = &f.name;
-                        match &f.kind {
-                            FieldKind::EntityProperty => quote! { #n },
-                            FieldKind::Normal(_) => quote! { _ },
-                        }
-                    }).collect();
+                    let pattern: Vec<TokenStream> = v
+                        .fields
+                        .iter()
+                        .map(|f| {
+                            let n = &f.name;
+                            match &f.kind {
+                                FieldKind::EntityProperty => quote! { #n },
+                                FieldKind::Normal(_) => quote! { _ },
+                            }
+                        })
+                        .collect();
                     quote! {
                         Self::#vname(#(#pattern),*) => { #(#completes)* }
                     }

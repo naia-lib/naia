@@ -33,17 +33,24 @@ use crate::{
 #[cfg(feature = "bench_instrumentation")]
 pub mod bench_send_counters {
     use std::sync::atomic::{AtomicU64, Ordering};
-    #[doc(hidden)] pub static NS_COLLECT_MESSAGES: AtomicU64 = AtomicU64::new(0);
-    #[doc(hidden)] pub static NS_TAKE_OUTGOING_EVENTS: AtomicU64 = AtomicU64::new(0);
-    #[doc(hidden)] pub static NS_SEND_PACKET_LOOP: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static NS_COLLECT_MESSAGES: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static NS_TAKE_OUTGOING_EVENTS: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static NS_SEND_PACKET_LOOP: AtomicU64 = AtomicU64::new(0);
     /// Time spent in `write_packet` (serialization) inside the send loop.
-    #[doc(hidden)] pub static NS_WRITE_PACKET: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static NS_WRITE_PACKET: AtomicU64 = AtomicU64::new(0);
     /// Time spent in `io.send_packet` (transport) inside the send loop.
-    #[doc(hidden)] pub static NS_IO_SEND: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static NS_IO_SEND: AtomicU64 = AtomicU64::new(0);
     /// Total data packets written across all connections per tick.
-    #[doc(hidden)] pub static N_PACKETS_SENT: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static N_PACKETS_SENT: AtomicU64 = AtomicU64::new(0);
     /// Time spent in `WorldWriter::write_into_packet` (entity/component serialization) per tick.
-    #[doc(hidden)] pub static NS_WRITE_UPDATES: AtomicU64 = AtomicU64::new(0);
+    #[doc(hidden)]
+    pub static NS_WRITE_UPDATES: AtomicU64 = AtomicU64::new(0);
 
     /// Resets all counters to zero.
     pub fn reset() {

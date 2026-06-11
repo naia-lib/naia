@@ -13,10 +13,7 @@ use crate::steps::world_helpers::last_entity_ref;
 /// Polls until the named client observes EntityAuthStatus::Granted.
 /// Covers [entity-delegation-06.t1] (first in-scope request wins).
 #[then("client {client} is granted authority for the delegated entity")]
-fn then_client_is_granted_authority(
-    ctx: &TestWorldRef,
-    name: ClientName,
-) -> AssertOutcome<()> {
+fn then_client_is_granted_authority(ctx: &TestWorldRef, name: ClientName) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
     let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
@@ -44,10 +41,7 @@ fn then_client_is_granted_authority(
 /// Allows Requested as a transient state while the server round-trip
 /// completes. Covers [entity-delegation-07.t1].
 #[then("client {client} is denied authority for the delegated entity")]
-fn then_client_is_denied_authority(
-    ctx: &TestWorldRef,
-    name: ClientName,
-) -> AssertOutcome<()> {
+fn then_client_is_denied_authority(ctx: &TestWorldRef, name: ClientName) -> AssertOutcome<()> {
     use naia_shared::EntityAuthStatus;
     let client_key = named_client_ref(ctx, name.as_ref());
     let entity_key = last_entity_ref(ctx);
@@ -114,9 +108,7 @@ fn then_client_is_available_for_delegated_entity(
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
             match entity.authority() {
-                Some(EntityAuthStatus::Available) => {
-                    AssertOutcome::Passed(())
-                }
+                Some(EntityAuthStatus::Available) => AssertOutcome::Passed(()),
                 _ => AssertOutcome::Pending,
             }
         } else {
@@ -129,9 +121,7 @@ fn then_client_is_available_for_delegated_entity(
 ///
 /// Covers [entity-delegation-13.t1] (entity leaves scope on exclude).
 #[then("the delegated entity is no longer in client A's world")]
-fn then_delegated_entity_is_no_longer_in_client_a_world(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_delegated_entity_is_no_longer_in_client_a_world(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_a = named_client_ref(ctx, "A");
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_a, |c| {
@@ -147,18 +137,14 @@ fn then_delegated_entity_is_no_longer_in_client_a_world(
 ///
 /// Covers [entity-delegation-17.t1] (delegation observable from client).
 #[then("client A observes Delegated replication config for the entity")]
-fn then_client_a_observes_delegated_replication_config(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_client_a_observes_delegated_replication_config(ctx: &TestWorldRef) -> AssertOutcome<()> {
     use naia_client::Publicity;
     let client_a = named_client_ref(ctx, "A");
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_a, |c| {
         if let Some(entity) = c.entity(&entity_key) {
             match entity.replication_config() {
-                Some(Publicity::Delegated) => {
-                    AssertOutcome::Passed(())
-                }
+                Some(Publicity::Delegated) => AssertOutcome::Passed(()),
                 Some(other) => AssertOutcome::Failed(format!(
                     "expected Delegated replication config, got {:?}",
                     other
@@ -183,9 +169,7 @@ fn then_client_observes_available_authority_status(
     ctx.client(client_key, |c| {
         if let Some(entity) = c.entity(&entity_key) {
             match entity.authority() {
-                Some(EntityAuthStatus::Available) => {
-                    AssertOutcome::Passed(())
-                }
+                Some(EntityAuthStatus::Available) => AssertOutcome::Passed(()),
                 Some(other) => AssertOutcome::Failed(format!(
                     "client {}: expected Available authority status, got {:?}",
                     name, other
@@ -204,9 +188,7 @@ fn then_client_observes_available_authority_status(
 
 /// Then the entity is in-scope for the client.
 #[then("the entity is in-scope for the client")]
-fn then_entity_in_scope_for_client_singleton(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_in_scope_for_client_singleton(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.server(|server| {
@@ -224,9 +206,7 @@ fn then_entity_in_scope_for_client_singleton(
 
 /// Then the entity is out-of-scope for the client.
 #[then("the entity is out-of-scope for the client")]
-fn then_entity_out_of_scope_for_client_singleton(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_out_of_scope_for_client_singleton(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.server(|server| {
@@ -244,9 +224,7 @@ fn then_entity_out_of_scope_for_client_singleton(
 
 /// Then the entity despawns on the client.
 #[then("the entity despawns on the client")]
-fn then_entity_despawns_on_client(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_despawns_on_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -260,9 +238,7 @@ fn then_entity_despawns_on_client(
 
 /// Then the entity spawns on the client.
 #[then("the entity spawns on the client")]
-fn then_entity_spawns_on_client(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_spawns_on_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -276,9 +252,7 @@ fn then_entity_spawns_on_client(
 
 /// Then the entity spawns on the client as a new lifetime.
 #[then("the entity spawns on the client as a new lifetime")]
-fn then_entity_spawns_on_client_as_new_lifetime(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_entity_spawns_on_client_as_new_lifetime(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     let entity_key = last_entity_ref(ctx);
     ctx.client(client_key, |client| {
@@ -294,9 +268,7 @@ fn then_entity_spawns_on_client_as_new_lifetime(
 ///
 /// Polls until the user no longer exists server-side (post-disconnect).
 #[then("the server stops replicating entities to that client")]
-fn then_server_stops_replicating_to_client(
-    ctx: &TestWorldRef,
-) -> AssertOutcome<()> {
+fn then_server_stops_replicating_to_client(ctx: &TestWorldRef) -> AssertOutcome<()> {
     let client_key = ctx.last_client();
     ctx.server(|server| {
         if !server.user_exists(&client_key) {
@@ -316,7 +288,6 @@ fn then_server_stops_replicating_to_client(
 fn then_no_error_is_raised(_ctx: &TestWorldRef) -> AssertOutcome<()> {
     AssertOutcome::Passed(())
 }
-
 
 /// Then the authority status for the entity is not set (None).
 ///

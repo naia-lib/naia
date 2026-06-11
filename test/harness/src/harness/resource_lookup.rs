@@ -29,7 +29,10 @@ where
     R: ReplicatedComponent,
     W: WorldRefType<crate::TestEntity>,
 {
-    world.entities().into_iter().find(|&e| world.has_component::<R>(&e))
+    world
+        .entities()
+        .into_iter()
+        .find(|&e| world.has_component::<R>(&e))
 }
 
 /// Read-only access to the value of a resource of type `R` in `world`.

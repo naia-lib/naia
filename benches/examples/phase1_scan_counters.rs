@@ -29,9 +29,17 @@ fn measure(u: usize, n: usize) {
 fn main() {
     println!("=== Phase 1: dirty_receiver_candidates scan counters (idle tick) ===");
     println!();
-    for (u, n) in [(1, 100), (1, 1_000), (1, 10_000),
-                   (4, 100), (4, 1_000), (4, 10_000),
-                   (16, 100), (16, 1_000), (16, 10_000)] {
+    for (u, n) in [
+        (1, 100),
+        (1, 1_000),
+        (1, 10_000),
+        (4, 100),
+        (4, 1_000),
+        (4, 10_000),
+        (16, 100),
+        (16, 1_000),
+        (16, 10_000),
+    ] {
         measure(u, n);
     }
     println!();

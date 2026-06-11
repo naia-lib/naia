@@ -200,9 +200,8 @@ pub fn graceful_disconnect_last_client(ctx: &mut TestWorldMut) {
 
     // Wait for the server to process the verified disconnect (user gone)
     scenario.expect(|ctx| {
-        let client_disconnected = ctx.client(client_key, |c| {
-            c.read_event::<ClientDisconnectEvent>()
-        });
+        let client_disconnected =
+            ctx.client(client_key, |c| c.read_event::<ClientDisconnectEvent>());
         let server_processed = !ctx.server(|s| s.user_exists(&client_key));
         (client_disconnected.is_some() && server_processed).then_some(())
     });
@@ -226,7 +225,9 @@ pub fn disconnect_last_client(ctx: &mut TestWorldMut) {
     });
     scenario.track_server_event(TrackedServerEvent::Disconnect);
     scenario.expect(|ctx| {
-        ctx.client(client_key, |client| client.read_event::<ClientDisconnectEvent>())
+        ctx.client(client_key, |client| {
+            client.read_event::<ClientDisconnectEvent>()
+        })
     });
     scenario.track_client_event(client_key, TrackedClientEvent::Disconnect);
     scenario.allow_flexible_next();

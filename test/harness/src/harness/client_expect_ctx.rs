@@ -145,7 +145,9 @@ impl<'a> ClientExpectCtx<'a> {
     /// Check if any component insert event was received for the given entity this tick or earlier
     pub fn has_insert_event_for_entity(&self, entity_key: &EntityKey) -> bool {
         self.events.has_insert_for_entity(entity_key)
-            || self.scenario.client_insert_ever_fired(&self.client_key, entity_key)
+            || self
+                .scenario
+                .client_insert_ever_fired(&self.client_key, entity_key)
     }
 
     /// Check if any component update event was received for the given entity this tick
@@ -156,7 +158,9 @@ impl<'a> ClientExpectCtx<'a> {
     /// Check if any component remove event was received for the given entity this tick or earlier
     pub fn has_remove_event_for_entity(&self, entity_key: &EntityKey) -> bool {
         self.events.has_remove_for_entity(entity_key)
-            || self.scenario.client_remove_ever_fired(&self.client_key, entity_key)
+            || self
+                .scenario
+                .client_remove_ever_fired(&self.client_key, entity_key)
     }
 
     /// Read messages from a specific channel

@@ -132,7 +132,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
         // handle queued disconnects (from verified disconnect handshake packets)
         for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
-            self.world_server.user_queue_disconnect(&user_key, naia_shared::DisconnectReason::ClientDisconnected);
+            self.world_server.user_queue_disconnect(
+                &user_key,
+                naia_shared::DisconnectReason::ClientDisconnected,
+            );
         }
 
         // handle world packets
@@ -242,7 +245,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// correspond to a currently connected user.
     ///
     /// [`Protocol`]: naia_shared::Protocol
-    pub fn send_message<C: Channel, M: Message>(&mut self, user_key: &UserKey, message: &M) -> Result<(), NaiaServerError> {
+    pub fn send_message<C: Channel, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        message: &M,
+    ) -> Result<(), NaiaServerError> {
         self.world_server.send_message::<C, M>(user_key, message)
     }
 
@@ -454,7 +461,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// Remove the resource of type `R`. Returns `true` if a resource
     /// was removed; `false` if `R` was not present.
-    pub fn remove_resource<W: WorldMutType<E>, R: ReplicatedComponent>(&mut self, world: W) -> bool {
+    pub fn remove_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        world: W,
+    ) -> bool {
         self.world_server.remove_resource::<W, R>(world)
     }
 
@@ -535,9 +545,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Read the current authority status of resource `R` from the
     /// server's POV. `None` if `R` is not inserted, or if it is not a
     /// delegable resource.
-    pub fn resource_authority_status<R: ReplicatedComponent>(
-        &self,
-    ) -> Option<EntityAuthStatus> {
+    pub fn resource_authority_status<R: ReplicatedComponent>(&self) -> Option<EntityAuthStatus> {
         let entity = self.world_server.resource_entity::<R>()?;
         self.world_server.entity_authority_status(&entity)
     }
@@ -668,7 +676,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         origin_user: &UserKey,
         world_entity: &E,
     ) -> Result<(), AuthorityError> {
-        self.world_server.entity_give_authority(origin_user, world_entity)
+        self.world_server
+            .entity_give_authority(origin_user, world_entity)
     }
 
     /// Updates the [`ReplicationConfig`] for a registered entity.
@@ -889,11 +898,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ///
     /// Per-user priority overrides the global priority for a specific client,
     /// allowing differential update rates across users for the same entity.
-    pub fn user_entity_priority(
-        &self,
-        user_key: &UserKey,
-        entity: E,
-    ) -> EntityPriorityRef<'_, E> {
+    pub fn user_entity_priority(&self, user_key: &UserKey, entity: E) -> EntityPriorityRef<'_, E> {
         self.world_server.user_entity_priority(user_key, entity)
     }
 
@@ -1056,7 +1061,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         max_ticks: u16,
         filter: impl IntoIterator<Item = naia_shared::ComponentKind>,
     ) {
-        self.world_server.enable_historian_filtered(max_ticks, filter);
+        self.world_server
+            .enable_historian_filtered(max_ticks, filter);
     }
 
     /// Record a snapshot of all replicated component values at the given tick.
@@ -1219,7 +1225,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         message_tick: &Tick,
         message: &M,
     ) -> bool {
-        self.world_server
-            .inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
+        self.world_server.inject_tick_buffer_message::<C, M>(
+            user_key,
+            host_tick,
+            message_tick,
+            message,
+        )
     }
 }

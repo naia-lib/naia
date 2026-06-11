@@ -8,7 +8,9 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use naia_shared::{BaseRecvConnection, ChannelKinds, ConnectionConfig, StandardHeader, Tick, Timer};
+use naia_shared::{
+    BaseRecvConnection, ChannelKinds, ConnectionConfig, StandardHeader, Tick, Timer,
+};
 
 use crate::{
     connection::{

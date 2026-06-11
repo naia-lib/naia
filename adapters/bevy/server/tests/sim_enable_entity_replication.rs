@@ -25,9 +25,7 @@ use bevy_app::App;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_server::{
-    pipeline_actors::{
-        configure_entity_replication, run_with_world_server, spawn_server_handles,
-    },
+    pipeline_actors::{configure_entity_replication, run_with_world_server, spawn_server_handles},
     EntityOwner, Plugin as ServerPlugin, ReplicationConfig, ScopeExit, ServerConfig,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, WorldProxyMut};
@@ -77,9 +75,10 @@ fn sim_enable_matches_legacy_observables() {
             sim_handle.enable_entity_replication(&entity);
             (sim_handle, recv, send)
         } else {
-            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
-                ws.enable_entity_replication(&entity);
-            });
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
+                    ws.enable_entity_replication(&entity);
+                });
             (sim_handle, recv, send)
         };
 
@@ -128,9 +127,10 @@ fn sim_enable_composes_with_configure_in_same_tick() {
             sim_handle.enable_entity_replication(&entity);
             (sim_handle, recv, send)
         } else {
-            let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
-                ws.enable_entity_replication(&entity);
-            });
+            let (sim_handle, recv, send, ()) =
+                run_with_world_server(sim_handle, recv, send, |ws| {
+                    ws.enable_entity_replication(&entity);
+                });
             (sim_handle, recv, send)
         };
 
@@ -141,9 +141,10 @@ fn sim_enable_composes_with_configure_in_same_tick() {
             configure_entity_replication(sim_handle, recv, send, &mut proxy, &entity, target)
         };
 
-        let (_sim_handle, _recv, _send, cfg) = run_with_world_server(sim_handle, recv, send, |ws| {
-            ws.entity_replication_config(&entity).expect("registered")
-        });
+        let (_sim_handle, _recv, _send, cfg) =
+            run_with_world_server(sim_handle, recv, send, |ws| {
+                ws.entity_replication_config(&entity).expect("registered")
+            });
         cfg
     }
 

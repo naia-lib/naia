@@ -5,9 +5,7 @@ use std::{
 };
 
 use crate::world::update::user_diff_handler::UserDiffHandler;
-use crate::{
-    ComponentKind, DiffMask, GlobalEntity, GlobalEntityIndex, GlobalWorldManagerType,
-};
+use crate::{ComponentKind, DiffMask, GlobalEntity, GlobalEntityIndex, GlobalWorldManagerType};
 
 /// Per-user replication diff-state, lifted out of the `&mut`-owned send
 /// connection into an `Arc`-shareable, lock-free structure (MISSION_TICK_FLOOR
@@ -71,7 +69,8 @@ impl ReplicationLedger {
         component_kind: &ComponentKind,
         new_diff_mask: &DiffMask,
     ) {
-        self.read().or_diff_mask(entity, component_kind, new_diff_mask);
+        self.read()
+            .or_diff_mask(entity, component_kind, new_diff_mask);
     }
 
     pub fn diff_mask_snapshot(
@@ -99,7 +98,8 @@ impl ReplicationLedger {
         entity: &GlobalEntity,
         component_kind: &ComponentKind,
     ) -> bool {
-        self.read().is_receiver_dirty_and_delivered(entity, component_kind)
+        self.read()
+            .is_receiver_dirty_and_delivered(entity, component_kind)
     }
 
     pub fn is_receiver_dirty_and_delivered_fast(
@@ -127,7 +127,11 @@ impl ReplicationLedger {
         self.read().clear_diff_mask_fast(entity_idx, kind_bit);
     }
 
-    pub fn diff_mask_is_clear(&self, entity: &GlobalEntity, component_kind: &ComponentKind) -> bool {
+    pub fn diff_mask_is_clear(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) -> bool {
         self.read().diff_mask_is_clear(entity, component_kind)
     }
 
@@ -147,7 +151,9 @@ impl ReplicationLedger {
 
     #[inline]
     fn read(&self) -> std::sync::RwLockReadGuard<'_, UserDiffHandler> {
-        self.handler.read().expect("ReplicationLedger lock poisoned")
+        self.handler
+            .read()
+            .expect("ReplicationLedger lock poisoned")
     }
 
     /// Acquire the read guard explicitly, so a hot batch of entry ops (e.g.

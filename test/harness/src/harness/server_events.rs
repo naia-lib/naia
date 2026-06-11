@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 
-use naia_server::{EntityAuthDeniedEvent as NaiaEntityAuthDeniedEvent, Events, NaiaServerError, TickEvents};
+use naia_server::{
+    EntityAuthDeniedEvent as NaiaEntityAuthDeniedEvent, Events, NaiaServerError, TickEvents,
+};
 use naia_shared::{
     ChannelKind, ComponentKind, GlobalResponseId, Message, MessageContainer, MessageKind,
     Replicate, Tick, WorldRefType,
@@ -9,7 +11,10 @@ use naia_shared::{
 use crate::harness::EntityKey;
 use crate::{ClientKey, Scenario, TestEntity};
 
-type HarnessRequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(ClientKey, GlobalResponseId, MessageContainer)>>>;
+type HarnessRequestsMap = HashMap<
+    ChannelKind,
+    HashMap<MessageKind, Vec<(ClientKey, GlobalResponseId, MessageContainer)>>,
+>;
 type HarnessRemovesMap = HashMap<ComponentKind, Vec<(ClientKey, EntityKey, Box<dyn Replicate>)>>;
 /// Kind-only removes: fired when the server doesn't hold component data (client entity despawn).
 type HarnessRemovesSyntheticMap = HashMap<ComponentKind, Vec<(ClientKey, EntityKey)>>;
@@ -62,7 +67,8 @@ impl ServerEvents {
         // Convert main events: connections (from world_events in combined Events)
         let mut connections = Vec::new();
         for user_key in events.read::<naia_server::ConnectEvent>() {
-            let client_key = scenario.user_to_client_key(&user_key)
+            let client_key = scenario
+                .user_to_client_key(&user_key)
                 .or_else(|| scenario.map_connect_event_by_addr(&user_key));
             if let Some(client_key) = client_key {
                 connections.push(client_key);
@@ -123,7 +129,9 @@ impl ServerEvents {
         // Convert world events: spawns (use helper method)
         let mut spawns = Vec::new();
         for (user_key, server_entity) in events.read::<naia_server::SpawnEntityEvent>() {
-            if let Some((client_key, entity_key)) = register_spawn_entity(scenario, user_key, server_entity) {
+            if let Some((client_key, entity_key)) =
+                register_spawn_entity(scenario, user_key, server_entity)
+            {
                 spawns.push((client_key, entity_key));
             }
         }
@@ -215,7 +223,9 @@ impl ServerEvents {
                 for (user_key, entity) in entity_data {
                     if let (Some(client_key), Some(entity_key)) = (
                         scenario.user_to_client_key(&user_key),
-                        scenario.entity_registry().entity_key_for_server_entity(&entity),
+                        scenario
+                            .entity_registry()
+                            .entity_key_for_server_entity(&entity),
                     ) {
                         scenario.record_server_insert(entity_key);
                         client_entities.push((client_key, entity_key));
@@ -235,7 +245,9 @@ impl ServerEvents {
                 for (user_key, entity, component) in entity_data {
                     if let (Some(client_key), Some(entity_key)) = (
                         scenario.user_to_client_key(&user_key),
-                        scenario.entity_registry().entity_key_for_server_entity(&entity),
+                        scenario
+                            .entity_registry()
+                            .entity_key_for_server_entity(&entity),
                     ) {
                         scenario.record_server_remove(entity_key);
                         client_entities.push((client_key, entity_key, component));
@@ -255,7 +267,9 @@ impl ServerEvents {
                 for (user_key, entity) in entity_data {
                     if let (Some(client_key), Some(entity_key)) = (
                         scenario.user_to_client_key(&user_key),
-                        scenario.entity_registry().entity_key_for_server_entity(&entity),
+                        scenario
+                            .entity_registry()
+                            .entity_key_for_server_entity(&entity),
                     ) {
                         scenario.record_server_remove(entity_key);
                         client_entities.push((client_key, entity_key));
@@ -403,12 +417,19 @@ impl ServerEvents {
     }
 
     pub fn has_insert_for_entity(&self, entity_key: &EntityKey) -> bool {
-        self.inserts.values().any(|v| v.iter().any(|(_, ek)| ek == entity_key))
+        self.inserts
+            .values()
+            .any(|v| v.iter().any(|(_, ek)| ek == entity_key))
     }
 
     pub fn has_remove_for_entity(&self, entity_key: &EntityKey) -> bool {
-        self.removes.values().any(|v| v.iter().any(|(_, ek, _)| ek == entity_key))
-            || self.removes_synthetic.values().any(|v| v.iter().any(|(_, ek)| ek == entity_key))
+        self.removes
+            .values()
+            .any(|v| v.iter().any(|(_, ek, _)| ek == entity_key))
+            || self
+                .removes_synthetic
+                .values()
+                .any(|v| v.iter().any(|(_, ek)| ek == entity_key))
     }
 }
 

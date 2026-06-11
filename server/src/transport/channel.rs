@@ -118,7 +118,10 @@ mod tests {
     #[test]
     fn channel_receiver_reports_readiness() {
         let (_tx, rx) = PacketChannel::unbounded();
-        assert!(rx.readiness().is_some(), "in-process channel must expose readiness");
+        assert!(
+            rx.readiness().is_some(),
+            "in-process channel must expose readiness"
+        );
     }
 
     #[test]
@@ -127,10 +130,16 @@ mod tests {
         let readiness = rx.readiness().unwrap();
 
         // Empty channel: readiness must NOT fire (event-driven, not spurious).
-        assert!(!woke_within(&readiness, 50), "readiness fired with no packet");
+        assert!(
+            !woke_within(&readiness, 50),
+            "readiness fired with no packet"
+        );
 
         tx.send(&addr(), &[1, 2, 3]).unwrap();
-        assert!(woke_within(&readiness, 500), "readiness did not fire after send");
+        assert!(
+            woke_within(&readiness, 500),
+            "readiness did not fire after send"
+        );
 
         match rx.receive().unwrap() {
             Some((a, p)) => {
@@ -153,7 +162,10 @@ mod tests {
         // A burst collapses to a single buffered token; drain clears it.
         assert!(woke_within(&readiness, 500), "burst did not fire readiness");
         readiness.drain();
-        assert!(!woke_within(&readiness, 50), "stale readiness tokens after drain");
+        assert!(
+            !woke_within(&readiness, 50),
+            "stale readiness tokens after drain"
+        );
 
         // ...but every packet is still drainable from the data channel.
         let mut n = 0;

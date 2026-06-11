@@ -26,16 +26,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::time::Instant;
 
-use anyhow::{Context, Result, bail};
-use rayon::prelude::*;
+use anyhow::{bail, Context, Result};
 use clap::Parser;
 use futures::executor::block_on;
-use namako_engine::codegen::{StepConstructor, WorldInventory, inventory};
-use namako_engine::npap::{
-    BindingSignature, ResolvedPlan, SemanticBinding, SemanticStepRegistry,
-};
-use namako_engine::step::Context as StepContext;
 use naia_tests::TestWorld;
+use namako_engine::codegen::{inventory, StepConstructor, WorldInventory};
+use namako_engine::npap::{BindingSignature, ResolvedPlan, SemanticBinding, SemanticStepRegistry};
+use namako_engine::step::Context as StepContext;
+use rayon::prelude::*;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
@@ -172,24 +170,25 @@ fn run_scenario_timed(
         // Build captures from the step text using the precompiled regex
         let mut capture_locs = entry.regex.capture_locations();
         let names = entry.regex.capture_names();
-        let matched = entry.regex.captures_read(&mut capture_locs, &step.step_text);
+        let matched = entry
+            .regex
+            .captures_read(&mut capture_locs, &step.step_text);
 
-        let matches: Vec<(Option<String>, String)> = if matched.is_some() {
-            names
-                .zip(
-                    std::iter::once(step.step_text.clone()).chain(
+        let matches: Vec<(Option<String>, String)> =
+            if matched.is_some() {
+                names
+                    .zip(std::iter::once(step.step_text.clone()).chain(
                         (1..capture_locs.len()).map(|gid| {
                             capture_locs
                                 .get(gid)
                                 .map_or(String::new(), |(s, e)| step.step_text[s..e].to_string())
                         }),
-                    ),
-                )
-                .map(|(n, v)| (n.map(String::from), v))
-                .collect()
-        } else {
-            vec![]
-        };
+                    ))
+                    .map(|(n, v)| (n.map(String::from), v))
+                    .collect()
+            } else {
+                vec![]
+            };
 
         let ctx = StepContext {
             step: namako_engine::gherkin::Step {
@@ -281,11 +280,7 @@ struct SuiteBenchReport {
 // Main
 // ---------------------------------------------------------------------------
 
-fn run_plan(
-    plan_path: &PathBuf,
-    verbose: bool,
-    jobs: Option<usize>,
-) -> Result<SuiteBenchReport> {
+fn run_plan(plan_path: &PathBuf, verbose: bool, jobs: Option<usize>) -> Result<SuiteBenchReport> {
     let parallel = jobs.map(|j| j != 1).unwrap_or(true);
     let mode = if parallel {
         let n = jobs.unwrap_or_else(rayon::current_num_threads);
@@ -304,7 +299,11 @@ fn run_plan(
     let plan: ResolvedPlan =
         serde_json::from_str(&plan_json).context("Cannot parse resolved_plan.json")?;
     let plan_parse_ms = parse_start.elapsed().as_millis() as u64;
-    eprintln!("  Plan parsed: {}ms  ({} scenarios)", plan_parse_ms, plan.scenarios.len());
+    eprintln!(
+        "  Plan parsed: {}ms  ({} scenarios)",
+        plan_parse_ms,
+        plan.scenarios.len()
+    );
 
     // 2. Validate hash (same logic as naia-npa)
     let current_bindings = collect_bindings::<TestWorld>();
@@ -323,7 +322,11 @@ fn run_plan(
     let setup_start = Instant::now();
     let dispatch_table = Arc::new(build_dispatch_table::<TestWorld>());
     let dispatch_setup_ms = setup_start.elapsed().as_millis() as u64;
-    eprintln!("  Dispatch table built: {}ms  ({} bindings)", dispatch_setup_ms, dispatch_table.len());
+    eprintln!(
+        "  Dispatch table built: {}ms  ({} bindings)",
+        dispatch_setup_ms,
+        dispatch_table.len()
+    );
 
     // 4. Run all scenarios (sequential or parallel), measuring each
     eprintln!("\nRunning {} scenarios ({mode})...", plan.scenarios.len());
@@ -342,29 +345,44 @@ fn run_plan(
         let dt = Arc::clone(&dispatch_table);
         let ctr = Arc::clone(&completed);
         pool.install(|| {
-            plan.scenarios.par_iter().map(|scenario| {
-                let timing = run_scenario_timed(scenario, &dt);
-                let done = ctr.fetch_add(1, Ordering::Relaxed) + 1;
-                let status = if timing.passed { "✓" } else { "✗" };
-                if verbose || !timing.passed {
-                    eprintln!("  [{done}/{total} {status}] {}  ({}ms)", timing.scenario_key, timing.duration_ms);
-                } else if done % 50 == 0 {
-                    eprintln!("  ... {done}/{total} scenarios done");
-                }
-                timing
-            }).collect()
+            plan.scenarios
+                .par_iter()
+                .map(|scenario| {
+                    let timing = run_scenario_timed(scenario, &dt);
+                    let done = ctr.fetch_add(1, Ordering::Relaxed) + 1;
+                    let status = if timing.passed { "✓" } else { "✗" };
+                    if verbose || !timing.passed {
+                        eprintln!(
+                            "  [{done}/{total} {status}] {}  ({}ms)",
+                            timing.scenario_key, timing.duration_ms
+                        );
+                    } else if done % 50 == 0 {
+                        eprintln!("  ... {done}/{total} scenarios done");
+                    }
+                    timing
+                })
+                .collect()
         })
     } else {
-        plan.scenarios.iter().enumerate().map(|(idx, scenario)| {
-            let timing = run_scenario_timed(scenario, &dispatch_table);
-            let status = if timing.passed { "✓" } else { "✗" };
-            if verbose || !timing.passed {
-                eprintln!("  [{}/{total} {status}] {}  ({}ms)", idx + 1, timing.scenario_key, timing.duration_ms);
-            } else if (idx + 1) % 50 == 0 {
-                eprintln!("  ... {}/{total} scenarios done", idx + 1);
-            }
-            timing
-        }).collect()
+        plan.scenarios
+            .iter()
+            .enumerate()
+            .map(|(idx, scenario)| {
+                let timing = run_scenario_timed(scenario, &dispatch_table);
+                let status = if timing.passed { "✓" } else { "✗" };
+                if verbose || !timing.passed {
+                    eprintln!(
+                        "  [{}/{total} {status}] {}  ({}ms)",
+                        idx + 1,
+                        timing.scenario_key,
+                        timing.duration_ms
+                    );
+                } else if (idx + 1) % 50 == 0 {
+                    eprintln!("  ... {}/{total} scenarios done", idx + 1);
+                }
+                timing
+            })
+            .collect()
     };
 
     let total_suite_ms = suite_start.elapsed().as_millis() as u64;
@@ -391,9 +409,17 @@ fn run_plan(
     let slow_scenarios = slow.into_iter().take(10).collect::<Vec<_>>();
 
     eprintln!("\n=== Results ===");
-    eprintln!("  Scenarios:       {total} ({passed} passed, {failed} failed)",
-        total = plan.scenarios.len(), passed = passed, failed = failed);
-    eprintln!("  Total time:      {:.1}s ({:.0}ms)", total_suite_ms as f64 / 1000.0, total_suite_ms);
+    eprintln!(
+        "  Scenarios:       {total} ({passed} passed, {failed} failed)",
+        total = plan.scenarios.len(),
+        passed = passed,
+        failed = failed
+    );
+    eprintln!(
+        "  Total time:      {:.1}s ({:.0}ms)",
+        total_suite_ms as f64 / 1000.0,
+        total_suite_ms
+    );
     eprintln!("  Scenarios/sec:   {:.2}", scenarios_per_sec);
     eprintln!("\nPer-scenario timing:");
     eprintln!("  Min:    {:>6}ms", min);
@@ -406,7 +432,12 @@ fn run_plan(
     eprintln!("\nTop 10 slowest scenarios:");
     for (i, t) in slow_scenarios.iter().enumerate().take(10) {
         let status = if t.passed { "✓" } else { "✗" };
-        eprintln!("  {:2}. [{status}] {}ms  {}", i + 1, t.duration_ms, t.scenario_key);
+        eprintln!(
+            "  {:2}. [{status}] {}ms  {}",
+            i + 1,
+            t.duration_ms,
+            t.scenario_key
+        );
     }
 
     if failed > 0 {
@@ -474,7 +505,10 @@ fn main() -> Result<()> {
     }
 
     if report.failed > 0 {
-        bail!("{} scenario(s) failed — check timing report for details", report.failed);
+        bail!(
+            "{} scenario(s) failed — check timing report for details",
+            report.failed
+        );
     }
 
     Ok(())

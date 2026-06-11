@@ -82,9 +82,7 @@ impl Handshaker for HandshakeManager {
                 let writer = self.write_connect_request();
                 Some(writer.to_packet())
             }
-            HandshakeState::Connected => {
-                None
-            }
+            HandshakeState::Connected => None,
         }
     }
 
@@ -116,9 +114,7 @@ impl Handshaker for HandshakeManager {
                     }
                     HandshakeHeader::ClientIdentifyRequest(_)
                     | HandshakeHeader::ClientConnectRequest
-                    | HandshakeHeader::Disconnect => {
-                        None
-                    }
+                    | HandshakeHeader::Disconnect => None,
                 }
             }
             PacketType::Pong => {
@@ -143,9 +139,7 @@ impl Handshaker for HandshakeManager {
                 }
                 None
             }
-            PacketType::Data | PacketType::Heartbeat | PacketType::Ping => {
-                None
-            }
+            PacketType::Data | PacketType::Heartbeat | PacketType::Ping => None,
         }
     }
 

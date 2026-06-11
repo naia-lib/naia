@@ -45,7 +45,10 @@ fn latest_wins_overwrites_pending_snapshot() {
     // Only one take consumes both — there's only one slot.
     let first = receiver.take_latest();
     assert!(first.is_some(), "first take returns the latest snapshot");
-    assert!(receiver.take_latest().is_none(), "no second snapshot queued");
+    assert!(
+        receiver.take_latest().is_none(),
+        "no second snapshot queued"
+    );
 }
 
 #[test]

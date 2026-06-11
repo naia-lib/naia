@@ -103,8 +103,7 @@ fn host_entity_channel_extract_outgoing_commands() {
 mod reserve_first_command_tests {
     use crate::{
         world::{
-            entity_command::EntityCommand,
-            local::local_entity::RemoteEntity,
+            entity_command::EntityCommand, local::local_entity::RemoteEntity,
             sync::HostEntityChannel,
         },
         BigMapKey, EntityAuthStatus, GlobalEntity, HostEntity, HostType,
@@ -177,7 +176,10 @@ mod reserve_first_command_tests {
         channel.send_command(set_authority_cmd(2));
         let commands = channel.extract_outgoing_commands();
         assert_eq!(commands.len(), 2, "expected reserved + sent commands");
-        assert!(matches!(&commands[0], EntityCommand::MigrateResponse(_, _, _, _)));
+        assert!(matches!(
+            &commands[0],
+            EntityCommand::MigrateResponse(_, _, _, _)
+        ));
         assert_eq!(subcommand_id_of(&commands[0]), Some(0));
         assert!(matches!(&commands[1], EntityCommand::SetAuthority(_, _, _)));
         assert_eq!(subcommand_id_of(&commands[1]), Some(1));
@@ -193,7 +195,10 @@ mod reserve_first_command_tests {
         // Drain without any send_command call.
         let commands = channel.extract_outgoing_commands();
         assert_eq!(commands.len(), 1);
-        assert!(matches!(&commands[0], EntityCommand::MigrateResponse(_, _, _, _)));
+        assert!(matches!(
+            &commands[0],
+            EntityCommand::MigrateResponse(_, _, _, _)
+        ));
         assert_eq!(subcommand_id_of(&commands[0]), Some(0));
     }
 
@@ -265,8 +270,14 @@ fn local_entity_map_install_and_apply_redirect() {
     let mut entity_map =
         crate::world::local::local_entity_map::LocalEntityMap::new(HostType::Server);
 
-    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote { id: 42, is_static: false };
-    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host { id: 100, is_static: false };
+    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote {
+        id: 42,
+        is_static: false,
+    };
+    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host {
+        id: 100,
+        is_static: false,
+    };
 
     // Install redirect
     entity_map.install_entity_redirect(old_entity, new_entity);
@@ -276,7 +287,10 @@ fn local_entity_map_install_and_apply_redirect() {
     assert_eq!(redirected, new_entity);
 
     // Non-redirected entity returns itself
-    let other_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote { id: 99, is_static: false };
+    let other_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote {
+        id: 99,
+        is_static: false,
+    };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 }
@@ -342,8 +356,14 @@ fn entity_message_apply_redirects() {
     // Test that we can apply entity redirects to EntityMessage
     use crate::world::entity::entity_message::EntityMessage;
 
-    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote { id: 42, is_static: false };
-    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host { id: 100, is_static: false };
+    let old_entity = crate::world::local::local_entity::OwnedLocalEntity::Remote {
+        id: 42,
+        is_static: false,
+    };
+    let new_entity = crate::world::local::local_entity::OwnedLocalEntity::Host {
+        id: 100,
+        is_static: false,
+    };
 
     // Create a message with the old entity
     let message = EntityMessage::<()>::Spawn(());
@@ -404,8 +424,14 @@ fn force_drain_preserves_component_state() {
 fn install_and_apply_redirect() {
     let mut entity_map = LocalEntityMap::new(HostType::Server);
 
-    let old_entity = OwnedLocalEntity::Remote { id: 42, is_static: false };
-    let new_entity = OwnedLocalEntity::Host { id: 100, is_static: false };
+    let old_entity = OwnedLocalEntity::Remote {
+        id: 42,
+        is_static: false,
+    };
+    let new_entity = OwnedLocalEntity::Host {
+        id: 100,
+        is_static: false,
+    };
 
     // Install redirect
     entity_map.install_entity_redirect(old_entity, new_entity);
@@ -415,7 +441,10 @@ fn install_and_apply_redirect() {
     assert_eq!(redirected, new_entity);
 
     // Non-redirected entity returns itself
-    let other_entity = OwnedLocalEntity::Remote { id: 99, is_static: false };
+    let other_entity = OwnedLocalEntity::Remote {
+        id: 99,
+        is_static: false,
+    };
     let not_redirected = entity_map.apply_entity_redirect(&other_entity);
     assert_eq!(not_redirected, other_entity);
 }

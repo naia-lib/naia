@@ -25,8 +25,8 @@
 
 use bevy_ecs::{entity::Entity, resource::Resource};
 
-use naia_server::pipeline_actors::{SimHandle, SimConverter as InnerSimConverter};
 use naia_bevy_shared::{EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity};
+use naia_server::pipeline_actors::{SimConverter as InnerSimConverter, SimHandle};
 
 /// Bevy `Resource` wrapper over the cloneable Sim-side converter.
 #[derive(Resource, Clone)]

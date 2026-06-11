@@ -1,8 +1,8 @@
 use std::{any::Any, collections::HashMap};
 
 use naia_shared::{
-    BigMap, ComponentFieldUpdate, ComponentKind, ComponentKinds, PendingComponentUpdate,
-    EntityAndGlobalEntityConverter, GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter,
+    BigMap, ComponentFieldUpdate, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter,
+    GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, PendingComponentUpdate,
     ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
     SerdeErr, WorldMutType, WorldRefType,
 };

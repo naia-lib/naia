@@ -130,7 +130,7 @@ mod tests {
 
     #[test]
     fn clear_removes_bit() {
-        let mut vis = ConnectionVisibilityBitset::new(65);  // needs mut for set/clear
+        let mut vis = ConnectionVisibilityBitset::new(65); // needs mut for set/clear
         let idx = GlobalEntityIndex(5);
         vis.set(idx);
         vis.clear(idx);

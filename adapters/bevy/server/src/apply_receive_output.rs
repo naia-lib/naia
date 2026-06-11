@@ -1,7 +1,11 @@
-use bevy_ecs::{entity::Entity, message::Messages, world::{Mut, World}};
+use bevy_ecs::{
+    entity::Entity,
+    message::Messages,
+    world::{Mut, World},
+};
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
 use naia_server::{
-    pipeline_actors::{SimHandle, SimEventReceiver},
+    pipeline_actors::{SimEventReceiver, SimHandle},
     EntityOwner, Events, ReceiveOutput,
 };
 
@@ -135,9 +139,7 @@ pub fn apply_receive_output(
             if !world.proxy().has_entity(&entity) {
                 continue;
             }
-            if let EntityOwner::Client(user_key) =
-                server.entity_owner(world.proxy(), &entity)
-            {
+            if let EntityOwner::Client(user_key) = server.entity_owner(world.proxy(), &entity) {
                 client_spawned_entities.push((user_key, entity));
             }
         }
@@ -462,7 +464,13 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
     sim_receiver: &SimEventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
-    apply_receive_output_pipeline_with_sim_receiver_split(world, None, sim_handle, sim_receiver, output)
+    apply_receive_output_pipeline_with_sim_receiver_split(
+        world,
+        None,
+        sim_handle,
+        sim_receiver,
+        output,
+    )
 }
 
 /// Dual-target variant of [`apply_receive_output_pipeline_with_sim_receiver`].
@@ -675,8 +683,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver_split(
     // (SimEventReceiver does not surface this event type).
     if events.has::<naia_events::DelegateEntityEvent>() {
         for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
-            ew.entity_mut(entity)
-                .insert(HostOwned::new::<Singleton>());
+            ew.entity_mut(entity).insert(HostOwned::new::<Singleton>());
         }
     }
 

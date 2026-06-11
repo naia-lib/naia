@@ -114,7 +114,9 @@ impl<E: Copy + Eq + PartialEq> EntityMessage<E> {
     pub fn with_entity<O: Copy + Eq + PartialEq>(self, entity: O) -> EntityMessage<O> {
         match self {
             EntityMessage::Spawn(_) => EntityMessage::Spawn(entity),
-            EntityMessage::SpawnWithComponents(_, kinds) => EntityMessage::SpawnWithComponents(entity, kinds),
+            EntityMessage::SpawnWithComponents(_, kinds) => {
+                EntityMessage::SpawnWithComponents(entity, kinds)
+            }
             EntityMessage::Despawn(_) => EntityMessage::Despawn(entity),
             EntityMessage::InsertComponent(_, component_kind) => {
                 EntityMessage::InsertComponent(entity, component_kind)

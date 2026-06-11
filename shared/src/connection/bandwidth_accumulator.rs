@@ -81,7 +81,9 @@ impl BandwidthAccumulator {
     pub(crate) fn spend(&mut self, actual_bytes: u32) {
         self.budget_bytes -= actual_bytes as f64;
         self.sent_this_tick = true;
-        self.bytes_sent_this_tick = self.bytes_sent_this_tick.saturating_add(actual_bytes as u64);
+        self.bytes_sent_this_tick = self
+            .bytes_sent_this_tick
+            .saturating_add(actual_bytes as u64);
     }
 
     /// Current remaining budget (may be negative when overshoot occurred).
@@ -248,7 +250,9 @@ mod tests {
     #[test]
     fn telemetry_bytes_sent_snapshots_per_tick() {
         init_clock();
-        let cfg = BandwidthConfig { target_bytes_per_sec: 64_000 };
+        let cfg = BandwidthConfig {
+            target_bytes_per_sec: 64_000,
+        };
         let mut acc = BandwidthAccumulator::new(&cfg);
         let t0 = Instant::now();
         acc.accumulate(&t0);

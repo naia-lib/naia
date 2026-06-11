@@ -32,9 +32,7 @@ use bevy_app::App;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_server::{
-    pipeline_actors::{
-        configure_entity_replication, run_with_world_server, spawn_server_handles,
-    },
+    pipeline_actors::{configure_entity_replication, run_with_world_server, spawn_server_handles},
     Plugin as ServerPlugin, ReplicationConfig, ScopeExit, ServerConfig,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, WorldProxyMut};
@@ -117,10 +115,11 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
         configure_entity_replication(sim_handle, recv, send, &mut proxy, &entity, revert)
     };
 
-    let (_sim_handle, _recv, _send, end_cfg) = run_with_world_server(sim_handle, recv, send, |ws| {
-        ws.entity_replication_config(&entity)
-            .expect("entity registered")
-    });
+    let (_sim_handle, _recv, _send, end_cfg) =
+        run_with_world_server(sim_handle, recv, send, |ws| {
+            ws.entity_replication_config(&entity)
+                .expect("entity registered")
+        });
     assert_eq!(end_cfg, revert);
     assert_eq!(end_cfg.scope_exit, ScopeExit::Despawn);
 }
@@ -132,9 +131,7 @@ fn configure_entity_replication_facade_matches_legacy_path_for_scope_exit() {
     // with the same input. The resulting `entity_replication_config`
     // reads must agree.
 
-    fn run_with(
-        facade: bool,
-    ) -> ReplicationConfig {
+    fn run_with(facade: bool) -> ReplicationConfig {
         let (sim_handle, recv, send) = handles();
         let mut sim_app = App::new();
         sim_app.add_plugins(ServerPlugin::sim_integration(

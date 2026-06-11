@@ -70,7 +70,11 @@ impl Url {
         s.find('?').and_then(|i| {
             let q = &s[i + 1..];
             let q = q.find('#').map(|j| &q[..j]).unwrap_or(q);
-            if q.is_empty() { None } else { Some(q) }
+            if q.is_empty() {
+                None
+            } else {
+                Some(q)
+            }
         })
     }
 
@@ -78,7 +82,11 @@ impl Url {
         let s = self.original.as_str();
         s.find('#').and_then(|i| {
             let f = &s[i + 1..];
-            if f.is_empty() { None } else { Some(f) }
+            if f.is_empty() {
+                None
+            } else {
+                Some(f)
+            }
         })
     }
 
@@ -107,14 +115,16 @@ impl Url {
         let after_scheme = s.find("//").map(|i| i + 2).unwrap_or(0);
         let authority = &s[after_scheme..self.authority_end()];
         let bracket_end = authority.rfind(']').unwrap_or(0);
-        authority[bracket_end..].rfind(':').and_then(|colon| {
-            authority[bracket_end + colon + 1..].parse().ok()
-        })
+        authority[bracket_end..]
+            .rfind(':')
+            .and_then(|colon| authority[bracket_end + colon + 1..].parse().ok())
     }
 }
 
 pub fn parse_server_url(server_url_str: &str) -> Url {
-    let url = Url { original: server_url_str.to_string() };
+    let url = Url {
+        original: server_url_str.to_string(),
+    };
 
     if let Some(path_segments) = url.path_segments() {
         if path_segments.count() > 1 {

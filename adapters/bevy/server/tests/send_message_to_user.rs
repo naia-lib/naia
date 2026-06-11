@@ -77,8 +77,11 @@ fn send_message_to_unknown_user_returns_false() {
     // handshake. `sim_handle.user_address` will return None and the helper
     // must short-circuit to `false`.
     let bogus_user: UserKey = UserKey::from_u64(0xDEAD_BEEF_DEAD_BEEF);
-    let queued =
-        send.send_message_to_user::<UnorderedReliableChannel, _>(&sim_handle, &bogus_user, &Ping { n: 1 });
+    let queued = send.send_message_to_user::<UnorderedReliableChannel, _>(
+        &sim_handle,
+        &bogus_user,
+        &Ping { n: 1 },
+    );
     assert!(
         !queued,
         "send_message_to_user must return false for an unknown UserKey",

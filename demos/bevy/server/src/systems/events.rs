@@ -86,10 +86,12 @@ pub fn connect_events(
         let mut assignment_message = EntityAssignment::new(true);
         assignment_message.entity.set(&server, &entity);
 
-        server.send_message::<EntityAssignmentChannel, EntityAssignment>(
-            &user_key,
-            &assignment_message,
-        ).unwrap();
+        server
+            .send_message::<EntityAssignmentChannel, EntityAssignment>(
+                &user_key,
+                &assignment_message,
+            )
+            .unwrap();
     }
 }
 

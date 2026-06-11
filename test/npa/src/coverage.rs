@@ -66,10 +66,7 @@ struct CoverageReport {
 pub fn run(args: CoverageArgs) -> Result<()> {
     let features_dir = args.specs_root.join("features");
     if !features_dir.exists() {
-        anyhow::bail!(
-            "features dir not found: {}",
-            features_dir.display()
-        );
+        anyhow::bail!("features dir not found: {}", features_dir.display());
     }
 
     let scenario_re = Regex::new(r"^\s*Scenario(?:\s+Outline)?:\s*(.*)$").unwrap();
@@ -88,8 +85,15 @@ pub fn run(args: CoverageArgs) -> Result<()> {
     entries.sort();
 
     for path in entries {
-        let report = scan_feature(&path, &scenario_re, &contract_re, &tag_re,
-            &mut active_contracts, &mut deferred_contracts, &mut offenders)?;
+        let report = scan_feature(
+            &path,
+            &scenario_re,
+            &contract_re,
+            &tag_re,
+            &mut active_contracts,
+            &mut deferred_contracts,
+            &mut offenders,
+        )?;
         features.push(report);
     }
 
@@ -140,8 +144,7 @@ fn scan_feature(
     deferred_contracts: &mut BTreeSet<String>,
     offenders: &mut Vec<String>,
 ) -> Result<FeatureReport> {
-    let text = fs::read_to_string(path)
-        .with_context(|| format!("reading {}", path.display()))?;
+    let text = fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
 
     let mut total = 0;
     let mut active = 0;
@@ -179,7 +182,9 @@ fn scan_feature(
 
             if is_deferred {
                 deferred_total += 1;
-                for c in &contracts { deferred_contracts.insert(c.clone()); }
+                for c in &contracts {
+                    deferred_contracts.insert(c.clone());
+                }
                 if is_policy {
                     deferred_policy += 1;
                 } else {
@@ -192,7 +197,9 @@ fn scan_feature(
                 }
             } else {
                 active += 1;
-                for c in &contracts { active_contracts.insert(c.clone()); }
+                for c in &contracts {
+                    active_contracts.insert(c.clone());
+                }
             }
 
             pending_tags.clear();
@@ -255,14 +262,20 @@ fn print_human(report: &CoverageReport) {
         report.deferred_non_policy_scenarios
     );
 
-    println!("\n{} active scenario(s), {} deferred, {} policy-only",
+    println!(
+        "\n{} active scenario(s), {} deferred, {} policy-only",
         report.active_scenarios,
         report.deferred_scenarios,
-        report.deferred_scenarios - report.deferred_non_policy_scenarios);
-    println!("Contracts with active (non-deferred) coverage: {}",
-        report.contracts_with_active_coverage.len());
-    println!("Contracts deferred-only (no active coverage): {}",
-        report.contracts_deferred_only.len());
+        report.deferred_scenarios - report.deferred_non_policy_scenarios
+    );
+    println!(
+        "Contracts with active (non-deferred) coverage: {}",
+        report.contracts_with_active_coverage.len()
+    );
+    println!(
+        "Contracts deferred-only (no active coverage): {}",
+        report.contracts_deferred_only.len()
+    );
 
     if !report.contracts_deferred_only.is_empty() {
         let by_area: BTreeMap<String, Vec<String>> = group_by_area(&report.contracts_deferred_only);
@@ -273,8 +286,10 @@ fn print_human(report: &CoverageReport) {
     }
 
     if report.deferred_non_policy_scenarios > 0 {
-        println!("\n⚠️  {} @Deferred Scenario(s) lack @PolicyOnly tag.",
-            report.deferred_non_policy_scenarios);
+        println!(
+            "\n⚠️  {} @Deferred Scenario(s) lack @PolicyOnly tag.",
+            report.deferred_non_policy_scenarios
+        );
         println!("    These are quality-debt items (Category B/C) — see SDD_QUALITY_DEBT_PLAN.md.");
     }
 }

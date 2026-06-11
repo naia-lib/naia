@@ -205,7 +205,10 @@ mod wrapping_diff_tests {
         // At/over the wrap boundary it folds into [0, GAME_TIME_LIMIT).
         assert_eq!(GameInstant::from_millis(GAME_TIME_LIMIT).as_millis(), 0);
         assert_eq!(GameInstant::from_millis(GAME_TIME_LIMIT + 7).as_millis(), 7);
-        assert_eq!(GameInstant::from_millis(u32::MAX).as_millis(), u32::MAX % GAME_TIME_LIMIT);
+        assert_eq!(
+            GameInstant::from_millis(u32::MAX).as_millis(),
+            u32::MAX % GAME_TIME_LIMIT
+        );
     }
 
     #[test]

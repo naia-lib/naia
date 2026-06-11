@@ -1,5 +1,5 @@
-use std::time::Duration;
 use naia_shared::KeyGenerator;
+use std::time::Duration;
 
 #[test]
 fn key_generator_recycle_prevents_exhaustion() {

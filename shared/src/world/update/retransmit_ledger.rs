@@ -1,7 +1,4 @@
-use std::{
-    collections::HashMap,
-    time::Duration,
-};
+use std::{collections::HashMap, time::Duration};
 
 use crate::{ComponentKind, DiffMask, GlobalEntity, Instant, PacketIndex};
 

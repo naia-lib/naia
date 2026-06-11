@@ -26,7 +26,9 @@ const SAMPLES: usize = 2_000;
 const SPIKE_FACTOR: f64 = 10.0;
 
 fn percentile(sorted: &[u64], p: f64) -> u64 {
-    if sorted.is_empty() { return 0; }
+    if sorted.is_empty() {
+        return 0;
+    }
     let idx = ((sorted.len() as f64 - 1.0) * p).round() as usize;
     sorted[idx]
 }
@@ -68,14 +70,24 @@ fn measure_cell(u: usize, n: usize, immutable: bool) -> CellReport {
     let mean: u64 = (times.iter().map(|&x| x as u128).sum::<u128>() / times.len() as u128) as u64;
 
     let spike_threshold = ((p99 as f64) * SPIKE_FACTOR) as u64;
-    let spikes: Vec<(usize, u64)> = times.iter().enumerate()
+    let spikes: Vec<(usize, u64)> = times
+        .iter()
+        .enumerate()
         .filter(|(_, &ns)| ns > spike_threshold)
         .map(|(i, &ns)| (i, ns))
         .collect();
 
     let kind = if immutable { "imm" } else { "mut" };
     let label = format!("{u:>2}u_{n:>5}e_{kind}");
-    CellReport { label, p50, p90, p99, max, mean, spikes }
+    CellReport {
+        label,
+        p50,
+        p90,
+        p99,
+        max,
+        mean,
+        spikes,
+    }
 }
 
 fn print_report(r: &CellReport) {
@@ -91,7 +103,10 @@ fn print_report(r: &CellReport) {
         r.mean as f64 / 1_000.0,
     );
     if !r.spikes.is_empty() {
-        let preview: Vec<String> = r.spikes.iter().take(5)
+        let preview: Vec<String> = r
+            .spikes
+            .iter()
+            .take(5)
             .map(|(i, ns)| format!("tick+{i} = {:.2}ms", *ns as f64 / 1e6))
             .collect();
         let rest = if r.spikes.len() > 5 {
@@ -99,7 +114,11 @@ fn print_report(r: &CellReport) {
         } else {
             String::new()
         };
-        println!("         spikes[{}]: {}{rest}", r.spikes.len(), preview.join(", "));
+        println!(
+            "         spikes[{}]: {}{rest}",
+            r.spikes.len(),
+            preview.join(", ")
+        );
     }
 }
 

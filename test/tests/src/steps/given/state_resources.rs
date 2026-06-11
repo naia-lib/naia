@@ -31,7 +31,10 @@ fn given_protocol_with_matchstate(_ctx: &mut TestWorldMut) {
     use naia_test_harness::{protocol, TestMatchState};
     let p = protocol();
     let kind = naia_shared::ComponentKind::of::<TestMatchState>();
-    assert!(p.resource_kinds.is_resource(&kind), "TestMatchState must be registered as a resource");
+    assert!(
+        p.resource_kinds.is_resource(&kind),
+        "TestMatchState must be registered as a resource"
+    );
 }
 
 /// Given a Naia protocol with delegable replicated resource type "PlayerSelection".
@@ -78,33 +81,39 @@ fn given_alice_holds_authority(ctx: &mut TestWorldMut) {
     use naia_shared::EntityAuthStatus;
     use naia_test_harness::TestPlayerSelection;
     let scenario = ctx.scenario_mut();
-    let alice_key = scenario.bdd_get(&crate::steps::world_helpers::client_key_storage("alice"))
+    let alice_key = scenario
+        .bdd_get(&crate::steps::world_helpers::client_key_storage("alice"))
         .expect("alice not connected");
     scenario.mutate(|mctx| {
         mctx.server(|server| {
-            assert!(server.configure_resource::<TestPlayerSelection>(naia_server::ReplicationConfig::delegated()));
+            assert!(server.configure_resource::<TestPlayerSelection>(
+                naia_server::ReplicationConfig::delegated()
+            ));
         });
     });
     scenario.spec_expect("alice holds authority: Available before request", |ctx| {
         ctx.client(alice_key, |cl| {
-            (cl.resource_authority_status::<TestPlayerSelection>() == Some(EntityAuthStatus::Available))
-                .then_some(())
+            (cl.resource_authority_status::<TestPlayerSelection>()
+                == Some(EntityAuthStatus::Available))
+            .then_some(())
         })
     });
     scenario.mutate(|mctx| {
         mctx.client(alice_key, |cl| {
-            assert!(cl.request_resource_authority::<TestPlayerSelection>().is_ok());
+            assert!(cl
+                .request_resource_authority::<TestPlayerSelection>()
+                .is_ok());
         });
     });
     scenario.spec_expect("alice holds authority: Granted", |ctx| {
         ctx.client(alice_key, |cl| {
-            (cl.resource_authority_status::<TestPlayerSelection>() == Some(EntityAuthStatus::Granted))
-                .then_some(())
+            (cl.resource_authority_status::<TestPlayerSelection>()
+                == Some(EntityAuthStatus::Granted))
+            .then_some(())
         })
     });
     scenario.allow_flexible_next();
 }
-
 
 /// Given a server with `PlayerSelection { selected_id: 0 }` and connected client "alice".
 ///
@@ -129,4 +138,3 @@ fn given_server_with_player_selection_and_alice(ctx: &mut TestWorldMut) {
         scenario.mutate(|_| {});
     }
 }
-

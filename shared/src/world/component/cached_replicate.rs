@@ -125,8 +125,6 @@ mod tests {
     // to the integration tests, not the trait-existence unit test.
     struct DummyImmutable;
 
-    use std::collections::HashSet;
-    use naia_serde::{BitReader, SerdeErr};
     use crate::named::Named;
     use crate::world::component::component_kinds::ComponentKind;
     use crate::world::component::property_mutate::PropertyMutator;
@@ -136,16 +134,26 @@ mod tests {
     use crate::world::entity::entity_converters::LocalEntityAndGlobalEntityConverter;
     use crate::world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
     use crate::RemoteEntity;
+    use naia_serde::{BitReader, SerdeErr};
+    use std::collections::HashSet;
 
     impl Named for DummyImmutable {
-        fn protocol_name() -> &'static str { "DummyImmutable" }
-        fn name(&self) -> String { "DummyImmutable".to_string() }
+        fn protocol_name() -> &'static str {
+            "DummyImmutable"
+        }
+        fn name(&self) -> String {
+            "DummyImmutable".to_string()
+        }
     }
 
     struct DummyBuilder;
     impl Named for DummyBuilder {
-        fn protocol_name() -> &'static str { "DummyImmutable" }
-        fn name(&self) -> String { "DummyImmutable".to_string() }
+        fn protocol_name() -> &'static str {
+            "DummyImmutable"
+        }
+        fn name(&self) -> String {
+            "DummyImmutable".to_string()
+        }
     }
     impl ReplicateBuilder for DummyBuilder {
         fn read(
@@ -155,7 +163,10 @@ mod tests {
         ) -> Result<Box<dyn Replicate>, SerdeErr> {
             Ok(Box::new(DummyImmutable))
         }
-        fn read_create_update(&self, _reader: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr> {
+        fn read_create_update(
+            &self,
+            _reader: &mut BitReader,
+        ) -> Result<PendingComponentUpdate, SerdeErr> {
             unreachable!("DummyImmutable does not exercise updates")
         }
         fn split_update(
@@ -165,19 +176,42 @@ mod tests {
         ) -> crate::world::component::replicate::SplitUpdateResult {
             unreachable!("DummyImmutable does not exercise updates")
         }
-        fn box_clone(&self) -> Box<dyn ReplicateBuilder> { Box::new(DummyBuilder) }
+        fn box_clone(&self) -> Box<dyn ReplicateBuilder> {
+            Box::new(DummyBuilder)
+        }
     }
 
     impl Replicate for DummyImmutable {
-        fn kind(&self) -> ComponentKind { ComponentKind::of::<DummyImmutable>() }
-        fn to_any(&self) -> &dyn Any { self }
-        fn to_any_mut(&mut self) -> &mut dyn Any { self }
-        fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> { self }
-        fn copy_to_box(&self) -> Box<dyn Replicate> { Box::new(DummyImmutable) }
-        fn create_builder() -> Box<dyn ReplicateBuilder> where Self: Sized { Box::new(DummyBuilder) }
-        fn diff_mask_size(&self) -> u8 { 0 }
-        fn dyn_ref(&self) -> ReplicaDynRef<'_> { ReplicaDynRef::new(self) }
-        fn dyn_mut(&mut self) -> ReplicaDynMut<'_> { ReplicaDynMut::new(self) }
+        fn kind(&self) -> ComponentKind {
+            ComponentKind::of::<DummyImmutable>()
+        }
+        fn to_any(&self) -> &dyn Any {
+            self
+        }
+        fn to_any_mut(&mut self) -> &mut dyn Any {
+            self
+        }
+        fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn copy_to_box(&self) -> Box<dyn Replicate> {
+            Box::new(DummyImmutable)
+        }
+        fn create_builder() -> Box<dyn ReplicateBuilder>
+        where
+            Self: Sized,
+        {
+            Box::new(DummyBuilder)
+        }
+        fn diff_mask_size(&self) -> u8 {
+            0
+        }
+        fn dyn_ref(&self) -> ReplicaDynRef<'_> {
+            ReplicaDynRef::new(self)
+        }
+        fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
+            ReplicaDynMut::new(self)
+        }
         fn mirror(&mut self, _other: &dyn Replicate) {}
         fn mirror_single_field(&mut self, _field_index: u8, _other: &dyn Replicate) {}
         fn set_mutator(&mut self, _mutator: &PropertyMutator) {}
@@ -186,24 +220,32 @@ mod tests {
             _component_kinds: &ComponentKinds,
             _writer: &mut dyn BitWrite,
             _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        ) {}
+        ) {
+        }
         fn write_update(
             &self,
             _diff_mask: &DiffMask,
             _writer: &mut dyn BitWrite,
             _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        ) {}
+        ) {
+        }
         fn read_apply_update(
             &mut self,
             _converter: &dyn LocalEntityAndGlobalEntityConverter,
             _update: PendingComponentUpdate,
-        ) -> Result<(), SerdeErr> { Ok(()) }
+        ) -> Result<(), SerdeErr> {
+            Ok(())
+        }
         fn read_apply_field_update(
             &mut self,
             _converter: &dyn LocalEntityAndGlobalEntityConverter,
             _update: ComponentFieldUpdate,
-        ) -> Result<(), SerdeErr> { Ok(()) }
-        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> { None }
+        ) -> Result<(), SerdeErr> {
+            Ok(())
+        }
+        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
+            None
+        }
         fn relations_complete(&mut self, _converter: &dyn LocalEntityAndGlobalEntityConverter) {}
         fn publish(&mut self, _mutator: &PropertyMutator) {}
         fn unpublish(&mut self) {}
@@ -211,7 +253,8 @@ mod tests {
             &mut self,
             _accessor: &EntityAuthAccessor,
             _mutator_opt: Option<&PropertyMutator>,
-        ) {}
+        ) {
+        }
         fn disable_delegation(&mut self) {}
         fn localize(&mut self) {}
     }
@@ -220,6 +263,9 @@ mod tests {
     fn dyn_any_downcast_recovers_concrete_type() {
         let boxed: Box<dyn CachedReplicate> = Box::new(DummyImmutable);
         let any: &dyn Any = boxed.as_ref().cached_as_any();
-        assert!(any.is::<DummyImmutable>(), "downcast must recover concrete type");
+        assert!(
+            any.is::<DummyImmutable>(),
+            "downcast must recover concrete type"
+        );
     }
 }

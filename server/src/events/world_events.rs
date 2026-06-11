@@ -12,8 +12,10 @@ use naia_shared::{
 
 use crate::{user::UserKey, ConnectEvent, ErrorEvent, NaiaServerError};
 
-pub(crate) type MessagesMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>;
-pub(crate) type RequestsMap = HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
+pub(crate) type MessagesMap =
+    HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, MessageContainer)>>>;
+pub(crate) type RequestsMap =
+    HashMap<ChannelKind, HashMap<MessageKind, Vec<(UserKey, GlobalResponseId, MessageContainer)>>>;
 pub(crate) type RemovesMap<E> = HashMap<ComponentKind, Vec<(UserKey, E, Box<dyn Replicate>)>>;
 /// Kind-only remove events — fired when entity component data is not available
 /// (e.g. client-owned entity despawn, where the server does not hold component bytes).

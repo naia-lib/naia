@@ -90,8 +90,10 @@ impl GlobalWorldManager {
         if self.entity_records.contains_key(global_entity) {
             panic!("entity already initialized!");
         }
-        self.entity_records
-            .insert(*global_entity, GlobalEntityRecord::new_static(EntityOwner::Client));
+        self.entity_records.insert(
+            *global_entity,
+            GlobalEntityRecord::new_static(EntityOwner::Client),
+        );
         self.diff_handler
             .write()
             .expect("GlobalDiffHandler lock poisoned")

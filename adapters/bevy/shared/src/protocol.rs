@@ -111,7 +111,9 @@ impl Protocol {
         self.add_component::<R>();
         // Mark in the resource registry — Replicate-only path on the
         // inner Protocol, not Component-typed.
-        self.inner.resource_kinds.register::<R>(ComponentKind::of::<R>());
+        self.inner
+            .resource_kinds
+            .register::<R>(ComponentKind::of::<R>());
         self
     }
 

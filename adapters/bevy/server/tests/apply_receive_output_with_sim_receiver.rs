@@ -144,10 +144,8 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
     let mut app_combined = build_app();
     let mut app_legacy = build_app();
 
-    let (sim_a, _, _) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
-    let (sim_b, _, _) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
+    let (sim_a, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
+    let (sim_b, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
     let make_output = || naia_server::ReceiveOutput::<Entity> {
@@ -165,10 +163,7 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
     );
     apply_receive_output_pipeline(app_legacy.world_mut(), &sim_b, make_output());
 
-    let combined_len = app_combined
-        .world()
-        .resource::<Messages<TickEvent>>()
-        .len();
+    let combined_len = app_combined.world().resource::<Messages<TickEvent>>().len();
     let legacy_len = app_legacy.world().resource::<Messages<TickEvent>>().len();
     assert_eq!(
         combined_len, legacy_len,

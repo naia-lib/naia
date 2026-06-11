@@ -29,9 +29,7 @@ use naia_bevy_server::{
     CommandsExt, Plugin as ServerPlugin, Server, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
-use naia_client::transport::local::{
-    LocalAddrCell, LocalClientSocket, Socket as ClientSocket,
-};
+use naia_client::transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket};
 use naia_server::transport::local::{LocalServerSocket, Socket as ServerSocket};
 use naia_shared::{
     transport::local::LocalTransportHub, ChannelDirection, ChannelMode, ReliableSettings,
@@ -90,11 +88,7 @@ struct ClientState {
 /// Startup: listen, make a room, spawn Position entity with replication enabled.
 /// Delegation is NOT configured here — naia's tracking system hasn't run yet so
 /// the Property SyncMutators aren't ready; we defer to the first Update tick.
-fn sys_server_startup(
-    mut commands: Commands,
-    mut server: Server,
-    mut state: ResMut<ServerState>,
-) {
+fn sys_server_startup(mut commands: Commands, mut server: Server, mut state: ResMut<ServerState>) {
     let room_key = server.create_room().key();
     state.room_key = Some(room_key);
 
@@ -111,10 +105,7 @@ fn sys_server_startup(
 
 /// Update: configure delegation exactly once, AFTER naia tracking has
 /// set up the entity's Property SyncMutators (first Update tick).
-fn sys_server_configure_delegation(
-    mut commands: Commands,
-    mut state: ResMut<ServerState>,
-) {
+fn sys_server_configure_delegation(mut commands: Commands, mut state: ResMut<ServerState>) {
     if state.delegation_configured {
         return;
     }
@@ -234,10 +225,8 @@ impl BevyHarness {
                 Startup,
                 (
                     move |mut server: Server| {
-                        let socket = ServerSocket::new(
-                            LocalServerSocket::new(hub_for_server.clone()),
-                            None,
-                        );
+                        let socket =
+                            ServerSocket::new(LocalServerSocket::new(hub_for_server.clone()), None);
                         server.listen(socket);
                     },
                     sys_server_startup,
@@ -263,7 +252,11 @@ impl BevyHarness {
             // true when HostOwned is inserted.
             .add_systems(
                 Update,
-                (sys_server_auth, sys_server_apply_authority, sys_server_connect)
+                (
+                    sys_server_auth,
+                    sys_server_apply_authority,
+                    sys_server_connect,
+                )
                     .chain()
                     .in_set(naia_bevy_shared::HandleWorldEvents),
             );
@@ -279,36 +272,28 @@ impl BevyHarness {
         client_app.add_plugins(ClientPlugin::<Main>::new(cfg, protocol()));
         client_app
             .init_resource::<ClientState>()
-            .add_systems(
-                Startup,
-                move |mut client: Client<Main>| {
-                    let (
-                        client_addr,
-                        auth_req_tx,
-                        auth_resp_rx,
-                        client_data_tx,
-                        client_data_rx,
-                    ) = hub_for_client.register_client();
-                    let addr_cell = LocalAddrCell::new();
-                    addr_cell.set_sync(hub_for_client.server_addr());
-                    let identity_token = Arc::new(Mutex::new(None::<naia_shared::IdentityToken>));
-                    let rejection_code = Arc::new(Mutex::new(None::<u16>));
-                    let inner = LocalClientSocket::new_with_tokens(
-                        client_addr,
-                        hub_for_client.server_addr(),
-                        auth_req_tx,
-                        auth_resp_rx,
-                        client_data_tx,
-                        client_data_rx,
-                        addr_cell,
-                        identity_token,
-                        rejection_code,
-                    );
-                    let socket = ClientSocket::new(inner, None);
-                    client.auth(Auth::new("alice", "pw"));
-                    client.connect(socket);
-                },
-            )
+            .add_systems(Startup, move |mut client: Client<Main>| {
+                let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
+                    hub_for_client.register_client();
+                let addr_cell = LocalAddrCell::new();
+                addr_cell.set_sync(hub_for_client.server_addr());
+                let identity_token = Arc::new(Mutex::new(None::<naia_shared::IdentityToken>));
+                let rejection_code = Arc::new(Mutex::new(None::<u16>));
+                let inner = LocalClientSocket::new_with_tokens(
+                    client_addr,
+                    hub_for_client.server_addr(),
+                    auth_req_tx,
+                    auth_resp_rx,
+                    client_data_tx,
+                    client_data_rx,
+                    addr_cell,
+                    identity_token,
+                    rejection_code,
+                );
+                let socket = ClientSocket::new(inner, None);
+                client.auth(Auth::new("alice", "pw"));
+                client.connect(socket);
+            })
             .add_systems(
                 Update,
                 (sys_client_connect, sys_client_count_auth_events)

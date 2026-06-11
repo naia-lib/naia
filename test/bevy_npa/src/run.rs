@@ -33,7 +33,11 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
         let (_, regex_fn, func) = step.inner();
         table.insert(
             meta.binding_id.to_string(),
-            StepEntry { func, impl_hash: meta.impl_hash.to_string(), regex: regex_fn() },
+            StepEntry {
+                func,
+                impl_hash: meta.impl_hash.to_string(),
+                regex: regex_fn(),
+            },
         );
     }
     for step in inventory::iter::<W::When> {
@@ -41,7 +45,11 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
         let (_, regex_fn, func) = step.inner();
         table.insert(
             meta.binding_id.to_string(),
-            StepEntry { func, impl_hash: meta.impl_hash.to_string(), regex: regex_fn() },
+            StepEntry {
+                func,
+                impl_hash: meta.impl_hash.to_string(),
+                regex: regex_fn(),
+            },
         );
     }
     for step in inventory::iter::<W::Then> {
@@ -49,7 +57,11 @@ fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
         let (_, regex_fn, func) = step.inner();
         table.insert(
             meta.binding_id.to_string(),
-            StepEntry { func, impl_hash: meta.impl_hash.to_string(), regex: regex_fn() },
+            StepEntry {
+                func,
+                impl_hash: meta.impl_hash.to_string(),
+                regex: regex_fn(),
+            },
         );
     }
     table
@@ -139,17 +151,13 @@ pub fn run(args: RunArgs) -> Result<()> {
                     let matched = e.regex.captures_read(&mut captures, &step.step_text);
                     let matches: Vec<(Option<String>, String)> = if matched.is_some() {
                         names
-                            .zip(
-                                std::iter::once(step.step_text.clone()).chain(
-                                    (1..captures.len()).map(|g| {
-                                        captures
-                                            .get(g)
-                                            .map_or(String::new(), |(s, end)| {
-                                                step.step_text[s..end].to_string()
-                                            })
-                                    }),
-                                ),
-                            )
+                            .zip(std::iter::once(step.step_text.clone()).chain(
+                                (1..captures.len()).map(|g| {
+                                    captures.get(g).map_or(String::new(), |(s, end)| {
+                                        step.step_text[s..end].to_string()
+                                    })
+                                }),
+                            ))
                             .map(|(n, v)| (n.map(String::from), v))
                             .collect()
                     } else {

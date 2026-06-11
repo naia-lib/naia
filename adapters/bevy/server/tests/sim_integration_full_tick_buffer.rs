@@ -127,7 +127,10 @@ fn tick_buffered_messages_drain_in_per_tick_order_via_park_window() {
                     &message_tick,
                     TestMessage::new(value),
                 );
-            assert!(accepted, "tick-buffer inject should be accepted for tick {message_tick}");
+            assert!(
+                accepted,
+                "tick-buffer inject should be accepted for tick {message_tick}"
+            );
             expected.push((message_tick, value));
         }
         *recv_slot.lock() = Some(recv);
@@ -136,10 +139,7 @@ fn tick_buffered_messages_drain_in_per_tick_order_via_park_window() {
     // ── Drain phase (still parked — simulates the Sim per-tick drain) ───
     let mut drained: Vec<(u16, u32)> = Vec::new();
     {
-        let mut recv = recv_slot
-            .lock()
-            .take()
-            .expect("RecvHandle still in slot");
+        let mut recv = recv_slot.lock().take().expect("RecvHandle still in slot");
         for message_tick in ticks.iter().copied() {
             let mut msgs = recv.receive_tick_buffer_messages(&message_tick);
             for (uk, msg) in msgs.read::<TickBufferedChannel, TestMessage>() {
@@ -150,7 +150,9 @@ fn tick_buffered_messages_drain_in_per_tick_order_via_park_window() {
         *recv_slot.lock() = Some(recv);
     }
 
-    app.world().resource::<PluginInternalState>().unpark_workers();
+    app.world()
+        .resource::<PluginInternalState>()
+        .unpark_workers();
 
     // Workers must still be alive + making progress after the borrow.
     thread::sleep(Duration::from_millis(10));
@@ -196,7 +198,9 @@ fn park_window_recv_borrow_is_race_free_under_repeated_cycles() {
         assert!(drained.is_empty(), "no client → no tick-buffer messages");
         *recv_slot.lock() = Some(recv);
 
-        app.world().resource::<PluginInternalState>().unpark_workers();
+        app.world()
+            .resource::<PluginInternalState>()
+            .unpark_workers();
         // Let the worker re-claim + spin briefly.
         thread::sleep(Duration::from_millis(2));
         app.world()

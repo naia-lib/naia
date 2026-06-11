@@ -235,10 +235,8 @@ where
     R: ReplicatedResource,
 {
     // Read the resource entity from the client wrapper.
-    let world_entity_opt: Option<bevy_ecs::entity::Entity> =
-        world.resource_scope::<ClientWrapper<T>, _>(|_, client| {
-            client.client.resource_entity::<R>()
-        });
+    let world_entity_opt: Option<bevy_ecs::entity::Entity> = world
+        .resource_scope::<ClientWrapper<T>, _>(|_, client| client.client.resource_entity::<R>());
 
     match world_entity_opt {
         Some(entity) => {
@@ -247,7 +245,9 @@ where
             let snapshot: Option<Box<dyn Replicate>> = {
                 let world_ref = WorldProxy::proxy(&*world);
                 use naia_bevy_shared::WorldRefType;
-                world_ref.component::<R>(&entity).map(|c| (*c).copy_to_box())
+                world_ref
+                    .component::<R>(&entity)
+                    .map(|c| (*c).copy_to_box())
             };
             let Some(snapshot) = snapshot else {
                 return;
@@ -343,10 +343,7 @@ where
         // server-owned-public case (where the client is the server's
         // mirror) accept writes. Anything else: drop silently.
         let auth = client.client.entity_authority_status(&entity);
-        let writable = matches!(
-            auth,
-            Some(naia_bevy_shared::EntityAuthStatus::Granted)
-        );
+        let writable = matches!(auth, Some(naia_bevy_shared::EntityAuthStatus::Granted));
         if !writable {
             return;
         }

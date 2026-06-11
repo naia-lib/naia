@@ -4,11 +4,11 @@ use std::hash::Hash;
 use log::{debug, warn};
 
 use naia_shared::{
-    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds,
-    ConnectionConfig, DiffMask, EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity,
-    GlobalEntityIndex, GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds,
-    PacketType, Protocol, Serde, SerdeErr, StandardHeader, Tick, Timer, UpdateKinds, WorldMutType,
-    WorldRefType, MTU_SIZE_BYTES,
+    BaseConnection, BitReader, BitWriter, ChannelKinds, ComponentKinds, ConnectionConfig, DiffMask,
+    EntityAndGlobalEntityConverter, EntityCommand, EntityEvent, GlobalEntity, GlobalEntityIndex,
+    GlobalEntitySpawner, HostType, Instant, MessageIndex, MessageKinds, PacketType, Protocol,
+    Serde, SerdeErr, StandardHeader, Tick, Timer, UpdateKinds, WorldMutType, WorldRefType,
+    MTU_SIZE_BYTES,
 };
 
 use crate::{
@@ -72,10 +72,12 @@ impl Connection {
         for entity in existing_entities {
             let component_kinds = global_world_manager.component_kinds(&entity).unwrap();
             let is_static = global_world_manager.entity_is_static(&entity);
-            connection
-                .base.send
-                .world_manager
-                .host_init_entity(&entity, component_kinds, component_kinds_map, is_static);
+            connection.base.send.world_manager.host_init_entity(
+                &entity,
+                component_kinds,
+                component_kinds_map,
+                is_static,
+            );
         }
 
         connection
@@ -204,7 +206,11 @@ impl Connection {
         }
 
         // Receive Request and Response Events
-        let (requests, responses) = self.base.send.message_manager.receive_requests_and_responses();
+        let (requests, responses) = self
+            .base
+            .send
+            .message_manager
+            .receive_requests_and_responses();
         // Requests
         for (channel_kind, requests) in requests {
             for (local_response_id, request) in requests {
@@ -249,7 +255,8 @@ impl Connection {
             &self.time_manager.server_receivable_tick,
         );
         let (mut host_world_events, update_events_map) = self
-            .base.send
+            .base
+            .send
             .world_manager
             .take_outgoing_events(now, &rtt_millis, world, converter, global_world_manager);
         // MISSION_TICK_FLOOR Lever 3: `write_update`'s plan entry is now
@@ -258,18 +265,19 @@ impl Connection {
         // mask for the `entity_idx INVALID` (client) arm and records+clears it
         // there — the placeholder mask carried here is never read. `kind_bit`
         // stays 0: PATH A/B (which need it) are server-only.
-        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> = update_events_map
-            .into_iter()
-            .filter_map(|(ge, kinds)| {
-                converter.global_entity_to_entity(&ge).ok().map(|we| {
-                    let kind_vec: UpdateKinds = kinds
-                        .into_iter()
-                        .map(|k| (k, 0u16, DiffMask::new(0)))
-                        .collect();
-                    (ge, GlobalEntityIndex::INVALID, we, kind_vec)
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, E, UpdateKinds)> =
+            update_events_map
+                .into_iter()
+                .filter_map(|(ge, kinds)| {
+                    converter.global_entity_to_entity(&ge).ok().map(|we| {
+                        let kind_vec: UpdateKinds = kinds
+                            .into_iter()
+                            .map(|k| (k, 0u16, DiffMask::new(0)))
+                            .collect();
+                        (ge, GlobalEntityIndex::INVALID, we, kind_vec)
+                    })
                 })
-            })
-            .collect();
+                .collect();
 
         // Phase A: tick the outbound token-bucket bandwidth accumulator
         // before the send cycle. Refreshes budget + one-packet overshoot.

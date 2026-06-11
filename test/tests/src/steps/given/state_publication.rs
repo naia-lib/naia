@@ -13,20 +13,24 @@ use naia_test_harness::EntityKey;
 // Entity-publication preconditions (multi-client + replication-config variants)
 // ──────────────────────────────────────────────────────────────────────
 
-fn spawn_client_entity_with_config(ctx: &mut TestWorldMut, name: &str, config: naia_client::Publicity) {
+fn spawn_client_entity_with_config(
+    ctx: &mut TestWorldMut,
+    name: &str,
+    config: naia_client::Publicity,
+) {
     use naia_test_harness::Position;
     let client_key = named_client_mut(ctx, name);
     let scenario = ctx.scenario_mut();
     let entity_key = scenario.mutate(|mctx| {
         mctx.client(client_key, |client| {
             client.spawn(|mut entity| {
-                entity.configure_replication(config).insert_component(Position::new(0.0, 0.0));
+                entity
+                    .configure_replication(config)
+                    .insert_component(Position::new(0.0, 0.0));
             })
         })
     });
-    scenario.expect(|ectx| {
-        ectx.server(|server| server.has_entity(&entity_key).then_some(()))
-    });
+    scenario.expect(|ectx| ectx.server(|server| server.has_entity(&entity_key).then_some(())));
     scenario.bdd_store(LAST_ENTITY_KEY, entity_key);
     scenario.allow_flexible_next();
 }
@@ -77,10 +81,13 @@ fn given_entity_in_scope_for_client_b(ctx: &mut TestWorldMut) {
     let client_b = named_client_mut(ctx, "B");
     let entity_key = last_entity_mut(ctx);
     let scenario = ctx.scenario_mut();
-    scenario.spec_expect("entity-publication: entity in scope for client B", |ectx|
-        ectx.server(|s| s.user_scope(&client_b)
-            .map(|sc| sc.has(&entity_key))
-            .unwrap_or(false)
-            .then_some(())));
+    scenario.spec_expect("entity-publication: entity in scope for client B", |ectx| {
+        ectx.server(|s| {
+            s.user_scope(&client_b)
+                .map(|sc| sc.has(&entity_key))
+                .unwrap_or(false)
+                .then_some(())
+        })
+    });
     scenario.allow_flexible_next();
 }

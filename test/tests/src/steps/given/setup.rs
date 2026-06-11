@@ -76,9 +76,9 @@ fn given_initial_round_trip_elapsed(ctx: &mut TestWorldMut) {
 /// query semantics in the "before fully connected" state.
 #[given("a client is created but not connected")]
 fn given_client_created_not_connected(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{protocol, Auth};
+    use std::time::Duration;
     let scenario = ctx.scenario_mut();
     let client_config = ClientConfig {
         send_handshake_interval: Duration::from_millis(0),
@@ -101,9 +101,9 @@ fn given_client_created_not_connected(ctx: &mut TestWorldMut) {
 /// Used to test RTT during handshake phase.
 #[given("a client begins connecting")]
 fn given_client_begins_connecting(ctx: &mut TestWorldMut) {
-    use std::time::Duration;
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{protocol, Auth};
+    use std::time::Duration;
     let scenario = ctx.scenario_mut();
     let client_config = ClientConfig {
         send_handshake_interval: Duration::from_millis(0),
@@ -180,9 +180,9 @@ fn given_server_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
 /// matching/mismatching protocol-id pairs.
 #[given("a client with protocol version {word}")]
 fn given_client_with_protocol_version(ctx: &mut TestWorldMut, version: String) {
-    use std::time::Duration;
     use naia_client::{ClientConfig, JitterBufferType};
     use naia_test_harness::{protocol, Auth, ProtocolId};
+    use std::time::Duration;
     let scenario = ctx.scenario_mut();
     let client_config = ClientConfig {
         send_handshake_interval: Duration::from_millis(0),

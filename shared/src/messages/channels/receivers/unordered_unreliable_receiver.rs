@@ -8,8 +8,8 @@ use naia_socket_shared::Instant;
 use crate::world::local::local_world_manager::LocalWorldManager;
 use crate::{
     messages::{
-        channels::{
-            receivers::channel_receiver::{ChannelReceiver, MessageChannelReceiver, RequestsAndResponses},
+        channels::receivers::channel_receiver::{
+            ChannelReceiver, MessageChannelReceiver, RequestsAndResponses,
         },
         message_kinds::MessageKinds,
     },
@@ -108,9 +108,7 @@ impl MessageChannelReceiver for UnorderedUnreliableReceiver {
         Ok(())
     }
 
-    fn receive_requests_and_responses(
-        &mut self,
-    ) -> RequestsAndResponses {
+    fn receive_requests_and_responses(&mut self) -> RequestsAndResponses {
         panic!("UnorderedUnreliable channels do not support requests");
     }
 }

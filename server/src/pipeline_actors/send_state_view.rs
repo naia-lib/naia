@@ -83,7 +83,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         #[cfg(feature = "f3_diag")]
         {
             let all: Vec<_> = gwm.all_global_entities().collect();
-            let resolved: Vec<E> = all.iter()
+            let resolved: Vec<E> = all
+                .iter()
                 .filter_map(|ge| gem.global_entity_to_entity(ge).ok())
                 .collect();
             eprintln!(
@@ -181,8 +182,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
         let mut live = Vec::with_capacity(indices.len());
         let mut entries = Vec::new();
         for idx in indices {
-            let Some(ge) = guard.global_entity_at(idx) else { continue; };
-            let Ok(world_entity) = gem.global_entity_to_entity(&ge) else { continue; };
+            let Some(ge) = guard.global_entity_at(idx) else {
+                continue;
+            };
+            let Ok(world_entity) = gem.global_entity_to_entity(&ge) else {
+                continue;
+            };
             if gwm.entity_is_replicating(&ge) {
                 live.push(world_entity);
             }
@@ -225,13 +230,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
 mod tests {
     use super::*;
 
-    use naia_shared::{
-        ComponentKind, GlobalEntity, GlobalEntitySpawner, Protocol,
-    };
+    use naia_shared::{ComponentKind, GlobalEntity, GlobalEntitySpawner, Protocol};
 
+    use crate::pipeline_actors::spawn_server_handles;
     use crate::EntityOwner;
     use crate::ServerConfig;
-    use crate::pipeline_actors::spawn_server_handles;
 
     /// Compile-time check: SendStateView<E> is Send + Sync + Clone.
     fn assert_traits<T: Send + Sync + Clone>() {}
@@ -296,7 +299,11 @@ mod tests {
 
         let view = sim_handle.send_state_view();
         let live = view.live_entities();
-        assert_eq!(live, vec![world_entity], "live should contain just the registered entity");
+        assert_eq!(
+            live,
+            vec![world_entity],
+            "live should contain just the registered entity"
+        );
 
         let mut entries = view.required_snapshot_entries();
         entries.sort_by_key(|(_, k)| format!("{k:?}"));
@@ -329,7 +336,10 @@ mod tests {
         }
 
         // Sanity: present before removal.
-        assert_eq!(sim_handle.send_state_view().live_entities(), vec![world_entity]);
+        assert_eq!(
+            sim_handle.send_state_view().live_entities(),
+            vec![world_entity]
+        );
 
         // Deregister the component record + entity record + map entry.
         {
@@ -398,13 +408,13 @@ mod tests {
     use std::any::Any;
     use std::collections::HashSet;
 
+    use naia_shared::EntityAuthAccessor;
     use naia_shared::{
         BitReader, BitWrite, ComponentFieldUpdate, ComponentKinds, DiffMask,
         LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, Named,
-        PendingComponentUpdate, PropertyMutator, ReplicaDynMut, ReplicaDynRef, RemoteEntity,
+        PendingComponentUpdate, PropertyMutator, RemoteEntity, ReplicaDynMut, ReplicaDynRef,
         Replicate, ReplicateBuilder, SerdeErr,
     };
-    use naia_shared::EntityAuthAccessor;
 
     struct TestKindA;
     struct TestKindB;
@@ -414,51 +424,126 @@ mod tests {
     macro_rules! impl_test_kind {
         ($val:ident, $builder:ident, $name:literal) => {
             impl Named for $val {
-                fn protocol_name() -> &'static str { $name }
-                fn name(&self) -> String { $name.to_string() }
+                fn protocol_name() -> &'static str {
+                    $name
+                }
+                fn name(&self) -> String {
+                    $name.to_string()
+                }
             }
             impl Named for $builder {
-                fn protocol_name() -> &'static str { $name }
-                fn name(&self) -> String { $name.to_string() }
+                fn protocol_name() -> &'static str {
+                    $name
+                }
+                fn name(&self) -> String {
+                    $name.to_string()
+                }
             }
             impl ReplicateBuilder for $builder {
                 fn read(
                     &self,
                     _r: &mut BitReader,
                     _c: &dyn LocalEntityAndGlobalEntityConverter,
-                ) -> Result<Box<dyn Replicate>, SerdeErr> { unreachable!() }
-                fn read_create_update(&self, _r: &mut BitReader) -> Result<PendingComponentUpdate, SerdeErr> { unreachable!() }
+                ) -> Result<Box<dyn Replicate>, SerdeErr> {
+                    unreachable!()
+                }
+                fn read_create_update(
+                    &self,
+                    _r: &mut BitReader,
+                ) -> Result<PendingComponentUpdate, SerdeErr> {
+                    unreachable!()
+                }
                 fn split_update(
                     &self,
                     _c: &dyn LocalEntityAndGlobalEntityConverter,
                     _u: PendingComponentUpdate,
-                ) -> Result<(Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>, Option<PendingComponentUpdate>), SerdeErr> {
+                ) -> Result<
+                    (
+                        Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
+                        Option<PendingComponentUpdate>,
+                    ),
+                    SerdeErr,
+                > {
                     unreachable!()
                 }
-                fn box_clone(&self) -> Box<dyn ReplicateBuilder> { Box::new($builder) }
+                fn box_clone(&self) -> Box<dyn ReplicateBuilder> {
+                    Box::new($builder)
+                }
             }
             impl Replicate for $val {
-                fn kind(&self) -> ComponentKind { ComponentKind::of::<$val>() }
-                fn to_any(&self) -> &dyn Any { self }
-                fn to_any_mut(&mut self) -> &mut dyn Any { self }
-                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> { self }
-                fn copy_to_box(&self) -> Box<dyn Replicate> { Box::new($val) }
-                fn create_builder() -> Box<dyn ReplicateBuilder> where Self: Sized { Box::new($builder) }
-                fn diff_mask_size(&self) -> u8 { 0 }
-                fn dyn_ref(&self) -> ReplicaDynRef<'_> { ReplicaDynRef::new(self) }
-                fn dyn_mut(&mut self) -> ReplicaDynMut<'_> { ReplicaDynMut::new(self) }
+                fn kind(&self) -> ComponentKind {
+                    ComponentKind::of::<$val>()
+                }
+                fn to_any(&self) -> &dyn Any {
+                    self
+                }
+                fn to_any_mut(&mut self) -> &mut dyn Any {
+                    self
+                }
+                fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+                    self
+                }
+                fn copy_to_box(&self) -> Box<dyn Replicate> {
+                    Box::new($val)
+                }
+                fn create_builder() -> Box<dyn ReplicateBuilder>
+                where
+                    Self: Sized,
+                {
+                    Box::new($builder)
+                }
+                fn diff_mask_size(&self) -> u8 {
+                    0
+                }
+                fn dyn_ref(&self) -> ReplicaDynRef<'_> {
+                    ReplicaDynRef::new(self)
+                }
+                fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
+                    ReplicaDynMut::new(self)
+                }
                 fn mirror(&mut self, _o: &dyn Replicate) {}
                 fn mirror_single_field(&mut self, _i: u8, _o: &dyn Replicate) {}
                 fn set_mutator(&mut self, _m: &PropertyMutator) {}
-                fn write(&self, _ck: &ComponentKinds, _w: &mut dyn BitWrite, _c: &mut dyn LocalEntityAndGlobalEntityConverterMut) {}
-                fn write_update(&self, _dm: &DiffMask, _w: &mut dyn BitWrite, _c: &mut dyn LocalEntityAndGlobalEntityConverterMut) {}
-                fn read_apply_update(&mut self, _c: &dyn LocalEntityAndGlobalEntityConverter, _u: PendingComponentUpdate) -> Result<(), SerdeErr> { Ok(()) }
-                fn read_apply_field_update(&mut self, _c: &dyn LocalEntityAndGlobalEntityConverter, _u: ComponentFieldUpdate) -> Result<(), SerdeErr> { Ok(()) }
-                fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> { None }
+                fn write(
+                    &self,
+                    _ck: &ComponentKinds,
+                    _w: &mut dyn BitWrite,
+                    _c: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+                ) {
+                }
+                fn write_update(
+                    &self,
+                    _dm: &DiffMask,
+                    _w: &mut dyn BitWrite,
+                    _c: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+                ) {
+                }
+                fn read_apply_update(
+                    &mut self,
+                    _c: &dyn LocalEntityAndGlobalEntityConverter,
+                    _u: PendingComponentUpdate,
+                ) -> Result<(), SerdeErr> {
+                    Ok(())
+                }
+                fn read_apply_field_update(
+                    &mut self,
+                    _c: &dyn LocalEntityAndGlobalEntityConverter,
+                    _u: ComponentFieldUpdate,
+                ) -> Result<(), SerdeErr> {
+                    Ok(())
+                }
+                fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
+                    None
+                }
                 fn relations_complete(&mut self, _c: &dyn LocalEntityAndGlobalEntityConverter) {}
                 fn publish(&mut self, _m: &PropertyMutator) {}
                 fn unpublish(&mut self) {}
-                fn enable_delegation(&mut self, _a: &EntityAuthAccessor, _m: Option<&PropertyMutator>) {}
+                fn enable_delegation(
+                    &mut self,
+                    _a: &EntityAuthAccessor,
+                    _m: Option<&PropertyMutator>,
+                ) {
+                }
                 fn disable_delegation(&mut self) {}
                 fn localize(&mut self) {}
             }

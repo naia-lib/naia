@@ -1,8 +1,4 @@
-use std::{
-    collections::VecDeque,
-    hash::Hash,
-    net::SocketAddr,
-};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr};
 
 use naia_serde::{BitReader, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
@@ -19,9 +15,9 @@ use crate::{
     world::{
         entity::entity_converters::GlobalWorldManagerType, host::host_world_manager::CommandId,
     },
-    ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter,
-    EntityCommand, GlobalEntity, GlobalEntityIndex, MessageKinds, PacketNotifiable, PacketType,
-    StandardHeader, Tick, Timer, WorldRefType,
+    ComponentKinds, ConnectionConfig, EntityAndGlobalEntityConverter, EntityCommand, GlobalEntity,
+    GlobalEntityIndex, MessageKinds, PacketNotifiable, PacketType, StandardHeader, Tick, Timer,
+    WorldRefType,
 };
 
 /// Recv-side half of `BaseConnection` (step 4-C.2).
@@ -146,8 +142,7 @@ impl BaseConnection {
             ack_send,
             ..
         } = &mut self.send;
-        let mut base_notifiables: [&mut dyn PacketNotifiable; 2] =
-            [message_manager, world_manager];
+        let mut base_notifiables: [&mut dyn PacketNotifiable; 2] = [message_manager, world_manager];
         ack_send.drain_samples(&mut base_notifiables, extra_notifiables);
     }
 

@@ -153,7 +153,10 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                     // Malformed request/response from remote — discard and continue rather
                     // than crashing the connection. This can arise from a buggy peer or
                     // deliberate fuzzing; the connection stays up.
-                    warn!("Discarding malformed request/response message ({}); dropping packet.", e);
+                    warn!(
+                        "Discarding malformed request/response message ({}); dropping packet.",
+                        e
+                    );
                     return;
                 }
             };
@@ -229,9 +232,7 @@ impl<A: ReceiverArranger> MessageChannelReceiver for ReliableMessageReceiver<A> 
         Ok(())
     }
 
-    fn receive_requests_and_responses(
-        &mut self,
-    ) -> RequestsAndResponses {
+    fn receive_requests_and_responses(&mut self) -> RequestsAndResponses {
         (
             std::mem::take(&mut self.incoming_requests),
             std::mem::take(&mut self.incoming_responses),

@@ -15,8 +15,8 @@
 #![allow(unused_imports)]
 
 use naia_server::pipeline_actors::{
-    self, RecvLifecycleEvent, TickMessageRouter, drain_lifecycle, drain_tick_buffer,
-    spawn_server_handles,
+    self, drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent,
+    TickMessageRouter,
 };
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 use naia_server::{ServerConfig, WorldServer};
@@ -94,11 +94,13 @@ fn spawn_server_handles_facade_matches_into_pipeline_handles() {
     // `WorldServer::new + into_pipeline_handles`. From the harness side
     // we can confirm it returns the same three-way decomposition that
     // `into_pipeline_handles` does.
-    let (coord, recv, send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol());
+    let (coord, recv, send) = spawn_server_handles::<u64, _>(ServerConfig::default(), protocol());
     // CoordHandle::shared and recv.state.shared / send.state.shared all
     // alias the same Arc<ServerShared>; strong-count must be ≥ 3.
     let strong = std::sync::Arc::strong_count(&coord.shared);
-    assert!(strong >= 3, "expected ≥3 strong refs to ServerShared, got {strong}");
+    assert!(
+        strong >= 3,
+        "expected ≥3 strong refs to ServerShared, got {strong}"
+    );
     drop((coord, recv, send));
 }

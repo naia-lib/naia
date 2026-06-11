@@ -383,7 +383,10 @@ fn when_server_inserts_score_dynamic(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| {
         c.server(|server| {
-            assert!(server.insert_resource(TestScore::new(0, 0), false), "insert Score should succeed");
+            assert!(
+                server.insert_resource(TestScore::new(0, 0), false),
+                "insert Score should succeed"
+            );
         });
     });
 }
@@ -395,7 +398,10 @@ fn when_server_inserts_matchstate_as_static(ctx: &mut TestWorldMut, phase: u8) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| {
         c.server(|server| {
-            assert!(server.insert_static_resource(TestMatchState::new(phase)), "insert MatchState should succeed");
+            assert!(
+                server.insert_static_resource(TestMatchState::new(phase)),
+                "insert MatchState should succeed"
+            );
         });
     });
 }
@@ -442,7 +448,10 @@ fn when_server_removes_matchstate(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| {
         c.server(|server| {
-            assert!(server.remove_resource::<TestMatchState>(), "remove MatchState should succeed");
+            assert!(
+                server.remove_resource::<TestMatchState>(),
+                "remove MatchState should succeed"
+            );
         });
     });
 }
@@ -454,7 +463,10 @@ fn when_server_removes_playerselection(ctx: &mut TestWorldMut) {
     let scenario = ctx.scenario_mut();
     scenario.mutate(|c| {
         c.server(|server| {
-            assert!(server.remove_resource::<TestPlayerSelection>(), "remove PlayerSelection should succeed");
+            assert!(
+                server.remove_resource::<TestPlayerSelection>(),
+                "remove PlayerSelection should succeed"
+            );
         });
     });
 }
@@ -468,10 +480,12 @@ fn when_server_removes_playerselection(ctx: &mut TestWorldMut) {
 fn when_server_attempts_reinsert_score(ctx: &mut TestWorldMut, home: u32, away: u32) {
     use naia_test_harness::TestScore;
     let scenario = ctx.scenario_mut();
-    let accepted = scenario.mutate(|c| {
-        c.server(|server| server.insert_resource(TestScore::new(home, away), false))
-    });
-    assert!(!accepted, "re-insert of an existing Score must return false (ResourceAlreadyExists)");
+    let accepted = scenario
+        .mutate(|c| c.server(|server| server.insert_resource(TestScore::new(home, away), false)));
+    assert!(
+        !accepted,
+        "re-insert of an existing Score must return false (ResourceAlreadyExists)"
+    );
 }
 
 // ──────────────────────────────────────────────────────────────────────
@@ -486,16 +500,19 @@ fn when_server_attempts_reinsert_score(ctx: &mut TestWorldMut, home: u32, away: 
 #[when("the server reads tick-buffered messages for that tick")]
 fn when_server_reads_tick_buffered_messages(ctx: &mut TestWorldMut) {
     use naia_shared::sequence_greater_than;
-    use naia_test_harness::test_protocol::{TickBufferedChannel, TestMessage};
+    use naia_test_harness::test_protocol::{TestMessage, TickBufferedChannel};
     let tick: naia_shared::Tick = ctx
         .scenario_mut()
         .bdd_get(TICK_BUFFER_TICK_KEY)
         .expect("no tick stored — did the client send tick-buffered messages?");
     let scenario = ctx.scenario_mut();
-    scenario.spec_expect("tick-buffer: wait for server to advance past target tick", |ectx| {
-        let now = ectx.server(|s| s.current_tick());
-        sequence_greater_than(now, tick).then_some(())
-    });
+    scenario.spec_expect(
+        "tick-buffer: wait for server to advance past target tick",
+        |ectx| {
+            let now = ectx.server(|s| s.current_tick());
+            sequence_greater_than(now, tick).then_some(())
+        },
+    );
     let count = scenario.mutate(|mctx| {
         mctx.server(|s| {
             let mut tb = s.receive_tick_buffer_messages(&tick);
@@ -513,7 +530,7 @@ fn when_server_reads_tick_buffered_messages(ctx: &mut TestWorldMut) {
 /// `TICK_BUFFER_REJECTED_KEY`. Used by messaging-14.
 #[when("a tick-buffered message is injected for an expired tick")]
 fn when_tick_buffered_message_injected_for_expired_tick(ctx: &mut TestWorldMut) {
-    use naia_test_harness::test_protocol::{TickBufferedChannel, TestMessage};
+    use naia_test_harness::test_protocol::{TestMessage, TickBufferedChannel};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
     for _ in 0..10 {
@@ -533,4 +550,3 @@ fn when_tick_buffered_message_injected_for_expired_tick(ctx: &mut TestWorldMut) 
     });
     scenario.bdd_store(TICK_BUFFER_REJECTED_KEY, !accepted);
 }
-

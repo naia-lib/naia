@@ -32,22 +32,100 @@ struct Scenario {
 
 const SCENARIOS: &[Scenario] = &[
     // Pure-player scenarios — isolate the per-player cost.
-    Scenario { label: "player_8",  users: 1, players: 8,  projectiles: 0, vehicles: 0 },
-    Scenario { label: "player_16", users: 1, players: 16, projectiles: 0, vehicles: 0 },
-    Scenario { label: "player_32", users: 1, players: 32, projectiles: 0, vehicles: 0 },
+    Scenario {
+        label: "player_8",
+        users: 1,
+        players: 8,
+        projectiles: 0,
+        vehicles: 0,
+    },
+    Scenario {
+        label: "player_16",
+        users: 1,
+        players: 16,
+        projectiles: 0,
+        vehicles: 0,
+    },
+    Scenario {
+        label: "player_32",
+        users: 1,
+        players: 32,
+        projectiles: 0,
+        vehicles: 0,
+    },
     // Pure-projectile — isolate the smaller P+V archetype.
-    Scenario { label: "projectile_30", users: 1, players: 0, projectiles: 30, vehicles: 0 },
-    Scenario { label: "projectile_50", users: 1, players: 0, projectiles: 50, vehicles: 0 },
+    Scenario {
+        label: "projectile_30",
+        users: 1,
+        players: 0,
+        projectiles: 30,
+        vehicles: 0,
+    },
+    Scenario {
+        label: "projectile_50",
+        users: 1,
+        players: 0,
+        projectiles: 50,
+        vehicles: 0,
+    },
     // Mixed match shapes (1 receiving client — per-client envelope).
-    Scenario { label: "halo_4v4",       users: 1, players: 8,  projectiles: 15, vehicles: 0 },
-    Scenario { label: "halo_8v8",       users: 1, players: 16, projectiles: 30, vehicles: 2 },
-    Scenario { label: "halo_btb_12v12", users: 1, players: 24, projectiles: 40, vehicles: 6 },
-    Scenario { label: "halo_btb_16v16", users: 1, players: 32, projectiles: 50, vehicles: 8 },
-    Scenario { label: "halo_mega_64",   users: 1, players: 64, projectiles: 80, vehicles: 12 },
+    Scenario {
+        label: "halo_4v4",
+        users: 1,
+        players: 8,
+        projectiles: 15,
+        vehicles: 0,
+    },
+    Scenario {
+        label: "halo_8v8",
+        users: 1,
+        players: 16,
+        projectiles: 30,
+        vehicles: 2,
+    },
+    Scenario {
+        label: "halo_btb_12v12",
+        users: 1,
+        players: 24,
+        projectiles: 40,
+        vehicles: 6,
+    },
+    Scenario {
+        label: "halo_btb_16v16",
+        users: 1,
+        players: 32,
+        projectiles: 50,
+        vehicles: 8,
+    },
+    Scenario {
+        label: "halo_mega_64",
+        users: 1,
+        players: 64,
+        projectiles: 80,
+        vehicles: 12,
+    },
     // Multi-client fan-out — confirms server egress = per_client × users.
-    Scenario { label: "halo_8v8_4u",       users: 4,  players: 16, projectiles: 30, vehicles: 2 },
-    Scenario { label: "halo_8v8_16u",      users: 16, players: 16, projectiles: 30, vehicles: 2 },
-    Scenario { label: "halo_btb_16v16_4u", users: 4,  players: 32, projectiles: 50, vehicles: 8 },
+    Scenario {
+        label: "halo_8v8_4u",
+        users: 4,
+        players: 16,
+        projectiles: 30,
+        vehicles: 2,
+    },
+    Scenario {
+        label: "halo_8v8_16u",
+        users: 16,
+        players: 16,
+        projectiles: 30,
+        vehicles: 2,
+    },
+    Scenario {
+        label: "halo_btb_16v16_4u",
+        users: 4,
+        players: 32,
+        projectiles: 50,
+        vehicles: 8,
+    },
 ];
 
 fn build_and_seed(s: &Scenario) -> (naia_benches::BenchWorld, std::ops::Range<usize>) {

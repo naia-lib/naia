@@ -1,4 +1,11 @@
-#![allow(unused_imports, unused_variables, unused_must_use, unused_mut, dead_code, for_loops_over_fallibles)]
+#![allow(
+    unused_imports,
+    unused_variables,
+    unused_must_use,
+    unused_mut,
+    dead_code,
+    for_loops_over_fallibles
+)]
 // ============================================================================
 // Common Definitions and Policies Tests
 // ============================================================================
@@ -10,8 +17,8 @@ use naia_server::{ReplicationConfig, ServerConfig};
 use naia_shared::{EntityAuthStatus, Protocol};
 
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, EntityOwner,
-    ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
+    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientKey, EntityOwner, ExpectCtx,
+    Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
 };
 
 mod _helpers;
@@ -50,11 +57,17 @@ fn remote_untrusted_input_does_not_panic() {
 
     // Simulate malformed/garbage input - framework should handle gracefully
     let garbage = vec![0, 1, 2, 3, 255, 255, 12, 34];
-    scenario.mutate(|ctx| { let _ = ctx.inject_client_packet(&client_a_key, garbage.clone()); });
-
-    scenario.spec_expect("common-02.t1: Remote/untrusted input MUST NOT panic", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
+    scenario.mutate(|ctx| {
+        let _ = ctx.inject_client_packet(&client_a_key, garbage.clone());
     });
+
+    scenario.spec_expect(
+        "common-02.t1: Remote/untrusted input MUST NOT panic",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -90,9 +103,13 @@ fn framework_invariant_violations_are_internal_bugs() {
     );
 
     // Complete a full connection cycle without panic
-    scenario.spec_expect("common-03.t1: Framework invariant violations MUST panic", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    scenario.spec_expect(
+        "common-03.t1: Framework invariant violations MUST panic",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -122,9 +139,13 @@ fn warnings_are_debug_only_and_non_normative() {
         test_protocol,
     );
 
-    scenario.spec_expect("common-04.t1: Warnings are debug-only and non-normative", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    scenario.spec_expect(
+        "common-04.t1: Warnings are debug-only and non-normative",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -161,15 +182,22 @@ fn determinism_under_deterministic_inputs() {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
             entity
         })
     });
 
     // Deterministically, client should see entity
-    scenario.spec_expect("common-05.t1: Deterministic inputs produce deterministic outputs", |ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
-    });
+    scenario.spec_expect(
+        "common-05.t1: Deterministic inputs produce deterministic outputs",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -209,17 +237,29 @@ fn per_tick_operations_resolve_deterministically() {
                     e.insert_component(Position::new(i as f32, i as f32));
                     e.enter_room(&room_key);
                 });
-                server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+                server
+                    .user_scope_mut(&client_a_key)
+                    .unwrap()
+                    .include(&entity);
                 entities.push(entity);
             }
         });
     });
 
     // All entities appear deterministically
-    scenario.spec_expect("common-06.t1: Same-tick operations resolve deterministically", |ctx| {
-        let all_present = entities.iter().all(|e| ctx.client(client_a_key, |c| c.has_entity(e)));
-        if all_present { Some(()) } else { None }
-    });
+    scenario.spec_expect(
+        "common-06.t1: Same-tick operations resolve deterministically",
+        |ctx| {
+            let all_present = entities
+                .iter()
+                .all(|e| ctx.client(client_a_key, |c| c.has_entity(e)));
+            if all_present {
+                Some(())
+            } else {
+                None
+            }
+        },
+    );
 }
 
 // ============================================================================
@@ -250,11 +290,14 @@ fn tests_do_not_assert_on_logs() {
     );
 
     // Assert on observable state, not log output
-    scenario.spec_expect("common-07.t1: Tests assert on events/state, not logs", |ctx| {
-        let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
-        let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
-        (connected && user_exists).then_some(())
-    });
+    scenario.spec_expect(
+        "common-07.t1: Tests assert on events/state, not logs",
+        |ctx| {
+            let connected = ctx.client(client_a_key, |c| c.connection_status().is_connected());
+            let user_exists = ctx.server(|s| s.user_exists(&client_a_key));
+            (connected && user_exists).then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -285,9 +328,13 @@ fn test_obligation_template_followed() {
         test_protocol,
     );
 
-    scenario.spec_expect("common-08.t1: Tests follow <contract-id>.t<N> pattern", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    scenario.spec_expect(
+        "common-08.t1: Tests follow <contract-id>.t<N> pattern",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -355,7 +402,8 @@ fn fixed_invariants_are_locked() {
     );
 
     scenario.spec_expect("common-10.t1: Fixed invariants are locked", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
+        ctx.client(client_a_key, |c| c.connection_status().is_connected())
+            .then_some(())
     });
 }
 
@@ -387,9 +435,13 @@ fn configurable_defaults_can_be_overridden() {
         test_protocol,
     );
 
-    scenario.spec_expect("common-11.t1: Configurable defaults can be overridden", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    scenario.spec_expect(
+        "common-11.t1: Configurable defaults can be overridden",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -421,7 +473,8 @@ fn new_constants_start_as_invariants() {
     );
 
     scenario.spec_expect("common-11a.t1: New constants start as invariants", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
+        ctx.client(client_a_key, |c| c.connection_status().is_connected())
+            .then_some(())
     });
 }
 
@@ -453,9 +506,13 @@ fn reading_metrics_does_not_influence_behavior() {
     );
 
     // Connection behavior is the same regardless of metric reads
-    scenario.spec_expect("common-12.t1: Reading metrics does not influence internal behavior", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    scenario.spec_expect(
+        "common-12.t1: Reading metrics does not influence internal behavior",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -487,9 +544,13 @@ fn test_tolerance_constants_documented() {
         test_protocol,
     );
 
-    scenario.spec_expect("common-12a.t1: Test tolerance constants are documented", |ctx| {
-        ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
-    });
+    scenario.spec_expect(
+        "common-12a.t1: Test tolerance constants are documented",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.connection_status().is_connected())
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -525,15 +586,22 @@ fn metrics_do_not_affect_replicated_state() {
                 e.insert_component(Position::new(1.0, 2.0));
                 e.enter_room(&room_key);
             });
-            server.user_scope_mut(&client_a_key).unwrap().include(&entity);
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
             entity
         })
     });
 
     // Entity replication works regardless of any metric readings
-    scenario.spec_expect("common-13.t1: Metrics are non-normative for gameplay", |ctx| {
-        ctx.client(client_a_key, |c| c.has_entity(&entity_e)).then_some(())
-    });
+    scenario.spec_expect(
+        "common-13.t1: Metrics are non-normative for gameplay",
+        |ctx| {
+            ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+                .then_some(())
+        },
+    );
 }
 
 // ============================================================================
@@ -571,9 +639,7 @@ fn reconnect_is_fresh_session() {
     });
 
     // Wait for disconnect
-    scenario.expect(|ctx| {
-        (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(())
-    });
+    scenario.expect(|ctx| (!ctx.server(|s| s.user_exists(&client_a_key))).then_some(()));
 
     // Reconnect - fresh session
     let client_a2_key = client_connect(
@@ -587,6 +653,7 @@ fn reconnect_is_fresh_session() {
 
     // New session is independent of old
     scenario.spec_expect("common-14.t1: Reconnect is fresh session", |ctx| {
-        ctx.client(client_a2_key, |c| c.connection_status().is_connected()).then_some(())
+        ctx.client(client_a2_key, |c| c.connection_status().is_connected())
+            .then_some(())
     });
 }

@@ -31,12 +31,12 @@ use std::{hash::Hash, net::SocketAddr};
 use naia_shared::{DisconnectReason, Tick};
 
 use crate::{
-    NaiaServerError, RecvHandle,
     connection::tick_buffer_messages::TickBufferMessages,
     events::ConnectEvent,
     events::{DisconnectEvent, ErrorEvent},
     server::receive_output::ReceiveOutput,
     user::UserKey,
+    NaiaServerError, RecvHandle,
 };
 
 /// Connection-lifecycle event surfaced by [`drain_lifecycle`] from a
@@ -88,7 +88,11 @@ where
         events.push(RecvLifecycleEvent::Connected { user_key });
     }
     for (user_key, address, reason) in output.world_events.read::<DisconnectEvent>() {
-        events.push(RecvLifecycleEvent::Disconnected { user_key, address, reason });
+        events.push(RecvLifecycleEvent::Disconnected {
+            user_key,
+            address,
+            reason,
+        });
     }
     for error in output.world_events.read::<ErrorEvent>() {
         events.push(RecvLifecycleEvent::RecvError { error });
@@ -104,10 +108,7 @@ where
 /// [`crate::connection::RecvConnection::tick_buffer_messages`] per
 /// connection. The result is ready to feed into a
 /// [`crate::pipeline_actors::TickMessageRouter::route`] call.
-pub fn drain_tick_buffer<E>(
-    recv_handle: &mut RecvHandle<E>,
-    tick: Tick,
-) -> TickBufferMessages
+pub fn drain_tick_buffer<E>(recv_handle: &mut RecvHandle<E>, tick: Tick) -> TickBufferMessages
 where
     E: Copy + Eq + Hash + Send + Sync,
 {

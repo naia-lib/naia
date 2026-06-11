@@ -98,7 +98,10 @@ fn second_call_to_send_all_packets_does_not_double_run_preamble() {
     // Push another RoomChange — this lands AFTER the preamble ran.
     let k2 = sim_handle.create_room();
     let _ = sim_handle.room_destroy(&k2);
-    assert!(queue_len(&sim_handle) >= 1, "second push must land on queue");
+    assert!(
+        queue_len(&sim_handle) >= 1,
+        "second push must land on queue"
+    );
 
     // Empty world for send_all_packets.
     let world = World::new();

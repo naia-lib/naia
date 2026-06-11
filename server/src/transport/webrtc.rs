@@ -63,16 +63,10 @@ impl TransportAuthReceiver for Box<dyn AuthReceiver> {
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
         match self.as_mut().receive() {
             Ok(auth_opt) => match auth_opt {
-                Some((addr, payload)) => {
-                    Ok(Some((addr, payload)))
-                }
-                None => {
-                    Ok(None)
-                }
+                Some((addr, payload)) => Ok(Some((addr, payload))),
+                None => Ok(None),
             },
-            Err(_err) => {
-                Err(RecvError)
-            }
+            Err(_err) => Err(RecvError),
         }
     }
 }

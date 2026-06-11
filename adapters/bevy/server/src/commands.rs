@@ -234,10 +234,7 @@ impl<'w, 's> ServerCommandsExt for Commands<'w, 's> {
     fn replicate_resource<R: ReplicatedResource>(&mut self, value: R) {
         let value_cell = parking_lot::Mutex::new(Some(value));
         self.queue(WorldOpCommand::new(move |world| {
-            let value = value_cell
-                .lock()
-                .take()
-                .expect("WorldOpCommand runs once");
+            let value = value_cell.lock().take().expect("WorldOpCommand runs once");
             replicate_resource_inner::<R>(world, value, /* is_static */ false);
         }));
     }
@@ -245,10 +242,7 @@ impl<'w, 's> ServerCommandsExt for Commands<'w, 's> {
     fn replicate_resource_static<R: ReplicatedResource>(&mut self, value: R) {
         let value_cell = parking_lot::Mutex::new(Some(value));
         self.queue(WorldOpCommand::new(move |world| {
-            let value = value_cell
-                .lock()
-                .take()
-                .expect("WorldOpCommand runs once");
+            let value = value_cell.lock().take().expect("WorldOpCommand runs once");
             replicate_resource_inner::<R>(world, value, /* is_static */ true);
         }));
     }
@@ -286,9 +280,7 @@ fn replicate_resource_inner<R: ReplicatedResource>(
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         let result = server.insert_resource::<_, R>(world.proxy_mut(), value, is_static);
         if let Err(_e) = result {
-            log::warn!(
-                "naia replicate_resource: type already inserted; skipping duplicate insert"
-            );
+            log::warn!("naia replicate_resource: type already inserted; skipping duplicate insert");
         }
     });
 

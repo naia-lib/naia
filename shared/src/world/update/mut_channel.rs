@@ -8,9 +8,9 @@ use std::{
 
 use parking_lot::{Mutex as PlMutex, RwLock as PlRwLock};
 
+use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::world::update::global_dirty_bitset::GlobalDirtyBitset;
 use crate::world::update::global_entity_index::GlobalEntityIndex;
-use crate::world::update::atomic_diff_mask::AtomicDiffMask;
 use crate::{DiffMask, GlobalWorldManagerType, PropertyMutate};
 
 /// Per-user dirty queue (Phase 9.4 / Stage E + B-strict + 2026-05-05
@@ -319,7 +319,12 @@ impl DirtyNotifier {
         set: Weak<DirtySet>,
         global: Weak<GlobalDirtyBitset>,
     ) -> Self {
-        Self { entity_idx, kind_bit, set, global }
+        Self {
+            entity_idx,
+            kind_bit,
+            set,
+            global,
+        }
     }
 
     fn notify_dirty(&self) {
@@ -347,7 +352,6 @@ pub trait MutChannelType: Send + Sync {
     fn new_receiver(&mut self, address: &Option<SocketAddr>) -> Option<MutReceiver>;
     /// Notifies all receivers that property `diff` has changed.
     fn send(&self, diff: u8);
-
 }
 
 /// Shared mutation channel that connects a component's property mutator to all interested receivers.
@@ -394,7 +398,6 @@ impl MutChannel {
         }
         false
     }
-
 }
 
 // MutReceiver — atomic, lock-free hot path.
@@ -547,7 +550,6 @@ impl MutSender {
 
 impl PropertyMutate for MutSender {
     fn mutate(&mut self, property_index: u8) -> bool {
-        
         self.channel.send(property_index)
     }
 }

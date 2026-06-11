@@ -139,22 +139,21 @@ impl MessageKinds {
     }
 
     fn net_id_to_kind(&self, net_id: &NetId) -> MessageKind {
-        *self.net_id_map.get(net_id).expect(
-            "Must properly initialize Message with Protocol via `add_message()` function!",
-        )
+        *self
+            .net_id_map
+            .get(net_id)
+            .expect("Must properly initialize Message with Protocol via `add_message()` function!")
     }
 
     fn kind_to_net_id(&self, message_kind: &MessageKind) -> NetId {
-        self
-            .kind_map
+        self.kind_map
             .get(message_kind)
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
             .0
     }
 
     fn kind_to_builder(&self, message_kind: &MessageKind) -> &dyn MessageBuilder {
-        self
-            .kind_map
+        self.kind_map
             .get(message_kind)
             .expect("Must properly initialize Message with Protocol via `add_message()` function!")
             .1

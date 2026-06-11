@@ -55,18 +55,28 @@ fn main() {
     // ── Analysis ──────────────────────────────────────────────────────────────
 
     println!("G-W4 Phase 2 — Compression audit");
-    println!("Scenario: {} tiles + {} units, {} steady-state ticks",
-             SPAWN_TILES, SPAWN_UNITS, STEADY_STATE_TICKS);
+    println!(
+        "Scenario: {} tiles + {} units, {} steady-state ticks",
+        SPAWN_TILES, SPAWN_UNITS, STEADY_STATE_TICKS
+    );
     println!();
 
-    let all_packets: Vec<Vec<u8>> = spawn_burst.iter().chain(steady_state.iter()).cloned().collect();
+    let all_packets: Vec<Vec<u8>> = spawn_burst
+        .iter()
+        .chain(steady_state.iter())
+        .cloned()
+        .collect();
 
     for (label, packets) in &[
         ("Spawn-burst", &spawn_burst),
         ("Steady-state", &steady_state),
         ("Combined", &all_packets),
     ] {
-        println!("── {} ({} packets) ─────────────────────────────", label, packets.len());
+        println!(
+            "── {} ({} packets) ─────────────────────────────",
+            label,
+            packets.len()
+        );
         if packets.is_empty() {
             println!("  (no packets)");
             continue;
@@ -78,7 +88,8 @@ fn main() {
 
     // ── Gate evaluation ───────────────────────────────────────────────────────
 
-    let large: Vec<Vec<u8>> = spawn_burst.iter()
+    let large: Vec<Vec<u8>> = spawn_burst
+        .iter()
         .filter(|p| p.len() > 150)
         .cloned()
         .collect();
@@ -89,7 +100,10 @@ fn main() {
         println!("      Evaluating gate on ALL spawn-burst packets instead.");
         let ratio = dict_compression_ratio(&spawn_burst);
         let reduction = 1.0 - ratio;
-        println!("GATE: dictionary compression on spawn-burst = {:.1}% reduction", reduction * 100.0);
+        println!(
+            "GATE: dictionary compression on spawn-burst = {:.1}% reduction",
+            reduction * 100.0
+        );
         if reduction >= 0.15 {
             println!("GATE PASS: ≥15% reduction — recommend enabling dictionary compression.");
             std::process::exit(0);
@@ -101,7 +115,10 @@ fn main() {
 
     let ratio = dict_compression_ratio(&large);
     let reduction = 1.0 - ratio;
-    println!("GATE: dictionary compression on large spawn-burst (>150B) = {:.1}% reduction", reduction * 100.0);
+    println!(
+        "GATE: dictionary compression on large spawn-burst (>150B) = {:.1}% reduction",
+        reduction * 100.0
+    );
     if reduction >= 0.15 {
         println!("GATE PASS: ≥15% reduction — ship dictionary compression as recommended default.");
     } else {
@@ -113,18 +130,23 @@ fn main() {
 // ── per-bucket report ─────────────────────────────────────────────────────────
 
 fn print_bucket_report(phase: &str, packets: &[Vec<u8>]) {
-    let small: Vec<&Vec<u8>>  = packets.iter().filter(|p| p.len() <= 50).collect();
-    let medium: Vec<&Vec<u8>> = packets.iter().filter(|p| p.len() > 50 && p.len() <= 150).collect();
-    let large: Vec<&Vec<u8>>  = packets.iter().filter(|p| p.len() > 150).collect();
+    let small: Vec<&Vec<u8>> = packets.iter().filter(|p| p.len() <= 50).collect();
+    let medium: Vec<&Vec<u8>> = packets
+        .iter()
+        .filter(|p| p.len() > 50 && p.len() <= 150)
+        .collect();
+    let large: Vec<&Vec<u8>> = packets.iter().filter(|p| p.len() > 150).collect();
 
     let _ = phase;
 
-    println!("  {:20} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8}",
-             "bucket", "count", "raw(B)", "zstd-7", "zstd-1", "zstd-3", "dict-3");
+    println!(
+        "  {:20} {:>6} {:>8} {:>8} {:>8} {:>8} {:>8}",
+        "bucket", "count", "raw(B)", "zstd-7", "zstd-1", "zstd-3", "dict-3"
+    );
     println!("  {}", "─".repeat(72));
 
     for (name, bucket) in &[
-        ("small (0-50B)",   &small),
+        ("small (0-50B)", &small),
         ("medium (50-150B)", &medium),
         ("large (150-430B)", &large),
     ] {
@@ -135,27 +157,27 @@ fn print_bucket_report(phase: &str, packets: &[Vec<u8>]) {
         }
         let total_raw: usize = owned.iter().map(|p| p.len()).sum();
         let r_neg7 = compression_ratio(&owned, -7);
-        let r1     = compression_ratio(&owned, 1);
-        let r3     = compression_ratio(&owned, 3);
-        let rd     = dict_compression_ratio(&owned);
+        let r1 = compression_ratio(&owned, 1);
+        let r3 = compression_ratio(&owned, 3);
+        let rd = dict_compression_ratio(&owned);
         println!(
             "  {:20} {:>6} {:>8} {:>7.1}% {:>7.1}% {:>7.1}% {:>7.1}%",
             name,
             owned.len(),
             total_raw,
             (1.0 - r_neg7) * 100.0,
-            (1.0 - r1)     * 100.0,
-            (1.0 - r3)     * 100.0,
-            (1.0 - rd)     * 100.0,
+            (1.0 - r1) * 100.0,
+            (1.0 - r3) * 100.0,
+            (1.0 - rd) * 100.0,
         );
     }
 
     let total_raw: usize = packets.iter().map(|p| p.len()).sum();
     let all_owned: Vec<Vec<u8>> = packets.to_vec();
     let r_neg7 = compression_ratio(&all_owned, -7);
-    let r1     = compression_ratio(&all_owned, 1);
-    let r3     = compression_ratio(&all_owned, 3);
-    let rd     = dict_compression_ratio(&all_owned);
+    let r1 = compression_ratio(&all_owned, 1);
+    let r3 = compression_ratio(&all_owned, 3);
+    let rd = dict_compression_ratio(&all_owned);
     println!("  {}", "─".repeat(72));
     println!(
         "  {:20} {:>6} {:>8} {:>7.1}% {:>7.1}% {:>7.1}% {:>7.1}%",
@@ -163,9 +185,9 @@ fn print_bucket_report(phase: &str, packets: &[Vec<u8>]) {
         packets.len(),
         total_raw,
         (1.0 - r_neg7) * 100.0,
-        (1.0 - r1)     * 100.0,
-        (1.0 - r3)     * 100.0,
-        (1.0 - rd)     * 100.0,
+        (1.0 - r1) * 100.0,
+        (1.0 - r3) * 100.0,
+        (1.0 - rd) * 100.0,
     );
 }
 
@@ -204,9 +226,7 @@ fn dict_compression_ratio(packets: &[Vec<u8>]) -> f64 {
     };
     let mut comp_total = 0usize;
     for p in packets {
-        let c = compressor.compress(p)
-            .map(|c| c.len())
-            .unwrap_or(p.len());
+        let c = compressor.compress(p).map(|c| c.len()).unwrap_or(p.len());
         comp_total += c;
     }
     comp_total as f64 / orig as f64

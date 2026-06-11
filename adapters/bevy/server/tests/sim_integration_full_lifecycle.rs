@@ -17,9 +17,9 @@ use bevy_app::App;
 use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    pipeline_actors::SnapshotSender, transport, SimHandleRes, Plugin as ServerPlugin,
-    PluginInternalState, PluginSimConfig, SendHandleRes, ServerConfig, SimConverter,
-    SimEventReceiverRes, SnapshotReceiverRes, SnapshotSenderRes,
+    pipeline_actors::SnapshotSender, transport, Plugin as ServerPlugin, PluginInternalState,
+    PluginSimConfig, SendHandleRes, ServerConfig, SimConverter, SimEventReceiverRes, SimHandleRes,
+    SnapshotReceiverRes, SnapshotSenderRes,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};

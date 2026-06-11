@@ -248,9 +248,7 @@ impl EntityRegistry {
     ///
     /// Returns None if the server entity isn't registered yet.
     pub fn entity_key_for_server_entity(&self, server_entity: &TestEntity) -> Option<EntityKey> {
-        self.server_entity_to_entity_key
-            .get(server_entity)
-            .copied()
+        self.server_entity_to_entity_key.get(server_entity).copied()
     }
 
     /// Look up EntityKey from a client's TestEntity.

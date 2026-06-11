@@ -1,8 +1,5 @@
 use parking_lot::Mutex;
-use std::{
-    net::SocketAddr,
-    sync::Arc,
-};
+use std::{net::SocketAddr, sync::Arc};
 
 use naia_shared::IdentityToken;
 
