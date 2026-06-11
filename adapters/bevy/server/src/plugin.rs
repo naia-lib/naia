@@ -9,9 +9,9 @@ use bevy_ecs::{
 };
 
 use naia_bevy_shared::{
-    HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking, HostSyncOwnedAddedTracking,
-    ProcessPackets, Protocol, ReceivePackets, SendPackets, SharedPlugin, TranslateTickEvents,
-    TranslateWorldEvents, WorldToHostSync, WorldUpdate,
+    on_despawn, on_host_owned_added, HandleTickEvents, HandleWorldEvents, HostSyncChangeTracking,
+    HostSyncOwnedAddedTracking, ProcessPackets, Protocol, ReceivePackets, SendPackets,
+    SharedPlugin, TranslateTickEvents, TranslateWorldEvents, WorldToHostSync, WorldUpdate,
 };
 use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
 
@@ -266,6 +266,21 @@ impl PluginType for Plugin {
         if !self.skip_host_sync_change_tracking {
             if let Some(schedule) = self.change_detection_schedule {
                 world_data.add_systems_to_schedule(app, schedule);
+                // SharedPlugin registers the entity-level host-sync trackers
+                // (`on_host_owned_added` feeding HostOwnedMap, `on_despawn`
+                // emitting HostSyncEvent::Despawn) in `Update` — which a Sim
+                // SubApp never runs. Mirror them into the change-detection
+                // schedule alongside the per-component trackers, with the
+                // same map-written-before-read ordering constraint.
+                app.add_systems(
+                    schedule,
+                    on_host_owned_added.in_set(HostSyncOwnedAddedTracking),
+                )
+                .add_systems(schedule, on_despawn.in_set(HostSyncChangeTracking))
+                .configure_sets(
+                    schedule,
+                    HostSyncOwnedAddedTracking.before(HostSyncChangeTracking),
+                );
             } else {
                 world_data.add_systems(app);
             }

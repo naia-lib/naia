@@ -264,6 +264,20 @@ impl<R: Replicate + Component<Mutability = Mutable>> ComponentAccess for Compone
                 );
                 component_mut.enable_delegation(&accessor, Some(&mutator));
             } else {
+                // A component with no record in the global world manager has
+                // not been picked up by host-sync yet (a freshly-spawned host
+                // entity can be configured Delegated before its component
+                // Inserts drain — its HostOwned properties have no mutator
+                // installed). Skip it: `insert_component_worldless` applies
+                // delegation when it registers the component (its
+                // `entity_is_delegated` arm), converging to the same state.
+                let component_kind = component_mut.kind();
+                let registered = global_manager
+                    .component_kinds(&global_entity)
+                    .is_some_and(|kinds| kinds.contains(&component_kind));
+                if !registered {
+                    return;
+                }
                 component_mut.enable_delegation(&accessor, None);
             }
         }

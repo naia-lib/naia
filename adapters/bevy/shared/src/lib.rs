@@ -46,7 +46,7 @@ pub use world_op_command::WorldOpCommand;
 /// via `naia-bevy-server` / `naia-bevy-client`).
 #[cfg(all(feature = "test_time", not(target_arch = "wasm32")))]
 pub use naia_shared::TestClock;
-pub use change_detection::HostSyncEvent;
+pub use change_detection::{on_despawn, on_host_owned_added, HostSyncEvent};
 pub use component_access::{AppTag, ComponentAccess, ComponentAccessor};
 pub use components::{HostOwned, HostOwnedMap};
 pub use plugin::SharedPlugin;
