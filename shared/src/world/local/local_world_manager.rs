@@ -1653,6 +1653,14 @@ impl LocalWorldManager {
             for component_kind in component_kinds {
                 channel.insert_component_channel_as_inserted(component_kind, 0);
             }
+
+            // Release anything that was buffered while the auto-created
+            // channel was still Despawned (the very messages whose early
+            // arrival created it), then surface those messages as engine
+            // events. A migrated entity never receives the Spawn message
+            // that normally performs this drain.
+            channel.drain_migration_buffered_messages();
+            self.remote.flush_entity_channel(remote_entity);
         } else {
             // Normal Case: Create new delegated channel
             let mut channel = RemoteEntityChannel::new_delegated(self.em_read().host_type());

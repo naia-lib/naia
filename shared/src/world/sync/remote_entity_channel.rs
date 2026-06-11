@@ -433,6 +433,24 @@ impl RemoteEntityChannel {
         self.last_epoch_id = Some(epoch_id);
     }
 
+    /// Releases messages that were buffered while this channel was still
+    /// `Despawned`, after a migration upgrade flipped it straight to
+    /// `Spawned`. A migrated entity never receives the `Spawn` message whose
+    /// arm normally performs this drain, so without an explicit release an
+    /// early-arrived message (e.g. the post-migration `SetAuthority` sent to
+    /// the former owner) parks in the auth sub-channel forever. Mirrors the
+    /// auth-drain + reprocess steps of `process_messages`' Spawn arm.
+    pub(crate) fn drain_migration_buffered_messages(&mut self) {
+        debug_assert_eq!(self.state, EntityChannelState::Spawned);
+        self.auth_channel.receiver_process_messages(self.state);
+        self.auth_channel
+            .receiver_drain_messages_into(&mut self.incoming_messages);
+        // Any non-auth messages still buffered (component updates that raced
+        // ahead of the MigrateResponse) are processable now that the channel
+        // is Spawned.
+        self.process_messages();
+    }
+
     pub(crate) fn insert_component_channel_as_inserted(
         &mut self,
         component_kind: ComponentKind,

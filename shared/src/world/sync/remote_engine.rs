@@ -101,6 +101,17 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
         entity_channel.drain_incoming_messages_into(entity, &mut self.incoming_events);
     }
 
+    /// Drains an entity channel's ready messages into the engine's incoming
+    /// events outside the normal `receive_message` flow. Used after a
+    /// migration upgrade releases messages that were buffered before the
+    /// channel spawned — without this they would only surface when the next
+    /// message for the entity happens to arrive.
+    pub(crate) fn flush_entity_channel(&mut self, entity: E) {
+        if let Some(entity_channel) = self.entity_channels.get_mut(&entity) {
+            entity_channel.drain_incoming_messages_into(entity, &mut self.incoming_events);
+        }
+    }
+
     pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
         if !self.entity_channels.contains_key(&entity) {
             panic!(

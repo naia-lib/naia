@@ -682,6 +682,12 @@ impl RemoteWorldManager {
         self.remote_engine.get_entity_channel_mut(remote_entity)
     }
 
+    /// See [`RemoteEngine::flush_entity_channel`] — surfaces messages a
+    /// migration upgrade released from the channel's pre-spawn buffers.
+    pub(crate) fn flush_entity_channel(&mut self, remote_entity: RemoteEntity) {
+        self.remote_engine.flush_entity_channel(remote_entity);
+    }
+
     /// Returns the current authority status for `entity`'s remote channel, if one exists.
     pub fn get_entity_auth_status(&self, entity: &RemoteEntity) -> Option<EntityAuthStatus> {
         self.remote_engine.get_entity_auth_status(entity)

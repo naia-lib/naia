@@ -138,6 +138,20 @@ impl AuthChannel {
                     | (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
                         // valid transition!
                     }
+                    // Same-state transitions are valid no-ops: duplicate
+                    // delivery is by-design on the migration path, where the
+                    // owning client self-sets Granted while processing
+                    // MigrateResponse and the server's explicit
+                    // SetAuthority(Granted) fan-out arrives afterwards.
+                    // Mirrors the idempotent same→same arm in the client's
+                    // `entity_update_authority`.
+                    (EntityAuthStatus::Available, EntityAuthStatus::Available)
+                    | (EntityAuthStatus::Requested, EntityAuthStatus::Requested)
+                    | (EntityAuthStatus::Granted, EntityAuthStatus::Granted)
+                    | (EntityAuthStatus::Denied, EntityAuthStatus::Denied)
+                    | (EntityAuthStatus::Releasing, EntityAuthStatus::Releasing) => {
+                        // idempotent — no state change
+                    }
                     (from_status, to_status) => {
                         panic!(
                             "Invalid authority transition from {:?} to {:?}",

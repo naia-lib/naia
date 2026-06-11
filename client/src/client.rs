@@ -2632,6 +2632,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.global_world_manager
                         .entity_update_authority(&global_entity, EntityAuthStatus::Granted);
 
+                    // Register the entity + its components for outgoing update
+                    // tracking, exactly as the SetAuthority(Granted) event path
+                    // does. Without this the migrated entity's `authed_entities`
+                    // entry is never created, so `is_component_updatable` stays
+                    // false and every c2s component update the (granted) owner
+                    // makes is silently dropped from `take_update_events` —
+                    // the entity LOOKS granted everywhere (global status,
+                    // channel status, AuthGrant event) but can never sync.
+                    if let Some(connection) = &mut self.server_connection {
+                        connection
+                            .base
+                            .send
+                            .world_manager
+                            .register_authed_entity(&self.global_world_manager, &global_entity);
+                    }
+
                     // Emit AuthGrant event
                     self.incoming_world_events.push_auth_grant(world_entity);
                     #[cfg(feature = "e2e_debug")]
