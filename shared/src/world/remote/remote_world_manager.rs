@@ -521,12 +521,17 @@ impl RemoteWorldManager {
         for (entity, component_kind, component) in
             self.waitlist.entities_to_insert(now, local_converter)
         {
-            let global_entity = local_converter
-                .remote_entity_to_global_entity(&entity)
-                .unwrap();
-            let world_entity = world_converter
-                .global_entity_to_entity(&global_entity)
-                .unwrap();
+            // The target entity may have despawned while the component sat
+            // in the waitlist (e.g. an avatar's despawn racing a waitlisted
+            // AssetRef insert) — `RemoteWorldWaitlist::despawn_entity` does
+            // not purge queued inserts, so a ready item can reference a
+            // dead entity. The insert is moot then: drop it.
+            let Ok(global_entity) = local_converter.remote_entity_to_global_entity(&entity) else {
+                continue;
+            };
+            let Ok(world_entity) = world_converter.global_entity_to_entity(&global_entity) else {
+                continue;
+            };
             self.finish_insert(
                 world,
                 local_converter,
