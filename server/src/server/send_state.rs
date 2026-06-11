@@ -1801,14 +1801,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     // Exhaustion = the entity never appeared: the scope-enter
                     // (and the entity's spawn for this user) is permanently
                     // dropped for this peer. This IS the bug condition the
-                    // entry-time transient is not. It stays warn-only (no
-                    // debug_assert) for now because one KNOWN consumer defect
-                    // fires it: cyberlith's level-editor cell hosts delegated
-                    // NetworkedSpawnPoint entities in its MAIN world while
-                    // scope application receives the SIM world, so those
-                    // scope-enters always exhaust (measured 2026-06-10,
-                    // le17). Promote to a debug_assert once that flow routes
-                    // main-world-hosted entities correctly.
+                    // entry-time transient is not. The known consumer defect
+                    // that used to fire this (cyberlith's level-editor cell
+                    // hosting delegated NetworkedSpawnPoint entities in its
+                    // MAIN world while scope application receives the SIM
+                    // world) was fixed by the all-sim residence cutover
+                    // (MISSION_EDITOR_ENTITY_RESIDENCE P3, 2026-06-10), so
+                    // exhaustion is now assertable: any hit is a real
+                    // silent-drop defect in the consumer's entity routing.
+                    debug_assert!(
+                        false,
+                        "apply_scope_for_user: ScopeToggled for user={:?} \
+                         entity={:?} exhausted {} retries — entity never \
+                         appeared in the snapshot world (permanent per-peer \
+                         spawn drop)",
+                        user_key, global_entity, SCOPE_RETRY_MAX,
+                    );
                     warn!(
                         "apply_scope_for_user: dropping ScopeToggled for \
                          user={:?} entity={:?} after {} retries — target \

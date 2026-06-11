@@ -127,6 +127,31 @@ impl AtomicBitSet {
         true
     }
 
+    /// Set every bit up to `bit_capacity`. Returns `true` iff the
+    /// bitset was clear before this call (clean→dirty signal,
+    /// race-tolerant like `or_with`). Used when an authority grant
+    /// must force a full-state update of a component (any bits beyond
+    /// the component's property count are never serialized —
+    /// `write_update` walks the property list, not the mask).
+    pub fn set_all(&self) -> bool {
+        let was_clear_before = self.is_clear();
+        let mut remaining = self.bit_capacity;
+        for word in self.words.iter() {
+            if remaining == 0 {
+                break;
+            }
+            let bits_this_word = remaining.min(64);
+            let value = if bits_this_word == 64 {
+                u64::MAX
+            } else {
+                (1u64 << bits_this_word) - 1
+            };
+            word.fetch_or(value, Ordering::Relaxed);
+            remaining -= bits_this_word;
+        }
+        was_clear_before && self.bit_capacity > 0
+    }
+
     /// Clear all bits. Returns `true` iff the bitset had any bit set
     /// (any word non-zero) before the clear.
     pub fn clear(&self) -> bool {
@@ -364,5 +389,44 @@ mod tests {
         for i in 0..32 {
             assert_eq!(m.byte(i), 0xFF, "byte {} should be 0xFF", i);
         }
+    }
+
+    #[test]
+    fn set_all_sets_every_bit_up_to_capacity_single_word() {
+        let m = AtomicBitSet::new(40); // 5 bytes, partial word
+        assert!(m.set_all(), "set_all on a clear mask reports was_clear");
+        for i in 0..5 {
+            assert_eq!(m.byte(i), 0xFF, "byte {} should be 0xFF", i);
+        }
+        // Bits beyond capacity stay clear (word tail not set).
+        assert_eq!(m.words[0].load(Ordering::Relaxed), (1u64 << 40) - 1);
+    }
+
+    #[test]
+    fn set_all_multiword_partial_last_word() {
+        let m = AtomicBitSet::new(72); // 9 bytes: one full word + 8 bits
+        assert!(m.set_all());
+        assert_eq!(m.words[0].load(Ordering::Relaxed), u64::MAX);
+        assert_eq!(m.words[1].load(Ordering::Relaxed), 0xFF);
+        let snap = m.snapshot();
+        for i in 0..9 {
+            assert_eq!(snap.byte(i), 0xFF);
+        }
+    }
+
+    #[test]
+    fn set_all_on_already_dirty_mask_reports_not_clear() {
+        let m = AtomicBitSet::new(16);
+        m.set_bit(3);
+        assert!(!m.set_all(), "mask was already dirty");
+        assert_eq!(m.byte(0), 0xFF);
+        assert_eq!(m.byte(1), 0xFF);
+    }
+
+    #[test]
+    fn set_all_zero_capacity_is_noop() {
+        let m = AtomicBitSet::new(0);
+        assert!(!m.set_all());
+        assert!(m.is_clear());
     }
 }

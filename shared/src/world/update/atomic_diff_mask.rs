@@ -53,6 +53,13 @@ impl AtomicDiffMask {
         self.bits.or_with(other)
     }
 
+    /// Set every bit. Returns `true` iff the mask was clear before
+    /// (clean→dirty signal). Used to force a full-state update when
+    /// authority over a component is granted.
+    pub fn set_all(&self) -> bool {
+        self.bits.set_all()
+    }
+
     /// Snapshot the current mask into an owned `DiffMask`. Used by
     /// `world_writer` when copying the mask into `sent_updates` before
     /// clearing.

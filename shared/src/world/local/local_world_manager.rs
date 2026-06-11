@@ -916,6 +916,13 @@ impl LocalWorldManager {
         for component_kind in component_kinds.iter() {
             self.updater
                 .register_component(global_entity, component_kind);
+            // Authority was just granted: any optimistic mutations made while
+            // the request was in flight fanned out before this receiver
+            // existed and were lost. Publish the full component state once so
+            // the new authority's view becomes canonical (convergent — the
+            // server applies and rebroadcasts idempotently).
+            self.updater
+                .mark_component_fully_dirty(global_entity, component_kind);
         }
     }
 

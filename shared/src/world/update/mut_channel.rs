@@ -490,6 +490,25 @@ impl MutReceiver {
         }
     }
 
+    /// Sets every bit in the diff mask, notifying the dirty queue if the mask
+    /// transitions from clean to dirty. Forces a full-state update of the
+    /// component — used when authority is granted so that optimistic
+    /// mutations made before the grant (which fanned out to zero receivers
+    /// and were lost) are still published to the server.
+    pub fn mark_all_dirty(&self) {
+        self.mask.set_all();
+        // Notify unconditionally, not just on the clean→dirty transition:
+        // mutations made before the notifier was attached (client-side
+        // optimistic writes while an authority request is in flight) leave
+        // the mask dirty with NO DirtyQueue entry — a was_clear-gated notify
+        // would skip and the bits would never be collected. The DirtyQueue
+        // dedupes, so duplicate notifies are harmless (same contract as the
+        // race-tolerant multi-word `set_bit`).
+        if let Some(n) = self.notifier.get() {
+            n.notify_dirty();
+        }
+    }
+
     /// ORs `other_mask` into the diff mask, notifying the dirty queue if the mask transitions from clean to dirty.
     pub fn or_mask(&self, other_mask: &DiffMask) {
         let was_clear_now_dirty = self.mask.or_with(other_mask);
