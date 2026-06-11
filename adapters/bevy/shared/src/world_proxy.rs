@@ -459,9 +459,14 @@ fn has_component<R: ReplicatedComponent>(world: &World, entity: &Entity) -> bool
 }
 
 fn has_component_of_kind(world: &World, entity: &Entity, component_kind: &ComponentKind) -> bool {
-    world
-        .entity(*entity)
-        .contains_type_id(<ComponentKind as Into<TypeId>>::into(*component_kind))
+    // Fallible lookup, like the sibling `has_component`: events can reference
+    // an entity despawned earlier in the same batch (e.g. a disconnect
+    // cascade), and a despawned entity trivially has no components. The
+    // infallible `world.entity()` panics the whole app on that race.
+    let Ok(entity_ref) = world.get_entity(*entity) else {
+        return false;
+    };
+    entity_ref.contains_type_id(<ComponentKind as Into<TypeId>>::into(*component_kind))
 }
 
 fn component<'a, R: ReplicatedComponent>(
