@@ -89,8 +89,8 @@ pub use naia_server::{
     pipeline_actors,
     shared::{
         default_channels, BigMap, BigMapKey, BitReader, BitWrite, BitWriter, ConstBitLength,
-        FileBitWriter, ResponseReceiveKey, SerdeErr, SignedInteger, SignedVariableInteger,
-        SocketConfig, UnsignedInteger, UnsignedVariableInteger,
+        FileBitWriter, GlobalResponseId, ResponseReceiveKey, SerdeErr, SignedInteger,
+        SignedVariableInteger, SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
     transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, ReplicationConfig,
     RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
