@@ -5,11 +5,28 @@ use naia_socket_shared::Instant;
 use crate::{messages::channels::senders::channel_sender::ChannelSender, types::MessageIndex};
 
 /// Retransmit-on-timeout sender that tracks unacknowledged messages and re-queues them after an RTT-based interval.
+///
+/// `sending_messages` is the single ordered source of truth (insertion order ==
+/// logical sequence order, including across the u16 wrap boundary). Every tick,
+/// [`collect_messages`](ReliableSender::collect_messages) rebuilds
+/// `outgoing_messages` as a fresh, derived *view* of the entries due for
+/// (re)transmission — never mutating it incrementally — so the view is always in
+/// sequence order by construction, with no sort and no wrap-around hazard. A
+/// message's `last_sent` timestamp is stamped only when it is *actually written*
+/// into a packet (see [`mark_written`](ReliableSender::mark_written)), not when
+/// it is staged — so a message that doesn't fit the packet (bandwidth/size
+/// truncation) stays "due" and is re-collected next tick instead of having its
+/// resend timer silently reset.
 pub struct ReliableSender<P: Send + Sync> {
     rtt_resend_factor: f32,
     sending_messages: VecDeque<Option<(MessageIndex, Option<Instant>, P)>>,
     next_send_message_index: MessageIndex,
     pub(crate) outgoing_messages: VecDeque<(MessageIndex, P)>,
+    // Timestamp of the collect_messages pass that built the current
+    // `outgoing_messages` view, applied to each message's `last_sent` when it is
+    // written (collect and the multi-packet write loop share one tick, so this
+    // is the correct send time for everything staged this tick).
+    collected_at: Option<Instant>,
     // Earliest `last_sent` across all currently-pending entries, recomputed on
     // each collect_messages pass. Combined with `has_unsent`, lets
     // collect_messages short-circuit when nothing is due for resend — avoiding
@@ -28,9 +45,35 @@ impl<P: Send + Sync> ReliableSender<P> {
             next_send_message_index: 0,
             sending_messages: VecDeque::new(),
             outgoing_messages: VecDeque::new(),
+            collected_at: None,
             min_last_sent: None,
             has_unsent: false,
             max_queue_depth,
+        }
+    }
+
+    /// Stamp `last_sent` on the entries that were actually written into a packet.
+    ///
+    /// Called by the message sender after `IndexedMessageWriter` reports which
+    /// staged indices it serialized. `written` is in ascending sequence order (a
+    /// prefix of the ordered `outgoing_messages` view), and `sending_messages` is
+    /// in that same order, so a single forward merge-walk stamps them — matching
+    /// purely by index equality, which is wrap-safe (no `<` comparison of raw
+    /// u16s). Entries left unwritten keep their prior `last_sent` and remain due.
+    pub(crate) fn mark_written(&mut self, written: &[MessageIndex]) {
+        let Some(now) = self.collected_at.clone() else {
+            return;
+        };
+        let mut next = written.iter();
+        let mut target = next.next();
+        for slot in self.sending_messages.iter_mut().flatten() {
+            let Some(&want) = target else {
+                break;
+            };
+            if slot.0 == want {
+                slot.1 = Some(now.clone());
+                target = next.next();
+            }
         }
     }
 
@@ -121,47 +164,44 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
             }
         }
 
+        // Rebuild the outgoing view from scratch. Any entries left over from a
+        // bandwidth/size-truncated packet last tick are dropped here and
+        // re-derived below from `sending_messages` — the ordered source of truth
+        // — so the view is always in sequence order with no incremental append
+        // (and thus no possibility of a lower index landing behind a higher one).
+        self.outgoing_messages.clear();
         let mut new_min: Option<Instant> = None;
-        for (message_index, last_sent_opt, message) in self.sending_messages.iter_mut().flatten() {
-            let mut should_send = false;
-            if let Some(last_sent) = last_sent_opt {
-                if last_sent.elapsed(now) >= resend_duration {
-                    should_send = true;
-                }
-            } else {
-                should_send = true;
-            }
-            if should_send {
+        let mut any_unsent = false;
+        for (message_index, last_sent_opt, message) in self.sending_messages.iter().flatten() {
+            let due = match last_sent_opt {
+                Some(last_sent) => last_sent.elapsed(now) >= resend_duration,
+                None => true,
+            };
+            if due {
                 self.outgoing_messages
                     .push_back((*message_index, message.clone()));
-                *last_sent_opt = Some(now.clone());
             }
-            if let Some(t) = last_sent_opt.as_ref() {
-                new_min = Some(match new_min {
-                    None => t.clone(),
-                    Some(cur) => {
-                        if t < &cur {
-                            t.clone()
-                        } else {
-                            cur
+            match last_sent_opt {
+                None => any_unsent = true,
+                Some(t) => {
+                    new_min = Some(match new_min {
+                        None => t.clone(),
+                        Some(cur) => {
+                            if t < &cur {
+                                t.clone()
+                            } else {
+                                cur
+                            }
                         }
-                    }
-                });
+                    });
+                }
             }
         }
+        self.collected_at = Some(now.clone());
         self.min_last_sent = new_min;
-        self.has_unsent = false;
-
-        // `IndexedMessageWriter` requires monotonically increasing MessageIndex
-        // within a packet. Retransmissions appended after not-yet-sent newer
-        // fragments break that invariant; a stable sort by raw index restores it.
-        // (MessageIndex is u16; for normal counts well below 32768 the raw order
-        // equals the logical sequence order, so wrapping is not a concern here.)
-        if self.outgoing_messages.len() > 1 {
-            let mut v: Vec<_> = std::mem::take(&mut self.outgoing_messages).into_iter().collect();
-            v.sort_by_key(|(idx, _)| *idx);
-            self.outgoing_messages.extend(v);
-        }
+        // Stays true while any message has never been written; self-corrects to
+        // false on the first collect after mark_written stamps them all.
+        self.has_unsent = any_unsent;
     }
 
     fn has_messages(&self) -> bool {
@@ -170,5 +210,131 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
 
     fn notify_message_delivered(&mut self, message_index: &MessageIndex) {
         self.deliver_message(message_index);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! Retransmit-ordering + stamp-on-write contract for `ReliableSender`.
+    //!
+    //! These drive the REAL `collect_messages` / `mark_written` /
+    //! `deliver_message` / `take_next_messages` methods — no reimplementation —
+    //! and pin the sender's responsibility to feed `IndexedMessageWriter` a
+    //! wrap-safe, sequence-ordered stream. `indexed_message_writer.rs` already
+    //! pins the dual invariant (it panics on out-of-order input); the gap these
+    //! close is that nothing asserted the *sender* never produces such input.
+
+    use super::ReliableSender;
+    use crate::messages::channels::senders::channel_sender::ChannelSender;
+    use naia_socket_shared::Instant;
+
+    // rtt_resend_factor 1.0 * rtt 100ms => resend_duration = 100ms.
+    const RTT_MILLIS: f32 = 100.0;
+
+    fn at(base: &Instant, plus_millis: u32) -> Instant {
+        let mut t = base.clone();
+        t.add_millis(plus_millis);
+        t
+    }
+
+    fn indices(out: &std::collections::VecDeque<(u16, u16)>) -> Vec<u16> {
+        out.iter().map(|(i, _)| *i).collect()
+    }
+
+    #[test]
+    fn collect_feeds_messages_in_sequence_order_across_the_u16_wrap() {
+        // The original bug: a raw-u16 sort put [65534, 65535, 0, 1] as
+        // [0, 1, 65534, 65535], making the downstream wrapping_diff(1, 65534)
+        // negative => panic. The view must preserve insertion (sequence) order,
+        // which straddles the wrap correctly.
+        let mut sender: ReliableSender<u16> = ReliableSender::new(1.0, None);
+        sender.next_send_message_index = 65534;
+        for payload in [0xAA, 0xBB, 0xCC, 0xDD] {
+            sender.send_message(payload); // indices 65534, 65535, 0, 1
+        }
+
+        let now = Instant::now();
+        sender.collect_messages(&now, &RTT_MILLIS);
+        let out = sender.take_next_messages();
+
+        assert_eq!(
+            indices(&out),
+            vec![65534, 65535, 0, 1],
+            "outgoing view must stay in sequence order across the wrap boundary"
+        );
+    }
+
+    #[test]
+    fn only_written_messages_have_their_resend_timer_reset() {
+        // Stamp-on-write: a message staged but NOT written (packet truncated by
+        // bandwidth/size) must stay due, not have its resend timer silently
+        // reset. The old code stamped at collect time, delaying truncated
+        // leftovers by a full RTT.
+        let mut sender: ReliableSender<u16> = ReliableSender::new(1.0, None);
+        for _ in 0..5 {
+            sender.send_message(0); // indices 0..=4
+        }
+
+        let t0 = Instant::now();
+        sender.collect_messages(&t0, &RTT_MILLIS);
+        let first = sender.take_next_messages();
+        assert_eq!(indices(&first), vec![0, 1, 2, 3, 4]);
+
+        // Simulate a packet that only had room for [0, 1, 2].
+        sender.mark_written(&[0, 1, 2]);
+
+        // 50ms later — less than the 100ms resend window.
+        let t1 = at(&t0, 50);
+        sender.collect_messages(&t1, &RTT_MILLIS);
+        let second = sender.take_next_messages();
+        assert_eq!(
+            indices(&second),
+            vec![3, 4],
+            "written messages must wait out their resend window; unwritten leftovers stay due"
+        );
+    }
+
+    #[test]
+    fn written_messages_retransmit_once_the_resend_window_elapses() {
+        let mut sender: ReliableSender<u16> = ReliableSender::new(1.0, None);
+        for _ in 0..3 {
+            sender.send_message(0); // indices 0..=2
+        }
+
+        let t0 = Instant::now();
+        sender.collect_messages(&t0, &RTT_MILLIS);
+        let _ = sender.take_next_messages();
+        sender.mark_written(&[0, 1, 2]);
+
+        // Past the resend window — all unacked messages must reappear, in order.
+        let t1 = at(&t0, 200);
+        sender.collect_messages(&t1, &RTT_MILLIS);
+        let retransmit = sender.take_next_messages();
+        assert_eq!(indices(&retransmit), vec![0, 1, 2]);
+    }
+
+    #[test]
+    fn acknowledged_messages_are_never_retransmitted() {
+        let mut sender: ReliableSender<u16> = ReliableSender::new(1.0, None);
+        for _ in 0..4 {
+            sender.send_message(0); // indices 0..=3
+        }
+
+        let t0 = Instant::now();
+        sender.collect_messages(&t0, &RTT_MILLIS);
+        let _ = sender.take_next_messages();
+        sender.mark_written(&[0, 1, 2, 3]);
+
+        // Ack index 1; it must drop out of the retransmit set.
+        sender.deliver_message(&1);
+
+        let t1 = at(&t0, 200);
+        sender.collect_messages(&t1, &RTT_MILLIS);
+        let retransmit = sender.take_next_messages();
+        assert_eq!(
+            indices(&retransmit),
+            vec![0, 2, 3],
+            "acked index 1 must not retransmit; the rest stay in order"
+        );
     }
 }

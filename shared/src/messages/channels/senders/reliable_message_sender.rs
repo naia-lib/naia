@@ -82,13 +82,19 @@ impl MessageChannelSender for ReliableMessageSender {
         writer: &mut BitWriter,
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>> {
-        IndexedMessageWriter::write_messages(
+        let written = IndexedMessageWriter::write_messages(
             message_kinds,
             &mut self.reliable_sender.outgoing_messages,
             converter,
             writer,
             has_written,
-        )
+        );
+        // Stamp `last_sent` only for the messages that actually made it into the
+        // packet, so truncated leftovers stay due and are re-collected next tick.
+        if let Some(indices) = &written {
+            self.reliable_sender.mark_written(indices);
+        }
+        written
     }
 
     fn send_outgoing_request(

@@ -336,6 +336,12 @@ fn messaging_16b_reliable_request_response_fragmentation() {
                             5000,
                             "request payload must arrive complete after reassembly"
                         );
+                        // Verify CONTENT, not just length — a length-preserving
+                        // bit-scramble in VecBitWriter would pass a len-only check.
+                        assert!(
+                            request.payload.iter().all(|&b| b == 0xAB),
+                            "request payload bytes must be intact after reassembly"
+                        );
                         return Some(naia_shared::ResponseSendKey::new(resp_id));
                     }
                 }
@@ -368,6 +374,10 @@ fn messaging_16b_reliable_request_response_fragmentation() {
                 response.payload.len(),
                 5000,
                 "response payload must arrive complete after reassembly"
+            );
+            assert!(
+                response.payload.iter().all(|&b| b == 0xCD),
+                "response payload bytes must be intact after reassembly"
             );
         });
     });
