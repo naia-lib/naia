@@ -100,3 +100,53 @@ impl BitWrite for FragmentWriter {
         false
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! Fragment-boundary invariant: the per-fragment writer holds exactly
+    //! `FRAGMENTATION_LIMIT_BITS`, so a body that fits in that many bits is one
+    //! fragment and one bit more rolls to a second. This is the off-by-one that
+    //! would silently corrupt/lose payload at the boundary, and it's the reason
+    //! the send-side gates (`message_manager::send_message` and
+    //! `ReliableMessageSender::send_or_fragment`) correctly use `>` not `>=`: a
+    //! body of exactly the limit fits whole, so fragmenting it would only add
+    //! needless fragment-header overhead. Driving `FragmentWriter` through its
+    //! `BitWrite` impl pins this with no Message/MessageKinds/converter setup.
+
+    use super::FragmentWriter;
+    use crate::{constants::FRAGMENTATION_LIMIT_BITS, messages::fragment::FragmentId};
+    use naia_serde::BitWrite;
+
+    fn fragments_for_bits(bit_count: u32) -> usize {
+        let mut writer = FragmentWriter::new(FragmentId::zero());
+        for _ in 0..bit_count {
+            writer.write_bit(true);
+        }
+        writer.to_messages().len()
+    }
+
+    #[test]
+    fn a_body_filling_exactly_one_fragment_is_not_split() {
+        assert_eq!(
+            fragments_for_bits(FRAGMENTATION_LIMIT_BITS),
+            1,
+            "a body of exactly FRAGMENTATION_LIMIT_BITS must occupy a single fragment"
+        );
+    }
+
+    #[test]
+    fn one_bit_past_the_limit_rolls_into_a_second_fragment() {
+        assert_eq!(
+            fragments_for_bits(FRAGMENTATION_LIMIT_BITS + 1),
+            2,
+            "one bit beyond the limit must spill into a second fragment"
+        );
+    }
+
+    #[test]
+    fn fragment_count_scales_with_whole_multiples_of_the_limit() {
+        // Three full fragments exactly; the fourth bit would start a 4th.
+        assert_eq!(fragments_for_bits(FRAGMENTATION_LIMIT_BITS * 3), 3);
+        assert_eq!(fragments_for_bits(FRAGMENTATION_LIMIT_BITS * 3 + 1), 4);
+    }
+}
