@@ -288,12 +288,12 @@ fn messaging_16_reliable_fragmentation_allowed() {
 /// multiple packets, reassembled correctly, and arrive with their full content
 /// intact.
 ///
-/// This exercises the three code paths added in naia dev `29593924`:
+/// This exercises the three code paths behind large request/response support:
 /// - `VecBitWriter` for heap-backed request/response body serialisation
 /// - `ReliableMessageSender::send_or_fragment` — fragmentation gate on the
 ///   `RequestOrResponse` wrapper message
-/// - `ReliableSender::collect_messages` sort — monotonic index order under
-///   retransmission
+/// - `ReliableSender::collect_messages` rebuild — a sequence-ordered, wrap-safe
+///   view of due messages under retransmission (no raw-index sort)
 #[test]
 fn messaging_16b_reliable_request_response_fragmentation() {
     let mut scenario = Scenario::new();
