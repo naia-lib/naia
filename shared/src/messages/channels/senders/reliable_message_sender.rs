@@ -44,9 +44,9 @@ impl ReliableMessageSender {
         message: MessageContainer,
     ) {
         if message.bit_length(message_kinds, converter) > FRAGMENTATION_LIMIT_BITS {
-            for fragment in self
-                .message_fragmenter
-                .fragment_message(message_kinds, converter, message)
+            for fragment in
+                self.message_fragmenter
+                    .fragment_message(message_kinds, converter, message)
             {
                 self.reliable_sender.send_message(fragment);
             }

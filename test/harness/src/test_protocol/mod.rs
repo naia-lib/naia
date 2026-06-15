@@ -102,7 +102,9 @@ pub struct LargeTestRequest {
 
 impl LargeTestRequest {
     pub fn new(size: usize) -> Self {
-        Self { payload: vec![0xABu8; size] }
+        Self {
+            payload: vec![0xABu8; size],
+        }
     }
 }
 
@@ -113,7 +115,9 @@ pub struct LargeTestResponse {
 
 impl LargeTestResponse {
     pub fn new(size: usize) -> Self {
-        Self { payload: vec![0xCDu8; size] }
+        Self {
+            payload: vec![0xCDu8; size],
+        }
     }
 }
 

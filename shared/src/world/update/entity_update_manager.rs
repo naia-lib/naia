@@ -108,8 +108,13 @@ impl EntityUpdateManager {
     /// Forces a full-state update for `(entity, component_kind)` by setting
     /// every dirty bit on its receiver. Used at authority-grant time: see
     /// `UserDiffHandler::mark_receiver_fully_dirty`.
-    pub fn mark_component_fully_dirty(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        self.ledger.mark_receiver_fully_dirty(entity, component_kind);
+    pub fn mark_component_fully_dirty(
+        &self,
+        entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        self.ledger
+            .mark_receiver_fully_dirty(entity, component_kind);
     }
 
     pub fn deregister_component(&mut self, entity: &GlobalEntity, component_kind: &ComponentKind) {

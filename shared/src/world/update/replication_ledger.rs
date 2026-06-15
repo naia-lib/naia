@@ -90,7 +90,8 @@ impl ReplicationLedger {
     }
 
     pub fn mark_receiver_fully_dirty(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        self.read().mark_receiver_fully_dirty(entity, component_kind);
+        self.read()
+            .mark_receiver_fully_dirty(entity, component_kind);
     }
 
     pub fn is_receiver_dirty_and_delivered(

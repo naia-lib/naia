@@ -315,9 +315,9 @@ fn messaging_16b_reliable_request_response_fragmentation() {
     let response_key = scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
             client
-                .send_request::<RequestResponseChannel, LargeTestRequest>(
-                    &LargeTestRequest::new(5000),
-                )
+                .send_request::<RequestResponseChannel, LargeTestRequest>(&LargeTestRequest::new(
+                    5000,
+                ))
                 .expect("large request must be accepted by reliable channel")
         })
     });
@@ -361,7 +361,9 @@ fn messaging_16b_reliable_request_response_fragmentation() {
     scenario.expect_msg(
         "messaging-16b.t2: client receives large fragmented response intact",
         |ctx| {
-            ctx.client(client_a_key, |client| client.has_response(&response_key).then_some(()))
+            ctx.client(client_a_key, |client| {
+                client.has_response(&response_key).then_some(())
+            })
         },
     );
 

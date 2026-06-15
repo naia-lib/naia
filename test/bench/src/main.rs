@@ -23,10 +23,11 @@ fn main() {
         std::process::exit(1);
     });
 
-    let results: Vec<crucible_core::BenchResult> = serde_json::from_str(&body).unwrap_or_else(|e| {
-        eprintln!("naia-bench: cannot parse {}: {}", path, e);
-        std::process::exit(1);
-    });
+    let results: Vec<crucible_core::BenchResult> =
+        serde_json::from_str(&body).unwrap_or_else(|e| {
+            eprintln!("naia-bench: cannot parse {}: {}", path, e);
+            std::process::exit(1);
+        });
 
     if results.is_empty() {
         eprintln!("naia-bench: no results in input file");

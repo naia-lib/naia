@@ -299,7 +299,11 @@ impl UserDiffHandler {
     /// the grant fanned out before this receiver existed and were lost, so
     /// the new authority publishes its complete component state once.
     pub fn mark_receiver_fully_dirty(&self, entity: &GlobalEntity, component_kind: &ComponentKind) {
-        let Some((entity_idx, kind_bit)) = self.entity_kind_to_key.get(&(*entity, *component_kind)).copied() else {
+        let Some((entity_idx, kind_bit)) = self
+            .entity_kind_to_key
+            .get(&(*entity, *component_kind))
+            .copied()
+        else {
             return;
         };
         let slot = self.slot(entity_idx, kind_bit);
