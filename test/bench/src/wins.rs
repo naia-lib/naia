@@ -16,7 +16,7 @@
 
 use std::collections::BTreeMap;
 
-use bench_core::{AssertOutcome, BenchResult};
+use crucible_core::{AssertOutcome, BenchResult};
 
 const STEADY_STATE_IDLE: &str = "scenarios/halo_btb_16v16/steady_state_idle";
 const CLIENT_RECEIVE_ACTIVE: &str = "scenarios/halo_btb_16v16/client_receive_active";
