@@ -170,6 +170,85 @@ impl BitWrite for BitWriter {
     }
 }
 
+/// A `BitWrite` implementation backed by a heap-allocated `Vec<u8>`.
+///
+/// Unlike [`BitWriter`] (which has a fixed MTU-sized stack buffer and panics on
+/// overflow), this type grows as needed and can hold arbitrarily large payloads.
+/// Used by [`naia_shared`] to serialize request/response bodies before wrapping
+/// them in a `RequestOrResponse` message that is then fragmented by the normal
+/// reliable-channel fragmenter.
+pub struct VecBitWriter {
+    scratch: u32,
+    scratch_bits: u32,
+    buffer: Vec<u8>,
+    current_bits: u32,
+}
+
+impl VecBitWriter {
+    pub fn new() -> Self {
+        Self {
+            scratch: 0,
+            scratch_bits: 0,
+            buffer: Vec::new(),
+            current_bits: 0,
+        }
+    }
+
+    fn flush_word(&mut self) {
+        self.buffer.extend_from_slice(&self.scratch.to_le_bytes());
+        self.scratch = 0;
+        self.scratch_bits = 0;
+    }
+
+    pub fn to_bytes(mut self) -> Box<[u8]> {
+        if self.scratch_bits > 0 {
+            let remaining_bytes = (self.scratch_bits as usize).div_ceil(8);
+            let word = self.scratch.to_le_bytes();
+            self.buffer.extend_from_slice(&word[..remaining_bytes]);
+        }
+        self.buffer.into_boxed_slice()
+    }
+}
+
+impl BitWrite for VecBitWriter {
+    #[inline(always)]
+    fn write_bit(&mut self, bit: bool) {
+        self.scratch |= (bit as u32) << self.scratch_bits;
+        self.scratch_bits += 1;
+        self.current_bits += 1;
+        if self.scratch_bits == 32 {
+            self.flush_word();
+        }
+    }
+
+    #[inline(always)]
+    fn write_byte(&mut self, byte: u8) {
+        self.current_bits += 8;
+        let available = 32 - self.scratch_bits;
+        if available >= 8 {
+            self.scratch |= (byte as u32) << self.scratch_bits;
+            self.scratch_bits += 8;
+            if self.scratch_bits == 32 {
+                self.flush_word();
+            }
+        } else {
+            let lo = (byte as u32) & ((1 << available) - 1);
+            self.scratch |= lo << self.scratch_bits;
+            self.flush_word();
+            self.scratch = (byte as u32) >> available;
+            self.scratch_bits = 8 - available;
+        }
+    }
+
+    fn count_bits(&mut self, _: u32) {
+        panic!("This method should not be called for VecBitWriter!");
+    }
+
+    fn is_counter(&self) -> bool {
+        false
+    }
+}
+
 /// Pre-serialized component body. Inline array, zero heap allocation.
 /// 64 bytes = 512 bits. All registered components must fit within this limit
 /// (enforced at ComponentKinds::add_component time via Replicate::max_bit_length()).

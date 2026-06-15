@@ -1,6 +1,8 @@
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
+use crate::constants::FRAGMENTATION_LIMIT_BITS;
+use crate::messages::channels::senders::message_fragmenter::MessageFragmenter;
 use crate::messages::channels::senders::request_sender::{LocalRequestId, RequestSender};
 use crate::messages::request::GlobalRequestId;
 use crate::{
@@ -20,6 +22,7 @@ use crate::{
 pub struct ReliableMessageSender {
     reliable_sender: ReliableSender<MessageContainer>,
     request_sender: RequestSender,
+    message_fragmenter: MessageFragmenter,
 }
 
 impl ReliableMessageSender {
@@ -27,6 +30,28 @@ impl ReliableMessageSender {
         Self {
             reliable_sender: ReliableSender::new(rtt_resend_factor, max_queue_depth),
             request_sender: RequestSender::new(),
+            message_fragmenter: MessageFragmenter::new(),
+        }
+    }
+}
+
+impl ReliableMessageSender {
+    /// Queue `message` directly if it fits in one packet, or fragment it first.
+    fn send_or_fragment(
+        &mut self,
+        message_kinds: &MessageKinds,
+        converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        message: MessageContainer,
+    ) {
+        if message.bit_length(message_kinds, converter) > FRAGMENTATION_LIMIT_BITS {
+            for fragment in self
+                .message_fragmenter
+                .fragment_message(message_kinds, converter, message)
+            {
+                self.reliable_sender.send_message(fragment);
+            }
+        } else {
+            self.reliable_sender.send_message(message);
         }
     }
 }
@@ -73,13 +98,13 @@ impl MessageChannelSender for ReliableMessageSender {
         global_request_id: GlobalRequestId,
         request: MessageContainer,
     ) {
-        let processed_request = self.request_sender.process_outgoing_request(
+        let processed = self.request_sender.process_outgoing_request(
             message_kinds,
             converter,
             global_request_id,
             request,
         );
-        self.send_message(processed_request);
+        self.send_or_fragment(message_kinds, converter, processed);
     }
 
     fn send_outgoing_response(
@@ -89,13 +114,13 @@ impl MessageChannelSender for ReliableMessageSender {
         local_response_id: LocalResponseId,
         response: MessageContainer,
     ) {
-        let processed_response = self.request_sender.process_outgoing_response(
+        let processed = self.request_sender.process_outgoing_response(
             message_kinds,
             converter,
             local_response_id,
             response,
         );
-        self.send_message(processed_response);
+        self.send_or_fragment(message_kinds, converter, processed);
     }
 
     fn process_incoming_response(

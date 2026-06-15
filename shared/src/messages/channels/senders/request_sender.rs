@@ -1,7 +1,7 @@
 use std::{collections::HashMap, time::Duration};
 
 use naia_derive::MessageRequest;
-use naia_serde::{BitWriter, SerdeInternal};
+use naia_serde::{SerdeInternal, VecBitWriter};
 
 use crate::messages::request::GlobalRequestId;
 use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
@@ -32,7 +32,7 @@ impl RequestSender {
         self.local_to_global_ids
             .insert(local_request_id, global_request_id);
 
-        let mut writer = BitWriter::with_max_capacity();
+        let mut writer = VecBitWriter::new();
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
         let request_message = RequestOrResponse::request(local_request_id, request_bytes);
@@ -46,7 +46,7 @@ impl RequestSender {
         local_response_id: LocalResponseId,
         response: MessageContainer,
     ) -> MessageContainer {
-        let mut writer = BitWriter::with_max_capacity();
+        let mut writer = VecBitWriter::new();
         response.write(message_kinds, &mut writer, converter);
         let response_bytes = writer.to_bytes();
         let response_message = RequestOrResponse::response(local_response_id, response_bytes);

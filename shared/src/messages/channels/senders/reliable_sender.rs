@@ -151,6 +151,17 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         }
         self.min_last_sent = new_min;
         self.has_unsent = false;
+
+        // `IndexedMessageWriter` requires monotonically increasing MessageIndex
+        // within a packet. Retransmissions appended after not-yet-sent newer
+        // fragments break that invariant; a stable sort by raw index restores it.
+        // (MessageIndex is u16; for normal counts well below 32768 the raw order
+        // equals the logical sequence order, so wrapping is not a concern here.)
+        if self.outgoing_messages.len() > 1 {
+            let mut v: Vec<_> = std::mem::take(&mut self.outgoing_messages).into_iter().collect();
+            v.sort_by_key(|(idx, _)| *idx);
+            self.outgoing_messages.extend(v);
+        }
     }
 
     fn has_messages(&self) -> bool {
