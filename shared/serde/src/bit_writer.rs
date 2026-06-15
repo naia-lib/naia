@@ -181,7 +181,12 @@ pub struct VecBitWriter {
     scratch: u32,
     scratch_bits: u32,
     buffer: Vec<u8>,
-    current_bits: u32,
+}
+
+impl Default for VecBitWriter {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl VecBitWriter {
@@ -190,7 +195,6 @@ impl VecBitWriter {
             scratch: 0,
             scratch_bits: 0,
             buffer: Vec::new(),
-            current_bits: 0,
         }
     }
 
@@ -215,7 +219,6 @@ impl BitWrite for VecBitWriter {
     fn write_bit(&mut self, bit: bool) {
         self.scratch |= (bit as u32) << self.scratch_bits;
         self.scratch_bits += 1;
-        self.current_bits += 1;
         if self.scratch_bits == 32 {
             self.flush_word();
         }
@@ -223,7 +226,6 @@ impl BitWrite for VecBitWriter {
 
     #[inline(always)]
     fn write_byte(&mut self, byte: u8) {
-        self.current_bits += 8;
         let available = 32 - self.scratch_bits;
         if available >= 8 {
             self.scratch |= (byte as u32) << self.scratch_bits;
@@ -733,5 +735,106 @@ mod tests {
         assert_eq!(counter.bits_needed(), 300);
         counter.count_bits(701);
         assert!(counter.overflowed());
+    }
+
+    // ─── VecBitWriter: heap-backed writer for >MTU request/response bodies ─────
+    //
+    // VecBitWriter is a from-scratch BitWrite impl. These pin it directly rather
+    // than relying solely on the messaging_16b end-to-end test. The strongest
+    // guarantee is equivalence to the trusted BitWriter: identical input must
+    // produce identical bytes, which covers every packing path (bit, aligned
+    // byte, word-spanning byte, and the to_bytes tail flush) at once.
+
+    use super::VecBitWriter;
+
+    /// Drives one writer with a fixed, path-exercising sequence of writes:
+    /// leading bits to misalign the scratch register, then bytes that must
+    /// span the 32-bit word boundary, then a few trailing bits.
+    fn drive_mixed_writes<W: BitWrite>(w: &mut W) {
+        // 3 leading bits -> scratch at an odd offset so every following byte
+        // straddles a word boundary (the `available < 8` path).
+        for &b in &[true, false, true] {
+            w.write_bit(b);
+        }
+        let payload: &[u8] = &[
+            0x00, 0xFF, 0xA5, 0x5A, 0x13, 0x80, 0x01, 0x7E, 0xC3, 0x42, 0x99, 0x6D,
+        ];
+        for &byte in payload {
+            w.write_byte(byte);
+        }
+        // trailing bits that leave the final word partially filled (tail flush).
+        for &b in &[true, true, false, true, false] {
+            w.write_bit(b);
+        }
+    }
+
+    #[test]
+    fn vec_bit_writer_is_byte_identical_to_bit_writer() {
+        let mut bw = BitWriter::with_max_capacity();
+        let mut vw = VecBitWriter::new();
+        drive_mixed_writes(&mut bw);
+        drive_mixed_writes(&mut vw);
+        assert_eq!(
+            bw.to_bytes(),
+            vw.to_bytes(),
+            "VecBitWriter must produce byte-identical output to BitWriter for the same writes"
+        );
+    }
+
+    #[test]
+    fn vec_bit_writer_round_trips_through_bit_reader() {
+        use crate::bit_reader::BitReader;
+        let mut vw = VecBitWriter::new();
+        drive_mixed_writes(&mut vw);
+        let buffer = vw.to_bytes();
+
+        // Re-read in the exact order written: 3 bits, 12 bytes (as 8 bits LSB
+        // first), 5 bits.
+        let mut reader = BitReader::new(&buffer);
+        for &b in &[true, false, true] {
+            assert_eq!(reader.read_bit().unwrap(), b);
+        }
+        let payload: &[u8] = &[
+            0x00, 0xFF, 0xA5, 0x5A, 0x13, 0x80, 0x01, 0x7E, 0xC3, 0x42, 0x99, 0x6D,
+        ];
+        for &byte in payload {
+            for bit in 0..8usize {
+                assert_eq!(reader.read_bit().unwrap(), (byte >> bit) & 1 != 0);
+            }
+        }
+        for &b in &[true, true, false, true, false] {
+            assert_eq!(reader.read_bit().unwrap(), b);
+        }
+    }
+
+    #[test]
+    fn vec_bit_writer_handles_large_payloads_past_the_mtu() {
+        use crate::bit_reader::BitReader;
+        // 5000 bytes — the messaging_16b payload size, far beyond BitWriter's
+        // fixed 430-byte buffer. This is the whole reason VecBitWriter exists.
+        let payload: Vec<u8> = (0..5000u32).map(|i| (i % 251) as u8).collect();
+        let mut vw = VecBitWriter::new();
+        for &byte in &payload {
+            vw.write_byte(byte);
+        }
+        let buffer = vw.to_bytes();
+
+        let mut reader = BitReader::new(&buffer);
+        let mut decoded = Vec::with_capacity(payload.len());
+        for _ in 0..payload.len() {
+            let mut byte = 0u8;
+            for bit in 0..8u8 {
+                if reader.read_bit().unwrap() {
+                    byte |= 1 << bit;
+                }
+            }
+            decoded.push(byte);
+        }
+        assert_eq!(decoded, payload, "large payload must round-trip intact");
+    }
+
+    #[test]
+    fn vec_bit_writer_empty_produces_no_bytes() {
+        assert_eq!(VecBitWriter::new().to_bytes().len(), 0);
     }
 }

@@ -226,10 +226,12 @@ Feature: Messaging Channel Semantics
 
     # [messaging-16b] — Request/response fragmentation.
     # Requires protocol_with_large_req_resp() which registers LargeTestRequest/
-    # LargeTestResponse. The Background `Given a server is running` always
-    # starts the server with protocol() before any Scenario Given can fire, so
-    # there is no way to override the protocol within the BDD world. Covered
-    # end-to-end by messaging_16b_reliable_request_response_fragmentation in
+    # LargeTestResponse. As the BDD harness is currently structured, the
+    # Background `Given a server is running` starts the server with protocol()
+    # before any Scenario Given fires, and no step exists to restart it with a
+    # different protocol — so this scenario can't be expressed against the shared
+    # BDD world without new harness plumbing. It is covered end-to-end by
+    # messaging_16b_reliable_request_response_fragmentation in
     # test/harness/contract_tests/integration_only/03_messaging.rs.
     @PolicyOnly
     @Scenario(14)
