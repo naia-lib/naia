@@ -224,14 +224,25 @@ Feature: Messaging Channel Semantics
       When the server sends a large message on a reliable channel
       Then no panic occurs
 
+    # [messaging-16b] — Request/response fragmentation.
+    # Requires protocol_with_large_req_resp() which registers LargeTestRequest/
+    # LargeTestResponse. The Background `Given a server is running` always
+    # starts the server with protocol() before any Scenario Given can fire, so
+    # there is no way to override the protocol within the BDD world. Covered
+    # end-to-end by messaging_16b_reliable_request_response_fragmentation in
+    # test/harness/contract_tests/integration_only/03_messaging.rs.
+    @PolicyOnly
     @Scenario(14)
+    Scenario: [messaging-16b] Large request/response bodies are fragmented and reassembled transparently
+
+    @Scenario(15)
     Scenario: [messaging-17] OrderedReliable channel deduplicates retransmitted messages
       Given a server is running
       And a client connects
       When the server sends message A on an ordered reliable channel
       Then the client receives message A exactly once
 
-    @Scenario(15)
+    @Scenario(16)
     Scenario: [messaging-18] EntityProperty message buffering
       Given a server is running
       And a client connects
@@ -245,10 +256,10 @@ Feature: Messaging Channel Semantics
     # ticks) never actually elapses. Fixing it requires TestClock injection
     # which the harness does not support.
     @PolicyOnly
-    @Scenario(16)
+    @Scenario(17)
     Scenario: [messaging-19] EntityProperty message TTL
 
-    @Scenario(17)
+    @Scenario(18)
     Scenario: [messaging-20] EntityProperty buffer caps with FIFO eviction
       Given a server is running
       And a client connects
@@ -257,14 +268,14 @@ Feature: Messaging Channel Semantics
       And the client collects all entity-command messages
       Then the client received exactly 128 entity-command messages
 
-    @Scenario(18)
+    @Scenario(19)
     Scenario: [messaging-23] Unanswered request does not crash the client
       Given a server is running
       And a client connects
       When the client sends a request
       Then no panic occurs
 
-    @Scenario(19)
+    @Scenario(20)
     Scenario: [messaging-24] Client disconnect cancels its pending requests without panic
       Given a server is running
       And a client connects
@@ -272,7 +283,7 @@ Feature: Messaging Channel Semantics
       And the client disconnects
       Then the server has 0 connected clients
 
-    @Scenario(20)
+    @Scenario(21)
     Scenario: [messaging-25] Deduplicated request delivers exactly one response
       Given a server is running
       And a client connects
@@ -280,7 +291,7 @@ Feature: Messaging Channel Semantics
       And the server responds to the request
       Then the client receives the response for that request
 
-    @Scenario(21)
+    @Scenario(22)
     Scenario: [messaging-26] Requests on ordered channel are received by the server
       Given a server is running
       And a client connects
@@ -288,7 +299,7 @@ Feature: Messaging Channel Semantics
       And the server responds to the request
       Then the client receives the response for that request
 
-    @Scenario(22)
+    @Scenario(23)
     Scenario: [messaging-27] Client can send a fire-and-forget request without panic
       Given a server is running
       And a client connects
@@ -296,7 +307,7 @@ Feature: Messaging Channel Semantics
       Then the operation succeeds
 
 
-    @Scenario(23)
+    @Scenario(24)
     Scenario: [messaging-28] TickBuffered input arrives at correct server tick under 10% packet loss
       Given a server is running
       And a client connects
