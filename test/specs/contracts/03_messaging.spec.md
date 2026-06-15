@@ -293,6 +293,12 @@ For UnorderedReliable / OrderedReliable / SequencedReliable:
 - If a user attempts to send a message requiring more than the bound, Naia MUST return `Result::Err`. (user-initiated)
 - If Naia internally attempts to exceed this bound, Naia MUST panic. (framework invariant)
 
+### [messaging-16b] — Request/response bodies exceeding MTU MUST be fragmented transparently
+
+**Obligations:**
+- **t1**: A `send_request` payload larger than the MTU (~430 bytes) MUST be fragmented and reassembled transparently; the server MUST receive the complete body via `read_request`.
+- **t2**: A `send_response` payload larger than the MTU MUST be fragmented and reassembled transparently; the client MUST receive the complete body via `receive_response`.
+
 ---
 
 ## Wrap-around safety
@@ -597,6 +603,8 @@ Summary of test obligations from contracts above:
 - `messaging-15.t1`: Unreliable oversize send returns Err (no fragmenting)
 - `messaging-16.t1`: Reliable fragmentation works up to 2^16 fragments
 - `messaging-16.t2`: Reliable oversize beyond bound returns Err
+- `messaging-16b.t1`: Large request body arrives complete after fragmented reassembly
+- `messaging-16b.t2`: Large response body arrives complete after fragmented reassembly
 
 **Wrap-around:**
 - `messaging-17.t1`: Wrap-around does not break ordering or sequencing contracts

@@ -14,10 +14,11 @@ use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
 use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
 
 use naia_test_harness::{
-    protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
-    ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    EntityCommandMessage, ExpectCtx, LargeTestMessage, Position, Scenario, ServerAuthEvent,
-    ServerConnectEvent, ServerDisconnectEvent, ToTicks,
+    protocol, protocol_with_large_req_resp, Auth, ClientConnectEvent, ClientDisconnectEvent,
+    ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
+    ClientKey, ClientRejectEvent, EntityCommandMessage, ExpectCtx, LargeTestMessage,
+    LargeTestRequest, LargeTestResponse, Position, Scenario, ServerAuthEvent, ServerConnectEvent,
+    ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
@@ -276,6 +277,100 @@ fn messaging_16_reliable_fragmentation_allowed() {
             Some(())
         },
     );
+}
+
+/// Reliable channels fragment large REQUEST and RESPONSE payloads end-to-end
+/// Contract: [messaging-16]
+///
+/// Given a `RequestResponseChannel` (UnorderedReliable); when a client sends a
+/// request whose serialised body exceeds the MTU (~430 bytes) and the server
+/// echoes an equally-large response; then both payloads are fragmented across
+/// multiple packets, reassembled correctly, and arrive with their full content
+/// intact.
+///
+/// This exercises the three code paths added in naia dev `29593924`:
+/// - `VecBitWriter` for heap-backed request/response body serialisation
+/// - `ReliableMessageSender::send_or_fragment` — fragmentation gate on the
+///   `RequestOrResponse` wrapper message
+/// - `ReliableSender::collect_messages` sort — monotonic index order under
+///   retransmission
+#[test]
+fn messaging_16b_reliable_request_response_fragmentation() {
+    let mut scenario = Scenario::new();
+    let test_protocol = protocol_with_large_req_resp();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    // Client sends a 5 000-byte request — well above the ~430-byte MTU.
+    let response_key = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client| {
+            client
+                .send_request::<RequestResponseChannel, LargeTestRequest>(
+                    &LargeTestRequest::new(5000),
+                )
+                .expect("large request must be accepted by reliable channel")
+        })
+    });
+
+    // Server waits for the fragmented request to reassemble and reads it.
+    let response_send_key = scenario.expect_msg(
+        "messaging-16b.t1: server receives large fragmented request intact",
+        |ctx| {
+            ctx.server(|server| {
+                for (recv_client_key, resp_id, request) in
+                    server.read_request::<RequestResponseChannel, LargeTestRequest>()
+                {
+                    if recv_client_key == client_a_key {
+                        assert_eq!(
+                            request.payload.len(),
+                            5000,
+                            "request payload must arrive complete after reassembly"
+                        );
+                        return Some(naia_shared::ResponseSendKey::new(resp_id));
+                    }
+                }
+                None
+            })
+        },
+    );
+
+    // Server sends a 5 000-byte response — exercises the response fragmentation path.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.send_response(&response_send_key, &LargeTestResponse::new(5000));
+        });
+    });
+
+    // Client waits for the fragmented response to arrive.
+    scenario.expect_msg(
+        "messaging-16b.t2: client receives large fragmented response intact",
+        |ctx| {
+            ctx.client(client_a_key, |client| client.has_response(&response_key).then_some(()))
+        },
+    );
+
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client| {
+            let response = client
+                .receive_response::<LargeTestResponse>(&response_key)
+                .expect("response must be available after has_response returned true");
+            assert_eq!(
+                response.payload.len(),
+                5000,
+                "response payload must arrive complete after reassembly"
+            );
+        });
+    });
 }
 
 /// EntityProperty messages buffer until entity is mapped

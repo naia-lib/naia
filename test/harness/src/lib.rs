@@ -25,8 +25,9 @@ pub use harness::{
     ClientSpawnEntityEvent, ClientTickEvent, ClientUnpublishEntityEvent,
 };
 pub use test_protocol::{
-    protocol, Auth, EntityCommandMessage, ImmutableLabel, LargeTestMessage, Position,
-    TestMatchState, TestPlayerSelection, TestScore, Velocity,
+    protocol, protocol_with_large_req_resp, Auth, EntityCommandMessage, ImmutableLabel,
+    LargeTestMessage, LargeTestRequest, LargeTestResponse, Position, TestMatchState,
+    TestPlayerSelection, TestScore, Velocity,
 };
 
 // Re-export demo_world types for tests

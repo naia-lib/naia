@@ -92,6 +92,37 @@ impl naia_shared::Request for TestRequest {
 
 impl naia_shared::Response for TestResponse {}
 
+// Large request/response pair for fragmentation testing (messaging-16.t3).
+// Payloads exceed the ~430-byte MTU so they are fragmented via VecBitWriter +
+// ReliableMessageSender::send_or_fragment before transmission.
+#[derive(Message)]
+pub struct LargeTestRequest {
+    pub payload: Vec<u8>,
+}
+
+impl LargeTestRequest {
+    pub fn new(size: usize) -> Self {
+        Self { payload: vec![0xABu8; size] }
+    }
+}
+
+#[derive(Message)]
+pub struct LargeTestResponse {
+    pub payload: Vec<u8>,
+}
+
+impl LargeTestResponse {
+    pub fn new(size: usize) -> Self {
+        Self { payload: vec![0xCDu8; size] }
+    }
+}
+
+impl naia_shared::Request for LargeTestRequest {
+    type Response = LargeTestResponse;
+}
+
+impl naia_shared::Response for LargeTestResponse {}
+
 // Enum message — validates #[derive(Message)] on enums (issue #163).
 // Covers all three variant styles: Unit, Named, Unnamed.
 #[derive(Message)]
@@ -233,6 +264,63 @@ pub fn protocol() -> Protocol {
         .add_message::<EntityCommandMessage>()
         .add_message::<TestRequest>()
         .add_message::<TestResponse>()
+        .add_channel::<ReliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnreliableChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedUnreliable,
+        )
+        .add_channel::<OrderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<UnorderedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<SequencedChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::SequencedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<TickBufferedChannel>(
+            ChannelDirection::ClientToServer,
+            ChannelMode::TickBuffered(TickBufferSettings::default()),
+        )
+        .add_channel::<RequestResponseChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_channel::<ServerToClientChannel>(
+            ChannelDirection::ServerToClient,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .enable_client_authoritative_entities()
+        .build()
+}
+
+/// Extended protocol that adds `LargeTestRequest`/`LargeTestResponse` for the
+/// request/response fragmentation test (`messaging_16b`).  Kept separate from
+/// `protocol()` so the main protocol's fingerprint is stable and the mismatch
+/// detection tests are unaffected.
+pub fn protocol_with_large_req_resp() -> Protocol {
+    Protocol::builder()
+        .add_component::<Position>()
+        .add_component::<Velocity>()
+        .add_component::<ImmutableLabel>()
+        .add_component::<ImmutableSeed>()
+        .add_resource::<TestScore>()
+        .add_resource::<TestMatchState>()
+        .add_resource::<TestPlayerSelection>()
+        .add_message::<Auth>()
+        .add_message::<TestMessage>()
+        .add_message::<LargeTestMessage>()
+        .add_message::<EntityCommandMessage>()
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>()
+        .add_message::<LargeTestRequest>()
+        .add_message::<LargeTestResponse>()
         .add_channel::<ReliableChannel>(
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
