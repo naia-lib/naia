@@ -77,8 +77,8 @@ pub use naia_bevy_shared::{
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},
-    transport, ClientConfig, CommandHistory, DisconnectReason, JitterBufferType, NaiaClientError,
-    Publicity,
+    transport, ClientConfig, CommandHistory, ConnectAttempt, DisconnectAction, DisconnectReason,
+    JitterBufferType, NaiaClientError, Publicity, ReconnectPolicy,
 };
 
 pub mod events;
@@ -90,7 +90,6 @@ mod commands;
 mod component_event_registry;
 mod components;
 mod plugin;
-mod reconnect;
 mod resource_sync;
 mod systems;
 
@@ -99,7 +98,6 @@ pub use client::{take_received_updates_of_kind, Client, ClientWrapper};
 pub use commands::{ClientCommandsExt, CommandsExt};
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;
-pub use reconnect::{ConnectAttempt, DisconnectAction, ReconnectPolicy};
 
 /// Phantom tag type for single-client Bevy apps.
 ///

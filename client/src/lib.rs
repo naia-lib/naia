@@ -125,6 +125,7 @@ pub extern "Rust" fn client_processed_spawn_increment() {
     CLIENT_PROCESSED_SPAWN.fetch_add(1, Ordering::Relaxed);
 }
 mod handshake;
+mod reconnect;
 mod request;
 mod tick_events;
 mod world;
@@ -138,6 +139,7 @@ cfg_if! {
 
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
+pub use reconnect::{ConnectAttempt, DisconnectAction, ReconnectPolicy};
 pub use command_history::CommandHistory;
 pub use connection::jitter_buffer::JitterBufferType;
 pub use error::NaiaClientError;

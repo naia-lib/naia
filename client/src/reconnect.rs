@@ -1,12 +1,13 @@
 //! Topology-free connection-lifecycle primitives: retry pacing + disconnect
 //! classification.
 //!
-//! naia owns transport, the Bevy client plugin, and [`connection_status`], but
-//! historically stopped at [`connect`]. The reusable bit it lacked is the
-//! *connection lifecycle* — the mechanics of (a) how fast to retry a connect
-//! attempt and (b) whether a given disconnect should be retried at all. Those
-//! mechanics are generic networking wisdom, independent of any application's
-//! deployment topology, so they live here.
+//! naia owns transport, the client, and [`ConnectionStatus`], but historically
+//! stopped at [`connect`]. The reusable bit it lacked is the *connection
+//! lifecycle* — the mechanics of (a) how fast to retry a connect attempt and
+//! (b) whether a given disconnect should be retried at all. Those mechanics are
+//! generic networking wisdom, independent of any application's deployment
+//! topology, so they live here in the core client (the Bevy adapter merely
+//! re-exports them).
 //!
 //! [`ReconnectPolicy`] owns ONLY the mechanics. The consumer keeps ownership of
 //! every *action*: how to actually perform a connect attempt (transport / auth
@@ -14,12 +15,12 @@
 //! The policy communicates its decisions through small returned enums
 //! ([`ConnectAttempt`], [`DisconnectAction`]) that the consumer matches on.
 //!
-//! [`connection_status`]: crate::Client::connection_status
+//! [`ConnectionStatus`]: crate::ConnectionStatus
 //! [`connect`]: crate::Client::connect
 
 use std::time::Duration;
 
-use naia_bevy_shared::Timer;
+use naia_shared::Timer;
 
 use crate::DisconnectReason;
 
@@ -49,9 +50,9 @@ pub enum DisconnectAction {
 ///
 /// The consumer owns this inside its own resource/struct (exactly as a hand-
 /// rolled retry would own a bare [`Timer`]) and calls [`poll_attempt`] each
-/// frame while it wants to be connecting. The first attempt of a fresh cycle
-/// fires immediately; subsequent retries are paced behind the retry interval so
-/// a failed handshake doesn't hammer the server.
+/// loop iteration while it wants to be connecting. The first attempt of a fresh
+/// cycle fires immediately; subsequent retries are paced behind the retry
+/// interval so a failed handshake doesn't hammer the server.
 ///
 /// Disconnect classification is the stateless [`classify_disconnect`]
 /// associated function — it encodes only the generic "Kicked is terminal, every
@@ -129,7 +130,7 @@ impl ReconnectPolicy {
 mod tests {
     use std::time::Duration;
 
-    use naia_bevy_shared::TestClock;
+    use naia_shared::TestClock;
 
     use crate::DisconnectReason;
 
