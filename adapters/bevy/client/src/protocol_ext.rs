@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_ecs::component::{Component, Mutable};
 
-use naia_bevy_shared::{Protocol, Replicate};
+use naia_bevy_shared::{Protocol, Replicate, ReplicateBundle};
 
 use crate::app_ext::AppRegisterComponentEvents;
 
@@ -22,16 +22,27 @@ use crate::app_ext::AppRegisterComponentEvents;
 /// trait is the tier-specific extension for the client side.  Server-side
 /// callers use `ProtocolServerExt::add_component` (in `naia-bevy-server`).
 ///
+/// `add_bundle` bakes in the bundle event installer (no wire registration —
+/// a bundle is a tuple of already-registered components; only the bevy event
+/// channels need setting up).  Server-side callers use
+/// `ProtocolServerExt::add_bundle`.
+///
 /// # Usage
 /// ```ignore
 /// // in a protocol-builder function called with a concrete T:
 /// protocol.add_component::<Game, NetworkedPosition>();
+/// protocol.add_bundle::<Game, (AvatarUnit, NetworkedTileTarget)>();
 /// ```
 pub trait ProtocolClientExt {
     fn add_component<T, C>(&mut self) -> &mut Self
     where
         T: Send + Sync + 'static,
         C: Replicate + Component<Mutability = Mutable>;
+
+    fn add_bundle<T, B>(&mut self) -> &mut Self
+    where
+        T: Send + Sync + 'static,
+        B: ReplicateBundle;
 }
 
 impl ProtocolClientExt for Protocol {
@@ -48,6 +59,21 @@ impl ProtocolClientExt for Protocol {
         // PhantomData), so the Arc stores no heap data beyond the vtable.
         self.push_client_event_installer(Arc::new(|app| {
             app.add_component_events::<T, C>();
+        }));
+
+        self
+    }
+
+    fn add_bundle<T, B>(&mut self) -> &mut Self
+    where
+        T: Send + Sync + 'static,
+        B: ReplicateBundle,
+    {
+        // Bundles are tuples of already-registered components — no wire
+        // registration needed.  Only the bevy event channels need setting up,
+        // which `add_bundle_events::<T, B>()` does.
+        self.push_client_event_installer(Arc::new(|app| {
+            app.add_bundle_events::<T, B>();
         }));
 
         self

@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use bevy_ecs::component::{Component, Mutable};
 
-use naia_bevy_shared::{Protocol, Replicate};
+use naia_bevy_shared::{Protocol, Replicate, ReplicateBundle};
 
 use crate::app_ext::AppRegisterComponentEvents;
 
@@ -21,14 +21,24 @@ use crate::app_ext::AppRegisterComponentEvents;
 /// trait is the tier-specific extension for the server side; client-side callers
 /// use `ProtocolClientExt::add_component` (in `naia-bevy-client`).
 ///
+/// `add_bundle` bakes in the bundle event installer (no wire registration —
+/// a bundle is a tuple of already-registered components; only the bevy event
+/// channels need setting up).  Client-side callers use
+/// `ProtocolClientExt::add_bundle`.
+///
 /// # Usage
 /// ```ignore
 /// protocol.add_component::<NetworkedPosition>();
+/// protocol.add_bundle::<(FileSystemEntry, FileSystemRootChild)>();
 /// ```
 pub trait ProtocolServerExt {
     fn add_component<C>(&mut self) -> &mut Self
     where
         C: Replicate + Component<Mutability = Mutable>;
+
+    fn add_bundle<B>(&mut self) -> &mut Self
+    where
+        B: ReplicateBundle;
 }
 
 impl ProtocolServerExt for Protocol {
@@ -44,6 +54,20 @@ impl ProtocolServerExt for Protocol {
         // the Arc stores no heap data beyond the vtable.
         self.push_server_event_installer(Arc::new(|app| {
             app.add_component_events::<C>();
+        }));
+
+        self
+    }
+
+    fn add_bundle<B>(&mut self) -> &mut Self
+    where
+        B: ReplicateBundle,
+    {
+        // Bundles are tuples of already-registered components — no wire
+        // registration needed.  Only the bevy event channels need setting up,
+        // which `add_bundle_events::<B>()` does.
+        self.push_server_event_installer(Arc::new(|app| {
+            app.add_bundle_events::<B>();
         }));
 
         self
