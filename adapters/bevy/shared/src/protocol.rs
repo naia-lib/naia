@@ -1,5 +1,6 @@
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
+use bevy_app::App;
 use bevy_ecs::component::{Component, Mutable};
 
 use naia_shared::{
@@ -14,6 +15,7 @@ pub struct Protocol {
     inner: InnerProtocol,
     world_data: Option<WorldData>,
     snapshot_readers: SnapshotReaderRegistry,
+    client_event_installers: Vec<Arc<dyn Fn(&mut App) + Send + Sync>>,
 }
 
 impl Default for Protocol {
@@ -22,6 +24,7 @@ impl Default for Protocol {
             inner: InnerProtocol::default(),
             world_data: Some(WorldData::new()),
             snapshot_readers: SnapshotReaderRegistry::new(),
+            client_event_installers: Vec::new(),
         }
     }
 }
@@ -148,6 +151,24 @@ impl Protocol {
 
     fn check_lock(&self) {
         self.inner.check_lock();
+    }
+
+    /// Store a type-erased client-side event-installer closure.  Called by
+    /// `ProtocolClientExt::add_component_with_client_events` (in
+    /// `naia-bevy-client`).  The closure names no client type, so there is no
+    /// layering cycle between `naia-bevy-shared` and `naia-bevy-client`.
+    pub fn push_client_event_installer(&mut self, f: Arc<dyn Fn(&mut App) + Send + Sync>) {
+        self.client_event_installers.push(f);
+    }
+
+    /// Drain and return every installer accumulated by calls to
+    /// `push_client_event_installer`.  The caller (`NaiaClientPlugin::<T>::build`)
+    /// invokes them after `ComponentEventRegistry<T>` has been inserted into the
+    /// `App`, and before the `Protocol` is consumed by `into()`.
+    pub fn take_client_event_installers(
+        &mut self,
+    ) -> Vec<std::sync::Arc<dyn Fn(&mut App) + Send + Sync>> {
+        std::mem::take(&mut self.client_event_installers)
     }
 
     pub fn build(&mut self) -> Self {

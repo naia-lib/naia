@@ -86,6 +86,11 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
 
         app.insert_resource(world_data);
 
+        // Take the client-event installers before Protocol is consumed by
+        // `into()`.  They will be applied after ComponentEventRegistry<T> is
+        // initialized below.
+        let client_event_installers = config.protocol.take_client_event_installers();
+
         let client = Client::<Entity>::new(config.client_config, config.protocol.into());
         let client = ClientWrapper::<T>::new(client);
 
@@ -94,7 +99,16 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_plugins(SharedPlugin::<T>::new())
             // RESOURCES //
             .insert_resource(client)
-            .init_resource::<ComponentEventRegistry<T>>()
+            .init_resource::<ComponentEventRegistry<T>>();
+
+        // Apply component-event installers captured during protocol build.
+        // ComponentEventRegistry<T> is now present in the world, so
+        // add_component_events::<T, C>() can safely look it up.
+        for installer in client_event_installers {
+            installer(app);
+        }
+
+        app
             // EVENTS //
             .add_message::<ConnectEvent<T>>()
             .add_message::<DisconnectEvent<T>>()
