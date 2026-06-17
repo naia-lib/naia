@@ -28,6 +28,7 @@ mod plugin;
 mod protocol;
 mod protocol_plugin;
 mod replicated_resource;
+mod snapshot_reader_registry;
 mod system_set;
 mod world_data;
 mod world_op_command;
@@ -35,6 +36,7 @@ mod world_proxy;
 
 pub use bundle::ReplicateBundle;
 pub use replicated_resource::ReplicatedResource;
+pub use snapshot_reader_registry::SnapshotReaderRegistry;
 pub use world_op_command::WorldOpCommand;
 
 pub use change_detection::{on_despawn, on_host_owned_added, HostSyncEvent};

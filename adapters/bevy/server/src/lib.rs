@@ -81,9 +81,9 @@ pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
     HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
     Instant, ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateBundle, ReplicatedComponent, ResponseSendKey, SendPackets, SnapshotWorld,
-    Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef,
-    WorldRefType, WorldToHostSync, WorldUpdate,
+    Replicate, ReplicateBundle, ReplicatedComponent, ResponseSendKey, SendPackets,
+    SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
+    WorldProxy, WorldProxyMut, WorldRef, WorldRefType, WorldToHostSync, WorldUpdate,
 };
 pub use naia_server::{
     pipeline_actors,
@@ -119,6 +119,7 @@ mod plugin_full;
 mod resource_sync;
 mod server;
 mod sim_converter;
+mod snapshot_builder;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
@@ -137,6 +138,7 @@ pub use plugin_full::{
 };
 pub use server::Server;
 pub use sim_converter::SimConverter;
+pub use snapshot_builder::{build_snapshot, build_snapshot_full};
 
 /// Call `listen` on the naia server resource directly via the App,
 /// before any systems run. Use this when you want to initialize the

@@ -7,12 +7,13 @@ use naia_shared::{
     LinkConditionerConfig, Message, Protocol as InnerProtocol, Replicate, Request,
 };
 
-use crate::{ProtocolPlugin, WorldData};
+use crate::{snapshot_reader_registry::SnapshotReaderRegistry, ProtocolPlugin, WorldData};
 
 #[derive(Clone)]
 pub struct Protocol {
     inner: InnerProtocol,
     world_data: Option<WorldData>,
+    snapshot_readers: SnapshotReaderRegistry,
 }
 
 impl Default for Protocol {
@@ -20,6 +21,7 @@ impl Default for Protocol {
         Self {
             inner: InnerProtocol::default(),
             world_data: Some(WorldData::new()),
+            snapshot_readers: SnapshotReaderRegistry::new(),
         }
     }
 }
@@ -98,7 +100,22 @@ impl Protocol {
             .as_mut()
             .expect("shouldn't happen")
             .put_kind::<C>(&ComponentKind::of::<C>());
+        self.snapshot_readers.register::<C>();
         self
+    }
+
+    /// Return a reference to the `SnapshotReaderRegistry` built up by
+    /// `add_component` calls.  Used by the server's `build_snapshot` helper
+    /// and by the `#9` desync harness in diax.
+    pub fn snapshot_reader_registry(&self) -> &SnapshotReaderRegistry {
+        &self.snapshot_readers
+    }
+
+    /// Take the `SnapshotReaderRegistry` out of this `Protocol`.  For
+    /// consumers that build the registry once and then need to hand it off
+    /// without cloning.  Leaves an empty registry in place.
+    pub fn take_snapshot_reader_registry(&mut self) -> SnapshotReaderRegistry {
+        std::mem::take(&mut self.snapshot_readers)
     }
 
     /// Register `R` as a Replicated Resource (see `_AGENTS/RESOURCES_PLAN.md`).
