@@ -445,6 +445,7 @@ mod tests {
                     _c: &mut dyn LocalEntityAndGlobalEntityConverterMut,
                 ) {
                 }
+                fn write_fields_for_comparison(&self, _w: &mut dyn BitWrite) {}
                 fn read_apply_update(
                     &mut self,
                     _c: &dyn LocalEntityAndGlobalEntityConverter,
