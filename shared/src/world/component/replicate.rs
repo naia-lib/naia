@@ -146,6 +146,13 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
         writer: &mut dyn BitWrite,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
     );
+    /// Write all field values unconditionally, regardless of Property ownership
+    /// mode.  Never panics for `LocalProperty` or `RemoteOwned` fields.
+    ///
+    /// Used by the desync harness to produce byte-exact snapshots for comparison
+    /// on CLIENT-side timelines where properties may be in `RemoteOwned` or
+    /// `Local` state rather than `HostOwned`.
+    fn write_fields_for_comparison(&self, writer: &mut dyn BitWrite);
     /// Reads data from an incoming packet, sufficient to sync the in-memory
     /// Component with it's replica on the Server
     fn read_apply_update(

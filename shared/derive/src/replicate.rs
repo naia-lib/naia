@@ -182,6 +182,8 @@ pub fn replicate_impl(
     } else {
         get_write_update_method(&enum_name, &properties, &struct_type)
     };
+    let write_fields_for_comparison_method =
+        get_write_fields_for_comparison_method(&properties, &struct_type);
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
     let split_update_method =
@@ -274,6 +276,7 @@ pub fn replicate_impl(
                 #set_mutator_method
                 #write_method
                 #write_update_method
+                #write_fields_for_comparison_method
                 #read_apply_update_method
                 #read_apply_field_update_method
                 #relations_waiting_method
@@ -1384,6 +1387,48 @@ fn get_write_update_method(
 
     quote! {
         fn write_update(&self, diff_mask: &DiffMask, writer: &mut dyn BitWrite, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
+            #output
+        }
+    }
+}
+
+/// Emit a `write_fields_for_comparison` implementation that writes every field
+/// unconditionally via `Property::write_for_comparison` (which never panics for
+/// `LocalProperty` or `RemoteOwned`, unlike `Property::write`).  Used by the
+/// desync harness to capture client-side component bytes for byte-exact
+/// comparison.
+fn get_write_fields_for_comparison_method(
+    properties: &[Property],
+    struct_type: &StructType,
+) -> TokenStream {
+    let mut output = quote! {};
+
+    for property in properties.iter() {
+        let field_name = get_field_name(property, struct_type);
+        let new_right = match property {
+            Property::Normal(_) => quote! {
+                Property::write_for_comparison(&self.#field_name, writer);
+            },
+            Property::Entity(_) => {
+                // Entity-reference fields: emit a fixed placeholder byte.
+                // Entity ids differ across timelines so they can't be
+                // byte-compared by raw value; the placeholder keeps the byte
+                // stream layout consistent without a false divergence.
+                quote! {
+                    0u8.ser(writer);
+                }
+            },
+            Property::NonReplicated(_) => {
+                // Non-replicated fields are not part of the wire state; skip.
+                quote! {}
+            }
+        };
+        let new_output = quote! { #output #new_right };
+        output = new_output;
+    }
+
+    quote! {
+        fn write_fields_for_comparison(&self, writer: &mut dyn BitWrite) {
             #output
         }
     }

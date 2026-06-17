@@ -32,7 +32,8 @@ pub use naia_serde::{
     FileBitWriter, OutgoingPacket, OwnedBitReader, Serde, SerdeBevyClient, SerdeBevyServer,
     SerdeBevyShared, SerdeErr, SerdeFloatConversion, SerdeIntegerConversion, SerdeInternal,
     SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat,
-    UnsignedInteger, UnsignedVariableFloat, UnsignedVariableInteger, MTU_SIZE_BITS, MTU_SIZE_BYTES,
+    UnsignedInteger, UnsignedVariableFloat, UnsignedVariableInteger, VecBitWriter, MTU_SIZE_BITS,
+    MTU_SIZE_BYTES,
 };
 pub use naia_socket_shared::{
     generate_identity_token, link_condition_logic, IdentityToken, Instant, LinkConditionerConfig,

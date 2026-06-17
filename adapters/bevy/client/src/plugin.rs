@@ -91,6 +91,13 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
         // initialized below.
         let client_event_installers = config.protocol.take_client_event_installers();
 
+        // Extract the SnapshotReaderRegistry before Protocol is consumed.
+        // Installed as a Bevy resource so the `#9` desync harness can capture
+        // registry-driven `entity → {ComponentKind → bytes}` records on the
+        // client-side timelines (confirmed + predicted) without needing to
+        // reach into the consumed Protocol.
+        let snapshot_readers = config.protocol.take_snapshot_reader_registry();
+
         let client = Client::<Entity>::new(config.client_config, config.protocol.into());
         let client = ClientWrapper::<T>::new(client);
 
@@ -99,6 +106,7 @@ impl<T: Sync + Send + 'static> PluginType for Plugin<T> {
             .add_plugins(SharedPlugin::<T>::new())
             // RESOURCES //
             .insert_resource(client)
+            .insert_resource(snapshot_readers)
             .init_resource::<ComponentEventRegistry<T>>();
 
         // Apply component-event installers captured during protocol build.

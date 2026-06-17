@@ -118,6 +118,18 @@ impl<T: Serde> Property<T> {
         }
     }
 
+    /// Writes the inner value unconditionally regardless of ownership mode.
+    ///
+    /// Unlike [`write`], this never panics for `LocalProperty` or
+    /// `RemoteOwned` — it always serializes the current inner value.
+    ///
+    /// Used by the desync harness to capture component bytes for comparison on
+    /// CLIENT-side timelines (confirmed + predicted) where properties are in
+    /// `RemoteOwned` or `Local` state rather than `HostOwned`.
+    pub fn write_for_comparison(&self, writer: &mut dyn BitWrite) {
+        self.inner().ser(writer);
+    }
+
     /// Reads from a stream and immediately writes to a stream
     /// Used to buffer updates for later
     pub fn read_write(reader: &mut BitReader, writer: &mut BitWriter) -> Result<(), SerdeErr> {
