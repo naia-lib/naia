@@ -47,7 +47,7 @@ fn bevy_protocol() -> BevyProtocol {
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
         )
-        .add_component::<Position>()
+        .register_component::<Position>()
         .add_resource::<TestScore>()
         .add_resource::<TestPlayerSelection>()
         .enable_client_authoritative_entities()

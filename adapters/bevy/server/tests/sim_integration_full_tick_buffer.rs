@@ -58,7 +58,7 @@ fn protocol() -> BevyProtocol {
             naia_shared::ChannelDirection::ClientToServer,
             naia_shared::ChannelMode::TickBuffered(naia_shared::TickBufferSettings::default()),
         )
-        .add_component::<Position>();
+        .register_component::<Position>();
     p.tick_interval(Duration::from_micros(100));
     p.build()
 }

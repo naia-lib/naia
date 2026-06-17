@@ -257,6 +257,11 @@ impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
         let mut config = self.config.lock().deref_mut().take().unwrap();
 
+        // Take server-event installers before the protocol is consumed by
+        // `into()` or `install_full_pipelining`.  Applied after
+        // `ComponentEventRegistry` is initialized below.
+        let server_event_installers = config.protocol.take_server_event_installers();
+
         let world_data = config.protocol.take_world_data();
         // T2: skip the per-Replicate host-sync change-tracking systems when the
         // app's world hosts no replicated entities (they would be pure no-op
@@ -322,6 +327,14 @@ impl PluginType for Plugin {
             .add_plugins(SharedPlugin::<Singleton>::new())
             // RESOURCES //
             .init_resource::<ComponentEventRegistry>();
+
+        // Apply server component-event installers captured during protocol
+        // build.  `ComponentEventRegistry` is now present in the world, so
+        // `add_component_events::<C>()` can safely look it up.
+        for installer in server_event_installers {
+            installer(app);
+        }
+
         if let Some(impl_) = server_impl {
             app.insert_resource(impl_);
         }

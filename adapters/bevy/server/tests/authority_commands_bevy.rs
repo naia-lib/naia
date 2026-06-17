@@ -49,7 +49,7 @@ fn protocol() -> BevyProtocol {
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
         )
-        .add_component::<Position>();
+        .register_component::<Position>();
     p.tick_interval(Duration::from_micros(100));
     p.build()
 }

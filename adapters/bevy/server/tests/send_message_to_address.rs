@@ -40,7 +40,7 @@ struct Ping {
 
 fn protocol() -> naia_shared::Protocol {
     let mut p = BevyProtocol::builder();
-    p.add_component::<Position>();
+    p.register_component::<Position>();
     p.add_channel::<UnorderedReliableChannel>(
         naia_shared::ChannelDirection::ServerToClient,
         naia_shared::ChannelMode::UnorderedReliable(naia_shared::ReliableSettings::default()),

@@ -18,26 +18,30 @@ use crate::app_ext::AppRegisterComponentEvents;
 /// `Arc<dyn Fn(&mut App) + Send + Sync>` on `Protocol`, which names no client
 /// type — no `naia-bevy-shared → naia-bevy-client` layering cycle.
 ///
+/// The shared `Protocol::register_component` is the wire-only primitive; this
+/// trait is the tier-specific extension for the client side.  Server-side
+/// callers use `ProtocolServerExt::add_component` (in `naia-bevy-server`).
+///
 /// # Usage
 /// ```ignore
 /// // in a protocol-builder function called with a concrete T:
-/// protocol.add_component_with_client_events::<Game, NetworkedPosition>();
+/// protocol.add_component::<Game, NetworkedPosition>();
 /// ```
 pub trait ProtocolClientExt {
-    fn add_component_with_client_events<T, C>(&mut self) -> &mut Self
+    fn add_component<T, C>(&mut self) -> &mut Self
     where
         T: Send + Sync + 'static,
         C: Replicate + Component<Mutability = Mutable>;
 }
 
 impl ProtocolClientExt for Protocol {
-    fn add_component_with_client_events<T, C>(&mut self) -> &mut Self
+    fn add_component<T, C>(&mut self) -> &mut Self
     where
         T: Send + Sync + 'static,
         C: Replicate + Component<Mutability = Mutable>,
     {
-        // Wire registration — same as `protocol.add_component::<C>()`.
-        self.add_component::<C>();
+        // Wire registration — same as `protocol.register_component::<C>()`.
+        self.register_component::<C>();
 
         // Bake the client event installer into the protocol.  `T` and `C` are
         // both known at this exact call site and captured by value (zero-sized

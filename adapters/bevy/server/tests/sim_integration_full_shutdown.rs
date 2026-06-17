@@ -37,7 +37,7 @@ use naia_test_harness::test_protocol::Position;
 
 fn protocol() -> BevyProtocol {
     let mut p = BevyProtocol::builder();
-    p.add_component::<Position>();
+    p.register_component::<Position>();
     p.tick_interval(Duration::from_micros(100));
     p.build()
 }

@@ -29,7 +29,7 @@ use naia_test_harness::test_protocol::Position;
 
 fn protocol() -> naia_shared::Protocol {
     let mut p = BevyProtocol::builder();
-    p.add_component::<Position>();
+    p.register_component::<Position>();
     p.tick_interval(Duration::from_micros(100));
     let bevy_proto = p.build();
     bevy_proto.into()
@@ -153,7 +153,7 @@ fn sim_converter_unknown_entity_returns_error() {
 
 fn protocol_bevy() -> naia_bevy_shared::Protocol {
     let mut p = BevyProtocol::builder();
-    p.add_component::<Position>();
+    p.register_component::<Position>();
     p.tick_interval(Duration::from_micros(100));
     p.build()
 }

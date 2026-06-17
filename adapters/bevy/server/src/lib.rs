@@ -115,6 +115,7 @@ mod components;
 mod host_sync_pipeline;
 mod plugin;
 mod plugin_full;
+mod protocol_ext;
 #[doc(hidden)]
 mod resource_sync;
 mod server;
@@ -123,6 +124,7 @@ mod snapshot_builder;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
+pub use protocol_ext::ProtocolServerExt;
 pub use apply_receive_output::{
     apply_receive_output_pipeline, apply_receive_output_pipeline_with_sim_receiver,
     apply_receive_output_pipeline_with_sim_receiver_split,

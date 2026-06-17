@@ -1,5 +1,5 @@
 //! Per-`ComponentKind` read-and-box registry, captured at
-//! [`Protocol::add_component`] time.
+//! [`Protocol::register_component` / `add_component`] time.
 //!
 //! This is the server-side snapshot-reader substrate: every component
 //! registered via `Protocol::add_component::<C>` has its typed
@@ -56,7 +56,7 @@ impl SnapshotReaderRegistry {
     }
 
     /// Capture the per-`C` read-and-box closure.  Called from
-    /// `Protocol::add_component::<C>()`.
+    /// `Protocol::register_component::<C>()`.
     pub(crate) fn register<C: Replicate + Component<Mutability = Mutable>>(&mut self) {
         let kind = ComponentKind::of::<C>();
         let reader: Arc<ReadAndBoxFn> =

@@ -15,8 +15,8 @@ pub struct ComponentsPlugin;
 impl ProtocolPlugin for ComponentsPlugin {
     fn build(&self, protocol: &mut Protocol) {
         protocol
-            .add_component::<Color>()
-            .add_component::<Position>()
-            .add_component::<Shape>();
+            .register_component::<Color>()
+            .register_component::<Position>()
+            .register_component::<Shape>();
     }
 }

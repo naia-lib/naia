@@ -4,7 +4,7 @@
 //! This is the canonical server-side snapshot-builder that replaces
 //! cyberlith's bespoke `build_snapshot_input` / `SnapshotComponentRegistry`
 //! pair. After Tier A `#1` lands, every `Replicate + Component` registered
-//! via `Protocol::add_component` automatically has a typed reader in
+//! via `Protocol::register_component` / `add_component` automatically has a typed reader in
 //! `SnapshotReaderRegistry`, so "replicated ⟺ has a snapshot reader" holds
 //! by construction.
 //!
@@ -81,7 +81,7 @@ fn assemble(
         };
         let Some(value) = readers.read(kind, &entity_ref) else {
             // Unregistered kind: can only happen during transition or if a
-            // consumer forgets to call `Protocol::add_component::<C>`. After
+            // consumer forgets to call `Protocol::register_component::<C>` / `add_component::<C>`. After
             // Tier A `#1` is fully in place this branch is unreachable for
             // cyberlith, because every `add_component` call captures a reader.
             continue;
