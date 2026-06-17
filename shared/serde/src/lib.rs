@@ -1,5 +1,6 @@
 pub use naia_serde_derive::{
-    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeInternal,
+    Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeDiax, SerdeDiaxShared,
+    SerdeInternal,
 };
 
 mod bit_counter;

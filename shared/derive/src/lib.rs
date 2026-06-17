@@ -32,12 +32,30 @@ pub fn replicate_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::Toke
     replicate_impl(input, shared_crate_name, false)
 }
 
+/// Derives the Replicate trait for a given struct, for the Diax facade.
+/// Mirror of ReplicateBevy: emits `diax_net_shared::` paths and skips the
+/// auto Component impl (the proto crate adds `#[derive(Component)]` itself).
+#[proc_macro_derive(ReplicateDiax, attributes(replicate))]
+pub fn replicate_derive_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let shared_crate_name = quote! { diax_net_shared };
+    replicate_impl(input, shared_crate_name, false)
+}
+
 // Channel
 
 /// Derives the Channel trait for a given struct
 #[proc_macro_derive(Channel)]
 pub fn channel_derive(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_shared };
+    channel_impl(input, shared_crate_name)
+}
+
+/// Derives the Channel trait for a given struct, for the Diax facade.
+/// Emits `diax_net_shared::` paths (Channel has no Bevy flavor; this is the
+/// only thing that lets the proto crates shed their direct `naia-shared` dep).
+#[proc_macro_derive(ChannelDiax)]
+pub fn channel_derive_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let shared_crate_name = quote! { diax_net_shared };
     channel_impl(input, shared_crate_name)
 }
 
@@ -82,5 +100,13 @@ pub fn message_derive_shared(input: proc_macro::TokenStream) -> proc_macro::Toke
 #[proc_macro_derive(MessageBevy)]
 pub fn message_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { naia_bevy_shared };
+    message_impl(input, shared_crate_name, false, false)
+}
+
+/// Derives the Message trait for a given struct, for the Diax facade.
+/// Mirror of MessageBevy: emits `diax_net_shared::` paths.
+#[proc_macro_derive(MessageDiax)]
+pub fn message_derive_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let shared_crate_name = quote! { diax_net_shared };
     message_impl(input, shared_crate_name, false, false)
 }

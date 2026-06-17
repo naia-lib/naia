@@ -51,6 +51,22 @@ pub fn derive_serde_bevy_client(input: proc_macro::TokenStream) -> proc_macro::T
     derive_serde_common(input, serde_crate_name)
 }
 
+/// Emits `diax_net_serde::` paths — for serde-only crates that flip to
+/// `diax_net_serde`. Mirror of `SerdeBevyShared`.
+#[proc_macro_derive(SerdeDiax)]
+pub fn derive_serde_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let serde_crate_name = quote! { diax_net_serde };
+    derive_serde_common(input, serde_crate_name)
+}
+
+/// Emits `diax_net_shared::` paths — for proto crates that flip to
+/// `diax_net_shared` and need their `Serde` derive to resolve there.
+#[proc_macro_derive(SerdeDiaxShared)]
+pub fn derive_serde_diax_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let serde_crate_name = quote! { diax_net_shared };
+    derive_serde_common(input, serde_crate_name)
+}
+
 fn derive_serde_common(
     input: proc_macro::TokenStream,
     serde_crate_name: proc_macro2::TokenStream,

@@ -21,7 +21,10 @@ cfg_if! {
     }
 }
 
-pub use naia_derive::{Channel, Message, MessageBevy, Replicate, ReplicateBevy};
+pub use naia_derive::{
+    Channel, ChannelDiax, Message, MessageBevy, MessageDiax, Replicate, ReplicateBevy,
+    ReplicateDiax,
+};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_serde::bench_serde_counters;
 pub use naia_serde::{
