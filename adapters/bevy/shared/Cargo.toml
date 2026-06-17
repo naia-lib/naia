@@ -20,6 +20,11 @@ advanced_handshake = [ "naia-shared/advanced_handshake" ]
 # tests can drive naia ticks via `TestClock::advance(ms)` between
 # `app.update()` calls.
 test_time = [ "naia-shared/test_time" ]
+# Surfaces the in-process local transport (`transport::local::{LocalTransportHub,
+# FAKE_SERVER_ADDR, ...}`) by forwarding `naia-shared/transport_local`. Lets
+# consumers reach the local transport through this adapter instead of a direct
+# `naia-shared` dep.
+transport_local = [ "naia-shared/transport_local" ]
 
 [dependencies]
 naia-shared = { version = "0.25", path = "../../../shared", features = ["bevy_support", "wbindgen"] }

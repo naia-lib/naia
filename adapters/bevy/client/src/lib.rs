@@ -95,6 +95,9 @@ mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
 pub use client::{take_received_updates_of_kind, Client, ClientWrapper};
+// Re-exported so consumers depend only on this adapter and never reach past it
+// into `naia-client` directly for the connection-lifecycle enum.
+pub use naia_client::ConnectionStatus;
 pub use commands::{ClientCommandsExt, CommandsExt};
 pub use components::{ClientOwned, ServerOwned};
 pub use plugin::Plugin;

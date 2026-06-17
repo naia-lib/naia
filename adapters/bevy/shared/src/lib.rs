@@ -56,3 +56,11 @@ pub use system_set::{
 };
 pub use world_data::WorldData;
 pub use world_proxy::{WorldMut, WorldProxy, WorldProxyMut, WorldRef};
+
+/// Re-export of the in-process local transport (`LocalTransportHub`,
+/// `FAKE_SERVER_ADDR`, etc.) so consumers wiring up the local transport
+/// (test harnesses, local-transport app builds) depend only on this adapter
+/// and never reach past it into `naia-shared` directly. Gated to match
+/// `naia_shared`'s own `transport_local` cfg.
+#[cfg(feature = "transport_local")]
+pub use naia_shared::transport;
