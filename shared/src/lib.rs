@@ -21,10 +21,7 @@ cfg_if! {
     }
 }
 
-pub use naia_derive::{
-    Channel, ChannelDiax, Message, MessageBevy, MessageDiax, Replicate, ReplicateBevy,
-    ReplicateDiax,
-};
+pub use naia_derive::{Channel, Message, Replicate};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_serde::bench_serde_counters;
 pub use naia_serde::{
@@ -136,7 +133,7 @@ pub use messages::{
             request_sender::LocalResponseId,
         },
     },
-    message::{Message, Message as MessageBevy, MessageBuilder},
+    message::{Message, MessageBuilder},
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,
@@ -157,7 +154,7 @@ pub use world::{
             ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
             ReplicaRefTrait, ReplicaRefWrapper,
         },
-        replicate::{Replicate, Replicate as ReplicateBevy, ReplicateBuilder, ReplicatedComponent},
+        replicate::{Replicate, Replicate as ReplicateTrait, ReplicateBuilder, ReplicatedComponent},
     },
     delegation::{
         auth_channel::EntityAuthAccessor,

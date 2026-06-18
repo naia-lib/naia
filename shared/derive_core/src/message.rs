@@ -1,20 +1,18 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DataEnum, DeriveInput, Fields, GenericParam, Generics, Ident, Index,
+    Data, DataEnum, DeriveInput, Fields, GenericParam, Generics, Ident, Index,
     LitStr, Member, Type,
 };
 
 use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};
 
 pub fn message_impl(
-    input: proc_macro::TokenStream,
+    input: DeriveInput,
     shared_crate_name: TokenStream,
     is_fragment: bool,
     is_request: bool,
-) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-
+) -> TokenStream {
     // Dispatch to the enum path before touching any struct-only helpers.
     if let Data::Enum(ref data_enum) = input.data {
         return enum_message_impl(
@@ -115,7 +113,7 @@ pub fn message_impl(
         }
     };
 
-    proc_macro::TokenStream::from(gen)
+    gen
 }
 
 fn get_is_fragment_method(is_fragment: bool) -> TokenStream {
@@ -743,7 +741,7 @@ fn enum_message_impl(
     shared_crate_name: TokenStream,
     is_fragment: bool,
     is_request: bool,
-) -> proc_macro::TokenStream {
+) -> TokenStream {
     let (untyped_generics, typed_generics, turbofish) = get_generics(input);
 
     let enum_name = &input.ident;
@@ -834,7 +832,7 @@ fn enum_message_impl(
         }
     };
 
-    proc_macro::TokenStream::from(gen)
+    gen
 }
 
 fn get_enum_write_method(variants: &[EnumVariant], bits_needed: u8) -> TokenStream {

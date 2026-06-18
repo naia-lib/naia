@@ -1,12 +1,11 @@
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
-use syn::{parse_macro_input, DeriveInput};
+use syn::DeriveInput;
 
 pub fn client_marker_impl(
-    input: proc_macro::TokenStream,
+    input: DeriveInput,
     root: TokenStream,
-) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+) -> TokenStream {
     let m = &input.ident;
 
     // All generated names follow {Marker}{Suffix} via format_ident! (no paste).
@@ -27,7 +26,7 @@ pub fn client_marker_impl(
     let remove_component_event = format_ident!("{}RemoveComponentEvent", m);
     let app_bundle_ext = format_ident!("{}AppBundleExt", m);
 
-    let gen: TokenStream = quote! {
+    quote! {
         pub type #client<'w>                = #root::Client<'w, #m>;
         pub type #connect_event             = #root::events::ConnectEvent<#m>;
         pub type #disconnect_event          = #root::events::DisconnectEvent<#m>;
@@ -59,7 +58,5 @@ pub fn client_marker_impl(
                 self
             }
         }
-    };
-
-    proc_macro::TokenStream::from(gen)
+    }
 }

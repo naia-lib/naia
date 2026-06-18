@@ -1,7 +1,7 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    parse_macro_input, Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident,
+    Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident,
     Index, LitStr, Member, PathArguments, Type,
 };
 
@@ -49,11 +49,10 @@ fn is_immutable_attr(input: &DeriveInput) -> bool {
 }
 
 pub fn replicate_impl(
-    input: proc_macro::TokenStream,
+    input: DeriveInput,
     shared_crate_name: TokenStream,
     auto_emit_bevy_component: bool,
-) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+) -> TokenStream {
 
     let is_immutable = is_immutable_attr(&input);
 
@@ -293,7 +292,7 @@ pub fn replicate_impl(
         }
     };
 
-    proc_macro::TokenStream::from(gen)
+    gen
 }
 
 /// When the derive crate itself has `bevy_support` active, emit a Bevy

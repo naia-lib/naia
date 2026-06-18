@@ -1,5 +1,18 @@
 pub use bevy_ecs;
 
+// Bevy-adapter `Replicate` derive: component=false flavor (users add their own
+// `#[derive(Component)]` alongside, so we skip the auto Component impl).
+// This goes into the MACRO namespace as `Replicate`.
+pub use naia_bevy_derive::Replicate;
+
+// The `Replicate` TRAIT — imported from naia_shared under its `ReplicateTrait`
+// alias (which is a pure type re-export) so Rust sees only a TYPE-namespace
+// import here and does not conflict with the macro-namespace derive above.
+// We then re-export it as `Replicate` in the type namespace; together with the
+// derive above, both namespaces hold `naia_bevy_shared::Replicate`, mirroring
+// how naia_shared itself dual-exports the name.
+pub use naia_shared::ReplicateTrait as Replicate;
+
 pub use naia_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, AuthorityError, BandwidthConfig,
     BitReader, BitWrite, BitWriter, Channel, ChannelDirection, ChannelKind, ChannelMode,
@@ -8,10 +21,10 @@ pub use naia_shared::{
     EntityDoesNotExistError, EntityProperty, FakeEntityConverter, FileBitWriter, GameInstant,
     GlobalEntity, HostEntity, HostEntityAuthStatus, IdentityToken, Instant, LinkConditionerConfig,
     LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntityMap,
-    MessageBevy as Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
+    Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
     OwnedBitReader, PendingComponentUpdate, Property, PropertyMutate, PropertyMutator, Random,
     ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicaDynRefWrapper,
-    ReplicaRefWrapper, ReplicateBevy as Replicate, ReplicateBuilder, ReplicatedComponent, Request,
+    ReplicaRefWrapper, ReplicateBuilder, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceKinds, ResourceRegistry, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,

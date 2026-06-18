@@ -1,15 +1,13 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, DeriveInput, LitStr};
+use syn::{DeriveInput, LitStr};
 
 use super::shared::{get_struct_type, StructType};
 
 pub fn channel_impl(
-    input: proc_macro::TokenStream,
+    input: DeriveInput,
     shared_crate_name: TokenStream,
-) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-
+) -> TokenStream {
     // Helper Properties
     let struct_type = get_struct_type(&input);
     match struct_type {
@@ -23,7 +21,7 @@ pub fn channel_impl(
     let struct_name = input.ident;
     let struct_name_str = LitStr::new(&struct_name.to_string(), struct_name.span());
 
-    let gen = quote! {
+    quote! {
         impl #shared_crate_name::Channel for #struct_name {
 
         }
@@ -36,7 +34,5 @@ pub fn channel_impl(
                 #struct_name_str
             }
         }
-    };
-
-    proc_macro::TokenStream::from(gen)
+    }
 }
