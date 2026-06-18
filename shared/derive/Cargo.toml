@@ -18,9 +18,6 @@ maintenance = { status = "actively-developed" }
 [lib]
 proc-macro = true
 
-[features]
-bevy_support = ["naia-derive-core/bevy_support"]
-
 [dependencies]
 naia-derive-core = { version = "0.25", path = "../derive_core" }
 naia-serde-derive = { version = "0.25", path = "../serde/derive" }

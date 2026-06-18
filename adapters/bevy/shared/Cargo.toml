@@ -28,7 +28,7 @@ transport_local = [ "naia-shared/transport_local" ]
 
 [dependencies]
 naia-bevy-derive = { version = "0.25", path = "../derive" }
-naia-shared = { version = "0.25", path = "../../../shared", features = ["bevy_support", "wbindgen"] }
+naia-shared = { version = "0.25", path = "../../../shared", features = ["wbindgen"] }
 bevy_app = { version = "0.18", default-features=false }
 bevy_ecs = { version = "0.18", default-features=false }
 log = { version = "0.4" }

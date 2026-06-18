@@ -320,26 +320,9 @@ mod tests {
     }
     struct TestVelocityBuilder;
 
-    // HostComponent impls: required for the non-bevy `ReplicatedComponent` bound.
-    // The bevy_support-gated Component impls below remain for the bevy branch.
+    // HostComponent impls: required for the `ReplicatedComponent` bound.
     impl crate::HostComponent for TestPosition {}
     impl crate::HostComponent for TestVelocity {}
-
-    // bevy_support requires `Component` for ReplicatedComponent.
-    // We provide a `cfg(feature = "bevy_support")` Component impl
-    // mirroring the derive-macro output.
-    #[cfg(feature = "bevy_support")]
-    impl bevy_ecs::component::Component for TestPosition {
-        const STORAGE_TYPE: bevy_ecs::component::StorageType =
-            bevy_ecs::component::StorageType::Table;
-        type Mutability = bevy_ecs::component::Mutable;
-    }
-    #[cfg(feature = "bevy_support")]
-    impl bevy_ecs::component::Component for TestVelocity {
-        const STORAGE_TYPE: bevy_ecs::component::StorageType =
-            bevy_ecs::component::StorageType::Table;
-        type Mutability = bevy_ecs::component::Mutable;
-    }
 
     impl Named for TestPosition {
         fn protocol_name() -> &'static str {

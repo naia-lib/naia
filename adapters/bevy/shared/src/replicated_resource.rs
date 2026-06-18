@@ -14,7 +14,7 @@
 use bevy_ecs::component::{Component, Mutable};
 use bevy_ecs::resource::Resource;
 
-use crate::Replicate;
+use crate::{HostComponent, Replicate};
 
 /// Type bound for a Replicated Resource. A type satisfying this bound
 /// is:
@@ -22,9 +22,10 @@ use crate::Replicate;
 /// - A `naia::Replicate` (registered via `protocol.add_resource::<R>()`).
 /// - A Bevy `Resource` (for `Res<R>`/`ResMut<R>` access).
 /// - A mutable Bevy `Component` (for the hidden resource entity).
+/// - A `HostComponent` (impl emitted by `#[derive(Replicate)]`).
 ///
 /// A blanket impl covers any `T` satisfying all three; users do not
 /// implement this trait directly.
-pub trait ReplicatedResource: Replicate + Resource + Component<Mutability = Mutable> {}
+pub trait ReplicatedResource: Replicate + HostComponent + Resource + Component<Mutability = Mutable> {}
 
-impl<T> ReplicatedResource for T where T: Replicate + Resource + Component<Mutability = Mutable> {}
+impl<T> ReplicatedResource for T where T: Replicate + HostComponent + Resource + Component<Mutability = Mutable> {}

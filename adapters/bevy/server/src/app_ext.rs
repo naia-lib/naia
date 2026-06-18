@@ -1,7 +1,7 @@
 use bevy_app::App;
 use bevy_ecs::component::Mutable;
 
-use naia_bevy_shared::{Replicate, ReplicateBundle};
+use naia_bevy_shared::{HostComponent, Replicate, ReplicateBundle};
 
 use crate::{
     component_event_registry::ComponentEventRegistry,
@@ -36,7 +36,8 @@ pub trait AppRegisterComponentEvents {
     /// `protocol.add_resource::<R>()` in the user's `ProtocolPlugin`.
     fn add_resource_events<R>(&mut self) -> &mut Self
     where
-        R: Replicate
+        R: HostComponent
+            + Replicate
             + bevy_ecs::resource::Resource
             + bevy_ecs::component::Component<Mutability = Mutable>;
 }
@@ -72,7 +73,8 @@ impl AppRegisterComponentEvents for App {
 
     fn add_resource_events<R>(&mut self) -> &mut Self
     where
-        R: Replicate
+        R: HostComponent
+            + Replicate
             + bevy_ecs::resource::Resource
             + bevy_ecs::component::Component<Mutability = Mutable>,
     {

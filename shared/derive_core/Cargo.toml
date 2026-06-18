@@ -12,9 +12,6 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[features]
-bevy_support = []
-
 [dependencies]
 proc-macro2 = "1.0"
 syn = { version = "2.0.29", features = ["clone-impls"] }

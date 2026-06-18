@@ -1,4 +1,4 @@
-use std::any::TypeId;
+use std::{any::TypeId, marker::PhantomData};
 
 use bevy_ecs::{
     entity::Entity,
@@ -8,14 +8,50 @@ use bevy_ecs::{
 use naia_shared::{
     ComponentFieldUpdate, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter,
     GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, PendingComponentUpdate,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper,
+    ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait, ReplicaRefWrapper, Replicate,
     ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
 };
 
-use super::{
-    component_ref::{ComponentMut, ComponentRef},
-    world_data::WorldData,
-};
+use super::world_data::WorldData;
+
+// --- downcast adapters for the typed read/write API (off hot path) ---
+
+/// Adapts a `ReplicaDynRefWrapper` to a `ReplicaRefTrait<R>` by downcasting via `Any`.
+struct DynRefDowncast<'a, R: Replicate> {
+    inner: ReplicaDynRefWrapper<'a>,
+    _phantom: PhantomData<R>,
+}
+impl<'a, R: Replicate> ReplicaRefTrait<R> for DynRefDowncast<'a, R> {
+    fn to_ref(&self) -> &R {
+        (&*self.inner)
+            .to_any()
+            .downcast_ref::<R>()
+            .expect("DynRefDowncast: component type mismatch")
+    }
+}
+
+/// Adapts a `ReplicaDynMutWrapper` to a `ReplicaMutTrait<R>` by downcasting via `Any`.
+struct DynMutDowncast<'a, R: Replicate> {
+    inner: ReplicaDynMutWrapper<'a>,
+    _phantom: PhantomData<R>,
+}
+impl<'a, R: Replicate> ReplicaRefTrait<R> for DynMutDowncast<'a, R> {
+    fn to_ref(&self) -> &R {
+        (&*self.inner)
+            .to_any()
+            .downcast_ref::<R>()
+            .expect("DynMutDowncast: component type mismatch")
+    }
+}
+impl<'a, R: Replicate> ReplicaMutTrait<R> for DynMutDowncast<'a, R> {
+    fn to_mut(&mut self) -> &mut R {
+        (&mut *self.inner)
+            .to_any_mut()
+            .downcast_mut::<R>()
+            .expect("DynMutDowncast: component type mismatch (mut)")
+    }
+}
 
 // WorldProxy
 
@@ -197,12 +233,12 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         &'_ mut self,
         entity: &Entity,
     ) -> Option<ReplicaMutWrapper<'_, R>> {
-        if let Some(bevy_mut) = self.world.get_mut::<R>(*entity) {
-            let wrapper = ComponentMut(bevy_mut);
-            let component_mut = ReplicaMutWrapper::new(wrapper);
-            return Some(component_mut);
-        }
-        None
+        let kind = ComponentKind::of::<R>();
+        let dyn_mut = component_mut_of_kind_raw(self.world, entity, &kind)?;
+        Some(ReplicaMutWrapper::new(DynMutDowncast {
+            inner: dyn_mut,
+            _phantom: PhantomData::<R>,
+        }))
     }
 
     fn component_mut_of_kind(
@@ -281,8 +317,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn insert_component<R: ReplicatedComponent>(&mut self, entity: &Entity, component_ref: R) {
-        // insert into ecs
-        self.world.entity_mut(*entity).insert(component_ref);
+        // Route through the boxed/dynamic path so we don't require R: bevy_ecs::Component
+        // (that bound is on ComponentAccessor<R>, not on ReplicatedComponent).
+        let boxed: Box<dyn Replicate> = Box::new(component_ref);
+        self.insert_boxed_component(entity, boxed);
     }
 
     fn insert_boxed_component(&mut self, entity: &Entity, boxed_component: Box<dyn Replicate>) {
@@ -297,7 +335,10 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn remove_component<R: ReplicatedComponent>(&mut self, entity: &Entity) -> Option<R> {
-        self.world.entity_mut(*entity).take::<R>()
+        let kind = ComponentKind::of::<R>();
+        let boxed = self.remove_component_of_kind(entity, &kind)?;
+        let boxed_any = boxed.to_boxed_any();
+        Some(*boxed_any.downcast::<R>().expect("remove_component: type mismatch"))
     }
 
     fn remove_component_of_kind(
@@ -455,7 +496,7 @@ fn entities(world: &World) -> Vec<Entity> {
 }
 
 fn has_component<R: ReplicatedComponent>(world: &World, entity: &Entity) -> bool {
-    world.get::<R>(*entity).is_some()
+    has_component_of_kind(world, entity, &ComponentKind::of::<R>())
 }
 
 fn has_component_of_kind(world: &World, entity: &Entity, component_kind: &ComponentKind) -> bool {
@@ -473,12 +514,12 @@ fn component<'a, R: ReplicatedComponent>(
     world: &'a World,
     entity: &Entity,
 ) -> Option<ReplicaRefWrapper<'a, R>> {
-    if let Some(bevy_ref) = world.get::<R>(*entity) {
-        let wrapper = ComponentRef(bevy_ref);
-        let component_ref = ReplicaRefWrapper::new(wrapper);
-        return Some(component_ref);
-    }
-    None
+    let kind = ComponentKind::of::<R>();
+    let dyn_ref = component_of_kind(world, entity, &kind)?;
+    Some(ReplicaRefWrapper::new(DynRefDowncast {
+        inner: dyn_ref,
+        _phantom: PhantomData::<R>,
+    }))
 }
 
 fn component_of_kind<'a>(
@@ -497,6 +538,21 @@ fn world_data(world: &World) -> &WorldData {
     world
         .get_resource::<WorldData>()
         .expect("Need to instantiate by adding WorldData<Protocol> resource at startup!")
+}
+
+fn component_mut_of_kind_raw<'a>(
+    world: &'a mut World,
+    entity: &Entity,
+    component_kind: &ComponentKind,
+) -> Option<ReplicaDynMutWrapper<'a>> {
+    let component_access = {
+        let world_data = world_data(world);
+        let Some(accessor) = world_data.component_access(component_kind) else {
+            panic!("ComponentKind has not been registered?");
+        };
+        accessor.box_clone()
+    };
+    component_access.component_mut(world, entity)
 }
 
 fn world_data_unchecked_mut(world: &'_ mut World) -> Mut<'_, WorldData> {

@@ -182,26 +182,12 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
 /// Marker trait for types that can be stored as a component in a host world.
 /// Implemented per-type by the `#[derive(Replicate)]` macro (unconditionally),
 /// so every replicated type satisfies this bound without any blanket impl.
-/// The Bevy adapter (`naia-bevy-shared`) additionally gates its `WorldMutType`
-/// methods on `bevy_ecs::component::Component`; `HostComponent` is the naia-owned
+/// The Bevy adapter (`naia-bevy-shared`) gates its `ComponentAccessor<R>` on
+/// `R: bevy_ecs::component::Component`; `HostComponent` is the naia-owned
 /// stand-in that lets core machinery reference the bound without depending on Bevy.
 pub trait HostComponent: 'static {}
 
-cfg_if! {
-    if #[cfg(feature = "bevy_support")]
-    {
-        // Require that Bevy Component to be implemented
-        use bevy_ecs::component::{Component, Mutable};
-
-        /// Marker trait combining `Replicate` with the Bevy `Component` bound; auto-implemented.
-        pub trait ReplicatedComponent: Replicate + Component<Mutability = Mutable> {}
-        impl<T: Replicate + Component<Mutability = Mutable>> ReplicatedComponent for T {}
-    }
-    else
-    {
-        /// Marker trait combining `Replicate` with `HostComponent`; auto-implemented for all
-        /// `Replicate + HostComponent` types when Bevy is not in use.
-        pub trait ReplicatedComponent: Replicate + HostComponent {}
-        impl<T: Replicate + HostComponent> ReplicatedComponent for T {}
-    }
-}
+/// Marker trait combining `Replicate` with `HostComponent`; auto-implemented for all
+/// `Replicate + HostComponent` types.
+pub trait ReplicatedComponent: Replicate + HostComponent {}
+impl<T: Replicate + HostComponent> ReplicatedComponent for T {}

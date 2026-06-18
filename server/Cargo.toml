@@ -17,7 +17,6 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
-bevy_support = ["naia-shared/bevy_support"]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-server-socket" ]
 transport_udp = [

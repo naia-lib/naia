@@ -548,12 +548,6 @@ mod tests {
                 fn localize(&mut self) {}
             }
             impl naia_shared::HostComponent for $val {}
-            #[cfg(feature = "bevy_support")]
-            impl naia_shared::bevy_ecs::component::Component for $val {
-                const STORAGE_TYPE: naia_shared::bevy_ecs::component::StorageType =
-                    naia_shared::bevy_ecs::component::StorageType::Table;
-                type Mutability = naia_shared::bevy_ecs::component::Mutable;
-            }
         };
     }
 
