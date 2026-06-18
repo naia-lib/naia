@@ -158,7 +158,7 @@ pub use world::{
             ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
             ReplicaRefTrait, ReplicaRefWrapper,
         },
-        replicate::{Replicate, Replicate as ReplicateTrait, ReplicateBuilder, ReplicatedComponent},
+        replicate::{HostComponent, Replicate, Replicate as ReplicateTrait, ReplicateBuilder, ReplicatedComponent},
     },
     delegation::{
         auth_channel::EntityAuthAccessor,

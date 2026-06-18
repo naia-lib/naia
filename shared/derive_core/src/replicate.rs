@@ -282,6 +282,12 @@ pub fn replicate_impl(
                 #clone_method
             }
 
+            // Unconditional per-type HostComponent impl so every `#[derive(Replicate)]`
+            // type satisfies the `HostComponent` bound (needed for the non-bevy branch of
+            // `ReplicatedComponent`; harmless in the bevy branch). The type is local to
+            // the proto crate so the orphan rule is satisfied.
+            impl #typed_generics #shared_crate_name::HostComponent for #replica_name #untyped_generics {}
+
             // When naia-shared is compiled with `bevy_support` on, workspace-wide
             // feature unification makes `ReplicatedComponent` require Bevy's
             // `Component` trait — even in non-Bevy crates. Auto-emit the impl

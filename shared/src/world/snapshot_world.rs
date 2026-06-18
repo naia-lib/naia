@@ -320,6 +320,11 @@ mod tests {
     }
     struct TestVelocityBuilder;
 
+    // HostComponent impls: required for the non-bevy `ReplicatedComponent` bound.
+    // The bevy_support-gated Component impls below remain for the bevy branch.
+    impl crate::HostComponent for TestPosition {}
+    impl crate::HostComponent for TestVelocity {}
+
     // bevy_support requires `Component` for ReplicatedComponent.
     // We provide a `cfg(feature = "bevy_support")` Component impl
     // mirroring the derive-macro output.

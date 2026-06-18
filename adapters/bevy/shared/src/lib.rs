@@ -23,7 +23,7 @@ pub use naia_shared::{
     LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, LocalEntityMap,
     Message, MessageBuilder, MessageContainer, MessageKind, MessageKinds, Named,
     OwnedBitReader, PendingComponentUpdate, Property, PropertyMutate, PropertyMutator, Random,
-    ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicaDynRefWrapper,
+    HostComponent, ReliableSettings, RemoteEntity, ReplicaDynMut, ReplicaDynRef, ReplicaDynRefWrapper,
     ReplicaRefWrapper, ReplicateBuilder, ReplicatedComponent, Request,
     ResourceAlreadyExists, ResourceKinds, ResourceRegistry, Response, ResponseReceiveKey,
     ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,

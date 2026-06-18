@@ -179,6 +179,14 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     fn localize(&mut self);
 }
 
+/// Marker trait for types that can be stored as a component in a host world.
+/// Implemented per-type by the `#[derive(Replicate)]` macro (unconditionally),
+/// so every replicated type satisfies this bound without any blanket impl.
+/// The Bevy adapter (`naia-bevy-shared`) additionally gates its `WorldMutType`
+/// methods on `bevy_ecs::component::Component`; `HostComponent` is the naia-owned
+/// stand-in that lets core machinery reference the bound without depending on Bevy.
+pub trait HostComponent: 'static {}
+
 cfg_if! {
     if #[cfg(feature = "bevy_support")]
     {
@@ -191,8 +199,9 @@ cfg_if! {
     }
     else
     {
-        /// Marker trait equivalent to `Replicate`; auto-implemented for all `Replicate` types when Bevy is not in use.
-        pub trait ReplicatedComponent: Replicate {}
-        impl<T: Replicate> ReplicatedComponent for T {}
+        /// Marker trait combining `Replicate` with `HostComponent`; auto-implemented for all
+        /// `Replicate + HostComponent` types when Bevy is not in use.
+        pub trait ReplicatedComponent: Replicate + HostComponent {}
+        impl<T: Replicate + HostComponent> ReplicatedComponent for T {}
     }
 }
