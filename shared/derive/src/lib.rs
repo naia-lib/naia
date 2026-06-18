@@ -6,11 +6,13 @@
 use quote::quote;
 
 mod channel;
+mod client_marker;
 mod message;
 mod replicate;
 mod shared;
 
 use channel::channel_impl;
+use client_marker::client_marker_impl;
 use message::message_impl;
 use replicate::replicate_impl;
 
@@ -39,6 +41,15 @@ pub fn replicate_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::Toke
 pub fn replicate_derive_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
     let shared_crate_name = quote! { diax_net_shared };
     replicate_impl(input, shared_crate_name, false)
+}
+
+// ClientMarker
+
+/// Derives the per-marker naia client facet for the Diax facade.
+/// Emits type aliases and an `{Marker}AppBundleExt` trait using `diax_net_client::` paths.
+#[proc_macro_derive(ClientMarkerDiax)]
+pub fn client_marker_derive_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    client_marker_impl(input)
 }
 
 // Channel
