@@ -94,6 +94,7 @@ mod protocol_ext;
 mod resource_sync;
 mod systems;
 
+pub use naia_derive::ClientMarkerBevy as ClientMarker;
 pub use app_ext::AppRegisterComponentEvents;
 pub use protocol_ext::ProtocolClientExt;
 pub use client::{take_received_updates_of_kind, Client, ClientWrapper};

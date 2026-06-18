@@ -45,11 +45,20 @@ pub fn replicate_derive_diax(input: proc_macro::TokenStream) -> proc_macro::Toke
 
 // ClientMarker
 
+/// Derives the per-marker naia client facet for the Bevy adapter.
+/// Emits type aliases and an `{Marker}AppBundleExt` trait using `naia_bevy_client::` paths.
+#[proc_macro_derive(ClientMarkerBevy)]
+pub fn client_marker_derive_bevy(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let root = quote! { naia_bevy_client };
+    client_marker_impl(input, root)
+}
+
 /// Derives the per-marker naia client facet for the Diax facade.
 /// Emits type aliases and an `{Marker}AppBundleExt` trait using `diax_net_client::` paths.
 #[proc_macro_derive(ClientMarkerDiax)]
 pub fn client_marker_derive_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    client_marker_impl(input)
+    let root = quote! { diax_net_client };
+    client_marker_impl(input, root)
 }
 
 // Channel
