@@ -162,7 +162,7 @@ pub struct RequestResponseChannel;
 #[derive(Channel)]
 pub struct ServerToClientChannel;
 
-#[derive(Replicate)]
+#[derive(Replicate, bevy_ecs::component::Component)]
 pub struct Position {
     pub x: Property<f32>,
     pub y: Property<f32>,
@@ -174,7 +174,7 @@ impl Position {
     }
 }
 
-#[derive(Replicate)]
+#[derive(Replicate, bevy_ecs::component::Component)]
 pub struct Velocity {
     pub vx: Property<f32>,
     pub vy: Property<f32>,
@@ -188,7 +188,7 @@ impl Velocity {
 
 /// Marker component that is replicated immutably.
 /// Used by Phase 5 spike tests to verify zero GlobalDiffHandler allocation.
-#[derive(Replicate)]
+#[derive(Replicate, bevy_ecs::component::Component)]
 #[replicate(immutable)]
 pub struct ImmutableLabel;
 
@@ -196,7 +196,7 @@ pub struct ImmutableLabel;
 /// serialized once at spawn/insert to seed each new observer, but it is never
 /// diff-tracked — so the host may mutate it every tick without producing
 /// updates to existing observers. Exercises the seed-only-replication primitive.
-#[derive(Replicate)]
+#[derive(Replicate, bevy_ecs::component::Component)]
 #[replicate(immutable)]
 pub struct ImmutableSeed {
     pub a: Property<u16>,
@@ -215,7 +215,7 @@ impl ImmutableSeed {
 
 /// Server-authoritative scoreboard resource. Used by integration tests
 /// to assert end-to-end resource replication and per-field diff updates.
-#[derive(Replicate, bevy_ecs::resource::Resource)]
+#[derive(Replicate, bevy_ecs::resource::Resource, bevy_ecs::component::Component)]
 pub struct TestScore {
     pub home: Property<u32>,
     pub away: Property<u32>,
@@ -228,7 +228,7 @@ impl TestScore {
 }
 
 /// Server-authoritative match-state resource (used by static-pool tests).
-#[derive(Replicate, bevy_ecs::resource::Resource)]
+#[derive(Replicate, bevy_ecs::resource::Resource, bevy_ecs::component::Component)]
 pub struct TestMatchState {
     pub phase: Property<u8>,
 }
@@ -242,7 +242,7 @@ impl TestMatchState {
 /// Delegable resource — registered as a normal resource; the
 /// authority-delegation tests configure delegation at insert time via
 /// `configure_replicated_resource`.
-#[derive(Replicate, bevy_ecs::resource::Resource)]
+#[derive(Replicate, bevy_ecs::resource::Resource, bevy_ecs::component::Component)]
 pub struct TestPlayerSelection {
     pub selected_id: Property<u16>,
 }
