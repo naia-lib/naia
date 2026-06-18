@@ -14,76 +14,24 @@
 //! `bits_needed_for(N)` shipped through every prior phase before being
 //! caught in Phase 8.3. The proptest harness exists to keep that class of
 //! bug from reappearing.
+//!
+//! This crate contains only the naia_shared / crate-internal (naia_serde) flavors.
+//! Adapter and facade flavors live in their own adapter-owned derive crates.
 
+use naia_serde_derive_core::derive_serde_common;
 use quote::quote;
-use syn::{parse_macro_input, Data, DeriveInput, Fields};
-
-mod impls;
-use impls::*;
+use syn::parse_macro_input;
 
 #[proc_macro_derive(Serde)]
 pub fn derive_serde(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_shared };
-    derive_serde_common(input, serde_crate_name)
+    derive_serde_common(input, serde_crate_name).into()
 }
 
 #[proc_macro_derive(SerdeInternal)]
 pub fn derive_serde_internal(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
     let serde_crate_name = quote! { naia_serde };
-    derive_serde_common(input, serde_crate_name)
-}
-
-#[proc_macro_derive(SerdeBevyShared)]
-pub fn derive_serde_bevy_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let serde_crate_name = quote! { naia_bevy_shared };
-    derive_serde_common(input, serde_crate_name)
-}
-
-#[proc_macro_derive(SerdeBevyServer)]
-pub fn derive_serde_bevy_server(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let serde_crate_name = quote! { naia_bevy_server };
-    derive_serde_common(input, serde_crate_name)
-}
-
-#[proc_macro_derive(SerdeBevyClient)]
-pub fn derive_serde_bevy_client(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let serde_crate_name = quote! { naia_bevy_client };
-    derive_serde_common(input, serde_crate_name)
-}
-
-/// Emits `diax_net_serde::` paths — for serde-only crates that flip to
-/// `diax_net_serde`. Mirror of `SerdeBevyShared`.
-#[proc_macro_derive(SerdeDiax)]
-pub fn derive_serde_diax(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let serde_crate_name = quote! { diax_net_serde };
-    derive_serde_common(input, serde_crate_name)
-}
-
-/// Emits `diax_net_shared::` paths — for proto crates that flip to
-/// `diax_net_shared` and need their `Serde` derive to resolve there.
-#[proc_macro_derive(SerdeDiaxShared)]
-pub fn derive_serde_diax_shared(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
-    let serde_crate_name = quote! { diax_net_shared };
-    derive_serde_common(input, serde_crate_name)
-}
-
-fn derive_serde_common(
-    input: proc_macro::TokenStream,
-    serde_crate_name: proc_macro2::TokenStream,
-) -> proc_macro::TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let input_name = input.ident;
-
-    let gen = match &input.data {
-        Data::Enum(enum_) => derive_serde_enum(enum_, &input_name, serde_crate_name),
-        Data::Struct(struct_) => match struct_.fields {
-            Fields::Unit | Fields::Unnamed(_) => {
-                derive_serde_tuple_struct(struct_, &input_name, serde_crate_name)
-            }
-            Fields::Named(_) => derive_serde_struct(struct_, &input_name, serde_crate_name),
-        },
-        _ => unimplemented!("Only structs and enums are supported"),
-    };
-
-    proc_macro::TokenStream::from(gen)
+    derive_serde_common(input, serde_crate_name).into()
 }

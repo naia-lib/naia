@@ -1,9 +1,9 @@
 [package]
-name = "naia-bevy-derive"
+name = "naia-serde-derive-core"
 version = "0.25.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
-description = "Proc-macro derives for the naia Bevy adapter"
+description = "Shared serde derive impl logic for naia serde derive crates (no adapter/facade names)"
 homepage = "https://github.com/naia-lib/naia"
 repository = "https://github.com/naia-lib/naia"
 license = "MIT OR Apache-2.0"
@@ -12,12 +12,7 @@ edition = "2021"
 [badges]
 maintenance = { status = "actively-developed" }
 
-[lib]
-proc-macro = true
-
 [dependencies]
-naia-derive-core = { version = "0.25", path = "../../../shared/derive_core" }
-naia-serde-derive-core = { version = "0.25", path = "../../../shared/serde/derive_core" }
 proc-macro2 = "1.0"
 syn = { version = "2.0.29", features = ["clone-impls"] }
 quote = "1.0"

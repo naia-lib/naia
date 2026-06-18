@@ -21,6 +21,10 @@ cfg_if! {
     }
 }
 
+// Bevy-flavored Serde derive macros — live in naia-bevy-derive.
+// The corresponding type aliases (Serde trait) for these names come from naia_serde below,
+// coexisting in different namespaces (macro-ns vs type-ns).
+pub use naia_bevy_derive::{SerdeBevyClient, SerdeBevyServer, SerdeBevyShared};
 pub use naia_derive::{Channel, Message, Replicate};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_serde::bench_serde_counters;

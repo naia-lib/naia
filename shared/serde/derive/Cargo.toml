@@ -21,8 +21,7 @@ proc-macro = true
 [features]
 
 [dependencies]
-log = { version = "0.4" }
-cfg-if = { version = "1.0" }
+naia-serde-derive-core = { version = "0.25", path = "../derive_core" }
 proc-macro2 = "1.0"
 syn = { version = "2.0.29" }
 quote = "1.0"
