@@ -25,6 +25,6 @@ naia-client = { version = "0.25", path = "../../../client", features = ["wbindge
 naia-bevy-shared = { version = "0.25", path = "../shared" }
 naia-bevy-derive = { version = "0.25", path = "../derive" }
 naia-derive = { version = "0.25", path = "../../../shared/derive" }
-bevy_app = { version = "0.18", default-features=false }
-bevy_ecs = { version = "0.18", default-features=false }
+bevy_app = { version = "0.19", default-features=false }
+bevy_ecs = { version = "0.19", default-features=false }
 log = { version = "0.4" }

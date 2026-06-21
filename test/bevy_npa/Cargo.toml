@@ -26,9 +26,9 @@ naia-server = { path = "../../server", features = ["transport_local", "test_time
 naia-client = { path = "../../client", features = ["transport_local", "test_time"] }
 naia-shared = { path = "../../shared", features = ["transport_local", "test_time"] }
 
-bevy_app = { version = "0.18", default-features = false }
-bevy_ecs = { version = "0.18", default-features = false }
-bevy_tasks = { version = "0.18", default-features = false }
+bevy_app = { version = "0.19", default-features = false }
+bevy_ecs = { version = "0.19", default-features = false }
+bevy_tasks = { version = "0.19", default-features = false }
 
 naia-test-harness = { path = "../harness" }
 parking_lot = "0.12"

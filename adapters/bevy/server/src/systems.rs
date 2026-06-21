@@ -315,7 +315,8 @@ pub fn send_packets(world: &mut World) {
                 // Tick Event
                 let mut did_tick = false;
 
-                let (messages, mut cursor) = events_reader_state.event_state.get_mut(world);
+                let (messages, mut cursor) =
+                    events_reader_state.event_state.get_mut(world).unwrap();
 
                 for bevy_events::TickEvent(_tick) in cursor.read(&messages) {
                     did_tick = true;
