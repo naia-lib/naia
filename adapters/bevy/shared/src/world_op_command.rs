@@ -51,6 +51,8 @@ impl<F: FnOnce(&mut World) + Send + 'static> WorldOpCommand<F> {
 }
 
 impl<F: FnOnce(&mut World) + Send + 'static> Command for WorldOpCommand<F> {
+    type Out = ();
+
     #[inline]
     fn apply(self, world: &mut World) {
         (self.op)(world);

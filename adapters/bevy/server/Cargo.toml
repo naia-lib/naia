@@ -48,8 +48,8 @@ crossbeam-channel = "0.5"
 smol = "1.3"
 naia-server = { version = "0.25", path = "../../../server" }
 naia-bevy-shared = { version = "0.25", path = "../shared" }
-bevy_app = { version = "0.18", default-features=false }
-bevy_ecs = { version = "0.18", default-features=false }
+bevy_app = { version = "0.19", default-features=false }
+bevy_ecs = { version = "0.19", default-features=false }
 log = { version = "0.4" }
 
 [dev-dependencies]
