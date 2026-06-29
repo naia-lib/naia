@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G2 COMPLETE — G3 design pending Connor sign-off
+status: G2 COMPLETE — G3a impl in progress
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -36,14 +36,18 @@ Implemented:
 - `PluginInternalState` fields: `armed_pipeline` replaces `armed_handles` + `armed_sim_handle`
 - All naia-server + naia-bevy-server tests updated + passing
 
-### 2b. G3 pub(crate) strategy — **APPROVED: Strategy 1 (Connor 2026-06-29)**
+### 2b. G3 design — **SIGNED OFF (Connor 2026-06-29)**
 
-Thin named methods on `SimHandle<E>` / `SimPipeline<E>`. Bevy adapter `CommandsExt` becomes a shim.
+**G3a** (naia-server core): forwarding methods on `SimPipeline<E>` for every public coord-only op already on `SimHandle<E>` — entity ops, room ops, user ops, authority reads, tick. `enable_entity_replication` excluded (G5).
 ```rust
-sim.mark_entity_as_static(&entity);
-sim.configure_entity(&entity, config);
-sim.take_entity_authority(&entity, &user_key);
+sim_pipeline.mark_entity_as_static(&entity);
+sim_pipeline.configure_entity_replication(&entity, config);
+sim_pipeline.entity_authority_status(&entity);
+sim_pipeline.room_add_entity(&room_key, &entity);
+// ... etc. — all SimHandle<E> methods forwarded
 ```
+
+**G3b** (cyberlith worktree): D11 `CellCommandsExt` dies; cyberlith Sim systems call `sim_pipeline.method()` directly in the park window. Bevy adapter `CommandsExt` stays unchanged — it's for the resident path and deferred `Commands` semantics the pipelined path doesn't need.
 
 ### 2c. Cyberlith lane — **DECIDED: Tycho owns both worktrees**
 
@@ -55,7 +59,7 @@ naia feature branch + cyberlith feature branch (naia path-dep repointed). Land a
 |------|-------------|--------|
 | G1 | `SimPipeline<E>` + `TickCtx<E,W>` tick-driver; `SimPipelineRes` in bevy adapter; tests green | ✅ COMPLETE (`55272fad`) |
 | G2 | `SimPipeline::listen(socket)` startup-window API; `PluginInternalState::listen` delegates to it | ✅ COMPLETE (`1e851a73`) |
-| G3 | Coord-only ops as named methods on `SimHandle`/`SimPipeline`; `CommandsExt` becomes shim | PENDING |
+| G3 | **G3a** forwarding methods on `SimPipeline<E>` for all coord-only ops; **G3b** cyberlith D11 `CellCommandsExt` dies, replaced by direct pipeline calls | PENDING (design signed off) |
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
