@@ -1312,18 +1312,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Marks an entity as static; its component data will not be re-sent after the initial spawn packet.
     pub fn mark_entity_as_static(&mut self, world_entity: &E) {
-        let Ok(global_entity) = self
-            .shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
-        else {
-            panic!("entity not found in global map");
-        };
-        self.shared
-            .global_world_manager
-            .write()
-            .mark_entity_as_static(&global_entity);
+        // G-unify 2b-2: delegate to the canonical CoordHandle body (byte-identical).
+        self.sim_handle.mark_entity_as_static(world_entity);
     }
 
     /// Returns `true` if the entity is currently in `Delegated` replication mode.
