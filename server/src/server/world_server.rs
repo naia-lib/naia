@@ -1306,18 +1306,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Returns `true` if the entity has been marked as static (never re-sent after initial spawn).
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
-        let Ok(global_entity) = self
-            .shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
-        else {
-            return false;
-        };
-        self.shared
-            .global_world_manager
-            .read()
-            .entity_is_static(&global_entity)
+        // G-unify 2b-2: delegate to the canonical CoordHandle body.
+        self.sim_handle.entity_is_static(world_entity)
     }
 
     /// Marks an entity as static; its component data will not be re-sent after the initial spawn packet.
@@ -1465,17 +1455,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Used by Bevy adapter event-emission filter (D13) to suppress
     /// SpawnEntityEvent / component events for resource entities.
     pub fn is_resource_entity(&self, world_entity: &E) -> bool {
-        let Ok(global_entity) = self
-            .shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
-        else {
-            return false;
-        };
-        self.sim_handle.state
-            .resource_registry
-            .is_resource_entity(&global_entity)
+        // G-unify 2b-2: delegate to the canonical CoordHandle body.
+        self.sim_handle.is_resource_entity(world_entity)
     }
 
     /// True iff a resource of type `R` is currently inserted.
@@ -1965,19 +1946,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
-        let global_entity = match self
-            .shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
-        {
-            Ok(ge) => ge,
-            Err(_) => return None,
-        };
-        self.shared
-            .global_world_manager
-            .read()
-            .entity_authority_status(&global_entity)
+        // G-unify 2b-2: delegate to the canonical CoordHandle body.
+        self.sim_handle.entity_authority_status(world_entity)
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
@@ -2065,28 +2035,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     // This intended to be used by adapter crates
     pub(crate) fn entity_owner(&self, world_entity: &E) -> EntityOwner {
-        let global_entity = self
-            .shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
-            .unwrap();
-        if let Some(owner) = self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_owner(&global_entity)
-        {
-            return owner;
-        }
-        EntityOwner::Local
+        // G-unify 2b-2: delegate to the canonical CoordHandle body. This also
+        // resolves a latent drift — the prior resident body `.unwrap()`-panicked
+        // on an unknown entity where the CoordHandle (pipelined) body returns
+        // `EntityOwner::Local`; both now share the safe `Local` fallback.
+        self.sim_handle.entity_owner(world_entity)
     }
 
     // Users
 
     /// Returns whether or not a User exists for the given RoomKey
     pub fn user_exists(&self, user_key: &UserKey) -> bool {
-        self.sim_handle.state.user_store.contains(user_key)
+        self.sim_handle.user_exists(user_key)
     }
 
     /// Retrieves an UserRef that exposes read-only operations for the User
@@ -2245,7 +2205,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Gets the current tick of the Server
     pub fn current_tick(&self) -> Tick {
-        self.shared.time_manager.read().current_tick()
+        self.sim_handle.current_tick()
     }
 
     /// Gets the current average tick duration of the Server
@@ -3389,7 +3349,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Get a User's Socket Address, given the associated UserKey
     pub(crate) fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
-        self.sim_handle.state.user_store.address(user_key)
+        self.sim_handle.user_address(user_key)
     }
 
     /// Returns an iterator of all the keys of the [`Room`]s the User belongs to
