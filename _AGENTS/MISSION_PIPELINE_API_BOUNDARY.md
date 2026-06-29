@@ -418,6 +418,30 @@ The consumer's systems sit between the sets via plain `add_systems(Update, …)`
 
 **Adapter wiring.** `wire_recv_subscriber_into_armed` (post-construction, because the recv channel is born inside `PipelineRuntime::new_armed` — asymmetric to `set_send_publisher`, whose channel is created earlier in `install_full_pipelining`). `pipelined_receive` now: gate-on-`Running` + park → `resource_scope` pulls the pipeline out → `pipeline.receive(&mut world.proxy_mut())` (core drains + applies) → fan out each output via `apply_receive_output_pipeline_with_event_receiver_split` (FIFO). Reorder vs the old `drain_recv_impl` (apply-all-then-fanout-all vs interleaved) is benign: `apply_recv_to_world` reads no fan-out state (fan-out only writes bevy `Messages`/markers); the real-ack byte-identity test (deferred G4/G5) is the eventual proof.
 
+### 2n. UNIFIED `WorldServer` enum — the consumer-API keystone (SIGNED OFF, Connor; supersedes standalone G4/G3c framing)
+
+**Context.** Designing G4 as a `spawn_replicated` fused op was REJECTED by Connor: keep naia's imperative style, "one way to do something", out-of-order calls deserve a panic. Instead the consumer-facing surface is the **chainable builder** `server.entity_mut(entity).enable_replication().configure_replication(config).enter_room(room_key)` — mirroring naia's EXISTING resident `EntityMut` (`server/src/world/entity_mut.rs`). The raw coord ops (`enable_entity_replication`/`configure_entity_replication`/`mark_entity_as_static`/room ops) go `pub(crate)`; the builder is the only public way.
+
+**The deeper decision (Connor, against type proliferation + HARD requirement: ergonomic pipelining for NON-bevy naia users).** Do NOT add a `PipelinedEntityMut` (proliferation) and do NOT unify only at the bevy adapter (non-bevy users need it too). Instead unify in **core**:
+
+- Rename current monolithic `WorldServer<E>` (the engine) → **`ResidentWorldServer<E>`**.
+- New public enum **`WorldServer<E>` = `WorldServerImpl::{ Resident(ResidentWorldServer<E>), Pipelined(PipelinedServer<E>) }`**.
+- The enum exposes ONE unified consumer surface dispatching per variant: **FULL operational unify** — a single `receive(world)`/`send(&world)` drive (Resident's wraps its fused `process_all_packets`/send path, byte-identical), plus `listen`/`io_load`, room/user/config ops, and ONE `entity_mut(entity)` builder (single `EntityMut`, dispatches per variant — no `PipelinedEntityMut`).
+- `MainServer`-based `Server<E>` (Full) stays an **orthogonal resident-only composite** wrapping the unified `WorldServer`. (Verified: `PipelinedServer::listen` → `ws.io_load` and handshakes in the engine recv path — Pipelined NEVER touches `MainServer`; it is the split form of the bare engine, exactly like `WorldOnly`.)
+- **Consequence (Connor's insight, confirmed): the bevy adapter's `ServerImpl` needs NO `Pipelined` variant.** `WorldOnly` now wraps the unified core `WorldServer` (which internally handles Pipelined); the separate `PipelinedServer` bevy Resource path collapses into it.
+
+This SUPERSEDES the old G3c ("adapter `ServerImpl::Pipelined`") and the standalone G4/G5/G5b op-steps — they all become methods on the unified `WorldServer` + its `EntityMut`. **Component ops** (insert/remove/despawn) ARE in the unified `EntityMut` ("all at once", Connor) — for the Pipelined variant they need the deferred-send mirror (the `configure_entity_replication` D.2.2 pattern) since `insert_component_worldless` touches both coord (`global_world_manager`) and send (`send_user_connections`) state. Phased execution plan: see §2o. Naia dev-trunk; byte-exact moat green at every phase.
+
+### 2o. Phased execution of the unified `WorldServer` enum (Plan agent, each phase moat-byte-green)
+
+Verification per phase: `cargo test -p naia-server` + `--lib`, `-p naia-test-harness` (esp. `g9pre_resident_pipelined_byte_identity`, `g9pre_core_assembler_byte_identity`), `-p naia-bevy-server` (default + `deterministic`), `cargo build --workspace`.
+
+- **Phase 1 — pure mechanical rename `WorldServer` → `ResidentWorldServer`.** ✅ **COMPLETE.** Word-boundary rename across all 27 `server/src` files (struct + every impl/ref); `server/mod.rs` + `lib.rs` carry a **transitional `pub use ResidentWorldServer as WorldServer` alias** so ALL downstream (`Server` Full, bevy adapter, harness, cyberlith) compile UNCHANGED — the rename is invisible. Zero logic touched; byte-exact path identifiers only. Gates: naia-server lib 42 · harness g9pre 4/4 byte-identity · adapter 91 · deterministic build green.
+- **Phase 2 — enum shell.** New `enum WorldServer<E> = WorldServerImpl::{Resident(ResidentWorldServer), Pipelined(PipelinedServer)}`; drop the Phase-1 alias; forward group-(a) reads/room/user/config/messaging/tick/stats by `match`. `Server` (Full) keeps `ResidentWorldServer` directly (orthogonal). Adapter `ServerImpl::WorldOnly` switches inner type to the enum (`Resident` variant) — first C2 edit.
+- **Phase 3 — unified `receive`/`send` (moat-critical).** Resident grows `receive<W>(&mut W) -> Vec<ReceiveOutput>` (= `receive_with_world` sequence, `&mut W`, wrapped `vec![..]`) + `send<W>(&W)` (forwards to `send_all_packets`); enum dispatches both. Verbatim wrappers over the existing fused drives → byte-identical (g9pre guards).
+- **Phase 4 — unified `EntityMut`.** `EntityMut.server` field → enum; `entity_mut`/`spawn_entity` dispatch; Pipelined arm uses coord-deferred ops (or stub where no op exists yet). No wire bytes.
+- **Phase 5 — bevy adapter collapse.** `WorldOnly` carries the enum's `Pipelined` variant for the pipelined path; remove standalone `PipelinedServer` bevy Resource + `pipelined`/`world_only_pipeline` split; route worker park-window machinery through the enum. HIGHEST risk; full `sim_integration_full_*` + harness parallel-send suite.
+
 ## 3. Sequence + status
 
 | Step | Description | Status |

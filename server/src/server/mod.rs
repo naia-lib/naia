@@ -8,7 +8,10 @@ pub use server_config::ServerConfig;
 mod main_server;
 pub use main_server::MainServer;
 pub mod world_server;
-pub use world_server::WorldServer;
+pub use world_server::ResidentWorldServer;
+// Phase 1 transitional alias: downstream consumers still name `WorldServer`.
+// Phase 2 replaces this with the unified `WorldServer` enum.
+pub use world_server::ResidentWorldServer as WorldServer;
 
 pub mod connection_shared;
 pub use connection_shared::ConnectionShared;

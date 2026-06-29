@@ -4,12 +4,12 @@
 //! Cyberlith's Sim systems install this as a Bevy `Resource` (via the
 //! bevy adapter's `Resource` derive on the re-export) and can then call
 //! `EntityProperty::set(&*sim_converter, &entity)` without reassembling
-//! a `WorldServer<E>`.
+//! a `ResidentWorldServer<E>`.
 //!
 //! # Why this exists
 //!
 //! Today the only `EntityAndGlobalEntityConverter<E>` implementer is
-//! `WorldServer<E>` (`server/src/server/world_server.rs:3956`), whose
+//! `ResidentWorldServer<E>` (`server/src/server/world_server.rs:3956`), whose
 //! body just calls `self.shared.global_entity_map.read().*` — i.e. the
 //! converter only needs `Arc<ServerShared<E>>`, not the fused server.
 //! `ServerEntityConverter<E>` exposes exactly that subset as a cloneable handle
@@ -22,7 +22,7 @@
 //! Because the backing impl on `ServerShared<E>` (in
 //! `server/src/server/server_shared.rs`) delegates to the same
 //! `global_entity_map: RwLock<GlobalEntityMap<E>>` that
-//! `WorldServer`'s converter reads, `EntityProperty::set` produces a
+//! `ResidentWorldServer`'s converter reads, `EntityProperty::set` produces a
 //! byte-identical `GlobalEntity` payload across the two paths. The
 //! `sim_configure_entity_replication` test in this adapter exercises
 //! this invariant end-to-end.

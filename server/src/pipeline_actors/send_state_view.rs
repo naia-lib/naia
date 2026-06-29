@@ -357,7 +357,7 @@ mod tests {
             spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
         // Register a world entity (id = 42) + global entity + two
-        // arbitrary component kinds. Bypass the WorldServer spawn API
+        // arbitrary component kinds. Bypass the ResidentWorldServer spawn API
         // entirely — go straight at the global maps.
         let world_entity: u64 = 42;
         let global_entity: GlobalEntity = {

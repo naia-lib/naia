@@ -28,7 +28,7 @@ use crate::server::ServerShared;
 use crate::user::{UserKey, WorldUser};
 use crate::EntityOwner;
 
-/// Coordination-side half of a pipeline-mode [`crate::WorldServer`],
+/// Coordination-side half of a pipeline-mode [`crate::ResidentWorldServer`],
 /// held by the Sim/main thread.
 ///
 /// Holds [`CoordinatorState`] (`user_store`, `room_store`, scope tables,
@@ -53,7 +53,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // ============================================================
     //
     // All methods below are pure coordination-state reads — no recv/send
-    // mutation. They mirror the namesake methods on `WorldServer`.
+    // mutation. They mirror the namesake methods on `ResidentWorldServer`.
 
     /// O(1): is `world_entity` a hidden resource entity? Used by the
     /// pipeline event-emission filter to suppress Spawn/Despawn events
@@ -74,10 +74,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
     /// Returns the current [`EntityOwner`] — who holds authoritative
     /// control over this entity right now. Mirrors
-    /// `WorldServer::entity_owner` (which reads only from `shared`).
+    /// `ResidentWorldServer::entity_owner` (which reads only from `shared`).
     ///
     /// The pre-B.7 bevy adapter passed a world reference here for
-    /// symmetry with `WorldServer::entity(world, entity).owner()`, but
+    /// symmetry with `ResidentWorldServer::entity(world, entity).owner()`, but
     /// the underlying body never reads from world — only from
     /// `shared.global_entity_map` + `shared.global_world_manager`. The
     /// world parameter is omitted here.
@@ -110,7 +110,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     ///
     /// Note: this returns ALL registered users (including those whose
     /// handshake has not yet completed). For the handshaked-only set,
-    /// use `WorldServer::user_keys` via `run_with_world_server`, which
+    /// use `ResidentWorldServer::user_keys` via `run_with_world_server`, which
     /// filters by `send_user_connections` membership.
     pub fn user_keys(&self) -> Vec<UserKey> {
         self.state.user_store.keys_copied()
@@ -135,10 +135,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// Cyberlith installs the returned `ServerEntityConverter` as a Bevy
     /// `Resource` on the Sim app so Sim systems can construct
     /// `EntityProperty`-bearing messages or components without
-    /// reassembling a `WorldServer<E>`. The backing
+    /// reassembling a `ResidentWorldServer<E>`. The backing
     /// `EntityAndGlobalEntityConverter<E>` impl on `ServerShared<E>`
     /// delegates to the same `global_entity_map` `RwLock` that
-    /// `WorldServer`'s converter reads, so wire output is byte-identical.
+    /// `ResidentWorldServer`'s converter reads, so wire output is byte-identical.
     pub fn entity_converter(&self) -> crate::pipeline_actors::ServerEntityConverter<E>
     where
         E: 'static,
@@ -153,7 +153,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // connection lifecycle: receive_user / disconnect_user.
     // ====================================================================
     //
-    // `receive_user`: mirrors `WorldServer::receive_user` (world_server.rs:270)
+    // `receive_user`: mirrors `ResidentWorldServer::receive_user` (world_server.rs:270)
     // field-for-field. Both operations touch only `self.state.user_store`.
     //
     // `disconnect_user`: the underlying `user_queue_disconnect` (world_server.rs:3006)
@@ -166,9 +166,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — register a
     /// newly-accepted user so the coordination state can track their scope without
-    /// reassembling a `WorldServer`.
+    /// reassembling a `ResidentWorldServer`.
     ///
-    /// Byte-identical to `WorldServer::receive_user`: inserts a `WorldUser`
+    /// Byte-identical to `ResidentWorldServer::receive_user`: inserts a `WorldUser`
     /// record into the user_store and registers the address in the
     /// disconnected-users map so the subsequent handshake can look it up via
     /// `user_store.take_disconnected`.
@@ -182,7 +182,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — request a
-    /// user disconnect without reassembling a `WorldServer`.
+    /// user disconnect without reassembling a `ResidentWorldServer`.
     ///
     /// Idempotent: returns silently if the user is not in the user_store
     /// (already disconnected or never registered). Otherwise pushes
@@ -306,7 +306,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // entity-replication enablement.
     // ====================================================================
     //
-    // `WorldServer::enable_entity_replication` (`world_server.rs:1044`)
+    // `ResidentWorldServer::enable_entity_replication` (`world_server.rs:1044`)
     // delegates to `spawn_entity_inner` which exclusively writes Coord-
     // side shared state: `shared.global_entity_map`,
     // `shared.global_world_manager`, and `shared.idx_to_world`. There is
@@ -322,13 +322,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // carry — there is no deferrable Send-side work to defer. Exposing
     // the existing shared-state writes as a Coord-only method is
     // therefore the entire delta. Backward compat:
-    // `WorldServer::enable_entity_replication` remains unchanged.
+    // `ResidentWorldServer::enable_entity_replication` remains unchanged.
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.2.1 (2026-05-19) —
     /// register `entity` as a server-owned replicating entity without
-    /// reassembling a `WorldServer`.
+    /// reassembling a `ResidentWorldServer`.
     ///
-    /// Byte-identical to `WorldServer::enable_entity_replication`:
+    /// Byte-identical to `ResidentWorldServer::enable_entity_replication`:
     /// writes the same three shared-state fields
     /// (`global_entity_map`, `global_world_manager`, `idx_to_world`)
     /// in the same order. No Send-side mutation; no world-hook
@@ -361,7 +361,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             );
             return;
         }
-        // Mirror `WorldServer::spawn_entity_inner` field-for-field —
+        // Mirror `ResidentWorldServer::spawn_entity_inner` field-for-field —
         // identical write order, identical inputs, same locks.
         let global_entity = self
             .shared
@@ -384,7 +384,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // ====================================================================
     //
     // End-to-end audit (`feedback-verify-before-proposing`) of
-    // `WorldServer::mark_entity_as_static` (`world_server.rs:1133`) ->
+    // `ResidentWorldServer::mark_entity_as_static` (`world_server.rs:1133`) ->
     // `GlobalWorldManager::mark_entity_as_static`
     // (`global_world_manager.rs:104`): the entire operation is a single
     // gwm flag write — `record.is_static = true`. There is NO Send-side
@@ -397,19 +397,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     //
     // Mirrors the legacy resolve-then-write sequence field-for-field,
     // including the same panic when the entity is absent from the global
-    // map. Backward compat: `WorldServer::mark_entity_as_static` is
+    // map. Backward compat: `ResidentWorldServer::mark_entity_as_static` is
     // unchanged. This retires the last `run_with_world_server`
     // reassembly in cyberlith's `drain_sim_tile_registrations`
     // (Phase E.6).
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.1 (2026-05-19) — mark
     /// `world_entity` as static (its component data is not re-sent after
-    /// the initial spawn packet) without reassembling a `WorldServer`.
+    /// the initial spawn packet) without reassembling a `ResidentWorldServer`.
     ///
     /// Coord-side-only: writes the `is_static` flag on the entity's
     /// `global_world_manager` record. No Send-side mutation; no world-hook
     /// registration; no deferred drainer work. Field-for-field identical
-    /// to `WorldServer::mark_entity_as_static`, including the panic when
+    /// to `ResidentWorldServer::mark_entity_as_static`, including the panic when
     /// the entity is not yet in the global map.
     pub fn mark_entity_as_static(&mut self, world_entity: &E) {
         let Ok(global_entity) = self
@@ -428,7 +428,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — pure
     /// Coord-side read of the entity's authority status. Mirrors
-    /// `WorldServer::entity_authority_status` (`world_server.rs:1698`) —
+    /// `ResidentWorldServer::entity_authority_status` (`world_server.rs:1698`) —
     /// reads only `shared.global_entity_map` + `shared.global_world_manager`.
     /// Used by the host-sync drain's auth gate (skip insert/remove/despawn
     /// when a client holds authority). Returns `None` when the entity is
@@ -450,7 +450,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// Returns `true` if `world_entity` has been marked as static. Mirrors
-    /// `WorldServer::entity_is_static` (reads only from `shared`).
+    /// `ResidentWorldServer::entity_is_static` (reads only from `shared`).
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
         use naia_shared::GlobalWorldManagerType;
         let Ok(global_entity) = self
@@ -472,7 +472,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // entity-replication reconfiguration with deferred Send/World work.
     // ====================================================================
     //
-    // Byte-identity strategy (vs `WorldServer::configure_entity_replication`,
+    // Byte-identity strategy (vs `ResidentWorldServer::configure_entity_replication`,
     // `world_server.rs:1423`): run the publicity-transition decision tree
     // EXACTLY ONCE here, reading PRE-transition gwm state, performing the
     // Coord-side gwm writes immediately (so a subsequent same-tick
@@ -486,7 +486,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — set the
     /// [`ReplicationConfig`](crate::ReplicationConfig) for `world_entity`
-    /// without reassembling a `WorldServer`.
+    /// without reassembling a `ResidentWorldServer`.
     ///
     /// Mutates Coord-side `global_world_manager` state immediately and
     /// DEFERS all Send-side state-machine work to the next
@@ -496,8 +496,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`
     /// twin), which the Sim system calls with the `&mut World`.
     ///
-    /// Wire-byte-identical to `WorldServer::configure_entity_replication`
-    /// once both drains have run. The existing `WorldServer` method is
+    /// Wire-byte-identical to `ResidentWorldServer::configure_entity_replication`
+    /// once both drains have run. The existing `ResidentWorldServer` method is
     /// unchanged for backward compat.
     pub fn configure_entity_replication(
         &mut self,
@@ -696,7 +696,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// Coord-immediate `publish_entity` body split: do the gwm
     /// `entity_publish` write now (so same-tick reads compose) and
     /// record the Send-side + World-side leaf work. Mirrors
-    /// `WorldServer::publish_entity` (`world_server.rs:2531`).
+    /// `ResidentWorldServer::publish_entity` (`world_server.rs:2531`).
     fn capture_publish(
         &mut self,
         global_entity: &naia_shared::GlobalEntity,
@@ -751,7 +751,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// Coord-immediate `unpublish_entity` body split. The `owner_addr`
     /// capture happens BEFORE `gwm.entity_unpublish` transitions
     /// ClientPublic → Client — this is the B.2 blocker-1 read-before-write
-    /// fix. Mirrors `WorldServer::unpublish_entity` (`world_server.rs:2585`).
+    /// fix. Mirrors `ResidentWorldServer::unpublish_entity` (`world_server.rs:2585`).
     fn capture_unpublish(
         &mut self,
         global_entity: &naia_shared::GlobalEntity,
@@ -811,7 +811,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// Coord-immediate `entity_enable_delegation` body split. Mirrors
-    /// `WorldServer::entity_enable_delegation` (`world_server.rs:2649`).
+    /// `ResidentWorldServer::entity_enable_delegation` (`world_server.rs:2649`).
     fn capture_enable_delegation(
         &mut self,
         global_entity: &naia_shared::GlobalEntity,
@@ -864,7 +864,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     }
 
     /// Coord-immediate `entity_disable_delegation` body split. Mirrors
-    /// `WorldServer::entity_disable_delegation` (`world_server.rs:2914`).
+    /// `ResidentWorldServer::entity_disable_delegation` (`world_server.rs:2914`).
     fn capture_disable_delegation(
         &mut self,
         global_entity: &naia_shared::GlobalEntity,

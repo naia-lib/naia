@@ -1,6 +1,6 @@
 //! Cross-thread shared state for the C.3 three-stage pipeline.
 //!
-//! `ServerShared<E>` holds the `WorldServer` fields that are either
+//! `ServerShared<E>` holds the `ResidentWorldServer` fields that are either
 //! init-only-after-construction or already internally thread-safe. The
 //! pipeline coordinator places this struct behind an `Arc<>` so the recv,
 //! sim, and send threads can read it concurrently without contention.
@@ -64,7 +64,7 @@ use crate::{
 /// Wrapping the struct itself in `Arc<>` is therefore enough — no outer lock
 /// is needed at this stage.
 ///
-/// The `E` parameter mirrors `WorldServer<E>` so subsequent steps can add
+/// The `E` parameter mirrors `ResidentWorldServer<E>` so subsequent steps can add
 /// `E`-generic fields (e.g. `global_entity_map: RwLock<GlobalEntityMap<E>>`)
 /// without changing this signature.
 pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
@@ -105,7 +105,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// `finalize_connection` pushes `ConnectionAdded` here from the recv
     /// thread (which can't write to `SendState.send_user_connections`
     /// directly in pipeline mode). The disconnect path pushes
-    /// `ConnectionRemoved`. Drained inline at `WorldServer::receive`'s
+    /// `ConnectionRemoved`. Drained inline at `ResidentWorldServer::receive`'s
     /// tail in serial mode; drained by the coordinator at step 6.5 in
     /// pipeline mode. See `send_state_update.rs` for variant semantics.
     pub(crate) pending_send_state_updates: Mutex<Vec<SendStateUpdate<E>>>,
@@ -202,7 +202,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
     /// Construct a new `ServerShared` from the components carved out of
-    /// `WorldServer::new`.
+    /// `ResidentWorldServer::new`.
     pub fn new(
         server_config: ServerConfig,
         channel_kinds: ChannelKinds,
@@ -241,7 +241,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
 
 // MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — see
 // `pipeline_actors/sim_converter.rs` for rationale + wire-identity
-// argument. Mirrors `WorldServer<E>`'s impl at
+// argument. Mirrors `ResidentWorldServer<E>`'s impl at
 // `server/src/server/world_server.rs:3956`; both delegate to the same
 // `global_entity_map` `RwLock` so `EntityProperty::set` produces
 // byte-identical wire payloads.

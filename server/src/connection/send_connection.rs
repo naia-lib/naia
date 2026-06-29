@@ -222,7 +222,7 @@ impl SendConnection {
         );
 
         // Collect outgoing entity commands only. Update events are pre-built by the
-        // three-phase Iris loop in WorldServer::send_all_packets and passed in directly.
+        // three-phase Iris loop in ResidentWorldServer::send_all_packets and passed in directly.
         #[cfg(feature = "bench_instrumentation")]
         let t = std::time::Instant::now();
         let mut host_world_events = self

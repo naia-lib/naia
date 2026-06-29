@@ -6,7 +6,7 @@
 //! ORDER position #5).
 //!
 //! In serial mode, the queue is drained inline at the tail of
-//! `WorldServer::receive`. In pipeline mode (step 4-F), the coordinator
+//! `ResidentWorldServer::receive`. In pipeline mode (step 4-F), the coordinator
 //! drains it at step 6.5 between the recv and send phases of the tick.
 //!
 //! ## Variants

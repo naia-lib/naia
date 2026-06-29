@@ -4,7 +4,7 @@ use naia_shared::{OwnedBitReader, Tick};
 
 use crate::events::world_events::WorldEvents;
 
-/// Decoded receive-phase output returned by [`WorldServer::receive`].
+/// Decoded receive-phase output returned by [`ResidentWorldServer::receive`].
 ///
 /// Contains everything accumulated during the recv phase in plain-data form
 /// that can cross thread boundaries, for use in the pipeline coordinator.
@@ -28,14 +28,14 @@ pub struct ReceiveOutput<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Server ticks that fired during this receive phase.
     ///
-    /// Populated by [`WorldServer::receive`] via `take_tick_events`. The
+    /// Populated by [`ResidentWorldServer::receive`] via `take_tick_events`. The
     /// pipeline coordinator uses these to drive simulation work; the bevy
     /// adapter's `apply_receive_output` fires one `TickEvent` per entry.
     pub pending_ticks: Vec<Tick>,
 
     /// Addresses that delivered at least one packet during this recv phase
     /// (step 4-F.naia.c.2b). Populated by `RecvHandle::receive` /
-    /// `WorldServer::receive_all_packets`; consumed by
+    /// `ResidentWorldServer::receive_all_packets`; consumed by
     /// `SendHandle::process_recv_packets` for the per-address `drain_acks`
     /// + `process_received_commands` sweep. The set is intentionally
     /// broader than the data-only `addrs_with_new_packets` set on
@@ -48,7 +48,7 @@ pub struct ReceiveOutput<E: Copy + Eq + Hash + Send + Sync> {
     /// advanced past `StandardHeader` + `Tick`, so the decoder starts at
     /// the message/world section directly.
     ///
-    /// In serial mode `WorldServer::receive_all_packets` packages these
+    /// In serial mode `ResidentWorldServer::receive_all_packets` packages these
     /// into the `ReceiveOutput` it constructs internally and passes them
     /// to `SendState::process_recv_packets` inline. In pipeline mode the
     /// coordinator drains them off the returned `ReceiveOutput` and hands

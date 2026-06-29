@@ -1,15 +1,15 @@
-//! Pipeline-mode handles for the recv and send halves of a `WorldServer`
+//! Pipeline-mode handles for the recv and send halves of a `ResidentWorldServer`
 //! (step 4-E.2f).
 //!
-//! Each handle owns its substate directly — no `Arc<Mutex<WorldServer>>`
+//! Each handle owns its substate directly — no `Arc<Mutex<ResidentWorldServer>>`
 //! wrapper. `RecvState<E>` and `SendState<E>` are both already `Send`
 //! (their `unsafe impl Send` blocks at `recv_state.rs:96` and
 //! `send_state.rs:48` carry the safety story), so the handles inherit
 //! `Send` without any further unsafe.
 //!
-//! `WorldServer::into_pipeline_handles(self)` decomposes the server into
+//! `ResidentWorldServer::into_pipeline_handles(self)` decomposes the server into
 //! three pieces — `CoordinatorState<E>`, `RecvHandle<E>`, `SendHandle<E>` —
-//! and `WorldServer::from_pipeline_states(...)` reassembles them. The
+//! and `ResidentWorldServer::from_pipeline_states(...)` reassembles them. The
 //! split is structural; thread-independent operation of the recv and
 //! send halves is wired up by the bevy pipeline coordinator in step 4-F.
 //!
@@ -17,7 +17,7 @@
 //!
 //! The cyberlith side `GameCell::update` is in serial-equivalent mode
 //! (cyberlith `2da625e1`) and currently does NOT call
-//! `into_pipeline_handles` — it keeps `WorldServer` reassembled and
+//! `into_pipeline_handles` — it keeps `ResidentWorldServer` reassembled and
 //! drives `receive_with_world` + `send_all_packets` inline. The
 //! multi-thread pipeline (step 4-F.cyberlith.e) is the next milestone.
 //!
@@ -33,16 +33,16 @@
 //!
 //! **C2 (World mutation).** The decoded entity events (spawn / insert /
 //! despawn) are applied to `&mut World` by
-//! `WorldServer::process_all_packets`, which mutates `self.send.*`
+//! `ResidentWorldServer::process_all_packets`, which mutates `self.send.*`
 //! while doing so. After `into_pipeline_handles`, the coordination side no longer
-//! holds a unified `WorldServer`. The .e MVP works around this by NOT
+//! holds a unified `ResidentWorldServer`. The .e MVP works around this by NOT
 //! calling `into_pipeline_handles` — it uses `receive_with_world`
 //! (cyberlith.d) which bundles `receive_all_packets +
 //! process_all_packets` inline.
 //!
 //! **C3 (send extraction).** `SendHandle::send_all_packets` does not
 //! exist yet. Adding it is step 4-F.naia.h — see the doc-comment on
-//! `WorldServer::send_all_packets` for the three-phase factoring plan.
+//! `ResidentWorldServer::send_all_packets` for the three-phase factoring plan.
 //!
 //! See `cyberlith/_AGENTS/MISSION_CAPACITY_UPLIFT.md` ("4-F.cyberlith.e
 //! — multi-thread pipeline coordinator", architectural reality check
@@ -73,7 +73,7 @@ pub struct RecvHandle<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// Consume this handle and return the inner `RecvState<E>` —
-    /// used by `WorldServer::from_pipeline_states` for serial-mode
+    /// used by `ResidentWorldServer::from_pipeline_states` for serial-mode
     /// reassembly until 4-F's coordinator runs the recv thread directly.
     pub fn into_state(self) -> RecvState<E> {
         self.state
@@ -92,7 +92,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// Drives the recv-only socket loop (no `SendState` access) and
     /// packages the per-tick handoff queues into a [`ReceiveOutput`] for
     /// the coordinator to thread into:
-    ///   1. `WorldServer::drain_pending_handshakes` (coordination-stage; needs
+    ///   1. `ResidentWorldServer::drain_pending_handshakes` (coordination-stage; needs
     ///      `sim_handle.user_store`).
     ///   2. `SendHandle::process_recv_packets` (which consumes
     ///      `received_addresses` + `pending_data_packets` alongside a
@@ -117,11 +117,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// connected user.
     ///
     /// Recv-only — touches only [`RecvState::recv_user_connections`].
-    /// Mirrors `WorldServer::receive_tick_buffer_messages` (`world_server.rs:825`),
+    /// Mirrors `ResidentWorldServer::receive_tick_buffer_messages` (`world_server.rs:825`),
     /// whose body reads exclusively from `self.recv.recv_user_connections`.
     /// Exposed on [`RecvHandle`] so cyberlith's per-tick decoder (moving
     /// off main onto Recv per MISSION_SIM_OWNS_WORLD D.5e.1+.2) can run
-    /// without WorldServer reassembly.
+    /// without ResidentWorldServer reassembly.
     pub fn receive_tick_buffer_messages(
         &mut self,
         tick: &Tick,
@@ -135,7 +135,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     }
 
     /// Test-only: manufacture a recv connection for `(address, user_key)`
-    /// (mirroring `WorldServer::finalize_connection`) and inject one
+    /// (mirroring `ResidentWorldServer::finalize_connection`) and inject one
     /// tick-buffered message into it, so a test can exercise
     /// [`Self::receive_tick_buffer_messages`] without a full client
     /// handshake. Returns `true` if the message was accepted by the
@@ -191,7 +191,7 @@ pub struct SendHandle<E: Copy + Eq + Hash + Send + Sync> {
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Consume this handle and return the inner `SendState<E>` —
-    /// used by `WorldServer::from_pipeline_states` for serial-mode
+    /// used by `ResidentWorldServer::from_pipeline_states` for serial-mode
     /// reassembly until 4-F's coordinator runs the send thread directly.
     pub fn into_state(self) -> SendState<E> {
         self.state
@@ -230,7 +230,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ///
     /// Thin wrapper that forwards to [`SendState::send_all_packets`].
     /// Called by the 4-F.cyberlith.e coordinator on the send thread AFTER
-    /// the Sim/main thread has called `WorldServer::run_send_preamble` on
+    /// the Sim/main thread has called `ResidentWorldServer::run_send_preamble` on
     /// the reassembled server (or, once the coordination/send split is taken
     /// further, after a coordination-side equivalent of the preamble runs).
     ///
@@ -279,7 +279,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// C.6 prep — run the per-tick send preamble on `SendState` alone,
-    /// without needing a world snapshot or a reassembled `WorldServer`.
+    /// without needing a world snapshot or a reassembled `ResidentWorldServer`.
     ///
     /// Cyberlith's Send SubApp calls this from its `ApplyExtract` phase
     /// (after extract delivers the inbound `SnapshotWorld<E>` from Sim,
@@ -320,7 +320,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     ///
     /// Companion to [`apply_pending_send_preamble`] (which only drains
     /// `RoomChange` variants). Together the two methods restore the
-    /// full body of the legacy `WorldServer::run_send_preamble` for
+    /// full body of the legacy `ResidentWorldServer::run_send_preamble` for
     /// pipeline-mode callers that hold a `SendHandle` directly.
     ///
     /// Cyberlith pattern:
@@ -368,21 +368,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — host-sync
     // worldless ops + `is_listening`, exposed handle-direct so the
     // pipeline host-sync drain (`drain_host_sync_into_pipeline`) no longer
-    // reassembles a `WorldServer`. Thin forwards to the `SendState`
-    // namesakes (which mirror `WorldServer::*` field-for-field — see the
-    // D.3b.2 section in `send_state.rs`). Existing `WorldServer::*` methods
+    // reassembles a `ResidentWorldServer`. Thin forwards to the `SendState`
+    // namesakes (which mirror `ResidentWorldServer::*` field-for-field — see the
+    // D.3b.2 section in `send_state.rs`). Existing `ResidentWorldServer::*` methods
     // are unchanged.
     // ====================================================================
 
     /// Pipeline-mode `is_listening`. Forwards to [`SendState::is_listening`]
     /// (`send_io.is_loaded()`). Used by the host-sync drain's "skip while
-    /// not listening" guard, mirroring `WorldServer::is_listening`.
+    /// not listening" guard, mirroring `ResidentWorldServer::is_listening`.
     pub fn is_listening(&self) -> bool {
         self.state.is_listening()
     }
 
     /// Pipeline-mode `insert_component_worldless`. Byte-identical to
-    /// `WorldServer::insert_component_worldless`. Mutates `shared.gwm` +
+    /// `ResidentWorldServer::insert_component_worldless`. Mutates `shared.gwm` +
     /// per-connection scope state on `SendState`; no Coord state needed.
     pub fn insert_component_worldless(
         &mut self,
@@ -394,7 +394,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// Pipeline-mode `remove_component_worldless`. Byte-identical to
-    /// `WorldServer::remove_component_worldless`.
+    /// `ResidentWorldServer::remove_component_worldless`.
     pub fn remove_component_worldless(
         &mut self,
         world_entity: &E,
@@ -405,7 +405,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// Pipeline-mode `despawn_entity_worldless`. Byte-identical to
-    /// `WorldServer::despawn_entity_worldless`. Takes `&mut CoordinatorState`
+    /// `ResidentWorldServer::despawn_entity_worldless`. Takes `&mut CoordinatorState`
     /// because the priority-mirror eviction + room-cache cleanup write
     /// Coord-side state (pass `&mut sim_handle.state`).
     pub fn despawn_entity_worldless(
@@ -418,7 +418,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     }
 
     /// C.6 prep — send a message to the user at `address` without
-    /// reassembling the WorldServer.
+    /// reassembling the ResidentWorldServer.
     ///
     /// Cyberlith pattern:
     /// ```ignore
@@ -487,13 +487,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // and needs to publish the result into naia's scope tables, which now
     // live on `SendState`. These helpers expose just-enough surface for
     // the send-side scope policy without re-introducing the
-    // `WorldServer::user_scope_mut` chain that depends on
+    // `ResidentWorldServer::user_scope_mut` chain that depends on
     // `CoordinatorState::user_store` and `RoomStore`.
 
     /// Returns a snapshot of the pending scope-check tuples
     /// `(room_key, user_key, world_entity)`.
     ///
-    /// Mirrors `WorldServer::scope_checks_pending()` but operates against
+    /// Mirrors `ResidentWorldServer::scope_checks_pending()` but operates against
     /// the relocated `SendState::scope_checks_cache`. Cyberlith's
     /// `run_scope_policy` system reads this each tick to decide which
     /// per-user / per-entity scope decisions to recompute.
@@ -503,7 +503,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// Mark all currently-pending scope checks as handled.
     ///
-    /// Mirrors `WorldServer::mark_scope_checks_pending_handled()`. Call
+    /// Mirrors `ResidentWorldServer::mark_scope_checks_pending_handled()`. Call
     /// after every batch returned by [`scope_checks_pending`].
     pub fn mark_scope_checks_pending_handled(&mut self) {
         self.state.scope_checks_cache.mark_pending_handled();
@@ -515,7 +515,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// `entity_scope_map` and pushes a `ScopeChange::ScopeToggled` onto
     /// the cross-half `scope_change_queue`. It does **NOT** run the
     /// publicity/owner pre-checks that
-    /// `WorldServer::user_scope_set_entity` runs — D5's send-side scope
+    /// `ResidentWorldServer::user_scope_set_entity` runs — D5's send-side scope
     /// policy is responsible for only invoking it on entities it has
     /// already determined are valid scope targets.
     ///
@@ -549,7 +549,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// performed if the entity is not registered) and forwards to the
     /// global-entity-keyed setter.
     ///
-    /// Mirrors `WorldServer::UserScopeMut::include / exclude` ergonomics
+    /// Mirrors `ResidentWorldServer::UserScopeMut::include / exclude` ergonomics
     /// for the Send SubApp world (where bevy entities are the natural
     /// key but the cross-half scope queue is keyed by `GlobalEntity`).
     /// Used by cyberlith D.5b's send-side `static_tile_scope_policy`.
@@ -593,7 +593,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // scope query: is `world_entity` currently in-scope for `user_key`?
     // ====================================================================
     //
-    // Mirrors `WorldServer::user_scope_has_entity` (world_server.rs:2292)
+    // Mirrors `ResidentWorldServer::user_scope_has_entity` (world_server.rs:2292)
     // with one adaptation: the `sim_handle.resource_registry.is_resource_entity`
     // call (which lives on CoordinatorState, not accessible from SendHandle)
     // is replaced by the `is_resource: bool` parameter. The caller
@@ -606,13 +606,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.4 (2026-05-19) — query
     /// whether `world_entity` is currently in-scope for `user_key`.
     ///
-    /// Mirrors `WorldServer::user_scope_has_entity` but operates against
+    /// Mirrors `ResidentWorldServer::user_scope_has_entity` but operates against
     /// Send-side state only — no Coord state required. The one Coord-only
     /// field accessed by the original (`sim_handle.resource_registry`) is
     /// replaced by the `is_resource` parameter; the caller supplies it via
     /// `CoordHandle::is_resource_entity(world_entity)` before calling here.
     ///
-    /// Decision logic (byte-identical to `WorldServer::user_scope_has_entity`
+    /// Decision logic (byte-identical to `ResidentWorldServer::user_scope_has_entity`
     /// once the `is_resource` substitution is accounted for):
     /// 1. Owner of a client-owned entity is always in-scope.
     /// 2. Private entities are never in-scope for non-owners.

@@ -5,7 +5,7 @@ use std::{
 
 use naia_shared::{BigMapKey, Channel, ChannelKind, GlobalEntity, Message};
 
-use super::{server::WorldServer, user::UserKey};
+use super::{server::ResidentWorldServer, user::UserKey};
 
 /// Opaque handle to a room on the server.
 ///
@@ -114,12 +114,12 @@ impl Room {
 /// Obtained from [`Server::room`]. Lets you inspect membership (users and
 /// entities) without borrowing the server mutably.
 pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s WorldServer<E>,
+    server: &'s ResidentWorldServer<E>,
     key: RoomKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
-    pub(crate) fn new(server: &'s WorldServer<E>, key: &RoomKey) -> Self {
+    pub(crate) fn new(server: &'s ResidentWorldServer<E>, key: &RoomKey) -> Self {
         Self { server, key: *key }
     }
 
@@ -188,12 +188,12 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomRef<'s, E> {
 /// Obtained from [`Server::room_mut`]. Lets you add/remove users and entities,
 /// broadcast messages, and destroy the room.
 pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s mut WorldServer<E>,
+    server: &'s mut ResidentWorldServer<E>,
     key: RoomKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> RoomMut<'s, E> {
-    pub(crate) fn new(server: &'s mut WorldServer<E>, key: &RoomKey) -> Self {
+    pub(crate) fn new(server: &'s mut ResidentWorldServer<E>, key: &RoomKey) -> Self {
         Self { server, key: *key }
     }
 

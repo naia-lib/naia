@@ -212,7 +212,7 @@ pub static SERVER_WORLD_PKTS_SENT: AtomicUsize = AtomicUsize::new(0);
 /// A server that uses either UDP or WebRTC communication to send/receive
 /// messages to/from connected clients, and syncs registered entities to
 /// clients to whom they are in-scope
-pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
+pub struct ResidentWorldServer<E: Copy + Eq + Hash + Send + Sync> {
     /// Cross-thread shared state (C.3 Phase 4 step 4-A).
     /// Init-only fields (`server_config`, kind tables, `global_dirty`) live
     /// here so pipeline recv/send handles can hold an `Arc<ServerShared<E>>`
@@ -234,8 +234,8 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) sim_handle: crate::server::CoordinatorState<E>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
-    /// Create a new WorldServer
+impl<E: Copy + Eq + Hash + Send + Sync> ResidentWorldServer<E> {
+    /// Create a new ResidentWorldServer
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
         let protocol: Protocol = protocol.into();
 
@@ -334,7 +334,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     pub(crate) fn entity_converter(&self) -> &dyn EntityAndGlobalEntityConverter<E> {
         // 4-E.2c: GlobalEntityMap now lives behind ServerShared::global_entity_map
-        // RwLock. The trait impl on WorldServer below acquires its own brief
+        // RwLock. The trait impl on ResidentWorldServer below acquires its own brief
         // read guards, so callers get a converter that does the right thing
         // without exposing the inner map.
         self
@@ -388,7 +388,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         // 4-E.2e: recv-side insertion happens directly (same thread
         // owns recv_user_connections). The send half is queued via
         // `SendStateUpdate::ConnectionAdded` — in serial mode the queue
-        // drains at `WorldServer::receive`'s tail before the user can
+        // drains at `ResidentWorldServer::receive`'s tail before the user can
         // observe any difference; in pipeline mode the coordinator
         // drains at step 6.5 so the recv thread never touches the
         // send-side map directly.
@@ -645,7 +645,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    /// Consume this `WorldServer` and return the three pipeline pieces
+    /// Consume this `ResidentWorldServer` and return the three pipeline pieces
     /// (step 4-E.2f). `CoordinatorState<E>` is handed back to the caller
     /// directly so the bevy pipeline adapter can stash it inside
     /// `ServerImpl::WorldOnly` (or equivalent) and orchestrate the
@@ -670,12 +670,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         )
     }
 
-    /// Reassemble a `WorldServer<E>` from its three pipeline pieces
+    /// Reassemble a `ResidentWorldServer<E>` from its three pipeline pieces
     /// (step 4-E.2f). Used by callers that need to drive the full
     /// `receive_all_packets` / `send_all_packets` lifecycle through the
     /// existing methods after a structural split — primarily the
     /// `pipeline_recv_send_independent` smoke test and any 4-F adapter
-    /// path that still needs the monolithic `WorldServer` surface.
+    /// path that still needs the monolithic `ResidentWorldServer` surface.
     ///
     /// The `Arc<ServerShared<E>>` is recovered from `recv.shared`
     /// (the same Arc clone also lives on `send.shared`).
@@ -693,7 +693,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         }
     }
 
-    /// Consume this `WorldServer` into the field-level pipeline states
+    /// Consume this `ResidentWorldServer` into the field-level pipeline states
     /// (step 4-E). Dissolves the per-user `Connection` wrappers into the
     /// recv and send halves, populating `RecvState::recv_user_connections`
     /// and `SendState::send_user_connections` respectively. Returns the
@@ -701,14 +701,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// caller may need (currently the coordinator-only state on the
     /// world_server such as room_store, entity_room_map, etc., still
     /// lives on `Self` and is *not* migrated here — step 4-F's coordinator
-    /// keeps the residual `WorldServer` around for borrow-API surface
+    /// keeps the residual `ResidentWorldServer` around for borrow-API surface
     /// continuity per the §8 "Refined architecture" note; this method
     /// returns only the two thread-side states needed by the recv/send
     /// threads).
     ///
     /// **Step 4-F integration:** the cyberlith coordinator calls this
     /// during `GameCell::init()` to harvest `RecvState` + `SendState`
-    /// for the recv/send threads, while keeping the residual `WorldServer`
+    /// for the recv/send threads, while keeping the residual `ResidentWorldServer`
     /// alive as the `Server` SystemParam target. The split happens once
     /// at startup; thereafter the two states evolve independently
     /// (subject to the handoff queues maintained on `ServerShared`).
@@ -771,7 +771,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let Some(user) = self.sim_handle.user_store.get(user_key) else {
             #[cfg(feature = "f3_diag")]
             eprintln!(
-                "[F3-DIAG naia/WorldServer] send_message_inner user_not_found_in_user_store user={:?} channel={:?}",
+                "[F3-DIAG naia/ResidentWorldServer] send_message_inner user_not_found_in_user_store user={:?} channel={:?}",
                 user_key, channel_kind
             );
             return Err(NaiaServerError::UserNotFound);
@@ -779,14 +779,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         let Some(send_conn) = self.send.send_user_connections.get_mut(&user.address()) else {
             #[cfg(feature = "f3_diag")]
             eprintln!(
-                "[F3-DIAG naia/WorldServer] send_message_inner no_send_conn user={:?} addr={:?} channel={:?}",
+                "[F3-DIAG naia/ResidentWorldServer] send_message_inner no_send_conn user={:?} addr={:?} channel={:?}",
                 user_key, user.address(), channel_kind
             );
             return Err(NaiaServerError::UserNotFound);
         };
         #[cfg(feature = "f3_diag")]
         eprintln!(
-            "[F3-DIAG naia/WorldServer] send_message_inner enqueue user={:?} addr={:?} channel={:?}",
+            "[F3-DIAG naia/ResidentWorldServer] send_message_inner enqueue user={:?} addr={:?} channel={:?}",
             user_key, user.address(), channel_kind
         );
         let gwm = self.shared.global_world_manager.read();
@@ -1007,7 +1007,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     ///      Touches `self.send.*` only.
     ///
     /// Step 4-F.naia.h factors phase 1 into a coordination-side method
-    /// (`WorldServer::run_send_preamble`) and moves phases 2 + 3 to
+    /// (`ResidentWorldServer::run_send_preamble`) and moves phases 2 + 3 to
     /// `SendState::send_all_packets` so `SendHandle` can drive them
     /// from a background thread. See
     /// `pipeline_recv_send_independent.rs:20-31` for the deferred-work
@@ -1043,7 +1043,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// runs this on MAIN inside the park window (before the send worker transmits
     /// the resulting plan a tick later).
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
-        // Defense-in-depth: drainer is also called by every WorldServer::room_*
+        // Defense-in-depth: drainer is also called by every ResidentWorldServer::room_*
         // method, so the queue should be empty here for in-process callers.
         self.send
             .apply_pending_room_changes(&self.shared.scope_change_queue);
@@ -4222,7 +4222,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 })
                 .collect();
             eprintln!(
-                "[F3-DIAG naia/WorldServer] drain_scope_change_queue draining {} variants: {:?}",
+                "[F3-DIAG naia/ResidentWorldServer] drain_scope_change_queue draining {} variants: {:?}",
                 changes.len(),
                 summary
             );
@@ -4330,10 +4330,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                 ScopeChange::ConfigureReplication(_) => {
                     // D.2.2: only the Coord-only `CoordHandle::configure_
                     // entity_replication` pushes this variant; the legacy
-                    // fused `WorldServer::configure_entity_replication`
+                    // fused `ResidentWorldServer::configure_entity_replication`
                     // path is fully synchronous and never enqueues it.
                     unreachable!(
-                        "ConfigureReplication is never pushed on the fused WorldServer path"
+                        "ConfigureReplication is never pushed on the fused ResidentWorldServer path"
                     );
                 }
             }
@@ -4593,7 +4593,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     // `RecvState::handle_disconnects` (recv-only).
 }
 
-impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for WorldServer<E> {
+impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for ResidentWorldServer<E> {
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
@@ -4620,7 +4620,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Wo
 
 cfg_if! {
     if #[cfg(feature = "test_utils")] {
-        impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
+        impl<E: Copy + Eq + Hash + Send + Sync> ResidentWorldServer<E> {
             #[doc(hidden)]
             pub fn diff_handler_global_count(&self) -> usize {
                 self.shared.global_world_manager.read().global_diff_handler_count()
@@ -4662,7 +4662,7 @@ cfg_if! {
 
         use naia_shared::{LocalEntity, OwnedLocalEntity};
 
-        impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
+        impl<E: Copy + Eq + Hash + Send + Sync> ResidentWorldServer<E> {
             /// Returns all LocalEntity IDs for entities replicated to the given user.
             ///
             /// Returns the set of LocalEntity IDs that currently exist for that user

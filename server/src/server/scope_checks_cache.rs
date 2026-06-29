@@ -2,7 +2,7 @@ use crate::{RoomKey, UserKey};
 use std::hash::Hash;
 
 /// Push-based mirror of the `(room, user, entity)` tuples produced by
-/// `WorldServer::scope_checks()`. Replaces the per-tick
+/// `ResidentWorldServer::scope_checks()`. Replaces the per-tick
 /// `O(rooms × users × entities)` rebuild with `O(churn)` updates whenever
 /// rooms, users, or entities mutate. `as_slice()` is `O(1)` and allocates
 /// nothing.
@@ -89,7 +89,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
     }
 
     /// Single-pass removal of every tuple referencing `entity` across all
-    /// rooms — invoked by `WorldServer::despawn_entity_worldless` so the
+    /// rooms — invoked by `ResidentWorldServer::despawn_entity_worldless` so the
     /// cache stays in sync without an O(rooms × entities) per-room walk.
     pub fn on_entity_despawned(&mut self, entity: E) {
         self.tuples.retain(|&(_, _, e)| e != entity);
@@ -106,7 +106,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> ScopeChecksCache<E> {
 mod tests {
     //! Unit tests for the push-based cache state machine. End-to-end
     //! equivalence with the slow-path recompute is enforced by the
-    //! debug-build assertion in `WorldServer::scope_checks()` (every 1024th
+    //! debug-build assertion in `ResidentWorldServer::scope_checks()` (every 1024th
     //! read), so these tests focus on the cache's own invariants under each
     //! mutation hook.
     //!
@@ -143,7 +143,7 @@ mod tests {
 
     /// Recompute the expected (room, user, entity) set from a description of
     /// rooms-with-users-and-entities — mirrors the slow-path
-    /// `WorldServer::scope_checks_recompute_slow` for these tests.
+    /// `ResidentWorldServer::scope_checks_recompute_slow` for these tests.
     fn expected(rooms: &[(RoomKey, &[UserKey], &[u32])]) -> HashSet<(RoomKey, UserKey, u32)> {
         let mut out = HashSet::new();
         for &(rk, users, entities) in rooms {
@@ -520,7 +520,7 @@ mod tests {
 
     #[test]
     fn world_server_room_ops_observe_same_state_post_refactor() {
-        // Regression: WorldServer::room_add_user should produce the same cache
+        // Regression: ResidentWorldServer::room_add_user should produce the same cache
         // state as a direct on_user_added_to_room call.
         let mut direct_cache = ScopeChecksCache::<u32>::new();
         direct_cache.on_user_added_to_room(rk(1), uk(2), [100u32, 200]);

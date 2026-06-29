@@ -1,7 +1,7 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — deferred
 //! `configure_entity_replication` op model.
 //!
-//! `WorldServer::configure_entity_replication` (`world_server.rs:1423`)
+//! `ResidentWorldServer::configure_entity_replication` (`world_server.rs:1423`)
 //! runs a publicity-transition decision tree whose leaves interleave
 //! THREE subsystems:
 //!
@@ -37,7 +37,7 @@
 //! `SendHandle::apply_pending_world_hooks<W>` (called from the Sim
 //! system, which holds `&mut World`).
 //!
-//! Wire-byte identity vs the legacy fused-`WorldServer` path is the
+//! Wire-byte identity vs the legacy fused-`ResidentWorldServer` path is the
 //! binding correctness criterion. Each op below is a verbatim relocation
 //! of the corresponding statement in the legacy method body — same
 //! inputs, same call, same order.

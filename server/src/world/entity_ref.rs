@@ -2,7 +2,7 @@ use std::hash::Hash;
 
 use naia_shared::{EntityAuthStatus, ReplicaRefWrapper, ReplicatedComponent, WorldRefType};
 
-use crate::{server::WorldServer, EntityOwner, ReplicationConfig};
+use crate::{server::ResidentWorldServer, EntityOwner, ReplicationConfig};
 
 /// Scoped read-only handle for a server entity.
 ///
@@ -10,13 +10,13 @@ use crate::{server::WorldServer, EntityOwner, ReplicationConfig};
 /// replication config, authority status, and ownership without borrowing the
 /// server mutably.
 pub struct EntityRef<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> {
-    server: &'s WorldServer<E>,
+    server: &'s ResidentWorldServer<E>,
     world: W,
     entity: E,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>> EntityRef<'s, E, W> {
-    pub(crate) fn new(server: &'s WorldServer<E>, world: W, entity: &E) -> Self {
+    pub(crate) fn new(server: &'s ResidentWorldServer<E>, world: W, entity: &E) -> Self {
         Self {
             server,
             world,

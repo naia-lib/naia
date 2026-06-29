@@ -4,11 +4,11 @@ use naia_shared::{
     AuthorityError, EntityAuthStatus, ReplicaMutWrapper, ReplicatedComponent, WorldMutType,
 };
 
-use crate::{room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig, UserKey};
+use crate::{room::RoomKey, server::ResidentWorldServer, EntityOwner, ReplicationConfig, UserKey};
 
 /// Scoped mutable handle for a server-owned entity.
 ///
-/// Obtained from [`Server::entity_mut`]. Borrows `WorldServer` for the
+/// Obtained from [`Server::entity_mut`]. Borrows `ResidentWorldServer` for the
 /// duration of the handle, so only one `EntityMut` can be live at a time.
 ///
 /// # Static-entity contract
@@ -25,7 +25,7 @@ use crate::{room::RoomKey, server::WorldServer, EntityOwner, ReplicationConfig, 
 /// `remove_component` on a static entity panics. This is enforced at
 /// runtime by the `allow_static_insert` flag.
 pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> {
-    server: &'s mut WorldServer<E>,
+    server: &'s mut ResidentWorldServer<E>,
     world: W,
     entity: E,
     /// True after `as_static()` is called — allows component insertion during
@@ -35,7 +35,7 @@ pub struct EntityMut<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> 
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E, W> {
-    pub(crate) fn new(server: &'s mut WorldServer<E>, world: W, entity: &E) -> Self {
+    pub(crate) fn new(server: &'s mut ResidentWorldServer<E>, world: W, entity: &E) -> Self {
         Self {
             server,
             world,
