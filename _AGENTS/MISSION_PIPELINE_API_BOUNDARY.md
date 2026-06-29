@@ -175,6 +175,19 @@ The "single knob, consumer code unchanged" property is realized at the bevy laye
 
 Today the worker threads + park/unpark barrier + worker loops live in the **bevy adapter** (`plugin_full.rs`: `park_workers`/`unpark_workers`/`spawn` at `:649/:718/:559-607`). For `receive`/`send` to be self-contained and framework-agnostic, this runtime moves **into naia-server core**, owned by `PipelinedServer<E>` (or a `PipelineRuntime` it holds): thread spawn, the parked-count barrier, the recv/send worker loops, and the `SnapshotSender`/`SnapshotReceiver` wiring (the slot type is already core — `pipeline_actors/snapshot_sender.rs`). Uses only `std::thread` + channels — no bevy. The bevy adapter then *calls* `receive`/`send` from the `ReceivePackets`/`SendPackets` sets instead of hand-rolling the window.
 
+> **G7-3 de-risk (VERIFIED 2026-06-29):** the move has **no real bevy coupling**.
+> The worker closures' only adapter-looking dependency is
+> `naia_bevy_shared::TestClock::{install_shared,shareable_handle,detach_shared}` —
+> but `TestClock` is defined in **`naia-shared`** (`shared/src/backends/test_time/timestamp.rs`)
+> and merely *re-exported* by `naia_bevy_shared` (M4 confirmed). Core calls it
+> directly under `feature = "test_time"`. `bevy_ecs::World` appears only in the
+> **main-side** `drain_recv_impl*` (which stays in the adapter — it fans events
+> into bevy `Messages`), NOT in the worker loops. `naia-server` already depends on
+> `smol` + `parking_lot`; the move adds only `crossbeam_channel` (the
+> `ReceiveOutput` hand-off). The `workers_active` / `pipeline_timing` cfg flags
+> and the `Entity`→`E` generalization come along mechanically. **Approach is
+> clean; the risk is execution-fidelity (determinism gate), not architecture.**
+
 #### `receive` internal sequence
 
 1. `park_workers()` — workers deposit handles in their slots.
