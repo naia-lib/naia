@@ -254,7 +254,7 @@ mod tests {
         let protocol = proto.build();
 
         let (sim_handle, _recv, _send) =
-            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
         let view = sim_handle.send_state_view();
         assert!(view.live_entities().is_empty(), "no entities → empty live");
@@ -278,7 +278,7 @@ mod tests {
         let protocol = proto.build();
 
         let (sim_handle, _recv, _send) =
-            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
         // Register a world entity (id = 42) + global entity + two
         // arbitrary component kinds. Bypass the WorldServer spawn API
@@ -322,7 +322,7 @@ mod tests {
         let protocol = proto.build();
 
         let (sim_handle, _recv, _send) =
-            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
         let world_entity: u64 = 7;
         let global_entity: GlobalEntity = {
@@ -370,7 +370,7 @@ mod tests {
         let protocol = proto.build();
 
         let (sim_handle, _recv, _send) =
-            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+            spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
         let e1: u64 = 1;
         let e2: u64 = 2;

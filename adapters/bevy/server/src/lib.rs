@@ -132,9 +132,10 @@ pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
+pub use naia_server::pipeline_actors::{SimPipeline, TickCtx};
 pub use plugin_full::{
     drain_recv_impl, drain_recv_impl_split, PluginInternalState, PluginSimConfig, RecvHandleRes,
-    SendHandleRes, SimEventReceiverRes, SimHandleRes, SnapshotReceiverRes, SnapshotSenderRes,
+    SendHandleRes, SimEventReceiverRes, SimPipelineRes, SnapshotReceiverRes, SnapshotSenderRes,
 };
 pub use server::Server;
 pub use sim_converter::SimConverter;

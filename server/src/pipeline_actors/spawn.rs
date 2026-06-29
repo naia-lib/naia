@@ -1,40 +1,36 @@
 //! `spawn_server_handles` — single entry point that constructs a
-//! [`WorldServer`] and immediately splits it into the three pipeline
-//! handles (sim_handle + recv + send).
+//! [`WorldServer`] and splits it into a [`SimPipeline`].
 //!
-//! Cyberlith's `GameCell::init` (per MISSION_SIM_OWNS_WORLD.md Phase B.7
-//! / C.1 / D.1) calls this once at startup; the three returned handles
-//! are then handed off to the Recv / Sim / Send SubApps.
+//! The returned [`SimPipeline`] owns all three sub-handles (sim, recv, send)
+//! and exposes them through the [`SimPipeline::tick`] API.
 
 use std::{hash::Hash, sync::Arc};
 
 use naia_shared::Protocol;
 
-use crate::{server::ServerShared, RecvHandle, SendHandle, ServerConfig, WorldServer};
+use crate::{server::ServerShared, ServerConfig, WorldServer};
 
-use super::SimHandle;
+use super::{handles::SimHandle, sim_pipeline::SimPipeline};
 
-/// Construct a [`WorldServer<E>`] and immediately split it into the three
-/// pipeline handles consumed by the 3-SubApp architecture.
+/// Construct a [`WorldServer<E>`] and immediately split it into a
+/// [`SimPipeline<E>`].
+///
+/// The `SimPipeline` owns all three pipeline sub-handles. Pass it to the
+/// bevy adapter's `Plugin::sim_integration_full` via a `SimPipelineRes`
+/// resource, then drive ticks with [`SimPipeline::tick`].
 ///
 /// Equivalent to:
 /// ```ignore
 /// let ws = WorldServer::<E>::new(config, protocol);
 /// let (coord_state, recv, send) = ws.into_pipeline_handles();
 /// let shared = Arc::clone(&recv.state.shared);
-/// (SimHandle { state: coord_state, shared }, recv, send)
+/// let sim = SimHandle { state: coord_state, shared };
+/// SimPipeline::new(sim, recv, send)
 /// ```
-///
-/// The returned `Arc<ServerShared<E>>` on [`SimHandle::shared`] is a
-/// clone of the same `Arc` already held by `recv.state.shared` and
-/// `send.state.shared` — all three handles see the same underlying
-/// [`ServerShared`] allocation, so cross-handle reads of shared init
-/// data are consistent without any synchronization beyond what
-/// [`ServerShared`] itself provides.
 pub fn spawn_server_handles<E, P>(
     server_config: ServerConfig,
     protocol: P,
-) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
+) -> SimPipeline<E>
 where
     E: Copy + Eq + Hash + Send + Sync + 'static,
     P: Into<Protocol>,
@@ -46,5 +42,5 @@ where
         state: coord_state,
         shared,
     };
-    (sim_handle, recv, send)
+    SimPipeline::new(sim_handle, recv, send)
 }

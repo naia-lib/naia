@@ -48,7 +48,7 @@ fn fresh_receiver_drains_empty() {
 #[test]
 fn push_pending_ticks_lands_in_tick_drainer() {
     let (sim_handle, _recv_handle, _send_handle) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles();
 
     let receiver = SimEventReceiver::<Entity>::new();
 
@@ -76,7 +76,7 @@ fn push_pending_ticks_lands_in_tick_drainer() {
 fn cloned_receiver_shares_state() {
     // Arc-internal: clones share the same backing storage.
     let (sim_handle, _recv_handle, _send_handle) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles();
 
     let receiver = SimEventReceiver::<Entity>::new();
     let clone = receiver.clone();

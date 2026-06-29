@@ -75,7 +75,7 @@ fn handles() -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let (sim_handle, recv, send) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles();
 
     let hub = LocalTransportHub::new(next_addr().parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
@@ -321,7 +321,7 @@ fn not_listening_short_circuits() {
     // skip the drain entirely — a queued Despawn leaves the entity intact,
     // matching the legacy `world_to_host_sync` `is_listening` guard.
     let (mut sim_handle, recv, send) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles();
     assert!(!send.is_listening(), "fresh handles are not listening");
 
     let mut sim_app = App::new();

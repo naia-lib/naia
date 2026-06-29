@@ -132,6 +132,16 @@ impl<'w> WorldMut<'w> {
     pub fn new(world: &'w mut World) -> Self {
         Self { world }
     }
+
+    /// Access the raw bevy [`World`].
+    ///
+    /// Used by `naia-bevy-server` extension methods on
+    /// [`naia_server::TickCtx<'_, Entity, WorldMut<'_>>`] that need bevy
+    /// primitives not reachable through [`naia_shared::WorldMutType`]
+    /// (e.g., draining `Messages<HostSyncEvent>`).
+    pub fn bevy_world_mut(&mut self) -> &mut World {
+        self.world
+    }
 }
 
 impl<'w> WorldRefType<Entity> for WorldMut<'w> {

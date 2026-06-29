@@ -4,10 +4,10 @@
 //! Verifies:
 //!   - Plugin install registers the expected Resources (`SimConverter`,
 //!     `SimEventReceiverRes`, `SnapshotSenderRes`, `SnapshotReceiverRes`,
-//!     `SimHandleRes`, `SendHandleRes`, `PluginInternalState`).
-//!   - Before `listen()`, `SimHandleRes` is empty (workers not running).
+//!     `SimPipelineRes`, `SendHandleRes`, `PluginInternalState`).
+//!   - Before `listen()`, `SimPipelineRes` inner pipeline is None (workers not running).
 //!   - After `listen()` with a `LocalServerSocket`, `App::update`
-//!     drains the armed sim_handle into `SimHandleRes` and Sim systems can
+//!     drains the armed pipeline into `SimPipelineRes` and Sim systems can
 //!     observe it.
 //!   - Dropping the App joins the worker threads cleanly within 5s.
 
@@ -18,7 +18,7 @@ use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
     pipeline_actors::SnapshotSender, transport, Plugin as ServerPlugin, PluginInternalState,
-    PluginSimConfig, SendHandleRes, ServerConfig, SimConverter, SimEventReceiverRes, SimHandleRes,
+    PluginSimConfig, SendHandleRes, ServerConfig, SimConverter, SimEventReceiverRes, SimPipelineRes,
     SnapshotReceiverRes, SnapshotSenderRes,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -69,8 +69,8 @@ fn plugin_install_registers_expected_resources() {
         "SnapshotReceiverRes installed",
     );
     assert!(
-        w.get_resource::<SimHandleRes>().is_some(),
-        "SimHandleRes installed",
+        w.get_resource::<SimPipelineRes>().is_some(),
+        "SimPipelineRes installed",
     );
     assert!(
         w.get_resource::<SendHandleRes>().is_some(),
@@ -83,30 +83,30 @@ fn plugin_install_registers_expected_resources() {
 }
 
 #[test]
-fn sim_handle_empty_before_listen() {
+fn sim_pipeline_empty_before_listen() {
     let app = build_app();
-    let sim_handle_res = app.world().resource::<SimHandleRes>();
+    let res = app.world().resource::<SimPipelineRes>();
     assert!(
-        sim_handle_res.0.is_none(),
-        "SimHandleRes is None before listen()",
+        res.0.is_none(),
+        "SimPipelineRes is None before listen()",
     );
 }
 
 #[test]
-fn listen_drains_armed_sim_handle_into_resource_after_update() {
+fn listen_drains_armed_pipeline_into_resource_after_update() {
     let mut app = build_app();
     {
         let state = app.world().resource::<PluginInternalState>();
         state.listen(local_socket("127.0.0.1:23001"));
     }
-    // Drives the install Startup-equivalent system (registered in
-    // Update by sim_integration_full) which drains armed_sim_handle →
-    // SimHandleRes.
+    // Drives the drain_armed_into_res system (registered in Update by
+    // sim_integration_full) which drains the armed SimPipeline into
+    // SimPipelineRes.
     app.update();
-    let sim_handle_res = app.world().resource::<SimHandleRes>();
+    let res = app.world().resource::<SimPipelineRes>();
     assert!(
-        sim_handle_res.0.is_some(),
-        "SimHandleRes filled after listen + update",
+        res.0.is_some(),
+        "SimPipelineRes filled after listen + update",
     );
 }
 

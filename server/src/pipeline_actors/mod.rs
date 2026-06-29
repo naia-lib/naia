@@ -25,6 +25,7 @@ mod send_state_view;
 mod sim_converter;
 #[allow(missing_docs)]
 mod sim_event_receiver;
+mod sim_pipeline;
 mod snapshot_sender;
 mod spawn;
 
@@ -40,6 +41,7 @@ pub use sim_event_receiver::{
     SimConnectEvent, SimDespawnEntityEvent, SimDisconnectEvent, SimErrorEvent, SimEventReceiver,
     SimPublishEntityEvent, SimSpawnEntityEvent, SimTickEvent, SimUnpublishEntityEvent,
 };
+pub use sim_pipeline::{SimPipeline, TickCtx};
 pub use snapshot_sender::{SnapshotReceiver, SnapshotSender};
 pub use spawn::spawn_server_handles;
 

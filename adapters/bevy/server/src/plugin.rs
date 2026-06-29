@@ -96,7 +96,7 @@ pub struct Plugin {
     /// [`Plugin::sim_integration_full`] also constructs the three
     /// pipeline handles, installs them + the C.6-prep facade
     /// resources (`SimConverter`, `SimEventReceiver`, `SnapshotSender`,
-    /// `SnapshotReceiver`, `SimHandleRes`, `SendHandleRes`,
+    /// `SnapshotReceiver`, `SimPipelineRes`, `SendHandleRes`,
     /// `PluginInternalState`), and registers the main-side
     /// `drain_recv_worker_output` + `propagate_worker_panics` systems
     /// in `change_detection_schedule` (or `Update`).

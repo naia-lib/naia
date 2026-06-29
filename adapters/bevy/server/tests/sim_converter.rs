@@ -40,7 +40,7 @@ fn handles() -> (
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
-    spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol())
+    spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles()
 }
 
 #[test]

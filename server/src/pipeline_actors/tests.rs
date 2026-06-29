@@ -38,7 +38,7 @@ fn spawn_server_handles_constructs_three_handles() {
     let protocol = proto.build();
 
     let (sim_handle, recv, send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // The three handles construct and own their own state. The Arc on
     // SimHandle::shared is the same allocation as on the recv/send
@@ -149,7 +149,7 @@ fn drain_tick_buffer_on_empty_recv_handle_is_empty() {
     let protocol = proto.build();
 
     let (_sim_handle, mut recv, _send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     let messages = drain_tick_buffer(&mut recv, 0);
     // TickBufferMessages has no public is_empty / len; smoke-check that
@@ -194,7 +194,7 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     let protocol = proto.build();
 
     let (_sim_handle, mut recv, _send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // Sanity-check that the channel kind made it into the shared
     // channel_kinds table — if this is empty, the protocol-build path is
@@ -282,7 +282,7 @@ fn sim_handle_room_ops_deferred_drain_path() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, mut send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // Register entity 42u64 in global_entity_map so room_add_entity can
     // look up its GlobalEntity.
@@ -361,7 +361,7 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, _send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // Register a user with a known address.
     let user_key = UserKey::from_u64(7);
@@ -459,7 +459,7 @@ fn sim_handle_receive_user_inserts_into_user_store() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, _send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     let user_key = UserKey::from_u64(100);
     let user_addr: SocketAddr = "127.0.0.1:11000".parse().unwrap();
@@ -498,7 +498,7 @@ fn sim_handle_disconnect_user_nonexistent_is_noop() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, _send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     let unknown_key = UserKey::from_u64(999);
 
@@ -525,7 +525,7 @@ fn sim_handle_disconnect_user_queues_request() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, _send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     let user_key = UserKey::from_u64(200);
     let user_addr: SocketAddr = "127.0.0.1:12000".parse().unwrap();
@@ -568,7 +568,7 @@ fn send_handle_scope_checks_pending_and_mark_handled() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, mut send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // Register entity 10u64 in global_entity_map.
     sim_handle
@@ -631,7 +631,7 @@ fn send_handle_user_scope_has_entity_explicit_include_exclude() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, mut send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // Register entity 42u64 as a server-owned entity.
     let world_entity: u64 = 42;
@@ -703,7 +703,7 @@ fn send_handle_user_scope_has_entity_room_default() {
     let protocol = proto.build();
 
     let (mut sim_handle, _recv, mut send) =
-        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol);
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // Register two entities.
     let entity_in_room: u64 = 100;

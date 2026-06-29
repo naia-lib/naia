@@ -68,7 +68,7 @@ fn build_app() -> App {
 fn empty_output_no_sink_population() {
     let mut app = build_app();
     let (sim_handle, _recv_handle, _send_handle) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
     let output = naia_server::ReceiveOutput::<Entity> {
@@ -100,7 +100,7 @@ fn empty_output_no_sink_population() {
 fn pending_ticks_fan_out_to_both_sinks() {
     let mut app = build_app();
     let (sim_handle, _recv_handle, _send_handle) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
     let output = naia_server::ReceiveOutput::<Entity> {
@@ -144,8 +144,8 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
     let mut app_combined = build_app();
     let mut app_legacy = build_app();
 
-    let (sim_a, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
-    let (sim_b, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
+    let (sim_a, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
+    let (sim_b, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
     let sim_receiver = SimEventReceiver::<Entity>::new();
 
     let make_output = || naia_server::ReceiveOutput::<Entity> {
@@ -181,7 +181,7 @@ fn cloned_sim_receiver_observes_helper_output() {
     // handle; a clone made beforehand sees the same events.
     let mut app = build_app();
     let (sim_handle, _, _) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol());
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
     let sim_receiver = SimEventReceiver::<Entity>::new();
     let observer = sim_receiver.clone();
 

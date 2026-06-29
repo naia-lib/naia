@@ -49,14 +49,14 @@ use naia_server::{RecvHandle, SendHandle};
 /// `Plugin::sim_integration_full`, `RecvHandleRes` / `SendHandleRes`
 /// wrap shared park-window slots: the workers must be parked (via
 /// [`crate::PluginInternalState::park_workers`]) before taking them, and
-/// unparked after returning them. `SimHandleRes` is a plain `Option`
-/// (sim_handle lives only on main):
+/// unparked after returning them. The sim handle lives inside `SimPipelineRes`:
 /// ```ignore
 /// fn sim_to_host_sync(world: &mut World) {
 ///     let state = world.resource::<PluginInternalState>();
 ///     state.park_workers();
 ///
-///     let mut sim_handle = world.resource_mut::<SimHandleRes>().0.take().unwrap();
+///     let mut sim_handle = world.resource_mut::<SimPipelineRes>()
+///         .0.as_mut().map(|p| p.take_sim()).unwrap();
 ///     let recv_slot = world.resource::<RecvHandleRes>().0.clone();
 ///     let send_slot = world.resource::<SendHandleRes>().0.clone();
 ///     let recv = recv_slot.lock().take().unwrap();
@@ -65,7 +65,9 @@ use naia_server::{RecvHandle, SendHandle};
 ///     let (sim_handle, recv, send) =
 ///         drain_host_sync_into_pipeline(world, sim_handle, recv, send);
 ///
-///     world.resource_mut::<SimHandleRes>().0 = Some(sim_handle);
+///     if let Some(p) = world.resource_mut::<SimPipelineRes>().0.as_mut() {
+///         p.restore_sim(sim_handle);
+///     }
 ///     *recv_slot.lock() = Some(recv);
 ///     *send_slot.lock() = Some(send);
 ///

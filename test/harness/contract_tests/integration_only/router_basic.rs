@@ -94,7 +94,7 @@ fn spawn_server_handles_facade_matches_into_pipeline_handles() {
     // `WorldServer::new + into_pipeline_handles`. From the harness side
     // we can confirm it returns the same three-way decomposition that
     // `into_pipeline_handles` does.
-    let (coord, recv, send) = spawn_server_handles::<u64, _>(ServerConfig::default(), protocol());
+    let (coord, recv, send) = spawn_server_handles::<u64, _>(ServerConfig::default(), protocol()).take_handles();
     // CoordHandle::shared and recv.state.shared / send.state.shared all
     // alias the same Arc<ServerShared>; strong-count must be ≥ 3.
     let strong = std::sync::Arc::strong_count(&coord.shared);

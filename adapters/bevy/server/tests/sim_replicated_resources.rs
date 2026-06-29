@@ -65,7 +65,7 @@ fn build_handles_listening(
 
     let naia_proto: naia_shared::Protocol = protocol().into();
     let (sim_handle, recv, send) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_proto);
+        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_proto).take_handles();
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);

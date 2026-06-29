@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: DESIGN — open questions in §3; Connor sign-off pending
+status: G1 IN PROGRESS (Option B + Strategy 1 approved by Connor 2026-06-29)
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -20,69 +20,49 @@ G6 carrier management also goes in `naia-server` core; the `Res<R>` bevy surface
 
 The bevy adapter's role is unchanged: thin delegation shims + bevy-native ergonomics (injectable resources, `CommandsExt`, `Res<R>`). A non-bevy consumer of naia-server gets G1–G5 against their own `WorldMutType<E>` impl.
 
-## 2. Design decisions — OPEN (Connor sign-off pending)
+## 2. Design decisions — RESOLVED
 
-### 2a. G1 tick-driver shape
+### 2a. G1 tick-driver shape — **APPROVED: Option B (Connor 2026-06-29)**
 
-**Option A — additive `PipelineDriver<E>` resource (non-breaking)**
-`spawn_server_handles` installs a fourth resource alongside the existing three `*HandleRes`.
-```rust
-driver.tick(&mut world_proxy, |ctx| {
-    ctx.host_sync();
-    ctx.send_all_packets();
-});
-```
-+ Additive; three handles still accessible during migration.
-− Four resources long-term; callers can still grab handles separately.
-
-**Option B — unified `SimPipeline<E>` replaces three separate handles (breaking)**
-Three handles become internal. `spawn_server_handles` returns `SimPipeline<E>`.
+`spawn_server_handles` returns `SimPipeline<E>` (handles are internal).
 ```rust
 pipeline.tick(&mut world_proxy, |ctx| { ... });
 pipeline.mark_entity_as_static(&entity);   // G3 also on same type
 ```
-+ Cleanest long-term API; handles are a true implementation detail.
-− Breaking change; naia API + cyberlith migration must land atomically.
+Implemented:
+- `SimPipeline<E>` + `TickCtx<'_, E, W>` in `naia-server`
+- `SimPipelineRes(pub Option<SimPipeline<Entity>>)` replaces `SimHandleRes` in `naia-bevy-server`
+- `take_sim()`/`restore_sim()` on `SimPipeline` for `drain_recv_impl_split` (which keeps taking recv/send via caller-provided Arc slots for backward compat)
+- `PluginInternalState` fields: `armed_pipeline` replaces `armed_handles` + `armed_sim_handle`
+- All naia-server + naia-bevy-server tests updated + passing
 
-**Option C — `tick(...)` on `SimHandle<E>` taking recv+send as arguments**
-No new types; three-arg call site.
-− Awkward ergonomics; mixes coord + lifecycle concerns.
+### 2b. G3 pub(crate) strategy — **APPROVED: Strategy 1 (Connor 2026-06-29)**
 
-**Tycho recommendation: Option B** (single type, handles internal). Option A acceptable if incremental landing is preferred.
-
-### 2b. G3 pub(crate) strategy
-
-**Strategy 1 — thin named methods on `SimHandle<E>` / `SimPipeline<E>` (RECOMMENDED)**
-One naia method per leaked op. Zero internal exposure. Bevy adapter `CommandsExt` becomes a shim.
+Thin named methods on `SimHandle<E>` / `SimPipeline<E>`. Bevy adapter `CommandsExt` becomes a shim.
 ```rust
 sim.mark_entity_as_static(&entity);
 sim.configure_entity(&entity, config);
 sim.take_entity_authority(&entity, &user_key);
 ```
-+ Named, tested, no internals exposed; D11 CellCommandsExt dies.
 
-**Strategy 2 — `SimCoordCtx<'_, E>` accessor exposing `GlobalWorldManager` + `RoomStore`**
-Scoped write access; callers call GWM/room ops directly.
-− Leaks internal types as public API; callers can re-invent mechanism.
+### 2c. Cyberlith lane — **DECIDED: Tycho owns both worktrees**
 
-**Tycho recommendation: Strategy 1.**
+naia feature branch + cyberlith feature branch (naia path-dep repointed). Land atomically.
 
-### 2c. Cyberlith lane
+## 3. Sequence + status
 
-The cyberlith-side migration (`server_access.rs` → policy-on-G1–G6) co-evolves with the naia API.
-Options:
-- **Tycho owns both worktrees** (per §7.5 of the audit spec): naia feature branch + cyberlith feature branch, repointed naia path-dep, land atomically.
-- **Naia-only**: Tycho lands G1–G6 in naia; cyberlith session does the `server_access.rs` migration after.
+| Step | Description | Status |
+|------|-------------|--------|
+| G1 | `SimPipeline<E>` + `TickCtx<E,W>` tick-driver; `SimPipelineRes` in bevy adapter; tests green | **IN PROGRESS** (all core changes landed; workspace tests running) |
+| G2 | Startup window API — `io_load` on `SimPipeline` (no raw `WorldServer` reassembly in cyberlith) | PENDING |
+| G3 | Coord-only ops as named methods on `SimHandle`/`SimPipeline`; `CommandsExt` becomes shim | PENDING |
+| G4 | `spawn_replicated` fused op | PENDING |
+| G5 | `enable_replication_for_existing_entity` | PENDING |
+| G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
+| G7 | Ergonomic single-call opt-in wrapper: `PluginInternalState::with_parked_tick(world, \|ctx\| {...})` collapses park/tick/unpark into one bevy-adapter call; non-pipelined consumer keeps `Server` resource path unchanged | PENDING (Connor-approved 2026-06-29) |
+| M2 | sim-namako BDD specs written against G1–G6+G7 contract, not the leaked shape | PENDING (after G1–G7) |
 
-Connor to decide.
-
-## 3. Sequence (per audit spec §7)
-
-G1 → G2 → G3 → G4 → G5 → G6. Each group = its own design sub-pass + Connor sign-off before impl.
-
-G1/G2/G3 = trunk (driver + un-pub(crate)); G4/G5 collapse onto trunk; G6 (resources) last.
-
-M2 sim-namako BDD specs are RESHAPED — write them against the new API surface (G1–G6 contract), not the leaked shape. M2 follows this mission, not before.
+Each pending group = design sub-pass + Connor sign-off before impl.
 
 ## 4. Working model — worktrees (per audit spec §7.5)
 

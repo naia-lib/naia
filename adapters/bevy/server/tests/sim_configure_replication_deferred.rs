@@ -58,7 +58,7 @@ fn protocol_bevy() -> naia_bevy_shared::Protocol {
 }
 
 fn handles() -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
-    spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol())
+    spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles()
 }
 
 fn sim_app() -> App {
