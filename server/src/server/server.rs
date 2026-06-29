@@ -365,6 +365,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         self.world_server.send_all_packets(world);
     }
 
+    /// MISSION_PIPELINE_API_BOUNDARY G7: a [`crate::pipeline_actors::SendStateView`]
+    /// backed by this server's shared state — drives the core registry-free
+    /// snapshot assembler. See [`crate::WorldServer::send_state_view`].
+    pub fn send_state_view(&self) -> crate::pipeline_actors::SendStateView<E> {
+        self.world_server.send_state_view()
+    }
+
     /// MISSION_TICK_FLOOR Lever 3 — PREPARE half (test/diagnostic + active
     /// freeze point). Build the self-contained per-user [`naia_shared::SendPlan`]
     /// at the freeze point: capture each component's frozen `DiffMask` and clear

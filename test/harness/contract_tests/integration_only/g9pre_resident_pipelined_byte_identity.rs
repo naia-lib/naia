@@ -221,6 +221,24 @@ fn snapshot_of(
     snap
 }
 
+/// Build the frozen `SnapshotWorld` via the **REAL core assembler** —
+/// `SendStateView::build_needed_snapshot` (the registry-free, `WorldRefType`-based
+/// G7 assembler) — instead of the hand-rolled `snapshot_of`.
+///
+/// This is the path the production pipelined `send` bracket uses (§2g item 4): it
+/// reads the dirty-trim needed-set from naia's shared state and copies each
+/// `(entity, kind)` out of the live world via the
+/// `component_of_kind → copy_to_box → insert_component` chain. Discharges the
+/// audit N4 G7 acceptance obligation: prove byte-identity while driving the
+/// REAL assembler, not a hand-built snapshot.
+fn snapshot_via_core_assembler(scenario: &mut Scenario) -> SnapshotWorld<TestEntity> {
+    scenario.with_server_world_mut(|s, world| {
+        let view = s.send_state_view();
+        let world_ref = world.proxy();
+        view.build_needed_snapshot(&world_ref)
+    })
+}
+
 /// RESIDENT mode: mutate the live world, then one tick → `send_all_packets`
 /// transmits synchronously against the live world.
 fn run_resident(case: &Case) -> Vec<TracePacket> {
@@ -297,6 +315,126 @@ fn g9pre_freeze_isolates_transmit_from_concurrent_mutation() {
          post-freeze live mutation — the transmitted bytes must carry the FROZEN \
          value, not the advanced live value. A divergence means the snapshot/freeze \
          does not actually isolate the worker from main-thread state advance."
+    );
+}
+
+/// G7 acceptance contract (audit N4): byte-identity while driving the REAL
+/// core `WorldRefType` assembler (`SendStateView::build_needed_snapshot`) for the
+/// frozen snapshot, across the full diff-mask case space. The original
+/// `g9pre_resident_pipelined_byte_identity` hand-builds the snapshot; this test
+/// proves the *production* assembler — the one whose skip-vs-panic is §2h M2 —
+/// produces wire bytes identical to the resident baseline.
+#[test]
+fn g9pre_core_assembler_byte_identity() {
+    let mut failures = Vec::new();
+
+    for case in cases() {
+        println!("\n══ [core-assembler] case: {} ══", case.label);
+        let r = s2c(&run_resident(&case));
+
+        let p = {
+            let mut scenario = Scenario::new();
+            let (_ck, entities) = setup_and_settle(&mut scenario);
+            apply_mutations(&mut scenario, &entities, &case);
+            let snap = snapshot_via_core_assembler(&mut scenario); // REAL assembler
+            let plan = scenario.prepare_send_job();
+            scenario.transmit_and_pump(snap, plan);
+            s2c(&scenario.take_trace().packets)
+        };
+
+        hexdump("RESIDENT      ", &r);
+        hexdump("CORE-ASSEMBLER", &p);
+
+        if r.len() != p.len() {
+            failures.push(format!(
+                "[{}] packet-count divergence: resident={}, core-assembler={}",
+                case.label,
+                r.len(),
+                p.len()
+            ));
+            continue;
+        }
+        let mismatches: Vec<usize> = r
+            .iter()
+            .zip(p.iter())
+            .enumerate()
+            .filter_map(|(i, (rb, pb))| (rb != pb).then_some(i))
+            .collect();
+        if !mismatches.is_empty() {
+            failures.push(format!(
+                "[{}] {} of {} packet(s) differ at indices {:?}",
+                case.label,
+                mismatches.len(),
+                r.len(),
+                mismatches
+            ));
+        } else {
+            println!("    ✓ byte-identical via core assembler ({} packet(s))", r.len());
+        }
+    }
+
+    assert!(
+        failures.is_empty(),
+        "G9pre N4: the REAL core WorldRefType assembler \
+         (SendStateView::build_needed_snapshot) diverged from the resident \
+         baseline. The production snapshot assembler does NOT reproduce resident \
+         wire output. Findings:\n  {}",
+        failures.join("\n  ")
+    );
+}
+
+/// G7 acceptance contract (audit N4), strongest form: the REAL core assembler
+/// PLUS a concurrent post-freeze live mutation. Builds the frozen snapshot via
+/// `build_needed_snapshot`, freezes, then advances the LIVE world to a different
+/// value before transmitting. The transmitted bytes must carry the FROZEN value
+/// (byte-identical to a resident send of it) — proving the production assembler +
+/// freeze together isolate the lagged transmit from main-thread state advance.
+#[test]
+fn g9pre_core_assembler_freeze_isolation() {
+    const FROZEN: (f32, f32) = (100.0, 200.0);
+    const LIVE_AFTER: (f32, f32) = (999.0, 999.0);
+
+    let frozen_case = Case {
+        label: "frozen value",
+        mutations: vec![EntityMutation {
+            index: 0,
+            set_x: Some(FROZEN.0),
+            set_y: Some(FROZEN.1),
+        }],
+    };
+
+    let resident = s2c(&run_resident(&frozen_case));
+
+    let pipelined = {
+        let mut scenario = Scenario::new();
+        let (_ck, entities) = setup_and_settle(&mut scenario);
+        apply_mutations(&mut scenario, &entities, &frozen_case);
+        let snap = snapshot_via_core_assembler(&mut scenario); // REAL assembler, captures FROZEN
+        let plan = scenario.prepare_send_job();
+        let live_after = Case {
+            label: "live after freeze",
+            mutations: vec![EntityMutation {
+                index: 0,
+                set_x: Some(LIVE_AFTER.0),
+                set_y: Some(LIVE_AFTER.1),
+            }],
+        };
+        apply_mutations(&mut scenario, &entities, &live_after);
+        scenario.transmit_and_pump(snap, plan);
+        s2c(&scenario.take_trace().packets)
+    };
+
+    hexdump("RESIDENT(frozen)            ", &resident);
+    hexdump("CORE-ASSEMBLER(frozen+live++)", &pipelined);
+
+    assert_eq!(
+        resident, pipelined,
+        "G9pre N4 (core assembler + freeze isolation): the production assembler \
+         must copy the FROZEN component value into the snapshot at the freeze \
+         point, and the freeze must isolate the transmit from the concurrent \
+         post-freeze live mutation. A divergence means the assembled snapshot \
+         either captured the wrong (post-mutation) value or the transmit read \
+         live state."
     );
 }
 

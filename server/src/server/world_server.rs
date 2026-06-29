@@ -1023,6 +1023,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
         self.transmit_send_job(world, plan);
     }
 
+    /// MISSION_PIPELINE_API_BOUNDARY G7: a [`crate::pipeline_actors::SendStateView`]
+    /// backed by this server's shared state. Used (e.g. by the determinism /
+    /// byte-identity harness) to drive the **core** registry-free snapshot
+    /// assembler (`SendStateView::build_needed_snapshot`) against a
+    /// `WorldRefType`, exactly as the pipelined `send` bracket does.
+    pub fn send_state_view(&self) -> crate::pipeline_actors::SendStateView<E> {
+        crate::pipeline_actors::SendStateView::from_shared(Arc::clone(&self.shared))
+    }
+
     /// MISSION_TICK_FLOOR Lever 3 — PREPARE half (coordination + per-user plan).
     /// Runs the coordination-stage preamble (`run_send_preamble`) and then
     /// `SendState::prepare_send_job`. On the active path the cyberlith pipeline

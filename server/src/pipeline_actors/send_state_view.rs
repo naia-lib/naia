@@ -39,6 +39,7 @@ use std::{collections::HashSet, hash::Hash, sync::Arc};
 
 use naia_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, GlobalEntityIndex, GlobalWorldManagerType,
+    SnapshotWorld, WorldRefType,
 };
 
 use crate::pipeline_actors::handles::CoordHandle;
@@ -198,6 +199,65 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             }
         }
         (live, entries)
+    }
+
+    /// MISSION_PIPELINE_API_BOUNDARY G7 (N4 acceptance contract): assemble a
+    /// [`SnapshotWorld<E>`] from any [`WorldRefType<E>`] using the **dirty-trim**
+    /// needed-set ([`Self::needed_live_and_snapshot_entries`]).
+    ///
+    /// This is the **core, registry-free** assembler — the framework-agnostic
+    /// generalization of the bevy adapter's `build_snapshot` (which keys off a
+    /// `SnapshotReaderRegistry`). It closes entirely on `WorldRefType<E>`:
+    /// `world.component_of_kind(&e, &kind)` → `ReplicaDynRefWrapper` (derefs to
+    /// `&dyn Replicate`) → `.copy_to_box()` → `Box<dyn Replicate>` →
+    /// [`SnapshotWorld::insert_component`]. No `SnapshotReaderRegistry` lift.
+    ///
+    /// Skip-on-absent: an `(entity, kind)` pair whose component is not present
+    /// on `world` is skipped (`continue`), never panicked — matching the bevy
+    /// assembler's `continue` arm. (Per audit §2h M2: do not let
+    /// `component_of_kind` panic on a missing component drive a hard failure
+    /// during transition.)
+    ///
+    /// Call AFTER the D8 preamble/scope/refresh sub-order (so the needed-set is
+    /// final) and BEFORE `prepare_send_job` (which freezes + clears the live
+    /// masks). See the §2g drain-phase ordering contract.
+    pub fn build_needed_snapshot<W: WorldRefType<E>>(&self, world: &W) -> SnapshotWorld<E> {
+        let (live_entities, required) = self.needed_live_and_snapshot_entries();
+        Self::assemble(world, &live_entities, &required)
+    }
+
+    /// Full-scope sibling of [`Self::build_needed_snapshot`]: assembles from the
+    /// untrimmed [`Self::live_entities`] + [`Self::required_snapshot_entries`]
+    /// supersets. Equivalent to the bevy adapter's `build_snapshot_full` —
+    /// used for bench / forced-full-snapshot workloads.
+    pub fn build_full_snapshot<W: WorldRefType<E>>(&self, world: &W) -> SnapshotWorld<E> {
+        let live_entities = self.live_entities();
+        let required = self.required_snapshot_entries();
+        Self::assemble(world, &live_entities, &required)
+    }
+
+    /// Registry-free assembler shared by the two `build_*_snapshot` entry
+    /// points. Marks each live entity, then copies each required component out
+    /// of `world` via the `WorldRefType` dyn-ref → `copy_to_box` chain.
+    fn assemble<W: WorldRefType<E>>(
+        world: &W,
+        live_entities: &[E],
+        required: &[(E, ComponentKind)],
+    ) -> SnapshotWorld<E> {
+        let mut snapshot = SnapshotWorld::new();
+        for entity in live_entities {
+            snapshot.mark_live(*entity);
+        }
+        for (entity, kind) in required {
+            let Some(dyn_ref) = world.component_of_kind(entity, kind) else {
+                // Component absent on `world` (despawned/removed between the
+                // needed-set read and now, or a kind this world doesn't host):
+                // skip rather than panic.
+                continue;
+            };
+            snapshot.insert_component(*entity, *kind, dyn_ref.copy_to_box());
+        }
+        snapshot
     }
 
     /// Deduped union of the `needed_entities` bitset and `global_dirty`,
