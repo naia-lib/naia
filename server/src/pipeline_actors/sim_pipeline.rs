@@ -29,14 +29,18 @@
 //! recv/send workers at spawn time; workers deposit their handle before
 //! parking and re-claim it after unpark.
 
-use std::{hash::Hash, sync::Arc};
+use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use parking_lot::Mutex;
-use naia_shared::{Protocol, WorldMutType};
+use naia_shared::{EntityAuthStatus, Protocol, Tick, WorldMutType};
 
-use crate::{server::ServerShared, RecvHandle, SendHandle, ServerConfig, WorldServer};
+use crate::{
+    room::RoomKey, server::ServerShared, user::UserKey, EntityOwner, RecvHandle, ReplicationConfig,
+    SendHandle, ServerConfig, WorldServer,
+};
 
 use super::handles::CoordHandle;
+use super::ServerEntityConverter;
 
 // ── PipelinedServer ───────────────────────────────────────────────────────────
 
@@ -238,6 +242,144 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         *self.send_slot.lock() = Some(SendHandle { state: send_state });
 
         result
+    }
+}
+
+// ── G3a — coord-only op forwarding ──────────────────────────────────────────────
+//
+// MISSION_PIPELINE_API_BOUNDARY G3a (Connor 2026-06-29): every public
+// coord-only op on [`CoordHandle<E>`] is mirrored here as a thin forwarding
+// method so consumers operate on the unified [`PipelinedServer<E>`] handle
+// directly — no `pipeline.coord_mut().method()` ceremony, no `WorldServer`
+// reassembly. All methods delegate to `self.coord()` / `self.coord_mut()`,
+// which panic only inside an in-flight `tick`/`with_world_server` window (the
+// pipelined consumer calls these from the parked main thread, outside that
+// window). `enable_entity_replication` is intentionally NOT forwarded here —
+// it is superseded by the G5 `enable_replication_for_existing_entity` op.
+
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
+    // ── Entity reads ──
+
+    /// Forwards to [`CoordHandle::is_resource_entity`].
+    pub fn is_resource_entity(&self, world_entity: &E) -> bool {
+        self.coord().is_resource_entity(world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::entity_owner`].
+    pub fn entity_owner(&self, world_entity: &E) -> EntityOwner {
+        self.coord().entity_owner(world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::entity_authority_status`].
+    pub fn entity_authority_status(&self, world_entity: &E) -> Option<EntityAuthStatus> {
+        self.coord().entity_authority_status(world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::entity_is_static`].
+    pub fn entity_is_static(&self, world_entity: &E) -> bool {
+        self.coord().entity_is_static(world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::entity_converter`].
+    pub fn entity_converter(&self) -> ServerEntityConverter<E> {
+        self.coord().entity_converter()
+    }
+
+    // ── User ops ──
+
+    /// Forwards to [`CoordHandle::user_exists`].
+    pub fn user_exists(&self, user_key: &UserKey) -> bool {
+        self.coord().user_exists(user_key)
+    }
+
+    /// Forwards to [`CoordHandle::user_keys`].
+    pub fn user_keys(&self) -> Vec<UserKey> {
+        self.coord().user_keys()
+    }
+
+    /// Forwards to [`CoordHandle::user_address`].
+    pub fn user_address(&self, user_key: &UserKey) -> Option<SocketAddr> {
+        self.coord().user_address(user_key)
+    }
+
+    /// Forwards to [`CoordHandle::receive_user`].
+    pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
+        self.coord_mut().receive_user(user_key, user_addr)
+    }
+
+    /// Forwards to [`CoordHandle::disconnect_user`].
+    pub fn disconnect_user(&mut self, user_key: &UserKey) {
+        self.coord_mut().disconnect_user(user_key)
+    }
+
+    // ── Room ops ──
+
+    /// Forwards to [`CoordHandle::create_room`].
+    pub fn create_room(&mut self) -> RoomKey {
+        self.coord_mut().create_room()
+    }
+
+    /// Forwards to [`CoordHandle::room_destroy`].
+    pub fn room_destroy(&mut self, room_key: &RoomKey) -> bool {
+        self.coord_mut().room_destroy(room_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_add_user`].
+    pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        self.coord_mut().room_add_user(room_key, user_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_remove_user`].
+    pub fn room_remove_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
+        self.coord_mut().room_remove_user(room_key, user_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_add_entity`].
+    pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
+        self.coord_mut().room_add_entity(room_key, world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::room_remove_entity`].
+    pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
+        self.coord_mut().room_remove_entity(room_key, world_entity)
+    }
+
+    // ── Replication config ──
+
+    /// Forwards to [`CoordHandle::mark_entity_as_static`].
+    pub fn mark_entity_as_static(&mut self, world_entity: &E) {
+        self.coord_mut().mark_entity_as_static(world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::configure_entity_replication`].
+    pub fn configure_entity_replication(&mut self, world_entity: &E, config: ReplicationConfig) {
+        self.coord_mut()
+            .configure_entity_replication(world_entity, config)
+    }
+
+    /// Forwards to [`CoordHandle::apply_pending_world_hooks`].
+    pub fn apply_pending_world_hooks<W>(&self, world: &mut W)
+    where
+        W: WorldMutType<E>,
+    {
+        self.coord().apply_pending_world_hooks(world)
+    }
+
+    // ── Tick / queue introspection ──
+
+    /// Forwards to [`CoordHandle::current_tick`].
+    pub fn current_tick(&self) -> Tick {
+        self.coord().current_tick()
+    }
+
+    /// Forwards to [`CoordHandle::scope_change_queue_len`].
+    pub fn scope_change_queue_len(&self) -> usize {
+        self.coord().scope_change_queue_len()
+    }
+
+    /// Forwards to [`CoordHandle::pending_world_hooks_len`].
+    pub fn pending_world_hooks_len(&self) -> usize {
+        self.coord().pending_world_hooks_len()
     }
 }
 
