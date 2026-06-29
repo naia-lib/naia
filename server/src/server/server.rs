@@ -162,8 +162,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// call.
     ///
     /// [`Events`]: crate::Events
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: W, now: &Instant) {
-        self.world_server.process_all_packets(world, now);
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
+        // Public API stays by-value; `WorldServer::process_all_packets` now takes
+        // `&mut W` (G8b) — reborrow here, byte-identical.
+        self.world_server.process_all_packets(&mut world, now);
     }
 
     /// Drains and returns all accumulated world events since the last call.

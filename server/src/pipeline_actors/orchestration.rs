@@ -285,7 +285,10 @@ pub fn apply_recv_to_world<E, W>(
     sim_handle: CoordHandle<E>,
     recv: RecvHandle<E>,
     send: SendHandle<E>,
-    world: W,
+    // MISSION_PIPELINE_API_BOUNDARY G8b: `&mut W` (not by value) so
+    // `PipelinedServer::receive` can reborrow one world across the several
+    // `ReceiveOutput`s a worker-shape channel burst yields per tick.
+    world: &mut W,
     output: &mut ReceiveOutput<E>,
     server_tick: Tick,
 ) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)

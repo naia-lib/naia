@@ -64,10 +64,16 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn process_all_packets<W: WorldMutType<Entity>>(&mut self, world: W, now: &Instant) {
+    pub(crate) fn process_all_packets<W: WorldMutType<Entity>>(
+        &mut self,
+        mut world: W,
+        now: &Instant,
+    ) {
         match self {
+            // `Server::process_all_packets` is by-value; `WorldServer`'s is `&mut W`
+            // (G8b) — reborrow for that arm. Byte-identical either way.
             Self::Full(server) => server.process_all_packets(world, now),
-            Self::WorldOnly(server) => server.process_all_packets(world, now),
+            Self::WorldOnly(server) => server.process_all_packets(&mut world, now),
         }
     }
 

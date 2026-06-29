@@ -84,12 +84,13 @@ fn pipeline_bracket_drives_receive_then_send_over_many_ticks() {
     let start_tick = server.current_tick();
 
     for _ in 0..8 {
-        // D0: receive. With no clients connected, the recv-drain yields an empty
-        // ReceiveOutput and the apply-to-world fast-path is taken.
-        let output = server.receive(world.proxy_mut());
+        // D0: receive. With no clients connected, the recv-drain yields a Vec with
+        // a single empty ReceiveOutput (the synchronous straggler-catch; no recv
+        // worker channel in this oracle drive) and the apply fast-path is skipped.
+        let outputs = server.receive(&mut world.proxy_mut());
         assert!(
-            output.is_empty(),
-            "no clients connected → receive() must return an empty ReceiveOutput",
+            outputs.iter().all(|o| o.is_empty()),
+            "no clients connected → receive() must return only empty ReceiveOutputs",
         );
 
         // D8 + D9: send. Runs preamble → scope → refresh, builds the (empty)

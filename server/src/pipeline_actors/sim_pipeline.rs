@@ -31,6 +31,7 @@
 
 use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
+use crossbeam_channel::Receiver;
 use parking_lot::Mutex;
 use naia_shared::{EntityAuthStatus, Protocol, Tick, WorldMutType, WorldRefType};
 
@@ -72,6 +73,24 @@ pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// byte-identical wire content modulo the one-tick scheduling shift
     /// (G9pre §2i).
     send_publisher: Option<super::SnapshotSender<E>>,
+    /// MISSION_PIPELINE_API_BOUNDARY G8b — the recv-shape selector for
+    /// [`Self::receive`], the exact mirror of [`Self::send_publisher`]:
+    /// - `None` ⇒ **oracle**: `receive` drains ONLY a synchronous
+    ///   `recv.receive()` on the calling thread (the determinism/desync path and
+    ///   every synchronous test drive). There is no recv worker.
+    /// - `Some(rx)` ⇒ **worker-driven production**: `receive` first drains
+    ///   everything the recv WORKER has shipped to its output channel since the
+    ///   last park window (FIFO, via `rx.try_iter()`), THEN appends one
+    ///   synchronous `recv.receive()` straggler-catch — exactly the sequence the
+    ///   bevy adapter previously hand-rolled in `drain_recv_impl`.
+    ///
+    /// Set by the bevy adapter under `#[cfg(not(feature = "deterministic"))]` via
+    /// [`Self::set_recv_subscriber`] (wired to the SAME channel whose `Sender` the
+    /// [`super::PipelineRuntime`]'s recv worker pushes to); left `None` in
+    /// deterministic builds. Both shapes feed the same `apply_recv_to_world`
+    /// application path, so the only difference is WHERE the socket drain happens
+    /// (this thread vs the recv worker) — symmetric to the send-shape split.
+    recv_subscriber: Option<Receiver<ReceiveOutput<E>>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
@@ -96,6 +115,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
             recv_slot: Arc::new(Mutex::new(Some(recv))),
             send_slot: Arc::new(Mutex::new(Some(send))),
             send_publisher: None,
+            recv_subscriber: None,
         }
     }
 
@@ -114,6 +134,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// `send`).
     pub fn set_send_publisher(&mut self, publisher: super::SnapshotSender<E>) {
         self.send_publisher = Some(publisher);
+    }
+
+    /// MISSION_PIPELINE_API_BOUNDARY G8b (mirror of [`Self::set_send_publisher`])
+    /// — switch [`Self::receive`] into **worker-driven production** mode: it will
+    /// drain `subscriber` (the recv worker's output channel) before its
+    /// synchronous straggler-catch, instead of only doing the synchronous drain.
+    ///
+    /// The bevy adapter calls this under `#[cfg(not(feature = "deterministic"))]`
+    /// with the [`Receiver`] returned by the [`super::PipelineRuntime`]'s
+    /// `recv_out_receiver()` (the consumer side of the channel the recv worker
+    /// pushes to). In deterministic builds it is never called, so `receive` stays
+    /// the inline oracle. Call before workers are spawned.
+    pub fn set_recv_subscriber(&mut self, subscriber: Receiver<ReceiveOutput<E>>) {
+        self.recv_subscriber = Some(subscriber);
     }
 
     /// Borrow the coordination handle.
@@ -453,40 +487,67 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// for the consumer (or its framework adapter) to fan out. Core mutates only
     /// `world` (the single entity world, §2h H3); it routes no events itself.
     ///
-    /// `world` is taken **by value** (`W: WorldMutType<E>`), matching naia's
-    /// world-proxy idiom and `apply_recv_to_world`'s signature — the consumer
-    /// passes a fresh `world.proxy_mut()` each call. (The §2g sketch wrote
-    /// `&mut W`; a proxy is not itself `&mut`-reusable, so by-value is the
-    /// accurate form.)
+    /// **Send-symmetric dual recv-shape (G8b).** `world` is taken as `&mut W`
+    /// (`W: WorldMutType<E>`) so the several `ReceiveOutput`s a worker-shape
+    /// channel burst can yield in one tick are each applied against a reborrow of
+    /// the same world (a `WorldMutType` proxy is single-use by value). The oracle
+    /// shape yields exactly one output; both return a `Vec` for a uniform API.
+    ///
+    /// Returns the per-output [`ReceiveOutput`]s — the connection-scoped and
+    /// entity-scoped EVENTS — in FIFO order, with each output's `world_events`
+    /// already populated by its application, for the consumer (or its framework
+    /// adapter) to fan out. Core mutates only `world` (the single entity world,
+    /// §2h H3); it routes no events itself.
+    ///
+    /// Shape selected by [`Self::recv_subscriber`]:
+    /// - `None` (oracle): one synchronous `recv.receive()`.
+    /// - `Some` (worker production): drain the recv worker's output channel FIFO,
+    ///   then append one synchronous `recv.receive()` straggler-catch. This is the
+    ///   exact sequence the bevy adapter's `drain_recv_impl` hand-rolled; G8b
+    ///   folds it into core so `receive` is the single recv entry point.
     ///
     /// # Precondition
     /// Workers parked (or not spawned). The bevy adapter's `ReceivePackets` set
     /// brackets this with park/unpark (G8); the synchronous oracle needs none.
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> ReceiveOutput<E> {
-        let (coord, mut recv, send) = self.take_handles();
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W) -> Vec<ReceiveOutput<E>> {
+        let (mut coord, mut recv, mut send) = self.take_handles();
         let server_tick = coord.current_tick();
 
-        // D0: single synchronous recv-drain.
-        let mut output = recv.receive();
+        // Worker shape: drain everything the recv worker shipped to its output
+        // channel since the last park window, FIFO (unbounded → nothing dropped).
+        // Oracle shape (`recv_subscriber == None`): there is no worker channel.
+        let mut outputs: Vec<ReceiveOutput<E>> = match &self.recv_subscriber {
+            Some(rx) => rx.try_iter().collect(),
+            None => Vec::new(),
+        };
+        // Synchronous straggler-catch (BOTH shapes): in worker mode this catches
+        // packets delivered after the recv worker's last iteration; in oracle mode
+        // it is the sole drain.
+        outputs.push(recv.receive());
 
-        // D0 (cont.): apply decoded entity ops to `world`. Skip the reassembly
-        // when nothing arrived (matches the bevy `drain_recv_impl_split` early
+        // D0 (cont.): apply each non-empty output's decoded entity ops to `world`
+        // in FIFO order, threading the handles. Reborrow `world` per output. Empty
+        // outputs skip the `WorldServer` reassembly (matches the prior early
         // return) — the handles round-trip unchanged.
-        let (coord, recv, send) = if output.is_empty() {
-            (coord, recv, send)
-        } else {
-            crate::pipeline_actors::apply_recv_to_world(
+        for output in outputs.iter_mut() {
+            if output.is_empty() {
+                continue;
+            }
+            let (c, r, s) = crate::pipeline_actors::apply_recv_to_world(
                 coord,
                 recv,
                 send,
-                world,
-                &mut output,
+                &mut *world,
+                output,
                 server_tick,
-            )
-        };
+            );
+            coord = c;
+            recv = r;
+            send = s;
+        }
 
         self.restore_handles(coord, recv, send);
-        output
+        outputs
     }
 
     /// **D8 + D9 — send.** Send-prep (preamble → scope → refresh), core snapshot

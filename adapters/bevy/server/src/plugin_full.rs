@@ -302,6 +302,25 @@ impl PluginInternalState {
         SendHandleRes(Arc::clone(&self.send_slot))
     }
 
+    /// MISSION_PIPELINE_API_BOUNDARY G8b — wire the recv worker's output channel
+    /// into the armed [`PipelinedServer`]'s `recv_subscriber` so its `receive`
+    /// drains the worker (the mirror of `set_send_publisher`, which is wired
+    /// pre-construction because its channel is created in `install_full_pipelining`).
+    ///
+    /// Done post-construction because the recv-output channel is created INSIDE
+    /// [`PipelineRuntime::new_armed`] (the runtime owns it), so its [`Receiver`]
+    /// does not exist until `internal` is built. No-op if the runtime has already
+    /// shut down (`recv_out_receiver()` is `None`) or the armed pipeline has been
+    /// drained.
+    #[cfg(not(feature = "deterministic"))]
+    fn wire_recv_subscriber_into_armed(&self) {
+        if let Some(rx) = self.runtime.recv_out_receiver() {
+            if let Some(p) = self.armed_pipeline.lock().as_mut() {
+                p.set_recv_subscriber(rx);
+            }
+        }
+    }
+
     /// Test/dev hook: request that workers panic on their next loop iteration.
     /// Delegates to the core runtime.
     #[cfg(any(test, feature = "test_time"))]
@@ -475,6 +494,16 @@ pub(crate) fn install_full_pipelining(
         snap_receiver.clone(),
     );
 
+    // G8b — mirror of the `set_send_publisher` wiring above, but post-construction:
+    // point the armed pipeline's `recv_subscriber` at the runtime's recv-output
+    // channel so `PipelinedServer::receive` drains the recv worker. The channel is
+    // born inside `PipelineRuntime::new_armed` (called by `new_armed`), so the
+    // `Receiver` only exists now. Same `not(deterministic)` + opt-in gate as send.
+    #[cfg(not(feature = "deterministic"))]
+    if drive_bracket_in_update {
+        internal.wire_recv_subscriber_into_armed();
+    }
+
     let recv_handle_res = internal.recv_handle_res();
     let send_handle_res = internal.send_handle_res();
 
@@ -562,17 +591,59 @@ pub(crate) fn install_full_pipelining(
 /// state, not resource presence — recv-draining before `listen()` would panic in
 /// `Server::receive_packet`.
 fn pipelined_receive(world: &mut World) {
-    // Park, then capture the slot `Arc`s and release the `&PluginInternalState`
-    // borrow before the `&mut World` recv-drain.
-    let (recv_slot, send_slot) = {
+    use naia_bevy_shared::WorldProxyMut;
+
+    // Gate on Running + park the workers (open the window). Release the
+    // `&PluginInternalState` borrow before the `&mut World` work below.
+    {
         let state = world.resource::<PluginInternalState>();
         if state.runtime.state() != RuntimeState::Running {
             return;
         }
         state.park_workers();
-        (Arc::clone(&state.recv_slot), Arc::clone(&state.send_slot))
+    }
+
+    // Clone the event-fan-out target so the `&PluginInternalState` borrow is
+    // dropped before the `resource_scope` below mutably borrows `world`.
+    let sim_receiver = world
+        .resource::<PluginInternalState>()
+        .sim_event_receiver
+        .lock()
+        .as_ref()
+        .cloned();
+    let Some(sim_receiver) = sim_receiver else {
+        return;
     };
-    drain_recv_impl(world, &recv_slot, &send_slot);
+
+    // G8b: the recv drain now lives in core `PipelinedServer::receive`. Pull the
+    // pipeline OUT of `world` (resource_scope) so we can hold `pipeline.coord()`
+    // for the bevy event fan-out while the diminished `world` is borrowed `&mut`.
+    world.resource_scope(|world, mut ps: bevy_ecs::world::Mut<PipelinedServer>| {
+        let Some(pipeline) = ps.0.as_mut() else {
+            return;
+        };
+        // Core drains the recv worker's output channel (wired via
+        // `recv_subscriber`) + a synchronous straggler, and applies every output
+        // to the single entity world. Single-world only (`entity_world = None`);
+        // the dual-world `_split` path stays on `drain_recv_impl` until G10.
+        let outputs = pipeline.receive(&mut world.proxy_mut());
+        // The coord is back in the pipeline now; borrow it for the bevy-specific
+        // event fan-out (core routes no events itself, §2h H3). Fan out per output
+        // in FIFO order into the bevy `Messages<…>` buffers + `EventReceiver`.
+        let coord = pipeline.coord();
+        for output in outputs {
+            if output.is_empty() {
+                continue;
+            }
+            apply_receive_output_pipeline_with_event_receiver_split(
+                world,
+                None,
+                coord,
+                &sim_receiver,
+                output,
+            );
+        }
+    });
 }
 
 /// `SendPackets` (pipelined, opt-in G8 §2l): run the core bracket's `send` and
@@ -727,7 +798,7 @@ pub fn drain_recv_impl_split(
                 sim_handle,
                 recv,
                 send,
-                ew.proxy_mut(),
+                &mut ew.proxy_mut(),
                 &mut output,
                 server_tick,
             ),
@@ -735,7 +806,7 @@ pub fn drain_recv_impl_split(
                 sim_handle,
                 recv,
                 send,
-                world.proxy_mut(),
+                &mut world.proxy_mut(),
                 &mut output,
                 server_tick,
             ),

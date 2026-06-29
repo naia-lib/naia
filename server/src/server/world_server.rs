@@ -502,12 +502,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     }
 
     /// Decodes and applies all buffered incoming packets for this frame.
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
-        self.process_disconnects(&mut world);
+    // MISSION_PIPELINE_API_BOUNDARY G8b: takes `world: &mut W` (not by value) so a
+    // caller applying SEVERAL `ReceiveOutput`s per tick (the worker-shape channel
+    // burst drained by `PipelinedServer::receive`) can reborrow one world across
+    // them — a `WorldMutType` proxy is single-use by value. Byte-identical: this
+    // body never moved `world`, only ever borrowed it `&mut`.
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: &mut W, now: &Instant) {
+        self.process_disconnects(world);
 
         let addresses = std::mem::take(&mut self.recv.addrs_with_new_packets);
         for address in addresses {
-            self.process_packets(&address, &mut world, now);
+            self.process_packets(&address, world, now);
         }
     }
 
@@ -590,11 +595,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
     /// loop can run without holding `world`.
     pub fn receive_with_world<W: WorldMutType<E>>(
         &mut self,
-        world: W,
+        mut world: W,
     ) -> super::receive_output::ReceiveOutput<E> {
         let now = Instant::now();
         self.receive_all_packets();
-        self.process_all_packets(world, &now);
+        self.process_all_packets(&mut world, &now);
         let world_events = self.take_world_events();
         let mut tick_events = self.take_tick_events(&now);
         let pending_ticks: Vec<Tick> = tick_events.read::<crate::events::TickEvent>().collect();
