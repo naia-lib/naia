@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G3a COMPLETE — MISSION REFRAMED (§2f: one authored tick, two runners) — G7–G10 design pending sign-off
+status: G3a COMPLETE — MISSION REFRAMED (§2f: one authored tick, two modes) — G7 detailed design (§2g) + G8–G10 pending sign-off
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -135,6 +135,60 @@ Switching resident↔pipelined changes nothing in the consumer's code — `recei
 - naia-server **core (FIRST — Connor 2026-06-29)**: the framework-agnostic `receive`/`send` mode-aware methods owning the skeleton + the four generic phases, over `RecvHandle`/`SendHandle`/`CoordHandle` + `WorldMutType<E>`. No consumer trait, no closures.
 - naia-bevy-server **adapter (layered on top)**: maps the bracket onto the existing `ReceivePackets` / `SendPackets` system-set ordering — pipelined mode makes those sets run the parked/worker version internally. The consumer's systems sit between the sets exactly as in resident mode (`app.add_systems(Update, my_system)`), with **zero new consumer-facing concepts**. The runner manages handle transit and operates on a consumer-chosen entity world (so a Sim-SubApp split, like cyberlith's, is just a choice the consumer's systems make — not baked into naia).
 
+### 2g. G7 design pass — the `receive`/`send` bracket, in detail (PROPOSED — pending Connor sign-off, 2026-06-29)
+
+All method/file cites below are VERIFIED against the current naia tree.
+
+#### Placement + signatures
+
+`receive`/`send` are inherent methods on **`PipelinedServer<E>`** (naia-server core). Their signatures match the resident equivalents (G9 adds the same two methods to resident `Server<E>`, bundling `receive_all_packets`+`process_all_packets` and `send_all_packets`), so the consumer's interleaved tick code is source-identical across modes:
+
+```rust
+impl<E> PipelinedServer<E> {
+    // PIPELINED: park_workers() + single recv-drain + apply recv events to world.
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W);
+    // PIPELINED: send-prep + snapshot build + send-job publish + unpark_workers().
+    pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: &W);
+}
+```
+
+The "single knob, consumer code unchanged" property is realized at the bevy layer by `ServerImpl` (G3c). A unified *core* server type (`Resident | Pipelined` enum) is OPTIONAL future ergonomics — NOT in G7. For a core binary, mode is the constructor you call; the interleaved op code is textually identical because both types expose the same op surface (G3a gave `PipelinedServer` the coord ops; `Server<E>` already has them).
+
+#### Threading ownership move (the substantive G7 work)
+
+Today the worker threads + park/unpark barrier + worker loops live in the **bevy adapter** (`plugin_full.rs`: `park_workers`/`unpark_workers`/`spawn` at `:649/:718/:559-607`). For `receive`/`send` to be self-contained and framework-agnostic, this runtime moves **into naia-server core**, owned by `PipelinedServer<E>` (or a `PipelineRuntime` it holds): thread spawn, the parked-count barrier, the recv/send worker loops, and the `SnapshotSender`/`SnapshotReceiver` wiring (the slot type is already core — `pipeline_actors/snapshot_sender.rs`). Uses only `std::thread` + channels — no bevy. The bevy adapter then *calls* `receive`/`send` from the `ReceivePackets`/`SendPackets` sets instead of hand-rolling the window.
+
+#### `receive` internal sequence
+
+1. `park_workers()` — workers deposit handles in their slots.
+2. single synchronous recv-drain: `RecvHandle::receive()` (`pipeline_handles.rs:101`) → apply `ReceiveOutput` events to `world` (the `WorldMutType` spawn/insert/despawn application currently in the bevy `drain_recv_impl_split` / `apply_recv_to_world`, generalized to `WorldMutType<E>`).
+3. leave `coord`/`recv`/`send` held on `self` for the duration of the window (existing `take_handles` shape).
+
+Between `receive` and `send` the consumer runs its own code with workers parked — calling `self.spawn_replicated(...)`, `self.room_add_entity(...)`, `self.receive_tick_buffer_messages(tick)` (G3a/G4/G5 ops). This is the park window, now implicit.
+
+#### `send` internal sequence (the heart of the question)
+
+Mapped to verified `SendHandle`/`SendState` methods, preserving cyberlith's load-bearing order:
+
+1. `apply_pending_send_preamble()` (`pipeline_handles.rs:293`) — drain room changes / configure-repl; flush handshake + heartbeats.
+2. `apply_pending_scope_changes(world)` (`:336`) — publish freshly-scoped entities into per-user send connections. Needs `WorldRefType`.
+3. `refresh_needed_entities()` (`:303`) — recompute the cross-thread needed-set.
+4. **Build the `SnapshotWorld<E>`** from `world` + `SendStateView::needed_live_and_snapshot_entries()` (`send_state_view.rs`) — a core, `WorldRefType<E>`-based assembler generalizing the bevy `build_snapshot` (`snapshot_builder.rs:45`). The trim is naia-internal; the consumer never authors a snapshot. **OPEN:** confirm `WorldRefType<E>` exposes by-kind serializable component reads; if not, lift a core reader-registry equivalent of `naia-bevy-shared::SnapshotReaderRegistry`.
+5. Send-job:
+   - **Pipelined (Worker):** `prepare_send_job(&snapshot)` (`:254`) captures frozen `DiffMask`s + clears live masks at the freeze point → `snapshot.attach_send_plan(plan)` → `snapshot_sender.send(snapshot)`. The send worker drains the slot and transmits **next tick** (the one-tick lag — MISSION_TICK_FLOOR Lever 3).
+   - **Resident / deterministic oracle:** `send_all_packets(snapshot)` (`:245`) inline; no slot, no lag.
+6. `unpark_workers()` — closes the window.
+
+#### World model
+
+`receive` takes `&mut W: WorldMutType` (applies recv events); `send` takes `&W: WorldRefType + Sync` (reads for the snapshot). In a single-world consumer these are the same world. cyberlith's Sim-SubApp-vs-main split is purely the bevy adapter's choice of *which* world to pass each call — not baked into core.
+
+#### Open questions for sign-off
+
+1. Threading move: confirm relocating the worker runtime from `plugin_full.rs` into naia-server core (owned by `PipelinedServer`) is in-scope for G7 (it's required for a self-contained core bracket).
+2. Snapshot assembler: core `WorldRefType`-based build vs lifting `SnapshotReaderRegistry` to core (item 4 OPEN above).
+3. Unified core server enum: defer to post-G9 (not G7) — confirm.
+
 ## 3. Sequence + status
 
 | Step | Description | Status |
@@ -147,7 +201,7 @@ Switching resident↔pipelined changes nothing in the consumer's code — `recei
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
-| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — two fat, mode-aware methods encapsulating the canonical skeleton (`receive` = park + single recv-drain; `send` = freeze-point send-prep + snapshot + send-job + unpark). Explicit method sequence; consumer interleaves their own code calling unified `Server` ops. **No trait, no closures, no hooks.** Framework-agnostic. **Supersedes** the old minimal `with_parked_tick` wrapper. | PENDING (design §2f — pending sign-off) |
+| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — `PipelinedServer::receive(&mut world)` (park + single recv-drain + apply events) and `::send(&world)` (send-prep + snapshot + send-job + unpark); **+ moves the worker-thread runtime from the bevy adapter into core**. Explicit method sequence; consumer interleaves own code via unified `Server` ops. **No trait, no closures, no hooks.** **Supersedes** the old `with_parked_tick`. **Detailed design: §2g.** | PENDING (design §2g — pending sign-off) |
 | G8 | **naia-bevy-server mode-aware system sets** (layered on G7) — pipelined mode makes the existing `ReceivePackets` / `SendPackets` system sets run the parked/worker bracket internally; consumer systems sit between them via plain `add_systems(Update, …)`. **Zero new consumer-facing concepts.** Manages handle transit + consumer-chosen entity world. | PENDING (design §2f — pending sign-off) |
 | G9 | **`ServerMode::{Resident, Pipelined}` — single knob, no `SendStrategy`** — Pipelined⇒worker send, Resident⇒synchronous send. Same `receive`/`send` signatures in both; consumer code unchanged (relies on G3c unified `Server` param). Deterministic oracle runs as `Resident`. **OPEN: validate Resident≡Pipelined byte-identity before relying on the oracle collapse.** | PENDING (design §2f — pending sign-off) |
 | G10 | **cyberlith cutover** (cyberlith worktree) — delete `open_park_window`/`do_park_window_tick`/`close_park_window` + the `drain_sim_*` glue; re-express as ordinary systems around naia's `ReceivePackets`/`SendPackets` sets; `cell.update()` collapses to naia's bracket. **Gate: determinism/desync moat byte-exact-green** (= perf floor preserved). | PENDING (design §2f — pending sign-off) |
