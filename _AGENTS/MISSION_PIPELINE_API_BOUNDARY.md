@@ -90,68 +90,50 @@ This is the chosen direction over a separate `PipelinedServer<'w>` param: maximu
 
 **The realization that reframes the mission.** The entire pipeline coordinator — park/unpark, the synchronous recv drain, the freeze-point send-prep sequence, the one-tick-lag send-job prep, the deterministic synchronous send path, and the handle-transit dance — is hand-rolled in cyberlith `game_cell` (`cell.rs::update` + `server_access.rs::{open_park_window, do_park_window_tick, close_park_window}`, ~600 lines). Tracing it line-by-line: **almost all of it is generic pipeline MECHANISM, not cyberlith policy.** The perf-critical, byte-exactness-sensitive pieces (single-park barrier, freeze-point send-prep, one-tick-lag send-job, deterministic oracle path) are exactly the generic parts. Every naia consumer that wants pipelining is otherwise forced to re-derive this by hand. The mechanism belongs in naia.
 
-This supersedes the piecemeal G7 (`with_parked_tick`): that only handed back a parked window with raw handles and left the consumer to hand-assemble send-prep/snapshot/send-job inside the closure. The pristine design has naia own the *whole skeleton*.
+#### The naia way: explicit method sequence, NO hooks/closures/traits (Connor 2026-06-29)
 
-#### Canonical pipelined tick (naia-owned skeleton)
-
-Fixed sequence; the **bold** rows are generic mechanism naia owns end-to-end:
-
-| Phase | Owner |
-|---|---|
-| **Park workers + transit handles** | naia |
-| **Synchronous recv drain (single park/tick — the barrier-orch optimization)** | naia |
-| ExtractCommands — drain tick-buffer messages → game actions | consumer hook |
-| Simulate — run gameplay | consumer hook |
-| FlushReplication — register/configure/host-sync entities (via unified `Server` ops) | consumer hook |
-| Scope — apply visibility policy (via unified `Server` scope ops) | consumer hook |
-| **Freeze-point send-prep: `apply_pending_send_preamble` + `apply_pending_scope_changes` + `refresh_needed_entities`** | naia |
-| BuildSnapshot — produce the (optionally trimmed) `SnapshotWorld` | consumer hook |
-| **Send-job: `prepare_send_job` + `attach_send_plan` + publish to send worker (one-tick lag) OR synchronous `send_all_packets`** | naia |
-| **Unpark workers** | naia |
-
-#### Hook registration — startup config, NO consumer trait (Connor 2026-06-29)
-
-The consumer never implements a trait. The framework-agnostic core takes the five hooks as **optional closures registered on a builder at startup** — the same pattern as the existing `Protocol::builder()` (consistent precedent; the only traits naia ever asks a consumer to touch are the derive-macro'd `Replicate`/`Message`/`Channel`).
+naia's existing core API is an **explicit imperative sequence the consumer writes**, interleaving their own logic between naia method calls (`server/src/lib.rs` resident main loop):
+```rust
+server.receive_all_packets();
+server.process_all_packets(world, &now);
+let ticks = server.take_tick_events(&now);
+//  ... consumer's own logic ...
+server.send_all_packets(world);
+```
+Pipelining follows the **same shape**. The generic mechanism is encapsulated behind two fat, mode-aware methods; the consumer's own code runs *between* them, calling the unified `Server` ops directly. **No callbacks, no builder closures, no consumer trait, no hook concept.**
 
 ```rust
-let driver = PipelineDriver::builder(server)
-    .mode(ServerMode::Pipelined)          // flip to ::Resident — nothing else changes
-    .send_strategy(SendStrategy::Worker)  // ::Synchronous = deterministic oracle
-    .simulate(|world| { /* gameplay */ })
-    .extract_commands(|recv, ticks, world| { /* route tick-buffer msgs */ })  // optional
-    .flush_replication(|server, world| { /* server.spawn_replicated(...) */ })// optional
-    .scope(|server, world| { /* visibility policy */ })                       // optional
-    .build_snapshot(|world| { /* trimmed SnapshotWorld */ })                  // optional
-    .build();
-driver.tick(&mut world);   // naia owns the whole skeleton
+server.receive(&mut world);   // PIPELINED: park + single recv-drain.  RESIDENT: receive_all + process_all.
+//  ... consumer code, identical in both modes:
+//      run the sim; server.spawn_replicated(...); server.room_add_entity(...);
+//      for msg in server.receive_tick_buffer_messages(tick) { ... }
+server.send(&mut world);      // PIPELINED: freeze-point send-prep + snapshot + send-job + unpark (worker).
+                              // RESIDENT: send_all_packets inline.
 ```
 
-Every hook is **optional with a naia default**, so simple consumers stay turnkey:
-- no `extract_commands` → tick-buffer messages not drained (consumer doesn't use them);
-- no `flush_replication`/`scope` → naia's existing room-based scoping applies;
-- no `build_snapshot` → **naia builds the FULL snapshot** (the trim is an opt-in optimization, never required).
+The decisive realization: **none of the five "phases" needs to be a hook.**
+- *Simulate* = the consumer's own code (no naia involvement).
+- *ExtractCommands / FlushReplication / Scope* = the consumer calling existing methods (`receive_tick_buffer_messages`, `spawn_replicated`/`configure_entity_replication`, `room_add_entity`/user-scope) — exactly as in the resident loop.
+- *BuildSnapshot* is **not a consumer concern at all** — naia already reads replicated state from the world generically via `WorldRefType`, and the trimmed `SnapshotWorld` is an internal pipeline optimization naia owns end-to-end (needed-set + component-copy are generic). The consumer never authors a snapshot.
 
-A minimal consumer is `builder(server).simulate(...).build()`. cyberlith fills in all five.
+So the only thing naia must encapsulate is the bracket: `receive` (park + recv-drain) and `send` (freeze-point send-prep + snapshot + send-job + unpark). Everything else is the consumer's normal code calling normal methods.
 
-(Hook closure signatures above are illustrative — the exact accessor passed to `flush_replication`/`scope` is the unified `Server` op surface so the same closure runs under both runners; finalized in the G7 design pass.)
+#### Two modes, one authored tick
 
-#### Two runners, one authored tick
+`ServerMode::{Resident, Pipelined}` is the single knob. **There is NO separate `SendStrategy`** — `Pipelined` *implies* worker-thread send; `Resident` *implies* synchronous send. They are a byte-identical pair (the moat requirement), so the deterministic oracle simply runs in **`Resident`** mode — no "pipelined-but-synchronous" variant, retiring cyberlith's `#[cfg(feature = "deterministic")]` send fork.
 
-The consumer registers the hooks **once**; naia provides two runners that execute them:
+Switching resident↔pipelined changes nothing in the consumer's code — `receive`/`send` keep the same signatures; only what they do internally differs. **G3a + G3c are the load-bearing substrate**: because the consumer's interleaved code calls the unified `Server` op surface, the *identical* code runs against either the resident `WorldServer` or the pipelined handles.
 
-- **Pipelined** — workers + park/unpark + worker-thread send + one-tick lag.
-- **Resident** — synchronous, monolithic `Server`, inline send. `SendStrategy::{Worker, Synchronous}` is runner config (the deterministic oracle becomes `Synchronous`, replacing cyberlith's `#[cfg(feature = "deterministic")]` fork).
-
-Switching resident↔pipelined is a one-line builder change (`.mode(...)`); same closures, same `driver.tick()`. **G3a + G3c are the load-bearing substrate, not mere ergonomics**: because the hooks call the unified `Server` op surface (`server.room_add_entity`, `server.configure_entity_replication`, …), the *identical* hook code runs against either the resident `WorldServer` or the pipelined handles.
+> OPEN (G9 design pass): confirm `Resident`-mode wire output is byte-identical to `Pipelined` so the deterministic oracle can run as `Resident`. Today cyberlith's deterministic build is pipeline-split + synchronous send, NOT pure resident — validate the collapse before relying on it (claim discipline). If they're not byte-identical, that's a real finding to resolve, not a knob to re-add.
 
 #### Performance preservation (non-negotiable)
 
-The runner executes the **exact same sequence** cyberlith hand-rolled — same single park, same freeze-point `prepare_send_job`, same one-tick lag, same deterministic synchronous oracle. Byte-exact identity ⇒ the determinism/desync moat keeps validating it ⇒ the perf floor is preserved by construction. This is the gate for the cyberlith cutover (G10): the moat must stay byte-exact-green.
+`send` (pipelined) executes the **exact same sequence** cyberlith hand-rolled — same single park, same freeze-point `prepare_send_job`, same one-tick lag. Byte-exact identity ⇒ the determinism/desync moat keeps validating it ⇒ the perf floor is preserved by construction. This is the G10 cutover gate: the moat must stay byte-exact-green, and `bench_profile` per-phase spans must match (no new barriers, no double-park).
 
 #### Layering
 
-- naia-server **core (FIRST — Connor 2026-06-29)**: the framework-agnostic `PipelineDriver` + `PipelineDriver::builder()` owning the skeleton + the four generic phases, configured by optional hook closures over `RecvHandle`/`SendHandle`/`CoordHandle` + `WorldMutType<E>`. No consumer trait.
-- naia-bevy-server **adapter (layered on top)**: is itself a consumer of `PipelineDriver::builder()` — it wires each phase closure to `world.run_schedule(PhaseLabel)`, exposing canonical phase-schedule labels. So bevy consumers write `app.add_systems(Simulate, my_system)` — no trait, no closures. The runner manages handle transit and operates on a consumer-chosen entity world (so a Sim-SubApp split, like cyberlith's, is just a choice the Simulate/BuildSnapshot systems make — not baked into naia).
+- naia-server **core (FIRST — Connor 2026-06-29)**: the framework-agnostic `receive`/`send` mode-aware methods owning the skeleton + the four generic phases, over `RecvHandle`/`SendHandle`/`CoordHandle` + `WorldMutType<E>`. No consumer trait, no closures.
+- naia-bevy-server **adapter (layered on top)**: maps the bracket onto the existing `ReceivePackets` / `SendPackets` system-set ordering — pipelined mode makes those sets run the parked/worker version internally. The consumer's systems sit between the sets exactly as in resident mode (`app.add_systems(Update, my_system)`), with **zero new consumer-facing concepts**. The runner manages handle transit and operates on a consumer-chosen entity world (so a Sim-SubApp split, like cyberlith's, is just a choice the consumer's systems make — not baked into naia).
 
 ## 3. Sequence + status
 
@@ -165,11 +147,11 @@ The runner executes the **exact same sequence** cyberlith hand-rolled — same s
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
-| G7 | **naia-server core `PipelineDriver` + `::builder()`** (FIRST) — owns the canonical pipelined-tick skeleton (park → recv-drain → freeze-point send-prep → send-job → unpark) + the four generic phases; configured by optional hook closures at startup, **no consumer trait** (precedent: `Protocol::builder()`). Framework-agnostic. **Supersedes** the old minimal `with_parked_tick` wrapper. | PENDING (design §2f — pending sign-off) |
-| G8 | **naia-bevy-server schedule-driven runner** (layered on G7) — a consumer of `PipelineDriver::builder()` that wires each phase closure to `world.run_schedule(PhaseLabel)`, exposing canonical labels (ExtractCommands / Simulate / FlushReplication / Scope / BuildSnapshot). Bevy consumers just `add_systems(label, …)`. Manages handle transit + consumer-chosen entity world. | PENDING (design §2f — pending sign-off) |
-| G9 | **Resident runner parity** — same phase labels execute synchronously via the monolithic `Server`; `SendStrategy::{Worker, Synchronous}` runner config (deterministic oracle = `Synchronous`). Resident↔pipelined = one config line. Relies on G3c unified `Server` param so hooks are mode-agnostic. | PENDING (design §2f — pending sign-off) |
-| G10 | **cyberlith cutover** (cyberlith worktree) — delete `open_park_window`/`do_park_window_tick`/`close_park_window` + the `drain_sim_*` glue; re-express them as phase systems in naia's labels; `cell.update()` → `runner.tick()`. **Gate: determinism/desync moat byte-exact-green** (= perf floor preserved). | PENDING (design §2f — pending sign-off) |
-| M2 | sim-namako BDD specs written against the phase-hook contract (G1–G9), not the leaked shape | PENDING (after G1–G9) |
+| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — two fat, mode-aware methods encapsulating the canonical skeleton (`receive` = park + single recv-drain; `send` = freeze-point send-prep + snapshot + send-job + unpark). Explicit method sequence; consumer interleaves their own code calling unified `Server` ops. **No trait, no closures, no hooks.** Framework-agnostic. **Supersedes** the old minimal `with_parked_tick` wrapper. | PENDING (design §2f — pending sign-off) |
+| G8 | **naia-bevy-server mode-aware system sets** (layered on G7) — pipelined mode makes the existing `ReceivePackets` / `SendPackets` system sets run the parked/worker bracket internally; consumer systems sit between them via plain `add_systems(Update, …)`. **Zero new consumer-facing concepts.** Manages handle transit + consumer-chosen entity world. | PENDING (design §2f — pending sign-off) |
+| G9 | **`ServerMode::{Resident, Pipelined}` — single knob, no `SendStrategy`** — Pipelined⇒worker send, Resident⇒synchronous send. Same `receive`/`send` signatures in both; consumer code unchanged (relies on G3c unified `Server` param). Deterministic oracle runs as `Resident`. **OPEN: validate Resident≡Pipelined byte-identity before relying on the oracle collapse.** | PENDING (design §2f — pending sign-off) |
+| G10 | **cyberlith cutover** (cyberlith worktree) — delete `open_park_window`/`do_park_window_tick`/`close_park_window` + the `drain_sim_*` glue; re-express as ordinary systems around naia's `ReceivePackets`/`SendPackets` sets; `cell.update()` collapses to naia's bracket. **Gate: determinism/desync moat byte-exact-green** (= perf floor preserved). | PENDING (design §2f — pending sign-off) |
+| M2 | sim-namako BDD specs written against the `receive`/`send` bracket contract (G1–G9), not the leaked shape | PENDING (after G1–G9) |
 
 Each pending group = design sub-pass + Connor sign-off before impl.
 
@@ -183,7 +165,7 @@ Each pending group = design sub-pass + Connor sign-off before impl.
 ## 5. Absorbed items
 
 - `enable_entity_replication` fail-loud guard (`naia dev 350f00c2`): committed but **moot/absorbed** — under G3/G6, `enable_entity_replication` becomes naia-internal; the invariant is enforced by API contract. Will be superseded when G3 lands.
-- M2 (sim-namako BDD coverage): reshaped as the executable contract for G1–G9 — the phase-hook contract of §2f, validated under both runners.
+- M2 (sim-namako BDD coverage): reshaped as the executable contract for G1–G9 — the `receive`/`send` bracket contract of §2f, validated under both modes.
 
 ## 6. Gates (from audit spec §8)
 
