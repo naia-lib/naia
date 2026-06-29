@@ -243,6 +243,63 @@ fn run_pipelined(case: &Case) -> Vec<TracePacket> {
     scenario.take_trace().packets
 }
 
+/// G9pre strengthening (audit N4b): prove the freeze genuinely ISOLATES the
+/// transmit from a concurrent next-tick live mutation — the actual reason the
+/// one-tick lag + `SnapshotWorld` exist (the send worker transmits tick N's
+/// frozen job while MAIN advances live state to tick N+1). After
+/// `prepare_send_job` (freeze) we mutate the LIVE world to a DIFFERENT value;
+/// the lagged transmit must emit the FROZEN value, byte-identical to a resident
+/// send of that frozen value — i.e. the live advance must NOT leak onto the wire.
+#[test]
+fn g9pre_freeze_isolates_transmit_from_concurrent_mutation() {
+    const FROZEN: (f32, f32) = (100.0, 200.0);
+    const LIVE_AFTER: (f32, f32) = (999.0, 999.0);
+
+    let frozen_case = Case {
+        label: "frozen value",
+        mutations: vec![EntityMutation {
+            index: 0,
+            set_x: Some(FROZEN.0),
+            set_y: Some(FROZEN.1),
+        }],
+    };
+
+    // Resident baseline: emits FROZEN.
+    let resident = s2c(&run_resident(&frozen_case));
+
+    // Pipelined WITH a concurrent post-freeze mutation to LIVE_AFTER.
+    let pipelined = {
+        let mut scenario = Scenario::new();
+        let (_ck, entities) = setup_and_settle(&mut scenario);
+        apply_mutations(&mut scenario, &entities, &frozen_case);
+        let snap = snapshot_of(&mut scenario, &entities, &frozen_case); // captures FROZEN
+        let plan = scenario.prepare_send_job(); // freeze point: mask captured + live mask cleared
+        // Concurrent next-tick mutation — must NOT appear on the wire this tick.
+        let live_after = Case {
+            label: "live after freeze",
+            mutations: vec![EntityMutation {
+                index: 0,
+                set_x: Some(LIVE_AFTER.0),
+                set_y: Some(LIVE_AFTER.1),
+            }],
+        };
+        apply_mutations(&mut scenario, &entities, &live_after);
+        scenario.transmit_and_pump(snap, plan);
+        s2c(&scenario.take_trace().packets)
+    };
+
+    hexdump("RESIDENT(frozen)        ", &resident);
+    hexdump("PIPELINED(frozen+live++)", &pipelined);
+
+    assert_eq!(
+        resident, pipelined,
+        "G9pre N4b: the freeze must isolate the lagged transmit from a concurrent \
+         post-freeze live mutation — the transmitted bytes must carry the FROZEN \
+         value, not the advanced live value. A divergence means the snapshot/freeze \
+         does not actually isolate the worker from main-thread state advance."
+    );
+}
+
 fn s2c(packets: &[TracePacket]) -> Vec<Vec<u8>> {
     packets
         .iter()
