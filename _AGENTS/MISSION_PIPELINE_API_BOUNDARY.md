@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G1 IN PROGRESS (Option B + Strategy 1 approved by Connor 2026-06-29)
+status: G2 COMPLETE — G3 design pending Connor sign-off
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -53,8 +53,8 @@ naia feature branch + cyberlith feature branch (naia path-dep repointed). Land a
 
 | Step | Description | Status |
 |------|-------------|--------|
-| G1 | `SimPipeline<E>` + `TickCtx<E,W>` tick-driver; `SimPipelineRes` in bevy adapter; tests green | **IN PROGRESS** (all core changes landed; workspace tests running) |
-| G2 | Startup window API — `io_load` on `SimPipeline` (no raw `WorldServer` reassembly in cyberlith) | PENDING |
+| G1 | `SimPipeline<E>` + `TickCtx<E,W>` tick-driver; `SimPipelineRes` in bevy adapter; tests green | ✅ COMPLETE (`55272fad`) |
+| G2 | `SimPipeline::listen(socket)` startup-window API; `PluginInternalState::listen` delegates to it | ✅ COMPLETE (`1e851a73`) |
 | G3 | Coord-only ops as named methods on `SimHandle`/`SimPipeline`; `CommandsExt` becomes shim | PENDING |
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
@@ -74,7 +74,7 @@ Each pending group = design sub-pass + Connor sign-off before impl.
 ## 5. Absorbed items
 
 - `enable_entity_replication` fail-loud guard (`naia dev 350f00c2`): committed but **moot/absorbed** — under G3/G6, `enable_entity_replication` becomes naia-internal; the invariant is enforced by API contract. Will be superseded when G3 lands.
-- M2 (sim-namako BDD coverage): reshaped as the executable contract for G1–G6.
+- M2 (sim-namako BDD coverage): reshaped as the executable contract for G1–G7.
 
 ## 6. Gates (from audit spec §8)
 
