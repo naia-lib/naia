@@ -12,7 +12,7 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19): this helper no
 //! longer reassembles a `WorldServer` via `run_with_world_server`. The
 //! `is_listening` guard reads `SendHandle::is_listening`, the auth gate
-//! reads `SimHandle::entity_authority_status`, and the insert / remove /
+//! reads `CoordHandle::entity_authority_status`, and the insert / remove /
 //! despawn ops route through the `SendHandle::*_worldless` methods (the
 //! despawn borrows `&mut sim_handle.state` for its Coord-side priority/room
 //! cleanup). Each worldless method mirrors its `WorldServer` namesake
@@ -34,7 +34,7 @@ use std::ops::DerefMut;
 use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
 use naia_bevy_shared::{EntityAuthStatus, HostSyncEvent, WorldData, WorldMutType, WorldProxyMut};
-use naia_server::pipeline_actors::SimHandle;
+use naia_server::pipeline_actors::CoordHandle;
 use naia_server::{RecvHandle, SendHandle};
 
 /// Drain `Messages<HostSyncEvent>` against the three pipeline handles
@@ -46,17 +46,17 @@ use naia_server::{RecvHandle, SendHandle};
 /// [`run_with_world_server`] instead of `ResMut<ServerImpl>`.
 ///
 /// Calling pattern (cyberlith Sim main schedule). Under
-/// `Plugin::sim_integration_full`, `RecvHandleRes` / `SendHandleRes`
+/// `Plugin::pipelined`, `RecvHandleRes` / `SendHandleRes`
 /// wrap shared park-window slots: the workers must be parked (via
 /// [`crate::PluginInternalState::park_workers`]) before taking them, and
-/// unparked after returning them. The sim handle lives inside `SimPipelineRes`:
+/// unparked after returning them. The sim handle lives inside `PipelinedServer`:
 /// ```ignore
 /// fn sim_to_host_sync(world: &mut World) {
 ///     let state = world.resource::<PluginInternalState>();
 ///     state.park_workers();
 ///
-///     let mut sim_handle = world.resource_mut::<SimPipelineRes>()
-///         .0.as_mut().map(|p| p.take_sim()).unwrap();
+///     let mut sim_handle = world.resource_mut::<PipelinedServer>()
+///         .0.as_mut().map(|p| p.take_coord()).unwrap();
 ///     let recv_slot = world.resource::<RecvHandleRes>().0.clone();
 ///     let send_slot = world.resource::<SendHandleRes>().0.clone();
 ///     let recv = recv_slot.lock().take().unwrap();
@@ -65,8 +65,8 @@ use naia_server::{RecvHandle, SendHandle};
 ///     let (sim_handle, recv, send) =
 ///         drain_host_sync_into_pipeline(world, sim_handle, recv, send);
 ///
-///     if let Some(p) = world.resource_mut::<SimPipelineRes>().0.as_mut() {
-///         p.restore_sim(sim_handle);
+///     if let Some(p) = world.resource_mut::<PipelinedServer>().0.as_mut() {
+///         p.restore_coord(sim_handle);
 ///     }
 ///     *recv_slot.lock() = Some(recv);
 ///     *send_slot.lock() = Some(send);
@@ -83,10 +83,10 @@ use naia_server::{RecvHandle, SendHandle};
 /// unchanged without rebuilding `WorldServer` (zero-cost no-op path).
 pub fn drain_host_sync_into_pipeline(
     world: &mut World,
-    mut sim_handle: SimHandle<Entity>,
+    mut sim_handle: CoordHandle<Entity>,
     recv: RecvHandle<Entity>,
     mut send: SendHandle<Entity>,
-) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     // Drain the message queue first; if empty, skip all handle work.
     let host_component_events: Vec<HostSyncEvent> = world
         .get_resource_mut::<Messages<HostSyncEvent>>()
@@ -98,7 +98,7 @@ pub fn drain_host_sync_into_pipeline(
 
     // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — handle-direct
     // drain. No `run_with_world_server` reassembly: queries route through
-    // `SendHandle::is_listening` + `SimHandle::entity_authority_status`,
+    // `SendHandle::is_listening` + `CoordHandle::entity_authority_status`,
     // mutations through the `SendHandle::*_worldless` ops (despawn borrows
     // `&mut sim_handle.state`). Byte-identical to the prior `WorldServer` path
     // — the worldless methods mirror `WorldServer::*` field-for-field.

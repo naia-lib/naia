@@ -1,12 +1,12 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) —
-//! `SimConverter<Entity>` resource installable on a Sim Bevy app.
+//! `ServerEntityConverter<Entity>` resource installable on a Sim Bevy app.
 //!
 //! Verifies the new converter facade:
-//! - A `SimConverter` built from a `SimHandle` (via
-//!   `SimConverter::from_sim`) installs on a Bevy `App` as a
+//! - A `ServerEntityConverter` built from a `CoordHandle` (via
+//!   `ServerEntityConverter::from_sim`) installs on a Bevy `App` as a
 //!   `Resource`.
 //! - For every entity registered via the legacy `WorldServer` path,
-//!   the `SimConverter` returns the SAME `GlobalEntity` as
+//!   the `ServerEntityConverter` returns the SAME `GlobalEntity` as
 //!   `WorldServer`'s built-in `EntityAndGlobalEntityConverter` impl —
 //!   the byte-identity precondition for `EntityProperty` wire output.
 //! - `EntityProperty::set(&sim_converter, &entity).get_inner()`
@@ -22,7 +22,7 @@ use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
     pipeline_actors::{run_with_world_server, spawn_server_handles},
-    Plugin as ServerPlugin, ServerConfig, SimConverter,
+    Plugin as ServerPlugin, ServerConfig, ServerEntityConverter,
 };
 use naia_bevy_shared::{EntityAndGlobalEntityConverter, EntityProperty, Protocol as BevyProtocol};
 use naia_test_harness::test_protocol::Position;
@@ -36,7 +36,7 @@ fn protocol() -> naia_shared::Protocol {
 }
 
 fn handles() -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
@@ -46,7 +46,7 @@ fn handles() -> (
 #[test]
 fn sim_converter_installs_as_sim_resource() {
     let (sim_handle, _recv, _send) = handles();
-    let sim_converter = SimConverter::from_sim(&sim_handle);
+    let sim_converter = ServerEntityConverter::from_coord(&sim_handle);
 
     let mut sim_app = App::new();
     sim_app.add_plugins(ServerPlugin::sim_integration(
@@ -56,15 +56,15 @@ fn sim_converter_installs_as_sim_resource() {
     sim_app.insert_resource(sim_converter);
 
     assert!(
-        sim_app.world().get_resource::<SimConverter>().is_some(),
-        "SimConverter must install as a Sim Bevy Resource",
+        sim_app.world().get_resource::<ServerEntityConverter>().is_some(),
+        "ServerEntityConverter must install as a Sim Bevy Resource",
     );
 }
 
 #[test]
 fn sim_converter_global_entity_matches_world_server_for_registered_entities() {
     let (sim_handle, recv, send) = handles();
-    let sim_converter = SimConverter::from_sim(&sim_handle);
+    let sim_converter = ServerEntityConverter::from_coord(&sim_handle);
 
     // Register several entities through the legacy WorldServer path
     // so they exist in `shared.global_entity_map`. Use the
@@ -78,7 +78,7 @@ fn sim_converter_global_entity_matches_world_server_for_registered_entities() {
         }
     });
 
-    // For every registered entity, the SimConverter and the
+    // For every registered entity, the ServerEntityConverter and the
     // run_with_world_server converter view must return identical
     // GlobalEntity values.
     let (sim_handle, _recv, _send, ()) = run_with_world_server(sim_handle, _recv, _send, |ws| {
@@ -89,7 +89,7 @@ fn sim_converter_global_entity_matches_world_server_for_registered_entities() {
                 .expect("sim lookup");
             assert_eq!(
                 from_ws, from_sim,
-                "SimConverter must return the same GlobalEntity as WorldServer for entity {:?}",
+                "ServerEntityConverter must return the same GlobalEntity as WorldServer for entity {:?}",
                 e,
             );
             // Round-trip
@@ -107,7 +107,7 @@ fn sim_converter_global_entity_matches_world_server_for_registered_entities() {
 #[test]
 fn entity_property_set_byte_identical_between_sim_converter_and_world_server() {
     let (sim_handle, recv, send) = handles();
-    let sim_converter = SimConverter::from_sim(&sim_handle);
+    let sim_converter = ServerEntityConverter::from_coord(&sim_handle);
 
     // Register one entity.
     let mut scratch_world = bevy_ecs::world::World::new();
@@ -116,7 +116,7 @@ fn entity_property_set_byte_identical_between_sim_converter_and_world_server() {
         ws.enable_entity_replication(&entity);
     });
 
-    // Build EntityProperty via SimConverter.
+    // Build EntityProperty via ServerEntityConverter.
     let mut prop_sim = EntityProperty::new_for_message();
     prop_sim.set(&sim_converter, &entity);
 
@@ -134,14 +134,14 @@ fn entity_property_set_byte_identical_between_sim_converter_and_world_server() {
     assert_eq!(
         prop_sim.get_inner(),
         prop_ws_inner,
-        "EntityProperty inner GlobalEntity must match between SimConverter and WorldServer paths",
+        "EntityProperty inner GlobalEntity must match between ServerEntityConverter and WorldServer paths",
     );
 }
 
 #[test]
 fn sim_converter_unknown_entity_returns_error() {
     let (sim_handle, _recv, _send) = handles();
-    let sim_converter = SimConverter::from_sim(&sim_handle);
+    let sim_converter = ServerEntityConverter::from_coord(&sim_handle);
 
     let mut scratch_world = bevy_ecs::world::World::new();
     let unknown = scratch_world.spawn(()).id();

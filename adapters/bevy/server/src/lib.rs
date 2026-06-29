@@ -117,28 +117,32 @@ mod plugin;
 mod plugin_full;
 mod protocol_ext;
 mod server;
-mod sim_converter;
+mod server_entity_converter;
 mod snapshot_builder;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
 pub use protocol_ext::ProtocolServerExt;
 pub use apply_receive_output::{
-    apply_receive_output_pipeline, apply_receive_output_pipeline_with_sim_receiver,
-    apply_receive_output_pipeline_with_sim_receiver_split,
+    apply_receive_output_pipeline,
+    apply_receive_output_pipeline_with_event_receiver,
+    apply_receive_output_pipeline_with_event_receiver_split,
 };
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
-pub use naia_server::pipeline_actors::{SimPipeline, TickCtx};
+// `TickCtx` re-exported directly; core `PipelinedServer<E>` accessible via
+// `naia_bevy_server::pipeline_actors::PipelinedServer`. The Bevy resource
+// `PipelinedServer` exported from plugin_full below.
+pub use naia_server::pipeline_actors::TickCtx;
 pub use plugin_full::{
-    drain_recv_impl, drain_recv_impl_split, PluginInternalState, PluginSimConfig, RecvHandleRes,
-    SendHandleRes, SimEventReceiverRes, SimPipelineRes, SnapshotReceiverRes, SnapshotSenderRes,
+    drain_recv_impl, drain_recv_impl_split, PluginInternalState, PipelineConfig, RecvHandleRes,
+    SendHandleRes, EventReceiverRes, PipelinedServer, SnapshotReceiverRes, SnapshotSenderRes,
 };
 pub use server::Server;
-pub use sim_converter::SimConverter;
+pub use server_entity_converter::ServerEntityConverter;
 pub use snapshot_builder::{build_snapshot, build_snapshot_full};
 
 /// Call `listen` on the naia server resource directly via the App,

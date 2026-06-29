@@ -54,7 +54,7 @@ fn protocol() -> naia_shared::Protocol {
 fn handles_listening(
     addr: &str,
 ) -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {

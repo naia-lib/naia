@@ -21,7 +21,7 @@ pub(crate) enum ScopeChange<E: Copy + Eq + Hash + Send + Sync> {
     RoomChange(RoomChange<E>),
     /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — deferred
     /// Send-side `configure_entity_replication` work. The Coord-only
-    /// `SimHandle::configure_entity_replication` performs the gwm
+    /// `CoordHandle::configure_entity_replication` performs the gwm
     /// writes immediately and captures the Send-side leaf ops here; the
     /// `SendState::apply_pending_configure_replication` drainer (driven
     /// from `apply_pending_send_preamble`) executes them. World-side

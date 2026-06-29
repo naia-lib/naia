@@ -1,4 +1,4 @@
-//! `SimConverter<E>` — MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19).
+//! `ServerEntityConverter<E>` — MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19).
 //!
 //! Sim-installable, cloneable `EntityAndGlobalEntityConverter<E>` view.
 //! Cyberlith's Sim systems install this as a Bevy `Resource` (via the
@@ -12,7 +12,7 @@
 //! `WorldServer<E>` (`server/src/server/world_server.rs:3956`), whose
 //! body just calls `self.shared.global_entity_map.read().*` — i.e. the
 //! converter only needs `Arc<ServerShared<E>>`, not the fused server.
-//! `SimConverter<E>` exposes exactly that subset as a cloneable handle
+//! `ServerEntityConverter<E>` exposes exactly that subset as a cloneable handle
 //! so cyberlith's `services/game/cell/src/server_access.rs` can retire
 //! its per-tick `run_with_naia_server` reassembly (see Phase C of the
 //! mission plan).
@@ -29,15 +29,15 @@
 //!
 //! # Construction
 //!
-//! Cyberlith builds a `SimConverter<E>` from any of the three pipeline
+//! Cyberlith builds a `ServerEntityConverter<E>` from any of the three pipeline
 //! handles (they all hold the same `Arc<ServerShared<E>>`):
 //!
 //! ```ignore
-//! let sim_converter = sim_handle.sim_converter();
+//! let sim_converter = sim_handle.entity_converter();
 //! sim_app.insert_resource(sim_converter);
 //! ```
 //!
-//! See [`crate::pipeline_actors::SimHandle::sim_converter`].
+//! See [`crate::pipeline_actors::CoordHandle::sim_converter`].
 
 use std::{hash::Hash, sync::Arc};
 
@@ -48,14 +48,14 @@ use naia_shared::{EntityAndGlobalEntityConverter, EntityDoesNotExistError, Globa
 /// The inner `Arc` allows the converter to be moved across thread
 /// boundaries and to be installed as a Bevy `Resource` (the bevy
 /// adapter applies `#[derive(Resource)]` via the re-export at
-/// `naia_bevy_server::SimConverter`).
-pub struct SimConverter<E: Copy + Eq + Hash + Send + Sync + 'static> {
+/// `naia_bevy_server::ServerEntityConverter`).
+pub struct ServerEntityConverter<E: Copy + Eq + Hash + Send + Sync + 'static> {
     inner: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimConverter<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> ServerEntityConverter<E> {
     /// Wrap an arbitrary `Arc`-backed converter. The typical
-    /// construction site is [`crate::pipeline_actors::SimHandle::sim_converter`],
+    /// construction site is [`crate::pipeline_actors::CoordHandle::sim_converter`],
     /// which wraps the shared `Arc<ServerShared<E>>`.
     pub fn from_arc(inner: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync>) -> Self {
         Self { inner }
@@ -68,7 +68,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimConverter<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SimConverter<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for ServerEntityConverter<E> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -77,7 +77,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SimConverter<E> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> EntityAndGlobalEntityConverter<E>
-    for SimConverter<E>
+    for ServerEntityConverter<E>
 {
     fn global_entity_to_entity(
         &self,

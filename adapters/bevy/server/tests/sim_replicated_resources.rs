@@ -27,7 +27,7 @@ use bevy_ecs::{entity::Entity, system::Commands};
 
 use naia_bevy_server::{
     drain_host_sync_into_pipeline,
-    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
     Plugin as ServerPlugin, RecvHandle, SendHandle, ServerConfig,
 };
 use naia_bevy_shared::{HostOwned, Protocol as BevyProtocol, WorldMutType, WorldProxyMut};
@@ -60,7 +60,7 @@ fn build_app() -> App {
 
 fn build_handles_listening(
     addr: &str,
-) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let naia_proto: naia_shared::Protocol = protocol().into();
@@ -78,7 +78,7 @@ fn build_handles_listening(
 }
 
 fn component_registered(
-    sim_handle: &SimHandle<Entity>,
+    sim_handle: &CoordHandle<Entity>,
     entity: Entity,
     kind: &ComponentKind,
 ) -> bool {

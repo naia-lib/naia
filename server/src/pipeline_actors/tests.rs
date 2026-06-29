@@ -25,7 +25,7 @@ use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
 use super::{
-    drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent, SimHandle,
+    drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent, CoordHandle,
 };
 
 /// Compile-time assertion that `T: Send`.
@@ -41,7 +41,7 @@ fn spawn_server_handles_constructs_three_handles() {
         spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
 
     // The three handles construct and own their own state. The Arc on
-    // SimHandle::shared is the same allocation as on the recv/send
+    // CoordHandle::shared is the same allocation as on the recv/send
     // handles, so the strong count must be at least 3.
     let strong = std::sync::Arc::strong_count(&sim_handle.shared);
     assert!(
@@ -54,7 +54,7 @@ fn spawn_server_handles_constructs_three_handles() {
 
 #[test]
 fn pipeline_handles_are_send() {
-    assert_send::<SimHandle<u64>>();
+    assert_send::<CoordHandle<u64>>();
     assert_send::<RecvHandle<u64>>();
     assert_send::<SendHandle<u64>>();
     // Naia-server doesn't depend on bevy_ecs, so we can't reference
@@ -268,10 +268,10 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
     );
 }
 
-/// Integration test for SimHandle room-ops deferred-drain path (§ 5.4).
+/// Integration test for CoordHandle room-ops deferred-drain path (§ 5.4).
 ///
 /// Verifies that:
-/// - SimHandle::create_room, room_add_user, room_add_entity push to
+/// - CoordHandle::create_room, room_add_user, room_add_entity push to
 ///   scope_change_queue without draining.
 /// - apply_pending_room_changes (as called from SendState::send_all_packets)
 ///   correctly applies those changes to entity_room_map + scope_checks_cache.
@@ -447,9 +447,9 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
     );
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `SimHandle::receive_user`
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::receive_user`
 ///
-/// Verifies that `SimHandle::receive_user(user_key, addr)` inserts the user
+/// Verifies that `CoordHandle::receive_user(user_key, addr)` inserts the user
 /// into `sim_handle.state.user_store` exactly as `WorldServer::receive_user` does,
 /// confirmed via the existing `user_exists` query method.
 #[test]
@@ -486,7 +486,7 @@ fn sim_handle_receive_user_inserts_into_user_store() {
     );
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `SimHandle::disconnect_user`
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::disconnect_user`
 /// idempotency on unknown user.
 ///
 /// Calling `disconnect_user` for a user that was never registered must return
@@ -513,7 +513,7 @@ fn sim_handle_disconnect_user_nonexistent_is_noop() {
     );
 }
 
-/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `SimHandle::disconnect_user`
+/// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::disconnect_user`
 /// queues a request for a known user.
 ///
 /// After `receive_user` then `disconnect_user`, `pending_disconnect_requests`
@@ -559,7 +559,7 @@ fn sim_handle_disconnect_user_queues_request() {
 /// and `SendHandle::mark_scope_checks_pending_handled`.
 ///
 /// Verifies that pending scope-check tuples appear after a room add-user +
-/// add-entity sequence (via the SimHandle room ops → preamble drain path), and
+/// add-entity sequence (via the CoordHandle room ops → preamble drain path), and
 /// that `mark_scope_checks_pending_handled` clears the pending slice.
 #[test]
 fn send_handle_scope_checks_pending_and_mark_handled() {

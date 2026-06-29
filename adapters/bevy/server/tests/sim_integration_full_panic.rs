@@ -1,5 +1,5 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.5 — panic propagation smoke for
-//! `Plugin::sim_integration_full`.
+//! `Plugin::pipelined`.
 //!
 //! Verifies that a panic on a worker thread surfaces on the main
 //! thread via [`PluginInternalState::propagate_panic_if_any`].
@@ -16,7 +16,7 @@ use std::{thread, time::Duration};
 use bevy_app::App;
 
 use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, ServerConfig,
+    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
@@ -32,10 +32,10 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration_full(
+    app.add_plugins(ServerPlugin::pipelined(
         ServerConfig::default(),
         protocol(),
-        PluginSimConfig::default(),
+        PipelineConfig::default(),
     ));
     app
 }

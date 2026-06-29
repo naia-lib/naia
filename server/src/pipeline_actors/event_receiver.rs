@@ -1,4 +1,4 @@
-//! `SimEventReceiver<E>` — C.6-prep Sim-side inbound transport-event facade.
+//! `EventReceiver<E>` — C.6-prep Sim-side inbound transport-event facade.
 //!
 //! # Why this exists
 //!
@@ -16,7 +16,7 @@
 //! but reasoning about the mutations from a Sim-system perspective is
 //! noisy.
 //!
-//! `SimEventReceiver<E>` is a parking-lot-Mutex-backed shared facade:
+//! `EventReceiver<E>` is a parking-lot-Mutex-backed shared facade:
 //! every event type that `apply_receive_output_pipeline` fires into
 //! `Messages<X>` is also fanned out into a per-type vector inside the
 //! receiver. Sim systems drain by type via `drain_connect_events()` /
@@ -29,8 +29,8 @@
 //! population is preserved during this mission so existing consumers
 //! still work." Cyberlith pre-C.6 callers that drain Messages on Recv
 //! continue to function. A consumer wanting the new facade installs a
-//! `SimEventReceiver<E>` on Sim, and calls
-//! [`SimEventReceiver::push_from_receive_output`] with each tick's
+//! `EventReceiver<E>` on Sim, and calls
+//! [`EventReceiver::push_from_receive_output`] with each tick's
 //! `ReceiveOutput<E>` (from whichever SubApp it has access to). The
 //! Messages population is independent.
 //!
@@ -57,7 +57,7 @@ use naia_shared::{
 
 use crate::{events::Events, server::receive_output::ReceiveOutput, user::UserKey, EntityOwner};
 
-use super::handles::SimHandle;
+use super::handles::CoordHandle;
 
 // ────────────────────────────────────────────────────────────────────
 // Per-event-type carrier structs (clone-friendly, Debug for tests).
@@ -66,19 +66,19 @@ use super::handles::SimHandle;
 // ────────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Debug)]
-pub struct SimConnectEvent {
+pub struct RecvConnectEvent {
     pub user_key: UserKey,
 }
 
 #[derive(Clone, Debug)]
-pub struct SimDisconnectEvent {
+pub struct RecvDisconnectEvent {
     pub user_key: UserKey,
     pub address: SocketAddr,
     pub reason: DisconnectReason,
 }
 
 #[derive(Clone, Debug)]
-pub struct SimErrorEvent {
+pub struct RecvErrorEvent {
     /// Stringified `NaiaServerError` — the error variants carry
     /// non-Clone payloads in places, so we collapse to a String here
     /// for the channel-shared facade.
@@ -86,34 +86,34 @@ pub struct SimErrorEvent {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct SimTickEvent(pub Tick);
+pub struct RecvTickEvent(pub Tick);
 
 #[derive(Clone, Debug)]
-pub struct SimSpawnEntityEvent<E> {
+pub struct RecvSpawnEntityEvent<E> {
     pub user_key: UserKey,
     pub entity: E,
 }
 
 #[derive(Clone, Debug)]
-pub struct SimDespawnEntityEvent<E> {
+pub struct RecvDespawnEntityEvent<E> {
     pub user_key: UserKey,
     pub entity: E,
 }
 
 #[derive(Clone, Debug)]
-pub struct SimPublishEntityEvent<E> {
+pub struct RecvPublishEntityEvent<E> {
     pub user_key: UserKey,
     pub entity: E,
 }
 
 #[derive(Clone, Debug)]
-pub struct SimUnpublishEntityEvent<E> {
+pub struct RecvUnpublishEntityEvent<E> {
     pub user_key: UserKey,
     pub entity: E,
 }
 
 // ────────────────────────────────────────────────────────────────────
-// SimEventReceiver
+// EventReceiver
 // ────────────────────────────────────────────────────────────────────
 
 /// Mutex-backed Sim-side inbound event receiver. Cloneable (Arc-internal).
@@ -122,11 +122,11 @@ pub struct SimUnpublishEntityEvent<E> {
 ///
 /// All `drain_*` methods are non-blocking: they take the buffer for
 /// their event type and return a `Vec` (empty when nothing has arrived).
-pub struct SimEventReceiver<E: Copy + Eq + Hash + Send + Sync + 'static> {
-    inner: Arc<SimEventReceiverInner<E>>,
+pub struct EventReceiver<E: Copy + Eq + Hash + Send + Sync + 'static> {
+    inner: Arc<EventReceiverInner<E>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SimEventReceiver<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for EventReceiver<E> {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -134,25 +134,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Clone for SimEventReceiver<E> 
     }
 }
 
-struct SimEventReceiverInner<E: Copy + Eq + Hash + Send + Sync + 'static> {
-    connects: Mutex<Vec<SimConnectEvent>>,
-    disconnects: Mutex<Vec<SimDisconnectEvent>>,
-    errors: Mutex<Vec<SimErrorEvent>>,
-    ticks: Mutex<Vec<SimTickEvent>>,
-    spawns: Mutex<Vec<SimSpawnEntityEvent<E>>>,
-    despawns: Mutex<Vec<SimDespawnEntityEvent<E>>>,
-    publishes: Mutex<Vec<SimPublishEntityEvent<E>>>,
-    unpublishes: Mutex<Vec<SimUnpublishEntityEvent<E>>>,
+struct EventReceiverInner<E: Copy + Eq + Hash + Send + Sync + 'static> {
+    connects: Mutex<Vec<RecvConnectEvent>>,
+    disconnects: Mutex<Vec<RecvDisconnectEvent>>,
+    errors: Mutex<Vec<RecvErrorEvent>>,
+    ticks: Mutex<Vec<RecvTickEvent>>,
+    spawns: Mutex<Vec<RecvSpawnEntityEvent<E>>>,
+    despawns: Mutex<Vec<RecvDespawnEntityEvent<E>>>,
+    publishes: Mutex<Vec<RecvPublishEntityEvent<E>>>,
+    unpublishes: Mutex<Vec<RecvUnpublishEntityEvent<E>>>,
     /// Erased message storage — keyed by (ChannelKind, MessageKind).
     /// Drained by `drain_messages::<C, M>`.
     messages: Mutex<Vec<(ChannelKind, MessageKind, UserKey, MessageContainer)>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> EventReceiver<E> {
     /// Construct a fresh receiver.
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(SimEventReceiverInner {
+            inner: Arc::new(EventReceiverInner {
                 connects: Mutex::new(Vec::new()),
                 disconnects: Mutex::new(Vec::new()),
                 errors: Mutex::new(Vec::new()),
@@ -178,14 +178,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
     /// `sim_handle` is needed for the same resource-entity filter
     /// `apply_receive_output_pipeline` applies (Spawn / Despawn of
     /// resource entities are suppressed).
-    pub fn push_from_receive_output(&self, sim_handle: &SimHandle<E>, output: ReceiveOutput<E>) {
+    pub fn push_from_receive_output(&self, sim_handle: &CoordHandle<E>, output: ReceiveOutput<E>) {
         let inner = &*self.inner;
 
         // Tick events
         if !output.pending_ticks.is_empty() {
             let mut guard = inner.ticks.lock();
             for tick in output.pending_ticks {
-                guard.push(SimTickEvent(tick));
+                guard.push(RecvTickEvent(tick));
             }
         }
 
@@ -198,14 +198,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         if events.has::<crate::ConnectEvent>() {
             let mut guard = inner.connects.lock();
             for user_key in events.read::<crate::ConnectEvent>() {
-                guard.push(SimConnectEvent { user_key });
+                guard.push(RecvConnectEvent { user_key });
             }
         }
         // Disconnect
         if events.has::<crate::DisconnectEvent>() {
             let mut guard = inner.disconnects.lock();
             for (user_key, address, reason) in events.read::<crate::DisconnectEvent>() {
-                guard.push(SimDisconnectEvent {
+                guard.push(RecvDisconnectEvent {
                     user_key,
                     address,
                     reason,
@@ -216,7 +216,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         if events.has::<crate::ErrorEvent>() {
             let mut guard = inner.errors.lock();
             for err in events.read::<crate::ErrorEvent>() {
-                guard.push(SimErrorEvent {
+                guard.push(RecvErrorEvent {
                     error: format!("{err:?}"),
                 });
             }
@@ -230,7 +230,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
                     continue;
                 }
                 if let EntityOwner::Client(user_key) = sim_handle.entity_owner(&entity) {
-                    guard.push(SimSpawnEntityEvent { user_key, entity });
+                    guard.push(RecvSpawnEntityEvent { user_key, entity });
                 }
             }
         }
@@ -241,20 +241,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
                 if sim_handle.is_resource_entity(&entity) {
                     continue;
                 }
-                guard.push(SimDespawnEntityEvent { user_key, entity });
+                guard.push(RecvDespawnEntityEvent { user_key, entity });
             }
         }
         // Publish / Unpublish
         if events.has::<crate::PublishEntityEvent>() {
             let mut guard = inner.publishes.lock();
             for (user_key, entity) in events.read::<crate::PublishEntityEvent>() {
-                guard.push(SimPublishEntityEvent { user_key, entity });
+                guard.push(RecvPublishEntityEvent { user_key, entity });
             }
         }
         if events.has::<crate::UnpublishEntityEvent>() {
             let mut guard = inner.unpublishes.lock();
             for (user_key, entity) in events.read::<crate::UnpublishEntityEvent>() {
-                guard.push(SimUnpublishEntityEvent { user_key, entity });
+                guard.push(RecvUnpublishEntityEvent { user_key, entity });
             }
         }
 
@@ -278,48 +278,48 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
     }
 
     /// Drain all queued connect events.
-    pub fn drain_connect_events(&self) -> Vec<SimConnectEvent> {
+    pub fn drain_connect_events(&self) -> Vec<RecvConnectEvent> {
         std::mem::take(&mut *self.inner.connects.lock())
     }
 
     /// Drain all queued disconnect events.
-    pub fn drain_disconnect_events(&self) -> Vec<SimDisconnectEvent> {
+    pub fn drain_disconnect_events(&self) -> Vec<RecvDisconnectEvent> {
         std::mem::take(&mut *self.inner.disconnects.lock())
     }
 
     /// Drain all queued error events.
-    pub fn drain_error_events(&self) -> Vec<SimErrorEvent> {
+    pub fn drain_error_events(&self) -> Vec<RecvErrorEvent> {
         std::mem::take(&mut *self.inner.errors.lock())
     }
 
     /// Drain all queued tick events.
-    pub fn drain_tick_events(&self) -> Vec<SimTickEvent> {
+    pub fn drain_tick_events(&self) -> Vec<RecvTickEvent> {
         std::mem::take(&mut *self.inner.ticks.lock())
     }
 
     /// Drain all queued client-owned entity-spawn events.
-    pub fn drain_spawn_entity_events(&self) -> Vec<SimSpawnEntityEvent<E>> {
+    pub fn drain_spawn_entity_events(&self) -> Vec<RecvSpawnEntityEvent<E>> {
         std::mem::take(&mut *self.inner.spawns.lock())
     }
 
     /// Drain all queued entity-despawn events.
-    pub fn drain_despawn_entity_events(&self) -> Vec<SimDespawnEntityEvent<E>> {
+    pub fn drain_despawn_entity_events(&self) -> Vec<RecvDespawnEntityEvent<E>> {
         std::mem::take(&mut *self.inner.despawns.lock())
     }
 
     /// Drain all queued entity-publish events.
-    pub fn drain_publish_entity_events(&self) -> Vec<SimPublishEntityEvent<E>> {
+    pub fn drain_publish_entity_events(&self) -> Vec<RecvPublishEntityEvent<E>> {
         std::mem::take(&mut *self.inner.publishes.lock())
     }
 
     /// Drain all queued entity-unpublish events.
-    pub fn drain_unpublish_entity_events(&self) -> Vec<SimUnpublishEntityEvent<E>> {
+    pub fn drain_unpublish_entity_events(&self) -> Vec<RecvUnpublishEntityEvent<E>> {
         std::mem::take(&mut *self.inner.unpublishes.lock())
     }
 
     // ────────────────────────────────────────────────────────────────
     // Typed push helpers — used by the combined helper
-    // `apply_receive_output_pipeline_with_sim_receiver` (in the bevy
+    // `apply_receive_output_pipeline_with_event_receiver` (in the bevy
     // server adapter) so it can drain a `ReceiveOutput<E>` once and
     // fan to both the bevy `Messages<X>` sinks AND this receiver
     // without double-consuming `WorldEvents<E>`.
@@ -330,7 +330,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
 
     /// Push a single tick into the tick buffer.
     pub fn push_tick(&self, tick: Tick) {
-        self.inner.ticks.lock().push(SimTickEvent(tick));
+        self.inner.ticks.lock().push(RecvTickEvent(tick));
     }
 
     /// Push a single connect event into the connect buffer.
@@ -338,7 +338,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         self.inner
             .connects
             .lock()
-            .push(SimConnectEvent { user_key });
+            .push(RecvConnectEvent { user_key });
     }
 
     /// Push a single disconnect event into the disconnect buffer.
@@ -348,7 +348,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         address: SocketAddr,
         reason: DisconnectReason,
     ) {
-        self.inner.disconnects.lock().push(SimDisconnectEvent {
+        self.inner.disconnects.lock().push(RecvDisconnectEvent {
             user_key,
             address,
             reason,
@@ -360,7 +360,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
     /// `format!("{err:?}")` collapse since `NaiaServerError` variants
     /// carry non-Clone payloads.
     pub fn push_error(&self, error: String) {
-        self.inner.errors.lock().push(SimErrorEvent { error });
+        self.inner.errors.lock().push(RecvErrorEvent { error });
     }
 
     /// Push a client-owned spawn event into the spawn buffer.
@@ -370,7 +370,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         self.inner
             .spawns
             .lock()
-            .push(SimSpawnEntityEvent { user_key, entity });
+            .push(RecvSpawnEntityEvent { user_key, entity });
     }
 
     /// Push a despawn event into the despawn buffer.
@@ -379,7 +379,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         self.inner
             .despawns
             .lock()
-            .push(SimDespawnEntityEvent { user_key, entity });
+            .push(RecvDespawnEntityEvent { user_key, entity });
     }
 
     /// Push a publish event into the publish buffer.
@@ -387,7 +387,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         self.inner
             .publishes
             .lock()
-            .push(SimPublishEntityEvent { user_key, entity });
+            .push(RecvPublishEntityEvent { user_key, entity });
     }
 
     /// Push an unpublish event into the unpublish buffer.
@@ -395,7 +395,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
         self.inner
             .unpublishes
             .lock()
-            .push(SimUnpublishEntityEvent { user_key, entity });
+            .push(RecvUnpublishEntityEvent { user_key, entity });
     }
 
     /// Push the entries of a (channel_kind, message_kind) entry into
@@ -446,7 +446,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SimEventReceiver<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> Default for SimEventReceiver<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Default for EventReceiver<E> {
     fn default() -> Self {
         Self::new()
     }

@@ -1,4 +1,4 @@
-//! C.6 Addition 4 — `SimEventReceiver<E>` facade.
+//! C.6 Addition 4 — `EventReceiver<E>` facade.
 //!
 //! Verifies that `push_from_receive_output` fans a `ReceiveOutput` into
 //! the typed per-event-type drainers.
@@ -18,7 +18,7 @@ use std::time::Duration;
 use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    pipeline_actors::{spawn_server_handles, SimEventReceiver},
+    pipeline_actors::{spawn_server_handles, EventReceiver},
     ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -34,7 +34,7 @@ fn protocol() -> naia_shared::Protocol {
 
 #[test]
 fn fresh_receiver_drains_empty() {
-    let recv = SimEventReceiver::<Entity>::new();
+    let recv = EventReceiver::<Entity>::new();
     assert!(recv.drain_connect_events().is_empty());
     assert!(recv.drain_disconnect_events().is_empty());
     assert!(recv.drain_error_events().is_empty());
@@ -50,7 +50,7 @@ fn push_pending_ticks_lands_in_tick_drainer() {
     let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles();
 
-    let receiver = SimEventReceiver::<Entity>::new();
+    let receiver = EventReceiver::<Entity>::new();
 
     // Synthesize a ReceiveOutput<Entity> with two ticks.
     let output = naia_server::ReceiveOutput::<Entity> {
@@ -78,7 +78,7 @@ fn cloned_receiver_shares_state() {
     let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles();
 
-    let receiver = SimEventReceiver::<Entity>::new();
+    let receiver = EventReceiver::<Entity>::new();
     let clone = receiver.clone();
 
     let output = naia_server::ReceiveOutput::<Entity> {

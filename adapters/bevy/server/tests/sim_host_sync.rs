@@ -7,7 +7,7 @@
 //! D.3b.2 exposes those handle-direct:
 //! - `SendHandle::is_listening` (mirrors `WorldServer::is_listening` —
 //!   `send_io.is_loaded()`),
-//! - `SimHandle::entity_authority_status` (pure shared read),
+//! - `CoordHandle::entity_authority_status` (pure shared read),
 //! - `SendHandle::{insert,remove}_component_worldless` (shared gwm +
 //!   per-connection scope state),
 //! - `SendHandle::despawn_entity_worldless(&mut sim_handle.state, ..)` (adds
@@ -38,7 +38,7 @@ use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
 use naia_bevy_server::{
     drain_host_sync_into_pipeline,
-    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
     EntityOwner, Plugin as ServerPlugin, RecvHandle, SendHandle, ServerConfig,
 };
 use naia_bevy_shared::{HostSyncEvent, Protocol as BevyProtocol};
@@ -71,7 +71,7 @@ fn next_addr() -> String {
 /// is true (the drain short-circuits otherwise, matching the legacy
 /// `world_to_host_sync` guard). Loads the io exactly like
 /// `send_scope_changes_drain.rs::handles_listening`.
-fn handles() -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+fn handles() -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let (sim_handle, recv, send) =
@@ -117,7 +117,7 @@ struct Observed {
     auth: Option<EntityAuthStatus>,
 }
 
-fn observe(sim_handle: &SimHandle<Entity>, entity: &Entity) -> Observed {
+fn observe(sim_handle: &CoordHandle<Entity>, entity: &Entity) -> Observed {
     Observed {
         owner: sim_handle.entity_owner(entity),
         auth: sim_handle.entity_authority_status(entity),
@@ -311,7 +311,7 @@ fn queries_match_world_server() {
     );
     assert_eq!(
         handle_auth, ws_auth,
-        "SimHandle::entity_authority_status must equal WorldServer::entity_authority_status",
+        "CoordHandle::entity_authority_status must equal WorldServer::entity_authority_status",
     );
 }
 

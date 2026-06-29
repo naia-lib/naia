@@ -24,19 +24,38 @@ The bevy adapter's role is unchanged: thin delegation shims + bevy-native ergono
 
 ### 2a. G1 tick-driver shape — **APPROVED: Option B (Connor 2026-06-29)**
 
-`spawn_server_handles` returns `SimPipeline<E>` (handles are internal).
+`PipelinedServer::new(config, protocol)` returns `PipelinedServer<E>` (handles are internal).
 ```rust
 pipeline.tick(&mut world_proxy, |ctx| { ... });
 pipeline.mark_entity_as_static(&entity);   // G3 also on same type
 ```
-Implemented:
-- `SimPipeline<E>` + `TickCtx<'_, E, W>` in `naia-server`
-- `SimPipelineRes(pub Option<SimPipeline<Entity>>)` replaces `SimHandleRes` in `naia-bevy-server`
-- `take_sim()`/`restore_sim()` on `SimPipeline` for `drain_recv_impl_split` (which keeps taking recv/send via caller-provided Arc slots for backward compat)
-- `PluginInternalState` fields: `armed_pipeline` replaces `armed_handles` + `armed_sim_handle`
+Implemented (post G1 rename):
+- `PipelinedServer<E>` + `TickCtx<'_, E, W>` in `naia-server` (formerly `SimPipeline<E>`)
+- `CoordHandle<E>` (formerly `SimHandle<E>`) — main-thread coordination handle; exposed as `ctx.coord` inside tick body
+- Bevy resource `PipelinedServer` (no suffix; formerly `SimPipelineRes`) wraps `Option<PipelinedServer<Entity>>`
+- `take_sim()`/`restore_sim()` → `take_coord()`/`restore_coord()` on `PipelinedServer`
+- `PluginInternalState` fields: `armed_pipeline` (unchanged)
 - All naia-server + naia-bevy-server tests updated + passing
 
-### 2b. G3 design — **SIGNED OFF (Connor 2026-06-29)**
+### 2b. Naming decisions — **SIGNED OFF (Connor 2026-06-29)**
+
+Full rename table (finalized):
+
+| Old name | New name | Notes |
+|---|---|---|
+| `SimPipeline<E>` | `PipelinedServer<E>` | Core pipeline handle |
+| `SimHandle<E>` | `CoordHandle<E>` | Main-thread coord; `ctx.coord` inside tick |
+| `SimPipelineRes` (Bevy resource) | `PipelinedServer` | No suffix; IS the server resource |
+| `SimConverter<E>` | `ServerEntityConverter<E>` | Not `EntityConverter` — avoids confusion with naia_shared naming |
+| `spawn_server_handles(config, proto)` | `PipelinedServer::new(config, proto)` | Constructor on the type |
+| `PluginSimConfig` | `PipelineConfig` | |
+| `Plugin::sim_integration_full()` | `Plugin::pipelined(...)` | |
+| `Plugin::sim_integration()` variants | `Plugin::pipelined()` variants | |
+| `SimEventReceiver<E>` + `SimEventReceiverRes` | deleted / internalized | Events flow through existing Bevy event types |
+| `SimConnectEvent`, `SimTickEvent`, `SimSpawnEntityEvent`, etc. | deleted — reuse existing `ConnectEvent`, `TickEvent`, `SpawnEntityEvent` etc. | Confirmed: no Cyberlith filtering on Sim* vs base events |
+| `TickCtx<'a, E, W>` | `TickCtx<'a, E, W>` | Keep; `coord` field name replaces `sim` |
+
+### 2c. G3 design — **SIGNED OFF (Connor 2026-06-29)**
 
 **G3a** (naia-server core): forwarding methods on `SimPipeline<E>` for every public coord-only op already on `SimHandle<E>` — entity ops, room ops, user ops, authority reads, tick. `enable_entity_replication` excluded (G5).
 ```rust
@@ -49,7 +68,7 @@ sim_pipeline.room_add_entity(&room_key, &entity);
 
 **G3b** (cyberlith worktree): D11 `CellCommandsExt` dies; cyberlith Sim systems call `sim_pipeline.method()` directly in the park window. Bevy adapter `CommandsExt` stays unchanged — it's for the resident path and deferred `Commands` semantics the pipelined path doesn't need.
 
-### 2c. Cyberlith lane — **DECIDED: Tycho owns both worktrees**
+### 2d. Cyberlith lane — **DECIDED: Claude owns both worktrees**
 
 naia feature branch + cyberlith feature branch (naia path-dep repointed). Land atomically.
 

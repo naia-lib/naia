@@ -20,7 +20,7 @@
 //!     / `world.entity_enable_delegation` / `world.entity_disable_delegation`
 //!     install per-component diff mutators on the (Sim) world.
 //!
-//! `SimHandle::configure_entity_replication` runs the decision tree
+//! `CoordHandle::configure_entity_replication` runs the decision tree
 //! ONCE — reading the pre-transition gwm state, performing the gwm
 //! writes immediately (so a subsequent same-tick configure on the same
 //! entity composes correctly), and recording the Send-side and

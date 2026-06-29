@@ -1,4 +1,4 @@
-//! C.6 prep 7/7 — `apply_receive_output_pipeline_with_sim_receiver`.
+//! C.6 prep 7/7 — `apply_receive_output_pipeline_with_event_receiver`.
 //!
 //! Verifies the single-drain dual-sink combined helper that resolves
 //! the SPEC_NAIA_C6_PREP §1.4 ambiguity (the spec showed
@@ -33,9 +33,9 @@ use bevy_app::App;
 use bevy_ecs::{entity::Entity, message::Messages};
 
 use naia_bevy_server::{
-    apply_receive_output_pipeline, apply_receive_output_pipeline_with_sim_receiver,
+    apply_receive_output_pipeline, apply_receive_output_pipeline_with_event_receiver,
     events::TickEvent,
-    pipeline_actors::{spawn_server_handles, SimEventReceiver},
+    pipeline_actors::{spawn_server_handles, EventReceiver},
     Plugin, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -69,7 +69,7 @@ fn empty_output_no_sink_population() {
     let mut app = build_app();
     let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
-    let sim_receiver = SimEventReceiver::<Entity>::new();
+    let sim_receiver = EventReceiver::<Entity>::new();
 
     let output = naia_server::ReceiveOutput::<Entity> {
         pending_ticks: Vec::new(),
@@ -78,7 +78,7 @@ fn empty_output_no_sink_population() {
         pending_data_packets: Vec::new(),
     };
 
-    apply_receive_output_pipeline_with_sim_receiver(
+    apply_receive_output_pipeline_with_event_receiver(
         app.world_mut(),
         &sim_handle,
         &sim_receiver,
@@ -101,7 +101,7 @@ fn pending_ticks_fan_out_to_both_sinks() {
     let mut app = build_app();
     let (sim_handle, _recv_handle, _send_handle) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
-    let sim_receiver = SimEventReceiver::<Entity>::new();
+    let sim_receiver = EventReceiver::<Entity>::new();
 
     let output = naia_server::ReceiveOutput::<Entity> {
         pending_ticks: vec![42, 43, 44],
@@ -110,7 +110,7 @@ fn pending_ticks_fan_out_to_both_sinks() {
         pending_data_packets: Vec::new(),
     };
 
-    apply_receive_output_pipeline_with_sim_receiver(
+    apply_receive_output_pipeline_with_event_receiver(
         app.world_mut(),
         &sim_handle,
         &sim_receiver,
@@ -146,7 +146,7 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
 
     let (sim_a, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
     let (sim_b, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
-    let sim_receiver = SimEventReceiver::<Entity>::new();
+    let sim_receiver = EventReceiver::<Entity>::new();
 
     let make_output = || naia_server::ReceiveOutput::<Entity> {
         pending_ticks: vec![100, 101],
@@ -155,7 +155,7 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
         pending_data_packets: Vec::new(),
     };
 
-    apply_receive_output_pipeline_with_sim_receiver(
+    apply_receive_output_pipeline_with_event_receiver(
         app_combined.world_mut(),
         &sim_a,
         &sim_receiver,
@@ -182,7 +182,7 @@ fn cloned_sim_receiver_observes_helper_output() {
     let mut app = build_app();
     let (sim_handle, _, _) =
         spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
-    let sim_receiver = SimEventReceiver::<Entity>::new();
+    let sim_receiver = EventReceiver::<Entity>::new();
     let observer = sim_receiver.clone();
 
     let output = naia_server::ReceiveOutput::<Entity> {
@@ -192,7 +192,7 @@ fn cloned_sim_receiver_observes_helper_output() {
         pending_data_packets: Vec::new(),
     };
 
-    apply_receive_output_pipeline_with_sim_receiver(
+    apply_receive_output_pipeline_with_event_receiver(
         app.world_mut(),
         &sim_handle,
         &sim_receiver,

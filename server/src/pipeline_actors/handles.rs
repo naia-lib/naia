@@ -1,10 +1,10 @@
-//! `SimHandle<E>` — bundles the coordination state with a clone
+//! `CoordHandle<E>` — bundles the coordination state with a clone
 //! of the cross-thread shared init (`Arc<ServerShared<E>>`) so cyberlith's
 //! Sim app can install it as a single resource.
 //!
 //! Naming (MISSION_USER_ONLY_SEES_SIM Phase H): there is no separate
 //! coordinator thread — the coordination capability is folded into the
-//! Sim/main thread, so this handle is named `SimHandle`. The underlying
+//! Sim/main thread, so this handle is named `CoordHandle`. The underlying
 //! per-thread state struct keeps the name [`CoordinatorState`] because it
 //! denotes the *coordination-state capability* (the third of the
 //! recv-side / send-side / coordination-side split), distinct from the
@@ -36,7 +36,7 @@ use crate::EntityOwner;
 /// so the coordination-side code can read shared init (`server_config`,
 /// kind tables, `global_dirty`) without going through the recv or send
 /// handle.
-pub struct SimHandle<E: Copy + Eq + Hash + Send + Sync> {
+pub struct CoordHandle<E: Copy + Eq + Hash + Send + Sync> {
     /// Coordination-side state, owned by the Sim/main thread.
     /// Single-threaded — no internal locking.
     pub state: CoordinatorState<E>,
@@ -46,7 +46,7 @@ pub struct SimHandle<E: Copy + Eq + Hash + Send + Sync> {
     pub shared: Arc<ServerShared<E>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     // ============================================================
     // Phase B.7 — coordination-side read API surface for the bevy adapter
     // pipeline bridge (`apply_receive_output_pipeline`).
@@ -129,23 +129,23 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     }
 
     /// MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — return a
-    /// cloneable [`crate::pipeline_actors::SimConverter`] view over
+    /// cloneable [`crate::pipeline_actors::ServerEntityConverter`] view over
     /// this server's `Arc<ServerShared<E>>`.
     ///
-    /// Cyberlith installs the returned `SimConverter` as a Bevy
+    /// Cyberlith installs the returned `ServerEntityConverter` as a Bevy
     /// `Resource` on the Sim app so Sim systems can construct
     /// `EntityProperty`-bearing messages or components without
     /// reassembling a `WorldServer<E>`. The backing
     /// `EntityAndGlobalEntityConverter<E>` impl on `ServerShared<E>`
     /// delegates to the same `global_entity_map` `RwLock` that
     /// `WorldServer`'s converter reads, so wire output is byte-identical.
-    pub fn sim_converter(&self) -> crate::pipeline_actors::SimConverter<E>
+    pub fn entity_converter(&self) -> crate::pipeline_actors::ServerEntityConverter<E>
     where
         E: 'static,
     {
         let shared_clone: Arc<crate::server::ServerShared<E>> = Arc::clone(&self.shared);
         let arc: Arc<dyn EntityAndGlobalEntityConverter<E> + Send + Sync> = shared_clone;
-        crate::pipeline_actors::SimConverter::from_arc(arc)
+        crate::pipeline_actors::ServerEntityConverter::from_arc(arc)
     }
 
     // ====================================================================
@@ -493,7 +493,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     /// [`SendHandle::apply_pending_send_preamble`] (via a
     /// `ScopeChange::ConfigureReplication` payload) and all World-side
     /// component-hook registration to
-    /// [`SimHandle::apply_pending_world_hooks`] (or its `SendHandle`
+    /// [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`
     /// twin), which the Sim system calls with the `&mut World`.
     ///
     /// Wire-byte-identical to `WorldServer::configure_entity_replication`

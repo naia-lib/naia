@@ -1,7 +1,7 @@
-//! Bevy `Resource` wrapper around [`naia_server::pipeline_actors::SimConverter`]
+//! Bevy `Resource` wrapper around [`naia_server::pipeline_actors::ServerEntityConverter`]
 //! for MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19).
 //!
-//! Sim systems install the [`SimConverter`] Resource on cyberlith's Sim
+//! Sim systems install the [`ServerEntityConverter`] Resource on cyberlith's Sim
 //! Bevy world so per-tick code that needs to set an `EntityProperty`
 //! (e.g. `EntityAssignment` messages, `AssetRef` components) can call
 //! the converter directly without reassembling a `WorldServer`.
@@ -10,7 +10,7 @@
 //!
 //! ```ignore
 //! // After `spawn_server_handles`:
-//! let sim_converter = SimConverter::from_sim(&sim_handle);
+//! let sim_converter = ServerEntityConverter::from_coord(&sim_handle);
 //! sim_app.insert_resource(sim_converter);
 //! ```
 //!
@@ -26,20 +26,20 @@
 use bevy_ecs::{entity::Entity, resource::Resource};
 
 use naia_bevy_shared::{EntityAndGlobalEntityConverter, EntityDoesNotExistError, GlobalEntity};
-use naia_server::pipeline_actors::{SimConverter as InnerSimConverter, SimHandle};
+use naia_server::pipeline_actors::{ServerEntityConverter as InnerServerEntityConverter, CoordHandle};
 
 /// Bevy `Resource` wrapper over the cloneable Sim-side converter.
 #[derive(Resource, Clone)]
-pub struct SimConverter {
-    inner: InnerSimConverter<Entity>,
+pub struct ServerEntityConverter {
+    inner: InnerServerEntityConverter<Entity>,
 }
 
-impl SimConverter {
-    /// Construct from a [`SimHandle`] (which holds the shared
+impl ServerEntityConverter {
+    /// Construct from a [`CoordHandle`] (which holds the shared
     /// `Arc<ServerShared<Entity>>` backing the converter).
-    pub fn from_sim(sim_handle: &SimHandle<Entity>) -> Self {
+    pub fn from_coord(sim_handle: &CoordHandle<Entity>) -> Self {
         Self {
-            inner: sim_handle.sim_converter(),
+            inner: sim_handle.entity_converter(),
         }
     }
 
@@ -49,7 +49,7 @@ impl SimConverter {
     }
 }
 
-impl EntityAndGlobalEntityConverter<Entity> for SimConverter {
+impl EntityAndGlobalEntityConverter<Entity> for ServerEntityConverter {
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,

@@ -1,9 +1,9 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) —
-//! `SimHandle::configure_entity_replication` deferred Send/World drain.
+//! `CoordHandle::configure_entity_replication` deferred Send/World drain.
 //!
 //! `WorldServer::configure_entity_replication` (`world_server.rs:1423`)
 //! fuses Coord (gwm) + Send (per-connection) + World (component-hook)
-//! work in one synchronous body. The Coord-only `SimHandle` variant
+//! work in one synchronous body. The Coord-only `CoordHandle` variant
 //! performs the gwm writes immediately and defers the Send-side leaf
 //! ops to `apply_pending_send_preamble` (via a
 //! `ScopeChange::ConfigureReplication` payload) and the World-side hooks
@@ -35,7 +35,7 @@ use bevy_app::App;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_server::{
-    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
     EntityAuthStatus, EntityOwner, Plugin as ServerPlugin, RecvHandle, ReplicationConfig,
     ScopeExit, SendHandle, ServerConfig,
 };
@@ -57,7 +57,7 @@ fn protocol_bevy() -> naia_bevy_shared::Protocol {
     p.build()
 }
 
-fn handles() -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+fn handles() -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     spawn_server_handles::<Entity, _>(ServerConfig::default(), protocol()).take_handles()
 }
 
@@ -72,7 +72,7 @@ fn sim_app() -> App {
 
 /// Drain the deferred World-side hooks onto the Sim app's world via a
 /// `WorldMut` proxy (the `WorldMutType<Entity>` impl the hooks require).
-fn drain_world_hooks(sim_handle: &SimHandle<Entity>, app: &mut App) {
+fn drain_world_hooks(sim_handle: &CoordHandle<Entity>, app: &mut App) {
     let world: &mut World = app.world_mut();
     let mut proxy = WorldProxyMut::proxy_mut(world);
     sim_handle.apply_pending_world_hooks(&mut proxy);
@@ -88,17 +88,17 @@ type Observables = (
 );
 
 fn read_observables(
-    sim_handle: SimHandle<Entity>,
+    sim_handle: CoordHandle<Entity>,
     recv: RecvHandle<Entity>,
     send: SendHandle<Entity>,
     entity: &Entity,
 ) -> (
-    SimHandle<Entity>,
+    CoordHandle<Entity>,
     RecvHandle<Entity>,
     SendHandle<Entity>,
     Observables,
 ) {
-    // Owner via the public `SimHandle::entity_owner` (the `WorldServer`
+    // Owner via the public `CoordHandle::entity_owner` (the `WorldServer`
     // namesake is `pub(crate)`).
     let owner = sim_handle.entity_owner(entity);
     let (sim_handle, recv, send, (cfg, auth, delegated)) =

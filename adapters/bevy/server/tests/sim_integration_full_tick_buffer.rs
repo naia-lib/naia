@@ -1,9 +1,9 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.3a — PlayerCommand tick-buffer
-//! drain through `Plugin::sim_integration_full`.
+//! drain through `Plugin::pipelined`.
 //!
 //! # The gap (pre-D.3a)
 //!
-//! The `sim_integration_full` recv worker permanently owned the
+//! The `pipelined` recv worker permanently owned the
 //! `RecvHandle` and only ran `recv.receive()`. There was no
 //! `RecvHandleRes`, so a Sim system could not reach the handle to call
 //! `RecvHandle::receive_tick_buffer_messages(tick)` — the per-tick call
@@ -27,7 +27,7 @@
 //! # Why injection rather than a live client handshake
 //!
 //! The pipeline's auth / `receive_user` connection-lifecycle layer is a
-//! separate (D.3b) concern not yet wired into `sim_integration_full`, so
+//! separate (D.3b) concern not yet wired into `pipelined`, so
 //! a real client cannot complete a handshake against it today. To
 //! exercise the tick-buffer drain we manufacture a recv connection and
 //! inject tick-buffered messages directly via the `test_utils`-gated
@@ -42,7 +42,7 @@ use std::{thread, time::Duration};
 use bevy_app::App;
 
 use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, RecvHandleRes,
+    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, RecvHandleRes,
     ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -65,10 +65,10 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration_full(
+    app.add_plugins(ServerPlugin::pipelined(
         ServerConfig::default(),
         protocol(),
-        PluginSimConfig::default(),
+        PipelineConfig::default(),
     ));
     app
 }

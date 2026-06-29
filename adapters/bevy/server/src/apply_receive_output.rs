@@ -5,7 +5,7 @@ use bevy_ecs::{
 };
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
 use naia_server::{
-    pipeline_actors::{SimEventReceiver, SimHandle},
+    pipeline_actors::{EventReceiver, CoordHandle},
     EntityOwner, Events, ReceiveOutput,
 };
 
@@ -230,7 +230,7 @@ pub fn apply_receive_output(
 ///
 /// Same event-emission body as [`apply_receive_output`], byte-for-byte,
 /// EXCEPT the two `ServerImpl` query sites (`is_resource_entity`,
-/// `entity_owner`) route through [`SimHandle`] instead. The
+/// `entity_owner`) route through [`CoordHandle`] instead. The
 /// `ComponentEventRegistry::receive_events` tail call is preserved
 /// verbatim (lesson 11 of `feedback_naia_4f_operational`: omitting it
 /// silently breaks `InsertComponentEvent<C>` / `UpdateComponentEvent<C>` /
@@ -240,7 +240,7 @@ pub fn apply_receive_output(
 /// after `apply_recv_to_world` populates `output.world_events`.
 pub fn apply_receive_output_pipeline(
     world: &mut World,
-    sim_handle: &SimHandle<Entity>,
+    sim_handle: &CoordHandle<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
     // Fire one bevy `TickEvent` per server tick that the recv path advanced.
@@ -413,8 +413,8 @@ pub fn apply_receive_output_pipeline(
 /// `ReceiveOutput<E>` ONCE and fans into BOTH sinks:
 ///   - the bevy `Messages<X>` buffers (the same fan-out
 ///     `apply_receive_output_pipeline` performs), AND
-///   - a [`SimEventReceiver`]`<Entity>` (the same fan-out
-///     [`SimEventReceiver::push_from_receive_output`] performs).
+///   - a [`EventReceiver`]`<Entity>` (the same fan-out
+///     [`EventReceiver::push_from_receive_output`] performs).
 ///
 /// # Why this exists
 ///
@@ -435,7 +435,7 @@ pub fn apply_receive_output_pipeline(
 ///   * pushes each item into the bevy `Messages<X>` writer (same
 ///     behavior as `apply_receive_output_pipeline`),
 ///   * and pushes a clone-or-equivalent into the matching
-///     `SimEventReceiver` typed buffer via `push_connect` /
+///     `EventReceiver` typed buffer via `push_connect` /
 ///     `push_disconnect` / `push_spawn_client_owned` / etc.
 ///
 /// Per-event clone costs are negligible: `UserKey` / `Entity` /
@@ -447,7 +447,7 @@ pub fn apply_receive_output_pipeline(
 /// # Coexistence
 ///
 /// The original [`apply_receive_output_pipeline`] and
-/// [`SimEventReceiver::push_from_receive_output`] functions are
+/// [`EventReceiver::push_from_receive_output`] functions are
 /// unchanged; existing single-sink callers (namako tests, cyberlith
 /// pre-C.6.f, this crate's other tests) keep working byte-for-byte.
 ///
@@ -458,13 +458,13 @@ pub fn apply_receive_output_pipeline(
 /// produce on the same input: same event ordering, same payload
 /// constructions, same `ComponentEventRegistry::receive_events` tail
 /// call (lesson 11 of `feedback_naia_4f_operational`).
-pub fn apply_receive_output_pipeline_with_sim_receiver(
+pub fn apply_receive_output_pipeline_with_event_receiver(
     world: &mut World,
-    sim_handle: &SimHandle<Entity>,
-    sim_receiver: &SimEventReceiver<Entity>,
+    sim_handle: &CoordHandle<Entity>,
+    sim_receiver: &EventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
-    apply_receive_output_pipeline_with_sim_receiver_split(
+    apply_receive_output_pipeline_with_event_receiver_split(
         world,
         None,
         sim_handle,
@@ -473,7 +473,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
     )
 }
 
-/// Dual-target variant of [`apply_receive_output_pipeline_with_sim_receiver`].
+/// Dual-target variant of [`apply_receive_output_pipeline_with_event_receiver`].
 ///
 /// When the consumer hosts replicated entities on a world OTHER than the
 /// coordinator world (e.g. cyberlith's editor cells, whose client-published
@@ -492,16 +492,16 @@ pub fn apply_receive_output_pipeline_with_sim_receiver(
 ///   Tick / Connect / Disconnect / Error / Message / Request / Auth events.
 ///
 /// `entity_world: None` collapses to the single-world behavior,
-/// byte-identical to [`apply_receive_output_pipeline_with_sim_receiver`].
-/// `SimEventReceiver` pushes are unchanged in both modes.
-pub fn apply_receive_output_pipeline_with_sim_receiver_split(
+/// byte-identical to [`apply_receive_output_pipeline_with_event_receiver`].
+/// `EventReceiver` pushes are unchanged in both modes.
+pub fn apply_receive_output_pipeline_with_event_receiver_split(
     world: &mut World,
     mut entity_world: Option<&mut World>,
-    sim_handle: &SimHandle<Entity>,
-    sim_receiver: &SimEventReceiver<Entity>,
+    sim_handle: &CoordHandle<Entity>,
+    sim_receiver: &EventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
-    // Fire one bevy `TickEvent` + push one SimTickEvent per server
+    // Fire one bevy `TickEvent` + push one RecvTickEvent per server
     // tick that the recv path advanced.
     if !output.pending_ticks.is_empty() {
         let mut tick_writer = world
@@ -586,7 +586,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver_split(
         event_writer.write(bevy_events::MessageEvents::from_inner(messages_map));
     }
 
-    // Request Event — bevy-only path. SimEventReceiver does not fan
+    // Request Event — bevy-only path. EventReceiver does not fan
     // requests out (per `push_from_receive_output`'s intentional
     // omission).
     if events.has_requests() {
@@ -680,7 +680,7 @@ pub fn apply_receive_output_pipeline_with_sim_receiver_split(
     }
 
     // Delegate Entity Event — bevy world mutation only
-    // (SimEventReceiver does not surface this event type).
+    // (EventReceiver does not surface this event type).
     if events.has::<naia_events::DelegateEntityEvent>() {
         for (_, entity) in events.read::<naia_events::DelegateEntityEvent>() {
             ew.entity_mut(entity).insert(HostOwned::new::<Singleton>());

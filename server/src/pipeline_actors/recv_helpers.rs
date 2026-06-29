@@ -48,7 +48,7 @@ use crate::{
 #[derive(Debug)]
 pub enum RecvLifecycleEvent {
     /// Handshake completed — `user_key` is now valid in the
-    /// `SimHandle`'s user store. Maps to [`ConnectEvent`].
+    /// `CoordHandle`'s user store. Maps to [`ConnectEvent`].
     Connected {
         /// The newly-allocated user key.
         user_key: UserKey,

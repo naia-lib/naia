@@ -25,7 +25,7 @@ use bevy_ecs::{entity::Entity, system::Commands};
 
 use naia_bevy_server::{
     drain_host_sync_into_pipeline,
-    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
     Plugin as ServerPlugin, RecvHandle, SendHandle, ServerConfig,
 };
 use naia_bevy_shared::{HostOwned, Protocol as BevyProtocol};
@@ -62,7 +62,7 @@ fn build_app() -> App {
 /// guard).
 fn build_handles_listening(
     addr: &str,
-) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let naia_proto: naia_shared::Protocol = protocol().into();
@@ -82,7 +82,7 @@ fn build_handles_listening(
 /// Returns true iff `SendStateView::live_entities` contains `entity`.
 /// Reads through the same public surface cyberlith Sim uses, which
 /// internally consults `global_world_manager` + `global_entity_map`.
-fn entity_registered(sim_handle: &SimHandle<Entity>, entity: Entity) -> bool {
+fn entity_registered(sim_handle: &CoordHandle<Entity>, entity: Entity) -> bool {
     sim_handle
         .send_state_view()
         .live_entities()
@@ -92,7 +92,7 @@ fn entity_registered(sim_handle: &SimHandle<Entity>, entity: Entity) -> bool {
 /// Returns true iff `SendStateView::required_snapshot_entries` contains
 /// `(entity, kind)`.
 fn component_registered(
-    sim_handle: &SimHandle<Entity>,
+    sim_handle: &CoordHandle<Entity>,
     entity: Entity,
     kind: &ComponentKind,
 ) -> bool {

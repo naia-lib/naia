@@ -1,12 +1,12 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.2.1 (2026-05-19) —
-//! `SimHandle::enable_entity_replication` Coord-only entry point.
+//! `CoordHandle::enable_entity_replication` Coord-only entry point.
 //!
 //! Audit of `WorldServer::enable_entity_replication`
 //! (`world_server.rs:1044`) -> `spawn_entity_inner`
 //! (`world_server.rs:1025`) shows the call exclusively writes Coord-side
 //! shared state (`global_entity_map`, `global_world_manager`,
 //! `idx_to_world`). No Send-side mutation, no world-hook registration.
-//! Exposing as a `SimHandle` method is therefore the entire delta —
+//! Exposing as a `CoordHandle` method is therefore the entire delta —
 //! no `ScopeChange::EnableReplication` variant needed (nothing to
 //! defer).
 //!
@@ -47,7 +47,7 @@ fn protocol_bevy() -> naia_bevy_shared::Protocol {
 }
 
 fn handles() -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
@@ -56,7 +56,7 @@ fn handles() -> (
 
 #[test]
 fn sim_enable_matches_legacy_observables() {
-    // Parity: register via SimHandle::enable_entity_replication on
+    // Parity: register via CoordHandle::enable_entity_replication on
     // one server, via WorldServer::enable_entity_replication under
     // reassembly on another. The observable shared-state reads
     // (entity_replication_config + entity_owner) must agree

@@ -481,7 +481,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// (without first calling this) still get the preamble inline —
     /// `send_all_packets` checks the flag.
     pub fn apply_pending_send_preamble(&mut self) {
-        // 1. Drain any SimHandle::room_* pushes that landed between
+        // 1. Drain any CoordHandle::room_* pushes that landed between
         // ticks. Mutates entity_room_map + scope_checks_cache; leaves
         // non-RoomChange variants in the queue for the existing per-user
         // scope-evaluation drainer to consume.
@@ -489,7 +489,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.apply_pending_room_changes(&shared.scope_change_queue);
 
         // 1b. MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — drain
-        // any SimHandle::configure_entity_replication pushes. Executes
+        // any CoordHandle::configure_entity_replication pushes. Executes
         // the deferred Send-side leaf ops (publish/unpublish/delegation
         // commands, despawn-from-non-owner, the migration sequence with
         // reserve_first_command, auth fan-out) against
@@ -554,7 +554,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// connection and message manager. In the pipeline architecture
     /// (cyberlith Send SubApp permanently holds `SendHandle`), the
     /// caller resolves `user_key → address` via
-    /// [`crate::pipeline_actors::SimHandle::user_address`] once and
+    /// [`crate::pipeline_actors::CoordHandle::user_address`] once and
     /// then calls this method directly — no per-tick WorldServer
     /// reassembly.
     ///
@@ -1209,7 +1209,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// entity_enable_delegation, enable_delegation_client_owned_entity,
     /// entity_disable_delegation}` — same per-connection call, same
     /// order. The gwm writes already ran (immediately) in
-    /// `SimHandle::configure_entity_replication`; this method performs
+    /// `CoordHandle::configure_entity_replication`; this method performs
     /// only the Send-half work, using the pre-transition state captured
     /// into each op's payload (B.2 blocker-1 read-before-write fix).
     ///
@@ -2403,7 +2403,7 @@ pub(crate) fn scope_retry_decision(current: u8) -> Option<u8> {
 /// exactly as the legacy synchronous path reads it after its own gwm
 /// write — so the per-component diff-mutator installation is identical.
 ///
-/// Called from [`crate::pipeline_actors::SimHandle::apply_pending_world_hooks`]
+/// Called from [`crate::pipeline_actors::CoordHandle::apply_pending_world_hooks`]
 /// and [`crate::SendHandle::apply_pending_world_hooks`].
 pub(crate) fn drain_pending_world_hooks<E, W>(shared: &Arc<ServerShared<E>>, world: &mut W)
 where

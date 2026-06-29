@@ -79,7 +79,7 @@ pub struct Plugin {
     /// When `true`, the plugin registers shared types + message types +
     /// `ComponentEventRegistry` + system sets + `world_to_host_sync`, but
     /// SKIPS constructing the `ServerImpl` resource. The caller installs
-    /// `SimHandle`/`RecvHandle`/`SendHandle` separately via
+    /// `CoordHandle`/`RecvHandle`/`SendHandle` separately via
     /// `naia_server::pipeline_actors::spawn_server_handles` and drives the
     /// recv/apply/send phases through `apply_receive_output_pipeline` +
     /// `apply_recv_to_world`.
@@ -93,17 +93,17 @@ pub struct Plugin {
     /// custom schedule like cyberlith Sim's `SimMain`.
     change_detection_schedule: Option<InternedScheduleLabel>,
     /// MISSION_USER_ONLY_SEES_SIM Phase D: when `true`,
-    /// [`Plugin::sim_integration_full`] also constructs the three
+    /// [`Plugin::pipelined`] also constructs the three
     /// pipeline handles, installs them + the C.6-prep facade
-    /// resources (`SimConverter`, `SimEventReceiver`, `SnapshotSender`,
-    /// `SnapshotReceiver`, `SimPipelineRes`, `SendHandleRes`,
+    /// resources (`ServerEntityConverter`, `EventReceiver`, `SnapshotSender`,
+    /// `SnapshotReceiver`, `PipelinedServer`, `SendHandleRes`,
     /// `PluginInternalState`), and registers the main-side
     /// `drain_recv_worker_output` + `propagate_worker_panics` systems
     /// in `change_detection_schedule` (or `Update`).
     full_pipelining: bool,
     /// When `true`, `build` SKIPS registering the per-`Replicate` host-sync
     /// change-tracking systems (`WorldData::add_systems[_to_schedule]`). Set
-    /// only by `sim_integration_full` from `PluginSimConfig`; all other
+    /// only by `pipelined` from `PipelineConfig`; all other
     /// constructors pass `false`. MISSION_OVERLAP_FRONTIER T2 — lets an app
     /// whose world hosts no replicated entities (cyberlith base game cell's
     /// main world) drop ~2 no-op change-tracking systems per component type.
@@ -121,10 +121,10 @@ impl Plugin {
     ///
     /// See `plugin_full.rs` for the API contract + lifecycle / park
     /// / panic surface exposed via [`crate::PluginInternalState`].
-    pub fn sim_integration_full(
+    pub fn pipelined(
         server_config: ServerConfig,
         protocol: Protocol,
-        cfg: crate::plugin_full::PluginSimConfig,
+        cfg: crate::plugin_full::PipelineConfig,
     ) -> Self {
         let mut plugin = Self::new_impl(
             server_config,
@@ -159,7 +159,7 @@ impl Plugin {
     /// Phase B.7 variant: installs shared types + system sets +
     /// `world_to_host_sync` but does NOT construct a `ServerImpl`. Used
     /// by the SubApp pipeline coordinator (cyberlith) which installs
-    /// `SimHandle`/`RecvHandle`/`SendHandle` via `spawn_server_handles`
+    /// `CoordHandle`/`RecvHandle`/`SendHandle` via `spawn_server_handles`
     /// and drives recv/apply/send via the `apply_*_pipeline` family.
     ///
     /// `server_config` is unused by this variant (no `ServerImpl` is
@@ -247,7 +247,7 @@ impl Plugin {
             change_detection_schedule,
             full_pipelining,
             // Default: register host-sync change-tracking. Only
-            // `sim_integration_full` overrides this from `PluginSimConfig`.
+            // `pipelined` overrides this from `PipelineConfig`.
             skip_host_sync_change_tracking: false,
         }
     }
@@ -293,11 +293,11 @@ impl PluginType for Plugin {
         app.insert_resource(world_data);
 
         // Phase B.7: types_and_sets_only skips constructing the
-        // ServerImpl resource. The caller installs SimHandle /
+        // ServerImpl resource. The caller installs CoordHandle /
         // RecvHandle / SendHandle via `spawn_server_handles` and drives
         // recv/apply/send through the `apply_*_pipeline` entry points.
         //
-        // Phase D (sim_integration_full): we DO construct the three
+        // Phase D (pipelined): we DO construct the three
         // handles here (state_external=true AND full_pipelining=true)
         // and stash them in `PluginInternalState` for `listen()` to
         // adopt. See `plugin_full.rs`.

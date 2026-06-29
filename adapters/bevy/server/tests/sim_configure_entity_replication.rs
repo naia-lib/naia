@@ -15,7 +15,7 @@
 //! `run_with_world_server` reassembly. The value-add is the API
 //! surface, not the wire body. See the function's doc-comment for
 //! the design rationale (why this is a free fn that reassembles
-//! rather than a `SimHandle` method that defers via a
+//! rather than a `CoordHandle` method that defers via a
 //! `ScopeChange::ConfigureReplication` variant).
 //!
 //! Coverage:
@@ -54,7 +54,7 @@ fn protocol_bevy() -> naia_bevy_shared::Protocol {
 }
 
 fn handles() -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
@@ -75,7 +75,7 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
     let entity = sim_app.world_mut().spawn(()).id();
 
     // Register the entity with naia (legacy path — Sim Phase C will
-    // route through SimHandle::enable_entity_replication once that
+    // route through CoordHandle::enable_entity_replication once that
     // API exists; today we use the reassembly).
     let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.enable_entity_replication(&entity);

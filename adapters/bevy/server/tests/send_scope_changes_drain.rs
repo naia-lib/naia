@@ -10,7 +10,7 @@
 //! pipeline-mode callers that hold a `SendHandle` directly.
 //!
 //! Observable surface: `scope_change_queue.len()` (via
-//! `SimHandle::scope_change_queue_len`). The legacy variants are
+//! `CoordHandle::scope_change_queue_len`). The legacy variants are
 //! pushed alongside the new `RoomChange` payloads by
 //! `room_store::add_user` / `add_entity`; the preamble drains only
 //! `RoomChange`, leaving the legacy entity-scope variants behind. The
@@ -22,7 +22,7 @@ use std::time::Duration;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_server::{
-    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
     ServerConfig,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, WorldProxy};
@@ -37,7 +37,7 @@ fn protocol() -> naia_shared::Protocol {
     bevy_proto.into()
 }
 
-fn handles_listening(addr: &str) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+fn handles_listening(addr: &str) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let (sim_handle, recv, send) =
@@ -53,22 +53,22 @@ fn handles_listening(addr: &str) -> (SimHandle<Entity>, RecvHandle<Entity>, Send
     (sim_handle, recv, send)
 }
 
-fn queue_len(sim_handle: &SimHandle<Entity>) -> usize {
+fn queue_len(sim_handle: &CoordHandle<Entity>) -> usize {
     sim_handle.scope_change_queue_len()
 }
 
 /// Make a real bevy entity that we can register against naia's
 /// `global_entity_map` via `WorldServer::spawn_entity`. The room_*
-/// methods on `SimHandle` go through the
+/// methods on `CoordHandle` go through the
 /// `shared.global_entity_map.entity_to_global_entity(world_entity)`
 /// lookup, which requires the entity to be registered.
 fn spawn_replicating_entity(
-    sim_handle: SimHandle<Entity>,
+    sim_handle: CoordHandle<Entity>,
     recv: RecvHandle<Entity>,
     send: SendHandle<Entity>,
     bevy_world: &mut World,
 ) -> (
-    SimHandle<Entity>,
+    CoordHandle<Entity>,
     RecvHandle<Entity>,
     SendHandle<Entity>,
     Entity,

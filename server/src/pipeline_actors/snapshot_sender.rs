@@ -48,7 +48,7 @@ use naia_shared::SnapshotWorld;
 /// Sim-side outbound snapshot sender. Cloneable (Arc-internal).
 ///
 /// Install as a Resource on Sim's bevy world by
-/// [`crate::pipeline_actors::SimHandle::snapshot_sender_pair`] (which
+/// [`crate::pipeline_actors::CoordHandle::snapshot_sender_pair`] (which
 /// returns a `(SnapshotSender<E>, SnapshotReceiver<E>)` matched pair).
 /// The matching [`SnapshotReceiver`] lives wherever the Send-side
 /// `send_all_packets` runs (typically a Send SubApp).

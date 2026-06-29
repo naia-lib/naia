@@ -183,7 +183,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.2.2 (2026-05-19) — pending
     /// World-side `configure_entity_replication` hook ops, pushed by
-    /// `SimHandle::configure_entity_replication` and drained by
+    /// `CoordHandle::configure_entity_replication` and drained by
     /// `SendHandle::apply_pending_world_hooks<W>` on the Sim system
     /// (the only stage holding the `&mut World`). LOCK ORDER position
     /// #10 (last) — briefly-held Mutex on push/drain, no hot-path
@@ -192,7 +192,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     pub(crate) pending_world_hooks: Mutex<VecDeque<ConfigureWorldOp<E>>>,
 
     /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — pending
-    /// disconnect requests pushed by `SimHandle::disconnect_user` and
+    /// disconnect requests pushed by `CoordHandle::disconnect_user` and
     /// drained by the recv path at the top of `process_disconnects`,
     /// immediately before `outstanding_disconnects` is consumed. LOCK
     /// ORDER position #11 (last) — briefly-held Mutex on push/drain, no

@@ -1,11 +1,11 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.3b.1 (2026-05-19) —
-//! `SimHandle::mark_entity_as_static` Coord-only entry point.
+//! `CoordHandle::mark_entity_as_static` Coord-only entry point.
 //!
 //! Audit of `WorldServer::mark_entity_as_static` (`world_server.rs:1133`)
 //! -> `GlobalWorldManager::mark_entity_as_static`
 //! (`global_world_manager.rs:104`) shows the entire op is a single
 //! gwm flag write (`record.is_static = true`). No Send-side mutation, no
-//! world-hook registration. Exposing as a `SimHandle` method is
+//! world-hook registration. Exposing as a `CoordHandle` method is
 //! therefore the entire delta — no `ScopeChange` variant needed (nothing
 //! to defer).
 //!
@@ -13,7 +13,7 @@
 //! - the new Coord-only path produces the same observable static-flag
 //!   state (`entity_is_static`) as the legacy
 //!   `WorldServer::mark_entity_as_static` under reassembly,
-//! - the flag is observable both via the new `SimHandle::entity_is_static`
+//! - the flag is observable both via the new `CoordHandle::entity_is_static`
 //!   query and via the legacy `WorldServer::entity_is_static` read.
 
 use std::time::Duration;
@@ -44,7 +44,7 @@ fn protocol_bevy() -> naia_bevy_shared::Protocol {
 }
 
 fn handles() -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
@@ -53,7 +53,7 @@ fn handles() -> (
 
 #[test]
 fn sim_mark_static_matches_legacy() {
-    // Parity: enable replication, then mark static — via SimHandle on
+    // Parity: enable replication, then mark static — via CoordHandle on
     // one server, via WorldServer under reassembly on another. The
     // observable static-flag state must agree.
 
@@ -101,7 +101,7 @@ fn sim_mark_static_matches_legacy() {
 
 #[test]
 fn sim_mark_static_observable_via_world_server() {
-    // Cross-path read: set the flag via SimHandle, read it back via the
+    // Cross-path read: set the flag via CoordHandle, read it back via the
     // legacy WorldServer::entity_is_static. They must agree (single shared
     // gwm state).
 
@@ -129,7 +129,7 @@ fn sim_mark_static_observable_via_world_server() {
         run_with_world_server(sim_handle, recv, send, |ws| ws.entity_is_static(&entity));
     assert!(
         is_static,
-        "flag set via SimHandle must be observable via WorldServer \
+        "flag set via CoordHandle must be observable via WorldServer \
          (single shared gwm state)",
     );
 }

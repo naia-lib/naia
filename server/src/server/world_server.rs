@@ -3691,7 +3691,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
 
     fn process_disconnects<W: WorldMutType<E>>(&mut self, world: &mut W) {
         // MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — drain
-        // disconnect requests queued by `SimHandle::disconnect_user`. Collect
+        // disconnect requests queued by `CoordHandle::disconnect_user`. Collect
         // while holding the lock, then call `user_queue_disconnect` without
         // the lock (it may re-lock other shared state). Runs immediately before
         // `outstanding_disconnects` is consumed so both are processed in the
@@ -4314,7 +4314,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> WorldServer<E> {
                     );
                 }
                 ScopeChange::ConfigureReplication(_) => {
-                    // D.2.2: only the Coord-only `SimHandle::configure_
+                    // D.2.2: only the Coord-only `CoordHandle::configure_
                     // entity_replication` pushes this variant; the legacy
                     // fused `WorldServer::configure_entity_replication`
                     // path is fully synchronous and never enqueues it.

@@ -1,13 +1,13 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.1 — lifecycle smoke for
-//! `Plugin::sim_integration_full`.
+//! `Plugin::pipelined`.
 //!
 //! Verifies:
-//!   - Plugin install registers the expected Resources (`SimConverter`,
-//!     `SimEventReceiverRes`, `SnapshotSenderRes`, `SnapshotReceiverRes`,
-//!     `SimPipelineRes`, `SendHandleRes`, `PluginInternalState`).
-//!   - Before `listen()`, `SimPipelineRes` inner pipeline is None (workers not running).
+//!   - Plugin install registers the expected Resources (`ServerEntityConverter`,
+//!     `EventReceiverRes`, `SnapshotSenderRes`, `SnapshotReceiverRes`,
+//!     `PipelinedServer`, `SendHandleRes`, `PluginInternalState`).
+//!   - Before `listen()`, `PipelinedServer` inner pipeline is None (workers not running).
 //!   - After `listen()` with a `LocalServerSocket`, `App::update`
-//!     drains the armed pipeline into `SimPipelineRes` and Sim systems can
+//!     drains the armed pipeline into `PipelinedServer` and Sim systems can
 //!     observe it.
 //!   - Dropping the App joins the worker threads cleanly within 5s.
 
@@ -18,7 +18,7 @@ use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
     pipeline_actors::SnapshotSender, transport, Plugin as ServerPlugin, PluginInternalState,
-    PluginSimConfig, SendHandleRes, ServerConfig, SimConverter, SimEventReceiverRes, SimPipelineRes,
+    PipelineConfig, SendHandleRes, ServerConfig, ServerEntityConverter, EventReceiverRes, PipelinedServer,
     SnapshotReceiverRes, SnapshotSenderRes,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -35,10 +35,10 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration_full(
+    app.add_plugins(ServerPlugin::pipelined(
         ServerConfig::default(),
         protocol(),
-        PluginSimConfig::default(),
+        PipelineConfig::default(),
     ));
     app
 }
@@ -53,12 +53,12 @@ fn plugin_install_registers_expected_resources() {
     let app = build_app();
     let w = app.world();
     assert!(
-        w.get_resource::<SimConverter>().is_some(),
-        "SimConverter installed",
+        w.get_resource::<ServerEntityConverter>().is_some(),
+        "ServerEntityConverter installed",
     );
     assert!(
-        w.get_resource::<SimEventReceiverRes>().is_some(),
-        "SimEventReceiverRes installed",
+        w.get_resource::<EventReceiverRes>().is_some(),
+        "EventReceiverRes installed",
     );
     assert!(
         w.get_resource::<SnapshotSenderRes>().is_some(),
@@ -69,8 +69,8 @@ fn plugin_install_registers_expected_resources() {
         "SnapshotReceiverRes installed",
     );
     assert!(
-        w.get_resource::<SimPipelineRes>().is_some(),
-        "SimPipelineRes installed",
+        w.get_resource::<PipelinedServer>().is_some(),
+        "PipelinedServer installed",
     );
     assert!(
         w.get_resource::<SendHandleRes>().is_some(),
@@ -85,10 +85,10 @@ fn plugin_install_registers_expected_resources() {
 #[test]
 fn sim_pipeline_empty_before_listen() {
     let app = build_app();
-    let res = app.world().resource::<SimPipelineRes>();
+    let res = app.world().resource::<PipelinedServer>();
     assert!(
         res.0.is_none(),
-        "SimPipelineRes is None before listen()",
+        "PipelinedServer is None before listen()",
     );
 }
 
@@ -100,13 +100,13 @@ fn listen_drains_armed_pipeline_into_resource_after_update() {
         state.listen(local_socket("127.0.0.1:23001"));
     }
     // Drives the drain_armed_into_res system (registered in Update by
-    // sim_integration_full) which drains the armed SimPipeline into
-    // SimPipelineRes.
+    // pipelined) which drains the armed PipelinedServer into
+    // PipelinedServer.
     app.update();
-    let res = app.world().resource::<SimPipelineRes>();
+    let res = app.world().resource::<PipelinedServer>();
     assert!(
         res.0.is_some(),
-        "SimPipelineRes filled after listen + update",
+        "PipelinedServer filled after listen + update",
     );
 }
 

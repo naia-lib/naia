@@ -33,7 +33,7 @@ use std::time::Duration;
 use bevy_ecs::{entity::Entity, world::World};
 
 use naia_bevy_server::{
-    pipeline_actors::{run_with_world_server, spawn_server_handles, SimHandle},
+    pipeline_actors::{run_with_world_server, spawn_server_handles, CoordHandle},
     ServerConfig,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, WorldProxy};
@@ -49,7 +49,7 @@ fn protocol() -> naia_shared::Protocol {
     bevy_proto.into()
 }
 
-fn handles_listening(addr: &str) -> (SimHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+fn handles_listening(addr: &str) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
     use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
     let (sim_handle, recv, send) =
@@ -65,17 +65,17 @@ fn handles_listening(addr: &str) -> (SimHandle<Entity>, RecvHandle<Entity>, Send
     (sim_handle, recv, send)
 }
 
-fn queue_len(sim_handle: &SimHandle<Entity>) -> usize {
+fn queue_len(sim_handle: &CoordHandle<Entity>) -> usize {
     sim_handle.scope_change_queue_len()
 }
 
 fn spawn_replicating_entity(
-    sim_handle: SimHandle<Entity>,
+    sim_handle: CoordHandle<Entity>,
     recv: RecvHandle<Entity>,
     send: SendHandle<Entity>,
     bevy_world: &mut World,
 ) -> (
-    SimHandle<Entity>,
+    CoordHandle<Entity>,
     RecvHandle<Entity>,
     SendHandle<Entity>,
     Entity,

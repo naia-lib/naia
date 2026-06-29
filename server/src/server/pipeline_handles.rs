@@ -141,7 +141,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
     /// handshake. Returns `true` if the message was accepted by the
     /// tick buffer.
     ///
-    /// Used by `Plugin::sim_integration_full`'s D.3a park-window
+    /// Used by `Plugin::pipelined`'s D.3a park-window
     /// tick-buffer drain test, which cannot complete a real handshake
     /// because the pipeline's auth / `receive_user` connection-lifecycle
     /// layer is a separate (D.3b) concern.
@@ -342,7 +342,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// `world`, installing per-component diff mutators against the
     /// (already-transitioned) gwm.
     ///
-    /// Twin of [`crate::pipeline_actors::SimHandle::apply_pending_world_hooks`]
+    /// Twin of [`crate::pipeline_actors::CoordHandle::apply_pending_world_hooks`]
     /// — both drain the same `shared.pending_world_hooks` queue, so a Sim
     /// system may call whichever handle it has in hand. The Send-side
     /// per-connection work for the same configure call drains separately
@@ -433,7 +433,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
 
     /// MISSION_USER_ONLY_SEES_SIM Phase B.3 (2026-05-19) — convenience
     /// wrapper that resolves `user_key → SocketAddr` via the supplied
-    /// `SimHandle` and forwards to [`send_message_to_address`].
+    /// `CoordHandle` and forwards to [`send_message_to_address`].
     ///
     /// Cyberlith pattern (no separate `sim_handle.user_address` step):
     /// ```ignore
@@ -459,7 +459,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// [`send_message_to_address`] entry point.
     pub fn send_message_to_user<C: naia_shared::Channel, M: naia_shared::Message>(
         &mut self,
-        sim_handle: &crate::pipeline_actors::SimHandle<E>,
+        sim_handle: &crate::pipeline_actors::CoordHandle<E>,
         user_key: &UserKey,
         message: &M,
     ) -> bool {
@@ -573,7 +573,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// `CoordinatorState` (it's coordination-thread state — user_store is its
     /// peer, and room membership is set via lifecycle events that arrive
     /// on the Recv SubApp). D5's send-side scope policy does not need
-    /// it. Cyberlith reaches room state via `SimHandle` on the Recv
+    /// it. Cyberlith reaches room state via `CoordHandle` on the Recv
     /// SubApp instead.
     #[doc(hidden)]
     fn _phase_a3_no_room_mut_on_send() {}
@@ -588,7 +588,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     // call (which lives on CoordinatorState, not accessible from SendHandle)
     // is replaced by the `is_resource: bool` parameter. The caller
     // (cyberlith's Sim tick system) pre-computes it via
-    // `SimHandle::is_resource_entity(entity)`. All other state accesses
+    // `CoordHandle::is_resource_entity(entity)`. All other state accesses
     // go through `self.state.shared` (shared global_entity_map + gwm) and
     // `self.state.entity_scope_map` / `self.state.entity_room_map` /
     // `self.state.user_room_map` (SendState send-side mirrors).
@@ -600,7 +600,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
     /// Send-side state only — no Coord state required. The one Coord-only
     /// field accessed by the original (`sim_handle.resource_registry`) is
     /// replaced by the `is_resource` parameter; the caller supplies it via
-    /// `SimHandle::is_resource_entity(world_entity)` before calling here.
+    /// `CoordHandle::is_resource_entity(world_entity)` before calling here.
     ///
     /// Decision logic (byte-identical to `WorldServer::user_scope_has_entity`
     /// once the `is_resource` substitution is accounted for):

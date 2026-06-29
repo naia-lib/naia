@@ -3,7 +3,7 @@
 //! for `SnapshotWorld<E>`.
 //!
 //! Cyberlith's Sim SubApp holds one as a bevy `Resource` (cloned from
-//! [`SimHandle::send_state_view`]) and queries it each tick to learn:
+//! [`CoordHandle::send_state_view`]) and queries it each tick to learn:
 //! - which entities to mark live in `SnapshotWorld`
 //! - which `(entity, component_kind)` pairs to populate from Sim's
 //!   gameplay world
@@ -41,7 +41,7 @@ use naia_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, GlobalEntityIndex, GlobalWorldManagerType,
 };
 
-use crate::pipeline_actors::handles::SimHandle;
+use crate::pipeline_actors::handles::CoordHandle;
 use crate::server::ServerShared;
 
 /// Read-only Sim-side view into naia's registered entity/component
@@ -64,7 +64,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Clone for SendStateView<E> {
 impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// Constructs a view backed by the supplied `ServerShared` arc.
     /// Public-but-not-typical: cyberlith should obtain a view via
-    /// [`SimHandle::send_state_view`] instead. This constructor is
+    /// [`CoordHandle::send_state_view`] instead. This constructor is
     /// exposed primarily for tests that build a `ServerShared` directly.
     pub fn from_shared(shared: Arc<ServerShared<E>>) -> Self {
         Self { shared }
@@ -217,9 +217,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     }
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
+impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// Construct a [`SendStateView<E>`] backed by the same
-    /// `Arc<ServerShared>` as this SimHandle. Cyberlith calls this
+    /// `Arc<ServerShared>` as this CoordHandle. Cyberlith calls this
     /// once at init and hands the view to Sim as a Resource.
     pub fn send_state_view(&self) -> SendStateView<E> {
         SendStateView::from_shared(Arc::clone(&self.shared))
@@ -244,7 +244,7 @@ mod tests {
         assert_traits::<SendStateView<u64>>();
     }
 
-    /// Build a fresh SimHandle<u64> backed by an empty protocol,
+    /// Build a fresh CoordHandle<u64> backed by an empty protocol,
     /// extract its SendStateView, and assert both methods return empty
     /// collections on a brand-new (no entities registered) server.
     #[test]

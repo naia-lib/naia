@@ -1,5 +1,5 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.2 + D.3 — Recv + Send worker
-//! integration smoke for `Plugin::sim_integration_full`.
+//! integration smoke for `Plugin::pipelined`.
 //!
 //! The two workers are wired in D.1; this file adds explicit
 //! integration tests for their per-loop behavior:
@@ -7,7 +7,7 @@
 //! - **Recv worker** (`recv_worker_loop`) calls `recv.receive()` in a
 //!   loop and pushes `ReceiveOutput<Entity>` through a bounded(1)
 //!   channel. The main-side `drain_recv_worker_output` system fans
-//!   into the bevy `Messages<X>` buffers + `SimEventReceiver`.
+//!   into the bevy `Messages<X>` buffers + `EventReceiver`.
 //!
 //! - **Send worker** (`send_worker_loop`) calls
 //!   `SnapshotReceiver::take_latest`, then
@@ -26,7 +26,7 @@ use bevy_app::App;
 use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, SendHandleRes,
+    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, SendHandleRes,
     ServerConfig, SnapshotReceiverRes, SnapshotSenderRes,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -44,10 +44,10 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration_full(
+    app.add_plugins(ServerPlugin::pipelined(
         ServerConfig::default(),
         protocol(),
-        PluginSimConfig::default(),
+        PipelineConfig::default(),
     ));
     app
 }

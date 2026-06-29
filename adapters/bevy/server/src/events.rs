@@ -86,9 +86,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> From<&mut Events<E>> for MessageEvents {
 
 impl MessageEvents {
     /// Construct from a pre-drained messages map. Used by
-    /// `apply_receive_output_pipeline_with_sim_receiver` (C.6 prep
+    /// `apply_receive_output_pipeline_with_event_receiver` (C.6 prep
     /// 7/7) which drains `events.take_messages()` once and fans the
-    /// map into both a `SimEventReceiver` and this `Messages` writer.
+    /// map into both a `EventReceiver` and this `Messages` writer.
     /// The resulting `MessageEvents` is byte-identical to
     /// `MessageEvents::from(&mut events)` against the same input.
     #[doc(hidden)]

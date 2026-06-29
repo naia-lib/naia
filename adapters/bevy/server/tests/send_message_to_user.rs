@@ -1,7 +1,7 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase B.3 (2026-05-19) —
 //! `SendHandle::send_message_to_user` convenience wrapper.
 //!
-//! Cyberlith pattern (Sim system holding both `SimHandle` and
+//! Cyberlith pattern (Sim system holding both `CoordHandle` and
 //! `SendHandle` as Bevy Resources):
 //! ```ignore
 //! send.send_message_to_user::<EntityAssignmentChannel, _>(&sim_handle, user_key, &msg);
@@ -50,7 +50,7 @@ fn protocol() -> naia_shared::Protocol {
 fn handles_listening(
     addr: &str,
 ) -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {

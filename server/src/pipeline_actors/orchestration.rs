@@ -1,6 +1,6 @@
 //! Cross-half orchestration helpers — Phase B.7 of MISSION_SIM_OWNS_WORLD.
 //!
-//! Pipeline-mode handles ([`SimHandle`], [`RecvHandle`], [`SendHandle`])
+//! Pipeline-mode handles ([`CoordHandle`], [`RecvHandle`], [`SendHandle`])
 //! each own one slice of what `WorldServer` formerly owned monolithically.
 //! Several user-facing operations on `WorldServer` (e.g. `entity_take_authority`,
 //! `room_mut.add_user`, `send_message`, `broadcast_message`) read or
@@ -39,7 +39,7 @@ use crate::server::{
     WorldServer,
 };
 
-use super::handles::SimHandle;
+use super::handles::CoordHandle;
 
 /// Re-assemble the three pipeline handles into a `WorldServer<E>`, invoke
 /// `f` against it, then split back into handles. Used by cyberlith B.7
@@ -51,15 +51,15 @@ use super::handles::SimHandle;
 /// Each is a move of the three substates + an `Arc::clone` of `shared`;
 /// no allocation, no per-field copy of the inner maps.
 pub fn run_with_world_server<E, R>(
-    sim_handle: SimHandle<E>,
+    sim_handle: CoordHandle<E>,
     recv: RecvHandle<E>,
     send: SendHandle<E>,
     f: impl FnOnce(&mut WorldServer<E>) -> R,
-) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>, R)
+) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>, R)
 where
     E: Copy + Eq + Hash + Send + Sync,
 {
-    let SimHandle {
+    let CoordHandle {
         state: coord_state,
         shared: _coord_shared,
     } = sim_handle;
@@ -68,7 +68,7 @@ where
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
     (
-        SimHandle {
+        CoordHandle {
             state: coord_state,
             shared,
         },
@@ -104,7 +104,7 @@ where
 /// ```
 ///
 /// As of Phase D.2.4 this delegates to the Coord-only
-/// [`SimHandle::configure_entity_replication`] + eager deferred-op
+/// [`CoordHandle::configure_entity_replication`] + eager deferred-op
 /// drains (see the D.2.4 section below). Wire output remains
 /// byte-identical to the legacy `WorldServer::configure_entity_replication`
 /// path — the B.2 test `sim_configure_entity_replication.rs` still
@@ -115,7 +115,7 @@ where
 /// B.2 (commit `1e9cf38f`) shipped this facade as a thin wrapper around
 /// [`run_with_world_server`] that called `WorldServer::configure_entity_
 /// replication` verbatim. The spec (`MISSION_USER_ONLY_SEES_SIM.md`
-/// §6.2) had proposed a true `SimHandle::configure_entity_replication`
+/// §6.2) had proposed a true `CoordHandle::configure_entity_replication`
 /// with the Send-side acknowledgment deferred to
 /// `apply_pending_send_preamble` via a new `ScopeChange::ConfigureReplication`
 /// variant, but an end-to-end audit of `WorldServer::configure_entity_
@@ -158,7 +158,7 @@ where
 /// - **Blocker 1** (read-before-write across half-boundaries) — fixed
 ///   by capturing the pre-transition gwm/user-store state into the
 ///   `ScopeChange::ConfigureReplication` payload at queue-push time
-///   (see [`SimHandle::configure_entity_replication`] and
+///   (see [`CoordHandle::configure_entity_replication`] and
 ///   `configure_replication::ConfigureCapture`).
 /// - **Blocker 2** (`MigrateResponse`-as-first-message ordering in the
 ///   client-origin delegation path) — fixed by D.2.3's explicit
@@ -166,7 +166,7 @@ where
 ///   migration sequence can run inside the deferred Send drain.
 /// - **Blocker 3** (world component-hook registration) — fixed by the
 ///   separate `pending_world_hooks` queue drained by
-///   [`SimHandle::apply_pending_world_hooks`] (or its `SendHandle`
+///   [`CoordHandle::apply_pending_world_hooks`] (or its `SendHandle`
 ///   twin), which the holder of `&mut World` calls explicitly.
 ///
 /// This facade now performs the full operation EAGERLY (synchronous
@@ -207,13 +207,13 @@ where
 /// test `sim_configure_entity_replication.rs` (it still calls this
 /// facade) plus the D.2.2 deferred-drain parity tests.
 pub fn configure_entity_replication<E, W>(
-    sim_handle: SimHandle<E>,
+    sim_handle: CoordHandle<E>,
     recv: RecvHandle<E>,
     mut send: SendHandle<E>,
     world: &mut W,
     entity: &E,
     config: crate::world::replication_config::ReplicationConfig,
-) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
+) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync + 'static,
     W: WorldMutType<E>,
@@ -247,15 +247,15 @@ where
 /// WorldServer manually via `WorldServer::from_pipeline_states` and
 /// must re-package the result via this function (since the
 /// `Arc<ServerShared>` is `pub(crate)` to outside callers, they can't
-/// rebuild `SimHandle` manually).
-pub fn split_world_server<E>(ws: WorldServer<E>) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
+/// rebuild `CoordHandle` manually).
+pub fn split_world_server<E>(ws: WorldServer<E>) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync,
 {
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
     (
-        SimHandle {
+        CoordHandle {
             state: coord_state,
             shared,
         },
@@ -282,18 +282,18 @@ where
 /// `SendHandle::process_recv_packets` decode step needs to evaluate
 /// tick-buffered messages against.
 pub fn apply_recv_to_world<E, W>(
-    sim_handle: SimHandle<E>,
+    sim_handle: CoordHandle<E>,
     recv: RecvHandle<E>,
     send: SendHandle<E>,
     world: W,
     output: &mut ReceiveOutput<E>,
     server_tick: Tick,
-) -> (SimHandle<E>, RecvHandle<E>, SendHandle<E>)
+) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync,
     W: WorldMutType<E>,
 {
-    let SimHandle {
+    let CoordHandle {
         state: coord_state,
         shared: _coord_shared,
     } = sim_handle;
@@ -351,7 +351,7 @@ where
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
     (
-        SimHandle {
+        CoordHandle {
             state: coord_state,
             shared,
         },

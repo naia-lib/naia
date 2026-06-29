@@ -35,7 +35,7 @@ fn protocol() -> naia_shared::Protocol {
 fn handles_listening(
     addr: &str,
 ) -> (
-    naia_server::pipeline_actors::SimHandle<Entity>,
+    naia_server::pipeline_actors::CoordHandle<Entity>,
     naia_server::RecvHandle<Entity>,
     naia_server::SendHandle<Entity>,
 ) {
@@ -54,7 +54,7 @@ fn handles_listening(
     (sim_handle, recv, send)
 }
 
-fn queue_len(sim_handle: &naia_server::pipeline_actors::SimHandle<Entity>) -> usize {
+fn queue_len(sim_handle: &naia_server::pipeline_actors::CoordHandle<Entity>) -> usize {
     sim_handle.scope_change_queue_len()
 }
 

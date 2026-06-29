@@ -1,5 +1,5 @@
 //! MISSION_USER_ONLY_SEES_SIM Phase D.4 — park / unpark TestClock
-//! integration smoke for `Plugin::sim_integration_full`.
+//! integration smoke for `Plugin::pipelined`.
 //!
 //! Verifies the D6 discipline ([[project-d6-testclock-findings]]):
 //!
@@ -23,8 +23,8 @@ use std::{thread, time::Duration};
 use bevy_app::App;
 
 use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PluginSimConfig, ServerConfig,
-    SimPipelineRes,
+    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, ServerConfig,
+    PipelinedServer,
 };
 use naia_bevy_shared::{Protocol as BevyProtocol, TestClock};
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
@@ -40,10 +40,10 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration_full(
+    app.add_plugins(ServerPlugin::pipelined(
         ServerConfig::default(),
         protocol(),
-        PluginSimConfig::default(),
+        PipelineConfig::default(),
     ));
     app
 }
@@ -129,7 +129,7 @@ fn unpark_without_prior_park_is_noop() {
 #[test]
 fn sim_handle_borrowable_while_parked() {
     // Demonstrates the cyberlith Phase E pattern: park workers, take
-    // the SimHandle from SimPipelineRes for cross-handle work in a
+    // the CoordHandle from PipelinedServer for cross-handle work in a
     // Sim system, restore it, unpark.
     let mut app = build_app();
     {
@@ -142,19 +142,19 @@ fn sim_handle_borrowable_while_parked() {
 
     let state = app.world().resource::<PluginInternalState>();
     state.park_workers();
-    // Now safely borrow the SimHandle via the pipeline.
+    // Now safely borrow the CoordHandle via the pipeline.
     let sim_handle_opt = {
-        let mut res = app.world_mut().resource_mut::<SimPipelineRes>();
-        res.0.as_mut().map(|p| p.take_sim())
+        let mut res = app.world_mut().resource_mut::<PipelinedServer>();
+        res.0.as_mut().map(|p| p.take_coord())
     };
     assert!(
         sim_handle_opt.is_some(),
-        "SimHandle borrowable while parked"
+        "CoordHandle borrowable while parked"
     );
     {
-        let mut res = app.world_mut().resource_mut::<SimPipelineRes>();
+        let mut res = app.world_mut().resource_mut::<PipelinedServer>();
         if let (Some(sim), Some(p)) = (sim_handle_opt, res.0.as_mut()) {
-            p.restore_sim(sim);
+            p.restore_coord(sim);
         }
     }
     let state = app.world().resource::<PluginInternalState>();

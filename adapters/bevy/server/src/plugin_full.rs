@@ -1,6 +1,6 @@
-//! `Plugin::sim_integration_full` — Plugin variant that internally
+//! `Plugin::pipelined` — Plugin variant that internally
 //! owns the Recv + Send worker threads + the three pipeline handles
-//! (`SimHandle` / `RecvHandle` / `SendHandle`).
+//! (`CoordHandle` / `RecvHandle` / `SendHandle`).
 //!
 //! # MISSION_USER_ONLY_SEES_SIM Phase D
 //!
@@ -17,13 +17,13 @@
 //!
 //! Resources installed on the Sim app:
 //!
-//! - [`crate::SimConverter`] — for `EntityProperty::set` work in Sim systems.
-//! - [`SimEventReceiver`]`<Entity>` — Sim drains lifecycle/tick/message events.
+//! - [`crate::ServerEntityConverter`] — for `EntityProperty::set` work in Sim systems.
+//! - [`EventReceiver`]`<Entity>` — Sim drains lifecycle/tick/message events.
 //! - [`SnapshotSender`]`<Entity>` — Sim publishes per-tick snapshots.
 //! - [`SnapshotReceiver`]`<Entity>` — for symmetry / observability; the
 //!   internal Send worker holds the load-bearing clone.
-//! - [`SimPipelineRes`] — holds the unified pipeline; Sim systems access the
-//!   `SimHandle` via `SimPipelineRes::0.as_mut().map(|p| p.sim_mut())`.
+//! - [`PipelinedServer`] — holds the unified pipeline; Sim systems access the
+//!   `CoordHandle` via `PipelinedServer::0.as_mut().map(|p| p.coord_mut())`.
 //! - [`SendHandleRes`] — Sim systems take/return for cross-handle work,
 //!   between Send-worker iterations. Hands off via the same
 //!   `Option<>`-take pattern cyberlith already uses.
@@ -77,21 +77,21 @@ use parking_lot::Mutex;
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::{
     pipeline_actors::{
-        spawn_server_handles, SimEventReceiver, SimPipeline, SnapshotReceiver,
-        SnapshotSender,
+        spawn_server_handles, EventReceiver, PipelinedServer as CorePipelinedServer,
+        SnapshotReceiver, SnapshotSender,
     },
     shared::Protocol as NaiaProtocol,
     ReceiveOutput, RecvHandle, SendHandle, ServerConfig,
 };
 
-use crate::apply_receive_output_pipeline_with_sim_receiver_split;
-use crate::sim_converter::SimConverter;
+use crate::apply_receive_output_pipeline_with_event_receiver_split;
+use crate::server_entity_converter::ServerEntityConverter;
 
-// ─── PluginSimConfig ────────────────────────────────────────────────────────
+// ─── PipelineConfig ────────────────────────────────────────────────────────
 
-/// Tunables for [`Plugin::sim_integration_full`].
+/// Tunables for [`Plugin::pipelined`].
 #[derive(Default)]
-pub struct PluginSimConfig {
+pub struct PipelineConfig {
     /// Schedule under which per-`Replicate` `on_component_added` /
     /// `on_component_removed` change-tracking systems are registered.
     /// When `None`, defaults to bevy's `Update` (matches
@@ -110,7 +110,7 @@ pub struct PluginSimConfig {
     pub skip_main_world_host_sync: bool,
 }
 
-impl PluginSimConfig {
+impl PipelineConfig {
     /// Set the change-detection schedule label.
     pub fn with_schedule<S: ScheduleLabel>(mut self, schedule: S) -> Self {
         self.change_detection_schedule = Some(schedule.intern());
@@ -126,7 +126,7 @@ impl PluginSimConfig {
 
 // ─── Resources ──────────────────────────────────────────────────────────────
 
-/// Bevy resource holding the [`SimPipeline`].
+/// Bevy resource holding the [`PipelinedServer`].
 ///
 /// `None` until the armed pipeline is drained into this resource (via the
 /// `drain_armed_into_res` Startup system or
@@ -136,11 +136,11 @@ impl PluginSimConfig {
 /// # Park-window borrow contract
 ///
 /// Workers must be parked (via [`PluginInternalState::park_workers`]) before
-/// any code calls [`SimPipeline::take_handles`] or [`SimPipeline::tick`] on
+/// any code calls [`PipelinedServer::take_handles`] or [`PipelinedServer::tick`] on
 /// the pipeline inside this resource. Callers must unpark via
 /// [`PluginInternalState::unpark_workers`] once the pipeline is restored.
 #[derive(Resource)]
-pub struct SimPipelineRes(pub Option<SimPipeline<Entity>>);
+pub struct PipelinedServer(pub Option<CorePipelinedServer<Entity>>);
 
 /// Bevy resource exposing the send worker's [`SendHandle`] for the
 /// park-window borrow contract.
@@ -159,16 +159,16 @@ pub struct SimPipelineRes(pub Option<SimPipeline<Entity>>);
 /// `process_recv_packets` having decoded the buffers, a send-half op —
 /// is reachable on main.)
 ///
-/// The wrapped `Arc` is the **same** slot as `SimPipelineRes`'s pipeline holds
-/// (`sim_pipeline.send_slot()`) — callers that already have `SimPipelineRes`
-/// can access it via [`SimPipeline::take_handles`] / [`SimPipeline::tick`] instead.
+/// The wrapped `Arc` is the **same** slot as `PipelinedServer`'s pipeline holds
+/// (`sim_pipeline.send_slot()`) — callers that already have `PipelinedServer`
+/// can access it via [`PipelinedServer::take_handles`] / [`PipelinedServer::tick`] instead.
 #[derive(Resource, Clone)]
 pub struct SendHandleRes(pub Arc<Mutex<Option<SendHandle<Entity>>>>);
 
 /// Bevy resource exposing the recv worker's [`RecvHandle`] for the
 /// park-window borrow contract (MISSION_USER_ONLY_SEES_SIM Phase D.3a).
 ///
-/// The wrapped `Arc` is the **same** slot as `SimPipelineRes`'s pipeline holds
+/// The wrapped `Arc` is the **same** slot as `PipelinedServer`'s pipeline holds
 /// (`sim_pipeline.recv_slot()`).
 ///
 /// See [`SendHandleRes`] for the full borrow-contract explanation.
@@ -176,10 +176,10 @@ pub struct SendHandleRes(pub Arc<Mutex<Option<SendHandle<Entity>>>>);
 pub struct RecvHandleRes(pub Arc<Mutex<Option<RecvHandle<Entity>>>>);
 
 /// Bevy `Resource` wrapper for the Sim-side
-/// [`SimEventReceiver`]`<Entity>` clone. Sim systems pull events via
+/// [`EventReceiver`]`<Entity>` clone. Sim systems pull events via
 /// `.0.drain_*()`.
 #[derive(Resource, Clone)]
-pub struct SimEventReceiverRes(pub SimEventReceiver<Entity>);
+pub struct EventReceiverRes(pub EventReceiver<Entity>);
 
 /// Bevy `Resource` wrapper for the Sim-side
 /// [`SnapshotSender`]`<Entity>` clone. Sim publishes per-tick snapshots
@@ -319,20 +319,20 @@ impl PanicSlot {
 }
 
 /// Bevy resource exposing the lifecycle / park / panic / shutdown
-/// surface of [`Plugin::sim_integration_full`].
+/// surface of [`Plugin::pipelined`].
 ///
 /// On drop, signals shutdown to the worker threads and blocks until
 /// they join (with a 5s soft-deadline before logging a warning).
 #[derive(Resource)]
 pub struct PluginInternalState {
     state: AtomicU8,
-    /// [`SimPipeline`] parked here between `build` and the drain into
-    /// [`SimPipelineRes`]. `listen()` reassembles `WorldServer` for `io_load`
+    /// [`PipelinedServer`] parked here between `build` and the drain into
+    /// [`PipelinedServer`]. `listen()` reassembles `WorldServer` for `io_load`
     /// by calling `with_world_server` on this pipeline (which temporarily moves
     /// handles into a `WorldServer` and returns them). After `listen()`, the
     /// pipeline is back here until `drain_armed_pipeline_into_resource` moves it
-    /// into `SimPipelineRes`.
-    armed_pipeline: Mutex<Option<SimPipeline<Entity>>>,
+    /// into `PipelinedServer`.
+    armed_pipeline: Mutex<Option<CorePipelinedServer<Entity>>>,
     /// Channel for the Recv worker to push `ReceiveOutput` to main.
     /// `Some` until `listen` runs.
     recv_out_chan_rx: Mutex<Option<Receiver<ReceiveOutput<Entity>>>>,
@@ -354,9 +354,9 @@ pub struct PluginInternalState {
     panic_slot: Arc<PanicSlot>,
     /// Worker thread handles. Empty until `listen()`; drained on Drop.
     workers: Mutex<Vec<WorkerHandle>>,
-    /// SimEventReceiver clone retained so the main-side drain system
+    /// EventReceiver clone retained so the main-side drain system
     /// can re-acquire it without taking the Sim Resource.
-    sim_event_receiver: Mutex<Option<SimEventReceiver<Entity>>>,
+    sim_event_receiver: Mutex<Option<EventReceiver<Entity>>>,
     /// D.3a park-window slot for the recv worker's [`RecvHandle`]. The
     /// recv worker deposits its handle here at the park checkpoint and
     /// re-claims it on unpark. The same `Arc` is wrapped by the
@@ -381,14 +381,14 @@ struct WorkerHandle {
 
 impl PluginInternalState {
     fn new_armed(
-        sim_pipeline: SimPipeline<Entity>,
-        sim_event_receiver: SimEventReceiver<Entity>,
+        sim_pipeline: CorePipelinedServer<Entity>,
+        sim_event_receiver: EventReceiver<Entity>,
         snapshot_sender: SnapshotSender<Entity>,
         snapshot_receiver: SnapshotReceiver<Entity>,
     ) -> Self {
         // Extract the shared slot Arcs from the pipeline so workers can be
-        // given the same Arc at spawn time (listen()). SimPipeline also holds
-        // these Arcs — after the drain into SimPipelineRes, the resource and
+        // given the same Arc at spawn time (listen()). PipelinedServer also holds
+        // these Arcs — after the drain into PipelinedServer, the resource and
         // the workers share the same underlying Mutex<Option<…>>.
         let recv_slot = sim_pipeline.recv_slot();
         let send_slot = sim_pipeline.send_slot();
@@ -432,13 +432,13 @@ impl PluginInternalState {
     }
 
     /// `Arc` clone of the recv worker's park-window slot, wrapping the same
-    /// `Arc` held by [`SimPipelineRes`]'s pipeline.
+    /// `Arc` held by [`PipelinedServer`]'s pipeline.
     fn recv_handle_res(&self) -> RecvHandleRes {
         RecvHandleRes(Arc::clone(&self.recv_slot))
     }
 
     /// `Arc` clone of the send worker's park-window slot, wrapping the same
-    /// `Arc` held by [`SimPipelineRes`]'s pipeline.
+    /// `Arc` held by [`PipelinedServer`]'s pipeline.
     fn send_handle_res(&self) -> SendHandleRes {
         SendHandleRes(Arc::clone(&self.send_slot))
     }
@@ -608,7 +608,7 @@ impl PluginInternalState {
 
         // Stash the pipeline back in armed_pipeline. A Startup system
         // (`drain_armed_pipeline_into_resource`) drains it into
-        // SimPipelineRes(Some(...)) once the bevy world is ready.
+        // PipelinedServer(Some(...)) once the bevy world is ready.
         // Since listen() can be called before or after Startup, this
         // intermediate stash avoids a chicken-and-egg ordering issue.
         self.armed_pipeline.lock().replace(sim_pipeline);
@@ -629,7 +629,7 @@ impl PluginInternalState {
 
     /// Park both worker threads (block until both reach the top of
     /// their idle loop). After return, callers may safely
-    /// `TestClock::advance(...)` or borrow handles via [`SimPipelineRes`]
+    /// `TestClock::advance(...)` or borrow handles via [`PipelinedServer`]
     /// / [`RecvHandleRes`] / [`SendHandleRes`] without racing the
     /// workers.
     ///
@@ -757,7 +757,7 @@ impl PluginInternalState {
     }
 
     ///
-    /// Take the armed [`SimPipeline`] from the parking slot.
+    /// Take the armed [`PipelinedServer`] from the parking slot.
     ///
     /// Filled at construction time; consumed by the Startup
     /// `drain_armed_into_res` system (or by consumers that need to avoid a
@@ -767,14 +767,14 @@ impl PluginInternalState {
     /// Pattern that avoids the aliasing issue:
     /// ```ignore
     /// if let Some(pipeline) = world.resource::<PluginInternalState>().take_armed_pipeline() {
-    ///     world.resource_mut::<SimPipelineRes>().0 = Some(pipeline);
+    ///     world.resource_mut::<PipelinedServer>().0 = Some(pipeline);
     /// }
     /// ```
-    pub fn take_armed_pipeline(&self) -> Option<SimPipeline<Entity>> {
+    pub fn take_armed_pipeline(&self) -> Option<CorePipelinedServer<Entity>> {
         self.armed_pipeline.lock().take()
     }
 
-    /// Drain the armed [`SimPipeline`] into [`SimPipelineRes`] on `world`.
+    /// Drain the armed [`PipelinedServer`] into [`PipelinedServer`] on `world`.
     ///
     /// Called by consumers (e.g. cyberlith `init.rs`) that drive Startup
     /// manually before running `Update` — the `drain_armed_into_res` closure
@@ -788,24 +788,24 @@ impl PluginInternalState {
     /// this while `PluginInternalState` is still borrowed from `world`.
     pub fn drain_armed_pipeline_into_resource(&self, world: &mut bevy_ecs::world::World) {
         if let Some(p) = self.armed_pipeline.lock().take() {
-            world.resource_mut::<SimPipelineRes>().0 = Some(p);
+            world.resource_mut::<PipelinedServer>().0 = Some(p);
         }
     }
 
     /// Obtain a [`naia_server::pipeline_actors::SendStateView`] from the
-    /// pre-`listen()` armed pipeline's [`SimHandle`].
+    /// pre-`listen()` armed pipeline's [`CoordHandle`].
     ///
     /// Called by consumers (e.g. cyberlith E.6c `init.rs`) that need to
     /// pass `send_state_view` to `install_sim_plugins` before `listen()`
     /// is invoked. Reads from `armed_pipeline` (the pipeline lives there
-    /// until drained into [`SimPipelineRes`] after `listen()`). Panics
+    /// until drained into [`PipelinedServer`] after `listen()`). Panics
     /// if the armed pipeline has been drained.
     pub fn armed_send_state_view(&self) -> naia_server::pipeline_actors::SendStateView<Entity> {
         let guard = self.armed_pipeline.lock();
         guard
             .as_ref()
             .expect("armed_send_state_view called after pipeline drained — too late")
-            .sim()
+            .coord()
             .send_state_view()
     }
 }
@@ -867,8 +867,8 @@ impl Drop for PluginInternalState {
 
 /// Called by `Plugin::build` when `full_pipelining=true`. Constructs
 /// the three pipeline handles, installs the C.6-prep Sim Resources
-/// (`SimConverter`, `SimEventReceiver`, `SnapshotSender`,
-/// `SnapshotReceiver`, `SimPipelineRes`, `SendHandleRes`,
+/// (`ServerEntityConverter`, `EventReceiver`, `SnapshotSender`,
+/// `SnapshotReceiver`, `PipelinedServer`, `SendHandleRes`,
 /// `PluginInternalState`) on the App, and registers the main-side
 /// drain + panic-propagation systems in the supplied schedule (or
 /// `Update`).
@@ -881,8 +881,8 @@ pub(crate) fn install_full_pipelining(
     let naia_proto: NaiaProtocol = protocol.into();
     let sim_pipeline = spawn_server_handles::<Entity, _>(server_config, naia_proto);
 
-    let sim_converter = SimConverter::from_sim(sim_pipeline.sim());
-    let sim_event_receiver = SimEventReceiver::<Entity>::new();
+    let sim_converter = ServerEntityConverter::from_coord(sim_pipeline.coord());
+    let sim_event_receiver = EventReceiver::<Entity>::new();
     let (snap_sender, snap_receiver) = SnapshotSender::<Entity>::pair();
 
     let internal = PluginInternalState::new_armed(
@@ -896,28 +896,28 @@ pub(crate) fn install_full_pipelining(
     let send_handle_res = internal.send_handle_res();
 
     app.insert_resource(sim_converter);
-    app.insert_resource(SimEventReceiverRes(sim_event_receiver));
+    app.insert_resource(EventReceiverRes(sim_event_receiver));
     app.insert_resource(SnapshotSenderRes(snap_sender));
     app.insert_resource(SnapshotReceiverRes(snap_receiver));
-    app.insert_resource(SimPipelineRes(None));
+    app.insert_resource(PipelinedServer(None));
     app.insert_resource(send_handle_res);
     app.insert_resource(recv_handle_res);
     app.insert_resource(internal);
 
     // Runs every Update tick until the pipeline drains (no-op once empty).
-    // Drains the armed SimPipeline into SimPipelineRes once listen() has run.
+    // Drains the armed PipelinedServer into PipelinedServer once listen() has run.
     let drain_armed_into_res = |world: &mut World| {
         let pipeline_opt = world
             .get_resource::<PluginInternalState>()
             .and_then(|s| s.take_armed_pipeline());
         if let Some(p) = pipeline_opt {
-            world.resource_mut::<SimPipelineRes>().0 = Some(p);
+            world.resource_mut::<PipelinedServer>().0 = Some(p);
         }
     };
 
     // Register main-side systems in the consumer's schedule (Update
     // by default). drain_armed runs FIRST so subsequent systems see
-    // the SimHandle; drain_recv_worker_output then applies output; panic
+    // the CoordHandle; drain_recv_worker_output then applies output; panic
     // propagation runs last.
     if let Some(label) = change_detection_schedule {
         app.add_systems(
@@ -1317,7 +1317,7 @@ fn send_worker_loop(
 /// Core receive drain logic: drains `ReceiveOutput` from the channel
 /// and from a synchronous `recv.receive()` call, applies cross-half
 /// orchestration, and fans events into the bevy `Messages<X>` buffers
-/// + the `SimEventReceiver`.
+/// + the `EventReceiver`.
 ///
 /// **Requires workers to already be parked** before this is called.
 /// The caller is responsible for parking/unparking. Handles are taken
@@ -1343,7 +1343,7 @@ pub fn drain_recv_impl(
 /// - the entity-scoped event fan-out (Spawn/Despawn/Publish/Unpublish
 ///   Messages, `ClientOwned`/`HostOwned` marker mutations, and the
 ///   `ComponentEventRegistry` tail) fires into `entity_world` — see
-///   [`apply_receive_output_pipeline_with_sim_receiver_split`].
+///   [`apply_receive_output_pipeline_with_event_receiver_split`].
 ///
 /// Connection-scoped state stays on `world` (the coordinator): the
 /// `PluginInternalState` / handle-slot reads, and the Tick / Connect /
@@ -1371,20 +1371,20 @@ pub fn drain_recv_impl_split(
         return;
     };
 
-    // Take only the SimHandle from the pipeline — recv/send are already
+    // Take only the CoordHandle from the pipeline — recv/send are already
     // available via the caller-provided slot Arcs (same underlying Arcs).
     let sim_handle_opt = world
-        .resource_mut::<SimPipelineRes>()
+        .resource_mut::<PipelinedServer>()
         .0
         .as_mut()
-        .map(|p| p.take_sim());
+        .map(|p| p.take_coord());
     let recv_opt = recv_slot.lock().take();
     let send_opt = send_slot.lock().take();
 
     if sim_handle_opt.is_none() || recv_opt.is_none() || send_opt.is_none() {
         if let Some(c) = sim_handle_opt {
-            if let Some(p) = world.resource_mut::<SimPipelineRes>().0.as_mut() {
-                p.restore_sim(c);
+            if let Some(p) = world.resource_mut::<PipelinedServer>().0.as_mut() {
+                p.restore_coord(c);
             }
         }
         if let Some(r) = recv_opt {
@@ -1417,8 +1417,8 @@ pub fn drain_recv_impl_split(
     outputs.push(fresh_output);
 
     if outputs.iter().all(|o| o.is_empty()) {
-        if let Some(p) = world.resource_mut::<SimPipelineRes>().0.as_mut() {
-            p.restore_sim(sim_handle);
+        if let Some(p) = world.resource_mut::<PipelinedServer>().0.as_mut() {
+            p.restore_coord(sim_handle);
         }
         *recv_slot.lock() = Some(recv);
         *send_slot.lock() = Some(send);
@@ -1459,7 +1459,7 @@ pub fn drain_recv_impl_split(
         sim_handle = c;
         recv = r;
         send = s;
-        apply_receive_output_pipeline_with_sim_receiver_split(
+        apply_receive_output_pipeline_with_event_receiver_split(
             world,
             entity_world.as_deref_mut(),
             &sim_handle,
@@ -1471,8 +1471,8 @@ pub fn drain_recv_impl_split(
     crate::pipeline_timing::record_apply(_t_apply.elapsed().as_nanos() as u64);
 
     // Return handles (no unpark — caller's responsibility).
-    if let Some(p) = world.resource_mut::<SimPipelineRes>().0.as_mut() {
-        p.restore_sim(sim_handle);
+    if let Some(p) = world.resource_mut::<PipelinedServer>().0.as_mut() {
+        p.restore_coord(sim_handle);
     }
     *recv_slot.lock() = Some(recv);
     *send_slot.lock() = Some(send);
