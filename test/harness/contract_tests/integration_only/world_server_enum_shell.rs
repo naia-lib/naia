@@ -10,8 +10,9 @@
 use naia_demo_world::{Entity as DemoEntity, World as DemoWorld};
 use naia_server::{
     transport::local::{LocalServerSocket, LocalTransportHub, Socket as ServerSocket},
-    ServerConfig, ServerMode, WorldServer,
+    EntityOwner, ReplicationConfig, ServerConfig, ServerMode, WorldServer,
 };
+use naia_shared::WorldMutType;
 use naia_test_harness::protocol;
 
 fn listening(addr: &str, mut server: WorldServer<DemoEntity>) -> WorldServer<DemoEntity> {
@@ -60,4 +61,37 @@ fn world_server_enum_pipelined_shell_dispatches() {
         server.send(world.proxy());
         let _tick = server.current_tick();
     }
+}
+
+/// The imperative entity builder dispatches through both engine shapes. The
+/// Pipelined arm exercises the coord-only fast paths (`enable_replication`,
+/// `configure_replication`) on a fresh (never-started) pipelined server.
+fn drive_entity_builder(mut server: WorldServer<DemoEntity>) {
+    let mut world = DemoWorld::default();
+    let entity = world.proxy_mut().spawn_entity();
+
+    // server.entity_mut(e).enable_replication().configure_replication(cfg)
+    server
+        .entity_mut(world.proxy_mut(), &entity)
+        .enable_replication()
+        .configure_replication(ReplicationConfig::public());
+
+    // Reads dispatch through the same builder: enabling a server entity makes
+    // it Server-owned and registers a replication config.
+    let mut em = server.entity_mut(world.proxy_mut(), &entity);
+    assert_eq!(em.owner(), EntityOwner::Server, "enabled entity must be Server-owned");
+    assert!(
+        em.replication_config().is_some(),
+        "configured entity must report a replication config",
+    );
+}
+
+#[test]
+fn world_server_enum_resident_entity_builder() {
+    drive_entity_builder(WorldServer::new(ServerConfig::default(), protocol()));
+}
+
+#[test]
+fn world_server_enum_pipelined_entity_builder() {
+    drive_entity_builder(WorldServer::new_pipelined(ServerConfig::default(), protocol()));
 }

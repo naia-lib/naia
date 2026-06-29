@@ -449,6 +449,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .entity_authority_status(&global_entity)
     }
 
+    /// Returns the [`ReplicationConfig`] for `world_entity`, or `None` if it is
+    /// not registered. Coord-only read (mirrors
+    /// `InternalWorldServer::entity_replication_config`, reads only `shared`);
+    /// returns `None` for an unknown entity rather than panicking (the safe
+    /// fallback shared with the other `CoordHandle` reads).
+    pub fn entity_replication_config(
+        &self,
+        world_entity: &E,
+    ) -> Option<crate::ReplicationConfig> {
+        let Ok(global_entity) = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return None;
+        };
+        self.shared
+            .global_world_manager
+            .read()
+            .entity_replication_config(&global_entity)
+    }
+
     /// Returns `true` if `world_entity` has been marked as static. Mirrors
     /// `InternalWorldServer::entity_is_static` (reads only from `shared`).
     pub fn entity_is_static(&self, world_entity: &E) -> bool {

@@ -353,6 +353,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord().entity_authority_status(world_entity)
     }
 
+    /// Forwards to [`CoordHandle::entity_replication_config`].
+    pub fn entity_replication_config(
+        &self,
+        world_entity: &E,
+    ) -> Option<crate::ReplicationConfig> {
+        self.coord().entity_replication_config(world_entity)
+    }
+
     /// Forwards to [`CoordHandle::entity_is_static`].
     pub fn entity_is_static(&self, world_entity: &E) -> bool {
         self.coord().entity_is_static(world_entity)
@@ -423,6 +431,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     // ── Replication config ──
+
+    /// Forwards to [`CoordHandle::enable_entity_replication`].
+    pub fn enable_entity_replication(&mut self, world_entity: &E) {
+        self.coord_mut().enable_entity_replication(world_entity)
+    }
 
     /// Forwards to [`CoordHandle::mark_entity_as_static`].
     pub fn mark_entity_as_static(&mut self, world_entity: &E) {

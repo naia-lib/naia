@@ -24,7 +24,10 @@ use std::hash::Hash;
 
 use naia_shared::{Protocol, Tick, WorldMutType, WorldRefType};
 
-use crate::{InternalWorldServer, PipelinedWorldServer, ReceiveOutput, ServerConfig};
+use crate::{
+    world::entity_mut::{EntityMut, EntityMutTarget},
+    InternalWorldServer, PipelinedWorldServer, ReceiveOutput, ServerConfig,
+};
 
 /// Whether a [`WorldServer`] drives its engine synchronously (resident) or
 /// across the pipeline's worker threads.
@@ -121,5 +124,30 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => ws.send_all_packets(world),
             WorldServerImpl::Pipelined(ps) => ps.send(&world),
         }
+    }
+
+    /// The imperative entity builder, dispatched per variant. Holds the `world`
+    /// for component access. `entity` must already exist in `world`.
+    ///
+    /// ```ignore
+    /// server.entity_mut(world, &entity)
+    ///       .enable_replication()
+    ///       .configure_replication(ReplicationConfig::public())
+    ///       .enter_room(&room_key);
+    /// ```
+    ///
+    /// # Panics
+    ///
+    /// Panics if `entity` does not exist in `world` (matching the resident
+    /// `InternalWorldServer::entity_mut` contract).
+    pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
+        if !world.has_entity(entity) {
+            panic!("No Entity exists for given Key!");
+        }
+        let target = match &mut self.inner {
+            WorldServerImpl::Resident(ws) => EntityMutTarget::Resident(ws),
+            WorldServerImpl::Pipelined(ps) => EntityMutTarget::Pipelined(ps),
+        };
+        EntityMut::with_target(target, world, entity)
     }
 }
