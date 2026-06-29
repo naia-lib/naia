@@ -339,6 +339,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimHandle<E> {
     /// cyberlith's `server_access::drain_sim_registrations` and
     /// `drain_sim_tile_registrations` use today.
     pub fn enable_entity_replication(&mut self, world_entity: &E) {
+        // Fail-loud on double-enable: enable_entity_replication mirrors
+        // spawn_entity_inner and is "enable once per entity." A second call
+        // would silently clobber the GlobalEntity mapping (GlobalEntityMap::
+        // spawn unconditionally mints a new GlobalEntity for local spawns),
+        // orphaning every connection that tracks the old one.
+        if self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .is_ok()
+        {
+            log::warn!(
+                "enable_entity_replication called on already-registered entity — \
+                 each entity may only be enabled once; ignoring"
+            );
+            debug_assert!(
+                false,
+                "enable_entity_replication double-enable: entity already in global_entity_map"
+            );
+            return;
+        }
         // Mirror `WorldServer::spawn_entity_inner` field-for-field —
         // identical write order, identical inputs, same locks.
         let global_entity = self
