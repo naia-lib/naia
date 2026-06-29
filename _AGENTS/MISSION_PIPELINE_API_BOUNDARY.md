@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 PENDING (move worker-thread runtime + Armed→Running from bevy adapter into core). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. OPEN before G10: G6b host-sync (framework-agnosticism fork).
+status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 ✅ (worker-thread runtime + park/unpark barrier + worker loops + Armed→Running→Stopped lifecycle MOVED into core `pipeline_actors::PipelineRuntime<E>`; bevy `PluginInternalState` now a thin delegating wrapper; `workers_active` cfg + `deterministic` feature + `build.rs` moved to naia-server; bench timing via fn-ptr hooks; GREEN — naia-server lib 42, full naia harness ~150, bevy adapter deterministic suite incl. cross-thread panic-propagation). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. OPEN before G10: G6b host-sync (framework-agnosticism fork).
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -174,6 +174,34 @@ The "single knob, consumer code unchanged" property is realized at the bevy laye
 #### Threading ownership move (the substantive G7 work)
 
 Today the worker threads + park/unpark barrier + worker loops live in the **bevy adapter** (`plugin_full.rs`: `park_workers`/`unpark_workers`/`spawn` at `:649/:718/:559-607`). For `receive`/`send` to be self-contained and framework-agnostic, this runtime moves **into naia-server core**, owned by `PipelinedServer<E>` (or a `PipelineRuntime` it holds): thread spawn, the parked-count barrier, the recv/send worker loops, and the `SnapshotSender`/`SnapshotReceiver` wiring (the slot type is already core — `pipeline_actors/snapshot_sender.rs`). Uses only `std::thread` + channels — no bevy. The bevy adapter then *calls* `receive`/`send` from the `ReceivePackets`/`SendPackets` sets instead of hand-rolling the window.
+
+> **IMPLEMENTED (G7-3, 2026-06-29).** Landed as `pipeline_actors::PipelineRuntime<E>`
+> (`server/src/pipeline_actors/runtime.rs`): `ParkControl` (the parked-count
+> condvar barrier), `PanicSlot`, `WorkerHandle`, the `RuntimeState`
+> (Armed→Running→Stopped) lifecycle, `worker_park_checkpoint`, and the
+> `recv_worker_loop`/`send_worker_loop` — all ported verbatim from the adapter and
+> generalized over `E`. Entry points: `new_armed(recv_slot, send_slot,
+> snapshot_receiver, timing)` → `spawn_workers(recv_readiness)` →
+> `park_workers`/`unpark_workers`/`propagate_panic_if_any`; `Drop` joins the
+> workers (5s soft-deadline). The bevy `PluginInternalState` keeps ONLY the
+> bevy-coupled wiring (`armed_pipeline`, `sim_event_receiver`,
+> `_snapshot_sender_keep`, the two slot `Arc`s, and a `runtime` field) and
+> delegates every lifecycle call. The event fan-out (`drain_recv_impl*`) stays in
+> the adapter (it writes bevy `Messages<X>`); it now reads the recv channel via
+> `runtime.recv_out_receiver()`.
+>
+> **Resolved sub-decisions** (none needed a design change): (1) the
+> `workers_active = not(deterministic)` cfg + the `deterministic` feature + the
+> `build.rs` that derives it moved to **naia-server**; the adapter's
+> `deterministic` feature now forwards to `naia-server/deterministic`, and the
+> adapter's vestigial `build.rs`/`smol`/`crossbeam-channel` deps were removed.
+> (2) `TestClock` is called directly as `naia_shared::TestClock` (it lives in
+> `naia-socket-shared`, re-exported by `naia-shared`) — no bevy. (3) the bench
+> `pipeline_timing` aggregator stays adapter-side and is wired into the core
+> runtime via `RuntimeTimingHooks` (`Option<fn(u64)>` per stage — recv/send/
+> barrier), so the core stays instrumentation-crate-free with zero overhead when
+> the feature is off. The byte-exact determinism path is unchanged: the parked
+> (not(workers_active)) worker loops are byte-identical to the pre-move code.
 
 > **G7-3 de-risk (VERIFIED 2026-06-29):** the move has **no real bevy coupling**.
 > The worker closures' only adapter-looking dependency is
@@ -371,7 +399,7 @@ A hostile pass ran against the **landed** G7-1/G7-2 code (not the design). It co
 | G5b | **(per §2h C2 — editor/delegated path IN SCOPE, Connor 2026-06-29)** queued `entity_take_authority` (+ related authority ops), drained at the editor-ops phase | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
 | G6b | **(per §2h H2 + audit N3 — OPEN, design pass required)** host-sync drain (bevy change-detection → replication config). This is the **least framework-agnostic** piece in the mission: `drain_sim_host_sync_pipelined` (`server_access.rs:275-320`) is driven by bevy `Messages<HostSyncEvent>` against the **Sim** world. Open forks: (a) can a non-bevy consumer even have host-sync, or is it a bevy-adapter-only convenience? (b) does it survive in a no-reassembly core (§6 forbids reassembly post-G10)? (c) can every `HostSyncEvent` producer be retired by explicit G4/G5 `spawn_replicated`/`enable_replication`, removing the bridge entirely? **Decide before G10.** | **OPEN** (own design pass) |
-| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — `PipelinedServer::receive(world) -> ReceiveOutput` (park + single recv-drain + apply events) and `::send(&world)` (send-prep + snapshot + send-job + unpark); **+ moves the worker-thread runtime from the bevy adapter into core**. Explicit method sequence; consumer interleaves own code via unified `Server` ops. **No trait, no closures, no hooks.** **Supersedes** the old `with_parked_tick`. **Detailed design: §2g.** **Acceptance contracts: (a) the §2g drain-phase ordering table D0–D9 (N1) implemented as a single ordered core method; (b) the §2i assembler byte-identity test driving the real core `WorldRefType` assembler (N4).** | **G7-1 ✅** (assembler + N4 tests green) · **G7-2 ✅** (`receive`/`send` bracket + `drain_and_send` D0–D9 contract; `pipeline_bracket` + g9pre green) · **G7-3 PENDING** (worker-runtime + Armed→Running move into core) |
+| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — `PipelinedServer::receive(world) -> ReceiveOutput` (park + single recv-drain + apply events) and `::send(&world)` (send-prep + snapshot + send-job + unpark); **+ moves the worker-thread runtime from the bevy adapter into core**. Explicit method sequence; consumer interleaves own code via unified `Server` ops. **No trait, no closures, no hooks.** **Supersedes** the old `with_parked_tick`. **Detailed design: §2g.** **Acceptance contracts: (a) the §2g drain-phase ordering table D0–D9 (N1) implemented as a single ordered core method; (b) the §2i assembler byte-identity test driving the real core `WorldRefType` assembler (N4).** | **G7-1 ✅** (assembler + N4 tests green) · **G7-2 ✅** (`receive`/`send` bracket + `drain_and_send` D0–D9 contract; `pipeline_bracket` + g9pre green) · **G7-3 ✅** (worker-runtime + park barrier + worker loops + Armed→Running→Stopped lifecycle moved into core `PipelineRuntime<E>`; `workers_active`/`deterministic`/`build.rs` relocated; bevy `PluginInternalState` delegates; naia-server lib + full naia harness + bevy deterministic suite green) → **G7 COMPLETE** |
 | G8 | **naia-bevy-server mode-aware system sets** (layered on G7) — pipelined mode makes the existing `ReceivePackets` / `SendPackets` system sets run the parked/worker bracket internally; consumer systems sit between them via plain `add_systems(Update, …)`. **Zero new consumer-facing concepts.** Manages handle transit + consumer-chosen entity world. | PENDING (design §2f — pending sign-off) |
 | G9pre | **(per §2h H1) PREREQUISITE SPIKE** — prove pipelined send content ≡ resident serialization byte-for-byte across diff-mask cases. | ✅ COMPLETE/GREEN (§2i) — byte-identical (envelope + payload) across full/partial/multi-entity masks + freeze-isolation (concurrent post-freeze live mutation does NOT leak); pipelined transmit content is a pure fn of `(snapshot, plan)`. **Scope caveat (N4): production needed-set assembler not yet exercised → G7 obligation.** |
 | G9 | **`ServerMode::{Resident, Pipelined}` — single knob** — Pipelined⇒worker send, Resident⇒synchronous send. Same `receive`/`send` signatures; consumer code unchanged. **Oracle = synchronously-driven Pipelined bracket (NOT Resident)** — per §2i, identical bytes to production by construction; **no `SendStrategy` knob needed**, single-knob purity holds. | PENDING (design §2f — pending sign-off) |

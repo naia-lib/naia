@@ -1,6 +1,8 @@
+//! MISSION_PIPELINE_API_BOUNDARY G7-3.
+//!
 //! Centralizes the Recv/Send worker parked-vs-active choice behind a single
-//! `workers_active` cfg so the ~half-dozen branch sites in `plugin_full.rs`
-//! don't each repeat the predicate.
+//! `workers_active` cfg (consumed by `pipeline_actors/runtime.rs`) so the branch
+//! sites don't each repeat the predicate.
 //!
 //! `workers_active = not(deterministic)`. The `test_time` feature (advanceable
 //! clock) is orthogonal and does NOT influence this. Truth table:
@@ -11,9 +13,10 @@
 //! | on        | on            | off            | test suite: sim clock, parked    |
 //! | on        | off           | ON             | bench: sim clock, ACTIVE workers |
 //!
-//! Existing builds that want parked workers reach it via `deterministic` (e.g.
-//! `cyberlith_test_harness` enables it by default), so the determinism-critical
-//! path is byte-for-byte unchanged.
+//! Builds that need byte-exact deterministic output reach parked workers via
+//! `deterministic` (e.g. the bevy adapter forwards its own `deterministic`
+//! feature to `naia-server/deterministic`), so the determinism-critical path is
+//! byte-for-byte unchanged from the pre-move (adapter-owned) runtime.
 
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(workers_active)");

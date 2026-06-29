@@ -18,6 +18,7 @@ mod send_state_view;
 mod server_entity_converter;
 #[allow(missing_docs)]
 mod event_receiver;
+mod runtime;
 mod sim_pipeline;
 mod snapshot_sender;
 mod spawn;
@@ -34,6 +35,7 @@ pub use event_receiver::{
     RecvConnectEvent, RecvDespawnEntityEvent, RecvDisconnectEvent, RecvErrorEvent, EventReceiver,
     RecvPublishEntityEvent, RecvSpawnEntityEvent, RecvTickEvent, RecvUnpublishEntityEvent,
 };
+pub use runtime::{PipelineRuntime, RuntimeState, RuntimeTimingHooks};
 pub use sim_pipeline::{PipelinedServer, TickCtx};
 pub use snapshot_sender::{SnapshotReceiver, SnapshotSender};
 pub use spawn::spawn_server_handles;

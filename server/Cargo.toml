@@ -26,6 +26,12 @@ transport_udp = [
 transport_local = [ "http", "base64", "naia-shared/transport_local" ]
 interior_visibility = [ "naia-shared/interior_visibility" ]
 test_time = [ "naia-shared/test_time" ]
+# MISSION_PIPELINE_API_BOUNDARY G7-3: parked-worker (byte-exact determinism)
+# mode for the core pipeline runtime. `build.rs` derives the `workers_active`
+# cfg as `not(deterministic)`. Implies `test_time` (the parked path drives the
+# sim clock synchronously). Consumers whose output must be deterministic enable
+# this (e.g. the bevy adapter's `deterministic` feature forwards to it).
+deterministic = [ "test_time" ]
 e2e_debug = []
 test_utils = [ "naia-shared/test_utils" ]
 bench_instrumentation = [ "naia-shared/bench_instrumentation" ]
@@ -38,6 +44,7 @@ f3_diag = []
 
 [dependencies]
 parking_lot = "0.12"
+crossbeam-channel = "0.5"
 naia-shared = { version = "0.25", path = "../shared" }
 naia-server-socket = { version = "0.25", path = "../socket/server", optional = true }
 cfg-if = { version = "1.0" }

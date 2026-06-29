@@ -30,7 +30,7 @@ test_time = [ "naia-server/test_time", "naia-bevy-shared/test_time" ]
 # saturated simulated clock. This split is fail-OPEN: builds that need
 # deterministic output MUST enable this (e.g. `cyberlith_test_harness` enables
 # it by default).
-deterministic = [ "test_time" ]
+deterministic = [ "test_time", "naia-server/deterministic" ]
 # Bench-only cross-thread per-stage timing aggregator (see `pipeline_timing.rs`).
 # Zero-cost when off.
 pipeline_timing = []
@@ -42,10 +42,6 @@ f3_diag = [ "naia-server/f3_diag" ]
 
 [dependencies]
 parking_lot = "0.12"
-crossbeam-channel = "0.5"
-# Event-driven recv: the recv worker awaits a `future::or` over the
-# transport readiness signal + a control wake signal, both smol channels.
-smol = "1.3"
 naia-server = { version = "0.25", path = "../../../server" }
 naia-bevy-shared = { version = "0.25", path = "../shared" }
 bevy_app = { version = "0.19", default-features=false }

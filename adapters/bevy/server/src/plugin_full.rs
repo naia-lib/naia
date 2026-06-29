@@ -55,14 +55,7 @@
 //! The F2 attempt at process-global synchronization deadlocked. D6's
 //! per-thread override + main-side park is the correct pattern.
 
-use std::{
-    any::Any,
-    sync::{
-        atomic::{AtomicBool, AtomicU8, Ordering},
-        Arc,
-    },
-    thread::{self, JoinHandle},
-};
+use std::sync::Arc;
 
 use bevy_app::App;
 use bevy_ecs::{
@@ -71,14 +64,13 @@ use bevy_ecs::{
     schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
     world::World,
 };
-use crossbeam_channel::{unbounded, Receiver, Sender};
 use parking_lot::Mutex;
 
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::{
     pipeline_actors::{
-        spawn_server_handles, EventReceiver, PipelinedServer as CorePipelinedServer,
-        SnapshotReceiver, SnapshotSender,
+        spawn_server_handles, EventReceiver, PipelineRuntime, PipelinedServer as CorePipelinedServer,
+        RuntimeTimingHooks, SnapshotReceiver, SnapshotSender,
     },
     shared::Protocol as NaiaProtocol,
     ReceiveOutput, RecvHandle, SendHandle, ServerConfig,
@@ -195,137 +187,13 @@ pub struct SnapshotReceiverRes(pub SnapshotReceiver<Entity>);
 
 // ─── PluginInternalState ───────────────────────────────────────────────────
 
-/// Lifecycle states the plugin progresses through.
-#[repr(u8)]
-#[derive(Clone, Copy, Eq, PartialEq, Debug)]
-enum State {
-    /// `Plugin::build` ran; handles parked; workers not yet spawned.
-    Armed = 0,
-    /// `listen()` succeeded; workers running.
-    Running = 1,
-    /// `Drop` called; workers shutting down or stopped.
-    Stopped = 2,
-}
-
-/// Park-control flags + condvar pair (parking_lot Mutex + Condvar) used
-/// to coordinate main↔worker timing.
-struct ParkControl {
-    /// `true` ⇒ workers should park at the top of their loop iteration.
-    park: AtomicBool,
-    /// Number of workers currently parked. Main waits until this hits
-    /// the expected worker count before continuing past
-    /// [`PluginInternalState::park_workers`].
-    parked_count: Mutex<u32>,
-    /// Signalled by a worker when it increments `parked_count` at the
-    /// checkpoint. `park_workers()` waits on this for `parked_count`
-    /// to reach the expected worker count.
-    parked_cv: parking_lot::Condvar,
-    /// Signalled by `unpark_workers()` (under the `parked_count` lock)
-    /// when it clears `park`. Parked workers wait on this to leave the
-    /// checkpoint. Replaces the prior `thread::park()`/`thread::unpark()`
-    /// scheme, which had a token race: a worker that consumed its unpark
-    /// token but was descheduled before re-reading `park` would re-read
-    /// the *next* cycle's `park=true` and re-block with no token, never
-    /// re-incrementing `parked_count` → deadlock. A condvar guarded by
-    /// the same mutex as the `park` read has no such lost transition.
-    resume_cv: parking_lot::Condvar,
-    /// Signalled by a worker when it decrements `parked_count` on leaving
-    /// the checkpoint. `unpark_workers()` waits on this until
-    /// `parked_count` is back to 0 — i.e. it is **synchronous**: it does
-    /// not return until every parked worker has observed `park=false` and
-    /// left the checkpoint. Because `unpark_workers()` and the next
-    /// `park_workers()` run sequentially on the same thread, this
-    /// guarantees `park` can never be re-set to `true` while a worker is
-    /// still mid-resume.
-    resumed_cv: parking_lot::Condvar,
-    /// Mutex + condvar for workers to sleep in between park windows. Workers
-    /// block here when idle; `park_workers()` signals this condvar after setting
-    /// `park=true` so workers wake, loop to `worker_park_checkpoint`, and enter
-    /// the coordinated park protocol.
-    ///
-    /// Used by BOTH paths (MISSION_OVERLAP_FRONTIER T1 made it active-mode too):
-    ///   - not(workers_active): the worker has no other work, so it body-sleeps
-    ///     on an UNBOUNDED `wait()` until woken here.
-    ///   - workers_active: the worker idle-waits on a BOUNDED `wait_for(100µs)`
-    ///     between receive/send iterations; signalling here wakes it instantly
-    ///     instead of after up to one ~100µs poll (the park-barrier win).
-    ///
-    /// This is the *idle* wait, separate from the *checkpoint* wait
-    /// (`resume_cv`): a body-sleeping worker isn't yet counted in
-    /// `parked_count`, whereas a checkpoint-waiting worker is. Keeping them
-    /// distinct lets `park_workers()` wake idlers (body_sleep_cv) without
-    /// disturbing the parked-count barrier, and lets `unpark_workers()`
-    /// release parked workers (resume_cv) without waking idlers.
-    body_sleep_mu: Mutex<()>,
-    body_sleep_cv: parking_lot::Condvar,
-    /// Event-driven control wake (workers_active): an awaitable, coalescing
-    /// `bounded(1)` signal the recv worker selects on alongside the
-    /// transport's packet-readiness. Every site that must wake an idle
-    /// worker — `park_workers`, `Drop` (shutdown), test-panic — pings it
-    /// via [`Self::ping_control`]. This is the async sibling of
-    /// `body_sleep_cv`: the active worker no longer polls a 100µs condvar,
-    /// so park/shutdown can no longer be observed "within one poll" — they
-    /// must explicitly wake it. The `not(workers_active)` (deterministic)
-    /// path still uses `body_sleep_cv` and ignores this.
-    control_tx: smol::channel::Sender<()>,
-    // Only read by the event-driven worker select (workers_active); the
-    // deterministic path waits on `body_sleep_cv` instead.
-    #[cfg_attr(not(workers_active), allow(dead_code))]
-    control_rx: smol::channel::Receiver<()>,
-}
-
-impl ParkControl {
-    fn new() -> Self {
-        // bounded(1) ⇒ coalescing: at most one pending wake token.
-        let (control_tx, control_rx) = smol::channel::bounded(1);
-        Self {
-            park: AtomicBool::new(false),
-            parked_count: Mutex::new(0),
-            parked_cv: parking_lot::Condvar::new(),
-            resume_cv: parking_lot::Condvar::new(),
-            resumed_cv: parking_lot::Condvar::new(),
-            body_sleep_mu: Mutex::new(()),
-            body_sleep_cv: parking_lot::Condvar::new(),
-            control_tx,
-            control_rx,
-        }
-    }
-
-    /// Wake the event-driven recv worker (coalescing; drop-if-full and
-    /// drop-if-closed are both fine — a buffered token already guarantees
-    /// the wake, and a closed channel means the worker is gone).
-    fn ping_control(&self) {
-        let _ = self.control_tx.try_send(());
-    }
-}
-
-/// Captured panic from a worker thread. Surfaced on main via
-/// [`PluginInternalState::propagate_panic_if_any`].
-struct PanicSlot(Mutex<Option<Box<dyn Any + Send + 'static>>>);
-
-impl PanicSlot {
-    fn new() -> Self {
-        Self(Mutex::new(None))
-    }
-    fn set(&self, payload: Box<dyn Any + Send + 'static>) {
-        let mut g = self.0.lock();
-        if g.is_none() {
-            *g = Some(payload);
-        }
-    }
-    fn take(&self) -> Option<Box<dyn Any + Send + 'static>> {
-        self.0.lock().take()
-    }
-}
-
-/// Bevy resource exposing the lifecycle / park / panic / shutdown
-/// surface of [`Plugin::pipelined`].
-///
-/// On drop, signals shutdown to the worker threads and blocks until
-/// they join (with a 5s soft-deadline before logging a warning).
+/// Bevy resource: the bevy-coupled lifecycle / park / panic surface of
+/// [`Plugin::pipelined`]. The worker-thread runtime itself now lives in
+/// naia-server core ([`PipelineRuntime`], MISSION_PIPELINE_API_BOUNDARY G7-3);
+/// this resource holds only the bevy-only wiring and **delegates** lifecycle
+/// (`listen`/`park`/`unpark`/panic-propagation/shutdown) to it.
 #[derive(Resource)]
 pub struct PluginInternalState {
-    state: AtomicU8,
     /// [`PipelinedServer`] parked here between `build` and the drain into
     /// [`PipelinedServer`]. `listen()` reassembles `WorldServer` for `io_load`
     /// by calling `with_world_server` on this pipeline (which temporarily moves
@@ -333,50 +201,24 @@ pub struct PluginInternalState {
     /// pipeline is back here until `drain_armed_pipeline_into_resource` moves it
     /// into `PipelinedServer`.
     armed_pipeline: Mutex<Option<CorePipelinedServer<Entity>>>,
-    /// Channel for the Recv worker to push `ReceiveOutput` to main.
-    /// `Some` until `listen` runs.
-    recv_out_chan_rx: Mutex<Option<Receiver<ReceiveOutput<Entity>>>>,
-    /// Sender half retained so it can be dropped on shutdown (signals
-    /// the main-side drain system that the worker is gone).
-    recv_out_chan_tx: Mutex<Option<Sender<ReceiveOutput<Entity>>>>,
-    /// SnapshotReceiver held until the Send worker is spawned.
-    snapshot_receiver: Mutex<Option<SnapshotReceiver<Entity>>>,
     /// SnapshotSender retained for the SnapshotSender resource clone
     /// path (the Sim app keeps the load-bearing clone via the inserted
     /// Resource; this is here only for `listen()`-time wiring).
     _snapshot_sender_keep: Mutex<Option<SnapshotSender<Entity>>>,
-    /// Shutdown signaller: dropping flips `true`, observed by workers
-    /// at the top of each loop iteration.
-    shutdown: Arc<AtomicBool>,
-    /// Park/unpark coordination.
-    park: Arc<ParkControl>,
-    /// Captured panic payload (first worker to panic wins).
-    panic_slot: Arc<PanicSlot>,
-    /// Worker thread handles. Empty until `listen()`; drained on Drop.
-    workers: Mutex<Vec<WorkerHandle>>,
     /// EventReceiver clone retained so the main-side drain system
     /// can re-acquire it without taking the Sim Resource.
     sim_event_receiver: Mutex<Option<EventReceiver<Entity>>>,
-    /// D.3a park-window slot for the recv worker's [`RecvHandle`]. The
-    /// recv worker deposits its handle here at the park checkpoint and
-    /// re-claims it on unpark. The same `Arc` is wrapped by the
-    /// [`RecvHandleRes`] Resource so a parked-window Sim system can
-    /// take/return the handle. `None` until `listen()` spawns the worker.
+    /// Park-window slot for the recv worker's [`RecvHandle`] — the SAME `Arc`
+    /// the core runtime + the pipeline hold, wrapped by [`RecvHandleRes`] so a
+    /// parked-window Sim system can take/return the handle.
     recv_slot: Arc<Mutex<Option<RecvHandle<Entity>>>>,
-    /// D.3a park-window slot for the send worker's [`SendHandle`] —
-    /// symmetric to `recv_slot`. Wrapped by [`SendHandleRes`]. `None`
-    /// until `listen()` spawns the worker.
+    /// Park-window slot for the send worker's [`SendHandle`] — symmetric.
+    /// Wrapped by [`SendHandleRes`].
     send_slot: Arc<Mutex<Option<SendHandle<Entity>>>>,
-    /// Test-only: when set, workers panic on their next loop iteration
-    /// (after the park checkpoint, before any other work). Used by
-    /// the D.5 panic-propagation test.
-    #[cfg(any(test, feature = "test_time"))]
-    test_panic_request: Arc<AtomicBool>,
-}
-
-struct WorkerHandle {
-    name: &'static str,
-    join: Option<JoinHandle<()>>,
+    /// The framework-agnostic worker runtime (threads + park barrier + recv
+    /// channel + snapshot-lag wiring + Armed→Running→Stopped lifecycle). Its
+    /// `Drop` signals shutdown and joins the workers (5s soft-deadline).
+    runtime: PipelineRuntime<Entity>,
 }
 
 impl PluginInternalState {
@@ -386,48 +228,38 @@ impl PluginInternalState {
         snapshot_sender: SnapshotSender<Entity>,
         snapshot_receiver: SnapshotReceiver<Entity>,
     ) -> Self {
-        // Extract the shared slot Arcs from the pipeline so workers can be
-        // given the same Arc at spawn time (listen()). PipelinedServer also holds
-        // these Arcs — after the drain into PipelinedServer, the resource and
-        // the workers share the same underlying Mutex<Option<…>>.
+        // The shared slot Arcs from the pipeline: the core runtime is given the
+        // SAME Arcs at construction so workers and the consumer's park-window
+        // borrow share one underlying `Mutex<Option<…>>`.
         let recv_slot = sim_pipeline.recv_slot();
         let send_slot = sim_pipeline.send_slot();
 
-        // UNBOUNDED: the recv worker calls `recv.receive()` (which destructively
-        // drains command packets off the socket into a `ReceiveOutput`) once per
-        // wakeup, but the main-side consumer (`drain_recv_impl`) only drains this
-        // channel once per park window (≈ once per service tick). When packets
-        // arrive in a burst, the worker produces several outputs between drains.
-        // A bounded(1) channel here silently `drop()`ed every output past the
-        // first — and because those outputs already held packets pulled OFF the
-        // socket, the drain's safety-net `recv.receive()` could not recover them:
-        // the tick-buffered PlayerCommands were permanently lost (measured ~93–98%
-        // loss under sustained input → the avatar barely moved). Unbounded never
-        // drops; the drain's `try_iter().collect()` empties it in FIFO order each
-        // cycle, so ordering — and determinism — are preserved. Memory is self-
-        // limiting: at most one drain-interval's worth of outputs accumulates.
-        // NOTE: this path is exercised ONLY when workers are active (live/async);
-        // under `test_time` the workers are pure parking services and the consumer
-        // drives `recv.receive()` synchronously, so the determinism harness never
-        // touched the dropping `try_send` — that is why the gate stayed green while
-        // live movement was broken.
-        let (tx, rx) = unbounded::<ReceiveOutput<Entity>>();
+        // Wire the bench-only `pipeline_timing` aggregator into the core runtime
+        // via fn-pointer hooks. Zero overhead + zero coupling when the feature
+        // is off (the core runtime takes `Option<fn(u64)>` per stage).
+        #[allow(unused_mut)]
+        let mut timing = RuntimeTimingHooks::default();
+        #[cfg(feature = "pipeline_timing")]
+        {
+            timing.record_recv = Some(crate::pipeline_timing::record_recv);
+            timing.record_send = Some(crate::pipeline_timing::record_send);
+            timing.record_barrier = Some(crate::pipeline_timing::record_barrier);
+        }
+
+        let runtime = PipelineRuntime::new_armed(
+            Arc::clone(&recv_slot),
+            Arc::clone(&send_slot),
+            snapshot_receiver,
+            timing,
+        );
+
         Self {
-            state: AtomicU8::new(State::Armed as u8),
             armed_pipeline: Mutex::new(Some(sim_pipeline)),
-            recv_out_chan_rx: Mutex::new(Some(rx)),
-            recv_out_chan_tx: Mutex::new(Some(tx)),
-            snapshot_receiver: Mutex::new(Some(snapshot_receiver)),
             _snapshot_sender_keep: Mutex::new(Some(snapshot_sender)),
-            shutdown: Arc::new(AtomicBool::new(false)),
-            park: Arc::new(ParkControl::new()),
-            panic_slot: Arc::new(PanicSlot::new()),
-            workers: Mutex::new(Vec::new()),
             sim_event_receiver: Mutex::new(Some(sim_event_receiver)),
             recv_slot,
             send_slot,
-            #[cfg(any(test, feature = "test_time"))]
-            test_panic_request: Arc::new(AtomicBool::new(false)),
+            runtime,
         }
     }
 
@@ -443,49 +275,21 @@ impl PluginInternalState {
         SendHandleRes(Arc::clone(&self.send_slot))
     }
 
-    /// Test/dev hook: request that workers panic on their next loop
-    /// iteration. Available under `cfg(test)` or with the `test_time`
-    /// feature (already used by all bevy adapter integration tests).
+    /// Test/dev hook: request that workers panic on their next loop iteration.
+    /// Delegates to the core runtime.
     #[cfg(any(test, feature = "test_time"))]
     pub fn request_worker_panic_for_test(&self) {
-        self.test_panic_request.store(true, Ordering::SeqCst);
-        // Wake any parked or idle (body-sleeping) workers so they loop
-        // back to the top and observe the request. (Polling workers in
-        // the non-test_time path observe it on their next iteration
-        // without a wakeup.)
-        self.park.resume_cv.notify_all();
-        #[cfg(not(workers_active))]
-        {
-            let _g = self.park.body_sleep_mu.lock();
-            self.park.body_sleep_cv.notify_all();
-        }
-        // Wake the event-driven (workers_active) worker so it loops back and
-        // observes the panic request.
-        self.park.ping_control();
+        self.runtime.request_worker_panic_for_test();
     }
 
-    fn state(&self) -> State {
-        // Safe because we only ever store valid `State` discriminants.
-        match self.state.load(Ordering::Acquire) {
-            0 => State::Armed,
-            1 => State::Running,
-            _ => State::Stopped,
-        }
-    }
-
-    /// Listen on `socket`. Calls `io_load` on the parked
-    /// `WorldServer` (reassembled from the three handles for the
-    /// duration of the call), spawns the Recv + Send worker threads,
-    /// and transitions to `Running`.
+    /// Listen on `socket`. Binds the socket on the parked `WorldServer`
+    /// (reassembled from the three handles for the duration of the call), then
+    /// asks the core [`PipelineRuntime`] to spawn the Recv + Send worker threads
+    /// and transition `Armed → Running`.
     ///
-    /// Panics if called more than once or after Drop.
+    /// Panics if called more than once or after Drop (the core runtime asserts
+    /// the `Armed` precondition in `spawn_workers`).
     pub fn listen<S: Into<Box<dyn naia_server::transport::Socket>>>(&self, socket: S) {
-        assert_eq!(
-            self.state(),
-            State::Armed,
-            "PluginInternalState::listen called in non-Armed state",
-        );
-
         let mut sim_pipeline = self
             .armed_pipeline
             .lock()
@@ -496,264 +300,50 @@ impl PluginInternalState {
         // calls io_load on the reassembled WorldServer in one step.
         sim_pipeline.listen(socket);
 
-        // Extract the transport's event-driven readiness (Some for the
-        // in-process PacketChannel every cell uses; None for poll-only
-        // sockets) before the recv worker starts — it selects on this
+        // Event-driven readiness (Some for the in-process PacketChannel every
+        // cell uses; None for poll-only sockets): the recv worker selects on it
         // instead of polling. The recv handle is back in its slot after
-        // with_world_server returns (same Arc as self.recv_slot).
+        // `listen()` returns (same Arc as self.recv_slot / the runtime's).
         let recv_readiness = self
             .recv_slot
             .lock()
             .as_ref()
-            .expect("recv handle in slot after with_world_server")
+            .expect("recv handle in slot after listen()")
             .readiness();
 
-        let recv_tx = self
-            .recv_out_chan_tx
-            .lock()
-            .clone()
-            .expect("recv_out_chan_tx Some in Armed state");
-
-        let recv_slot = Arc::clone(&self.recv_slot);
-        let shutdown_recv = Arc::clone(&self.shutdown);
-        let park_recv = Arc::clone(&self.park);
-        let panic_recv = Arc::clone(&self.panic_slot);
-        #[cfg(any(test, feature = "test_time"))]
-        let test_panic_recv = Arc::clone(&self.test_panic_request);
-
-        // Create a single shared clock Arc for ALL workers. This ensures
-        // TestClock::advance on the calling thread (scenario test thread)
-        // advances the same clock that both workers read. Two separate
-        // shareable_handle() calls would create two distinct Arcs — the
-        // calling thread would only be linked to the last one.
-        #[cfg(feature = "test_time")]
-        let clock_handle_shared = naia_bevy_shared::TestClock::shareable_handle();
-        #[cfg(feature = "test_time")]
-        let clock_handle_recv = Arc::clone(&clock_handle_shared);
-
-        let recv_join = thread::Builder::new()
-            .name("naia-recv-worker".into())
-            .spawn(move || {
-                #[cfg(feature = "test_time")]
-                naia_bevy_shared::TestClock::install_shared(clock_handle_recv);
-
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    recv_worker_loop(
-                        &recv_slot,
-                        &recv_tx,
-                        &shutdown_recv,
-                        &park_recv,
-                        recv_readiness,
-                        #[cfg(any(test, feature = "test_time"))]
-                        &test_panic_recv,
-                    );
-                }));
-
-                if let Err(payload) = result {
-                    panic_recv.set(payload);
-                }
-
-                #[cfg(feature = "test_time")]
-                naia_bevy_shared::TestClock::detach_shared();
-            })
-            .expect("spawn recv worker thread");
-
-        // Send worker borrows the send handle from the shared park-window
-        // slot per-iteration (D.3a), symmetric to the recv worker. Seed
-        // the slot here; the worker claims it each iteration and
-        // re-deposits at every park checkpoint.
-        // send handle already in self.send_slot (same Arc as sim_pipeline.send_slot).
-
-        let snap_rx = self
-            .snapshot_receiver
-            .lock()
-            .take()
-            .expect("snapshot_receiver Some in Armed state");
-
-        let send_slot = Arc::clone(&self.send_slot);
-        let shutdown_send = Arc::clone(&self.shutdown);
-        let park_send = Arc::clone(&self.park);
-        let panic_send = Arc::clone(&self.panic_slot);
-        #[cfg(any(test, feature = "test_time"))]
-        let test_panic_send = Arc::clone(&self.test_panic_request);
-
-        #[cfg(feature = "test_time")]
-        let clock_handle_send = Arc::clone(&clock_handle_shared);
-
-        let send_join = thread::Builder::new()
-            .name("naia-send-worker".into())
-            .spawn(move || {
-                #[cfg(feature = "test_time")]
-                naia_bevy_shared::TestClock::install_shared(clock_handle_send);
-
-                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    send_worker_loop(
-                        &send_slot,
-                        &snap_rx,
-                        &shutdown_send,
-                        &park_send,
-                        #[cfg(any(test, feature = "test_time"))]
-                        &test_panic_send,
-                    );
-                }));
-
-                if let Err(payload) = result {
-                    panic_send.set(payload);
-                }
-
-                #[cfg(feature = "test_time")]
-                naia_bevy_shared::TestClock::detach_shared();
-            })
-            .expect("spawn send worker thread");
+        // Spawn the worker threads + flip Armed→Running (core runtime owns the
+        // threading, park barrier, clock-sharing, panic capture, and channel).
+        self.runtime.spawn_workers(recv_readiness);
 
         // Stash the pipeline back in armed_pipeline. A Startup system
         // (`drain_armed_pipeline_into_resource`) drains it into
-        // PipelinedServer(Some(...)) once the bevy world is ready.
-        // Since listen() can be called before or after Startup, this
-        // intermediate stash avoids a chicken-and-egg ordering issue.
+        // PipelinedServer(Some(...)) once the bevy world is ready. Since
+        // listen() can be called before or after Startup, this intermediate
+        // stash avoids a chicken-and-egg ordering issue.
         self.armed_pipeline.lock().replace(sim_pipeline);
-
-        self.workers.lock().extend([
-            WorkerHandle {
-                name: "naia-recv-worker",
-                join: Some(recv_join),
-            },
-            WorkerHandle {
-                name: "naia-send-worker",
-                join: Some(send_join),
-            },
-        ]);
-
-        self.state.store(State::Running as u8, Ordering::Release);
     }
 
-    /// Park both worker threads (block until both reach the top of
-    /// their idle loop). After return, callers may safely
-    /// `TestClock::advance(...)` or borrow handles via [`PipelinedServer`]
-    /// / [`RecvHandleRes`] / [`SendHandleRes`] without racing the
-    /// workers.
-    ///
-    /// No-op when in `Armed` (workers not yet spawned) or `Stopped`.
-    ///
-    /// # Panic / exit safety
-    ///
-    /// A worker that has panicked (its `catch_unwind` body unwound) or
-    /// exited will never reach its park checkpoint, so a naive condvar
-    /// wait would deadlock. The wait therefore breaks early once every
-    /// not-yet-parked worker thread has *finished* — i.e. the live
-    /// workers are all parked and the rest are gone. A subsequent
-    /// [`Self::propagate_panic_if_any`] surfaces the captured payload.
-    /// Callers (e.g. [`drain_recv_worker_output`]) tolerate a
-    /// not-fully-parked return by finding `None` in a handle slot and
-    /// bailing.
+    /// Park both worker threads (block until both reach the top of their idle
+    /// loop). After return, callers may safely `TestClock::advance(...)` or
+    /// borrow handles via [`PipelinedServer`] / [`RecvHandleRes`] /
+    /// [`SendHandleRes`] without racing the workers. No-op when `Armed` /
+    /// `Stopped`. Panic/exit-safe (see [`PipelineRuntime::park_workers`]).
+    /// Delegates to the core runtime.
     pub fn park_workers(&self) {
-        if self.state() != State::Running {
-            return;
-        }
-        let expected = self.workers.lock().len() as u32;
-        self.park.park.store(true, Ordering::SeqCst);
-        // Wake body-sleeping workers via condvar so they loop back to the
-        // checkpoint and park immediately, on BOTH paths:
-        //   - Parked (deterministic) mode: the worker body-sleeps on an
-        //     UNBOUNDED `body_sleep_cv.wait()` until woken (it has no other work).
-        //   - Active mode (MISSION_OVERLAP_FRONTIER T1): the worker idle-waits on
-        //     a BOUNDED `body_sleep_cv.wait_for(100µs)` between receive/send
-        //     iterations. Signalling here wakes it instantly instead of after up
-        //     to one ~100µs poll interval — that per-worker poll latency was the
-        //     ~140µs park barrier (audit §2.4). The 100µs bound still re-polls the
-        //     socket between ticks if no park is pending (preserves receive cadence).
-        //
-        // Hold body_sleep_mu while notifying to prevent the classic lost-wakeup
-        // race: without the lock, notify_all() can fire AFTER a worker checks the
-        // condvar condition (finds park=false) but BEFORE it calls wait() — the
-        // signal is lost. Holding the lock (which the worker also holds across its
-        // park-check + wait) ensures either the worker sees park=true (set above,
-        // SeqCst) and skips the wait, or it is already inside wait() and is woken.
-        // (parking_lot condvar wait releases the lock atomically.)
-        {
-            let _g = self.park.body_sleep_mu.lock();
-            self.park.body_sleep_cv.notify_all();
-        }
-        // Event-driven (workers_active) path: the active worker blocks in a
-        // `future::or` rather than the 100µs condvar poll, so wake it
-        // explicitly. The bounded(1) token is buffered if it's mid-drain
-        // (no lost wakeup); `park` is already SeqCst-set above so the woken
-        // worker observes it at the checkpoint.
-        self.park.ping_control();
-        // Time spent blocked here is the "park barrier wait" — the main thread
-        // waiting for the workers to reach their checkpoint. Large per-tick
-        // ⇒ the workers' tick work landed on the main critical path
-        // (serialization); ~0 ⇒ they finished in the gaps. See pipeline_timing.
-        #[cfg(feature = "pipeline_timing")]
-        let _t_barrier = std::time::Instant::now();
-        let mut g = self.park.parked_count.lock();
-        while *g < expected {
-            // Break early if the not-yet-parked workers have all
-            // finished (panicked/exited) — they will never park.
-            let finished = self
-                .workers
-                .lock()
-                .iter()
-                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
-                .count() as u32;
-            if *g + finished >= expected {
-                break;
-            }
-            // Bounded wait so a worker that finishes *after* the check
-            // above (before we re-loop) is still observed promptly.
-            self.park
-                .parked_cv
-                .wait_for(&mut g, std::time::Duration::from_millis(5));
-        }
-        #[cfg(feature = "pipeline_timing")]
-        crate::pipeline_timing::record_barrier(_t_barrier.elapsed().as_nanos() as u64);
+        self.runtime.park_workers();
     }
 
-    /// Resume both worker threads. **Synchronous**: does not return until
-    /// every parked worker has observed `park=false` and left the
-    /// checkpoint (`parked_count` back to 0). This is what makes the next
-    /// `park_workers()` safe — it cannot set `park=true` while a worker is
-    /// still mid-resume, which was the root of the prior `thread::park()`
-    /// token-race deadlock.
+    /// Resume both worker threads. Synchronous — see
+    /// [`PipelineRuntime::unpark_workers`]. Delegates to the core runtime.
     pub fn unpark_workers(&self) {
-        if self.state() != State::Running {
-            return;
-        }
-        let mut g = self.park.parked_count.lock();
-        // Clear the park flag and wake checkpoint waiters under the same
-        // lock the checkpoint reads `park` under (no lost wakeup).
-        self.park.park.store(false, Ordering::SeqCst);
-        self.park.resume_cv.notify_all();
-        // Wait until all parked workers have decremented out of the
-        // checkpoint. A worker that finished/panicked never incremented,
-        // so it doesn't hold up the count.
-        while *g > 0 {
-            // Bounded wait so a worker that finishes (panic/exit) after we
-            // last observed the count is still noticed promptly.
-            let finished_unparked = self
-                .workers
-                .lock()
-                .iter()
-                .filter(|w| w.join.as_ref().map(|j| j.is_finished()).unwrap_or(true))
-                .count() as u32;
-            // If the only thing keeping the count above 0 would be a
-            // worker that has since finished, stop waiting.
-            if finished_unparked >= *g {
-                break;
-            }
-            self.park
-                .resumed_cv
-                .wait_for(&mut g, std::time::Duration::from_millis(5));
-        }
+        self.runtime.unpark_workers();
     }
 
-    /// If a worker thread has panicked, re-panic on the calling
-    /// thread (surfacing the captured payload). Call once per
-    /// `App::update` from a Sim system, or before any test assertion.
+    /// If a worker thread has panicked, re-panic on the calling thread.
+    /// Call once per `App::update` from a Sim system, or before any test
+    /// assertion. Delegates to the core runtime.
     pub fn propagate_panic_if_any(&self) {
-        if let Some(payload) = self.panic_slot.take() {
-            std::panic::resume_unwind(payload);
-        }
+        self.runtime.propagate_panic_if_any();
     }
 
     ///
@@ -807,59 +397,6 @@ impl PluginInternalState {
             .expect("armed_send_state_view called after pipeline drained — too late")
             .coord()
             .send_state_view()
-    }
-}
-
-impl Drop for PluginInternalState {
-    fn drop(&mut self) {
-        // Signal shutdown.
-        self.shutdown.store(true, Ordering::SeqCst);
-        // Drop the recv channel sender so the main-side drain stops
-        // expecting more outputs.
-        self.recv_out_chan_tx.lock().take();
-        // Clear the park flag + wake checkpoint waiters so any parked
-        // worker leaves the checkpoint and observes shutdown. Done under
-        // the parked_count lock (same lock the checkpoint reads `park`
-        // under) to avoid a lost wakeup.
-        {
-            let _g = self.park.parked_count.lock();
-            self.park.park.store(false, Ordering::SeqCst);
-            self.park.resume_cv.notify_all();
-        }
-        // Wake body-sleeping workers (parked-worker mode) so they observe
-        // shutdown. Hold the lock to prevent lost-wakeup (see park_workers).
-        #[cfg(not(workers_active))]
-        {
-            let _g = self.park.body_sleep_mu.lock();
-            self.park.body_sleep_cv.notify_all();
-        }
-        // Wake the event-driven (workers_active) recv worker so it leaves its
-        // `future::or` and observes `shutdown` at the loop top — otherwise it
-        // would block until the 5s join deadline.
-        self.park.ping_control();
-        let mut workers = std::mem::take(&mut *self.workers.lock());
-
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        for w in workers.iter_mut() {
-            let name = w.name;
-            if let Some(join) = w.join.take() {
-                // Try to join, but don't block forever.
-                while std::time::Instant::now() < deadline {
-                    if join.is_finished() {
-                        break;
-                    }
-                    thread::sleep(std::time::Duration::from_millis(1));
-                }
-                if join.is_finished() {
-                    if join.join().is_err() {
-                        log::warn!("naia plugin worker {name} panicked during shutdown");
-                    }
-                } else {
-                    log::warn!("naia plugin worker {name} did not exit within 5s; leaking thread",);
-                }
-            }
-        }
-        self.state.store(State::Stopped as u8, Ordering::Release);
     }
 }
 
@@ -942,376 +479,6 @@ pub(crate) fn install_full_pipelining(
     }
 }
 
-// ─── Worker loops ───────────────────────────────────────────────────────────
-
-/// Top-of-iteration: if `park` is set, increment parked_count, notify
-/// main, then wait on `resume_cv` until `unpark_workers()` clears `park`.
-fn worker_park_checkpoint(park: &ParkControl) {
-    // Fast path: not parking, no lock needed.
-    if !park.park.load(Ordering::SeqCst) {
-        return;
-    }
-    let mut g = park.parked_count.lock();
-    // Re-check under the lock: `park` may have been cleared between the
-    // unlocked load above and acquiring the lock.
-    if !park.park.load(Ordering::SeqCst) {
-        return;
-    }
-    *g += 1;
-    park.parked_cv.notify_all();
-    // Park loop: wait on the resume condvar (NOT thread::park) until the
-    // park flag clears. The condvar wait atomically releases `g`; the
-    // `park` read happens under `g`, and `unpark_workers()` clears `park`
-    // + notifies under the same lock — so there is no lost transition and
-    // no token to drop.
-    while park.park.load(Ordering::SeqCst) {
-        park.resume_cv.wait(&mut g);
-    }
-    // Leaving the checkpoint: decrement and signal `unpark_workers()`,
-    // which blocks until this count returns to 0 (synchronous unpark).
-    *g -= 1;
-    park.resumed_cv.notify_all();
-}
-
-/// Recv worker loop. The `RecvHandle` is **not** owned by this closure
-/// — it lives in the shared `recv_slot` (`Arc<Mutex<Option<…>>>`) so a
-/// parked-window Sim system can borrow it via [`RecvHandleRes`] for the
-/// per-user tick-buffer drain (D.3a).
-///
-/// Per-iteration discipline that keeps the park-window borrow race-free:
-///
-/// 1. **Park checkpoint with the handle deposited.** The handle sits in
-///    `recv_slot` whenever the worker is at the checkpoint, so once
-///    [`PluginInternalState::park_workers`] returns (worker parked +
-///    `parked_count` incremented), main is guaranteed to find the handle
-///    in the slot.
-/// 2. **Claim** the handle from the slot for the brief receive window.
-/// 3. `recv.receive()` + ship the `ReceiveOutput`.
-/// 4. **Deposit** the handle back into the slot *before* looping back to
-///    the checkpoint.
-///
-/// Because the park flag is only observed at the checkpoint (step 1), a
-/// park request that arrives mid-receive-window simply waits one short
-/// iteration until the worker has re-deposited the handle and parks.
-//
-// `recv_slot` / `out_tx` are only touched on the active receive path; the
-// parked recv worker is a pure parking service.
-#[cfg_attr(not(workers_active), allow(unused_variables))]
-fn recv_worker_loop(
-    recv_slot: &Arc<Mutex<Option<RecvHandle<Entity>>>>,
-    out_tx: &Sender<ReceiveOutput<Entity>>,
-    shutdown: &Arc<AtomicBool>,
-    park: &Arc<ParkControl>,
-    readiness: Option<naia_server::transport::PacketReadiness>,
-    #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
-) {
-    loop {
-        // Park checkpoint: the handle is in `recv_slot`, so a parked Sim
-        // system can take it for `receive_tick_buffer_messages`.
-        worker_park_checkpoint(park);
-        if shutdown.load(Ordering::SeqCst) {
-            return;
-        }
-        #[cfg(any(test, feature = "test_time"))]
-        if test_panic.load(Ordering::SeqCst) {
-            panic!("test-requested recv worker panic");
-        }
-
-        // Claim the handle for the brief receive window. If main has it
-        // (only possible mid-park, which the checkpoint above already
-        // gated), skip this iteration rather than block.
-        // Claim the handle for the brief receive window using `try_lock` so
-        // the worker always loops back to the park checkpoint rather than
-        // blocking indefinitely. Blocking `.lock()` could cause the recv
-        // worker to be stuck waiting for the lock while `park_workers()` waits
-        // for this worker to reach its checkpoint — a deadlock. `try_lock`
-        // means a contended slot (held briefly by `open_park_window` /
-        // `drain_recv_worker_output`) just produces a 100µs retry; the
-        // worker then hits the park checkpoint on the next iteration.
-        // In test_time mode (LocalTransport, deterministic clock), the main
-        // thread drives all recv.receive() calls synchronously in
-        // drain_recv_worker_output while workers are parked. Running
-        // recv.receive() here concurrently causes RwLock contention on
-        // time_manager (recv needs write; send_all_packets holds read), which
-        // can deadlock park_workers() when the recv worker is blocked inside
-        // receive() and cannot reach its park checkpoint.
-        //
-        // Production (non-test_time): recv.receive() runs here to drain the
-        // UDP socket promptly between ticks, avoiding packet loss under load.
-        #[cfg(not(workers_active))]
-        {
-            // Body-sleep: block with zero CPU cost until park_workers()
-            // signals body_sleep_cv (meaning park=true and workers should
-            // reach the checkpoint). Using body_sleep_cv instead of
-            // thread::park() avoids the single-token race where park_workers()'s
-            // thread::unpark() token is consumed here, leaving the checkpoint
-            // while-loop's thread::park() without a token (deadlock). Condvar
-            // notify_all is not token-based and always wakes waiting workers.
-            // The `test_panic` clause lets `request_worker_panic_for_test`
-            // wake an idle worker so it loops back and observes the request.
-            let mut g = park.body_sleep_mu.lock();
-            while !park.park.load(Ordering::SeqCst)
-                && !shutdown.load(Ordering::SeqCst)
-                && !test_panic.load(Ordering::SeqCst)
-            {
-                park.body_sleep_cv.wait(&mut g);
-            }
-            drop(g);
-            continue;
-        }
-
-        #[cfg(workers_active)]
-        {
-            // Don't start a receive() if park was requested — loop straight back to
-            // the checkpoint (which parks immediately). No sleep: the worker is about
-            // to park, and a sleep here would just add up to 100µs to the barrier in
-            // the race window where park is set after the checkpoint returned. (T1)
-            if park.park.load(Ordering::SeqCst) {
-                continue;
-            }
-
-            let mut recv = match recv_slot.try_lock().and_then(|mut g| g.take()) {
-                Some(h) => h,
-                None => {
-                    thread::sleep(std::time::Duration::from_micros(100));
-                    continue;
-                }
-            };
-
-            #[cfg(feature = "pipeline_timing")]
-            let _t_recv = std::time::Instant::now();
-            let output = recv.receive();
-            #[cfg(feature = "pipeline_timing")]
-            crate::pipeline_timing::record_recv(_t_recv.elapsed().as_nanos() as u64);
-
-            // Re-deposit using try_lock spin (never blocks park checkpoint).
-            loop {
-                match recv_slot.try_lock() {
-                    Some(mut g) => {
-                        *g = Some(recv);
-                        break;
-                    }
-                    None => {
-                        thread::sleep(std::time::Duration::from_micros(100));
-                    }
-                }
-            }
-
-            // Unbounded channel: NEVER drop a `ReceiveOutput`. It already holds
-            // command packets pulled off the socket; dropping it would lose them
-            // (see channel construction in `new_armed`). `send` only errors if the
-            // receiver hung up (plugin teardown) — exit cleanly in that case.
-            if out_tx.send(output).is_err() {
-                return;
-            }
-            // Idle inter-iteration wait.
-            match &readiness {
-                // Event-driven (in-process PacketChannel): block with ZERO CPU
-                // until either the transport signals a packet may be ready OR a
-                // control wake (park / shutdown / test-panic) fires. This
-                // eliminates the 100µs idle-poll storm: under oversubscription
-                // the cell is fed only ~once per 5ms service loop, so ~98% of
-                // the old polls were wasted wakeups.
-                //
-                // Lost-wakeup-free: async-channel `recv()` re-checks the buffer
-                // before parking, and both signals are bounded(1) coalescing —
-                // a ping that lands between this worker's drain and its next
-                // wait leaves a buffered token, so the freshly-created future
-                // resolves immediately. The per-tick park-window drain remains
-                // the authoritative safety net (≤1-tick dwell ceiling).
-                Some(readiness) => {
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        smol::block_on(smol::future::or(readiness.wait(), async {
-                            let _ = park.control_rx.recv().await;
-                        }));
-                    }
-                    // Clear the token(s) that woke us so the next iteration's
-                    // wait starts fresh (data is drained by recv.receive() at
-                    // the loop top; any packet that arrives after this re-pings).
-                    readiness.drain();
-                    while park.control_rx.try_recv().is_ok() {}
-                }
-                // Poll-only transport (raw socket, no awaitable readiness): keep
-                // the bounded condvar poll — park_workers()'s body_sleep_cv wake
-                // still cuts the park barrier; the 100µs bound drains the socket.
-                None => {
-                    let mut g = park.body_sleep_mu.lock();
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        park.body_sleep_cv
-                            .wait_for(&mut g, std::time::Duration::from_micros(100));
-                    }
-                    drop(g);
-                }
-            }
-        } // end #[cfg(workers_active)]
-    }
-}
-
-/// Send worker loop. Symmetric to [`recv_worker_loop`]: the
-/// `SendHandle` lives in the shared `send_slot` so a parked-window Sim
-/// system can borrow it via [`SendHandleRes`] for cross-half work that
-/// needs the send half. Same per-iteration deposit discipline keeps the
-/// park-window borrow race-free.
-///
-/// In the parked (deterministic) mode this worker is a **pure parking
-/// service** (like the recv worker): the consumer drives the send
-/// synchronously inside its park window, so `snap_rx` / `send_slot` are
-/// unused here.
-#[cfg_attr(not(workers_active), allow(unused_variables))]
-fn send_worker_loop(
-    send_slot: &Arc<Mutex<Option<SendHandle<Entity>>>>,
-    snap_rx: &SnapshotReceiver<Entity>,
-    shutdown: &Arc<AtomicBool>,
-    park: &Arc<ParkControl>,
-    #[cfg(any(test, feature = "test_time"))] test_panic: &Arc<AtomicBool>,
-) {
-    // MISSION_TICK_FLOOR Lever 3: one-tick send lag. The job published this
-    // cycle is buffered here and transmitted on the NEXT cycle, so the worker
-    // sends the previous tick's frozen job. With the park still in place (L3.2)
-    // this validates the frozen send produces correct (1-tick-late) wire vs the
-    // oracle; once the park is removed (L3.4) the lag is what lets the transmit
-    // overlap the next tick's Sim safely (the frozen rider prevents a torn read
-    // of the live `global_dirty`).
-    #[cfg(workers_active)]
-    let mut held_job: Option<crate::SnapshotWorld<Entity>> = None;
-    loop {
-        // Park checkpoint: handle is in `send_slot`, borrowable by main.
-        worker_park_checkpoint(park);
-        if shutdown.load(Ordering::SeqCst) {
-            return;
-        }
-        #[cfg(any(test, feature = "test_time"))]
-        if test_panic.load(Ordering::SeqCst) {
-            panic!("test-requested send worker panic");
-        }
-
-        // In test_time the send worker is a PURE PARKING SERVICE: the consumer
-        // drives the send (preamble + scope changes + send_all_packets)
-        // synchronously inside its park window, so handshake-response and
-        // snapshot delivery occur at a deterministic point each tick rather than
-        // whenever this real-time thread happens to be scheduled. That real-time
-        // timing was load-dependent and could reorder connect handshakes under
-        // parallel test load, perturbing avatar spawn order (rapier handle
-        // assignment) → non-deterministic physics. Body-sleep until the next
-        // park (zero CPU); never touch the snapshot or the send handle.
-        #[cfg(not(workers_active))]
-        {
-            let mut g = park.body_sleep_mu.lock();
-            while !park.park.load(Ordering::SeqCst)
-                && !shutdown.load(Ordering::SeqCst)
-                && !test_panic.load(Ordering::SeqCst)
-            {
-                park.body_sleep_cv.wait(&mut g);
-            }
-            drop(g);
-            continue;
-        }
-
-        #[cfg(workers_active)]
-        {
-            // Don't start send work if park was requested — send_all_packets
-            // holds time_manager.read() for its entire packet loop, which can
-            // block the recv worker's time_manager.write() (in take_tick_events);
-            // skipping lets this worker reach its checkpoint without contention.
-            // Loop straight back to the checkpoint (no sleep): the worker is about
-            // to park, and a sleep here would just add to the barrier wait. (T1)
-            if park.park.load(Ordering::SeqCst) {
-                continue;
-            }
-
-            // Claim the handle FIRST — before touching the lag buffer — so a
-            // failed claim cannot drop a buffered job. try_lock never blocks the
-            // park checkpoint.
-            let mut send = match send_slot.try_lock().and_then(|mut g| g.take()) {
-                Some(h) => h,
-                None => {
-                    thread::sleep(std::time::Duration::from_micros(100));
-                    continue;
-                }
-            };
-
-            // MISSION_TICK_FLOOR Lever 3: one-tick lag. Buffer this cycle's
-            // freshly-published job; transmit the job buffered on the PREVIOUS
-            // cycle. `replace` returns the prior buffered job (to send now);
-            // when no new job was published, flush whatever is still buffered.
-            let job_to_send = match snap_rx.take_latest() {
-                Some(new_job) => held_job.replace(new_job),
-                None => held_job.take(),
-            };
-
-            // MISSION_SNAPSHOT_DIRTY_TRIM (2026-05-20): the preamble + scope
-            // application + needed-set refresh run on the MAIN thread inside the
-            // park window (cyberlith `do_park_window_tick` Step 7.5), BEFORE the
-            // snapshot is built — so the snapshot contains exactly what this send
-            // reads. The worker only transmits.
-            #[cfg(feature = "pipeline_timing")]
-            let _t_send = std::time::Instant::now();
-
-            if let Some(mut job) = job_to_send {
-                // MISSION_TICK_FLOOR Lever 3: dispatch on the prepared send plan.
-                // An active job carries a `SendPlan` built on MAIN at the freeze
-                // point (frozen `DiffMask`s + frozen dirty domain + live masks
-                // already cleared), so this lagged transmit reads ZERO live
-                // per-user diff state. A job without a plan (not expected on this
-                // path) falls back to a synchronous prepare+transmit, which is
-                // only consistent if the live bitset isn't being mutated
-                // concurrently — i.e. while the park still serializes (L3.2).
-                let _ = job.take_frozen_dirty();
-                match job.take_send_plan() {
-                    Some(plan) => {
-                        // L3 seam Step 5: drain the ACK channel in the worker
-                        // preamble (before transmit) so `sent_updates` is
-                        // consumed on the send side — single-owner. The no-plan
-                        // fallback below drains inside `send_all_packets`.
-                        send.drain_all_acks();
-                        send.transmit_send_job(job, plan);
-                    }
-                    None => send.send_all_packets(job),
-                }
-                #[cfg(feature = "pipeline_timing")]
-                crate::pipeline_timing::record_send(_t_send.elapsed().as_nanos() as u64);
-
-                // Re-deposit before looping back to the park checkpoint.
-                loop {
-                    match send_slot.try_lock() {
-                        Some(mut g) => {
-                            *g = Some(send);
-                            break;
-                        }
-                        None => {
-                            thread::sleep(std::time::Duration::from_micros(100));
-                        }
-                    }
-                }
-            } else {
-                // Nothing buffered yet (one-tick warmup) or nothing to send:
-                // re-deposit and bounded idle-wait so park_workers() wakes us
-                // instantly; the 100µs bound re-polls for the next job. (T1)
-                loop {
-                    match send_slot.try_lock() {
-                        Some(mut g) => {
-                            *g = Some(send);
-                            break;
-                        }
-                        None => {
-                            thread::sleep(std::time::Duration::from_micros(100));
-                        }
-                    }
-                }
-                {
-                    let mut g = park.body_sleep_mu.lock();
-                    if !park.park.load(Ordering::SeqCst) && !shutdown.load(Ordering::SeqCst) {
-                        park.body_sleep_cv
-                            .wait_for(&mut g, std::time::Duration::from_micros(100));
-                    }
-                    drop(g);
-                }
-                continue;
-            }
-        }
-    }
-}
-
 // ─── Main-side drain system ────────────────────────────────────────────────
 
 /// Core receive drain logic: drains `ReceiveOutput` from the channel
@@ -1361,7 +528,7 @@ pub fn drain_recv_impl_split(
 
     let receiver = world
         .get_resource::<PluginInternalState>()
-        .and_then(|s| s.recv_out_chan_rx.lock().as_ref().cloned());
+        .and_then(|s| s.runtime.recv_out_receiver());
     let Some(receiver) = receiver else { return };
 
     let sim_receiver = world
