@@ -12,7 +12,7 @@ use crate::Historian;
 use crate::{
     connection::tick_buffer_messages::TickBufferMessages,
     events::main_events::WorldPacketEvent,
-    server::{main_server::MainServer, world_server::ResidentWorldServer},
+    server::{main_server::MainServer, world_server::InternalWorldServer},
     transport::Socket,
     transport::{PacketChannel, PacketSender},
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
@@ -51,7 +51,7 @@ use crate::{
 pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
     main_server: MainServer,
     outstanding_main_events: MainEvents,
-    world_server: ResidentWorldServer<E>,
+    world_server: InternalWorldServer<E>,
     to_world_sender_opt: Option<Box<dyn PacketSender>>,
 }
 
@@ -84,7 +84,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
                 protocol_id,
             ),
             outstanding_main_events: MainEvents::default(),
-            world_server: ResidentWorldServer::new(server_config, protocol),
+            world_server: InternalWorldServer::new(server_config, protocol),
             to_world_sender_opt: None,
         }
     }
@@ -163,7 +163,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     ///
     /// [`Events`]: crate::Events
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
-        // Public API stays by-value; `ResidentWorldServer::process_all_packets` now takes
+        // Public API stays by-value; `InternalWorldServer::process_all_packets` now takes
         // `&mut W` (G8b) — reborrow here, byte-identical.
         self.world_server.process_all_packets(&mut world, now);
     }
@@ -369,7 +369,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// MISSION_PIPELINE_API_BOUNDARY G7: a [`crate::pipeline_actors::SendStateView`]
     /// backed by this server's shared state — drives the core registry-free
-    /// snapshot assembler. See [`crate::ResidentWorldServer::send_state_view`].
+    /// snapshot assembler. See [`crate::InternalWorldServer::send_state_view`].
     pub fn send_state_view(&self) -> crate::pipeline_actors::SendStateView<E> {
         self.world_server.send_state_view()
     }
@@ -379,7 +379,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// at the freeze point: capture each component's frozen `DiffMask` and clear
     /// the live per-user mask. The transmit half then serializes it without
     /// reading any live per-user diff state — the crux of the correct one-tick
-    /// send lag. See [`crate::ResidentWorldServer::prepare_send_job`].
+    /// send lag. See [`crate::InternalWorldServer::prepare_send_job`].
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(
         &mut self,
         world: &W,
@@ -389,7 +389,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// MISSION_TICK_FLOOR Lever 3 — TRANSMIT half. Serialize + send a prepared
     /// [`naia_shared::SendPlan`] against the snapshot `world`, reading zero live
-    /// per-user diff state. See [`crate::ResidentWorldServer::transmit_send_job`].
+    /// per-user diff state. See [`crate::InternalWorldServer::transmit_send_job`].
     pub fn transmit_send_job<W: WorldRefType<E> + Sync>(
         &mut self,
         world: W,
@@ -400,7 +400,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
 
     /// L3 send-state seam Step 5 — send-side ACK drain (worker-preamble
     /// equivalent). Call before `transmit_send_job` when driving the lagged
-    /// transmit directly. See [`crate::ResidentWorldServer::drain_all_acks`].
+    /// transmit directly. See [`crate::InternalWorldServer::drain_all_acks`].
     pub fn drain_all_acks(&mut self) {
         self.world_server.drain_all_acks();
     }

@@ -210,7 +210,7 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
 
     // Manufacture a RecvConnection directly via the crate-internal
     // `new_connection_pair` factory, mirroring what
-    // `ResidentWorldServer::finalize_connection` does after handshake.
+    // `InternalWorldServer::finalize_connection` does after handshake.
     let address: SocketAddr = "127.0.0.1:54300".parse().unwrap();
     let user_key = UserKey::from_u64(42);
     let gwm_guard = recv.state.shared.global_world_manager.read();
@@ -450,7 +450,7 @@ fn configure_unpublish_captures_owner_addr_before_transition() {
 /// MISSION_USER_ONLY_SEES_SIM Phase D.3b.3 (2026-05-19) — `CoordHandle::receive_user`
 ///
 /// Verifies that `CoordHandle::receive_user(user_key, addr)` inserts the user
-/// into `sim_handle.state.user_store` exactly as `ResidentWorldServer::receive_user` does,
+/// into `sim_handle.state.user_store` exactly as `InternalWorldServer::receive_user` does,
 /// confirmed via the existing `user_exists` query method.
 #[test]
 fn sim_handle_receive_user_inserts_into_user_store() {

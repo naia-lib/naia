@@ -37,7 +37,7 @@ use naia_shared::{EntityAuthStatus, Protocol, Tick, WorldMutType, WorldRefType};
 
 use crate::{
     room::RoomKey, server::ServerShared, user::UserKey, EntityOwner, ReceiveOutput, RecvHandle,
-    ReplicationConfig, SendHandle, ServerConfig, ResidentWorldServer,
+    ReplicationConfig, SendHandle, ServerConfig, InternalWorldServer,
 };
 
 use super::handles::CoordHandle;
@@ -50,7 +50,7 @@ use super::ServerEntityConverter;
 /// See module-level docs for the design overview.
 pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// Coordination handle (main-thread only). Stored as `Option` so the
-    /// handle can be temporarily moved into a `ResidentWorldServer` for operations
+    /// handle can be temporarily moved into a `InternalWorldServer` for operations
     /// that require full-server access (e.g., `io_load` via [`Self::listen`]).
     pub(super) coord: Option<CoordHandle<E>>,
     /// Park-window slot shared with the recv worker.
@@ -94,7 +94,7 @@ pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
-    /// Construct a [`ResidentWorldServer<E>`] and immediately split it into a
+    /// Construct a [`InternalWorldServer<E>`] and immediately split it into a
     /// [`PipelinedServer<E>`].
     ///
     /// This is the primary entry point for consumers. Pass the result to the
@@ -102,7 +102,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// resource), then call [`Self::listen`] to bind a socket and drive ticks
     /// with [`Self::tick`].
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-        let ws = ResidentWorldServer::<E>::new(server_config, protocol);
+        let ws = InternalWorldServer::<E>::new(server_config, protocol);
         let (coord_state, recv, send) = ws.into_pipeline_handles();
         let shared: Arc<ServerShared<E>> = Arc::clone(&recv.state.shared);
         let coord = CoordHandle { state: coord_state, shared };
@@ -273,7 +273,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     }
 
     /// Bind a transport socket: splits the socket into its I/O handles and
-    /// calls `io_load` on the reassembled `ResidentWorldServer`.
+    /// calls `io_load` on the reassembled `InternalWorldServer`.
     ///
     /// This is the G2 startup-window entry point. Equivalent to:
     /// ```ignore
@@ -288,16 +288,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         self.with_world_server(|ws| ws.io_load(ps, pr));
     }
 
-    /// Temporarily reassemble a [`crate::ResidentWorldServer`] and invoke `f` against it.
+    /// Temporarily reassemble a [`crate::InternalWorldServer`] and invoke `f` against it.
     ///
-    /// All three handles are moved into the `ResidentWorldServer`; after `f` returns
+    /// All three handles are moved into the `InternalWorldServer`; after `f` returns
     /// they are re-split and restored. Used for ops that require full-server
     /// access (e.g. `entity_replication_config` until G3 adds it to `CoordHandle`).
     ///
     /// Workers must be parked (or not yet started) before calling this.
     pub fn with_world_server<R>(
         &mut self,
-        f: impl FnOnce(&mut crate::ResidentWorldServer<E>) -> R,
+        f: impl FnOnce(&mut crate::InternalWorldServer<E>) -> R,
     ) -> R {
         let coord = self.coord.take().expect(
             "PipelinedServer::with_world_server: CoordHandle not available",
@@ -310,7 +310,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         );
 
         let coord_state = coord.state;
-        let mut ws = ResidentWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
+        let mut ws = InternalWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
         let result = f(&mut ws);
         let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
         let shared = Arc::clone(&recv_state.shared);
@@ -328,7 +328,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
 // MISSION_PIPELINE_API_BOUNDARY G3a (Connor 2026-06-29): every public
 // coord-only op on [`CoordHandle<E>`] is mirrored here as a thin forwarding
 // method so consumers operate on the unified [`PipelinedServer<E>`] handle
-// directly — no `pipeline.coord_mut().method()` ceremony, no `ResidentWorldServer`
+// directly — no `pipeline.coord_mut().method()` ceremony, no `InternalWorldServer`
 // reassembly. All methods delegate to `self.coord()` / `self.coord_mut()`,
 // which panic only inside an in-flight `tick`/`with_world_server` window (the
 // pipelined consumer calls these from the parked main thread, outside that
@@ -527,7 +527,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
 
         // D0 (cont.): apply each non-empty output's decoded entity ops to `world`
         // in FIFO order, threading the handles. Reborrow `world` per output. Empty
-        // outputs skip the `ResidentWorldServer` reassembly (matches the prior early
+        // outputs skip the `InternalWorldServer` reassembly (matches the prior early
         // return) — the handles round-trip unchanged.
         for output in outputs.iter_mut() {
             if output.is_empty() {

@@ -1,10 +1,10 @@
-//! Recv-thread state owned by `ResidentWorldServer` (step 4-D).
+//! Recv-thread state owned by `InternalWorldServer` (step 4-D).
 //!
 //! Bundles the recv-thread-exclusive fields that previously lived directly
-//! on `ResidentWorldServer`. Step 4-E moves this struct out from under
-//! `Arc<Mutex<ResidentWorldServer>>` into `RecvHandle<E>` directly (and adds
+//! on `InternalWorldServer`. Step 4-E moves this struct out from under
+//! `Arc<Mutex<InternalWorldServer>>` into `RecvHandle<E>` directly (and adds
 //! `recv_user_connections` + `recv_io` once the symmetric `SendState`
-//! extraction lifts the matching pieces out of `ResidentWorldServer`).
+//! extraction lifts the matching pieces out of `InternalWorldServer`).
 
 use std::{
     collections::{HashMap, HashSet},
@@ -28,7 +28,7 @@ use crate::{
     user::UserKey,
 };
 
-/// Bundles the recv-thread-exclusive `ResidentWorldServer` fields (step 4-D).
+/// Bundles the recv-thread-exclusive `InternalWorldServer` fields (step 4-D).
 pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
     /// Periodic outer-loop tick that drives `handle_disconnects`.
     pub(crate) timeout_timer: Timer,
@@ -64,12 +64,12 @@ pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
 
     /// Per-address map of recv-side connection halves.
     ///
-    /// Populated by `ResidentWorldServer::into_pipeline_states()` when the
+    /// Populated by `InternalWorldServer::into_pipeline_states()` when the
     /// pipeline coordinator takes ownership; empty in serial mode
-    /// (where `ResidentWorldServer::user_connections` holds the full
+    /// (where `InternalWorldServer::user_connections` holds the full
     /// `Connection` wrappers). Once the recv thread runs against
     /// `RecvState` directly (step 4-F), this map replaces
-    /// `ResidentWorldServer::user_connections` for recv-path lookups.
+    /// `InternalWorldServer::user_connections` for recv-path lookups.
     pub recv_user_connections: HashMap<SocketAddr, RecvConnection>,
 
     /// Receive half of the transport (step 4-E.2a). Owned here so the
@@ -87,7 +87,7 @@ pub struct RecvState<E: Copy + Eq + std::hash::Hash + Send + Sync> {
     /// publishes immediately on the cross-half atomic), then snapshots
     /// the in-flight `BitReader` into an `OwnedBitReader` and pushes
     /// here. In serial mode the queue drains inline at the tail of
-    /// `ResidentWorldServer::receive_all_packets`; in pipeline mode the
+    /// `InternalWorldServer::receive_all_packets`; in pipeline mode the
     /// coordinator drains via `SendHandle::process_recv_packets` (4-E.2f).
     pub(crate) pending_data_packets: Vec<(SocketAddr, Tick, OwnedBitReader)>,
 }
@@ -124,7 +124,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 
     /// Recv-only socket-read loop (step 4-F.naia.c.2b).
     ///
-    /// Body of `ResidentWorldServer::receive_all_packets`'s recv-side work,
+    /// Body of `InternalWorldServer::receive_all_packets`'s recv-side work,
     /// hoisted onto `RecvState` so `RecvHandle::receive` can drive it
     /// directly on the recv thread. Touches ONLY `self.*` fields
     /// (`recv_user_connections`, `recv_io`, `pending_data_packets`,
@@ -134,7 +134,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
     /// Specifically does NOT touch `SendState` — every cross-half hop
     /// goes through a queue on `ServerShared`.
     ///
-    /// In serial mode `ResidentWorldServer::receive_all_packets` calls this and
+    /// In serial mode `InternalWorldServer::receive_all_packets` calls this and
     /// then runs the coordination-stage `drain_pending_handshakes` +
     /// `SendState::process_recv_packets` post-passes; in pipeline mode
     /// `RecvHandle::receive` calls this and drains the
@@ -261,7 +261,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 
     /// Advance the tick clock and return any newly-fired tick events
     /// (step 4-F.naia.c.2b — recv-side equivalent of
-    /// `ResidentWorldServer::take_tick_events`).
+    /// `InternalWorldServer::take_tick_events`).
     pub fn take_tick_events(&mut self, now: &naia_shared::Instant) -> TickEvents {
         // Drain ALL ticks due at `now` (grid catch-up): `recv_server_tick`
         // advances the grid by one interval per call, so loop until it reports

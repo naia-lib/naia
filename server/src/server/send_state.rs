@@ -1,6 +1,6 @@
 //! Send-thread state owned by the pipeline coordinator (step 4-E).
 //!
-//! After `ResidentWorldServer::into_pipeline_states()` consumes the ResidentWorldServer,
+//! After `InternalWorldServer::into_pipeline_states()` consumes the InternalWorldServer,
 //! `SendState<E>` carries every field the send thread needs:
 //! `send_user_connections` (the send halves of every connection), the
 //! per-user priority layer, the outbound `PacketSender`, and a clone of
@@ -53,7 +53,7 @@ use crate::{
     ScopeExit,
 };
 
-/// Send-thread-exclusive state lifted out of `ResidentWorldServer` (step 4-E).
+/// Send-thread-exclusive state lifted out of `InternalWorldServer` (step 4-E).
 pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
     /// Per-address map of send-side connection halves. Each holds a clone
     /// of the matching connection's `Arc<ConnectionShared>` for ack/RTT
@@ -184,7 +184,7 @@ pub(crate) const SCOPE_RETRY_MAX: u8 = 16;
 
 impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Periodic ping dispatch (step 4-F.naia.c.2c — relocated from
-    /// `ResidentWorldServer::handle_pings`).
+    /// `InternalWorldServer::handle_pings`).
     ///
     /// Send-side because every operation other than
     /// `recv_conn.ping_manager.write_ping(...)` is send-side: the
@@ -196,7 +196,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// `ping_manager.should_send_ping()` / `write_ping(...)` can run
     /// against the recv-half body data.
     ///
-    /// Serial mode: called from `ResidentWorldServer::receive_all_packets` with
+    /// Serial mode: called from `InternalWorldServer::receive_all_packets` with
     /// `&mut self.recv.recv_user_connections`. Pipeline mode: called by
     /// the coordinator with `&mut recv_handle.state.recv_user_connections`
     /// either standalone or alongside `process_recv_packets`.
@@ -243,7 +243,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Coordinator-stage cross-half processing (step 4-F.naia.c.2b).
     ///
     /// Runs the work that used to live at the tail of
-    /// `ResidentWorldServer::receive_all_packets` and inside
+    /// `InternalWorldServer::receive_all_packets` and inside
     /// `decode_pending_data_packets`. Takes a `&mut` borrow of the
     /// recv-side connection map so the tick-buffer decode can mutate
     /// `RecvConnection::tick_buffer` alongside the send-side ack /
@@ -359,7 +359,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// ConnectRequest response) enqueue here because they cannot touch
     /// `SendState::send_io` in pipeline mode.
     ///
-    /// Relocated from `ResidentWorldServer::flush_pending_outbound_packets` in
+    /// Relocated from `InternalWorldServer::flush_pending_outbound_packets` in
     /// step 4-F.naia.h so the send thread can drain inline at the top of
     /// `SendState::send_all_packets`.
     pub(crate) fn flush_pending_outbound_packets(&mut self) {
@@ -378,7 +378,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Periodic heartbeat sweep — emits a heartbeat packet to every
     /// connection that hasn't sent recently. Send-side only (the header
     /// reads the cross-half ACK snapshot via the shared atomic).
-    /// Relocated from `ResidentWorldServer::handle_heartbeats` in 4-F.naia.h.
+    /// Relocated from `InternalWorldServer::handle_heartbeats` in 4-F.naia.h.
     pub(crate) fn handle_heartbeats(&mut self) {
         if !self.heartbeat_timer.ringing() {
             return;
@@ -395,7 +395,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Sweep `should_send_empty_ack` flags and emit ACK-only packets.
-    /// Relocated from `ResidentWorldServer::handle_empty_acks` in 4-F.naia.h.
+    /// Relocated from `InternalWorldServer::handle_empty_acks` in 4-F.naia.h.
     pub(crate) fn handle_empty_acks(&mut self) {
         let tm_guard = self.shared.time_manager.read();
         let tm: &TimeManager = &*tm_guard;
@@ -435,7 +435,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Pipeline-mode send-half tick body (step 4-F.naia.h).
     ///
     /// Runs every send-side step a tick requires AFTER the coordinator
-    /// has called `ResidentWorldServer::run_send_preamble` (which performs the
+    /// has called `InternalWorldServer::run_send_preamble` (which performs the
     /// coordination-stage `global_priority` publish + `update_entity_scopes` +
     /// `flush_pending_auth_grants` work it owns).
     ///
@@ -461,7 +461,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// C.6 prep — split the per-tick send preamble out of
     /// `send_all_packets` so cyberlith's Send SubApp can run it on the
     /// Send-owned thread before constructing a `SnapshotWorld<E>`,
-    /// without first reassembling the ResidentWorldServer.
+    /// without first reassembling the InternalWorldServer.
     ///
     /// The preamble:
     ///   1. Drains pending `RoomChange`s from `scope_change_queue` into
@@ -473,7 +473,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///   4. Sweeps `handle_heartbeats` + `handle_empty_acks`.
     ///
     /// All four steps need only `SendState` + `Arc<ServerShared>` — no
-    /// reassembled ResidentWorldServer, no world snapshot. Idempotent within a
+    /// reassembled InternalWorldServer, no world snapshot. Idempotent within a
     /// tick: setting `preamble_done_this_tick = true` causes the
     /// subsequent `send_all_packets` to skip its inline preamble.
     ///
@@ -547,15 +547,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// C.6 prep — send a message to the user at `address` without
-    /// reassembling the ResidentWorldServer.
+    /// reassembling the InternalWorldServer.
     ///
-    /// `ResidentWorldServer::send_message` looks up `user_key → address` via
+    /// `InternalWorldServer::send_message` looks up `user_key → address` via
     /// `sim_handle.user_store`, then dispatches against the send-side
     /// connection and message manager. In the pipeline architecture
     /// (cyberlith Send SubApp permanently holds `SendHandle`), the
     /// caller resolves `user_key → address` via
     /// [`crate::pipeline_actors::CoordHandle::user_address`] once and
-    /// then calls this method directly — no per-tick ResidentWorldServer
+    /// then calls this method directly — no per-tick InternalWorldServer
     /// reassembly.
     ///
     /// Returns `true` if the message was queued. Returns `false` if
@@ -1205,7 +1205,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// against `send_user_connections`.
     ///
     /// Each op is a verbatim relocation of the corresponding statement in
-    /// `ResidentWorldServer::{publish_entity, unpublish_entity,
+    /// `InternalWorldServer::{publish_entity, unpublish_entity,
     /// entity_enable_delegation, enable_delegation_client_owned_entity,
     /// entity_disable_delegation}` — same per-connection call, same
     /// order. The gwm writes already ran (immediately) in
@@ -1385,7 +1385,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
     }
 
-    /// Send-side equivalent of `ResidentWorldServer::entity_global_idx`
+    /// Send-side equivalent of `InternalWorldServer::entity_global_idx`
     /// (world_server.rs:3946) — resolve the dense `GlobalEntityIndex`
     /// via the shared diff handler.
     fn configure_entity_global_idx(&self, global_entity: &GlobalEntity) -> GlobalEntityIndex {
@@ -1404,7 +1404,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.send_user_connections.get(addr).map(|c| c.user_key)
     }
 
-    /// Mirror of `ResidentWorldServer::enable_delegation_client_owned_entity`'s
+    /// Mirror of `InternalWorldServer::enable_delegation_client_owned_entity`'s
     /// Send-half (world_server.rs:2719) for the deferred drain. The gwm
     /// publicity/ownership/auth writes are performed HERE (not in the
     /// Coord method) because they are interleaved with per-connection
@@ -1606,7 +1606,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///
     /// Companion to [`apply_pending_send_preamble`] (which only drains
     /// `RoomChange` variants). Together the two methods restore the full
-    /// body of the legacy `ResidentWorldServer::run_send_preamble` →
+    /// body of the legacy `InternalWorldServer::run_send_preamble` →
     /// `update_entity_scopes` → `drain_scope_change_queue` chain for the
     /// pipeline-mode callers that hold a `SendHandle` directly.
     ///
@@ -1721,7 +1721,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 ScopeChange::UserLeftRoom(user_key, room_key) => {
                     // Despawn / pause every entity that was in the
                     // departed room and isn't covered by another shared
-                    // room. Mirrors legacy `ResidentWorldServer::drain_scope_change_queue`
+                    // room. Mirrors legacy `InternalWorldServer::drain_scope_change_queue`
                     // UserLeftRoom arm.
                     let entity_list: Vec<(GlobalEntity, E)> = self
                         .room_entities_map
@@ -1842,7 +1842,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Per-(user, entity) scope evaluator. Mirrors the body of legacy
-    /// `ResidentWorldServer::apply_scope_for_user` (server/src/server/world_server.rs
+    /// `InternalWorldServer::apply_scope_for_user` (server/src/server/world_server.rs
     /// ~lines 3712-3894), but reads only from `SendState` + `shared` +
     /// the per-call `world` + `user_addresses` snapshot.
     ///
@@ -1852,7 +1852,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///    from `SendState`. Replicated resources publish via their own
     ///    code path (server/src/server/world_server.rs §RESOURCES_PLAN)
     ///    and are NOT exercised by the cyberlith pipeline's
-    ///    `apply_pending_scope_changes` call (the legacy ResidentWorldServer
+    ///    `apply_pending_scope_changes` call (the legacy InternalWorldServer
     ///    `send_all_packets` path still runs `drain_scope_change_queue`
     ///    with the live registry). Treating `is_resource` as `false`
     ///    here is safe for the pipeline-mode caller: it only flips the
@@ -2106,11 +2106,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 
     // ====================================================================
     // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — host-sync
-    // worldless ops, relocated from `ResidentWorldServer` so the pipeline-mode
+    // worldless ops, relocated from `InternalWorldServer` so the pipeline-mode
     // host-sync drain can run handle-direct (no `run_with_world_server`
-    // reassembly). Each mirrors its `ResidentWorldServer` namesake field-for-field
+    // reassembly). Each mirrors its `InternalWorldServer` namesake field-for-field
     // — identical lock order, identical writes — so the wire output is
-    // byte-identical. The `ResidentWorldServer::*_worldless` methods are unchanged
+    // byte-identical. The `InternalWorldServer::*_worldless` methods are unchanged
     // (they remain the serial-mode path + the parity oracle in tests).
     //
     // Cross-half ownership (audited end-to-end against
@@ -2124,7 +2124,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     //   (room cache cleanup). Those live on `CoordinatorState`, so the
     //   method takes `&mut CoordinatorState<E>`.
 
-    /// Pipeline-mode `is_listening`. Mirrors `ResidentWorldServer::is_listening`
+    /// Pipeline-mode `is_listening`. Mirrors `InternalWorldServer::is_listening`
     /// (`world_server.rs:251`) — reads only `send_io.is_loaded()`. The
     /// loaded flag is Send-side state, so this lives on `SendState`.
     pub(crate) fn is_listening(&self) -> bool {
@@ -2132,7 +2132,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Pipeline-mode `insert_component_worldless`. Byte-for-byte mirror of
-    /// `ResidentWorldServer::insert_component_worldless` (`world_server.rs:2397`)
+    /// `InternalWorldServer::insert_component_worldless` (`world_server.rs:2397`)
     /// with `excluding_user_opt = None` inlined (the host-sync drain always
     /// passes `None`, so the `sim_handle.user_store` lookup in
     /// `insert_new_component_into_entity_scopes` is dead — omitted here).
@@ -2212,7 +2212,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Pipeline-mode `remove_component_worldless`. Byte-for-byte mirror of
-    /// `ResidentWorldServer::remove_component_worldless` (`world_server.rs:2492`).
+    /// `InternalWorldServer::remove_component_worldless` (`world_server.rs:2492`).
     pub(crate) fn remove_component_worldless(
         &mut self,
         world_entity: &E,
@@ -2252,7 +2252,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     }
 
     /// Pipeline-mode `despawn_entity_worldless`. Byte-for-byte mirror of
-    /// `ResidentWorldServer::despawn_entity_worldless` (`world_server.rs:2150`)
+    /// `InternalWorldServer::despawn_entity_worldless` (`world_server.rs:2150`)
     /// including the inlined `cleanup_entity_replication` +
     /// `despawn_entity_from_all_connections` private helpers. Takes
     /// `&mut CoordinatorState<E>` because the priority-mirror eviction and
@@ -2304,7 +2304,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             .despawn_by_global(&global_entity);
     }
 
-    /// Inlined `ResidentWorldServer::despawn_entity_from_all_connections`
+    /// Inlined `InternalWorldServer::despawn_entity_from_all_connections`
     /// (`world_server.rs:2199`). Resolves the global idx, clears
     /// `idx_to_world`, and despawns the entity from every connection that
     /// has it in scope.
@@ -2338,7 +2338,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
 /// the per-user `UserPriorityState<E>` plus the read-only
 /// `GlobalPriorityState<E>` layer.
 ///
-/// Relocated from `ResidentWorldServer::WorldServerPriorityHook` in 4-F.naia.h
+/// Relocated from `InternalWorldServer::WorldServerPriorityHook` in 4-F.naia.h
 /// so the hook lives next to its sole call site in
 /// `SendState::send_all_packets`.
 struct SendStatePriorityHook<'a, E: Copy + Eq + Hash + Send + Sync> {
@@ -2397,7 +2397,7 @@ pub(crate) fn scope_retry_decision(current: u8) -> Option<u8> {
 /// Each op maps to a `WorldMutType` hook (`entity_publish` /
 /// `entity_unpublish` / `entity_enable_delegation` /
 /// `entity_disable_delegation`) — a verbatim relocation of the
-/// corresponding `world.*` call in `ResidentWorldServer::{publish_entity,
+/// corresponding `world.*` call in `InternalWorldServer::{publish_entity,
 /// unpublish_entity, entity_enable_delegation, entity_disable_delegation}`.
 /// Reads the POST-transition gwm (the Coord method already wrote it),
 /// exactly as the legacy synchronous path reads it after its own gwm

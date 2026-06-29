@@ -1,25 +1,25 @@
 //! Cross-half orchestration helpers — Phase B.7 of MISSION_SIM_OWNS_WORLD.
 //!
 //! Pipeline-mode handles ([`CoordHandle`], [`RecvHandle`], [`SendHandle`])
-//! each own one slice of what `ResidentWorldServer` formerly owned monolithically.
-//! Several user-facing operations on `ResidentWorldServer` (e.g. `entity_take_authority`,
+//! each own one slice of what `InternalWorldServer` formerly owned monolithically.
+//! Several user-facing operations on `InternalWorldServer` (e.g. `entity_take_authority`,
 //! `room_mut.add_user`, `send_message`, `broadcast_message`) read or
 //! mutate state that crosses multiple halves. Implementing them as direct
 //! handle methods would require either (1) duplicating ~1.5k LOC of
-//! `ResidentWorldServer` body or (2) introducing a `WorldServerBorrow<'a>`
+//! `InternalWorldServer` body or (2) introducing a `WorldServerBorrow<'a>`
 //! lifetime-bound shim that duplicates the same method surface against
 //! `&mut` borrows.
 //!
 //! Instead, [`run_with_world_server`] takes the three handles by value,
-//! reassembles them into a `ResidentWorldServer` via [`ResidentWorldServer::from_pipeline_states`],
+//! reassembles them into a `InternalWorldServer` via [`InternalWorldServer::from_pipeline_states`],
 //! invokes the caller's closure against the reassembled server, and
-//! re-splits via [`ResidentWorldServer::into_pipeline_states`]. The pattern
-//! preserves single-source-of-truth for every ResidentWorldServer method body
-//! and lets cyberlith systems call the existing `ResidentWorldServer` API verbatim
+//! re-splits via [`InternalWorldServer::into_pipeline_states`]. The pattern
+//! preserves single-source-of-truth for every InternalWorldServer method body
+//! and lets cyberlith systems call the existing `InternalWorldServer` API verbatim
 //! during the B.7 transitional phase.
 //!
 //! [`apply_recv_to_world`] is the pipeline-mode entry point that mirrors
-//! the (otherwise-internal) `ResidentWorldServer::receive_with_world` semantics:
+//! the (otherwise-internal) `InternalWorldServer::receive_with_world` semantics:
 //! it consumes a [`ReceiveOutput`] populated by [`RecvHandle::receive`],
 //! drives the cross-half `process_recv_packets` + world-mutation half
 //! of `process_all_packets`, accumulates the resulting world events
@@ -36,25 +36,25 @@ use naia_shared::{Instant, Tick, WorldMutType};
 use crate::server::{
     pipeline_handles::{RecvHandle, SendHandle},
     receive_output::ReceiveOutput,
-    ResidentWorldServer,
+    InternalWorldServer,
 };
 
 use super::handles::CoordHandle;
 
-/// Re-assemble the three pipeline handles into a `ResidentWorldServer<E>`, invoke
+/// Re-assemble the three pipeline handles into a `InternalWorldServer<E>`, invoke
 /// `f` against it, then split back into handles. Used by cyberlith B.7
-/// systems for cross-half `ResidentWorldServer` operations (room mutation, scope
+/// systems for cross-half `InternalWorldServer` operations (room mutation, scope
 /// writes that need world-entity → global-entity resolution,
 /// `send_message`, `broadcast_message`, `entity_take_authority`).
 ///
-/// Cost: one `ResidentWorldServer` struct construction + destruction per call.
+/// Cost: one `InternalWorldServer` struct construction + destruction per call.
 /// Each is a move of the three substates + an `Arc::clone` of `shared`;
 /// no allocation, no per-field copy of the inner maps.
 pub fn run_with_world_server<E, R>(
     sim_handle: CoordHandle<E>,
     recv: RecvHandle<E>,
     send: SendHandle<E>,
-    f: impl FnOnce(&mut ResidentWorldServer<E>) -> R,
+    f: impl FnOnce(&mut InternalWorldServer<E>) -> R,
 ) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>, R)
 where
     E: Copy + Eq + Hash + Send + Sync,
@@ -63,7 +63,7 @@ where
         state: coord_state,
         shared: _coord_shared,
     } = sim_handle;
-    let mut ws = ResidentWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
+    let mut ws = InternalWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
     let result = f(&mut ws);
     let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
     let shared = Arc::clone(&recv_state.shared);
@@ -106,19 +106,19 @@ where
 /// As of Phase D.2.4 this delegates to the Coord-only
 /// [`CoordHandle::configure_entity_replication`] + eager deferred-op
 /// drains (see the D.2.4 section below). Wire output remains
-/// byte-identical to the legacy `ResidentWorldServer::configure_entity_replication`
+/// byte-identical to the legacy `InternalWorldServer::configure_entity_replication`
 /// path — the B.2 test `sim_configure_entity_replication.rs` still
 /// enforces this against this exact facade, unchanged.
 ///
-/// # Historical: why B.2 originally reassembled `ResidentWorldServer`
+/// # Historical: why B.2 originally reassembled `InternalWorldServer`
 ///
 /// B.2 (commit `1e9cf38f`) shipped this facade as a thin wrapper around
-/// [`run_with_world_server`] that called `ResidentWorldServer::configure_entity_
+/// [`run_with_world_server`] that called `InternalWorldServer::configure_entity_
 /// replication` verbatim. The spec (`MISSION_USER_ONLY_SEES_SIM.md`
 /// §6.2) had proposed a true `CoordHandle::configure_entity_replication`
 /// with the Send-side acknowledgment deferred to
 /// `apply_pending_send_preamble` via a new `ScopeChange::ConfigureReplication`
-/// variant, but an end-to-end audit of `ResidentWorldServer::configure_entity_
+/// variant, but an end-to-end audit of `InternalWorldServer::configure_entity_
 /// replication` (`world_server.rs:1423`) found three blockers that
 /// deferred that design to Phase D.2 (each resolved there — see the
 /// D.2.4 section):
@@ -151,7 +151,7 @@ where
 ///
 /// # Phase D.2.4 (2026-05-19) — delegates to the Coord-only API
 ///
-/// As of D.2.4 this facade NO LONGER reassembles a `ResidentWorldServer` via
+/// As of D.2.4 this facade NO LONGER reassembles a `InternalWorldServer` via
 /// [`run_with_world_server`]. The three D.2 blockers quoted above were
 /// resolved by D.2.1–D.2.3:
 ///
@@ -185,7 +185,7 @@ where
 ///    variants from `scope_change_queue` and applies their Send leaf-ops;
 ///    every other variant (`EntityEnteredRoom`, `ScopeToggled`,
 ///    `RoomChange`, …) is left untouched in queue order. This matches
-///    the legacy facade exactly: `ResidentWorldServer::configure_entity_replication`
+///    the legacy facade exactly: `InternalWorldServer::configure_entity_replication`
 ///    applied the Send work inline WITHOUT running the per-tick send
 ///    preamble (no heartbeats / empty-acks / outbound flush / no
 ///    `preamble_done_this_tick` flag). Calling the broader
@@ -240,15 +240,15 @@ where
     (sim_handle, recv, send)
 }
 
-/// Re-split a `ResidentWorldServer<E>` back into the three handles. Used by
-/// callers that needed `&mut ResidentWorldServer` access alongside `&mut World`
+/// Re-split a `InternalWorldServer<E>` back into the three handles. Used by
+/// callers that needed `&mut InternalWorldServer` access alongside `&mut World`
 /// (e.g. `configure_entity_replication`) and so couldn't use the
 /// closure form of `run_with_world_server` — they construct the
-/// ResidentWorldServer manually via `ResidentWorldServer::from_pipeline_states` and
+/// InternalWorldServer manually via `InternalWorldServer::from_pipeline_states` and
 /// must re-package the result via this function (since the
 /// `Arc<ServerShared>` is `pub(crate)` to outside callers, they can't
 /// rebuild `CoordHandle` manually).
-pub fn split_world_server<E>(ws: ResidentWorldServer<E>) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
+pub fn split_world_server<E>(ws: InternalWorldServer<E>) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync,
 {
@@ -264,7 +264,7 @@ where
     )
 }
 
-/// Pipeline-mode equivalent of `ResidentWorldServer::receive_with_world` — closes
+/// Pipeline-mode equivalent of `InternalWorldServer::receive_with_world` — closes
 /// the world-mutation gap that [`RecvHandle::receive`] leaves open.
 ///
 /// `output` is the per-tick `ReceiveOutput<E>` previously produced by
@@ -300,7 +300,7 @@ where
         state: coord_state,
         shared: _coord_shared,
     } = sim_handle;
-    let mut ws = ResidentWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
+    let mut ws = InternalWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
 
     // Pre-stuff the already-collected handshake-time world events from
     // `RecvHandle::receive` into the reassembled server's recv-side
@@ -330,7 +330,7 @@ where
 
     // Cross-half decode step: the recv path skipped this because it
     // had no SendHandle. We replicate the second half of
-    // `ResidentWorldServer::receive_all_packets` here. The drain of
+    // `InternalWorldServer::receive_all_packets` here. The drain of
     // `received_addresses` + `pending_data_packets` mirrors the
     // pipeline-mode coordinator step from
     // `SendHandle::process_recv_packets`'s doc-comment.

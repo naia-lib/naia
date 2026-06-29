@@ -2,7 +2,7 @@ use std::{collections::hash_set::Iter, hash::Hash, net::SocketAddr};
 
 use naia_shared::BigMapKey;
 
-use crate::{server::ResidentWorldServer, RoomKey};
+use crate::{server::InternalWorldServer, RoomKey};
 
 /// Opaque handle to a connected user.
 ///
@@ -29,12 +29,12 @@ impl BigMapKey for UserKey {
 /// Obtained from [`Server::user`]. Lets you inspect the user's network
 /// address and room membership without borrowing the server mutably.
 pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s ResidentWorldServer<E>,
+    server: &'s InternalWorldServer<E>,
     key: UserKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
-    pub(crate) fn new(server: &'s ResidentWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &UserKey) -> Self {
         Self { server, key: *key }
     }
 
@@ -64,12 +64,12 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserRef<'s, E> {
 /// Obtained from [`Server::user_mut`]. Lets you move the user between rooms,
 /// read their network address, and queue a disconnect.
 pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s mut ResidentWorldServer<E>,
+    server: &'s mut InternalWorldServer<E>,
     key: UserKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserMut<'s, E> {
-    pub(crate) fn new(server: &'s mut ResidentWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &UserKey) -> Self {
         Self { server, key: *key }
     }
 

@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use super::{server::ResidentWorldServer, user::UserKey};
+use super::{server::InternalWorldServer, user::UserKey};
 
 /// Scoped read-only handle for a user's fine-grained entity scope.
 ///
@@ -10,12 +10,12 @@ use super::{server::ResidentWorldServer, user::UserKey};
 /// user's explicit scope (or if the server uses room-only scoping with no
 /// per-entity overrides).
 pub struct UserScopeRef<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s ResidentWorldServer<E>,
+    server: &'s InternalWorldServer<E>,
     key: UserKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeRef<'s, E> {
-    pub(crate) fn new(server: &'s ResidentWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &UserKey) -> Self {
         Self { server, key: *key }
     }
 
@@ -39,12 +39,12 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeRef<'s, E> {
 /// # }
 /// ```
 pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync> {
-    server: &'s mut ResidentWorldServer<E>,
+    server: &'s mut InternalWorldServer<E>,
     key: UserKey,
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync> UserScopeMut<'s, E> {
-    pub(crate) fn new(server: &'s mut ResidentWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &UserKey) -> Self {
         Self { server, key: *key }
     }
 

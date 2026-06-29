@@ -13,8 +13,8 @@ use crate::{
 /// - `disconnected_users`: pending handshake entries keyed by socket address
 ///
 /// Pure query methods are self-contained. Lifecycle methods that affect other
-/// `ResidentWorldServer` domains (connections, scope, priorities, rooms) stay on
-/// `ResidentWorldServer` as thin orchestration.
+/// `InternalWorldServer` domains (connections, scope, priorities, rooms) stay on
+/// `InternalWorldServer` as thin orchestration.
 pub(crate) struct UserStore {
     users: HashMap<UserKey, WorldUser>,
     /// Tracks users that have been pre-registered (via `receive_user`) but

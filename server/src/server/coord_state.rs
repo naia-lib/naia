@@ -1,4 +1,4 @@
-//! Coordinator-thread state owned by `ResidentWorldServer` (step 4-E.2a).
+//! Coordinator-thread state owned by `InternalWorldServer` (step 4-E.2a).
 //!
 //! Bundles the fields that are neither recv-thread-exclusive nor
 //! send-thread-exclusive nor cross-thread-shared. Later 4-E.2 sub-commits
@@ -22,7 +22,7 @@ use crate::request::{GlobalRequestManager, GlobalResponseManager};
 
 use super::{room_store::RoomStore, user_store::UserStore};
 
-/// Coordinator-thread state lifted out of `ResidentWorldServer` (step 4-E.2a).
+/// Coordinator-thread state lifted out of `InternalWorldServer` (step 4-E.2a).
 ///
 /// Fields marked with a `// → <step>` comment are migrated to a different
 /// owner in a later sub-commit; their location here is purely transitional.

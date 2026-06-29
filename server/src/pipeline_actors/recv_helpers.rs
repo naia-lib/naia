@@ -12,10 +12,10 @@
 //!   [`TickBufferMessages`] accumulator, ready to feed into a
 //!   [`crate::pipeline_actors::TickMessageRouter`].
 //!
-//! These mirror what `ResidentWorldServer::receive_with_world` does inline in
+//! These mirror what `InternalWorldServer::receive_with_world` does inline in
 //! the legacy serial path (`apply_receive_output` + tick-buffer-drain),
 //! but factored so the Recv SubApp can call them without holding a
-//! `ResidentWorldServer` or a `&mut World`.
+//! `InternalWorldServer` or a `&mut World`.
 //!
 //! # Scope note
 //!
