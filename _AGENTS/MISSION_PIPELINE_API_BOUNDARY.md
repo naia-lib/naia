@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G3a COMPLETE — adversarial audit run (§2h, verdict NEEDS-REVISION) — spec corrected; 3 DECISIONS NEEDED (editor scope C2/H3, Resident≡Pipelined spike H1) before G7 sign-off
+status: G3a COMPLETE — audit (§2h) incorporated + all blockers RESOLVED (editor in-scope, H3 single-world, §2e internal-queueing no-panic, G9pre spike scheduled) — G7 ready for sign-off
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -78,18 +78,20 @@ naia feature branch + cyberlith feature branch (naia path-dep repointed). Land a
 
 Bevy server apps access the server through the single `Server<'w>` `#[derive(SystemParam)]`, which wraps the private `#[derive(Resource)] enum ServerImpl`. Today: `Full(naia_server::Server<Entity>)` + `WorldOnly(WorldServer<Entity>)`. **Decision: add a third variant `Pipelined(PipelinedServer<Entity>)`** so pipelined consumers use the same `Server` param — no separate `PipelinedServer` SystemParam, no raw `ResMut<PipelinedServer>` + `.0.as_mut()` ceremony.
 
-**(corrected per §2h — the original panic-arm classification was wrong; C1/C2.)**
+**(REWRITTEN per §2h C1/C2 + Connor 2026-06-29 — NO panic arms; internal queueing.)**
 
-The error in the first draft was assuming "send-side methods" are not callable in pipelined mode. They are: during the park window (between `receive` and `send`) the `recv`/`send` handles are **held** on `PipelinedServer`, so message-send, tick-buffer reads, and authority ops are all valid — cyberlith does exactly this today (`send_message_to_user` in `broadcast_desync_snapshots`, `entity_take_authority` in `drain_sim_editor_ops`, both inside the window). The correct classification:
+The original panic-arm design was wrong. The pristine model: **every mutating unified-`Server` method is available in Pipelined mode from any system at any time** — it does not require the workers to be parked. Methods that can't apply immediately **queue into internal lock-protected buffers** and drain at the correct phase inside `receive`/`send`. This extends naia's *existing* deferred-queue pattern — `scope_change_queue`, `pending_world_hooks`, `pending_disconnect_requests` (`handles.rs`) — to the remaining mutating ops:
 
-- **Park-window-valid → REAL `Pipelined` arms** (the large majority). Three backing stores, all available during the window:
-  - *coord-backed* (rest on main between ticks): `create_room`, `room_*`, `user_*`, entity reads, `mark_entity_as_static`, `configure_entity_replication`, `current_tick` (the G3a set).
-  - *send-handle-backed* (the held `SendHandle`): `send_message`, `broadcast_message`, `broadcast`-style sends, scope fan-out — enqueue into per-connection outbound.
-  - *recv-handle-backed* (the held `RecvHandle`): `receive_tick_buffer_messages`, request/response receive.
-- **Genuinely-unavailable → panic arms (re-derived, must be empty or justified).** Only methods that need state truly absent in the window. The audit shows `entity_take_authority` is NOT one of these (editor cells reach it in-window) — see C2/G5b. **The panic set must be derived from actual park-window call sites in cyberlith, not assumed.** Target: empty.
-- *Outside-window* methods (`listen`, `accept_connection` at startup) are handled by the G2 startup-window path, not the per-tick param.
+- **Reads** (`entity_authority_status`, `user_keys`, `current_tick`, …) → return current coord state (rests on main); always valid.
+- **Coord mutations** (`create_room`, `room_*`, `configure_entity_replication`, `mark_entity_as_static`, `spawn_replicated`, `take_authority`, …) → already queue (or newly queue) into coord/shared buffers; drained at their defined phase.
+- **Message sends** (`send_message`, `broadcast_message`, `send_message_to_user`) → enqueue into a new internal `pending_outbound_messages` buffer, drained during `send`'s preamble (before transmit). This is what makes C1's desync broadcast and any future per-tick gameplay message work without the consumer touching a handle.
+- **Authority ops** (`entity_take_authority`, C2) → queue; drained at the editor-ops phase.
 
-This remains the chosen direction over a separate `PipelinedServer<'w>` param: single consumer-facing param. But the per-tick surface is far wider than the original draft claimed — message/authority/tick-buffer ops are first-class in pipelined mode.
+**NO method panics.** The park-window discipline disappears from the consumer's mental model entirely.
+
+**Byte-exactness constraint (load-bearing):** each queue must drain at the *same logical phase* cyberlith applies it today (e.g. `take_authority` BEFORE despawn-replication — `do_park_window_tick` Step 5 ordering; outbound messages before transmit). Drain-point fidelity is a G-impl correctness requirement, validated by the moat.
+
+This keeps the single consumer-facing param (over a separate `PipelinedServer<'w>`) AND makes the full mutating surface first-class in both modes. `listen`/`accept_connection` at startup remain the G2 startup-window path.
 
 ### 2f. Pristine end-state — one authored tick, two runners (PROPOSED — pending Connor sign-off, 2026-06-29)
 
@@ -171,9 +173,9 @@ Today the worker threads + park/unpark barrier + worker loops live in the **bevy
 
 **(per §2h M4)** G7 also owns the **Armed→Running lifecycle** transition (handle spawn + listen-before-startup ordering currently tangled with bevy `Startup`/`Resource` at `plugin_full.rs:609`), not just thread spawn.
 
-**(per §2h H3 — world model, DECISION NEEDED.)** `receive` is written `&mut W` (single world), but delegated/editor cells apply recv events to **two** worlds in one call: `drain_recv_impl_split(main, Some(sim_world), …)` (`open_park_window`). Confirm whether the post-`#21-P4` end state is single-world for recv-apply. If multi-world persists, `receive` needs a designed two-world/composite contract — not "the adapter's choice."
+**(per §2h H3 — RESOLVED:)** `receive` is single-world (the entity world) and returns `ReceiveOutput`; the bevy adapter fans the returned events into main vs sim `Messages<X>`. See the World-model section below.
 
-Between `receive` and `send` the consumer runs its own code with workers parked — calling `self.spawn_replicated(...)`, `self.room_add_entity(...)`, `self.send_message(...)`, `self.receive_tick_buffer_messages(tick)` (the §2e-corrected park-window-valid surface). This is the park window, now implicit.
+The consumer's own code can call `self.spawn_replicated(...)`, `self.room_add_entity(...)`, `self.send_message(...)`, `self.take_authority(...)`, `self.receive_tick_buffer_messages(tick)` **from any system, any time** (§2e internal-queueing model) — not only between `receive` and `send`. Mutations queue and drain at their defined phase.
 
 #### `do_park_window_tick` step ledger (per §2h M1 — nothing falls through)
 
@@ -214,9 +216,14 @@ Mapped to verified `SendHandle`/`SendState` methods, preserving cyberlith's load
    - **Resident / deterministic oracle:** `send_all_packets(snapshot)` (`:245`) inline; no slot, no lag.
 6. `unpark_workers()` — closes the window.
 
-#### World model (corrected per §2h H3)
+#### World model (RESOLVED per §2h H3 — core is single-world)
 
-`receive` takes `&mut W: WorldMutType` (applies recv events); `send` takes `&W: WorldRefType + Sync` (reads for the snapshot). In a single-world consumer these are the same world. **DECISION NEEDED:** cyberlith's delegated/editor cells apply recv events to *two* worlds in one call (`drain_recv_impl_split(main, Some(sim_world), …)`). The single-`&mut W` signature does NOT model that. Either (a) confirm the post-`#21-P4` end state is single-world for recv-apply and editor is the only two-world case (then scope editor per C2/G5b), or (b) design a two-world/composite-world contract for `receive` in core. Do not ship the single-world signature until this is resolved.
+Core `receive` returns the events as data; it mutates only the entity world:
+```rust
+pub fn receive<W: WorldMutType<E>>(&mut self, entity_world: &mut W) -> ReceiveOutput<E>;
+pub fn send<W: WorldRefType<E> + Sync>(&mut self, entity_world: &W);
+```
+The only world naia core mutates on recv is `entity_world` (spawn/despawn/component-apply). Connection-scoped events (Connect/Disconnect/Tick/Message/Request/Auth) and entity-scoped events are **returned in `ReceiveOutput`** — they touch no world in core. cyberlith's apparent "two worlds" (`apply_receive_output.rs:483-492`) is the **bevy adapter** fanning the returned events into bevy `Messages<X>` across main (connection-scoped) and sim (entity-scoped). That routing is adapter logic over `ReceiveOutput`; the core entity-op application targets the single `entity_world`. No composite-world contract in core.
 
 #### Open questions for sign-off
 
@@ -228,11 +235,11 @@ Mapped to verified `SendHandle`/`SendState` methods, preserving cyberlith's load
 
 A hostile audit (citations independently re-verified) found the factual layer solid but **§2e and §2f/§2g design not sign-off-ready**. Resolutions below; the affected sections are corrected in place and tagged "(corrected per §2h)".
 
-- **C1 (CRITICAL — CONFIRMED) — §2e panic arms break the moat.** `broadcast_desync_snapshots` calls `send.send_message_to_user::<DesyncDetectionChannel, WorldSnapshotRecord>` **inside the park window** (`server_access.rs:820`, called from `do_park_window_tick:1664`, gated `#[cfg(feature="desync_detection")]` — the moat build). §2e routed `send_message`/`broadcast_message` to `panic!` "unreachable in practice" — FALSE. **Resolution:** the §2e classification was wrong. Message-send is a **park-window-valid op** — the `SendHandle` is *held* during the window — so it gets a **REAL Pipelined arm** that enqueues into the held `SendHandle`'s per-connection outbound (exactly what the desync broadcast does today). §2e rewritten below.
-- **C2 (CRITICAL — CONFIRMED) — `entity_take_authority` panic arm contradicts editor cells.** `drain_sim_editor_ops` calls `ws.entity_take_authority(...)` via `run_with_naia_server` reassembly **inside the park window** (`server_access.rs:85`), for delegated/editor cells. §2e panics on it. **Resolution + DECISION NEEDED (Connor):** is the editor/delegated-cell path in scope for this mission? If yes, authority ops need real park-window arms (a coord/window-safe `take_authority`, not in G3a today) — add as **G5b**. If no, scope it out explicitly. *Defaulting to in-scope pending Connor.*
-- **H1 (HIGH — UNVERIFIED-RISK) — Resident≡Pipelined byte-identity is an unproven, fallback-pre-banned linchpin.** Today's deterministic oracle is pipeline-split + inline send (trimmed `SnapshotWorld`), NOT resident (full-world serialize via a different driver, `server.rs:364`). **Resolution:** promoted from "OPEN note" to a **hard G9 prerequisite spike** — prove byte-identity BEFORE adopting "no SendStrategy". The "not a knob to re-add" purity goal is **conditionally lifted**: if the spike fails, keep a pipelined-synchronous oracle. G9 corrected below.
+- **C1 (CRITICAL — CONFIRMED → RESOLVED) — §2e panic arms break the moat.** `broadcast_desync_snapshots` calls `send.send_message_to_user::<DesyncDetectionChannel, WorldSnapshotRecord>` **inside the park window** (`server_access.rs:820`, called from `do_park_window_tick:1664`, gated `#[cfg(feature="desync_detection")]` — the moat build). §2e routed `send_message`/`broadcast_message` to `panic!` "unreachable in practice" — FALSE (verified directly). **Resolution (Connor 2026-06-29):** NO panic arms. Message-send queues into an internal `pending_outbound_messages` buffer drained during `send` — works from any system. §2e fully rewritten to the internal-queueing model.
+- **C2 (CRITICAL — CONFIRMED → RESOLVED) — `entity_take_authority` panic arm contradicts editor cells.** `drain_sim_editor_ops` calls `ws.entity_take_authority(...)` via `run_with_naia_server` reassembly **inside the park window** (`server_access.rs:85`), for delegated/editor cells. **Resolution (Connor 2026-06-29): editor/delegated path is IN SCOPE.** Authority ops queue like every other mutation (§2e), drained at the editor-ops phase — **G5b** confirmed in-scope.
+- **H1 (HIGH — UNVERIFIED-RISK → SCHEDULED) — Resident≡Pipelined byte-identity is an unproven linchpin.** Today's deterministic oracle is pipeline-split + inline send (trimmed `SnapshotWorld`), NOT resident (full-world serialize via a different driver, `server.rs:364`). **Resolution (Connor 2026-06-29):** byte-identity confirmed a **hard G9 prerequisite spike (G9pre)**. The "deterministic oracle" = an execution MODE used by the determinism/desync harness, not a test suite: if G9pre passes, the harness runs `ServerMode::Resident` (inherently synchronous → deterministic); if it fails, retain a **workers-off / synchronous-send mode of the Pipelined runtime** (today's `deterministic` cfg behavior, promoted to a first-class `PipelinedServer` config). Either way a mode, not a suite.
 - **H2 (HIGH — CONFIRMED gap) — the bracket drops host-sync.** `drain_sim_host_sync_pipelined` (`server_access.rs:275`) reassembles `WorldServer` to bridge bevy change-detection → naia replication config; it's generic mechanism but appears nowhere in §2g, yet §6 forbids reassembly post-G10. **Resolution:** add host-sync placement to §2g (new **G6b**: coord/window-safe host-sync drain), OR prove every `HostSyncEvent` producer is retired by explicit G4/G5 `spawn_replicated`/`enable_replication`. Note: `drain_sim_host_sync_pipelined` still runs against the **Sim** world despite the `#21 P4` "main-world host-sync retired" claim — verify.
-- **H3 (HIGH — LIKELY-FLAW) — single-world `receive`/`send` ignores two-world recv-apply.** Delegated cells call `drain_recv_impl_split(main, Some(sim_world), …)` — recv events apply to **two** worlds in one call (`open_park_window`). §2g's `receive(&mut W)` is single-world. **Resolution + DECISION NEEDED (Connor):** confirm whether the post-`#21-P4` end state is single-world for recv-apply (editor's `delegated` branch suggests not). If multi-world persists, the core bracket needs a designed two-world/composite-world contract — NOT "the adapter's choice". §2g world-model corrected to flag this.
+- **H3 (HIGH — LIKELY-FLAW → RESOLVED) — single-world `receive`/`send`.** Traced (`apply_receive_output.rs:483-492`): the "two worlds" are NOT two entity worlds — they are **one entity world + event routing**. `entity_world` gets entity-scoped *events*; `world` (coordinator) gets connection-scoped events. The only thing naia **core mutates** is the entity world (spawn/despawn/component-apply). Everything else is `ReceiveOutput` returned as DATA. **Resolution:** core `receive<W: WorldMutType<E>>(&mut self, entity_world: &mut W) -> ReceiveOutput<E>` is genuinely single-world; the two-world *event fan-out* (writing bevy `Messages<X>` into main vs sim) is the bevy adapter routing the returned `ReceiveOutput` — adapter concern, not core. No composite-world contract needed. §2g world-model rewritten.
 - **M1 (MEDIUM) — "almost all generic" over-claims; needs a step ledger.** **Resolution:** §2g gains a line-by-line ledger of all ~10 `do_park_window_tick` steps → {core bracket | G4/G5/G6 op | consumer policy}, so nothing falls through (resource/lifecycle/scope-delta drains were unplaced).
 - **M2 (MEDIUM) — assembler panic-vs-skip divergence.** Confirmed the assembler CHAIN is sound (the bevy registry itself just calls `copy_to_box` — `snapshot_reader_registry.rs:64`), but `component_of_kind` panics on an unregistered kind whereas the registry path skips. **Resolution:** core assembler must **skip-on-unregistered** to match. Noted in §2g.
 - **M3 (MEDIUM) — "perf preserved by construction" ≠ moat-guaranteed.** The moat proves correctness, not speed; the `WorldRefType` assembler (HashMap + dyn dispatch + `copy_to_box`) may be slower than the registry's typed `get::<C>()`. **Resolution:** §6 gains a **numeric `bench_profile` per-phase gate** at G10 (not just "spans match"); decide up front whether the bevy adapter keeps its registry fast-path (if so, that's an acknowledged exception to "fully unified").
@@ -249,10 +256,10 @@ A hostile audit (citations independently re-verified) found the factual layer so
 | G2 | `SimPipeline::listen(socket)` startup-window API; `PluginInternalState::listen` delegates to it | ✅ COMPLETE (`1e851a73`) |
 | G3a | forwarding methods on `PipelinedServer<E>` for all coord-only ops | ✅ COMPLETE (`175d4bc7` rename + G3a impl) |
 | G3b | cyberlith D11 `CellCommandsExt` dies, replaced by direct `pipelined_server.method()` calls in the park window | PENDING (design signed off) |
-| G3c | unified `Server` param: add `ServerImpl::Pipelined(PipelinedServer<Entity>)` variant; **park-window-valid methods (coord-, send-handle-, and recv-handle-backed) get REAL arms** (incl. `send_message`/`broadcast_message`); panic set re-derived from actual call sites, target empty; retire raw `ResMut<PipelinedServer>` access | PENDING (design §2e corrected per §2h) |
+| G3c | unified `Server` param: add `ServerImpl::Pipelined(PipelinedServer<Entity>)` variant; **NO panic arms** — all mutating methods (incl. `send_message`/`broadcast_message`/`take_authority`) work from any system via internal queueing (§2e); reads return coord state; retire raw `ResMut<PipelinedServer>` access | PENDING (design §2e, internal-queueing model) |
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
-| G5b | **(per §2h C2)** coord/window-safe `entity_take_authority` (+ related authority ops editor/delegated cells use in-window) | PENDING — DECISION NEEDED: editor path in scope? |
+| G5b | **(per §2h C2 — editor/delegated path IN SCOPE, Connor 2026-06-29)** queued `entity_take_authority` (+ related authority ops), drained at the editor-ops phase | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
 | G6b | **(per §2h H2)** coord/window-safe host-sync drain (bevy change-detection → replication config), OR proof every `HostSyncEvent` producer is retired by explicit G4/G5 | PENDING |
 | G7 | **naia-server core `receive`/`send` bracket** (FIRST) — `PipelinedServer::receive(&mut world)` (park + single recv-drain + apply events) and `::send(&world)` (send-prep + snapshot + send-job + unpark); **+ moves the worker-thread runtime from the bevy adapter into core**. Explicit method sequence; consumer interleaves own code via unified `Server` ops. **No trait, no closures, no hooks.** **Supersedes** the old `with_parked_tick`. **Detailed design: §2g.** | PENDING (design §2g — pending sign-off) |
