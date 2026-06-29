@@ -13,7 +13,7 @@ use naia_bevy_shared::{
     HostSyncOwnedAddedTracking, ProcessPackets, Protocol, ReceivePackets, SendPackets,
     SharedPlugin, TranslateTickEvents, TranslateWorldEvents, WorldToHostSync, WorldUpdate,
 };
-use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, WorldServer};
+use naia_server::{shared::Protocol as NaiaProtocol, InternalWorldServer, Server, ServerConfig};
 
 use super::{
     component_event_registry::ComponentEventRegistry,
@@ -328,7 +328,7 @@ impl PluginType for Plugin {
             Some(ServerImpl::full(server))
         } else {
             let protocol: NaiaProtocol = config.protocol.into();
-            let server = WorldServer::<Entity>::new(config.server_config, protocol);
+            let server = InternalWorldServer::<Entity>::new(config.server_config, protocol);
             Some(ServerImpl::world_only(server))
         };
 

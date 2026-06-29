@@ -11,7 +11,7 @@ use naia_server::{
     shared::SocketConfig, transport::Socket, ConnectionStats, EntityOwner, EntityPriorityMut,
     EntityPriorityRef, Events, Historian, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
     RoomRef, Server as NaiaServer, TickBufferMessages, TickEvents, UserKey, UserMut, UserRef,
-    UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer, WorldServer,
+    InternalWorldServer as NaiaWorldServer, UserScopeMut, UserScopeRef,
 };
 
 use naia_bevy_shared::{
@@ -726,7 +726,7 @@ impl<'w> Server<'w> {
 
     pub fn world_only_resource_scope<R>(
         world: &mut World,
-        f: impl FnOnce(&mut World, &mut WorldServer<Entity>) -> R,
+        f: impl FnOnce(&mut World, &mut NaiaWorldServer<Entity>) -> R,
     ) -> R {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| match &mut *server {
             ServerImpl::WorldOnly(server) => f(world, server),

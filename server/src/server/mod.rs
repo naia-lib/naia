@@ -9,9 +9,11 @@ mod main_server;
 pub use main_server::MainServer;
 pub mod world_server;
 pub use world_server::InternalWorldServer;
-// Phase 1 transitional alias: downstream consumers still name `WorldServer`.
-// Phase 2 replaces this with the unified `WorldServer` enum.
-pub use world_server::InternalWorldServer as WorldServer;
+
+/// The unified `WorldServer` enum (G-unify Phase 2c) over the resident +
+/// pipelined engine shapes.
+pub mod world_server_enum;
+pub use world_server_enum::{ServerMode, WorldServer};
 
 pub mod connection_shared;
 pub use connection_shared::ConnectionShared;

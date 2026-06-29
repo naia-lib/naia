@@ -1,17 +1,17 @@
 //! C.3 Phase 4 step 4-E.2f gate: `pipeline_recv_send_independent`
 //!
-//! Smoke-tests the structural rewiring of `WorldServer::into_pipeline_handles`
-//! and `WorldServer::from_pipeline_states` introduced in 4-E.2f.
+//! Smoke-tests the structural rewiring of `InternalWorldServer::into_pipeline_handles`
+//! and `InternalWorldServer::from_pipeline_states` introduced in 4-E.2f.
 //!
 //! What this test verifies (today):
-//!   1. `WorldServer::into_pipeline_handles(self)` returns the three-way
+//!   1. `InternalWorldServer::into_pipeline_handles(self)` returns the three-way
 //!      `(CoordinatorState<E>, RecvHandle<E>, SendHandle<E>)` decomposition.
 //!   2. `RecvHandle<E>` and `SendHandle<E>` are `Send` without any
 //!      `unsafe impl Send` block (they inherit it from their owned
 //!      `RecvState<E>` / `SendState<E>` substates which carry the
 //!      safety story).
-//!   3. `WorldServer::from_pipeline_states(coord, recv, send)` reassembles
-//!      the three pieces into a working `WorldServer<E>` that retains the
+//!   3. `InternalWorldServer::from_pipeline_states(coord, recv, send)` reassembles
+//!      the three pieces into a working `InternalWorldServer<E>` that retains the
 //!      same configuration as the pre-split server (tick interval,
 //!      protocol, etc.) and exposes the full `Server`-shim API.
 //!   4. The round-trip — split, immediately reassemble, then drive a
@@ -37,7 +37,7 @@ use std::time::Duration;
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::{
     CoordinatorState, RecvHandle, RecvState, ReplicationConfig, SendHandle, SendState,
-    ServerConfig, WorldServer,
+    ServerConfig, InternalWorldServer,
 };
 
 use naia_test_harness::{
@@ -49,12 +49,12 @@ use _helpers::client_connect;
 
 /// Compile-time assertion that the new handles inherit `Send` from
 /// their owned substates — the spec explicitly requires dropping the
-/// `unsafe impl Send` blocks that the previous `Arc<Mutex<WorldServer>>`
+/// `unsafe impl Send` blocks that the previous `Arc<Mutex<InternalWorldServer>>`
 /// design needed.
 #[allow(dead_code)]
 fn _assert_handles_send_safe() {
     fn assert_send<T: Send>() {}
-    // Per `WorldServer<E>` callers in the bevy adapter, `E` is `Entity`,
+    // Per `InternalWorldServer<E>` callers in the bevy adapter, `E` is `Entity`,
     // but the structural property holds for any `E: Copy + Eq + Hash +
     // Send + Sync`. Using `u64` here keeps the test free of bevy_ecs.
     assert_send::<RecvHandle<u64>>();
@@ -63,7 +63,7 @@ fn _assert_handles_send_safe() {
     assert_send::<SendState<u64>>();
 }
 
-/// Construct a fresh `WorldServer`, split it into the three-way pipeline
+/// Construct a fresh `InternalWorldServer`, split it into the three-way pipeline
 /// pieces, and reassemble immediately. Verifies the structural plumbing
 /// holds: the recovered server reports the same config back.
 #[test]
@@ -72,7 +72,7 @@ fn into_pipeline_handles_returns_three_way() {
     let proto = protocol();
     let expected_max_replicated = server_config.max_replicated_entities;
 
-    let ws: WorldServer<u64> = WorldServer::new(server_config, proto.clone());
+    let ws: InternalWorldServer<u64> = InternalWorldServer::new(server_config, proto.clone());
     let pre_split_listening = ws.is_listening();
 
     // The signature is itself the assertion: any drift in the return
@@ -85,7 +85,7 @@ fn into_pipeline_handles_returns_three_way() {
 
     // Recover the server. Reassembly clones the `Arc<ServerShared<E>>`
     // out of `recv.shared` — both halves carry the same Arc clone.
-    let ws2: WorldServer<u64> = WorldServer::from_pipeline_states(
+    let ws2: InternalWorldServer<u64> = InternalWorldServer::from_pipeline_states(
         coord,
         recv_handle.into_state(),
         send_handle.into_state(),
@@ -94,7 +94,7 @@ fn into_pipeline_handles_returns_three_way() {
     assert_eq!(
         ws2.is_listening(),
         pre_split_listening,
-        "round-tripped WorldServer must preserve listening state"
+        "round-tripped InternalWorldServer must preserve listening state"
     );
     assert_eq!(
         ws2.users_count(),
@@ -103,7 +103,7 @@ fn into_pipeline_handles_returns_three_way() {
     );
     // The recovered shared state retains the configured entity capacity
     // (this also fails fast if from_pipeline_states wires the wrong
-    // ServerShared into the WorldServer skeleton).
+    // ServerShared into the InternalWorldServer skeleton).
     let _ = expected_max_replicated; // silence unused if checks below removed
 }
 
@@ -112,7 +112,7 @@ fn into_pipeline_handles_returns_three_way() {
 /// match `parallel_send_matches_serial`'s observable outcomes.
 ///
 /// This is the strongest behavioral assertion 4-E.2f can make today:
-/// the round-trip preserves *all* observable WorldServer state and
+/// the round-trip preserves *all* observable InternalWorldServer state and
 /// produces identical client-visible packets.
 #[test]
 fn pipeline_recv_send_independent() {
@@ -270,7 +270,7 @@ fn pipeline_recv_send_threads_overlap() {
 
     let server_config = ServerConfig::default();
     let proto = protocol();
-    let mut ws: WorldServer<u64> = WorldServer::new(server_config, proto);
+    let mut ws: InternalWorldServer<u64> = InternalWorldServer::new(server_config, proto);
 
     // Plumb a real LocalServerSocket so the recv loop's `recv_io.recv_reader()`
     // returns `Ok(None)` per iteration (idle) instead of panicking the

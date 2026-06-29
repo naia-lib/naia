@@ -4,7 +4,7 @@
 //! `drain_lifecycle`, `drain_tick_buffer`).
 //!
 //! Construction pattern mirrors `pipeline_recv_send_independent.rs`:
-//! build a `WorldServer<u64>` with a real `LocalServerSocket`, then
+//! build a `InternalWorldServer<u64>` with a real `LocalServerSocket`, then
 //! split via `into_pipeline_handles` to obtain a `RecvHandle<u64>` for
 //! the helpers to operate against. Smoke-test verifies the empty path
 //! (no connections, no events) — the round-trip "inject + drain"
@@ -19,7 +19,7 @@ use naia_server::pipeline_actors::{
     TickMessageRouter,
 };
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
-use naia_server::{ServerConfig, WorldServer};
+use naia_server::{ServerConfig, InternalWorldServer};
 use naia_shared::Tick;
 
 use naia_test_harness::protocol;
@@ -54,7 +54,7 @@ fn build_pipeline_split() -> (
     naia_server::RecvHandle<u64>,
     naia_server::SendHandle<u64>,
 ) {
-    let mut ws: WorldServer<u64> = WorldServer::new(ServerConfig::default(), protocol());
+    let mut ws: InternalWorldServer<u64> = InternalWorldServer::new(ServerConfig::default(), protocol());
 
     let hub = LocalTransportHub::new(FAKE_SERVER_ADDR.parse().unwrap());
     let inner = LocalServerSocket::new(hub);
@@ -91,7 +91,7 @@ fn drain_lifecycle_on_freshly_built_recv_handle_is_empty() {
 #[test]
 fn spawn_server_handles_facade_matches_into_pipeline_handles() {
     // Per Phase A.1, `spawn_server_handles` is a thin facade over
-    // `WorldServer::new + into_pipeline_handles`. From the harness side
+    // `InternalWorldServer::new + into_pipeline_handles`. From the harness side
     // we can confirm it returns the same three-way decomposition that
     // `into_pipeline_handles` does.
     let (coord, recv, send) = spawn_server_handles::<u64, _>(ServerConfig::default(), protocol()).take_handles();

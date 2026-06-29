@@ -120,8 +120,8 @@ pub use room::{RoomKey, RoomMut, RoomRef};
 #[cfg(feature = "bench_instrumentation")]
 pub use server::world_server::{bench_iris_counters, bench_scope_counters};
 pub use server::{
-    ConnectionShared, CoordinatorState, MainServer, ReceiveOutput, RecvHandle, RecvState,
-    InternalWorldServer, SendHandle, SendState, Server, ServerConfig, WorldServer,
+    ConnectionShared, CoordinatorState, InternalWorldServer, MainServer, ReceiveOutput, RecvHandle,
+    RecvState, SendHandle, SendState, Server, ServerConfig, ServerMode, WorldServer,
 };
 
 #[cfg(feature = "e2e_debug")]
