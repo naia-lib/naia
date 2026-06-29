@@ -174,6 +174,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// or [`Self::tick`] is called. Used by the bevy adapter's `drain_recv_impl`
     /// which passes the handles through `apply_recv_to_world` (a loop that requires
     /// owned handle access and cannot use the `tick()` closure form).
+    ///
+    /// # Panic-poisoning caveat (audit #5)
+    /// This empties all three slots; the paired `restore_handles` re-fills them.
+    /// If a caller panics AFTER `take_handles` but BEFORE `restore_handles` (e.g.
+    /// inside `apply_recv_to_world` or `transmit_send_job`), the slots stay empty
+    /// and the NEXT entry panics with `"… not in slot — park workers first"` —
+    /// which misdescribes the actual fault (a prior panic, not a missing park).
+    /// `receive`/`send`/`tick` all share this hazard; it is acceptable for the
+    /// oracle/test path (a panic there already aborts the run) but a debugger
+    /// chasing the second panic should look upstream for the first.
     pub fn take_handles(&mut self) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>) {
         let coord = self.coord.take().expect(
             "PipelinedServer::take_handles: CoordHandle not available",
@@ -495,10 +505,23 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         //    (D1–D7: no queues exist yet at G7; intentionally empty — see doc.)
 
         // D8 send-prep — STRICT sub-order (`server_access.rs:1691-1706`):
-        //    preamble (drain room/configure, flush handshake+heartbeats)
+        //    ack-drain (consume the cross-half ACK channel: trim acked
+        //               `sent_updates` + fire delivery notifications)
+        //    → preamble (drain room/configure, flush handshake+heartbeats)
         //    → scope-changes (publish freshly-scoped entities into per-user sends)
         //    → refresh (recompute the cross-thread needed-set FROM those).
         // Reordering these trims the snapshot wrong.
+        //
+        // The ack-drain is NOT optional and NOT folded into the preamble:
+        // `apply_pending_send_preamble` flushes/heartbeats/empty-acks but does
+        // NOT consume the inbound ACK channel — that single-owner consumer is
+        // `drain_all_acks`, which both reference send paths run before transmit
+        // (resident `SendState::send_all_packets`, the active send worker's
+        // preamble). Omitting it would leave acked `sent_updates` in the
+        // `RetransmitLedger` forever → endless retransmits and a needed-set that
+        // never clears → divergence from resident the instant a client acks
+        // (audit #1).
+        send.drain_all_acks();
         send.apply_pending_send_preamble();
         send.apply_pending_scope_changes(world);
         send.refresh_needed_entities();
@@ -507,6 +530,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         //    The needed-set is now final (post-D8), so the core assembler reads
         //    exactly what this send transmits. Build BEFORE prepare_send_job,
         //    which freezes the DiffMasks and clears the live per-user masks.
+        //
+        // Machine-pin the D8→D9 ordering invariant the spec promised (audit #4):
+        // the send-prep preamble + scope-changes MUST have run this tick before
+        // the snapshot is assembled, else the needed-set is stale and the trim
+        // is wrong. (refresh runs immediately after scope above, in literal
+        // sequence, so the preamble+scope flags are the load-bearing guard.)
+        debug_assert!(
+            send.send_prep_done_this_tick(),
+            "D9 snapshot build ran before D8 send-prep (preamble+scope) this tick",
+        );
         let snapshot = coord.send_state_view().build_needed_snapshot(world);
         // prepare_send_job re-runs preamble/scope idempotently (per-tick flags
         // set by D8 above), then freezes the plan against the live `world`.

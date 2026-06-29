@@ -30,6 +30,19 @@
 //! `build_needed_snapshot` → `prepare_send_job` → `transmit_send_job` primitives
 //! the bracket composes). This test covers the *packaging + ordering + handle
 //! lifecycle* the g9pre tests do not.
+//!
+//! ## Known coverage gap (audit #1 / #6, tracked — not silent)
+//!
+//! `drain_and_send` now runs `SendHandle::drain_all_acks` first in its D8
+//! sub-order (matching resident `SendState::send_all_packets` and the active
+//! send worker's preamble) — without it, acked `sent_updates` would never clear
+//! and the needed-set would retransmit forever. That drain is exercised here
+//! only against a connection-free run (no acks exist with zero clients).
+//! Asserting the drain's *effect* — byte-identity of a bracket send to resident
+//! over many ticks WITH a real client acking — requires (a) replicating an
+//! entity THROUGH the bracket (`spawn_replicated`/`enable_replication`, G4/G5)
+//! and (b) a `PipelinedServer`-vs-resident comparison harness (G8). That
+//! assertion is a named G8 obligation; it is not silently dropped.
 
 #![allow(unused_imports)]
 

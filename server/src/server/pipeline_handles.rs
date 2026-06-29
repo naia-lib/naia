@@ -304,6 +304,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         self.state.refresh_needed_entities();
     }
 
+    /// MISSION_PIPELINE_API_BOUNDARY G7 (audit #4) — has the D8 send-prep
+    /// sub-order (`apply_pending_send_preamble` + `apply_pending_scope_changes`)
+    /// already run this tick? Used by the `drain_and_send` `debug_assert` to
+    /// machine-pin that the snapshot build (D9) never precedes send-prep (D8).
+    /// Reads the same per-tick idempotency flags that `prepare_send_job`
+    /// consumes; `false` once they reset at the end of `prepare_send_job`.
+    pub(crate) fn send_prep_done_this_tick(&self) -> bool {
+        self.state.preamble_done_this_tick && self.state.scope_changes_done_this_tick
+    }
+
     /// C.6 prep #6 — drain entity-scope variants (`EntityEnteredRoom`,
     /// `UserEnteredRoom`, `UserLeftRoom`, `ScopeToggled`) from
     /// `scope_change_queue` and fan them out to user connections.

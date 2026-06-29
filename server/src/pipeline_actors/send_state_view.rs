@@ -212,11 +212,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
     /// `&dyn Replicate`) → `.copy_to_box()` → `Box<dyn Replicate>` →
     /// [`SnapshotWorld::insert_component`]. No `SnapshotReaderRegistry` lift.
     ///
-    /// Skip-on-absent: an `(entity, kind)` pair whose component is not present
-    /// on `world` is skipped (`continue`), never panicked — matching the bevy
-    /// assembler's `continue` arm. (Per audit §2h M2: do not let
-    /// `component_of_kind` panic on a missing component drive a hard failure
-    /// during transition.)
+    /// Skip-on-absent: an `(entity, kind)` pair is included ONLY when
+    /// [`WorldRefType::has_component_of_kind`] reports it present; otherwise it
+    /// is skipped, never panicked. This guard is load-bearing, not cosmetic:
+    /// the bevy `WorldRefType::component_of_kind` *panics* on a kind the world
+    /// never registered (`world_proxy.rs` `"ComponentKind has not been
+    /// registered?"`), whereas the bevy snapshot assembler's reader path returns
+    /// `None` and skips. Gating on the fully-fallible `has_component_of_kind`
+    /// (entity-absent / component-absent / kind-unregistered all → `false`)
+    /// reproduces the bevy assembler's skip semantics EXACTLY and keeps this
+    /// core assembler panic-free per audit §2h M2. (In practice `required` only
+    /// ever holds registered, server-tracked kinds, so the guard is defense in
+    /// depth — but it is the difference between "true by construction" and
+    /// "happens not to hit the panic".)
     ///
     /// Call AFTER the D8 preamble/scope/refresh sub-order (so the needed-set is
     /// final) and BEFORE `prepare_send_job` (which freezes + clears the live
@@ -249,10 +257,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendStateView<E> {
             snapshot.mark_live(*entity);
         }
         for (entity, kind) in required {
+            // Fallible has-check FIRST: entity despawned/component removed
+            // between the needed-set read and now, OR a kind this world never
+            // registered — all skip rather than panic. `component_of_kind` on
+            // the bevy world panics on an unregistered kind, so this guard
+            // (not the `else` arm below) is what makes the assembler match the
+            // bevy assembler's skip semantics and stay panic-free.
+            if !world.has_component_of_kind(entity, kind) {
+                continue;
+            }
             let Some(dyn_ref) = world.component_of_kind(entity, kind) else {
-                // Component absent on `world` (despawned/removed between the
-                // needed-set read and now, or a kind this world doesn't host):
-                // skip rather than panic.
+                // Belt-and-suspenders: a TOCTOU removal between the has-check
+                // and the fetch also skips rather than panics.
                 continue;
             };
             snapshot.insert_component(*entity, *kind, dyn_ref.copy_to_box());
