@@ -171,10 +171,11 @@ impl<R: Replicate> ComponentEventHandler for ComponentEventHandlerImpl<R> {
                 world
                     .resource_mut::<Messages<RemoveResourceEvent<R>>>()
                     .write(RemoveResourceEvent::<R>::new(user_key, component));
-                // Also remove the bevy-Resource mirror if present.
-                // (Mode B: `Res<R>` should disappear when the resource
-                // is removed. Best-effort — if the type isn't a bevy
-                // Resource the call is a no-op via type erasure.)
+                // No mirror to tear down: under bevy 0.19 the carrier
+                // entity-component aliases `Res<R>`, so removing the
+                // component (done by the despawn chokepoint) already
+                // turns `Res<R>` into `None`. We only emit the typed
+                // RemoveResourceEvent here.
                 continue;
             }
             world

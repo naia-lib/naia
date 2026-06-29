@@ -3,9 +3,11 @@
 //!
 //! These tests stand up a real Bevy `App` for both server and client
 //! using the `transport_local` `LocalTransportHub`, exercising the
-//! full Mode B mirror end-to-end (server `commands.replicate_resource`
-//! → wire → client `Res<R>`). The test harness in `test/harness/`
-//! uses `naia_demo_world` directly and can't reach this path.
+//! replicated-resource path end-to-end (server
+//! `commands.replicate_resource` → wire → client `Res<R>`, which under
+//! bevy 0.19 materializes by carrier-component↔resource aliasing — no
+//! mirror system). The test harness in `test/harness/` uses
+//! `naia_demo_world` directly and can't reach this path.
 //!
 //! Coverage:
 //! - **F1**: client-side `Res<R>` is auto-populated end-to-end.

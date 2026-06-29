@@ -33,7 +33,7 @@ use std::ops::DerefMut;
 
 use bevy_ecs::{entity::Entity, message::Messages, world::World};
 
-use naia_bevy_shared::{EntityAuthStatus, HostSyncEvent, WorldMutType, WorldProxyMut};
+use naia_bevy_shared::{EntityAuthStatus, HostSyncEvent, WorldData, WorldMutType, WorldProxyMut};
 use naia_server::pipeline_actors::SimHandle;
 use naia_server::{RecvHandle, SendHandle};
 
@@ -114,15 +114,34 @@ pub fn drain_host_sync_into_pipeline(
                     // the insert via the receive path).
                     continue;
                 }
-                let mut world_proxy = world.proxy_mut();
-                let Some(mut component_mut) =
-                    world_proxy.component_mut_of_kind(&entity, &component_kind)
-                else {
-                    // Component already removed between emission and drain
-                    // — same tolerant behavior as the non-pipelined path.
-                    continue;
-                };
-                send.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+                {
+                    let mut world_proxy = world.proxy_mut();
+                    let Some(mut component_mut) =
+                        world_proxy.component_mut_of_kind(&entity, &component_kind)
+                    else {
+                        // Component already removed between emission and
+                        // drain — same tolerant behavior as the
+                        // non-pipelined path.
+                        continue;
+                    };
+                    send.insert_component_worldless(
+                        &entity,
+                        DerefMut::deref_mut(&mut component_mut),
+                    );
+                }
+                // bevy 0.19: if this is a ReplicatedResource carrier
+                // (host-spawned in sim-integration), remember the entity so
+                // the despawn chokepoint never `World::despawn`s it — even
+                // after the resource component is later removed. Symmetric
+                // with the client receive path (`insert_boxed_component`):
+                // server carriers come in worldless and would otherwise go
+                // unmarked, leaving the panic-guard reliant on the resource
+                // component still being present at despawn time.
+                if let Some(mut world_data) = world.get_resource_mut::<WorldData>() {
+                    if world_data.is_resource_kind(&component_kind) {
+                        world_data.mark_resource_carrier_entity(&entity);
+                    }
+                }
             }
             HostSyncEvent::Remove(_host_id, entity, component_kind) => {
                 if sim_handle.entity_authority_status(&entity) == Some(EntityAuthStatus::Denied) {

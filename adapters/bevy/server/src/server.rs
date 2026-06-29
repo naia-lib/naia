@@ -693,9 +693,9 @@ impl<'w> Server<'w> {
     /// Returns the hidden Bevy `Entity` carrying resource `R`, or
     /// `None` if `R` is not currently inserted. Mostly useful for
     /// advanced introspection / diagnostics; user code should typically
-    /// access resource state through `Query<&R>` over the resource
-    /// entity (Mode A) or, once landed, `Res<R>` via the mirror system
-    /// (Mode B).
+    /// access resource state through `Res<R>` — under bevy 0.19 the
+    /// carrier entity-component aliases `Res<R>` (one storage cell), so
+    /// no mirror system is involved.
     pub fn resource_entity<R: ReplicatedResource>(&self) -> Option<Entity> {
         self.server_impl.resource_entity::<R>()
     }
