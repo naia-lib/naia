@@ -22,9 +22,9 @@
 
 use std::hash::Hash;
 
-use naia_shared::{Protocol, Tick};
+use naia_shared::{Protocol, Tick, WorldMutType, WorldRefType};
 
-use crate::{InternalWorldServer, PipelinedWorldServer, ServerConfig};
+use crate::{InternalWorldServer, PipelinedWorldServer, ReceiveOutput, ServerConfig};
 
 /// Whether a [`WorldServer`] drives its engine synchronously (resident) or
 /// across the pipeline's worker threads.
@@ -91,6 +91,35 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.current_tick(),
             WorldServerImpl::Pipelined(ps) => ps.current_tick(),
+        }
+    }
+
+    /// Receive one tick's worth of inbound traffic and apply it to `world`,
+    /// returning the per-source [`ReceiveOutput`]s (world + tick events).
+    ///
+    /// The world is taken **by value** — the established naia convention is a
+    /// fresh per-call proxy (`world.proxy_mut()`). The resident variant drives
+    /// its fused `receive_with_world` (one output); the pipelined variant drains
+    /// its recv path (one output in the oracle shape, N in the worker shape).
+    /// Both ultimately apply through the same `process_all_packets` path.
+    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Vec<ReceiveOutput<E>> {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => vec![ws.receive_with_world(world)],
+            WorldServerImpl::Pipelined(ps) => ps.receive(&mut world),
+        }
+    }
+
+    /// Flush one tick's worth of outbound traffic, serialized against `world`.
+    ///
+    /// World by value (fresh per-call proxy, e.g. `world.proxy()`). The resident
+    /// variant transmits inline against the live world; the pipelined variant
+    /// transmits the frozen needed-set snapshot (oracle inline, or published to
+    /// the send worker). Byte-identical modulo the worker's one-tick lag
+    /// (g9pre).
+    pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.send_all_packets(world),
+            WorldServerImpl::Pipelined(ps) => ps.send(&world),
         }
     }
 }
