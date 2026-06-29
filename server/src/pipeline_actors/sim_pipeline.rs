@@ -47,7 +47,7 @@ use super::ServerEntityConverter;
 /// Unified pipeline handle. Construct with [`PipelinedServer::new`].
 ///
 /// See module-level docs for the design overview.
-pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync> {
+pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// Coordination handle (main-thread only). Stored as `Option` so the
     /// handle can be temporarily moved into a `WorldServer` for operations
     /// that require full-server access (e.g., `io_load` via [`Self::listen`]).
@@ -56,6 +56,22 @@ pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync> {
     recv_slot: Arc<Mutex<Option<RecvHandle<E>>>>,
     /// Park-window slot shared with the send worker.
     send_slot: Arc<Mutex<Option<SendHandle<E>>>>,
+    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l Decision 1) — the send-shape
+    /// selector for [`Self::send`]:
+    /// - `None` ⇒ **oracle**: `send` transmits the frozen job INLINE on the
+    ///   calling thread (the determinism/desync path the moat validates, and
+    ///   every synchronous test drive). Main drains the ACK channel itself.
+    /// - `Some(tx)` ⇒ **worker-driven production**: `send` publishes the frozen
+    ///   `(snapshot, plan)` job here and the send worker transmits it NEXT tick
+    ///   (one-tick lag, MISSION_TICK_FLOOR Lever 3). Main does NOT drain ACKs —
+    ///   the send worker is the single-owner consumer (`runtime.rs`).
+    ///
+    /// Set by the bevy adapter under `#[cfg(workers_active)]` via
+    /// [`Self::set_send_publisher`]; left `None` in deterministic builds. Both
+    /// shapes reduce to the same `(snapshot, frozen plan)` and so emit
+    /// byte-identical wire content modulo the one-tick scheduling shift
+    /// (G9pre §2i).
+    send_publisher: Option<super::SnapshotSender<E>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
@@ -79,7 +95,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
             coord: Some(coord),
             recv_slot: Arc::new(Mutex::new(Some(recv))),
             send_slot: Arc::new(Mutex::new(Some(send))),
+            send_publisher: None,
         }
+    }
+
+    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l Decision 1) — switch [`Self::send`]
+    /// into **worker-driven production** mode: it will publish the frozen
+    /// `(snapshot, plan)` send job to `publisher` (drained by the send worker,
+    /// which transmits it next tick — the one-tick lag) instead of transmitting
+    /// inline.
+    ///
+    /// The bevy adapter calls this under `#[cfg(workers_active)]` with a clone of
+    /// the same [`super::SnapshotSender`] whose paired [`super::SnapshotReceiver`]
+    /// was handed to the [`super::PipelineRuntime`]'s send worker. In
+    /// deterministic builds it is never called, so `send` stays the inline oracle.
+    ///
+    /// Call before workers are spawned (the publisher must be wired before any
+    /// `send`).
+    pub fn set_send_publisher(&mut self, publisher: super::SnapshotSender<E>) {
+        self.send_publisher = Some(publisher);
     }
 
     /// Borrow the coordination handle.
@@ -471,9 +505,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// world; the trimmed `SnapshotWorld` is assembled from it internally — the
     /// consumer never authors a snapshot.
     pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
+        // Take the publisher out for the duration of the send so `drain_and_send`
+        // can borrow it without aliasing `&mut self` (the handles are also taken
+        // from `self`). It is a plain clone-able channel sender; move it back after.
+        let publisher = self.send_publisher.take();
         let (coord, recv, mut send) = self.take_handles();
-        Self::drain_and_send(&coord, &mut send, world);
+        Self::drain_and_send(&coord, &mut send, world, publisher.as_ref());
         self.restore_handles(coord, recv, send);
+        self.send_publisher = publisher;
     }
 
     /// The **D0–D9 drain-phase ordering contract** (MISSION_PIPELINE_API_BOUNDARY
@@ -493,6 +532,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         coord: &CoordHandle<E>,
         send: &mut SendHandle<E>,
         world: &W,
+        publisher: Option<&super::SnapshotSender<E>>,
     ) {
         // D1 entity-replication registrations (spawn_replicated/enable_replication)
         //    — queue introduced by G4/G5. Must drain before resource & host-sync.
@@ -521,7 +561,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         // `RetransmitLedger` forever → endless retransmits and a needed-set that
         // never clears → divergence from resident the instant a client acks
         // (audit #1).
-        send.drain_all_acks();
+        //
+        // **Send-shape split (G8 §2l Decision 1):** the ack-drain owner depends
+        // on the shape. In the ORACLE shape (`publisher = None`) the calling
+        // thread is the sole owner of the send half, so it drains here. In the
+        // WORKER shape (`publisher = Some`) the send WORKER drains the channel in
+        // its own preamble before each transmit (`runtime.rs`) — it is the
+        // single-owner consumer, so main MUST NOT drain too (double-consume would
+        // trim `sent_updates` a tick early → divergence). preamble/scope/refresh
+        // run in BOTH shapes (they prepare this tick's per-user sends + needed-set
+        // / frozen plan, which the worker then transmits self-contained).
+        if publisher.is_none() {
+            send.drain_all_acks();
+        }
         send.apply_pending_send_preamble();
         send.apply_pending_scope_changes(world);
         send.refresh_needed_entities();
@@ -540,12 +592,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
             send.send_prep_done_this_tick(),
             "D9 snapshot build ran before D8 send-prep (preamble+scope) this tick",
         );
-        let snapshot = coord.send_state_view().build_needed_snapshot(world);
+        let mut snapshot = coord.send_state_view().build_needed_snapshot(world);
         // prepare_send_job re-runs preamble/scope idempotently (per-tick flags
         // set by D8 above), then freezes the plan against the live `world`.
         let plan = send.prepare_send_job(world);
-        // Oracle/synchronous transmit shape: inline against the frozen snapshot.
-        send.transmit_send_job(snapshot, plan);
+        match publisher {
+            // ORACLE shape: inline transmit against the frozen snapshot, on the
+            // calling thread (no workers / the synchronous determinism path).
+            None => send.transmit_send_job(snapshot, plan),
+            // WORKER-DRIVEN PRODUCTION shape (G8 §2l Decision 1): attach the
+            // frozen plan to the snapshot, making it a self-contained send job,
+            // and publish it. The send worker drains the latest job, drains the
+            // ACK channel, and transmits NEXT tick (one-tick lag). This preserves
+            // the worker overlap the perf floor depends on; the worker's transmit
+            // reads zero live per-user diff state because the plan is frozen here.
+            Some(publisher) => {
+                snapshot.attach_send_plan(plan);
+                publisher.send(snapshot);
+            }
+        }
     }
 }
 

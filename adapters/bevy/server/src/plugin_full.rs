@@ -66,11 +66,11 @@ use bevy_ecs::{
 };
 use parking_lot::Mutex;
 
-use naia_bevy_shared::Protocol as BevyProtocol;
+use naia_bevy_shared::{Protocol as BevyProtocol, ReceivePackets, SendPackets};
 use naia_server::{
     pipeline_actors::{
         spawn_server_handles, EventReceiver, PipelineRuntime, PipelinedServer as CorePipelinedServer,
-        RuntimeTimingHooks, SnapshotReceiver, SnapshotSender,
+        RuntimeState, RuntimeTimingHooks, SnapshotReceiver, SnapshotSender,
     },
     shared::Protocol as NaiaProtocol,
     ReceiveOutput, RecvHandle, SendHandle, ServerConfig,
@@ -100,6 +100,26 @@ pub struct PipelineConfig {
     /// the level-editor cell leaves it `false` (its main world DOES host
     /// delegated tile/spawn-point entities). MISSION_OVERLAP_FRONTIER T2.
     pub skip_main_world_host_sync: bool,
+    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l) — when `true`, the adapter itself
+    /// drives the per-tick park-window bracket from the existing
+    /// `ReceivePackets` / `SendPackets` system sets:
+    /// - `ReceivePackets` ⇒ `park_workers()` + the single-world recv-drain
+    ///   ([`drain_recv_impl`]).
+    /// - `SendPackets` ⇒ [`PipelinedServer::send`] (dual send-shape) +
+    ///   `unpark_workers()`.
+    /// The consumer's own systems sit between the two sets via plain
+    /// `add_systems(Update, …)`, running with the workers parked and the handles
+    /// round-tripping through their slots — turnkey pipelining with zero new
+    /// consumer-facing concepts.
+    ///
+    /// Default `false` (the adapter registers only the no-op drain/panic systems;
+    /// the consumer hand-rolls its own park window, e.g. cyberlith's
+    /// `open_park_window` until the G10 cutover). Opt-in is what lets G8 land
+    /// non-breaking: the existing pipelined adapter tests drive park/unpark
+    /// manually and rely on the adapter NOT auto-driving a window in `Update`.
+    /// Single-world only (`entity_world = None`); a Sim-SubApp split stays a
+    /// consumer choice (§2f).
+    pub drive_bracket_in_update: bool,
 }
 
 impl PipelineConfig {
@@ -112,6 +132,13 @@ impl PipelineConfig {
     /// Skip registering host-sync change-tracking (see field docs).
     pub fn skip_host_sync(mut self, skip: bool) -> Self {
         self.skip_main_world_host_sync = skip;
+        self
+    }
+
+    /// Have the adapter drive the park-window bracket from the `ReceivePackets`
+    /// / `SendPackets` system sets (see [`Self::drive_bracket_in_update`]).
+    pub fn drive_in_update(mut self, drive: bool) -> Self {
+        self.drive_bracket_in_update = drive;
         self
     }
 }
@@ -414,13 +441,32 @@ pub(crate) fn install_full_pipelining(
     server_config: ServerConfig,
     protocol: BevyProtocol,
     change_detection_schedule: Option<InternedScheduleLabel>,
+    drive_bracket_in_update: bool,
 ) {
     let naia_proto: NaiaProtocol = protocol.into();
-    let sim_pipeline = spawn_server_handles::<Entity, _>(server_config, naia_proto);
+    #[cfg_attr(feature = "deterministic", allow(unused_mut))]
+    let mut sim_pipeline = spawn_server_handles::<Entity, _>(server_config, naia_proto);
 
     let sim_converter = ServerEntityConverter::from_coord(sim_pipeline.coord());
     let sim_event_receiver = EventReceiver::<Entity>::new();
     let (snap_sender, snap_receiver) = SnapshotSender::<Entity>::pair();
+
+    // G8 §2l Decision 1 — in worker-driven production builds, when the adapter
+    // drives the bracket, point `PipelinedServer::send` at the SAME snapshot
+    // channel the runtime's send worker drains, so `send` publishes the frozen
+    // one-tick-lag job instead of transmitting inline. Deterministic builds (and
+    // any non-driven build) leave it unset ⇒ the inline oracle shape.
+    //
+    // The adapter keys this off its own `deterministic` feature (which forwards
+    // 1:1 to `naia-server/deterministic`, the same feature `naia-server`'s
+    // `build.rs` reads to set `workers_active = not(deterministic)` core-side) —
+    // the adapter no longer carries a `build.rs` (G7-3), so it cannot read the
+    // `workers_active` cfg directly. `not(deterministic)` is exactly the
+    // production/bench build where the send worker actively transmits.
+    #[cfg(not(feature = "deterministic"))]
+    if drive_bracket_in_update {
+        sim_pipeline.set_send_publisher(snap_sender.clone());
+    }
 
     let internal = PluginInternalState::new_armed(
         sim_pipeline,
@@ -477,6 +523,77 @@ pub(crate) fn install_full_pipelining(
                 .chain(),
         );
     }
+
+    // G8 §2l — when the consumer opted in, the adapter drives the park-window
+    // bracket from the existing `ReceivePackets` / `SendPackets` system sets
+    // (configured in `Update` by `Plugin::build`). `ReceivePackets` parks the
+    // workers and runs the single-world recv-drain; `SendPackets` runs the core
+    // bracket's `send` (dual-shape) and unparks. The consumer's own systems sit
+    // between the two sets (the set chain orders them) with workers parked.
+    //
+    // `drain_armed_into_res` is chained BEFORE `pipelined_receive` inside
+    // `ReceivePackets` so the `PipelinedServer` resource is populated before the
+    // bracket runs — both bracket systems no-op (and crucially do NOT park) until
+    // then, keeping park/unpark balanced across the listen()/drain transition.
+    if drive_bracket_in_update {
+        app.add_systems(
+            bevy_app::Update,
+            (drain_armed_into_res, pipelined_receive)
+                .chain()
+                .in_set(ReceivePackets),
+        )
+        .add_systems(bevy_app::Update, pipelined_send.in_set(SendPackets));
+    }
+}
+
+// ─── G8 adapter-driven park-window bracket systems ─────────────────────────
+
+/// `ReceivePackets` (pipelined, opt-in G8 §2l): open the park window and run the
+/// single-world recv-drain. Parks the workers, then drains the recv worker's
+/// output channel + a synchronous `recv.receive()` and applies/fans the events
+/// (via [`drain_recv_impl`], `entity_world = None`). Leaves the workers parked
+/// for the consumer's systems; [`pipelined_send`] closes the window.
+///
+/// No-op (and does NOT park) until the worker runtime is `Running` (i.e. after
+/// `listen()` has spawned the workers), so the window stays balanced with
+/// [`pipelined_send`] across the arming transition. Note `drain_armed_into_res`
+/// populates the `PipelinedServer` resource even BEFORE `listen()` (so consumers
+/// can reach the coord at `Startup`), so the listening signal is the runtime
+/// state, not resource presence — recv-draining before `listen()` would panic in
+/// `Server::receive_packet`.
+fn pipelined_receive(world: &mut World) {
+    // Park, then capture the slot `Arc`s and release the `&PluginInternalState`
+    // borrow before the `&mut World` recv-drain.
+    let (recv_slot, send_slot) = {
+        let state = world.resource::<PluginInternalState>();
+        if state.runtime.state() != RuntimeState::Running {
+            return;
+        }
+        state.park_workers();
+        (Arc::clone(&state.recv_slot), Arc::clone(&state.send_slot))
+    };
+    drain_recv_impl(world, &recv_slot, &send_slot);
+}
+
+/// `SendPackets` (pipelined, opt-in G8 §2l): run the core bracket's `send` and
+/// close the park window (unpark). `send` is dual-shape — inline transmit
+/// (oracle / deterministic) or publish-to-worker (production), selected by the
+/// `send_publisher` wired in [`install_full_pipelining`].
+///
+/// No-op (and does NOT unpark) until the runtime is `Running`, mirroring
+/// [`pipelined_receive`] so park/unpark stay balanced across arming.
+fn pipelined_send(world: &mut World) {
+    use naia_bevy_shared::WorldProxy;
+
+    if world.resource::<PluginInternalState>().runtime.state() != RuntimeState::Running {
+        return;
+    }
+    world.resource_scope(|world, mut ps: bevy_ecs::world::Mut<PipelinedServer>| {
+        if let Some(pipeline) = ps.0.as_mut() {
+            pipeline.send(&world.proxy());
+        }
+    });
+    world.resource::<PluginInternalState>().unpark_workers();
 }
 
 // ─── Main-side drain system ────────────────────────────────────────────────

@@ -108,6 +108,11 @@ pub struct Plugin {
     /// whose world hosts no replicated entities (cyberlith base game cell's
     /// main world) drop ~2 no-op change-tracking systems per component type.
     skip_host_sync_change_tracking: bool,
+    /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l) — when `true`, `install_full_pipelining`
+    /// registers the adapter-driven park-window bracket in the `ReceivePackets`
+    /// / `SendPackets` sets (see [`crate::plugin_full::PipelineConfig::drive_bracket_in_update`]).
+    /// Set only by `pipelined` from `PipelineConfig`; all other constructors pass `false`.
+    drive_bracket_in_update: bool,
 }
 
 impl Plugin {
@@ -136,6 +141,7 @@ impl Plugin {
             true,
         );
         plugin.skip_host_sync_change_tracking = cfg.skip_main_world_host_sync;
+        plugin.drive_bracket_in_update = cfg.drive_bracket_in_update;
         plugin
     }
 
@@ -249,6 +255,9 @@ impl Plugin {
             // Default: register host-sync change-tracking. Only
             // `pipelined` overrides this from `PipelineConfig`.
             skip_host_sync_change_tracking: false,
+            // Default: adapter does NOT auto-drive the bracket. Only `pipelined`
+            // overrides this from `PipelineConfig` (G8 §2l).
+            drive_bracket_in_update: false,
         }
     }
 }
@@ -308,6 +317,7 @@ impl PluginType for Plugin {
                     config.server_config,
                     config.protocol,
                     self.change_detection_schedule,
+                    self.drive_bracket_in_update,
                 );
             } else {
                 let _ = config.server_config;
