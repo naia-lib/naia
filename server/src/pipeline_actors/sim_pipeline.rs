@@ -32,11 +32,11 @@
 use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use parking_lot::Mutex;
-use naia_shared::{EntityAuthStatus, Protocol, Tick, WorldMutType};
+use naia_shared::{EntityAuthStatus, Protocol, Tick, WorldMutType, WorldRefType};
 
 use crate::{
-    room::RoomKey, server::ServerShared, user::UserKey, EntityOwner, RecvHandle, ReplicationConfig,
-    SendHandle, ServerConfig, WorldServer,
+    room::RoomKey, server::ServerShared, user::UserKey, EntityOwner, ReceiveOutput, RecvHandle,
+    ReplicationConfig, SendHandle, ServerConfig, WorldServer,
 };
 
 use super::handles::CoordHandle;
@@ -380,6 +380,139 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// Forwards to [`CoordHandle::pending_world_hooks_len`].
     pub fn pending_world_hooks_len(&self) -> usize {
         self.coord().pending_world_hooks_len()
+    }
+}
+
+// ── G7 — the `receive`/`send` bracket ───────────────────────────────────────────
+//
+// MISSION_PIPELINE_API_BOUNDARY G7 (Connor sign-off 2026-06-29): the
+// framework-agnostic per-tick bracket. A consumer (bevy or non-bevy) drives one
+// pipelined tick as an explicit method sequence — `receive` then its own
+// interleaved gameplay/scope code, then `send` — with NO trait to implement, NO
+// closures, NO hooks. This supersedes the closure-form `tick`/`with_parked_tick`.
+//
+// Both methods take/return the three handles via the park-window slots (same
+// shape as `tick`). When the worker runtime is present (G7-3) it parks the
+// workers around this bracket; when absent (the determinism/desync ORACLE, and
+// every `naia_test_harness` drive) the bracket runs fully synchronously on the
+// calling thread and emits bytes identical to worker-driven production by
+// construction (G9pre §2i).
+
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
+    /// **D0 — receive.** Park-window recv-drain + entity-op application.
+    ///
+    /// Drains the recv half once (`RecvHandle::receive`) and applies the decoded
+    /// spawn/insert/update/despawn/handshake events to `world` via the core
+    /// [`crate::pipeline_actors::apply_recv_to_world`] orchestration. Returns the
+    /// resulting [`ReceiveOutput`] — the connection-scoped and entity-scoped
+    /// EVENTS (Connect/Disconnect/Tick/Message/Request/Auth + Spawn/Despawn/…) —
+    /// for the consumer (or its framework adapter) to fan out. Core mutates only
+    /// `world` (the single entity world, §2h H3); it routes no events itself.
+    ///
+    /// `world` is taken **by value** (`W: WorldMutType<E>`), matching naia's
+    /// world-proxy idiom and `apply_recv_to_world`'s signature — the consumer
+    /// passes a fresh `world.proxy_mut()` each call. (The §2g sketch wrote
+    /// `&mut W`; a proxy is not itself `&mut`-reusable, so by-value is the
+    /// accurate form.)
+    ///
+    /// # Precondition
+    /// Workers parked (or not spawned). The bevy adapter's `ReceivePackets` set
+    /// brackets this with park/unpark (G8); the synchronous oracle needs none.
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> ReceiveOutput<E> {
+        let (coord, mut recv, send) = self.take_handles();
+        let server_tick = coord.current_tick();
+
+        // D0: single synchronous recv-drain.
+        let mut output = recv.receive();
+
+        // D0 (cont.): apply decoded entity ops to `world`. Skip the reassembly
+        // when nothing arrived (matches the bevy `drain_recv_impl_split` early
+        // return) — the handles round-trip unchanged.
+        let (coord, recv, send) = if output.is_empty() {
+            (coord, recv, send)
+        } else {
+            crate::pipeline_actors::apply_recv_to_world(
+                coord,
+                recv,
+                send,
+                world,
+                &mut output,
+                server_tick,
+            )
+        };
+
+        self.restore_handles(coord, recv, send);
+        output
+    }
+
+    /// **D8 + D9 — send.** Send-prep (preamble → scope → refresh), core snapshot
+    /// build, then prepare + transmit of the frozen send job against `world`.
+    ///
+    /// This is the synchronous (oracle) execution shape: it prepares the frozen
+    /// `SendPlan` at the freeze point and transmits it **inline** on the calling
+    /// thread (§2g item 5 "Pipelined-oracle"). The worker-driven production shape
+    /// (publish the job to the send slot, worker transmits next tick) is added
+    /// with the runtime in G7-3; both reduce to the same `(snapshot, plan)` so
+    /// they are byte-identical (G9pre §2i, empirically incl. the real assembler —
+    /// `g9pre_core_assembler_*`).
+    ///
+    /// Delegates the load-bearing ordering to [`Self::drain_and_send`] (the
+    /// D0–D9 drain-phase contract). `world` is the consumer's **live** entity
+    /// world; the trimmed `SnapshotWorld` is assembled from it internally — the
+    /// consumer never authors a snapshot.
+    pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
+        let (coord, recv, mut send) = self.take_handles();
+        Self::drain_and_send(&coord, &mut send, world);
+        self.restore_handles(coord, recv, send);
+    }
+
+    /// The **D0–D9 drain-phase ordering contract** (MISSION_PIPELINE_API_BOUNDARY
+    /// §2g, audit N1). This is the single, first-class total order in which
+    /// queued mutations and the send job apply — the byte-exactness-critical
+    /// sequence that §2e's "queue from any system" ergonomics relocated out of
+    /// cyberlith's hand-commented `do_park_window_tick` and into naia. The moat
+    /// DETECTS a regression; this contract PREVENTS one.
+    ///
+    /// D0 (recv events → world) is owned by [`Self::receive`]. D1–D7 are the
+    /// queued-op drains whose queues are introduced by later steps (G4/G5 entity
+    /// registrations, G6 resource carriers, G5b authority/editor, G6b host-sync,
+    /// §2e outbound messages, scope-ledger writes); each is a no-op early-return
+    /// until its queue exists, and any future op class MUST be slotted explicitly
+    /// into this order rather than appended ad hoc. D8/D9 are live now.
+    fn drain_and_send<W: WorldRefType<E> + Sync>(
+        coord: &CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        world: &W,
+    ) {
+        // D1 entity-replication registrations (spawn_replicated/enable_replication)
+        //    — queue introduced by G4/G5. Must drain before resource & host-sync.
+        // D2 resource-replication registrations (Res<R> carriers) — G6. Before host-sync.
+        // D3 lifecycle (despawn/insert/remove) — G4/G5. After spawns, before authority.
+        // D4 authority/editor ops (take_authority) — G5b. Before host-sync.
+        // D5 host-sync (change-detection → repl config) — G6b. After all entity mutations.
+        // D6 outbound messages (send_message/broadcast, incl. desync snapshot) — §2e.
+        // D7 scope-ledger writes (ScopeToggled enqueue) — before send-prep.
+        //    (D1–D7: no queues exist yet at G7; intentionally empty — see doc.)
+
+        // D8 send-prep — STRICT sub-order (`server_access.rs:1691-1706`):
+        //    preamble (drain room/configure, flush handshake+heartbeats)
+        //    → scope-changes (publish freshly-scoped entities into per-user sends)
+        //    → refresh (recompute the cross-thread needed-set FROM those).
+        // Reordering these trims the snapshot wrong.
+        send.apply_pending_send_preamble();
+        send.apply_pending_scope_changes(world);
+        send.refresh_needed_entities();
+
+        // D9 snapshot build + send job.
+        //    The needed-set is now final (post-D8), so the core assembler reads
+        //    exactly what this send transmits. Build BEFORE prepare_send_job,
+        //    which freezes the DiffMasks and clears the live per-user masks.
+        let snapshot = coord.send_state_view().build_needed_snapshot(world);
+        // prepare_send_job re-runs preamble/scope idempotently (per-tick flags
+        // set by D8 above), then freezes the plan against the live `world`.
+        let plan = send.prepare_send_job(world);
+        // Oracle/synchronous transmit shape: inline against the frozen snapshot.
+        send.transmit_send_job(snapshot, plan);
     }
 }
 

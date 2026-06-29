@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G3a COMPLETE — two adversarial audits incorporated (§2h, §2j). G9pre spike COMPLETE/GREEN (§2i: serialization-equivalence + freeze-isolation byte-identical; oracle = synchronously-driven Pipelined bracket, NOT Resident). G7 design ready for sign-off WITH two added contracts (N1 drain-phase order, N4 assembler byte-identity obligation). OPEN before G10: G6b host-sync (framework-agnosticism fork). NOT "all blockers resolved" — see §2j.
+status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 PENDING (move worker-thread runtime + Armed→Running from bevy adapter into core). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. OPEN before G10: G6b host-sync (framework-agnosticism fork).
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -151,11 +151,23 @@ All method/file cites below are VERIFIED against the current naia tree.
 ```rust
 impl<E> PipelinedServer<E> {
     // PIPELINED: park_workers() + single recv-drain + apply recv events to world.
-    pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W);
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> ReceiveOutput<E>;
     // PIPELINED: send-prep + snapshot build + send-job publish + unpark_workers().
     pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: &W);
 }
 ```
+
+> **IMPLEMENTED (G7-2, 2026-06-29).** Both methods land on `PipelinedServer<E>`
+> (`server/src/pipeline_actors/sim_pipeline.rs`). `send` delegates the load-bearing
+> order to a private `drain_and_send` implementing the D0–D9 contract below (D1–D7
+> are documented no-op stubs until their queues exist; D8/D9 live). **Signature
+> accuracy fix:** `receive` takes `world` **by value** (`W: WorldMutType<E>`), not
+> `&mut W` — `apply_recv_to_world` consumes the world proxy by value (naia's
+> proxy-per-call idiom; a proxy is not `&mut`-reusable). At G7-2 the bracket runs
+> the synchronous/oracle shape (transmit inline); the worker-driven production
+> shape (publish to send slot, worker transmits next tick) lands with the runtime
+> in G7-3. Coverage: `pipeline_bracket` (structural drive, zero-client) + the
+> g9pre byte-identity suite (the send primitives the bracket composes).
 
 The "single knob, consumer code unchanged" property is realized at the bevy layer by `ServerImpl` (G3c). A unified *core* server type (`Resident | Pipelined` enum) is OPTIONAL future ergonomics — NOT in G7. For a core binary, mode is the constructor you call; the interleaved op code is textually identical because both types expose the same op surface (G3a gave `PipelinedServer` the coord ops; `Server<E>` already has them).
 
@@ -336,7 +348,7 @@ A hostile second pass (citations independently re-verified) ran after §2i. It c
 | G5b | **(per §2h C2 — editor/delegated path IN SCOPE, Connor 2026-06-29)** queued `entity_take_authority` (+ related authority ops), drained at the editor-ops phase | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
 | G6b | **(per §2h H2 + audit N3 — OPEN, design pass required)** host-sync drain (bevy change-detection → replication config). This is the **least framework-agnostic** piece in the mission: `drain_sim_host_sync_pipelined` (`server_access.rs:275-320`) is driven by bevy `Messages<HostSyncEvent>` against the **Sim** world. Open forks: (a) can a non-bevy consumer even have host-sync, or is it a bevy-adapter-only convenience? (b) does it survive in a no-reassembly core (§6 forbids reassembly post-G10)? (c) can every `HostSyncEvent` producer be retired by explicit G4/G5 `spawn_replicated`/`enable_replication`, removing the bridge entirely? **Decide before G10.** | **OPEN** (own design pass) |
-| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — `PipelinedServer::receive(&mut world)` (park + single recv-drain + apply events) and `::send(&world)` (send-prep + snapshot + send-job + unpark); **+ moves the worker-thread runtime from the bevy adapter into core**. Explicit method sequence; consumer interleaves own code via unified `Server` ops. **No trait, no closures, no hooks.** **Supersedes** the old `with_parked_tick`. **Detailed design: §2g.** **Acceptance contracts: (a) the §2g drain-phase ordering table D0–D9 (N1) implemented as a single ordered core method with debug-asserts; (b) the §2i assembler byte-identity test driving the real core `WorldRefType` assembler (N4).** | PENDING (design §2g — pending sign-off) |
+| G7 | **naia-server core `receive`/`send` bracket** (FIRST) — `PipelinedServer::receive(world) -> ReceiveOutput` (park + single recv-drain + apply events) and `::send(&world)` (send-prep + snapshot + send-job + unpark); **+ moves the worker-thread runtime from the bevy adapter into core**. Explicit method sequence; consumer interleaves own code via unified `Server` ops. **No trait, no closures, no hooks.** **Supersedes** the old `with_parked_tick`. **Detailed design: §2g.** **Acceptance contracts: (a) the §2g drain-phase ordering table D0–D9 (N1) implemented as a single ordered core method; (b) the §2i assembler byte-identity test driving the real core `WorldRefType` assembler (N4).** | **G7-1 ✅** (assembler + N4 tests green) · **G7-2 ✅** (`receive`/`send` bracket + `drain_and_send` D0–D9 contract; `pipeline_bracket` + g9pre green) · **G7-3 PENDING** (worker-runtime + Armed→Running move into core) |
 | G8 | **naia-bevy-server mode-aware system sets** (layered on G7) — pipelined mode makes the existing `ReceivePackets` / `SendPackets` system sets run the parked/worker bracket internally; consumer systems sit between them via plain `add_systems(Update, …)`. **Zero new consumer-facing concepts.** Manages handle transit + consumer-chosen entity world. | PENDING (design §2f — pending sign-off) |
 | G9pre | **(per §2h H1) PREREQUISITE SPIKE** — prove pipelined send content ≡ resident serialization byte-for-byte across diff-mask cases. | ✅ COMPLETE/GREEN (§2i) — byte-identical (envelope + payload) across full/partial/multi-entity masks + freeze-isolation (concurrent post-freeze live mutation does NOT leak); pipelined transmit content is a pure fn of `(snapshot, plan)`. **Scope caveat (N4): production needed-set assembler not yet exercised → G7 obligation.** |
 | G9 | **`ServerMode::{Resident, Pipelined}` — single knob** — Pipelined⇒worker send, Resident⇒synchronous send. Same `receive`/`send` signatures; consumer code unchanged. **Oracle = synchronously-driven Pipelined bracket (NOT Resident)** — per §2i, identical bytes to production by construction; **no `SendStrategy` knob needed**, single-knob purity holds. | PENDING (design §2f — pending sign-off) |
