@@ -2,8 +2,8 @@
 //!
 //! The three handles — [`CoordHandle`], [`RecvHandle`], [`SendHandle`] —
 //! each run on a dedicated thread (or in the Sim/main app for `CoordHandle`).
-//! [`PipelinedServer`] is the unified consumer-facing handle that owns all
-//! three and exposes the primary [`PipelinedServer::new`] + [`PipelinedServer::tick`]
+//! [`PipelinedWorldServer`] is the unified consumer-facing handle that owns all
+//! three and exposes the primary [`PipelinedWorldServer::new`] + [`PipelinedWorldServer::tick`]
 //! API.
 //!
 //! Naming note: this module is `pipeline_actors` (not `pipeline_handles`)
@@ -36,7 +36,10 @@ pub use event_receiver::{
     RecvPublishEntityEvent, RecvSpawnEntityEvent, RecvTickEvent, RecvUnpublishEntityEvent,
 };
 pub use runtime::{PipelineRuntime, RuntimeState, RuntimeTimingHooks};
-pub use sim_pipeline::{PipelinedServer, TickCtx};
+pub use sim_pipeline::{PipelinedWorldServer, TickCtx};
+// Transitional alias (G-unify 2c): downstream + the diax facade still name
+// `PipelinedServer` until the cross-repo atomic land repoints them.
+pub use sim_pipeline::PipelinedWorldServer as PipelinedServer;
 pub use snapshot_sender::{SnapshotReceiver, SnapshotSender};
 pub use spawn::spawn_server_handles;
 

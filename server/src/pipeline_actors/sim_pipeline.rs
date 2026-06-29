@@ -1,7 +1,7 @@
-//! [`PipelinedServer<E>`] — unified pipeline handle; the primary entry point
+//! [`PipelinedWorldServer<E>`] — unified pipeline handle; the primary entry point
 //! for consumers of the pipelined server API.
 //!
-//! Construct with [`PipelinedServer::new`] (replaces `spawn_server_handles`).
+//! Construct with [`PipelinedWorldServer::new`] (replaces `spawn_server_handles`).
 //! Owns all three sub-handles:
 //! - `coord` (coordination, main-thread only).
 //! - `recv` (network-receive worker) — in a park-window slot shared with the worker.
@@ -18,13 +18,13 @@
 //!
 //! The body receives a [`TickCtx`] with owned `recv`/`send` handles and a
 //! `&mut CoordHandle<E>` (`ctx.coord`) for the duration of the tick. Workers
-//! must be parked before calling `tick()`; [`PipelinedServer`] does NOT own
+//! must be parked before calling `tick()`; [`PipelinedWorldServer`] does NOT own
 //! the park/unpark machinery — that belongs to the adapter
 //! (`PluginInternalState::park_workers`).
 //!
 //! # Worker slot sharing
 //!
-//! [`PipelinedServer::recv_slot`] and [`PipelinedServer::send_slot`] return
+//! [`PipelinedWorldServer::recv_slot`] and [`PipelinedWorldServer::send_slot`] return
 //! `Arc<Mutex<Option<...>>>` clones. The bevy adapter gives these to the
 //! recv/send workers at spawn time; workers deposit their handle before
 //! parking and re-claim it after unpark.
@@ -43,12 +43,12 @@ use crate::{
 use super::handles::CoordHandle;
 use super::ServerEntityConverter;
 
-// ── PipelinedServer ───────────────────────────────────────────────────────────
+// ── PipelinedWorldServer ───────────────────────────────────────────────────────────
 
-/// Unified pipeline handle. Construct with [`PipelinedServer::new`].
+/// Unified pipeline handle. Construct with [`PipelinedWorldServer::new`].
 ///
 /// See module-level docs for the design overview.
-pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
+pub struct PipelinedWorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// Coordination handle (main-thread only). Stored as `Option` so the
     /// handle can be temporarily moved into a `InternalWorldServer` for operations
     /// that require full-server access (e.g., `io_load` via [`Self::listen`]).
@@ -93,12 +93,12 @@ pub struct PipelinedServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     recv_subscriber: Option<Receiver<ReceiveOutput<E>>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Construct a [`InternalWorldServer<E>`] and immediately split it into a
-    /// [`PipelinedServer<E>`].
+    /// [`PipelinedWorldServer<E>`].
     ///
     /// This is the primary entry point for consumers. Pass the result to the
-    /// bevy adapter's `Plugin::pipelined` (via a `PipelinedServer` Bevy
+    /// bevy adapter's `Plugin::pipelined` (via a `PipelinedWorldServer` Bevy
     /// resource), then call [`Self::listen`] to bind a socket and drive ticks
     /// with [`Self::tick`].
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
@@ -155,12 +155,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
     /// [`Self::with_world_server`] — both restore it before returning).
     pub fn coord(&self) -> &CoordHandle<E> {
-        self.coord.as_ref().expect("PipelinedServer: CoordHandle temporarily unavailable")
+        self.coord.as_ref().expect("PipelinedWorldServer: CoordHandle temporarily unavailable")
     }
 
     /// Mutably borrow the coordination handle.
     pub fn coord_mut(&mut self) -> &mut CoordHandle<E> {
-        self.coord.as_mut().expect("PipelinedServer: CoordHandle temporarily unavailable")
+        self.coord.as_mut().expect("PipelinedWorldServer: CoordHandle temporarily unavailable")
     }
 
     /// `Arc` clone of the recv worker's park-window slot.
@@ -196,13 +196,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         body: impl FnOnce(&mut TickCtx<'_, E, W>),
     ) {
         let mut coord = self.coord.take().expect(
-            "PipelinedServer::tick: CoordHandle not available — re-entrant tick?",
+            "PipelinedWorldServer::tick: CoordHandle not available — re-entrant tick?",
         );
         let recv = self.recv_slot.lock().take().expect(
-            "PipelinedServer::tick: RecvHandle not in slot — park workers before calling tick()",
+            "PipelinedWorldServer::tick: RecvHandle not in slot — park workers before calling tick()",
         );
         let send = self.send_slot.lock().take().expect(
-            "PipelinedServer::tick: SendHandle not in slot — park workers before calling tick()",
+            "PipelinedWorldServer::tick: SendHandle not in slot — park workers before calling tick()",
         );
         let mut ctx = TickCtx {
             coord: &mut coord,
@@ -227,7 +227,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// `SendHandleRes`). MUST be followed by [`Self::restore_coord`] before the
     /// pipeline is used again.
     pub fn take_coord(&mut self) -> CoordHandle<E> {
-        self.coord.take().expect("PipelinedServer::take_coord: CoordHandle not available")
+        self.coord.take().expect("PipelinedWorldServer::take_coord: CoordHandle not available")
     }
 
     /// Restore a coordination handle previously taken by [`Self::take_coord`].
@@ -254,13 +254,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
     /// chasing the second panic should look upstream for the first.
     pub fn take_handles(&mut self) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>) {
         let coord = self.coord.take().expect(
-            "PipelinedServer::take_handles: CoordHandle not available",
+            "PipelinedWorldServer::take_handles: CoordHandle not available",
         );
         let recv = self.recv_slot.lock().take().expect(
-            "PipelinedServer::take_handles: RecvHandle not in slot — park workers first",
+            "PipelinedWorldServer::take_handles: RecvHandle not in slot — park workers first",
         );
         let send = self.send_slot.lock().take().expect(
-            "PipelinedServer::take_handles: SendHandle not in slot — park workers first",
+            "PipelinedWorldServer::take_handles: SendHandle not in slot — park workers first",
         );
         (coord, recv, send)
     }
@@ -300,13 +300,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
         f: impl FnOnce(&mut crate::InternalWorldServer<E>) -> R,
     ) -> R {
         let coord = self.coord.take().expect(
-            "PipelinedServer::with_world_server: CoordHandle not available",
+            "PipelinedWorldServer::with_world_server: CoordHandle not available",
         );
         let recv = self.recv_slot.lock().take().expect(
-            "PipelinedServer::with_world_server: RecvHandle not in slot",
+            "PipelinedWorldServer::with_world_server: RecvHandle not in slot",
         );
         let send = self.send_slot.lock().take().expect(
-            "PipelinedServer::with_world_server: SendHandle not in slot",
+            "PipelinedWorldServer::with_world_server: SendHandle not in slot",
         );
 
         let coord_state = coord.state;
@@ -327,7 +327,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
 //
 // MISSION_PIPELINE_API_BOUNDARY G3a (Connor 2026-06-29): every public
 // coord-only op on [`CoordHandle<E>`] is mirrored here as a thin forwarding
-// method so consumers operate on the unified [`PipelinedServer<E>`] handle
+// method so consumers operate on the unified [`PipelinedWorldServer<E>`] handle
 // directly — no `pipeline.coord_mut().method()` ceremony, no `InternalWorldServer`
 // reassembly. All methods delegate to `self.coord()` / `self.coord_mut()`,
 // which panic only inside an in-flight `tick`/`with_world_server` window (the
@@ -335,7 +335,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
 // window). `enable_entity_replication` is intentionally NOT forwarded here —
 // it is superseded by the G5 `enable_replication_for_existing_entity` op.
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     // ── Entity reads ──
 
     /// Forwards to [`CoordHandle::is_resource_entity`].
@@ -476,7 +476,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
 // calling thread and emits bytes identical to worker-driven production by
 // construction (G9pre §2i).
 
-impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// **D0 — receive.** Park-window recv-drain + entity-op application.
     ///
     /// Drains the recv half once (`RecvHandle::receive`) and applies the decoded
@@ -677,11 +677,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedServer<E> {
 
 // ── TickCtx ───────────────────────────────────────────────────────────────────
 
-/// Scoped context passed to a [`PipelinedServer::tick`] body.
+/// Scoped context passed to a [`PipelinedWorldServer::tick`] body.
 ///
 /// Provides framework-agnostic access to all three pipeline handles plus the
 /// consumer's world. The recv and send handles are **owned** for the duration
-/// of the tick body; [`PipelinedServer::tick`] automatically returns them to their
+/// of the tick body; [`PipelinedWorldServer::tick`] automatically returns them to their
 /// slots when the body returns.
 ///
 /// Adapters (e.g., `naia-bevy-server`) may add extension methods by `impl`ing

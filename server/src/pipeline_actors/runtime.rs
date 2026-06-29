@@ -203,7 +203,7 @@ pub struct PipelineRuntime<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// Worker thread handles. Empty until `spawn_workers`; drained on Drop.
     workers: Mutex<Vec<WorkerHandle>>,
     /// Park-window slot for the recv worker's [`RecvHandle`] — the same `Arc`
-    /// held by the [`crate::pipeline_actors::PipelinedServer`]'s pipeline, so a
+    /// held by the [`crate::pipeline_actors::PipelinedWorldServer`]'s pipeline, so a
     /// parked-window consumer system can take/return the handle.
     recv_slot: Arc<Mutex<Option<RecvHandle<E>>>>,
     /// Park-window slot for the send worker's [`SendHandle`] — symmetric.
@@ -221,7 +221,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
     /// call [`Self::spawn_workers`] after the socket is bound.
     ///
     /// `recv_slot` / `send_slot` MUST be the same `Arc`s the
-    /// [`crate::pipeline_actors::PipelinedServer`] holds (via its
+    /// [`crate::pipeline_actors::PipelinedWorldServer`] holds (via its
     /// `recv_slot()` / `send_slot()` accessors), so the workers and the
     /// consumer's park-window borrow share one underlying `Mutex<Option<…>>`.
     pub fn new_armed(

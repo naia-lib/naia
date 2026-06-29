@@ -69,7 +69,8 @@ use parking_lot::Mutex;
 use naia_bevy_shared::{Protocol as BevyProtocol, ReceivePackets, SendPackets};
 use naia_server::{
     pipeline_actors::{
-        spawn_server_handles, EventReceiver, PipelineRuntime, PipelinedServer as CorePipelinedServer,
+        spawn_server_handles, EventReceiver, PipelineRuntime,
+        PipelinedWorldServer as CorePipelinedServer,
         RuntimeState, RuntimeTimingHooks, SnapshotReceiver, SnapshotSender,
     },
     shared::Protocol as NaiaProtocol,

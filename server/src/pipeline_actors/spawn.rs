@@ -1,7 +1,7 @@
 //! Backward-compat re-export: `spawn_server_handles` delegates to
-//! [`PipelinedServer::new`].
+//! [`PipelinedWorldServer::new`].
 //!
-//! Prefer calling `PipelinedServer::new(config, protocol)` directly.
+//! Prefer calling `PipelinedWorldServer::new(config, protocol)` directly.
 
 use std::hash::Hash;
 
@@ -9,19 +9,19 @@ use naia_shared::Protocol;
 
 use crate::ServerConfig;
 
-use super::sim_pipeline::PipelinedServer;
+use super::sim_pipeline::PipelinedWorldServer;
 
-/// Construct a [`PipelinedServer<E>`]. Prefer `PipelinedServer::new` directly.
+/// Construct a [`PipelinedWorldServer<E>`]. Prefer `PipelinedWorldServer::new` directly.
 ///
 /// Kept for call-sites that haven't migrated yet; delegates directly to
-/// [`PipelinedServer::new`] with identical semantics.
+/// [`PipelinedWorldServer::new`] with identical semantics.
 pub fn spawn_server_handles<E, P>(
     server_config: ServerConfig,
     protocol: P,
-) -> PipelinedServer<E>
+) -> PipelinedWorldServer<E>
 where
     E: Copy + Eq + Hash + Send + Sync + 'static,
     P: Into<Protocol>,
 {
-    PipelinedServer::new(server_config, protocol)
+    PipelinedWorldServer::new(server_config, protocol)
 }

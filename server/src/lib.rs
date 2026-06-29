@@ -112,7 +112,10 @@ pub use naia_shared::bench_serde_counters;
 pub use naia_shared::bench_take_events_counters;
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_shared::bench_write_counters;
-pub use pipeline_actors::{spawn_server_handles, CoordHandle, PipelinedServer};
+pub use pipeline_actors::{
+    spawn_server_handles, CoordHandle, PipelinedWorldServer,
+    PipelinedWorldServer as PipelinedServer,
+};
 pub use room::{RoomKey, RoomMut, RoomRef};
 #[cfg(feature = "bench_instrumentation")]
 pub use server::world_server::{bench_iris_counters, bench_scope_counters};

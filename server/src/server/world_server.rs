@@ -511,7 +511,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Decodes and applies all buffered incoming packets for this frame.
     // MISSION_PIPELINE_API_BOUNDARY G8b: takes `world: &mut W` (not by value) so a
     // caller applying SEVERAL `ReceiveOutput`s per tick (the worker-shape channel
-    // burst drained by `PipelinedServer::receive`) can reborrow one world across
+    // burst drained by `PipelinedWorldServer::receive`) can reborrow one world across
     // them — a `WorldMutType` proxy is single-use by value. Byte-identical: this
     // body never moved `world`, only ever borrowed it `&mut`.
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: &mut W, now: &Instant) {
