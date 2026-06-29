@@ -309,12 +309,12 @@ where
     // (handshake events first, then the data-packet-derived events
     // that process_all_packets appends).
     let prior_world_events = std::mem::replace(
-        &mut ws.recv.incoming_world_events,
+        &mut ws.recv.state.incoming_world_events,
         crate::events::WorldEvents::<E>::new(),
     );
-    ws.recv.incoming_world_events = std::mem::replace(&mut output.world_events, prior_world_events);
+    ws.recv.state.incoming_world_events = std::mem::replace(&mut output.world_events, prior_world_events);
     // After the swap: output.world_events holds an empty fresh
-    // WorldEvents (target of the merged drain below); ws.recv.incoming_world_events
+    // WorldEvents (target of the merged drain below); ws.recv.state.incoming_world_events
     // holds the prior events ready to be augmented by process_all_packets.
 
     // Drain pending handshakes — in pipeline mode (RecvState::receive),
@@ -336,8 +336,8 @@ where
     // `SendHandle::process_recv_packets`'s doc-comment.
     let received_addresses = std::mem::take(&mut output.received_addresses);
     let pending_data_packets = std::mem::take(&mut output.pending_data_packets);
-    ws.send.process_recv_packets(
-        &mut ws.recv.recv_user_connections,
+    ws.send.state.process_recv_packets(
+        &mut ws.recv.state.recv_user_connections,
         received_addresses,
         pending_data_packets,
         server_tick,
