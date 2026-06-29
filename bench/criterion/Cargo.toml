@@ -2,7 +2,7 @@
 name = "naia-benches"
 version = "0.1.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
-workspace = ".."
+workspace = "../.."
 edition = "2021"
 publish = false
 description = "Criterion wall-time benchmarks for Naia"
@@ -32,10 +32,10 @@ path = "tests/many_kinds_no_64_cap.rs"
 criterion = { version = "0.5", features = ["html_reports"] }
 
 [dependencies]
-naia-server = { path = "../server", features = ["transport_local", "test_time", "bench_instrumentation"] }
-naia-client = { path = "../client", features = ["transport_local", "test_time"] }
-naia-shared = { path = "../shared", features = ["transport_local", "test_time", "bench_instrumentation"] }
-naia-demo-world = { path = "../demos/demo_utils/demo_world" }
+naia-server = { path = "../../server", features = ["transport_local", "test_time", "bench_instrumentation"] }
+naia-client = { path = "../../client", features = ["transport_local", "test_time"] }
+naia-shared = { path = "../../shared", features = ["transport_local", "test_time", "bench_instrumentation"] }
+naia-demo-world = { path = "../../demos/demo_utils/demo_world" }
 parking_lot = "0.12"
 bevy_ecs = { version = "0.19", default-features = false }
 zstd = "0.13"

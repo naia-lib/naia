@@ -13,8 +13,8 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
-naia-serde = { path = "../shared/serde" }
-naia-shared = { path = "../shared", default-features = false }
+naia-serde = { path = "../../shared/serde" }
+naia-shared = { path = "../../shared", default-features = false }
 
 [[bin]]
 name = "packet_deserialize"

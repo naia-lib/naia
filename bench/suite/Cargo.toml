@@ -12,7 +12,7 @@ path = "src/main.rs"
 [dependencies]
 # Same deps as naia-npa — this binary runs the full plan with timing instrumentation
 namako_engine = { path = "../../../namako/engine", features = ["npap", "macros"] }
-naia-tests = { path = "../tests" }
+naia-tests = { path = "../../test/tests" }
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

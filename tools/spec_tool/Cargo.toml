@@ -11,7 +11,7 @@ name = "naia_spec_tool"
 path = "src/main.rs"
 
 [dependencies]
-naia-test-harness = { path = "../harness" }
+naia-test-harness = { path = "../../test/harness" }
 
 clap = { version = "4.5", features = ["derive"] }
 serde = { version = "1.0", features = ["derive"] }
