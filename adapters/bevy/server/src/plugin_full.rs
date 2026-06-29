@@ -492,15 +492,9 @@ impl PluginInternalState {
             .take()
             .expect("armed_pipeline Some in Armed state");
 
-        // Load socket io via SimPipeline::with_world_server. Handles are
-        // temporarily moved into a WorldServer for the duration of the call,
-        // then restored to their slots. Byte-for-byte equivalent to
-        // `Server::listen`.
-        let socket: Box<dyn naia_server::transport::Socket> = socket.into();
-        let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(socket);
-        sim_pipeline.with_world_server(|ws| {
-            ws.io_load(ps, pr);
-        });
+        // Bind the socket (G2 API): splits the socket into I/O handles and
+        // calls io_load on the reassembled WorldServer in one step.
+        sim_pipeline.listen(socket);
 
         // Extract the transport's event-driven readiness (Some for the
         // in-process PacketChannel every cell uses; None for poll-only

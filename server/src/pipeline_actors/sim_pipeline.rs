@@ -173,12 +173,30 @@ impl<E: Copy + Eq + Hash + Send + Sync> SimPipeline<E> {
         *self.send_slot.lock() = Some(send);
     }
 
+    /// Bind a transport socket: splits the socket into its I/O handles and
+    /// calls `io_load` on the reassembled `WorldServer`.
+    ///
+    /// This is the G2 startup-window entry point. Equivalent to:
+    /// ```ignore
+    /// let (_auth_tx, _auth_rx, ps, pr) = socket.into().listen();
+    /// sim_pipeline.with_world_server(|ws| ws.io_load(ps, pr));
+    /// ```
+    ///
+    /// Must be called while workers are not yet spawned (or parked). After
+    /// this call the pipeline is ready for `tick()`.
+    pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S)
+    where
+        E: 'static,
+    {
+        let (_auth_tx, _auth_rx, ps, pr) = crate::transport::Socket::listen(socket.into());
+        self.with_world_server(|ws| ws.io_load(ps, pr));
+    }
+
     /// Temporarily reassemble a [`crate::WorldServer`] and invoke `f` against it.
     ///
     /// All three handles are moved into the `WorldServer`; after `f` returns
-    /// they are re-split and restored. Used internally and in tests that need
-    /// full-server access (e.g. `io_load` until G2 lands, `entity_replication_config`
-    /// until G3 adds it to `SimHandle`).
+    /// they are re-split and restored. Used for ops that require full-server
+    /// access (e.g. `entity_replication_config` until G3 adds it to `SimHandle`).
     ///
     /// Workers must be parked (or not yet started) before calling this.
     pub fn with_world_server<R>(
