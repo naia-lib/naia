@@ -51,6 +51,16 @@ pub struct HostWorldManager {
     // channel is gone. Component value UPDATES are NOT tracked here — they
     // are covered by the cross-thread `GlobalDirtyBitset`.
     pending_outbound: HashSet<GlobalEntity>,
+
+    // Per-entity set of component kinds CONFIRMED delivered to this peer,
+    // maintained from acked Insert/Remove deliveries in
+    // `process_delivered_commands`. Unlike the delivered `RemoteEntityChannel`'s
+    // `component_channels` map (which keeps a kind's entry after a delivered
+    // RemoveComponent), this set honors removes, so `host_entity_fully_delivered`
+    // never sees a stale "delivered" kind after a remove → re-insert. See that
+    // method for the full rationale (premature `pending_outbound` retire →
+    // dirty-trim under-supply).
+    delivered_component_kinds: HashMap<GlobalEntity, HashSet<ComponentKind>>,
 }
 
 impl HostWorldManager {
@@ -63,6 +73,7 @@ impl HostWorldManager {
             delivered_engine: RemoteEngine::new(host_type.invert()),
             incoming_events: Vec::new(),
             pending_outbound: HashSet::new(),
+            delivered_component_kinds: HashMap::new(),
         }
     }
 
@@ -76,19 +87,47 @@ impl HostWorldManager {
     /// True iff `host_entity`'s spawn + every host-known component kind
     /// has been confirmed delivered (or the host channel no longer
     /// exists). Used to retire entries from `pending_outbound`.
-    fn host_entity_fully_delivered(&self, host_entity: &HostEntity) -> bool {
+    fn host_entity_fully_delivered(
+        &self,
+        host_entity: &HostEntity,
+        global_entity: &GlobalEntity,
+    ) -> bool {
         let Some(host_channel) = self.host_engine.get_entity_channel(host_entity) else {
             // Host channel gone (despawned / migrated) — nothing left to
             // (re)transmit a value for.
             return true;
         };
-        let Some(delivered_channel) = self.get_delivered_world().get(host_entity) else {
+        // Spawn-delivery gate: the entity is not in the delivered world until
+        // its Spawn / SpawnWithComponents has been acked. Until then it is
+        // never fully delivered (covers the zero-component Spawn case, which
+        // would otherwise vacuously pass the empty component check below).
+        if self.get_delivered_world().get(host_entity).is_none() {
             return false;
-        };
-        host_channel
-            .component_kinds()
-            .iter()
-            .all(|k| delivered_channel.has_component_kind(k))
+        }
+        // Component delivery: compare the host channel's CURRENT outstanding
+        // kinds against the per-entity DELIVERED kind set. The delivered set is
+        // maintained from acked Insert/Remove deliveries (`on_delivered_*_
+        // component`), so it correctly reflects a remove. The delivered
+        // `RemoteEntityChannel`'s `has_component_kind` must NOT be used here: its
+        // `component_channels` map retains a kind's entry after a delivered
+        // RemoveComponent (it is keyed for message-ordering, not presence), so it
+        // reports a stale `true` for a removed component. On a remove → re-insert
+        // of a RETAINED carrier (e.g. a replicated-resource carrier whose entity
+        // registration survives `remove_replicated_resource`) that stale `true`
+        // would mark the freshly re-added InsertComponent "already delivered" and
+        // retire the entity from `pending_outbound` one tick after re-insert —
+        // before the new value is actually acked. The dirty-trim snapshot would
+        // then drop the entity while the reliable InsertComponent is still being
+        // retransmitted, producing a `world_writer` needed-set under-supply
+        // panic (silent insert loss in release). Over-retention is harmless by
+        // the `pending_outbound` contract; premature retire is the bug this
+        // guards against.
+        let delivered = self.delivered_component_kinds.get(global_entity);
+        host_channel.component_kinds().iter().all(|k| {
+            delivered
+                .map(|set| set.contains(k))
+                .unwrap_or(false)
+        })
     }
 
     /// L3 send-state seam variant: build the converter holding a write guard on
@@ -371,7 +410,7 @@ impl HostWorldManager {
                 .copied()
                 .filter(
                     |ge| match local_entity_map.global_entity_to_host_entity(ge) {
-                        Ok(host_entity) => self.host_entity_fully_delivered(&host_entity),
+                        Ok(host_entity) => self.host_entity_fully_delivered(&host_entity, ge),
                         // No host mapping → entity is gone; stop tracking it.
                         Err(_) => true,
                     },
@@ -486,6 +525,9 @@ impl HostWorldManager {
     ) {
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_DESPAWNS_TOTAL).increment(1);
+        if let Some(global_entity) = local_entity_map.global_entity_from_host(host_entity) {
+            self.delivered_component_kinds.remove(&global_entity);
+        }
         self.entity_generator
             .remove_by_host_entity(local_entity_map, host_entity);
     }
@@ -501,6 +543,10 @@ impl HostWorldManager {
         // Mark the receiver delivered so Phase 3 can skip the 6+ HashMap lookup chain
         // of is_component_updatable_for_entity and use the single-lookup fast path instead.
         entity_update_manager.mark_component_delivered(global_entity, component_kind);
+        self.delivered_component_kinds
+            .entry(*global_entity)
+            .or_default()
+            .insert(*component_kind);
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_COMPONENT_INSERTS_TOTAL).increment(1);
     }
@@ -514,6 +560,9 @@ impl HostWorldManager {
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_COMPONENT_REMOVES_TOTAL).increment(1);
         entity_update_manager.deregister_component(global_entity, component_kind);
+        if let Some(set) = self.delivered_component_kinds.get_mut(global_entity) {
+            set.remove(component_kind);
+        }
     }
 
     pub(crate) fn insert_entity_channel(&mut self, entity: HostEntity, channel: HostEntityChannel) {
