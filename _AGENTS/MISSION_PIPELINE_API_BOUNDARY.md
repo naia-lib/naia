@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G2 COMPLETE — naming sidequest complete — G3a impl NEXT
+status: G3a COMPLETE — G3b/G3c (unified Server param) NEXT
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -66,11 +66,25 @@ sim_pipeline.room_add_entity(&room_key, &entity);
 // ... etc. — all SimHandle<E> methods forwarded
 ```
 
-**G3b** (cyberlith worktree): D11 `CellCommandsExt` dies; cyberlith Sim systems call `sim_pipeline.method()` directly in the park window. Bevy adapter `CommandsExt` stays unchanged — it's for the resident path and deferred `Commands` semantics the pipelined path doesn't need.
+G3a is IMPLEMENTED (`PipelinedServer<E>` forwarding methods landed; naming finalized to `PipelinedServer`/`CoordHandle`). The forwarded set: entity reads (`is_resource_entity`, `entity_owner`, `entity_authority_status`, `entity_is_static`, `entity_converter`), user ops (`user_exists`, `user_keys`, `user_address`, `receive_user`, `disconnect_user`), room ops (`create_room`, `room_destroy`, `room_add_user`, `room_remove_user`, `room_add_entity`, `room_remove_entity`), replication config (`mark_entity_as_static`, `configure_entity_replication`, `apply_pending_world_hooks`), tick/queue introspection (`current_tick`, `scope_change_queue_len`, `pending_world_hooks_len`). `enable_entity_replication` excluded (G5).
+
+**G3b** (cyberlith worktree): D11 `CellCommandsExt` dies; cyberlith Sim systems call `pipelined_server.method()` directly in the park window. Bevy adapter `CommandsExt` stays unchanged — it's for the resident path and deferred `Commands` semantics the pipelined path doesn't need.
 
 ### 2d. Cyberlith lane — **DECIDED: Claude owns both worktrees**
 
 naia feature branch + cyberlith feature branch (naia path-dep repointed). Land atomically.
+
+### 2e. Unified `Server` SystemParam — **DECIDED: `ServerImpl::Pipelined` variant (Connor 2026-06-29)**
+
+Bevy server apps access the server through the single `Server<'w>` `#[derive(SystemParam)]`, which wraps the private `#[derive(Resource)] enum ServerImpl`. Today: `Full(naia_server::Server<Entity>)` + `WorldOnly(WorldServer<Entity>)`. **Decision: add a third variant `Pipelined(PipelinedServer<Entity>)`** so pipelined consumers use the same `Server` param — no separate `PipelinedServer` SystemParam, no raw `ResMut<PipelinedServer>` + `.0.as_mut()` ceremony.
+
+Design constraints (the two access disciplines do NOT fully unify — encode this honestly):
+
+- **Coord-safe subset → real `Pipelined` arms.** The coord handle rests on the main thread between ticks (`PipelinedServer.coord: Option<…>`); coord-only ops push to lock-protected queues that are safe against the concurrently-running recv/send workers by design. So the entire G3a forwarded set gets genuine `Pipelined` arms callable from any main-thread system: `create_room`, `room_*`, `user_*`/`receive_user`/`disconnect_user`, entity reads, `mark_entity_as_static`, `configure_entity_replication`, `current_tick`, queue introspection.
+- **Send-side / full-server methods → loud panic arms.** `send_message`, `broadcast_message`, `send_request`/`send_response`/`receive_response`, `accept_connection`/`reject_connection`/`listen`, `user_scope_mut`, `global_entity_priority_mut`, `record_historian_tick`, `entity_take_authority`, resource ops — these route through the send handle / reassembled `WorldServer` and are only valid inside the `tick()` park window. Their `Pipelined` arm is `unimplemented!`/`panic!` with a clear "not valid in pipelined mode — perform this inside the tick window" message. Accepted leak: pipelined consumers do all send-side work inside the existing drain/tick systems, so these arms are unreachable in practice.
+- The park-window discipline is still enforced by the plugin's drain/tick systems (the type cannot encode "only valid when parked"); the `Pipelined` variant only relocates the existing `PipelinedServer` resource into the enum and routes coord-safe methods.
+
+This is the chosen direction over a separate `PipelinedServer<'w>` param: maximum API uniformity, single consumer-facing param across all three modes.
 
 ## 3. Sequence + status
 
@@ -78,12 +92,14 @@ naia feature branch + cyberlith feature branch (naia path-dep repointed). Land a
 |------|-------------|--------|
 | G1 | `SimPipeline<E>` + `TickCtx<E,W>` tick-driver; `SimPipelineRes` in bevy adapter; tests green | ✅ COMPLETE (`55272fad`) |
 | G2 | `SimPipeline::listen(socket)` startup-window API; `PluginInternalState::listen` delegates to it | ✅ COMPLETE (`1e851a73`) |
-| G3 | **G3a** forwarding methods on `SimPipeline<E>` for all coord-only ops; **G3b** cyberlith D11 `CellCommandsExt` dies, replaced by direct pipeline calls | PENDING (design signed off) |
+| G3a | forwarding methods on `PipelinedServer<E>` for all coord-only ops | ✅ COMPLETE (`175d4bc7` rename + G3a impl) |
+| G3b | cyberlith D11 `CellCommandsExt` dies, replaced by direct `pipelined_server.method()` calls in the park window | PENDING (design signed off) |
+| G3c | unified `Server` param: add `ServerImpl::Pipelined(PipelinedServer<Entity>)` variant; coord-safe methods get real arms, send-side methods get loud panic arms; retire raw `ResMut<PipelinedServer>` access | PENDING (design signed off §2e) |
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
 | G7 | Ergonomic single-call opt-in wrapper: `PluginInternalState::with_parked_tick(world, \|ctx\| {...})` collapses park/tick/unpark into one bevy-adapter call; non-pipelined consumer keeps `Server` resource path unchanged | PENDING (Connor-approved 2026-06-29) |
-| M2 | sim-namako BDD specs written against G1–G6+G7 contract, not the leaked shape | PENDING (after G1–G7) |
+| M2 | sim-namako BDD specs written against G1–G7 contract (incl. G3c unified `Server` param), not the leaked shape | PENDING (after G1–G7) |
 
 Each pending group = design sub-pass + Connor sign-off before impl.
 
