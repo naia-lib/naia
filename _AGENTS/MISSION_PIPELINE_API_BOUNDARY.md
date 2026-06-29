@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G3a COMPLETE — G3b/G3c (unified Server param) NEXT
+status: G3a COMPLETE — MISSION REFRAMED (§2f: one authored tick, two runners) — G7–G10 design pending sign-off
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -86,6 +86,47 @@ Design constraints (the two access disciplines do NOT fully unify — encode thi
 
 This is the chosen direction over a separate `PipelinedServer<'w>` param: maximum API uniformity, single consumer-facing param across all three modes.
 
+### 2f. Pristine end-state — one authored tick, two runners (PROPOSED — pending Connor sign-off, 2026-06-29)
+
+**The realization that reframes the mission.** The entire pipeline coordinator — park/unpark, the synchronous recv drain, the freeze-point send-prep sequence, the one-tick-lag send-job prep, the deterministic synchronous send path, and the handle-transit dance — is hand-rolled in cyberlith `game_cell` (`cell.rs::update` + `server_access.rs::{open_park_window, do_park_window_tick, close_park_window}`, ~600 lines). Tracing it line-by-line: **almost all of it is generic pipeline MECHANISM, not cyberlith policy.** The perf-critical, byte-exactness-sensitive pieces (single-park barrier, freeze-point send-prep, one-tick-lag send-job, deterministic oracle path) are exactly the generic parts. Every naia consumer that wants pipelining is otherwise forced to re-derive this by hand. The mechanism belongs in naia.
+
+This supersedes the piecemeal G7 (`with_parked_tick`): that only handed back a parked window with raw handles and left the consumer to hand-assemble send-prep/snapshot/send-job inside the closure. The pristine design has naia own the *whole skeleton*.
+
+#### Canonical pipelined tick (naia-owned skeleton)
+
+Fixed sequence; the **bold** rows are generic mechanism naia owns end-to-end:
+
+| Phase | Owner |
+|---|---|
+| **Park workers + transit handles** | naia |
+| **Synchronous recv drain (single park/tick — the barrier-orch optimization)** | naia |
+| ExtractCommands — drain tick-buffer messages → game actions | consumer hook |
+| Simulate — run gameplay | consumer hook |
+| FlushReplication — register/configure/host-sync entities (via unified `Server` ops) | consumer hook |
+| Scope — apply visibility policy (via unified `Server` scope ops) | consumer hook |
+| **Freeze-point send-prep: `apply_pending_send_preamble` + `apply_pending_scope_changes` + `refresh_needed_entities`** | naia |
+| BuildSnapshot — produce the (optionally trimmed) `SnapshotWorld` | consumer hook |
+| **Send-job: `prepare_send_job` + `attach_send_plan` + publish to send worker (one-tick lag) OR synchronous `send_all_packets`** | naia |
+| **Unpark workers** | naia |
+
+#### Two runners, one authored tick
+
+The consumer authors the five policy hooks **once** (bevy: systems in naia-defined canonical phase-schedule labels; non-bevy: trait methods / closures). naia provides two runners that execute those same hooks:
+
+- **Pipelined** — workers + park/unpark + worker-thread send + one-tick lag.
+- **Resident** — synchronous, monolithic `Server`, inline send. `SendStrategy::{Worker, Synchronous}` is runner config (the deterministic oracle becomes `Synchronous`, replacing cyberlith's `#[cfg(feature = "deterministic")]` fork).
+
+Switching resident↔pipelined is a one-line runner/config change. **G3a + G3c are the load-bearing substrate, not mere ergonomics**: because the hooks call the unified `Server` op surface (`server.room_add_entity`, `server.configure_entity_replication`, …), the *identical* hook code runs against either the resident `WorldServer` or the pipelined handles.
+
+#### Performance preservation (non-negotiable)
+
+The runner executes the **exact same sequence** cyberlith hand-rolled — same single park, same freeze-point `prepare_send_job`, same one-tick lag, same deterministic synchronous oracle. Byte-exact identity ⇒ the determinism/desync moat keeps validating it ⇒ the perf floor is preserved by construction. This is the gate for the cyberlith cutover (G10): the moat must stay byte-exact-green.
+
+#### Layering
+
+- naia-server **core**: the framework-agnostic `PipelineDriver` owning the skeleton + the four generic phases, parameterized by hooks (trait/closure form) over `RecvHandle`/`SendHandle`/`CoordHandle` + `WorldMutType<E>`.
+- naia-bevy-server **adapter**: canonical phase-schedule labels + a runner that maps labels→hooks, manages handle transit, and operates on a consumer-chosen entity world (so a consumer's Sim-SubApp split, like cyberlith's, is just a choice the Simulate/BuildSnapshot hooks make — not baked into naia).
+
 ## 3. Sequence + status
 
 | Step | Description | Status |
@@ -98,8 +139,11 @@ This is the chosen direction over a separate `PipelinedServer<'w>` param: maximu
 | G4 | `spawn_replicated` fused op | PENDING |
 | G5 | `enable_replication_for_existing_entity` | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
-| G7 | Ergonomic single-call opt-in wrapper: `PluginInternalState::with_parked_tick(world, \|ctx\| {...})` collapses park/tick/unpark into one bevy-adapter call; non-pipelined consumer keeps `Server` resource path unchanged | PENDING (Connor-approved 2026-06-29) |
-| M2 | sim-namako BDD specs written against G1–G7 contract (incl. G3c unified `Server` param), not the leaked shape | PENDING (after G1–G7) |
+| G7 | **naia-server core `PipelineDriver`** — owns the canonical pipelined-tick skeleton (park → recv-drain → freeze-point send-prep → send-job → unpark) + the four generic phases, parameterized by policy hooks (trait/closure form). Framework-agnostic. **Supersedes** the old minimal `with_parked_tick` wrapper. | PENDING (design §2f — pending sign-off) |
+| G8 | **naia-bevy-server schedule-driven runner** — canonical phase-schedule labels (ExtractCommands / Simulate / FlushReplication / Scope / BuildSnapshot); a `PipelinedRunner` maps labels→hooks, manages handle transit, and drives a consumer-chosen entity world. Consumer registers systems in the labels. | PENDING (design §2f — pending sign-off) |
+| G9 | **Resident runner parity** — same phase labels execute synchronously via the monolithic `Server`; `SendStrategy::{Worker, Synchronous}` runner config (deterministic oracle = `Synchronous`). Resident↔pipelined = one config line. Relies on G3c unified `Server` param so hooks are mode-agnostic. | PENDING (design §2f — pending sign-off) |
+| G10 | **cyberlith cutover** (cyberlith worktree) — delete `open_park_window`/`do_park_window_tick`/`close_park_window` + the `drain_sim_*` glue; re-express them as phase systems in naia's labels; `cell.update()` → `runner.tick()`. **Gate: determinism/desync moat byte-exact-green** (= perf floor preserved). | PENDING (design §2f — pending sign-off) |
+| M2 | sim-namako BDD specs written against the phase-hook contract (G1–G9), not the leaked shape | PENDING (after G1–G9) |
 
 Each pending group = design sub-pass + Connor sign-off before impl.
 
@@ -113,11 +157,12 @@ Each pending group = design sub-pass + Connor sign-off before impl.
 ## 5. Absorbed items
 
 - `enable_entity_replication` fail-loud guard (`naia dev 350f00c2`): committed but **moot/absorbed** — under G3/G6, `enable_entity_replication` becomes naia-internal; the invariant is enforced by API contract. Will be superseded when G3 lands.
-- M2 (sim-namako BDD coverage): reshaped as the executable contract for G1–G7.
+- M2 (sim-namako BDD coverage): reshaped as the executable contract for G1–G9 — the phase-hook contract of §2f, validated under both runners.
 
 ## 6. Gates (from audit spec §8)
 
-- `server_access.rs`: zero `WorldServer` reassembly, zero handle `.take()`, zero `HostSyncEvent` construction.
+- **Perf preservation (G10 gate):** cyberlith determinism/desync moat stays byte-exact-green through the cutover — the runner must execute the same single-park / freeze-point send-prep / one-tick-lag sequence. Byte-exact identity IS the perf-floor guarantee. Also confirm `bench_profile` per-phase spans match pre-cutover (no new barriers, no double-park).
+- `server_access.rs` (until deleted at G10): zero `WorldServer` reassembly, zero handle `.take()`, zero `HostSyncEvent` construction. At G10 the file's park-window machinery is gone entirely.
 - naia-primitive tripwire (cybertool check) green with empty/justified allowlist.
 - naia sim-namako specs cover G1–G6 behavior (incl. resource remove→re-insert).
 - cyberlith determinism moat green; naia-isolation green; native + wasm32 build.
