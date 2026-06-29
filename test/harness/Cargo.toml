@@ -81,3 +81,7 @@ path = "contract_tests/integration_only/router_basic.rs"
 [[test]]
 name = "lagged_send_drops_final_value"
 path = "contract_tests/integration_only/lagged_send_drops_final_value.rs"
+
+[[test]]
+name = "g9pre_resident_pipelined_byte_identity"
+path = "contract_tests/integration_only/g9pre_resident_pipelined_byte_identity.rs"
