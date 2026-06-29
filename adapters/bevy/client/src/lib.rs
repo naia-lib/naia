@@ -73,7 +73,7 @@
 pub use naia_bevy_shared::{
     sequence_greater_than, sequence_less_than, wrapping_diff, EntityAuthStatus, GameInstant,
     HandleTickEvents, HandleWorldEvents, Protocol, Random, Replicate, ReplicateBundle,
-    ResponseSendKey, Tick, Timer, WorldToHostSync, WorldUpdate,
+    ReplicatedResource, ResponseSendKey, Tick, Timer, WorldToHostSync, WorldUpdate,
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},
@@ -91,7 +91,6 @@ mod component_event_registry;
 mod components;
 mod plugin;
 mod protocol_ext;
-mod resource_sync;
 mod systems;
 
 pub use naia_bevy_derive::ClientMarker;

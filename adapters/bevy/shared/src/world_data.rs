@@ -16,6 +16,24 @@ use super::component_access::{ComponentAccess, ComponentAccessor};
 pub struct WorldData {
     entities: HashSet<Entity>,
     kind_to_accessor_map: HashMap<ComponentKind, Box<dyn ComponentAccess>>,
+    /// Component kinds that are Replicated Resources (registered via
+    /// `Protocol::add_resource`). A ReplicatedResource is BOTH a bevy
+    /// `Component` (the carrier entity-component) AND a bevy `Resource`
+    /// (`Res<R>`); under bevy 0.19 those share one storage cell, so the
+    /// carrier entity-component aliases `Res<R>`. Despawning such an
+    /// entity panics — so the despawn chokepoint
+    /// (`WorldMut::despawn_entity`) consults this set and emulates bevy's
+    /// resource lifecycle (component-remove → `Res<R>` becomes `None`)
+    /// instead of `World::despawn`.
+    resource_kinds: HashSet<ComponentKind>,
+    /// Entities that have ever carried a Replicated Resource component.
+    /// Once an entity has held a `Resource`-derived component, bevy 0.19
+    /// panics if it is `World::despawn`ed — *even after the component is
+    /// removed*. Resource removal replicates as BOTH a component-remove
+    /// (empties the carrier) and an entity-despawn; this set lets the
+    /// despawn chokepoint recognize the now-empty carrier and skip
+    /// `World::despawn` (the entity is retained, reclaimed on world drop).
+    resource_carrier_entities: HashSet<Entity>,
 }
 
 impl Clone for WorldData {
@@ -27,6 +45,8 @@ impl Clone for WorldData {
                 .iter()
                 .map(|(kind, accessor)| (*kind, accessor.box_clone()))
                 .collect(),
+            resource_kinds: self.resource_kinds.clone(),
+            resource_carrier_entities: self.resource_carrier_entities.clone(),
         }
     }
 }
@@ -41,6 +61,7 @@ impl WorldData {
             panic!("merging world data with non-empty entities");
         }
         self.kind_to_accessor_map.extend(other.kind_to_accessor_map);
+        self.resource_kinds.extend(other.resource_kinds);
     }
 
     pub fn add_systems(&self, app: &mut App) {
@@ -115,5 +136,30 @@ impl WorldData {
 
     pub(crate) fn has_kind(&self, component_kind: &ComponentKind) -> bool {
         self.kind_to_accessor_map.contains_key(component_kind)
+    }
+
+    /// Mark `component_kind` as a Replicated Resource kind. Called by
+    /// `Protocol::add_resource`.
+    pub fn mark_resource_kind(&mut self, component_kind: &ComponentKind) {
+        self.resource_kinds.insert(*component_kind);
+    }
+
+    /// Whether `component_kind` is a Replicated Resource kind (its
+    /// carrier entity-component aliases `Res<R>` and must never be
+    /// despawned — see [`WorldData::resource_kinds`]).
+    pub fn is_resource_kind(&self, component_kind: &ComponentKind) -> bool {
+        self.resource_kinds.contains(component_kind)
+    }
+
+    /// Record that `entity` carries (or has carried) a Replicated
+    /// Resource component, so the despawn chokepoint never `World::despawn`s
+    /// it.
+    pub fn mark_resource_carrier_entity(&mut self, entity: &Entity) {
+        self.resource_carrier_entities.insert(*entity);
+    }
+
+    /// Whether `entity` has ever carried a Replicated Resource component.
+    pub fn is_resource_carrier_entity(&self, entity: &Entity) -> bool {
+        self.resource_carrier_entities.contains(entity)
     }
 }

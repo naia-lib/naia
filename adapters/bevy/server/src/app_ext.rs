@@ -10,30 +10,29 @@ use crate::{
         InsertComponentEvent, InsertResourceEvent, RemoveComponentEvent, RemoveResourceEvent,
         UpdateComponentEvent, UpdateResourceEvent,
     },
-    resource_sync::{install_resource_sync_system, SyncDirtyTracker},
 };
 
 // App Extension Methods
 pub trait AppRegisterComponentEvents {
     fn add_component_events<C: Replicate>(&mut self) -> &mut Self;
     fn add_bundle_events<B: ReplicateBundle>(&mut self) -> &mut Self;
-    /// Register the user-facing event types for Replicated Resource `R`.
-    /// Adds `InsertResourceEvent<R>`, `UpdateResourceEvent<R>`, and
-    /// `RemoveResourceEvent<R>` as bevy `Message` types.
+    /// Register the user-facing lifecycle event types for Replicated
+    /// Resource `R`: `InsertResourceEvent<R>`, `UpdateResourceEvent<R>`,
+    /// and `RemoveResourceEvent<R>` as bevy `Message` types.
     ///
-    /// Also installs the **Mode B mirror system** for `R`: a per-tick
-    /// system that drains the bevy-resource side's `SyncDirtyTracker<R>`
-    /// and propagates each touched `Property<T>` field to the entity-
-    /// component side via `Replicate::mirror_single_field`. The result:
-    /// users access `R` via standard `Res<R>` / `ResMut<R>`, mutations
-    /// replicate per-field with no over-replication.
+    /// Replication of the resource VALUE happens for free under bevy 0.19
+    /// storage aliasing: a `ReplicatedResource` is both a bevy `Component`
+    /// (the host-owned carrier entity-component, with the native naia
+    /// `PropertyMutator` attached at insert) and a bevy `Resource`
+    /// (`Res<R>`), and they share one storage cell — so `ResMut<R>` writes
+    /// are diff-tracked and replicate via the standard component path with
+    /// no mirror. This method is OPTIONAL and only needed if the consumer
+    /// wants the insert/update/remove lifecycle messages (and to suppress
+    /// the equivalent component-events; see `add_component_events`).
     ///
-    /// Per D17 of `_AGENTS/RESOURCES_PLAN.md`: this method extends the
-    /// existing `AppRegisterComponentEvents` trait rather than introducing
-    /// a new trait — keeps user trait imports minimal.
-    ///
-    /// The shared `Protocol` must also register `R` via
-    /// `protocol.add_resource::<R>()` in the user's `ProtocolPlugin`.
+    /// The shared `Protocol` must register `R` via
+    /// `protocol.add_resource::<R>()` in the user's `ProtocolPlugin`, and
+    /// `commands.replicate_resource::<R>(..)` inserts the value.
     fn add_resource_events<R>(&mut self) -> &mut Self
     where
         R: HostComponent
@@ -78,17 +77,12 @@ impl AppRegisterComponentEvents for App {
             + bevy_ecs::resource::Resource
             + bevy_ecs::component::Component<Mutability = Mutable>,
     {
-        // Register the user-facing event types as bevy messages.
+        // Register the user-facing lifecycle event types as bevy messages.
+        // Value replication is handled by aliasing + the carrier
+        // component's native naia mutator — no mirror system to install.
         self.add_message::<InsertResourceEvent<R>>()
             .add_message::<UpdateResourceEvent<R>>()
             .add_message::<RemoveResourceEvent<R>>();
-
-        // Install Mode B mirror infrastructure: tracker + sync system.
-        // Idempotent — re-registration is a no-op.
-        if self.world().get_resource::<SyncDirtyTracker<R>>().is_none() {
-            self.insert_resource(SyncDirtyTracker::<R>::default());
-        }
-        install_resource_sync_system::<R>(self);
 
         self
     }

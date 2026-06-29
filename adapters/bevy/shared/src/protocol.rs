@@ -143,6 +143,13 @@ impl Protocol {
         self.inner
             .resource_kinds
             .register::<R>(ComponentKind::of::<R>());
+        // Mark the kind in `world_data` so the bevy despawn chokepoint
+        // (`WorldMut::despawn_entity`) treats the carrier entity as a
+        // resource carrier (component-remove, never `World::despawn`).
+        self.world_data
+            .as_mut()
+            .expect("shouldn't happen")
+            .mark_resource_kind(&ComponentKind::of::<R>());
         self
     }
 

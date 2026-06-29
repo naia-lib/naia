@@ -199,6 +199,48 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     }
 
     fn despawn_entity(&mut self, entity: &Entity) {
+        // Resource-carrier guard (bevy 0.19): a ReplicatedResource carrier
+        // entity's `Resource`-derived component ALIASES `Res<R>` (a
+        // Component+Resource type shares one storage cell). Despawning such
+        // an entity PANICS — once an entity has held a resource component,
+        // `World::despawn` errors even after the component is removed. A
+        // replicated resource therefore follows bevy's RESOURCE lifecycle,
+        // not the entity lifecycle: "despawn" of the carrier is emulated by
+        // removing the resource component(s) (clean — turns `Res<R>` into
+        // `None`), leaving the now-empty carrier entity in place (reclaimed
+        // on world drop). This is the single chokepoint every despawn path
+        // funnels through (server `remove_resource`, client disconnect
+        // `despawn_all_remote_entities`, scope-exit, server-driven despawn).
+        // An entity is a resource carrier if it currently holds a resource
+        // component, OR it has ever held one (marked at insert; the resource
+        // component may already have been removed by a preceding
+        // component-remove op — resource removal replicates as
+        // component-remove THEN entity-despawn).
+        let resource_kinds_on_entity: Vec<ComponentKind> = {
+            let component_kinds = WorldMutType::<Entity>::component_kinds(self, entity);
+            let world_data = world_data(self.world);
+            component_kinds
+                .into_iter()
+                .filter(|kind| world_data.is_resource_kind(kind))
+                .collect()
+        };
+        let is_resource_carrier = !resource_kinds_on_entity.is_empty()
+            || world_data(self.world).is_resource_carrier_entity(entity);
+        if is_resource_carrier {
+            // Remove any resource component(s) still present (clean — turns
+            // `Res<R>` into `None`), then retain the now-empty entity. We must
+            // NOT `World::despawn` a (former) resource carrier.
+            for kind in &resource_kinds_on_entity {
+                let _ = self.remove_component_of_kind(entity, kind);
+            }
+            // Drop the entity from naia's adapter-side entity set, but DO
+            // NOT call `World::despawn` (the empty carrier entity is
+            // retained, reclaimed on world drop).
+            let mut world_data = world_data_unchecked_mut(self.world);
+            world_data.despawn_entity(entity);
+            return;
+        }
+
         let mut world_data = world_data_unchecked_mut(self.world);
         world_data.despawn_entity(entity);
 
@@ -326,11 +368,18 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
     fn insert_boxed_component(&mut self, entity: &Entity, boxed_component: Box<dyn Replicate>) {
         let component_kind = boxed_component.kind();
         self.world
-            .resource_scope(|world: &mut World, data: Mut<WorldData>| {
+            .resource_scope(|world: &mut World, mut data: Mut<WorldData>| {
                 let Some(accessor) = data.component_access(&component_kind) else {
                     panic!("ComponentKind has not been registered?");
                 };
                 accessor.insert_component(world, entity, boxed_component);
+                // bevy 0.19: a ReplicatedResource carrier entity must never
+                // be `World::despawn`ed. Remember it so the despawn
+                // chokepoint routes to component-remove even after the
+                // resource component is later removed.
+                if data.is_resource_kind(&component_kind) {
+                    data.mark_resource_carrier_entity(entity);
+                }
             });
     }
 

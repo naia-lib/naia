@@ -246,6 +246,19 @@ impl BevyHarness {
             .expect("run insert system");
         self.server_app.update();
     }
+
+    fn server_removes_score(&mut self) {
+        let id = self
+            .server_app
+            .register_system(|mut commands: bevy_ecs::system::Commands| {
+                commands.remove_replicated_resource::<TestScore>();
+            });
+        self.server_app
+            .world_mut()
+            .run_system(id)
+            .expect("run remove system");
+        self.server_app.update();
+    }
 }
 
 #[test]
@@ -432,4 +445,89 @@ fn f3_disconnect_with_resource_authority_reverts_to_available() {
         .expect("server still holds Res<TestScore>");
     assert_eq!(*score.home, 0);
     let _ = EntityAuthStatus::Available;
+}
+
+/// f6: server `remove_replicated_resource` lifecycle.
+///
+/// A ReplicatedResource carrier entity must NEVER be `World::despawn`ed
+/// (it aliases a bevy `Resource` cell, which panics on despawn). The
+/// despawn chokepoint (`WorldMut::despawn_entity`) detects the carrier
+/// (its component kind is in `resource_kinds`) and emulates bevy's
+/// resource lifecycle via component-remove instead. This test proves:
+/// (a) `remove_replicated_resource` does NOT panic on the server, and
+/// (b) the client's `Res<TestScore>` becomes `None` (the removal
+/// replicates as the carrier's despawn, which the client also routes to
+/// component-remove).
+#[test]
+fn f6_remove_replicated_resource_clears_client_res() {
+    let mut h = BevyHarness::new();
+    h.tick_n(60);
+
+    h.server_inserts_score(TestScore::new(4, 5));
+    h.tick_n(60);
+    assert!(
+        h.client_app.world().get_resource::<TestScore>().is_some(),
+        "client should hold Res<TestScore> after insert"
+    );
+    // Server still holds it too.
+    assert!(h.server_app.world().get_resource::<TestScore>().is_some());
+
+    // Remove — must not panic (would `World::despawn` the carrier without
+    // the resource-aware chokepoint).
+    h.server_removes_score();
+    assert!(
+        h.server_app.world().get_resource::<TestScore>().is_none(),
+        "server Res<TestScore> should be gone after remove (component-remove)"
+    );
+
+    h.tick_n(60);
+
+    assert!(
+        h.client_app.world().get_resource::<TestScore>().is_none(),
+        "client Res<TestScore> should be cleared after server removal"
+    );
+}
+
+/// f7: client disconnect with a live replicated resource must NOT panic.
+///
+/// `Client::disconnect` ultimately runs `despawn_all_remote_entities`,
+/// which despawns every remote entity — INCLUDING the resource carrier.
+/// Before the resource-aware chokepoint that `World::despawn` panicked
+/// (the crash this fix targets). Here we drive a real client disconnect
+/// and assert the client app survives a subsequent update and drops
+/// `Res<TestScore>`.
+#[test]
+fn f7_client_disconnect_with_resource_no_panic() {
+    let mut h = BevyHarness::new();
+    h.tick_n(60);
+
+    h.server_inserts_score(TestScore::new(1, 2));
+    h.tick_n(60);
+    assert!(
+        h.client_app.world().get_resource::<TestScore>().is_some(),
+        "client should hold Res<TestScore> before disconnect"
+    );
+
+    // Drive a real client disconnect: `despawn_all_remote_entities` runs
+    // during the client's process loop and despawns the carrier entity.
+    let id = h
+        .client_app
+        .register_system(|mut client: Client<Main>| {
+            if client.connection_status() == naia_bevy_client::ConnectionStatus::Connected {
+                client.disconnect();
+            }
+        });
+    h.client_app.world_mut().run_system(id).expect("disconnect");
+
+    // Several updates so the disconnect + despawn_all_remote_entities path
+    // executes. This must not panic.
+    for _ in 0..10 {
+        naia_bevy_shared::TestClock::advance(60);
+        h.client_app.update();
+    }
+
+    assert!(
+        h.client_app.world().get_resource::<TestScore>().is_none(),
+        "client Res<TestScore> should be cleared after disconnect (carrier removed, not despawned)"
+    );
 }

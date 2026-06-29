@@ -8,25 +8,27 @@ use crate::{
         InsertBundleEvent, InsertComponentEvent, InsertResourceEvent, RemoveComponentEvent,
         RemoveResourceEvent, UpdateComponentEvent, UpdateResourceEvent,
     },
-    resource_sync::install_resource_sync_system,
 };
 
 // App Extension Methods
 pub trait AppRegisterComponentEvents {
     fn add_component_events<T: Send + Sync + 'static, C: Replicate>(&mut self) -> &mut Self;
     fn add_bundle_events<T: Send + Sync + 'static, B: ReplicateBundle>(&mut self) -> &mut Self;
-    /// Register the user-facing event types for Replicated Resource `R`
-    /// scoped under client-tag `T`. Adds `InsertResourceEvent<T, R>`,
-    /// `UpdateResourceEvent<T, R>`, and `RemoveResourceEvent<T, R>` as
-    /// bevy `Message` types AND installs the Mode B mirror system
-    /// (incoming entity-component → bevy `Resource<R>` + outgoing
-    /// `ResMut<R>` → entity-component when client holds authority).
+    /// Register the user-facing lifecycle event types for Replicated
+    /// Resource `R` scoped under client-tag `T`: `InsertResourceEvent<T, R>`,
+    /// `UpdateResourceEvent<T, R>`, and `RemoveResourceEvent<T, R>` as bevy
+    /// `Message` types.
     ///
-    /// Per D17 of `_AGENTS/RESOURCES_PLAN.md`: this method extends the
-    /// existing `AppRegisterComponentEvents` trait — no new trait
-    /// import for users to manage.
+    /// The resource VALUE is delivered for free under bevy 0.19 storage
+    /// aliasing: the replicated carrier entity-component IS `Res<R>` (a
+    /// Component+Resource type shares one storage cell), so when the client
+    /// receives the carrier component `Res<R>` is populated automatically,
+    /// and per-field server updates flow through the standard component
+    /// apply path. This method is OPTIONAL — only needed for the
+    /// insert/update/remove lifecycle messages (and to suppress the
+    /// equivalent component-events; see `add_component_events`).
     ///
-    /// The shared `Protocol` must also register `R` via
+    /// The shared `Protocol` must register `R` via
     /// `protocol.add_resource::<R>()` in the user's `ProtocolPlugin`.
     fn add_resource_events<T, R>(&mut self) -> &mut Self
     where
@@ -71,12 +73,6 @@ impl AppRegisterComponentEvents for App {
         self.add_message::<InsertResourceEvent<T, R>>()
             .add_message::<UpdateResourceEvent<T, R>>()
             .add_message::<RemoveResourceEvent<T, R>>();
-
-        // Install Mode B mirror infrastructure: per-tick dispatcher
-        // running incoming (entity-component → bevy Resource) and
-        // outgoing (bevy ResMut → entity-component → wire) sync
-        // hooks. Idempotent.
-        install_resource_sync_system::<T, R>(self);
 
         self
     }

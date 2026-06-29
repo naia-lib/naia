@@ -265,28 +265,24 @@ impl<'w, 's> ServerCommandsExt for Commands<'w, 's> {
 }
 
 /// Shared body of `replicate_resource` and `replicate_resource_static`.
-/// Inserts the resource on the entity-component side via ServerImpl,
-/// then installs the Mode B bevy-Resource mirror.
+///
+/// Spawns the host-owned carrier entity and inserts `value` as its `R`
+/// component with the native naia `PropertyMutator` attached. Under bevy
+/// 0.19 storage aliasing that carrier component IS `Res<R>`, so no
+/// separate bevy-`Resource` mirror is needed: a later `ResMut<R>` field
+/// write mutates the same Property cell the native mutator is attached
+/// to, which records the per-field diff in naia's `DirtyQueue` and
+/// replicates. Singleton-per-type is enforced by `ServerImpl::insert_resource`
+/// (the resource registry rejects a duplicate kind).
 fn replicate_resource_inner<R: ReplicatedResource>(
     world: &mut bevy_ecs::world::World,
     value: R,
     is_static: bool,
 ) {
-    // Snapshot for the bevy-Resource side (Mode B mirror needs its own
-    // copy with `SyncMutator` wired in; the entity-component side gets
-    // the original `value`).
-    let snapshot = value.copy_to_box();
-
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {
         let result = server.insert_resource::<_, R>(world.proxy_mut(), value, is_static);
         if let Err(_e) = result {
             log::warn!("naia replicate_resource: type already inserted; skipping duplicate insert");
         }
     });
-
-    let value_for_bevy: Box<R> = snapshot
-        .to_boxed_any()
-        .downcast::<R>()
-        .expect("Box<dyn Replicate> built from R must downcast back to R");
-    crate::resource_sync::install_bevy_resource_mirror::<R>(world, *value_for_bevy);
 }

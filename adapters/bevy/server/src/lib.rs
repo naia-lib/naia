@@ -81,7 +81,7 @@ pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
     HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
     Instant, ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateBundle, ReplicatedComponent, ResponseSendKey, SendPackets,
+    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, ResponseSendKey, SendPackets,
     SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
     WorldProxy, WorldProxyMut, WorldRef, WorldRefType, WorldToHostSync, WorldUpdate,
 };
@@ -116,8 +116,6 @@ mod host_sync_pipeline;
 mod plugin;
 mod plugin_full;
 mod protocol_ext;
-#[doc(hidden)]
-mod resource_sync;
 mod server;
 mod sim_converter;
 mod snapshot_builder;
