@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use bevy_ecs::{
+    component::Component,
     entity::Entity,
     resource::Resource,
     system::{ResMut, SystemParam},
@@ -16,9 +17,20 @@ use naia_server::{
 
 use naia_bevy_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, Instant, Message, ReplicatedResource, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType, WorldRefType,
+    EntityDoesNotExistError, GlobalEntity, HostOwned, Instant, Message, ReplicatedResource, Request,
+    Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType, WorldProxyMut, WorldRefType,
 };
+
+use crate::plugin::Singleton;
+
+/// G6 — naia-owned outbox of sim-world resource carriers awaiting coord-side
+/// registration. Lazily inserted into the sim subapp world by
+/// [`Server::pipeline_replicate_resource`] and drained, against the coordinator,
+/// by [`Server::pipeline_drain_resource_registrations`]. Owning this here (vs a
+/// consumer-defined carrier) keeps pipelined-sim resource replication a naia
+/// engine concern.
+#[derive(Resource, Default)]
+pub struct PendingResourceRegistrations(Vec<Entity>);
 
 use crate::Replicate;
 
@@ -865,6 +877,94 @@ impl<'w> Server<'w> {
     pub fn pipeline_send(world: &mut World, send_world: &World) {
         Self::world_only_resource_scope(world, |_world, ws| {
             ws.send(naia_bevy_shared::WorldProxy::proxy(send_world));
+        });
+    }
+
+    /// G6 — register a replicated resource from a sim-mode (pipelined) world.
+    /// The sim-mode counterpart of the resident
+    /// [`crate::ServerCommandsExt::replicate_resource`].
+    ///
+    /// Under bevy's resource/storage aliasing the inserted value's component
+    /// lives on a hidden backing carrier entity; this tags that carrier
+    /// `HostOwned` (so it rides the existing `HostSyncEvent` machinery exactly
+    /// like an avatar/tile) and enqueues it for the coord-side registration drain
+    /// ([`Self::pipeline_drain_resource_registrations`]). The value insert + the
+    /// `HostOwned` attach are the same `&mut World` op, so naia's
+    /// `on_component_added::<R>` fires naturally on the next sim Update.
+    pub fn pipeline_replicate_resource<R: ReplicatedResource>(sim_world: &mut World, value: R) {
+        sim_world.insert_resource(value);
+        let Some(entity) = Self::resource_backing_entity::<R>(sim_world) else {
+            return;
+        };
+        // Carrier reuse across remove/re-insert: a carrier that ALREADY has
+        // `HostOwned` is a prior carrier being re-used — its naia registration is
+        // still live; only the component was re-added. Enable once per entity —
+        // re-enabling fails loud in naia, and the re-add's `on_component_added`
+        // carries the existing GlobalEntity through the host-sync drain.
+        if sim_world.entity(entity).contains::<HostOwned>() {
+            return;
+        }
+        sim_world
+            .entity_mut(entity)
+            .insert(HostOwned::new::<Singleton>());
+        sim_world
+            .get_resource_or_insert_with(PendingResourceRegistrations::default)
+            .0
+            .push(entity);
+    }
+
+    /// G6 — de-register a sim-mode replicated resource. Removes ONLY the resource
+    /// component and deliberately KEEPS `HostOwned` on the carrier: naia's
+    /// `on_component_removed::<R>` emits the wire-Remove only while the carrier
+    /// still has `HostOwned`, so dropping it here would SUPPRESS the removal and
+    /// clients' `Res<R>` would never clear. With `HostOwned` retained, the
+    /// component-remove replicates → clients clear the carrier component → their
+    /// `Res<R>` becomes `None` via storage aliasing.
+    ///
+    /// The now-empty carrier entity is intentionally retained (exactly as bevy's
+    /// own `remove_resource` retains its backing entity) and is reused by the next
+    /// [`Self::pipeline_replicate_resource`] — a former-resource entity can't be
+    /// despawned under bevy 0.19.
+    pub fn pipeline_remove_replicated_resource<R: ReplicatedResource>(sim_world: &mut World) {
+        sim_world.remove_resource::<R>();
+    }
+
+    /// Locate the hidden backing carrier entity for resource `R` (the `Res<R>`
+    /// component lives on it via storage aliasing).
+    fn resource_backing_entity<R: Component>(world: &mut World) -> Option<Entity> {
+        let mut query = world.query_filtered::<Entity, bevy_ecs::query::With<R>>();
+        query.iter(world).next()
+    }
+
+    /// G6 — coord-side drain of [`PendingResourceRegistrations`]; call inside the
+    /// park window. For each pending carrier: enable replication, apply the
+    /// caller's `config` (policy), add it to `room_key` (policy), then flush the
+    /// batched world hooks. Byte-identical to the former hand-rolled
+    /// `enable → configure → room_add → apply_pending_world_hooks` sequence; the
+    /// deferred Send-side `ConfigureReplication` ops queued here drain later inside
+    /// `send()`'s D8 preamble, as before.
+    pub fn pipeline_drain_resource_registrations(
+        main_world: &mut World,
+        sim_world: &mut World,
+        room_key: &RoomKey,
+        config: ReplicationConfig,
+    ) {
+        let pending: Vec<Entity> = sim_world
+            .get_resource_mut::<PendingResourceRegistrations>()
+            .map(|mut r| std::mem::take(&mut r.0))
+            .unwrap_or_default();
+        if pending.is_empty() {
+            return;
+        }
+        Self::world_only_resource_scope(main_world, |_main, ws| {
+            let ps = ws.as_pipelined_mut().expect("pipelined server");
+            for entity in &pending {
+                ps.enable_entity_replication(entity);
+                ps.configure_entity_replication(entity, config);
+                ps.room_add_entity(room_key, entity);
+            }
+            let mut proxy = WorldProxyMut::proxy_mut(&mut *sim_world);
+            ps.apply_pending_world_hooks(&mut proxy);
         });
     }
 
