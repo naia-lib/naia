@@ -11,7 +11,7 @@ use naia_server::{
     shared::SocketConfig, transport::Socket, ConnectionStats, EntityOwner, EntityPriorityMut,
     EntityPriorityRef, Events, Historian, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
     RoomRef, Server as NaiaServer, TickBufferMessages, TickEvents, UserKey, UserMut, UserRef,
-    InternalWorldServer as NaiaWorldServer, UserScopeMut, UserScopeRef,
+    UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
 };
 
 use naia_bevy_shared::{
@@ -41,12 +41,10 @@ impl ServerImpl {
     pub(crate) fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         match self {
             Self::Full(server) => server.listen(socket),
-            Self::WorldOnly(server) => {
-                let boxed_socket: Box<dyn Socket> = socket.into();
-                let (_auth_sender, _auth_receiver, packet_sender, packet_receiver) =
-                    boxed_socket.listen();
-                server.io_load(packet_sender, packet_receiver);
-            }
+            // The enum's `listen` performs the socket split + `io_load`
+            // internally for its Resident arm — exactly what the old inline
+            // body did here.
+            Self::WorldOnly(server) => server.listen(socket),
         }
     }
 
@@ -66,14 +64,14 @@ impl ServerImpl {
 
     pub(crate) fn process_all_packets<W: WorldMutType<Entity>>(
         &mut self,
-        mut world: W,
+        world: W,
         now: &Instant,
     ) {
         match self {
-            // `Server::process_all_packets` is by-value; `WorldServer`'s is `&mut W`
-            // (G8b) — reborrow for that arm. Byte-identical either way.
+            // Both the `Server` and the unified `WorldServer` enum take the
+            // world by value here. Byte-identical either way.
             Self::Full(server) => server.process_all_packets(world, now),
-            Self::WorldOnly(server) => server.process_all_packets(&mut world, now),
+            Self::WorldOnly(server) => server.process_all_packets(world, now),
         }
     }
 
@@ -111,7 +109,7 @@ impl ServerImpl {
         }
         match self {
             Self::Full(server) => server.entity(world, entity).authority(),
-            Self::WorldOnly(server) => server.entity(world, entity).authority(),
+            Self::WorldOnly(server) => server.entity_authority_status(world, entity),
         }
     }
 
@@ -122,7 +120,7 @@ impl ServerImpl {
     ) -> EntityOwner {
         match self {
             Self::Full(server) => server.entity(world, entity).owner(),
-            Self::WorldOnly(server) => server.entity(world, entity).owner(),
+            Self::WorldOnly(server) => server.entity_owner(world, entity),
         }
     }
 
