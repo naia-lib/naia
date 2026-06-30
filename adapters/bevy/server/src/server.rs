@@ -968,6 +968,38 @@ impl<'w> Server<'w> {
         });
     }
 
+    /// G6b — drain the sim world's `HostSyncEvent` queue against the parked
+    /// pipeline (the D5 host-sync phase); call inside the park window. Relocates
+    /// the former consumer-side `take_handles → drain → restore_handles` dance
+    /// into the engine: the handle take/restore is now naia's own internal
+    /// concern (like `receive`/`send`), so consumers no longer reach for the raw
+    /// pipeline handles.
+    ///
+    /// The drain genuinely needs the handles taken out (it calls `&mut SendHandle`
+    /// worldless insert/remove/despawn ops + `&mut CoordHandle::state`, which are
+    /// not reachable through the in-place `as_pipelined_mut` forwarding methods).
+    /// The take/restore is wrapped so the handles are restored to their slots even
+    /// if the drain unwinds — otherwise a mid-drain panic would leave the slots
+    /// empty and mask the real fault with a misleading "park workers first" on the
+    /// next tick. The panic is re-raised after restore.
+    pub fn pipeline_drain_host_sync(main_world: &mut World, sim_world: &mut World) {
+        Self::world_only_resource_scope(main_world, |_main, ws| {
+            let ps = ws.as_pipelined_mut().expect("pipelined server");
+            let (mut coord, recv, mut send) = ps.take_handles();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                crate::host_sync_pipeline::drain_host_sync_in_place(
+                    sim_world, &mut coord, &mut send,
+                );
+            }));
+            // Restore unconditionally — the handles are still owned here on both
+            // the success and unwind paths (the drain borrowed them).
+            ps.restore_handles(coord, recv, send);
+            if let Err(payload) = result {
+                std::panic::resume_unwind(payload);
+            }
+        });
+    }
+
     /// Re-panic on the main thread if a worker thread has panicked.
     pub fn pipeline_propagate_panics(world: &World) {
         if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {

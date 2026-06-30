@@ -76,13 +76,28 @@ pub fn drain_host_sync_into_pipeline(
     recv: RecvHandle<Entity>,
     mut send: SendHandle<Entity>,
 ) -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
+    drain_host_sync_in_place(world, &mut sim_handle, &mut send);
+    (sim_handle, recv, send)
+}
+
+/// By-reference core of [`drain_host_sync_into_pipeline`]. Borrows the coord +
+/// send handles instead of consuming them, so the caller retains ownership
+/// across the drain — which lets the G6b park-window driver
+/// (`Server::pipeline_drain_host_sync`) restore the handles to their slots even
+/// if the drain unwinds (the by-value wrapper above would lose them on panic).
+/// `recv` is not needed by the drain, so it is not threaded through here.
+pub(crate) fn drain_host_sync_in_place(
+    world: &mut World,
+    sim_handle: &mut CoordHandle<Entity>,
+    send: &mut SendHandle<Entity>,
+) {
     // Drain the message queue first; if empty, skip all handle work.
     let host_component_events: Vec<HostSyncEvent> = world
         .get_resource_mut::<Messages<HostSyncEvent>>()
         .map(|mut reader| reader.drain().collect())
         .unwrap_or_default();
     if host_component_events.is_empty() {
-        return (sim_handle, recv, send);
+        return;
     }
 
     // MISSION_USER_ONLY_SEES_SIM Phase D.3b.2 (2026-05-19) — handle-direct
@@ -95,7 +110,7 @@ pub fn drain_host_sync_into_pipeline(
     // Skip drain entirely while not listening — matches today's
     // `world_to_host_sync` guard on `server.is_listening()`.
     if !send.is_listening() {
-        return (sim_handle, recv, send);
+        return;
     }
     for event in host_component_events {
         match event {
@@ -148,6 +163,4 @@ pub fn drain_host_sync_into_pipeline(
             }
         }
     }
-
-    (sim_handle, recv, send)
 }
