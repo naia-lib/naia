@@ -140,7 +140,7 @@ pub use plugin::Plugin;
 // Bevy resource or per-handle `Res` wrappers.
 pub use naia_server::pipeline_actors::TickCtx;
 pub use plugin_full::{EventReceiverRes, PipelineConfig};
-pub use server::Server;
+pub use server::{PendingScopeAuthorityOps, PipelineScopeAuthorityOp, Server};
 pub use server_entity_converter::ServerEntityConverter;
 pub use snapshot_builder::{build_snapshot, build_snapshot_full};
 

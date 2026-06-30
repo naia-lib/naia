@@ -32,6 +32,32 @@ use crate::plugin::Singleton;
 #[derive(Resource, Default)]
 pub struct PendingResourceRegistrations(Vec<Entity>);
 
+/// G5b — a sim-side room/authority op deferred to the park window. A pipelined
+/// Sim world is naia-handle-free, so editor-style systems queue these intents
+/// into [`PendingScopeAuthorityOps`] and the orchestrator drains them against the
+/// parked coordinator via [`Server::pipeline_drain_scope_authority_ops`]. Owning
+/// the op vocabulary + queue here (vs a consumer-defined enum) keeps pipelined-sim
+/// room/authority deferral a naia engine concern.
+#[derive(Debug, Clone)]
+pub enum PipelineScopeAuthorityOp {
+    /// Add a sim-world entity to a room (`WorldServer::room_add_entity`).
+    RoomAdd(Entity),
+    /// Reclaim server authority over an entity, breaking any client delegation
+    /// lock (`WorldServer::entity_take_authority`).
+    TakeAuthority(Entity),
+    /// Delegate authority over an entity to a client
+    /// (`WorldServer::entity_give_authority`).
+    GiveAuthority(UserKey, Entity),
+}
+
+/// G5b — naia-owned outbox of [`PipelineScopeAuthorityOp`]s queued by sim-side
+/// systems, drained against the coordinator by
+/// [`Server::pipeline_drain_scope_authority_ops`]. Initialized into the sim
+/// subapp world by the consumer (like any sim resource it pushes to) and owned
+/// here so the op vocabulary stays a naia engine concern.
+#[derive(Resource, Default)]
+pub struct PendingScopeAuthorityOps(pub Vec<PipelineScopeAuthorityOp>);
+
 use crate::Replicate;
 
 #[derive(Resource)]
@@ -996,6 +1022,54 @@ impl<'w> Server<'w> {
             ps.restore_handles(coord, recv, send);
             if let Err(payload) = result {
                 std::panic::resume_unwind(payload);
+            }
+        });
+    }
+
+    /// G5b — coord-side drain of [`PendingScopeAuthorityOps`]; call inside the
+    /// park window, BEFORE the host-sync drain (a `TakeAuthority` must land before
+    /// its reject/replace despawn replicates). Relocates the former consumer-side
+    /// `with_world_server` reassembly + raw `room_add_entity` / `entity_take_authority`
+    /// calls into the engine.
+    ///
+    /// Order matches the prior hand-rolled path: all `RoomAdd`s first (in queue
+    /// order, via the Coord-only `as_pipelined_mut().room_add_entity`), then the
+    /// authority ops (`TakeAuthority` / `GiveAuthority`) in queue order — so a
+    /// room-add is normalized ahead of any authority op. Byte-identical to the
+    /// legacy two-phase drain. No-op early-return when the queue is empty.
+    pub fn pipeline_drain_scope_authority_ops(
+        main_world: &mut World,
+        sim_world: &mut World,
+        room_key: &RoomKey,
+    ) {
+        let ops: Vec<PipelineScopeAuthorityOp> = sim_world
+            .get_resource_mut::<PendingScopeAuthorityOps>()
+            .map(|mut q| std::mem::take(&mut q.0))
+            .unwrap_or_default();
+        if ops.is_empty() {
+            return;
+        }
+        Self::world_only_resource_scope(main_world, |_main, ws| {
+            // Phase 1: room adds via the Coord-only path.
+            {
+                let ps = ws.as_pipelined_mut().expect("pipelined server");
+                for op in &ops {
+                    if let PipelineScopeAuthorityOp::RoomAdd(entity) = op {
+                        ps.room_add_entity(room_key, entity);
+                    }
+                }
+            }
+            // Phase 2: authority ops, in queue order.
+            for op in &ops {
+                match op {
+                    PipelineScopeAuthorityOp::TakeAuthority(entity) => {
+                        let _ = ws.entity_take_authority(entity);
+                    }
+                    PipelineScopeAuthorityOp::GiveAuthority(user, entity) => {
+                        let _ = ws.entity_give_authority(user, entity);
+                    }
+                    PipelineScopeAuthorityOp::RoomAdd(_) => {}
+                }
             }
         });
     }
