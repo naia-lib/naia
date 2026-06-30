@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 ✅ (worker-thread runtime + park/unpark barrier + worker loops + Armed→Running→Stopped lifecycle MOVED into core `pipeline_actors::PipelineRuntime<E>`; bevy `PluginInternalState` now a thin delegating wrapper; `workers_active` cfg + `deterministic` feature + `build.rs` moved to naia-server; bench timing via fn-ptr hooks; GREEN — naia-server lib 42, full naia harness ~150, bevy adapter deterministic suite incl. cross-thread panic-propagation). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. OPEN before G10: G6b host-sync (framework-agnosticism fork).
+status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 ✅ (worker-thread runtime + park/unpark barrier + worker loops + Armed→Running→Stopped lifecycle MOVED into core `pipeline_actors::PipelineRuntime<E>`; bevy `PluginInternalState` now a thin delegating wrapper; `workers_active` cfg + `deterministic` feature + `build.rs` moved to naia-server; bench timing via fn-ptr hooks; GREEN — naia-server lib 42, full naia harness ~150, bevy adapter deterministic suite incl. cross-thread panic-propagation). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. **✅ G10 cyberlith cutover COMPLETE + MERGED TO TRUNK (2026-06-30):** naia `dev 3cada463`, diax `main 339efe6`, cyberlith `main 014e080ec`; determinism/desync moat **54/54** on the real merged checkouts; naia-isolation clean; worktrees + feature branches deleted. **G4 + G5 STRUCK (Connor 2026-06-30)** — net-new sugar for marginal gain; entity registration stays on the (byte-exact) `world_only_resource_scope`+coord path, the accepted floor. **Remaining ergonomic collapse (each = own design pass + sign-off): G5b (queued authority), G6 (`Res<R>`), G6b (host-sync fork — last `.take()`), G1 (`tick(ctx)` bracket sugar — Connor likes it).** See cyberlith `_AGENTS/MISSION_G10_CYBERLITH_CUTOVER.md` §S6 for the rescoped item list + consumer collapse map.
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -471,8 +471,8 @@ Verification per phase: `cargo test -p naia-server` + `--lib`, `-p naia-test-har
 | G3a | forwarding methods on `PipelinedServer<E>` for all coord-only ops | ✅ COMPLETE (`175d4bc7` rename + G3a impl) |
 | G3b | cyberlith D11 `CellCommandsExt` dies, replaced by direct `pipelined_server.method()` calls in the park window | PENDING (design signed off) |
 | G3c | unified `Server` param: add `ServerImpl::Pipelined(PipelinedServer<Entity>)` variant; **NO panic arms** — all mutating methods (incl. `send_message`/`broadcast_message`/`take_authority`) work from any system via internal queueing (§2e); reads return coord state; retire raw `ResMut<PipelinedServer>` access | PENDING (design §2e, internal-queueing model) |
-| G4 | `spawn_replicated` fused op | PENDING |
-| G5 | `enable_replication_for_existing_entity` | PENDING |
+| G4 | `spawn_replicated` fused op | ~~STRUCK (Connor 2026-06-30)~~ — net-new sugar; registration stays on the byte-exact `world_only_resource_scope`+coord path (accepted floor) |
+| G5 | `enable_replication_for_existing_entity` | ~~STRUCK (Connor 2026-06-30)~~ — ditto; projectile mid-tick `HostSyncEvent::Insert` replay stays (accepted floor) |
 | G5b | **(per §2h C2 — editor/delegated path IN SCOPE, Connor 2026-06-29)** queued `entity_take_authority` (+ related authority ops), drained at the editor-ops phase | PENDING |
 | G6 | `Res<R>` resource API (`SimPipeline::insert_resource` etc.) | PENDING |
 | G6b | **(per §2h H2 + audit N3 — OPEN, design pass required)** host-sync drain (bevy change-detection → replication config). This is the **least framework-agnostic** piece in the mission: `drain_sim_host_sync_pipelined` (`server_access.rs:275-320`) is driven by bevy `Messages<HostSyncEvent>` against the **Sim** world. Open forks: (a) can a non-bevy consumer even have host-sync, or is it a bevy-adapter-only convenience? (b) does it survive in a no-reassembly core (§6 forbids reassembly post-G10)? (c) can every `HostSyncEvent` producer be retired by explicit G4/G5 `spawn_replicated`/`enable_replication`, removing the bridge entirely? **Decide before G10.** | **OPEN** (own design pass) |
@@ -481,7 +481,7 @@ Verification per phase: `cargo test -p naia-server` + `--lib`, `-p naia-test-har
 | G8b | **recv-channel drain folded into core `receive`** (symmetric to G8 send-shape) — core `PipelinedServer::{set_recv_subscriber, receive}` dual recv-shape (oracle synchronous / worker channel-drain); `receive` returns `Vec<ReceiveOutput>`. `apply_recv_to_world` + `WorldServer::process_all_packets` take `&mut W` (reborrow for N outputs; byte-identical, never moved world). Adapter `pipelined_receive` drives core `receive` + bevy fan-out; `drain_recv_impl` retained for the legacy/dual-world path (moat untouched). **Design §2m.** | **✅ COMPLETE** (design §2m SIGNED OFF, 2 decisions). naia-server lib 42 · harness clean (pipeline_bracket 3 · g9pre byte-identity 4) · adapter 91 (default + deterministic) · both modes build. Real-ack byte-identity still deferred to G4/G5 (§2l Decision 2). |
 | G9pre | **(per §2h H1) PREREQUISITE SPIKE** — prove pipelined send content ≡ resident serialization byte-for-byte across diff-mask cases. | ✅ COMPLETE/GREEN (§2i) — byte-identical (envelope + payload) across full/partial/multi-entity masks + freeze-isolation (concurrent post-freeze live mutation does NOT leak); pipelined transmit content is a pure fn of `(snapshot, plan)`. **Scope caveat (N4): production needed-set assembler not yet exercised → G7 obligation.** |
 | G9 | **`ServerMode::{Resident, Pipelined}` — single knob** — Pipelined⇒worker send, Resident⇒synchronous send. Same `receive`/`send` signatures; consumer code unchanged. **Oracle = synchronously-driven Pipelined bracket (NOT Resident)** — per §2i, identical bytes to production by construction; **no `SendStrategy` knob needed**, single-knob purity holds. | PENDING (design §2f — pending sign-off) |
-| G10 | **cyberlith cutover** (cyberlith worktree) — delete `open_park_window`/`do_park_window_tick`/`close_park_window` + the `drain_sim_*` glue; re-express as ordinary systems around naia's `ReceivePackets`/`SendPackets` sets; `cell.update()` collapses to naia's bracket. **ATOMIC-only (per §2h L1): editor/desync Pipelined surface must exist (G3c-corrected + G5b + G6b) before this compiles green.** **Gate: determinism/desync moat byte-exact-green + numeric `bench_profile` per-phase parity.** | PENDING (design §2f — pending sign-off) |
+| G10 | **cyberlith cutover** (cyberlith worktree) — delete `open_park_window`/`do_park_window_tick`/`close_park_window` + the `drain_sim_*` glue; re-express as ordinary systems around naia's `ReceivePackets`/`SendPackets` sets; `cell.update()` collapses to naia's bracket. **ATOMIC-only (per §2h L1): editor/desync Pipelined surface must exist (G3c-corrected + G5b + G6b) before this compiles green.** **Gate: determinism/desync moat byte-exact-green + numeric `bench_profile` per-phase parity.** | **✅ COMPLETE + MERGED (2026-06-30)** — landed differently from the original framing: cyberlith drives an **explicit `pipeline_park`/`receive`/policy/`send`/`unpark` bracket** (D1: the adapter `ReceivePackets`/`SendPackets` systems can't reach the Sim SubApp world the snapshot builds from), `drain_sim_*` route through `Server::world_only_resource_scope`; moat **54/54** on real trunks. Detail: cyberlith `MISSION_G10_CYBERLITH_CUTOVER.md`. |
 | M2 | sim-namako BDD specs written against the `receive`/`send` bracket contract (G1–G9), not the leaked shape | PENDING (after G1–G9) |
 
 Each pending group = design sub-pass + Connor sign-off before impl.
@@ -490,7 +490,11 @@ Each pending group = design sub-pass + Connor sign-off before impl.
 
 - naia: feature branch off `dev` (branched after M1 reorg at `6ce04cc4`).
 - cyberlith: feature branch off `main`, naia path-dep repointed at naia worktree.
-- Land atomically: naia→`dev`, cyberlith→`main`.
+- Land atomically: naia→`dev`, cyberlith→`main`. **✅ DONE 2026-06-30** — all three
+  feature branches merged (source-only; the path-dep rewrites were worktree-only,
+  never committed) + pushed; `-pipeline` worktrees removed; validated on the real
+  merged checkouts (moat 54/54). slag needed no change (its `../naia` path resolves
+  to the new API once `dev` carried it).
 - Mainline session (cyberlith action plan) stays on primary checkouts; sees no churn until land.
 
 ## 5. Absorbed items
@@ -502,7 +506,17 @@ Each pending group = design sub-pass + Connor sign-off before impl.
 
 - **Correctness (G10 gate):** cyberlith determinism/desync moat stays byte-exact-green through the cutover — same single-park / freeze-point send-prep / one-tick-lag sequence.
 - **Perf (G10 gate, per §2h M3 — SEPARATE from correctness):** the moat proves correctness, NOT speed. Add a **numeric `bench_profile` per-phase gate**: `pw::s6_snapshot_build` and total `cell::update` must stay within a bounded delta of pre-cutover (no new barriers, no double-park, no snapshot-assembler regression from the `WorldRefType` path vs the registry path). Decide up front whether the bevy adapter keeps its registry fast-path (acknowledged exception to "fully unified") or accepts the generic path's cost.
-- `server_access.rs` (until deleted at G10): zero `WorldServer` reassembly, zero handle `.take()`, zero `HostSyncEvent` construction. At G10 the file's park-window machinery is gone entirely.
-- naia-primitive tripwire (cybertool check) green with empty/justified allowlist.
+- `server_access.rs` post-G10 DoD (**REVISED 2026-06-30 — G4/G5 struck**): G10
+  removed the park-window machinery (open/close-window + handle transit), NOT the
+  file — it survives as the policy layer driving the explicit bracket. The
+  end-state targets are now: **zero handle `.take()`** (reachable — only
+  `drain_sim_host_sync_pipelined`'s `take_handles` remains, removed by **G6b**);
+  resource/editor/host-sync drains = clean policy on **G6/G5b/G6b** APIs. The
+  **accepted floor** (G4/G5 struck): `drain_sim_registrations`/`_lifecycle` keep
+  `world_only_resource_scope`+coord registration ops, and the projectile mid-tick
+  `HostSyncEvent::Insert` replay stays. So "zero reassembly / zero HostSyncEvent
+  construction" is **deliberately not a goal** — the floor is documented and OK.
+- naia-primitive tripwire (cybertool check) green with the allowlist driven to the
+  **registration floor** above (not empty), each entry justified.
 - naia sim-namako specs cover G1–G6 behavior (incl. resource remove→re-insert).
 - cyberlith determinism moat green; naia-isolation green; native + wasm32 build.
