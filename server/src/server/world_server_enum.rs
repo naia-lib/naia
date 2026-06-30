@@ -104,11 +104,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// §2f separate spawn step: stand up the pipelined worker runtime (after
-    /// [`Self::listen`] binds the socket). No-op for a resident server (it has no
-    /// workers) and under `not(workers_active)` (the synchronous oracle).
+    /// [`Self::listen`] binds the socket). Under `not(workers_active)` the
+    /// pipelined arm is itself a no-op (the synchronous oracle has no threads).
+    ///
+    /// # Panics
+    /// Panics on a resident server — spawning workers is a pipelined-only
+    /// lifecycle action; calling it here is a misuse (fail loud, never silently
+    /// no-op).
     pub fn start_workers(&mut self, timing: crate::pipeline_actors::RuntimeTimingHooks) {
-        if let WorldServerImpl::Pipelined(ps) = &mut self.inner {
-            ps.start_workers(timing);
+        match &mut self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.start_workers(timing),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::start_workers called on a resident server (pipelined-only)")
+            }
         }
     }
 
@@ -122,25 +130,43 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// Re-panic on the calling thread if an owned pipelined worker has panicked.
-    /// No-op for a resident server.
+    ///
+    /// # Panics
+    /// Panics on a resident server (no worker threads exist; calling this here
+    /// is a misuse — fail loud).
     pub fn propagate_panic_if_any(&self) {
-        if let WorldServerImpl::Pipelined(ps) = &self.inner {
-            ps.propagate_panic_if_any();
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.propagate_panic_if_any(),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::propagate_panic_if_any called on a resident server (pipelined-only)")
+            }
         }
     }
 
     /// Explicitly open the pipelined park window (advanced/test escape hatch;
-    /// `receive` does this internally). No-op for a resident server.
+    /// `receive` does this internally).
+    ///
+    /// # Panics
+    /// Panics on a resident server (no park window exists — fail loud).
     pub fn park_workers(&self) {
-        if let WorldServerImpl::Pipelined(ps) = &self.inner {
-            ps.park_workers();
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.park_workers(),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::park_workers called on a resident server (pipelined-only)")
+            }
         }
     }
 
-    /// Explicitly close the pipelined park window. No-op for a resident server.
+    /// Explicitly close the pipelined park window.
+    ///
+    /// # Panics
+    /// Panics on a resident server (no park window exists — fail loud).
     pub fn unpark_workers(&self) {
-        if let WorldServerImpl::Pipelined(ps) = &self.inner {
-            ps.unpark_workers();
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.unpark_workers(),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::unpark_workers called on a resident server (pipelined-only)")
+            }
         }
     }
 
