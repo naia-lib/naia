@@ -86,22 +86,82 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
-    /// Borrow the inner [`PipelinedWorldServer`], or `None` for a resident
-    /// server. The adapter bridge for the bevy-specific park-window bracket
-    /// fan-out (which needs the coord after `receive`); the consumer-facing op
-    /// surface goes through the dispatched methods, not this accessor.
-    pub fn as_pipelined(&self) -> Option<&PipelinedWorldServer<E>> {
-        match &self.inner {
-            WorldServerImpl::Pipelined(ps) => Some(ps),
-            WorldServerImpl::Resident(_) => None,
+    /// Add `world_entity` to `room_key` (coarse scope membership). First-class
+    /// over both modes (replaces the old `as_pipelined().coord().room_add_entity`).
+    pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.room_add_entity(room_key, world_entity),
+            WorldServerImpl::Pipelined(ps) => ps.room_add_entity(room_key, world_entity),
         }
     }
 
-    /// Mutable form of [`Self::as_pipelined`].
-    pub fn as_pipelined_mut(&mut self) -> Option<&mut PipelinedWorldServer<E>> {
+    /// Remove `world_entity` from `room_key`.
+    pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         match &mut self.inner {
-            WorldServerImpl::Pipelined(ps) => Some(ps),
-            WorldServerImpl::Resident(_) => None,
+            WorldServerImpl::Resident(ws) => ws.room_remove_entity(room_key, world_entity),
+            WorldServerImpl::Pipelined(ps) => ps.room_remove_entity(room_key, world_entity),
+        }
+    }
+
+    /// Flush the batched world-mutation hooks staged during this tick's
+    /// coord-side ops (entity registration / configuration) onto `world`. In
+    /// resident mode the staging queue is normally empty (ops apply inline), so
+    /// this is a cheap drain; in pipelined mode it applies the deferred hooks.
+    pub fn apply_pending_world_hooks<W: WorldMutType<E>>(&self, world: &mut W) {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.sim_handle.apply_pending_world_hooks(world),
+            WorldServerImpl::Pipelined(ps) => ps.apply_pending_world_hooks(world),
+        }
+    }
+
+    /// Take the three engine handles out for a worldless drain (the bevy
+    /// host-sync phase). Pipelined-only — restore with [`Self::restore_handles`].
+    ///
+    /// # Panics
+    /// Panics on a resident server (the handles live inline, not in slots — there
+    /// is nothing to take). Calling this on a resident server is a misuse.
+    pub fn take_handles(
+        &mut self,
+    ) -> (
+        crate::CoordHandle<E>,
+        crate::RecvHandle<E>,
+        crate::SendHandle<E>,
+    ) {
+        match &mut self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.take_handles(),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::take_handles called on a resident server (pipelined-only)")
+            }
+        }
+    }
+
+    /// Restore handles taken by [`Self::take_handles`]. Pipelined-only.
+    ///
+    /// # Panics
+    /// Panics on a resident server.
+    pub fn restore_handles(
+        &mut self,
+        coord: crate::CoordHandle<E>,
+        recv: crate::RecvHandle<E>,
+        send: crate::SendHandle<E>,
+    ) {
+        match &mut self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.restore_handles(coord, recv, send),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::restore_handles called on a resident server (pipelined-only)")
+            }
+        }
+    }
+
+    /// Test/dev hook: ask the pipeline workers to panic on their next loop.
+    /// Pipelined-only; no-op-shaped panic on a resident server.
+    #[cfg(any(test, feature = "test_time"))]
+    pub fn request_worker_panic_for_test(&self) {
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.request_worker_panic_for_test(),
+            WorldServerImpl::Resident(_) => panic!(
+                "WorldServer::request_worker_panic_for_test called on a resident server (pipelined-only)"
+            ),
         }
     }
 
@@ -1283,6 +1343,21 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Pipelined-only test hook: the shared `RecvHandle` slot, so a test can take
+    /// the handle out (while workers are parked) to inject/drain tick-buffer
+    /// messages directly. Panics on a resident server.
+    #[doc(hidden)]
+    pub fn recv_slot(
+        &self,
+    ) -> std::sync::Arc<parking_lot::Mutex<Option<crate::RecvHandle<E>>>> {
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.recv_slot(),
+            WorldServerImpl::Resident(_) => {
+                panic!("WorldServer::recv_slot called on a resident server (pipelined-only)")
+            }
+        }
+    }
+
     #[doc(hidden)]
     pub fn inject_tick_buffer_message<C: Channel, M: Message>(
         &mut self,
@@ -1299,5 +1374,23 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
                 ws.inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
             }),
         }
+    }
+}
+
+impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter<E>
+    for WorldServer<E>
+{
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        WorldServer::global_entity_to_entity(self, global_entity)
+    }
+
+    fn entity_to_global_entity(
+        &self,
+        entity: &E,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        WorldServer::entity_to_global_entity(self, entity)
     }
 }

@@ -5,8 +5,7 @@ use bevy_ecs::{
 };
 use naia_bevy_shared::{HostOwned, WorldProxy, WorldRefType};
 use naia_server::{
-    pipeline_actors::{EventReceiver, CoordHandle},
-    EntityOwner, Events, ReceiveOutput,
+    pipeline_actors::EventReceiver, EntityOwner, Events, ReceiveOutput, WorldServer,
 };
 
 use crate::{
@@ -240,7 +239,7 @@ pub fn apply_receive_output(
 /// after `apply_recv_to_world` populates `output.world_events`.
 pub fn apply_receive_output_pipeline(
     world: &mut World,
-    sim_handle: &CoordHandle<Entity>,
+    sim_handle: &WorldServer<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
     // Fire one bevy `TickEvent` per server tick that the recv path advanced.
@@ -460,7 +459,7 @@ pub fn apply_receive_output_pipeline(
 /// call (lesson 11 of `feedback_naia_4f_operational`).
 pub fn apply_receive_output_pipeline_with_event_receiver(
     world: &mut World,
-    sim_handle: &CoordHandle<Entity>,
+    sim_handle: &WorldServer<Entity>,
     sim_receiver: &EventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {
@@ -497,7 +496,7 @@ pub fn apply_receive_output_pipeline_with_event_receiver(
 pub fn apply_receive_output_pipeline_with_event_receiver_split(
     world: &mut World,
     mut entity_world: Option<&mut World>,
-    sim_handle: &CoordHandle<Entity>,
+    sim_handle: &WorldServer<Entity>,
     sim_receiver: &EventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
 ) {

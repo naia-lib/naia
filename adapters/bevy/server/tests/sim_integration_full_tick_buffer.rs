@@ -78,11 +78,7 @@ fn listen(app: &mut App, addr: &str) {
 fn recv_slot(
     app: &mut App,
 ) -> std::sync::Arc<parking_lot::Mutex<Option<RecvHandle<Entity>>>> {
-    Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
-        ws.as_pipelined_mut()
-            .expect("pipelined WorldServer")
-            .recv_slot()
-    })
+    Server::world_only_resource_scope(app.world_mut(), |_world, ws| ws.recv_slot())
 }
 
 #[test]

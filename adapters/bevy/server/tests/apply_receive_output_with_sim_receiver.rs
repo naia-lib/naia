@@ -35,7 +35,7 @@ use bevy_ecs::{entity::Entity, message::Messages};
 use naia_bevy_server::{
     apply_receive_output_pipeline, apply_receive_output_pipeline_with_event_receiver,
     events::TickEvent,
-    pipeline_actors::{spawn_server_handles, EventReceiver},
+    pipeline_actors::EventReceiver,
     Plugin, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
@@ -67,8 +67,8 @@ fn build_app() -> App {
 #[test]
 fn empty_output_no_sink_population() {
     let mut app = build_app();
-    let (sim_handle, _recv_handle, _send_handle) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
+    let sim_handle =
+        naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
     let sim_receiver = EventReceiver::<Entity>::new();
 
     let output = naia_server::ReceiveOutput::<Entity> {
@@ -99,8 +99,8 @@ fn empty_output_no_sink_population() {
 #[test]
 fn pending_ticks_fan_out_to_both_sinks() {
     let mut app = build_app();
-    let (sim_handle, _recv_handle, _send_handle) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
+    let sim_handle =
+        naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
     let sim_receiver = EventReceiver::<Entity>::new();
 
     let output = naia_server::ReceiveOutput::<Entity> {
@@ -144,8 +144,8 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
     let mut app_combined = build_app();
     let mut app_legacy = build_app();
 
-    let (sim_a, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
-    let (sim_b, _, _) = spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
+    let sim_a = naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
+    let sim_b = naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
     let sim_receiver = EventReceiver::<Entity>::new();
 
     let make_output = || naia_server::ReceiveOutput::<Entity> {
@@ -180,8 +180,8 @@ fn cloned_sim_receiver_observes_helper_output() {
     // Arc-internal share: helper pushes through the &sim_receiver
     // handle; a clone made beforehand sees the same events.
     let mut app = build_app();
-    let (sim_handle, _, _) =
-        spawn_server_handles::<Entity, _>(ServerConfig::default(), naia_protocol()).take_handles();
+    let sim_handle =
+        naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
     let sim_receiver = EventReceiver::<Entity>::new();
     let observer = sim_receiver.clone();
 

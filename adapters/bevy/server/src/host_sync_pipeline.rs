@@ -47,19 +47,18 @@ use naia_server::{RecvHandle, SendHandle};
 ///
 /// Calling pattern (cyberlith Sim main schedule). Under `Plugin::pipelined` the
 /// pipeline lives inside the unified `WorldServer` resource (§2f); reach it via
-/// [`crate::Server::world_only_resource_scope`] + `WorldServer::as_pipelined_mut`,
-/// park the workers (via [`crate::Server::pipeline_park`]) before taking the
-/// handles, and unpark (via [`crate::Server::pipeline_unpark`]) after returning
-/// them:
+/// [`crate::Server::world_only_resource_scope`], park the workers (via
+/// [`crate::Server::pipeline_park`]) before taking the handles with
+/// `WorldServer::take_handles`, and unpark (via [`crate::Server::pipeline_unpark`])
+/// after restoring them:
 /// ```ignore
 /// fn sim_to_host_sync(world: &mut World) {
 ///     crate::Server::pipeline_park(world);
 ///     crate::Server::world_only_resource_scope(world, |world, ws| {
-///         let ps = ws.as_pipelined_mut().unwrap();
-///         let (sim_handle, recv, send) = ps.take_handles();
+///         let (sim_handle, recv, send) = ws.take_handles();
 ///         let (sim_handle, recv, send) =
 ///             drain_host_sync_into_pipeline(world, sim_handle, recv, send);
-///         ps.restore_handles(sim_handle, recv, send);
+///         ws.restore_handles(sim_handle, recv, send);
 ///     });
 ///     crate::Server::pipeline_unpark(world);
 /// }

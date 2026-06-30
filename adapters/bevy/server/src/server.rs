@@ -877,7 +877,7 @@ impl<'w> Server<'w> {
         mut apply: impl FnMut(
             &mut World,
             Option<&mut World>,
-            &naia_server::pipeline_actors::CoordHandle<Entity>,
+            &naia_server::WorldServer<Entity>,
             naia_server::ReceiveOutput<Entity>,
         ),
     ) {
@@ -886,12 +886,11 @@ impl<'w> Server<'w> {
                 Some(sim) => ws.receive(naia_bevy_shared::WorldProxyMut::proxy_mut(&mut *sim)),
                 None => ws.receive(naia_bevy_shared::WorldProxyMut::proxy_mut(&mut *world)),
             };
-            let coord = ws.as_pipelined().expect("pipelined server").coord();
             for output in outputs {
                 if output.is_empty() {
                     continue;
                 }
-                apply(world, recv_world.as_deref_mut(), coord, output);
+                apply(world, recv_world.as_deref_mut(), ws, output);
             }
         });
     }
@@ -983,14 +982,13 @@ impl<'w> Server<'w> {
             return;
         }
         Self::world_only_resource_scope(main_world, |_main, ws| {
-            let ps = ws.as_pipelined_mut().expect("pipelined server");
-            for entity in &pending {
-                ps.enable_entity_replication(entity);
-                ps.configure_entity_replication(entity, config);
-                ps.room_add_entity(room_key, entity);
-            }
             let mut proxy = WorldProxyMut::proxy_mut(&mut *sim_world);
-            ps.apply_pending_world_hooks(&mut proxy);
+            for entity in &pending {
+                ws.enable_entity_replication(entity);
+                ws.configure_entity_replication(&mut proxy, entity, config);
+                ws.room_add_entity(room_key, entity);
+            }
+            ws.apply_pending_world_hooks(&mut proxy);
         });
     }
 
@@ -1010,8 +1008,7 @@ impl<'w> Server<'w> {
     /// next tick. The panic is re-raised after restore.
     pub fn pipeline_drain_host_sync(main_world: &mut World, sim_world: &mut World) {
         Self::world_only_resource_scope(main_world, |_main, ws| {
-            let ps = ws.as_pipelined_mut().expect("pipelined server");
-            let (mut coord, recv, mut send) = ps.take_handles();
+            let (mut coord, recv, mut send) = ws.take_handles();
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 crate::host_sync_pipeline::drain_host_sync_in_place(
                     sim_world, &mut coord, &mut send,
@@ -1019,7 +1016,7 @@ impl<'w> Server<'w> {
             }));
             // Restore unconditionally — the handles are still owned here on both
             // the success and unwind paths (the drain borrowed them).
-            ps.restore_handles(coord, recv, send);
+            ws.restore_handles(coord, recv, send);
             if let Err(payload) = result {
                 std::panic::resume_unwind(payload);
             }
@@ -1050,13 +1047,10 @@ impl<'w> Server<'w> {
             return;
         }
         Self::world_only_resource_scope(main_world, |_main, ws| {
-            // Phase 1: room adds via the Coord-only path.
-            {
-                let ps = ws.as_pipelined_mut().expect("pipelined server");
-                for op in &ops {
-                    if let PipelineScopeAuthorityOp::RoomAdd(entity) = op {
-                        ps.room_add_entity(room_key, entity);
-                    }
+            // Phase 1: room adds (first-class unified op).
+            for op in &ops {
+                if let PipelineScopeAuthorityOp::RoomAdd(entity) = op {
+                    ws.room_add_entity(room_key, entity);
                 }
             }
             // Phase 2: authority ops, in queue order.
@@ -1095,8 +1089,8 @@ impl<'w> Server<'w> {
     #[cfg(any(test, feature = "test_time"))]
     pub fn pipeline_request_worker_panic_for_test(world: &World) {
         if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
-            if let Some(ps) = ws.as_pipelined() {
-                ps.request_worker_panic_for_test();
+            if ws.mode() == naia_server::ServerMode::Pipelined {
+                ws.request_worker_panic_for_test();
             }
         }
     }

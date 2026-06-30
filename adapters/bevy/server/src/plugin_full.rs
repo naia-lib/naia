@@ -185,18 +185,12 @@ fn pipelined_receive(world: &mut World) {
         let Some(ws) = server.as_world_server_mut() else {
             return;
         };
-        let Some(ps) = ws.as_pipelined_mut() else {
-            return;
-        };
-        if !ps.is_running() {
+        if !ws.is_running() {
             return;
         }
         // Core parks internally, drains the recv worker's output channel + a
         // synchronous straggler, and applies every output to the entity world.
-        let outputs = ps.receive(&mut world.proxy_mut());
-        // The coord is back in the pipeline now; borrow it for the bevy-specific
-        // event fan-out (core routes no events itself, §2h H3).
-        let coord = ps.coord();
+        let outputs = ws.receive(world.proxy_mut());
         for output in outputs {
             if output.is_empty() {
                 continue;
@@ -204,7 +198,7 @@ fn pipelined_receive(world: &mut World) {
             apply_receive_output_pipeline_with_event_receiver_split(
                 world,
                 None,
-                coord,
+                ws,
                 &sim_receiver,
                 output,
             );
@@ -224,13 +218,10 @@ fn pipelined_send(world: &mut World) {
         let Some(ws) = server.as_world_server_mut() else {
             return;
         };
-        let Some(ps) = ws.as_pipelined_mut() else {
-            return;
-        };
-        if !ps.is_running() {
+        if !ws.is_running() {
             return;
         }
-        ps.send(&world.proxy());
+        ws.send(world.proxy());
     });
 }
 

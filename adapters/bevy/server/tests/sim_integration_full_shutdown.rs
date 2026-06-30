@@ -77,10 +77,10 @@ fn consumer_drives_send_in_park_window() {
 
     Server::pipeline_park(app.world());
     let sent = Server::world_only_resource_scope(app.world_mut(), |world, ws| {
-        let Some(ps) = ws.as_pipelined_mut() else {
+        if ws.mode() != naia_server::ServerMode::Pipelined {
             return false;
-        };
-        ps.send(&world.proxy());
+        }
+        ws.send(world.proxy());
         true
     });
     Server::pipeline_unpark(app.world());

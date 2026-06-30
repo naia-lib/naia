@@ -56,9 +56,7 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 /// its slot, so this panics if the bracket failed to restore the handles.
 fn current_tick(app: &mut App) -> u16 {
     Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
-        ws.as_pipelined_mut()
-            .expect("PipelinedWorldServer present")
-            .current_tick()
+        ws.current_tick()
     })
 }
 

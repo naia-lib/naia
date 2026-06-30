@@ -124,12 +124,12 @@ fn sim_handle_borrowable_while_parked() {
 
     Server::pipeline_park(app.world());
     let borrowed = Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
-        let Some(ps) = ws.as_pipelined_mut() else {
+        if ws.mode() != naia_server::ServerMode::Pipelined {
             return false;
-        };
-        // Borrow + restore the CoordHandle while parked.
-        let coord = ps.take_coord();
-        ps.restore_coord(coord);
+        }
+        // Borrow + restore the engine handles while parked.
+        let (coord, recv, send) = ws.take_handles();
+        ws.restore_handles(coord, recv, send);
         true
     });
     assert!(

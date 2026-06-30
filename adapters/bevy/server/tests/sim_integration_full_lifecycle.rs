@@ -48,8 +48,10 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 
 /// Reach into the pipeline stored in the `WorldServer` resource and run `f`
 /// against it; returns `false` if the resource is not a Pipelined WorldServer.
-fn with_pipeline<R>(app: &mut App, f: impl FnOnce(&mut naia_server::pipeline_actors::PipelinedWorldServer<bevy_ecs::entity::Entity>) -> R) -> Option<R> {
-    Server::world_only_resource_scope(app.world_mut(), |_world, ws| ws.as_pipelined_mut().map(f))
+fn with_pipeline<R>(app: &mut App, f: impl FnOnce(&mut naia_server::WorldServer<bevy_ecs::entity::Entity>) -> R) -> Option<R> {
+    Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
+        (ws.mode() == naia_server::ServerMode::Pipelined).then(|| f(ws))
+    })
 }
 
 #[test]
