@@ -78,7 +78,7 @@ fn drive_entity_builder(mut server: WorldServer<DemoEntity>) {
 
     // Reads dispatch through the same builder: enabling a server entity makes
     // it Server-owned and registers a replication config.
-    let mut em = server.entity_mut(world.proxy_mut(), &entity);
+    let em = server.entity_mut(world.proxy_mut(), &entity);
     assert_eq!(em.owner(), EntityOwner::Server, "enabled entity must be Server-owned");
     assert!(
         em.replication_config().is_some(),
