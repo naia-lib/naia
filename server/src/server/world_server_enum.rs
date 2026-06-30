@@ -76,6 +76,74 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Wrap an already-constructed [`PipelinedWorldServer`] (e.g. one built via
+    /// `spawn_server_handles` with extra wiring) as a pipelined [`WorldServer`].
+    pub fn from_pipelined(pipeline: PipelinedWorldServer<E>) -> Self {
+        Self {
+            inner: WorldServerImpl::Pipelined(pipeline),
+        }
+    }
+
+    /// Borrow the inner [`PipelinedWorldServer`], or `None` for a resident
+    /// server. The adapter bridge for the bevy-specific park-window bracket
+    /// fan-out (which needs the coord after `receive`); the consumer-facing op
+    /// surface goes through the dispatched methods, not this accessor.
+    pub fn as_pipelined(&self) -> Option<&PipelinedWorldServer<E>> {
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => Some(ps),
+            WorldServerImpl::Resident(_) => None,
+        }
+    }
+
+    /// Mutable form of [`Self::as_pipelined`].
+    pub fn as_pipelined_mut(&mut self) -> Option<&mut PipelinedWorldServer<E>> {
+        match &mut self.inner {
+            WorldServerImpl::Pipelined(ps) => Some(ps),
+            WorldServerImpl::Resident(_) => None,
+        }
+    }
+
+    /// §2f separate spawn step: stand up the pipelined worker runtime (after
+    /// [`Self::listen`] binds the socket). No-op for a resident server (it has no
+    /// workers) and under `not(workers_active)` (the synchronous oracle).
+    pub fn start_workers(&mut self, timing: crate::pipeline_actors::RuntimeTimingHooks) {
+        if let WorldServerImpl::Pipelined(ps) = &mut self.inner {
+            ps.start_workers(timing);
+        }
+    }
+
+    /// `true` if this is a pipelined server whose workers are spawned + running.
+    /// Always `false` for a resident server.
+    pub fn is_running(&self) -> bool {
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.is_running(),
+            WorldServerImpl::Resident(_) => false,
+        }
+    }
+
+    /// Re-panic on the calling thread if an owned pipelined worker has panicked.
+    /// No-op for a resident server.
+    pub fn propagate_panic_if_any(&self) {
+        if let WorldServerImpl::Pipelined(ps) = &self.inner {
+            ps.propagate_panic_if_any();
+        }
+    }
+
+    /// Explicitly open the pipelined park window (advanced/test escape hatch;
+    /// `receive` does this internally). No-op for a resident server.
+    pub fn park_workers(&self) {
+        if let WorldServerImpl::Pipelined(ps) = &self.inner {
+            ps.park_workers();
+        }
+    }
+
+    /// Explicitly close the pipelined park window. No-op for a resident server.
+    pub fn unpark_workers(&self) {
+        if let WorldServerImpl::Pipelined(ps) = &self.inner {
+            ps.unpark_workers();
+        }
+    }
+
     /// Which drive shape this server was constructed with.
     pub fn mode(&self) -> ServerMode {
         match &self.inner {

@@ -360,6 +360,24 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .map_or(false, |rt| rt.state() == RuntimeState::Running)
     }
 
+    /// Explicitly OPEN the park window (block until both workers deposit their
+    /// handles and park). Normally `receive` does this internally; this is the
+    /// advanced/test escape hatch for code that needs to borrow the handles
+    /// outside the `receive`/`send` bracket. No-op when not `Running`.
+    pub fn park_workers(&self) {
+        if let Some(rt) = &self.runtime {
+            rt.park_workers();
+        }
+    }
+
+    /// Explicitly CLOSE the park window (resume the workers). Pair with
+    /// [`Self::park_workers`]. No-op when not `Running`.
+    pub fn unpark_workers(&self) {
+        if let Some(rt) = &self.runtime {
+            rt.unpark_workers();
+        }
+    }
+
     /// If an owned worker thread has panicked, re-panic on the calling thread.
     /// No-op when no runtime is present (deterministic / not-yet-spawned).
     pub fn propagate_panic_if_any(&self) {
