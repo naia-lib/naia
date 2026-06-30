@@ -992,6 +992,41 @@ impl<'w> Server<'w> {
         });
     }
 
+    /// G6 (single-world) — coordinator + entities share ONE `World`
+    /// (MISSION_SINGLE_WORLD_CELL). Byte-identical to the two-world
+    /// [`Self::pipeline_drain_resource_registrations`]: same
+    /// `enable → configure → room_add → apply_pending_world_hooks` sequence in the
+    /// same order, with the same deferred Send-side `ConfigureReplication`
+    /// queuing. The only difference is the source of the entity proxy: the
+    /// `PendingResourceRegistrations` queue is drained from `world` BEFORE the
+    /// `ServerImpl` resource is lifted out, then the de-resourced `world` handed
+    /// back by [`Self::world_only_resource_scope`] is used as the proxy source —
+    /// so the coord borrow and the entity borrow never alias (which is exactly
+    /// why the two-`&mut World` signature can't serve a single world). Call inside
+    /// the park window. No-op early-return when the outbox is empty.
+    pub fn pipeline_drain_resource_registrations_single(
+        world: &mut World,
+        room_key: &RoomKey,
+        config: ReplicationConfig,
+    ) {
+        let pending: Vec<Entity> = world
+            .get_resource_mut::<PendingResourceRegistrations>()
+            .map(|mut r| std::mem::take(&mut r.0))
+            .unwrap_or_default();
+        if pending.is_empty() {
+            return;
+        }
+        Self::world_only_resource_scope(world, |world, ws| {
+            let mut proxy = WorldProxyMut::proxy_mut(&mut *world);
+            for entity in &pending {
+                ws.enable_entity_replication(entity);
+                ws.configure_entity_replication(&mut proxy, entity, config);
+                ws.room_add_entity(room_key, entity);
+            }
+            ws.apply_pending_world_hooks(&mut proxy);
+        });
+    }
+
     /// G6b — drain the sim world's `HostSyncEvent` queue against the parked
     /// pipeline (the D5 host-sync phase); call inside the park window. Relocates
     /// the former consumer-side `take_handles → drain → restore_handles` dance
@@ -1016,6 +1051,29 @@ impl<'w> Server<'w> {
             }));
             // Restore unconditionally — the handles are still owned here on both
             // the success and unwind paths (the drain borrowed them).
+            ws.restore_handles(coord, recv, send);
+            if let Err(payload) = result {
+                std::panic::resume_unwind(payload);
+            }
+        });
+    }
+
+    /// G6b (single-world) — coordinator + entities share ONE `World`
+    /// (MISSION_SINGLE_WORLD_CELL). Byte-identical to the two-world
+    /// [`Self::pipeline_drain_host_sync`]: lift the `ServerImpl` out, take the
+    /// handles, drain `Messages<HostSyncEvent>` via the same in-place core, and
+    /// restore — wrapped in the same `catch_unwind` so a mid-drain panic still
+    /// restores the handles to their slots (then re-raises) rather than masking
+    /// the fault with a misleading "park workers first" on the next tick. The
+    /// only difference is the entity source: the de-resourced `world` from
+    /// [`Self::world_only_resource_scope`] is the drain target, so the coord
+    /// borrow and the entity borrow never alias. Call inside the park window.
+    pub fn pipeline_drain_host_sync_single(world: &mut World) {
+        Self::world_only_resource_scope(world, |world, ws| {
+            let (mut coord, recv, mut send) = ws.take_handles();
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                crate::host_sync_pipeline::drain_host_sync_in_place(world, &mut coord, &mut send);
+            }));
             ws.restore_handles(coord, recv, send);
             if let Err(payload) = result {
                 std::panic::resume_unwind(payload);
