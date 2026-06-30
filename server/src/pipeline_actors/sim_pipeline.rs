@@ -33,7 +33,10 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use parking_lot::Mutex;
-use naia_shared::{EntityAuthStatus, Protocol, Tick, WorldMutType, WorldRefType};
+use naia_shared::{
+    ChannelKind, ConnectionStats, EntityAuthStatus, EntityPriorityMut, EntityPriorityRef, Message,
+    Protocol, Tick, WorldMutType, WorldRefType,
+};
 
 use crate::{
     room::RoomKey, server::ServerShared, user::UserKey, EntityOwner, ReceiveOutput, RecvHandle,
@@ -679,6 +682,194 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Forwards to [`CoordHandle::pending_world_hooks_len`].
     pub fn pending_world_hooks_len(&self) -> usize {
         self.coord().pending_world_hooks_len()
+    }
+
+    // ── task #9 — backings for the Room/User/UserScope borrow-builders ───────
+    //
+    // MISSION_PIPELINE_API_BOUNDARY task #9: the `WorldServer` Pipelined arm no
+    // longer panics for the borrow-returning builders. The coord-resident
+    // backings forward to `CoordHandle`; the send-resident reads lock the
+    // park-window send/recv slot (occupied during the `receive()`→`send()`
+    // window — fail-loud `.expect` if a caller reads outside it while workers
+    // run); the send-resident mutations reassemble via `with_world_server`.
+
+    // ── Coord-resident room/user reads ──
+
+    /// Forwards to [`CoordHandle::room_has_user`].
+    pub fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
+        self.coord().room_has_user(room_key, user_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_users_count`].
+    pub fn room_users_count(&self, room_key: &RoomKey) -> usize {
+        self.coord().room_users_count(room_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_user_keys`]. Borrows the coord handle.
+    pub fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
+        self.coord().room_user_keys(room_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_has_entity`].
+    pub fn room_has_entity(&self, room_key: &RoomKey, world_entity: &E) -> bool {
+        self.coord().room_has_entity(room_key, world_entity)
+    }
+
+    /// Forwards to [`CoordHandle::room_entities`].
+    pub fn room_entities(&self, room_key: &RoomKey) -> Vec<E> {
+        self.coord().room_entities(room_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_entities_count`].
+    pub fn room_entities_count(&self, room_key: &RoomKey) -> usize {
+        self.coord().room_entities_count(room_key)
+    }
+
+    /// Forwards to [`CoordHandle::user_rooms_count`].
+    pub fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
+        self.coord().user_rooms_count(user_key)
+    }
+
+    /// Forwards to [`CoordHandle::user_room_keys`]. Borrows the coord handle.
+    pub fn user_room_keys(
+        &self,
+        user_key: &UserKey,
+    ) -> Option<std::collections::hash_set::Iter<'_, RoomKey>> {
+        self.coord().user_room_keys(user_key)
+    }
+
+    /// Forwards to [`CoordHandle::global_entity_priority`] (coord-resident).
+    pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
+        self.coord().global_entity_priority(entity)
+    }
+
+    /// Forwards to [`CoordHandle::global_entity_priority_mut`] (coord-resident).
+    pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
+        self.coord_mut().global_entity_priority_mut(entity)
+    }
+
+    // ── Send/recv-resident `&self` reads (slot-lock) ──
+
+    /// `true` once the transport is bound + listening. Send-resident
+    /// (`send.send_io`); reads the parked send handle.
+    pub fn is_listening(&self) -> bool {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::is_listening: SendHandle not in slot — read between receive() and send()")
+            .state
+            .send_io
+            .is_loaded()
+    }
+
+    /// The pending incremental scope-check tuples. Send-resident
+    /// (`send.scope_checks_cache`); reads the parked send handle.
+    pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::scope_checks_pending: SendHandle not in slot — read between receive() and send()")
+            .state
+            .scope_checks_cache
+            .pending_slice()
+            .to_vec()
+    }
+
+    /// Average RTT to the given user's client, or `None` if not connected.
+    /// Reads the coord user address + the parked recv handle's ping manager.
+    pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
+        let addr = self.coord().user_address(user_key)?;
+        let recv = self.recv_slot.lock();
+        let recv = recv
+            .as_ref()
+            .expect("PipelinedWorldServer::rtt: RecvHandle not in slot — read between receive() and send()");
+        Some(recv.state.recv_user_connections.get(&addr)?.ping_manager.rtt_average)
+    }
+
+    /// Average jitter to the given user's client, or `None` if not connected.
+    pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
+        let addr = self.coord().user_address(user_key)?;
+        let recv = self.recv_slot.lock();
+        let recv = recv
+            .as_ref()
+            .expect("PipelinedWorldServer::jitter: RecvHandle not in slot — read between receive() and send()");
+        Some(recv.state.recv_user_connections.get(&addr)?.ping_manager.jitter_average)
+    }
+
+    /// Per-connection diagnostics for the given user, or `None` if not connected.
+    /// Reads the coord user address + both parked recv and send handles.
+    pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
+        let addr = self.coord().user_address(user_key)?;
+        let recv = self.recv_slot.lock();
+        let recv = recv
+            .as_ref()
+            .expect("PipelinedWorldServer::connection_stats: RecvHandle not in slot — read between receive() and send()");
+        let send = self.send_slot.lock();
+        let send = send
+            .as_ref()
+            .expect("PipelinedWorldServer::connection_stats: SendHandle not in slot — read between receive() and send()");
+        let recv_conn = recv.state.recv_user_connections.get(&addr)?;
+        let send_conn = send.state.send_user_connections.get(&addr)?;
+        let pm = &recv_conn.ping_manager;
+        Some(ConnectionStats {
+            rtt_ms: pm.rtt_average,
+            rtt_p50_ms: pm.rtt_p50_ms(),
+            rtt_p99_ms: pm.rtt_p99_ms(),
+            jitter_ms: pm.jitter_average,
+            packet_loss_pct: send_conn.base.packet_loss_pct(),
+            kbps_sent: send.state.send_io.outgoing_bandwidth_to_client(&addr),
+            kbps_recv: recv.state.recv_io.incoming_bandwidth_from_client(&addr),
+        })
+    }
+
+    /// Whether `world_entity` is in `user_key`'s explicit scope — a `&self`
+    /// read (used by `UserScopeRef`/`UserScopeMut::has`). Reads the parked send
+    /// handle's scope/room maps plus coord user/resource state, and shares the
+    /// canonical predicate (`user_scope_has_entity_impl`) with the fused engine
+    /// — zero drift. Fail-loud if the send handle is not parked.
+    pub fn user_scope_has_entity_ref(&self, user_key: &UserKey, world_entity: &E) -> bool {
+        let coord = self.coord();
+        let send = self.send_slot.lock();
+        let send = send.as_ref().expect(
+            "PipelinedWorldServer::user_scope_has_entity_ref: SendHandle not in slot — read between receive() and send()",
+        );
+        crate::server::user_scope_has_entity_impl(
+            &coord.shared,
+            &send.state.entity_scope_map,
+            &send.state.entity_room_map,
+            &coord.state.user_store,
+            &coord.state.resource_registry,
+            user_key,
+            world_entity,
+        )
+    }
+
+    // ── Send-resident `&mut` mutations (with_world_server reassembly) ──
+
+    /// Include/exclude `world_entity` in `user_key`'s explicit scope.
+    /// Send-resident (`send.entity_scope_map` + `scope_change_queue`); applied
+    /// via park-window reassembly. Mirrors `InternalWorldServer::user_scope_set_entity`.
+    pub fn user_scope_set_entity(&mut self, user_key: &UserKey, world_entity: &E, is_contained: bool) {
+        self.with_world_server(|ws| ws.user_scope_set_entity(user_key, world_entity, is_contained))
+    }
+
+    /// Remove all entities from `user_key`'s explicit scope. Send-resident;
+    /// applied via reassembly. Mirrors `InternalWorldServer::user_scope_remove_user`.
+    pub fn user_scope_remove_user(&mut self, user_key: &UserKey) {
+        self.with_world_server(|ws| ws.user_scope_remove_user(user_key))
+    }
+
+    /// Broadcast a message to all users in `room_key`. Reaches send state
+    /// (`send_message_inner`); applied via park-window reassembly — consistent
+    /// with the unified `send_message`/`broadcast_message` (which also reassemble
+    /// at the Pipelined arm). Mirrors `InternalWorldServer::room_broadcast_message`.
+    pub(crate) fn room_broadcast_message(
+        &mut self,
+        channel_kind: &ChannelKind,
+        room_key: &RoomKey,
+        message_box: Box<dyn Message>,
+    ) {
+        self.with_world_server(|ws| ws.room_broadcast_message(channel_kind, room_key, message_box))
     }
 }
 

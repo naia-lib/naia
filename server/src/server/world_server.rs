@@ -2576,93 +2576,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     }
 
     pub(crate) fn user_scope_has_entity(&self, user_key: &UserKey, world_entity: &E) -> bool {
-        let global_entity = self
-            .shared
-            .global_entity_map
-            .read()
-            .entity_to_global_entity(world_entity)
-            .unwrap();
-
-        // Check if entity has Private replication config
-        let is_private = if let Some(config) = self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_replication_config(&global_entity)
-        {
-            matches!(config.publicity, Publicity::Private)
-        } else {
-            false
-        };
-
-        // Owning client is always in-scope for client-owned entities
-        let is_owner = if let Some(
-            EntityOwner::Client(owner_key)
-            | EntityOwner::ClientWaiting(owner_key)
-            | EntityOwner::ClientPublic(owner_key),
-        ) = self
-            .shared
-            .global_world_manager
-            .read()
-            .entity_owner(&global_entity)
-        {
-            owner_key == *user_key
-        } else {
-            false
-        };
-
-        // If owner, always in scope
-        if is_owner {
-            return true;
-        }
-
-        // Per [entity-publication]: Private entities MUST NOT be in-scope for non-owners
-        if is_private {
-            return false;
-        }
-
-        // Check explicit include/exclude
-        if let Some(in_scope) = self.send.state.entity_scope_map.get(user_key, &global_entity) {
-            if *in_scope {
-                // [entity-scopes-09]: explicit include() cannot bypass the room gate for
-                // server-owned non-resource entities that have no rooms at all. Entities
-                // in rooms (even rooms the user isn't in) are valid include() targets per
-                // [entity-scopes-06]; only completely roomless entities are gated.
-                let entity_is_roomless = self
-                    .send
-                    .state
-                    .entity_room_map
-                    .entity_get_rooms(&global_entity)
-                    .is_none();
-                if entity_is_roomless {
-                    let is_resource = self
-                        .sim_handle
-                        .state
-                        .resource_registry
-                        .is_resource_entity(&global_entity);
-                    let server_owned = self
-                        .shared
-                        .global_world_manager
-                        .read()
-                        .entity_owner(&global_entity)
-                        .map(|o| o.is_server())
-                        .unwrap_or(false);
-                    if server_owned && !is_resource {
-                        return false;
-                    }
-                }
-            }
-            return *in_scope;
-        }
-        // Default: in-scope if user and entity share a room
-        let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
-            return false;
-        };
-        let Some(entity_rooms) = self.send.state.entity_room_map.entity_get_rooms(&global_entity) else {
-            return false;
-        };
-        let user_rooms = user.room_keys();
-        entity_rooms.intersection(user_rooms).next().is_some()
+        // task #9: the canonical body is factored into a free function so the
+        // pipelined `&self` slot-lock read path
+        // (`PipelinedWorldServer::user_scope_has_entity_ref`) shares it verbatim
+        // — zero semantic drift between the fused and split engines.
+        crate::server::user_scope_has_entity_impl(
+            &self.shared,
+            &self.send.state.entity_scope_map,
+            &self.send.state.entity_room_map,
+            &self.sim_handle.state.user_store,
+            &self.sim_handle.state.resource_registry,
+            user_key,
+            world_entity,
+        )
     }
 
     //// Components
@@ -4740,4 +4666,93 @@ cfg_if! {
             }
         }
     }
+}
+
+/// task #9 — the canonical `user_scope_has_entity` predicate, factored out of
+/// [`InternalWorldServer::user_scope_has_entity`] so both the fused engine and
+/// the pipelined `&self` slot-lock read path
+/// ([`crate::PipelinedWorldServer::user_scope_has_entity_ref`]) share ONE body
+/// — zero semantic drift across the engine split. Reads shared gwm/global-map
+/// state plus the send-resident scope/room maps and the coord-resident
+/// user/resource registries; mutates nothing.
+pub(crate) fn user_scope_has_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
+    shared: &crate::server::ServerShared<E>,
+    entity_scope_map: &EntityScopeMap,
+    entity_room_map: &EntityRoomMap,
+    user_store: &UserStore,
+    resource_registry: &ResourceRegistry,
+    user_key: &UserKey,
+    world_entity: &E,
+) -> bool {
+    let global_entity = shared
+        .global_entity_map
+        .read()
+        .entity_to_global_entity(world_entity)
+        .unwrap();
+
+    // Check if entity has Private replication config
+    let is_private = if let Some(config) = shared
+        .global_world_manager
+        .read()
+        .entity_replication_config(&global_entity)
+    {
+        matches!(config.publicity, Publicity::Private)
+    } else {
+        false
+    };
+
+    // Owning client is always in-scope for client-owned entities
+    let is_owner = if let Some(
+        EntityOwner::Client(owner_key)
+        | EntityOwner::ClientWaiting(owner_key)
+        | EntityOwner::ClientPublic(owner_key),
+    ) = shared.global_world_manager.read().entity_owner(&global_entity)
+    {
+        owner_key == *user_key
+    } else {
+        false
+    };
+
+    // If owner, always in scope
+    if is_owner {
+        return true;
+    }
+
+    // Per [entity-publication]: Private entities MUST NOT be in-scope for non-owners
+    if is_private {
+        return false;
+    }
+
+    // Check explicit include/exclude
+    if let Some(in_scope) = entity_scope_map.get(user_key, &global_entity) {
+        if *in_scope {
+            // [entity-scopes-09]: explicit include() cannot bypass the room gate for
+            // server-owned non-resource entities that have no rooms at all. Entities
+            // in rooms (even rooms the user isn't in) are valid include() targets per
+            // [entity-scopes-06]; only completely roomless entities are gated.
+            let entity_is_roomless = entity_room_map.entity_get_rooms(&global_entity).is_none();
+            if entity_is_roomless {
+                let is_resource = resource_registry.is_resource_entity(&global_entity);
+                let server_owned = shared
+                    .global_world_manager
+                    .read()
+                    .entity_owner(&global_entity)
+                    .map(|o| o.is_server())
+                    .unwrap_or(false);
+                if server_owned && !is_resource {
+                    return false;
+                }
+            }
+        }
+        return *in_scope;
+    }
+    // Default: in-scope if user and entity share a room
+    let Some(user) = user_store.get(user_key) else {
+        return false;
+    };
+    let Some(entity_rooms) = entity_room_map.entity_get_rooms(&global_entity) else {
+        return false;
+    };
+    let user_rooms = user.room_keys();
+    entity_rooms.intersection(user_rooms).next().is_some()
 }

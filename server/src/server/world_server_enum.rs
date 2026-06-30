@@ -260,9 +260,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn is_listening(&self) -> bool {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.is_listening(),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::is_listening is not available on a pipelined server (state lives in the parked send/recv workers)"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.is_listening(),
         }
     }
 
@@ -414,9 +412,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn scope_checks_pending(&self) -> Vec<(RoomKey, UserKey, E)> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.scope_checks_pending(),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::scope_checks_pending is not available on a pipelined server (state lives in the parked send/recv workers)"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.scope_checks_pending(),
         }
     }
 
@@ -424,9 +420,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn jitter(&self, user_key: &UserKey) -> Option<f32> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.jitter(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::jitter is not available on a pipelined server (state lives in the parked send/recv workers)"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.jitter(user_key),
         }
     }
 
@@ -434,9 +428,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.rtt(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::rtt is not available on a pipelined server (state lives in the parked send/recv workers)"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.rtt(user_key),
         }
     }
 
@@ -444,9 +436,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn connection_stats(&self, user_key: &UserKey) -> Option<ConnectionStats> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.connection_stats(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::connection_stats is not available on a pipelined server (state lives in the parked send/recv workers)"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.connection_stats(user_key),
         }
     }
 
@@ -793,99 +783,128 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
-    // ── Borrow-returning builders (Resident-only) ────────────────────────
+    // ── Borrow-returning builders (mode-dispatched, task #9) ─────────────
+    //
+    // The builders are ONE type over both engine shapes (the `EntityMut`
+    // precedent): the Resident arm borrows the fused `InternalWorldServer`; the
+    // Pipelined arm borrows this `PipelinedWorldServer` and each builder method
+    // dispatches to a coord fast path (room/user state is coord-resident) or a
+    // park-window reassembly (`with_world_server`, for the send-resident
+    // scope/broadcast ops). No method panics — except per-USER priority (see
+    // below), whose backing layer is send-resident AND borrow-returning.
 
-    /// A read-only handle to the given user. Panics on a pipelined server.
+    /// A read-only handle to the given user. Panics if no user exists.
     pub fn user(&self, user_key: &UserKey) -> UserRef<'_, E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                if !ps.user_exists(user_key) {
+                    panic!("No User exists for given Key!");
+                }
+                UserRef::with_pipeline(ps, user_key)
+            }
         }
     }
 
-    /// A read-only handle to the given user if it exists. Panics on a pipelined server.
+    /// A read-only handle to the given user if it exists.
     pub fn user_opt(&self, user_key: &UserKey) -> Option<UserRef<'_, E>> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user_opt(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_opt (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps
+                .user_exists(user_key)
+                .then(|| UserRef::with_pipeline(ps, user_key)),
         }
     }
 
-    /// A mutable handle to the given user. Panics on a pipelined server.
+    /// A mutable handle to the given user. Panics if no user exists.
     pub fn user_mut(&mut self, user_key: &UserKey) -> UserMut<'_, E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_mut(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_mut (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                if !ps.user_exists(user_key) {
+                    panic!("No User exists for given Key!");
+                }
+                UserMut::with_pipeline(ps, user_key)
+            }
         }
     }
 
-    /// A mutable handle to the given user if it exists. Panics on a pipelined server.
+    /// A mutable handle to the given user if it exists.
     pub fn user_mut_opt(&mut self, user_key: &UserKey) -> Option<UserMut<'_, E>> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_mut_opt(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_mut_opt (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps
+                .user_exists(user_key)
+                .then(|| UserMut::with_pipeline(ps, user_key)),
         }
     }
 
-    /// A read-only scope handle for the given user. Panics on a pipelined server.
+    /// A read-only scope handle for the given user. Panics if no user exists.
     pub fn user_scope(&self, user_key: &UserKey) -> UserScopeRef<'_, E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user_scope(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_scope (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                if !ps.user_exists(user_key) {
+                    panic!("No User exists for given Key!");
+                }
+                UserScopeRef::with_pipeline(ps, user_key)
+            }
         }
     }
 
-    /// A mutable scope handle for the given user. Panics on a pipelined server.
+    /// A mutable scope handle for the given user. Panics if no user exists.
     pub fn user_scope_mut(&mut self, user_key: &UserKey) -> UserScopeMut<'_, E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_scope_mut(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_scope_mut (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                if !ps.user_exists(user_key) {
+                    panic!("No User exists for given Key!");
+                }
+                UserScopeMut::with_pipeline(ps, user_key)
+            }
         }
     }
 
-    /// A read-only global priority handle for an entity. Panics on a pipelined server.
+    /// A read-only global priority handle for an entity. The sender-wide
+    /// priority layer is coord-resident, so this works in both modes.
     pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.global_entity_priority(entity),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::global_entity_priority (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.global_entity_priority(entity),
         }
     }
 
-    /// A mutable global priority handle for an entity. Panics on a pipelined server.
+    /// A mutable global priority handle for an entity (coord-resident; both modes).
     pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.global_entity_priority_mut(entity),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::global_entity_priority_mut (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.global_entity_priority_mut(entity),
         }
     }
 
-    /// A read-only per-user priority handle for an entity. Panics on a pipelined server.
+    /// A read-only **per-user** priority handle for an entity.
+    ///
+    /// # Panics (pipelined)
+    /// Per-user priority layers are **send-resident** (`send.user_priorities`)
+    /// AND borrow-returning (`EntityPriorityRef` holds `&EntityPriorityData`),
+    /// so unlike the coord-resident *global* layer they cannot be served from a
+    /// parked-slot borrow. The clean fix is a symmetric coord-side
+    /// `user_priority_mirror` + publish-on-send (mirroring the 4-E.2e global
+    /// path); until that lands, use [`Self::global_entity_priority`] on a
+    /// pipelined server. Tracked: MISSION_PIPELINE_API_BOUNDARY §2e backlog.
     pub fn user_entity_priority(&self, user_key: &UserKey, entity: E) -> EntityPriorityRef<'_, E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user_entity_priority(user_key, entity),
             WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_entity_priority (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
+                "WorldServer::user_entity_priority is not yet available on a pipelined server: \
+                 the per-user priority layer is send-resident and borrow-returning (needs a \
+                 coord-side user_priority_mirror, §2e backlog). Use global_entity_priority for now."
             ),
         }
     }
 
-    /// A mutable per-user priority handle for an entity. Panics on a pipelined server.
+    /// A mutable **per-user** priority handle for an entity. See
+    /// [`Self::user_entity_priority`] for why this panics on a pipelined server.
     pub fn user_entity_priority_mut(
         &mut self,
         user_key: &UserKey,
@@ -894,38 +913,47 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_entity_priority_mut(user_key, entity),
             WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_entity_priority_mut (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
+                "WorldServer::user_entity_priority_mut is not yet available on a pipelined server: \
+                 the per-user priority layer is send-resident and borrow-returning (needs a \
+                 coord-side user_priority_mirror, §2e backlog). Use global_entity_priority_mut for now."
             ),
         }
     }
 
-    /// Create a new room and return a mutable handle. Panics on a pipelined server.
+    /// Create a new room and return a mutable handle (both modes).
     pub fn create_room(&mut self) -> RoomMut<'_, E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.create_room(),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::create_room (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                let room_key = ps.create_room();
+                RoomMut::with_pipeline(ps, &room_key)
+            }
         }
     }
 
-    /// A read-only handle to the given room. Panics on a pipelined server.
+    /// A read-only handle to the given room. Panics if no room exists.
     pub fn room(&self, room_key: &RoomKey) -> RoomRef<'_, E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.room(room_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::room (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                if !ps.room_exists(room_key) {
+                    panic!("No Room exists for given Key!");
+                }
+                RoomRef::with_pipeline(ps, room_key)
+            }
         }
     }
 
-    /// A mutable handle to the given room. Panics on a pipelined server.
+    /// A mutable handle to the given room. Panics if no room exists.
     pub fn room_mut(&mut self, room_key: &RoomKey) -> RoomMut<'_, E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.room_mut(room_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::room_mut (borrow-returning builder) is not available on a pipelined server; use the coord-only mutators instead"
-            ),
+            WorldServerImpl::Pipelined(ps) => {
+                if !ps.room_exists(room_key) {
+                    panic!("No Room exists for given Key!");
+                }
+                RoomMut::with_pipeline(ps, room_key)
+            }
         }
     }
 }

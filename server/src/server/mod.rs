@@ -9,6 +9,7 @@ mod main_server;
 pub use main_server::MainServer;
 pub mod world_server;
 pub use world_server::InternalWorldServer;
+pub(crate) use world_server::user_scope_has_entity_impl;
 
 /// The unified `WorldServer` enum (G-unify Phase 2c) over the resident +
 /// pipelined engine shapes.

@@ -59,21 +59,21 @@ impl RoomStore {
 
     // ── Room-level queries ───────────────────────────────────────────────
 
-    pub(super) fn has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
+    pub(crate) fn has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
         self.rooms
             .get(room_key)
             .map(|r| r.has_user(user_key))
             .unwrap_or(false)
     }
 
-    pub(super) fn users_count(&self, room_key: &RoomKey) -> usize {
+    pub(crate) fn users_count(&self, room_key: &RoomKey) -> usize {
         self.rooms
             .get(room_key)
             .map(|r| r.users_count())
             .unwrap_or(0)
     }
 
-    pub(super) fn user_keys_iter(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
+    pub(crate) fn user_keys_iter(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
         self.rooms
             .get(room_key)
             .map(|r| r.user_keys())
@@ -81,7 +81,7 @@ impl RoomStore {
             .flatten()
     }
 
-    pub(super) fn entities_iter(&self, room_key: &RoomKey) -> impl Iterator<Item = &GlobalEntity> {
+    pub(crate) fn entities_iter(&self, room_key: &RoomKey) -> impl Iterator<Item = &GlobalEntity> {
         self.rooms
             .get(room_key)
             .map(|r| r.entities())
@@ -89,14 +89,14 @@ impl RoomStore {
             .flatten()
     }
 
-    pub(super) fn has_entity(&self, room_key: &RoomKey, entity: &GlobalEntity) -> bool {
+    pub(crate) fn has_entity(&self, room_key: &RoomKey, entity: &GlobalEntity) -> bool {
         self.rooms
             .get(room_key)
             .map(|r| r.has_entity(entity))
             .unwrap_or(false)
     }
 
-    pub(super) fn entities_count(&self, room_key: &RoomKey) -> usize {
+    pub(crate) fn entities_count(&self, room_key: &RoomKey) -> usize {
         self.rooms
             .get(room_key)
             .map(|r| r.entities_count())

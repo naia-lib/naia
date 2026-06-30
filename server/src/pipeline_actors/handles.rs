@@ -15,13 +15,14 @@
 //! `SendHandle::state.shared` — all three point at the same underlying
 //! [`ServerShared`] allocation.
 
-use std::{hash::Hash, net::SocketAddr, sync::Arc};
+use std::{collections::hash_set::Iter, hash::Hash, net::SocketAddr, sync::Arc};
 
 use std::time::Duration;
 
 use naia_shared::{
     DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
-    GlobalEntity, GlobalEntitySpawner, ReplicatedComponent, Tick,
+    EntityPriorityMut, EntityPriorityRef, GlobalEntity, GlobalEntitySpawner, ReplicatedComponent,
+    Tick,
 };
 
 use crate::room::{Room, RoomKey};
@@ -1025,5 +1026,84 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         E: 'static,
     {
         crate::server::send_state::drain_pending_world_hooks(&self.shared, world);
+    }
+
+    // ====================================================================
+    // MISSION_PIPELINE_API_BOUNDARY task #9 — coord-resident reads backing
+    // the Room/User borrow-builders on the Pipelined arm. Each mirrors the
+    // namesake `InternalWorldServer` helper field-for-field (all read
+    // `state.room_store` / `state.user_store` — coord-resident).
+    // ====================================================================
+
+    /// Whether `user_key` is a member of `room_key`. Mirrors
+    /// `InternalWorldServer::room_has_user`.
+    pub fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
+        self.state.room_store.has_user(room_key, user_key)
+    }
+
+    /// Number of users in `room_key`. Mirrors `InternalWorldServer::room_users_count`.
+    pub fn room_users_count(&self, room_key: &RoomKey) -> usize {
+        self.state.room_store.users_count(room_key)
+    }
+
+    /// Iterator over the user keys in `room_key`. Borrows `state.room_store`.
+    /// Mirrors `InternalWorldServer::room_user_keys`.
+    pub fn room_user_keys(&self, room_key: &RoomKey) -> impl Iterator<Item = &UserKey> {
+        self.state.room_store.user_keys_iter(room_key)
+    }
+
+    /// Whether `world_entity` is in `room_key` (converts via the global map).
+    /// Mirrors `InternalWorldServer::room(..).has_entity`.
+    pub fn room_has_entity(&self, room_key: &RoomKey, world_entity: &E) -> bool {
+        if let Ok(global_entity) = self.entity_to_global_entity(world_entity) {
+            self.state.room_store.has_entity(room_key, &global_entity)
+        } else {
+            false
+        }
+    }
+
+    /// All world-entities in `room_key` (converts each via the global map,
+    /// dropping any that no longer resolve). Mirrors
+    /// `InternalWorldServer::room(..).entities`.
+    pub fn room_entities(&self, room_key: &RoomKey) -> Vec<E> {
+        let mut output = Vec::new();
+        for global_entity in self.state.room_store.entities_iter(room_key) {
+            if let Ok(entity) = self.global_entity_to_entity(global_entity) {
+                output.push(entity);
+            }
+        }
+        output
+    }
+
+    /// Number of entities in `room_key`. Mirrors `InternalWorldServer::room_entities_count`.
+    pub fn room_entities_count(&self, room_key: &RoomKey) -> usize {
+        self.state.room_store.entities_count(room_key)
+    }
+
+    /// Number of rooms `user_key` belongs to, or `None` if the key is stale.
+    /// Mirrors `InternalWorldServer::user_rooms_count`.
+    pub fn user_rooms_count(&self, user_key: &UserKey) -> Option<usize> {
+        self.state.user_store.rooms_count(user_key)
+    }
+
+    /// Iterator over the room keys `user_key` belongs to, or `None` if stale.
+    /// Borrows `state.user_store`. Mirrors `InternalWorldServer::user_room_keys`.
+    pub fn user_room_keys(&self, user_key: &UserKey) -> Option<Iter<'_, RoomKey>> {
+        self.state.user_store.room_keys_iter(user_key)
+    }
+
+    /// Read-only handle to the **sender-wide (global)** priority state for
+    /// `entity` — coord-resident (`state.global_priority_mirror`, 4-E.2e).
+    /// Mirrors `InternalWorldServer::global_entity_priority`.
+    pub fn global_entity_priority(&self, entity: E) -> EntityPriorityRef<'_, E> {
+        self.state.global_priority_mirror.get_ref(entity)
+    }
+
+    /// Mutable handle to the **sender-wide (global)** priority state for
+    /// `entity`. Writes target `state.global_priority_mirror`; the publish step
+    /// at the top of the next send carries the change to `send.global_priority`
+    /// (4-E.2e). Mirrors `InternalWorldServer::global_entity_priority_mut`.
+    pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
+        self.state.global_priority_mirror.get_mut(entity)
     }
 }
