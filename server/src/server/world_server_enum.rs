@@ -103,6 +103,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Disconnect a user out-of-band (coord-inline). First-class over both modes.
+    pub fn disconnect_user(&mut self, user_key: &UserKey) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.sim_handle.disconnect_user(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.disconnect_user(user_key),
+        }
+    }
+
     /// Flush the batched world-mutation hooks staged during this tick's
     /// coord-side ops (entity registration / configuration) onto `world`. In
     /// resident mode the staging queue is normally empty (ops apply inline), so
