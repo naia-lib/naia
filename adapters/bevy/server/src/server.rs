@@ -822,6 +822,52 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// G1 — park + drain (the recv half of the park-window bracket). Owns the
+    /// resource-scope nesting, the coord-handle acquisition, and the per-output
+    /// loop, so the consumer supplies only the recv-world choice and the
+    /// per-output applier (policy). Replaces the hand-rolled
+    /// `world_only_resource_scope` + `as_pipelined().expect().coord()` + output
+    /// loop in a consumer's `open_park_window`.
+    ///
+    /// `recv_world`: `None` receives entity ops into `world` itself (the
+    /// single-world path); `Some(sim)` receives into a disjoint sim world (the
+    /// delegated/editor path). For each non-empty output the applier is called
+    /// with `(&mut world, recv_world, coord, output)`.
+    pub fn pipeline_recv(
+        world: &mut World,
+        mut recv_world: Option<&mut World>,
+        mut apply: impl FnMut(
+            &mut World,
+            Option<&mut World>,
+            &naia_server::pipeline_actors::CoordHandle<Entity>,
+            naia_server::ReceiveOutput<Entity>,
+        ),
+    ) {
+        Self::world_only_resource_scope(world, |world, ws| {
+            let outputs = match recv_world.as_deref_mut() {
+                Some(sim) => ws.receive(naia_bevy_shared::WorldProxyMut::proxy_mut(&mut *sim)),
+                None => ws.receive(naia_bevy_shared::WorldProxyMut::proxy_mut(&mut *world)),
+            };
+            let coord = ws.as_pipelined().expect("pipelined server").coord();
+            for output in outputs {
+                if output.is_empty() {
+                    continue;
+                }
+                apply(world, recv_world.as_deref_mut(), coord, output);
+            }
+        });
+    }
+
+    /// G1 — snapshot + unpark (the send half of the park-window bracket). Owns
+    /// the resource-scope + immutable world proxy. Replaces the consumer's
+    /// `world_only_resource_scope(|_, ws| ws.send(WorldProxy::proxy(..)))` in
+    /// `close_park_window`.
+    pub fn pipeline_send(world: &mut World, send_world: &World) {
+        Self::world_only_resource_scope(world, |_world, ws| {
+            ws.send(naia_bevy_shared::WorldProxy::proxy(send_world));
+        });
+    }
+
     /// Re-panic on the main thread if a worker thread has panicked.
     pub fn pipeline_propagate_panics(world: &World) {
         if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
