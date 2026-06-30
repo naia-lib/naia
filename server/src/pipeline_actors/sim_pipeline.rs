@@ -42,6 +42,7 @@ use crate::{
 
 use super::handles::CoordHandle;
 use super::ServerEntityConverter;
+use super::{PipelineRuntime, RuntimeState, RuntimeTimingHooks};
 
 // ── PipelinedWorldServer ───────────────────────────────────────────────────────────
 
@@ -91,6 +92,16 @@ pub struct PipelinedWorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// application path, so the only difference is WHERE the socket drain happens
     /// (this thread vs the recv worker) — symmetric to the send-shape split.
     recv_subscriber: Option<Receiver<ReceiveOutput<E>>>,
+    /// MISSION_PIPELINE_API_BOUNDARY §2f — the worker-thread runtime, OWNED by
+    /// the pipelined server (was the bevy adapter's `PluginInternalState.runtime`
+    /// until the §2f ownership move). `None` until [`Self::start_workers`] spawns
+    /// the threads (the separate spawn step after [`Self::listen`] binds the
+    /// socket); always `None` in deterministic builds (`not(workers_active)` — the
+    /// synchronous oracle shape, no threads). When `Some` + `Running`,
+    /// [`Self::receive`] parks the workers at the top of the window and
+    /// [`Self::send`] unparks them at the bottom, so the whole park-window bracket
+    /// is self-contained in naia core. The runtime's `Drop` joins the workers.
+    runtime: Option<PipelineRuntime<E>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
@@ -116,6 +127,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             send_slot: Arc::new(Mutex::new(Some(send))),
             send_publisher: None,
             recv_subscriber: None,
+            runtime: None,
         }
     }
 
@@ -286,6 +298,83 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
         let (_auth_tx, _auth_rx, ps, pr) = crate::transport::Socket::listen(socket.into());
         self.with_world_server(|ws| ws.io_load(ps, pr));
+    }
+
+    /// §2f — the **separate spawn step**: stand up the worker-thread runtime and
+    /// transition it `Armed → Running`. Call AFTER [`Self::listen`] has bound the
+    /// socket (so the recv handle's `readiness()` is meaningful) and while the
+    /// handles are in their slots.
+    ///
+    /// Creates the internal snapshot lag channel (so `send` publishes the frozen
+    /// `(snapshot, plan)` job to the send worker — the consumer never authors a
+    /// snapshot, §2f), wires the recv worker's output channel into
+    /// [`Self::recv_subscriber`], and spawns the threads around this pipeline's own
+    /// slot `Arc`s. `timing` carries the optional per-stage instrumentation hooks
+    /// (zero-overhead `None`s for non-bench builds).
+    ///
+    /// In deterministic builds (`not(workers_active)`) this is a no-op: there are
+    /// no worker threads and `receive`/`send` run the synchronous oracle shape.
+    #[cfg(workers_active)]
+    pub fn start_workers(&mut self, timing: RuntimeTimingHooks) {
+        // The snapshot job channel is naia-internal: `send` publishes here, the
+        // send worker transmits next tick (the one-tick lag).
+        let (snap_sender, snap_receiver) = super::SnapshotSender::<E>::pair();
+        self.send_publisher = Some(snap_sender);
+
+        let runtime = PipelineRuntime::new_armed(
+            Arc::clone(&self.recv_slot),
+            Arc::clone(&self.send_slot),
+            snap_receiver,
+            timing,
+        );
+        // Mirror of the send wiring: point `receive` at the recv worker's output
+        // channel (born inside `new_armed`).
+        if let Some(rx) = runtime.recv_out_receiver() {
+            self.recv_subscriber = Some(rx);
+        }
+
+        // The recv handle is back in its slot after `listen()`; read its readiness
+        // so the recv worker can select on it instead of polling.
+        let recv_readiness = self
+            .recv_slot
+            .lock()
+            .as_ref()
+            .expect("recv handle in slot before start_workers()")
+            .readiness();
+
+        runtime.spawn_workers(recv_readiness);
+        self.runtime = Some(runtime);
+    }
+
+    /// Deterministic-build no-op form of [`Self::start_workers`] (no worker
+    /// threads exist; `receive`/`send` run the synchronous oracle shape).
+    #[cfg(not(workers_active))]
+    pub fn start_workers(&mut self, _timing: RuntimeTimingHooks) {}
+
+    /// `true` once [`Self::start_workers`] has spawned the runtime and it is
+    /// `Running` (so `receive`/`send` should park/unpark around the window).
+    /// Always `false` in deterministic builds.
+    pub fn is_running(&self) -> bool {
+        self.runtime
+            .as_ref()
+            .map_or(false, |rt| rt.state() == RuntimeState::Running)
+    }
+
+    /// If an owned worker thread has panicked, re-panic on the calling thread.
+    /// No-op when no runtime is present (deterministic / not-yet-spawned).
+    pub fn propagate_panic_if_any(&self) {
+        if let Some(rt) = &self.runtime {
+            rt.propagate_panic_if_any();
+        }
+    }
+
+    /// Test/dev hook: request that the owned workers panic on their next loop
+    /// iteration. No-op when no runtime is present.
+    #[cfg(any(test, feature = "test_time"))]
+    pub fn request_worker_panic_for_test(&self) {
+        if let Some(rt) = &self.runtime {
+            rt.request_worker_panic_for_test();
+        }
     }
 
     /// Temporarily reassemble a [`crate::InternalWorldServer`] and invoke `f` against it.
@@ -606,6 +695,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Workers parked (or not spawned). The bevy adapter's `ReceivePackets` set
     /// brackets this with park/unpark (G8); the synchronous oracle needs none.
     pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W) -> Vec<ReceiveOutput<E>> {
+        // §2f: when the worker runtime is owned + `Running`, OPEN the park window
+        // here — the workers deposit their handles in the slots and block, so the
+        // `take_handles` below is race-free. No-op for the synchronous oracle
+        // (no runtime) — byte-identical to the pre-ownership-move bracket.
+        if self.is_running() {
+            self.runtime.as_ref().unwrap().park_workers();
+        }
         let (mut coord, mut recv, mut send) = self.take_handles();
         let server_tick = coord.current_tick();
 
@@ -670,6 +766,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         Self::drain_and_send(&coord, &mut send, world, publisher.as_ref());
         self.restore_handles(coord, recv, send);
         self.send_publisher = publisher;
+        // §2f: CLOSE the park window — resume the workers (the send worker picks
+        // up the freshly-published frozen job and transmits it next tick). No-op
+        // for the synchronous oracle (no runtime).
+        if self.is_running() {
+            self.runtime.as_ref().unwrap().unpark_workers();
+        }
     }
 
     /// The **D0–D9 drain-phase ordering contract** (MISSION_PIPELINE_API_BOUNDARY
