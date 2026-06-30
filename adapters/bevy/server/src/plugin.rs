@@ -93,13 +93,11 @@ pub struct Plugin {
     /// custom schedule like cyberlith Sim's `SimMain`.
     change_detection_schedule: Option<InternedScheduleLabel>,
     /// MISSION_USER_ONLY_SEES_SIM Phase D: when `true`,
-    /// [`Plugin::pipelined`] also constructs the three
-    /// pipeline handles, installs them + the C.6-prep facade
-    /// resources (`ServerEntityConverter`, `EventReceiver`, `SnapshotSender`,
-    /// `SnapshotReceiver`, `PipelinedServer`, `SendHandleRes`,
-    /// `PluginInternalState`), and registers the main-side
-    /// `drain_recv_worker_output` + `propagate_worker_panics` systems
-    /// in `change_detection_schedule` (or `Update`).
+    /// [`Plugin::pipelined`] builds the pipeline, stores it inside the unified
+    /// `ServerImpl::WorldOnly(WorldServer)` resource (§2f), installs the
+    /// `ServerEntityConverter` + `EventReceiverRes` Sim resources, and registers
+    /// the panic-propagation (and, when opted in, park-window bracket) systems in
+    /// `change_detection_schedule` (or `Update`).
     full_pipelining: bool,
     /// When `true`, `build` SKIPS registering the per-`Replicate` host-sync
     /// change-tracking systems (`WorldData::add_systems[_to_schedule]`). Set
@@ -110,7 +108,7 @@ pub struct Plugin {
     skip_host_sync_change_tracking: bool,
     /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l) — when `true`, `install_full_pipelining`
     /// registers the adapter-driven park-window bracket in the `ReceivePackets`
-    /// / `SendPackets` sets (see [`crate::plugin_full::PipelineConfig::drive_bracket_in_update`]).
+    /// / `SendPackets` sets (see [`crate::PipelineConfig::drive_bracket_in_update`]).
     /// Set only by `pipelined` from `PipelineConfig`; all other constructors pass `false`.
     drive_bracket_in_update: bool,
 }
@@ -124,8 +122,9 @@ impl Plugin {
     /// MISSION_USER_ONLY_SEES_SIM Phase D — full-pipelining variant
     /// that internally spawns Recv + Send worker threads.
     ///
-    /// See `plugin_full.rs` for the API contract + lifecycle / park
-    /// / panic surface exposed via [`crate::PluginInternalState`].
+    /// See `plugin_full.rs` for the API contract. Lifecycle (listen / start /
+    /// park / unpark / panic-propagation) is driven via the
+    /// [`crate::Server::pipeline_listen`] family of static helpers.
     pub fn pipelined(
         server_config: ServerConfig,
         protocol: Protocol,

@@ -1,37 +1,29 @@
-//! MISSION_USER_ONLY_SEES_SIM Phase D.2 + D.3 — Recv + Send worker
-//! integration smoke for `Plugin::pipelined`.
+//! MISSION_PIPELINE_API_BOUNDARY §2f — Recv + Send worker integration smoke for
+//! `Plugin::pipelined`, driven through the `Server::pipeline_*` helpers.
 //!
-//! The two workers are wired in D.1; this file adds explicit
-//! integration tests for their per-loop behavior:
+//! With no connected clients the workers loop without producing or consuming
+//! meaningful state. These tests verify the pipeline stays healthy across many
+//! ticks, that the consumer can drive the send op synchronously inside a park
+//! window through the pipeline, and that Drop joins any workers cleanly.
 //!
-//! - **Recv worker** (`recv_worker_loop`) calls `recv.receive()` in a
-//!   loop and pushes `ReceiveOutput<Entity>` through a bounded(1)
-//!   channel. The main-side `drain_recv_worker_output` system fans
-//!   into the bevy `Messages<X>` buffers + `EventReceiver`.
+//! NOTE: even in the `deterministic` (`workers_active = false`) test build the
+//! recv/send worker threads DO spawn (parked-service loop), so the
+//! worker-survival and clean-drop assertions run against real threads; only the
+//! send WIRING stays in its inline oracle shape.
 //!
-//! - **Send worker** (`send_worker_loop`) calls
-//!   `SnapshotReceiver::take_latest`, then
-//!   `apply_pending_send_preamble` + `apply_pending_scope_changes` +
-//!   `send_all_packets` against the drained snapshot.
-//!
-//! With no connected clients, both workers loop without producing or
-//! consuming meaningful state. These tests verify the workers stay
-//! alive across many ticks + many snapshot publish/drain cycles, and
-//! that `SnapshotSender::send` from main reaches the Send worker
-//! (observed via `has_pending` going from `true` to `false`).
+//! The old `SnapshotSenderRes` / `SnapshotReceiverRes` / `SendHandleRes`
+//! consumer resources are gone (§2f): the snapshot channel is now created
+//! INTERNALLY by `PipelinedWorldServer::start_workers`, and the consumer drives
+//! the send via `PipelinedWorldServer::send` (reached through the unified
+//! WorldServer resource) instead of manually flushing the SendHandle.
 
-use std::{thread, time::Duration};
+use std::time::Duration;
 
 use bevy_app::App;
-use bevy_ecs::entity::Entity;
 
-use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, SendHandleRes,
-    ServerConfig, SnapshotReceiverRes, SnapshotSenderRes,
-};
-use naia_bevy_shared::Protocol as BevyProtocol;
+use naia_bevy_server::{transport, PipelineConfig, Plugin as ServerPlugin, Server, ServerConfig};
+use naia_bevy_shared::{Protocol as BevyProtocol, WorldProxy};
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
-use naia_shared::SnapshotWorld;
 
 use naia_test_harness::test_protocol::Position;
 
@@ -57,87 +49,53 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
     Box::new(Socket::new(LocalServerSocket::new(hub), None))
 }
 
+fn listen_and_start(app: &mut App, addr: &str) {
+    Server::pipeline_listen(app.world_mut(), local_socket(addr));
+    Server::pipeline_start(app.world_mut());
+}
+
 #[test]
 fn workers_survive_many_ticks_with_no_clients() {
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23030"));
-    }
+    listen_and_start(&mut app, "127.0.0.1:23030");
     for _ in 0..200 {
         app.update();
     }
     // No worker panicked; propagate is a no-op.
-    app.world()
-        .resource::<PluginInternalState>()
-        .propagate_panic_if_any();
+    Server::pipeline_propagate_panics(app.world());
 }
 
 #[test]
-fn published_snapshot_drains_via_consumer_park_window() {
+fn consumer_drives_send_in_park_window() {
+    // The consumer-driven park window: park the workers, drive the pipeline's
+    // `send` op synchronously against the bevy world, unpark. With no clients
+    // and deterministic builds `send` is an inline no-op transmit — the point is
+    // that the op routes cleanly through the pipeline and the handles round-trip.
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23031"));
-    }
+    listen_and_start(&mut app, "127.0.0.1:23031");
     app.update();
-    // Give worker time to enter its loop.
-    thread::sleep(Duration::from_millis(20));
 
-    // Publish an empty snapshot. SnapshotWorld<Entity> needs to be
-    // constructible; we use a synthetic empty world.
-    let sender = app.world().resource::<SnapshotSenderRes>().0.clone();
-    sender.send(SnapshotWorld::<Entity>::new());
-    assert!(
-        sender.has_pending(),
-        "snapshot pending immediately after send"
-    );
+    Server::pipeline_park(app.world());
+    let sent = Server::world_only_resource_scope(app.world_mut(), |world, ws| {
+        let Some(ps) = ws.as_pipelined_mut() else {
+            return false;
+        };
+        ps.send(&world.proxy());
+        true
+    });
+    Server::pipeline_unpark(app.world());
 
-    // In test_time the send worker is a PURE PARKING SERVICE — it never drains
-    // snapshots itself (driving the send on its real-time thread made connect
-    // handshakes reorder under parallel load). The consumer (e.g. cyberlith's
-    // park window) drives the send synchronously at a deterministic point each
-    // tick: park the workers, take the SendHandle from the shared slot, flush
-    // the preamble + send the latest snapshot, return the handle, unpark. The
-    // drain is therefore synchronous — no wait loop needed.
-    {
-        let world = app.world();
-        let state = world.resource::<PluginInternalState>();
-        state.park_workers();
-        let send_slot = world.resource::<SendHandleRes>().0.clone();
-        let snap = world.resource::<SnapshotReceiverRes>().0.take_latest();
-        let mut send = send_slot
-            .lock()
-            .take()
-            .expect("SendHandle in shared slot while workers parked");
-        send.apply_pending_send_preamble();
-        if let Some(snap) = snap {
-            send.send_all_packets(snap);
-        }
-        *send_slot.lock() = Some(send);
-        state.unpark_workers();
-    }
+    assert!(sent, "send routed through the pipeline in the park window");
 
-    assert!(
-        !sender.has_pending(),
-        "consumer-driven park-window send drained the published snapshot",
-    );
-
-    app.world()
-        .resource::<PluginInternalState>()
-        .propagate_panic_if_any();
+    Server::pipeline_propagate_panics(app.world());
 }
 
 #[test]
 fn explicit_shutdown_via_drop_completes_within_5s() {
-    // Repeat of D.1's app_drop_joins_worker_threads_cleanly but with
-    // 200 update cycles in between to verify Drop signaling works
-    // even when workers have been running a long time.
+    // Repeat of the lifecycle drop test but with 200 update cycles in between to
+    // verify Drop signaling works even when workers have been running a while.
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23032"));
-    }
+    listen_and_start(&mut app, "127.0.0.1:23032");
     for _ in 0..200 {
         app.update();
     }

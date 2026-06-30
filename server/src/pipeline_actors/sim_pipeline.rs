@@ -312,14 +312,34 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// slot `Arc`s. `timing` carries the optional per-stage instrumentation hooks
     /// (zero-overhead `None`s for non-bench builds).
     ///
-    /// In deterministic builds (`not(workers_active)`) this is a no-op: there are
-    /// no worker threads and `receive`/`send` run the synchronous oracle shape.
-    #[cfg(workers_active)]
+    /// **Worker-shape vs oracle-shape, but threads in BOTH.** The threads are
+    /// spawned regardless of `workers_active` — in the deterministic
+    /// (`not(workers_active)`) build they run the *parked-service* loop (they park
+    /// on demand but never drain the socket or transmit), so the park/unpark/
+    /// panic/join lifecycle is real and testable while `receive`/`send` still run
+    /// the synchronous oracle. Only the worker-DRIVEN wiring is gated: the
+    /// `send_publisher` (so `send` publishes the frozen job to the send worker
+    /// instead of transmitting inline) and the `recv_subscriber` (so `receive`
+    /// drains the recv worker's channel) are set ONLY under `workers_active`;
+    /// the deterministic build leaves both `None` (the inline/synchronous oracle —
+    /// the byte-exact moat path).
+    ///
+    /// Note: the byte-exact moat (`naia_test_harness` / g9pre) drives the core
+    /// bracket synchronously and never calls this, so spawning parked threads here
+    /// cannot affect determinism.
     pub fn start_workers(&mut self, timing: RuntimeTimingHooks) {
-        // The snapshot job channel is naia-internal: `send` publishes here, the
-        // send worker transmits next tick (the one-tick lag).
+        // The snapshot job channel always exists (`new_armed` needs the
+        // receiver); only the worker-driven build points `send` at it.
         let (snap_sender, snap_receiver) = super::SnapshotSender::<E>::pair();
-        self.send_publisher = Some(snap_sender);
+        #[cfg(workers_active)]
+        {
+            self.send_publisher = Some(snap_sender);
+        }
+        #[cfg(not(workers_active))]
+        {
+            // Oracle: `send` transmits inline; nothing is published to the worker.
+            drop(snap_sender);
+        }
 
         let runtime = PipelineRuntime::new_armed(
             Arc::clone(&self.recv_slot),
@@ -327,10 +347,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             snap_receiver,
             timing,
         );
-        // Mirror of the send wiring: point `receive` at the recv worker's output
-        // channel (born inside `new_armed`).
-        if let Some(rx) = runtime.recv_out_receiver() {
-            self.recv_subscriber = Some(rx);
+        // Worker-driven build only: point `receive` at the recv worker's output
+        // channel (born inside `new_armed`). Oracle leaves it `None` (synchronous).
+        #[cfg(workers_active)]
+        {
+            if let Some(rx) = runtime.recv_out_receiver() {
+                self.recv_subscriber = Some(rx);
+            }
         }
 
         // The recv handle is back in its slot after `listen()`; read its readiness
@@ -345,11 +368,6 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         runtime.spawn_workers(recv_readiness);
         self.runtime = Some(runtime);
     }
-
-    /// Deterministic-build no-op form of [`Self::start_workers`] (no worker
-    /// threads exist; `receive`/`send` run the synchronous oracle shape).
-    #[cfg(not(workers_active))]
-    pub fn start_workers(&mut self, _timing: RuntimeTimingHooks) {}
 
     /// `true` once [`Self::start_workers`] has spawned the runtime and it is
     /// `Running` (so `receive`/`send` should park/unpark around the window).

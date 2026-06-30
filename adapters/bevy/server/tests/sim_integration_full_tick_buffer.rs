@@ -1,49 +1,37 @@
-//! MISSION_USER_ONLY_SEES_SIM Phase D.3a — PlayerCommand tick-buffer
-//! drain through `Plugin::pipelined`.
+//! MISSION_PIPELINE_API_BOUNDARY §2f — PlayerCommand tick-buffer drain through
+//! `Plugin::pipelined`.
 //!
-//! # The gap (pre-D.3a)
+//! # The mechanism (under test)
 //!
-//! The `pipelined` recv worker permanently owned the
-//! `RecvHandle` and only ran `recv.receive()`. There was no
-//! `RecvHandleRes`, so a Sim system could not reach the handle to call
-//! `RecvHandle::receive_tick_buffer_messages(tick)` — the per-tick call
-//! cyberlith makes to drain naia's per-user tick-buffered
-//! `PlayerCommands`. Adopting the plugin as-is would silently drop ALL
-//! player input. This was the sole blocker for cyberlith Phase E.6.
-//!
-//! # The D.3a mechanism (under test)
-//!
-//! The recv (and send) worker now borrow their handle from a shared
-//! park-window slot (`Arc<Mutex<Option<_>>>`) per loop iteration,
-//! depositing it at the park checkpoint. `RecvHandleRes` / `SendHandleRes`
-//! wrap those slots. A Sim system:
-//!   1. parks the workers (`PluginInternalState::park_workers`),
-//!   2. takes the `RecvHandle` from the slot,
-//!   3. calls `receive_tick_buffer_messages(tick)` for each tick,
+//! A Sim system reaches the pipeline's `RecvHandle` to call
+//! `RecvHandle::receive_tick_buffer_messages(tick)` — the per-tick call cyberlith
+//! makes to drain naia's per-user tick-buffered `PlayerCommands`. Under §2f the
+//! pipeline lives inside the unified `WorldServer` resource; the consumer:
+//!   1. parks the workers (`Server::pipeline_park`),
+//!   2. reaches the pipeline via `Server::world_only_resource_scope` +
+//!      `as_pipelined_mut` and takes the `RecvHandle` from its shared slot
+//!      (`PipelinedWorldServer::recv_slot`),
+//!   3. calls `receive_tick_buffer_messages(tick)` per tick,
 //!   4. returns the handle and unparks.
-//! The park barrier makes the take/return race-free (D6 / Phase-G
-//! discipline) — see the borrow-contract docs on `RecvHandleRes`.
+//! The park barrier makes the take/return race-free (D6 / Phase-G discipline).
 //!
 //! # Why injection rather than a live client handshake
 //!
-//! The pipeline's auth / `receive_user` connection-lifecycle layer is a
-//! separate (D.3b) concern not yet wired into `pipelined`, so
-//! a real client cannot complete a handshake against it today. To
-//! exercise the tick-buffer drain we manufacture a recv connection and
-//! inject tick-buffered messages directly via the `test_utils`-gated
-//! `RecvHandle::inject_tick_buffer_message_for_test` — mirroring exactly
-//! the per-user tick-buffer state a real handshake + `process_recv_packets`
-//! decode would leave behind. The borrow path the Sim system exercises
-//! (park → take from `RecvHandleRes` slot → drain → return → unpark) is
-//! the real, un-mocked mechanism.
+//! A real client cannot complete a handshake against the pipelined plugin today,
+//! so we manufacture a recv connection and inject tick-buffered messages directly
+//! via the `test_utils`-gated `RecvHandle::inject_tick_buffer_message_for_test` —
+//! mirroring the per-user tick-buffer state a real handshake +
+//! `process_recv_packets` decode would leave behind. The borrow path the Sim
+//! system exercises (park → take from the recv slot → drain → return → unpark)
+//! is the real, un-mocked mechanism.
 
 use std::{thread, time::Duration};
 
 use bevy_app::App;
+use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, RecvHandleRes,
-    ServerConfig,
+    transport, PipelineConfig, Plugin as ServerPlugin, RecvHandle, Server, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
@@ -79,12 +67,22 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 }
 
 fn listen(app: &mut App, addr: &str) {
-    let socket = local_socket(addr);
-    // Listen + run one update so the armed sim_handle drains and the workers
-    // start spinning.
-    app.world().resource::<PluginInternalState>().listen(socket);
+    Server::pipeline_listen(app.world_mut(), local_socket(addr));
+    Server::pipeline_start(app.world_mut());
     app.update();
     thread::sleep(Duration::from_millis(15));
+}
+
+/// Clone the pipeline's recv-handle slot (the same `Arc` the recv worker borrows
+/// from in active builds). The workers must be parked before taking the handle.
+fn recv_slot(
+    app: &mut App,
+) -> std::sync::Arc<parking_lot::Mutex<Option<RecvHandle<Entity>>>> {
+    Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
+        ws.as_pipelined_mut()
+            .expect("pipelined WorldServer")
+            .recv_slot()
+    })
 }
 
 #[test]
@@ -95,20 +93,11 @@ fn tick_buffered_messages_drain_in_per_tick_order_via_park_window() {
     let addr: std::net::SocketAddr = "127.0.0.1:54400".parse().unwrap();
     let user_key = UserKey::from_u64(7);
 
-    // Inject one tick-buffered TestMessage per tick across several ticks.
-    // Per the TickBufferReceiver contract the message_tick must be in the
-    // future of host_tick; we inject at host=H, message=H+2, then drain
-    // at the message tick. Values increase monotonically so we can assert
-    // per-tick FIFO order is preserved end-to-end.
     let ticks: Vec<u16> = vec![12, 13, 14, 15, 16];
     let mut expected: Vec<(u16, u32)> = Vec::new();
 
-    let state = app.world().resource::<PluginInternalState>();
-    state.park_workers();
-    let recv_slot = {
-        let res = app.world().resource::<RecvHandleRes>();
-        res.0.clone()
-    };
+    Server::pipeline_park(app.world());
+    let recv_slot = recv_slot(&mut app);
 
     // ── Inject phase (parked) ──────────────────────────────────────────
     {
@@ -150,18 +139,14 @@ fn tick_buffered_messages_drain_in_per_tick_order_via_park_window() {
         *recv_slot.lock() = Some(recv);
     }
 
-    app.world()
-        .resource::<PluginInternalState>()
-        .unpark_workers();
+    Server::pipeline_unpark(app.world());
 
-    // Workers must still be alive + making progress after the borrow.
+    // Workers (if any) must still be alive + making progress after the borrow.
     thread::sleep(Duration::from_millis(10));
-    app.world()
-        .resource::<PluginInternalState>()
-        .propagate_panic_if_any();
+    Server::pipeline_propagate_panics(app.world());
 
-    // Every injected command was drained, NONE dropped, and per-tick
-    // order preserved (values strictly increasing in arrival order).
+    // Every injected command was drained, NONE dropped, and per-tick order
+    // preserved (values strictly increasing in arrival order).
     assert_eq!(
         drained, expected,
         "all tick-buffered commands drained in per-tick order; got {drained:?}, expected {expected:?}",
@@ -172,40 +157,31 @@ fn tick_buffered_messages_drain_in_per_tick_order_via_park_window() {
 
 #[test]
 fn park_window_recv_borrow_is_race_free_under_repeated_cycles() {
-    // Hammer the park → take RecvHandle → return → unpark cycle while the
-    // workers are actively spinning, to surface any race in the
-    // deposit/claim handoff. No client is connected, so the drain returns
-    // nothing — the point is that the handle is always present in the slot
-    // once parked, and the workers always re-claim it on unpark and keep
-    // running (no panic, no lost handle, no deadlock).
+    // Hammer the park → take RecvHandle → return → unpark cycle. No client is
+    // connected, so the drain returns nothing — the point is that the handle is
+    // always present in the slot once parked, and (in active builds) the workers
+    // always re-claim it on unpark and keep running.
     let mut app = build_app();
     listen(&mut app, "127.0.0.1:23041");
 
     for cycle in 0..25 {
-        let state = app.world().resource::<PluginInternalState>();
-        state.park_workers();
+        Server::pipeline_park(app.world());
 
-        let recv_slot = app.world().resource::<RecvHandleRes>().0.clone();
+        let recv_slot = recv_slot(&mut app);
         let recv = recv_slot.lock().take();
         assert!(
             recv.is_some(),
             "RecvHandle must be in the slot once workers are parked (cycle {cycle})",
         );
-        // Touch the handle (drain an arbitrary tick — returns nothing).
         let mut recv = recv.unwrap();
         let mut msgs = recv.receive_tick_buffer_messages(&(cycle as u16));
         let drained = msgs.read::<TickBufferedChannel, TestMessage>();
         assert!(drained.is_empty(), "no client → no tick-buffer messages");
         *recv_slot.lock() = Some(recv);
 
-        app.world()
-            .resource::<PluginInternalState>()
-            .unpark_workers();
-        // Let the worker re-claim + spin briefly.
+        Server::pipeline_unpark(app.world());
         thread::sleep(Duration::from_millis(2));
-        app.world()
-            .resource::<PluginInternalState>()
-            .propagate_panic_if_any();
+        Server::pipeline_propagate_panics(app.world());
     }
 
     drop(app);

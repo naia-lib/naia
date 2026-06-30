@@ -1,25 +1,23 @@
-//! MISSION_USER_ONLY_SEES_SIM Phase D.1 — lifecycle smoke for
-//! `Plugin::pipelined`.
+//! MISSION_PIPELINE_API_BOUNDARY §2f — lifecycle smoke for `Plugin::pipelined`.
 //!
 //! Verifies:
-//!   - Plugin install registers the expected Resources (`ServerEntityConverter`,
-//!     `EventReceiverRes`, `SnapshotSenderRes`, `SnapshotReceiverRes`,
-//!     `PipelinedServer`, `SendHandleRes`, `PluginInternalState`).
-//!   - Before `listen()`, `PipelinedServer` inner pipeline is None (workers not running).
-//!   - After `listen()` with a `LocalServerSocket`, `App::update`
-//!     drains the armed pipeline into `PipelinedServer` and Sim systems can
-//!     observe it.
-//!   - Dropping the App joins the worker threads cleanly within 5s.
+//!   - Plugin install registers the expected consumer-facing Resources
+//!     (`ServerEntityConverter`, `EventReceiverRes`) and stores the pipeline
+//!     inside the unified `WorldServer` resource (reachable via
+//!     `Server::world_only_resource_scope` + `as_pipelined`).
+//!   - Before `pipeline_listen`, the pipeline is not listening.
+//!   - After `pipeline_listen` + `pipeline_start`, the pipeline is bound
+//!     (listening) and reachable.
+//!   - Dropping the App joins any worker threads cleanly within 5s (the
+//!     `PipelinedWorldServer` Drop joins workers).
 
 use std::time::Duration;
 
 use bevy_app::App;
-use bevy_ecs::entity::Entity;
 
 use naia_bevy_server::{
-    pipeline_actors::SnapshotSender, transport, Plugin as ServerPlugin, PluginInternalState,
-    PipelineConfig, SendHandleRes, ServerConfig, ServerEntityConverter, EventReceiverRes, PipelinedServer,
-    SnapshotReceiverRes, SnapshotSenderRes,
+    transport, EventReceiverRes, PipelineConfig, Plugin as ServerPlugin, Server, ServerConfig,
+    ServerEntityConverter,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
@@ -48,87 +46,63 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
     Box::new(Socket::new(LocalServerSocket::new(hub), None))
 }
 
+/// Reach into the pipeline stored in the `WorldServer` resource and run `f`
+/// against it; returns `false` if the resource is not a Pipelined WorldServer.
+fn with_pipeline<R>(app: &mut App, f: impl FnOnce(&mut naia_server::pipeline_actors::PipelinedWorldServer<bevy_ecs::entity::Entity>) -> R) -> Option<R> {
+    Server::world_only_resource_scope(app.world_mut(), |_world, ws| ws.as_pipelined_mut().map(f))
+}
+
 #[test]
 fn plugin_install_registers_expected_resources() {
-    let app = build_app();
-    let w = app.world();
-    assert!(
-        w.get_resource::<ServerEntityConverter>().is_some(),
-        "ServerEntityConverter installed",
-    );
-    assert!(
-        w.get_resource::<EventReceiverRes>().is_some(),
-        "EventReceiverRes installed",
-    );
-    assert!(
-        w.get_resource::<SnapshotSenderRes>().is_some(),
-        "SnapshotSenderRes installed",
-    );
-    assert!(
-        w.get_resource::<SnapshotReceiverRes>().is_some(),
-        "SnapshotReceiverRes installed",
-    );
-    assert!(
-        w.get_resource::<PipelinedServer>().is_some(),
-        "PipelinedServer installed",
-    );
-    assert!(
-        w.get_resource::<SendHandleRes>().is_some(),
-        "SendHandleRes installed",
-    );
-    assert!(
-        w.get_resource::<PluginInternalState>().is_some(),
-        "PluginInternalState installed",
-    );
-}
-
-#[test]
-fn sim_pipeline_empty_before_listen() {
-    let app = build_app();
-    let res = app.world().resource::<PipelinedServer>();
-    assert!(
-        res.0.is_none(),
-        "PipelinedServer is None before listen()",
-    );
-}
-
-#[test]
-fn listen_drains_armed_pipeline_into_resource_after_update() {
     let mut app = build_app();
     {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23001"));
+        let w = app.world();
+        assert!(
+            w.get_resource::<ServerEntityConverter>().is_some(),
+            "ServerEntityConverter installed",
+        );
+        assert!(
+            w.get_resource::<EventReceiverRes>().is_some(),
+            "EventReceiverRes installed",
+        );
     }
-    // Drives the drain_armed_into_res system (registered in Update by
-    // pipelined) which drains the armed PipelinedServer into
-    // PipelinedServer.
-    app.update();
-    let res = app.world().resource::<PipelinedServer>();
-    assert!(
-        res.0.is_some(),
-        "PipelinedServer filled after listen + update",
+    // The pipeline is stored inside the unified WorldServer resource.
+    assert_eq!(
+        with_pipeline(&mut app, |_ps| ()),
+        Some(()),
+        "pipeline reachable via the WorldServer resource",
     );
 }
 
 #[test]
-fn snapshot_sender_resource_is_usable() {
-    // Verify the SnapshotSenderRes is the load-bearing copy (not a
-    // dropped clone) — calling .send is a no-op but should not panic
-    // and has_pending should report true afterwards.
-    let app = build_app();
-    let sender = app.world().resource::<SnapshotSenderRes>().0.clone();
-    assert!(!sender.has_pending(), "no snapshot pending initially");
+fn pipeline_not_listening_before_listen() {
+    let mut app = build_app();
+    let listening = with_pipeline(&mut app, |_ps| ()).is_some();
+    assert!(listening, "pipeline present before listen()");
+    assert!(
+        !Server::pipeline_is_running(app.world()),
+        "pipeline not running before start()",
+    );
+}
+
+#[test]
+fn listen_and_start_binds_pipeline() {
+    let mut app = build_app();
+    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23001"));
+    Server::pipeline_start(app.world_mut());
+    app.update();
+    // The pipeline is reachable and reports its current tick (coord in slot).
+    let tick = with_pipeline(&mut app, |ps| ps.current_tick());
+    assert!(tick.is_some(), "pipeline reachable + coord borrowable after start");
 }
 
 #[test]
 fn app_drop_joins_worker_threads_cleanly() {
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23002"));
-    }
+    Server::pipeline_listen(app.world_mut(), local_socket("127.0.0.1:23002"));
+    Server::pipeline_start(app.world_mut());
     app.update();
-    // Drop the App; PluginInternalState::Drop joins workers.
+    // Drop the App; the pipeline's Drop joins any worker threads.
     let start = std::time::Instant::now();
     drop(app);
     let elapsed = start.elapsed();
@@ -137,15 +111,4 @@ fn app_drop_joins_worker_threads_cleanly() {
         "App drop completed worker join within 5s (took {:?})",
         elapsed,
     );
-}
-
-#[test]
-fn snapshot_sender_pair_construction_independent() {
-    // Sanity: the plugin's SnapshotSender is independent of any
-    // user-constructed pair. Constructing a new pair doesn't disturb
-    // the plugin's state.
-    let app = build_app();
-    let (_s, _r) = SnapshotSender::<Entity>::pair();
-    let sender = app.world().resource::<SnapshotSenderRes>().0.clone();
-    assert!(!sender.has_pending());
 }

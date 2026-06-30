@@ -1,31 +1,27 @@
-//! MISSION_USER_ONLY_SEES_SIM Phase D.4 — park / unpark TestClock
-//! integration smoke for `Plugin::pipelined`.
+//! MISSION_PIPELINE_API_BOUNDARY §2f — park / unpark TestClock integration
+//! smoke for `Plugin::pipelined`, driven through the `Server::pipeline_*`
+//! static lifecycle helpers (the `PluginInternalState` resource is gone; the
+//! pipeline now lives inside the unified `WorldServer` resource).
 //!
 //! Verifies the D6 discipline ([[project-d6-testclock-findings]]):
 //!
-//! 1. `PluginInternalState::park_workers()` blocks until both worker
-//!    threads have observed the park flag and incremented
-//!    `parked_count` to N=2.
-//! 2. While parked, the main thread can mutate the shared TestClock
-//!    via `TestClock::advance(...)` without racing a worker mid-
-//!    `recv.receive()` / `send.send_all_packets()`.
-//! 3. `PluginInternalState::unpark_workers()` resumes both workers.
+//! 1. `Server::pipeline_park` blocks until both worker threads have parked.
+//! 2. While parked, the main thread can mutate the shared TestClock via
+//!    `TestClock::advance(...)` without racing a worker mid-loop.
+//! 3. `Server::pipeline_unpark` resumes both workers.
 //! 4. Workers continue to make progress after unpark (no deadlock).
 //! 5. Repeated park/unpark cycles work.
 //!
-//! The "make progress" check is observational: we measure that the
-//! number of `recv.receive()` iterations during the unparked window
-//! is non-zero by giving the workers time to spin and verifying drop
-//! join time is reasonable.
+//! NOTE: even in the `deterministic` (`workers_active = false`) test build the
+//! recv/send worker threads DO spawn (parked-service loop), so `pipeline_park`
+//! genuinely blocks until both threads reach their park checkpoint and
+//! `pipeline_unpark` resumes them — real worker-lifecycle coverage.
 
 use std::{thread, time::Duration};
 
 use bevy_app::App;
 
-use naia_bevy_server::{
-    transport, Plugin as ServerPlugin, PluginInternalState, PipelineConfig, ServerConfig,
-    PipelinedServer,
-};
+use naia_bevy_server::{transport, PipelineConfig, Plugin as ServerPlugin, Server, ServerConfig};
 use naia_bevy_shared::{Protocol as BevyProtocol, TestClock};
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
 
@@ -53,110 +49,92 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
     Box::new(Socket::new(LocalServerSocket::new(hub), None))
 }
 
+fn listen_and_start(app: &mut App, addr: &str) {
+    Server::pipeline_listen(app.world_mut(), local_socket(addr));
+    Server::pipeline_start(app.world_mut());
+}
+
 #[test]
 fn park_workers_returns_promptly() {
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23010"));
-    }
+    listen_and_start(&mut app, "127.0.0.1:23010");
     app.update();
 
-    // Give workers a moment to spin so they're definitely in their
-    // loop body (vs. just-spawned and about to enter it).
+    // Give workers a moment to spin so they're definitely in their loop body.
     thread::sleep(Duration::from_millis(20));
 
-    let state = app.world().resource::<PluginInternalState>();
     let start = std::time::Instant::now();
-    state.park_workers();
+    Server::pipeline_park(app.world());
     let elapsed = start.elapsed();
     assert!(
         elapsed < Duration::from_secs(2),
-        "park_workers returned within 2s (took {:?})",
+        "pipeline_park returned within 2s (took {:?})",
         elapsed,
     );
-    state.unpark_workers();
+    Server::pipeline_unpark(app.world());
 }
 
 #[test]
 fn park_unpark_cycle_progresses_test_clock_safely() {
-    // D6 contract: with park around TestClock::advance, the worker
-    // reads the new clock value on resume without racing a mid-tick
-    // read. This is observational — we exercise the discipline and
-    // assert no panic + workers still alive afterwards.
+    // D6 contract: with park around TestClock::advance, the worker reads the new
+    // clock value on resume without racing a mid-tick read.
     TestClock::reset();
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23011"));
-    }
+    listen_and_start(&mut app, "127.0.0.1:23011");
     app.update();
 
     thread::sleep(Duration::from_millis(20));
 
     for cycle in 0..5 {
-        let state = app.world().resource::<PluginInternalState>();
-        state.park_workers();
-        // Now safe to mutate the shared clock without racing workers
-        // mid-`recv.receive()` / mid-`send_all_packets()`.
+        Server::pipeline_park(app.world());
+        // Now safe to mutate the shared clock without racing workers mid-loop.
         TestClock::advance(40);
-        state.unpark_workers();
-        // Give workers a bit of unparked time so they see the new
-        // clock value.
+        Server::pipeline_unpark(app.world());
+        // Give workers a bit of unparked time so they see the new clock value.
         thread::sleep(Duration::from_millis(5));
-        // propagate_panic_if_any: if a worker panicked, this re-panics
-        // on the main thread (test fails with the original payload).
-        app.world()
-            .resource::<PluginInternalState>()
-            .propagate_panic_if_any();
+        // If a worker panicked, this re-panics on the main thread.
+        Server::pipeline_propagate_panics(app.world());
         let _ = cycle;
     }
 
-    // Final assertion: app drops cleanly.
+    // Final assertion: app drops cleanly (pipeline Drop joins any workers).
     drop(app);
 }
 
 #[test]
 fn unpark_without_prior_park_is_noop() {
     let app = build_app();
-    // PluginInternalState in Armed state; unpark should be a no-op
-    // (workers don't exist yet).
-    let state = app.world().resource::<PluginInternalState>();
-    state.unpark_workers(); // No panic.
-    state.park_workers(); // No-op too (Armed state).
+    // Before listen+start the runtime is still Armed (no worker threads yet), so
+    // unpark/park are no-ops.
+    Server::pipeline_unpark(app.world()); // No panic.
+    Server::pipeline_park(app.world()); // No-op too.
 }
 
 #[test]
 fn sim_handle_borrowable_while_parked() {
-    // Demonstrates the cyberlith Phase E pattern: park workers, take
-    // the CoordHandle from PipelinedServer for cross-handle work in a
-    // Sim system, restore it, unpark.
+    // Demonstrates the cyberlith Phase E pattern: park workers, take the
+    // CoordHandle from the pipeline for cross-handle work in a Sim system,
+    // restore it, unpark. The pipeline is reached through the unified
+    // WorldServer resource via `as_pipelined_mut`.
     let mut app = build_app();
-    {
-        let state = app.world().resource::<PluginInternalState>();
-        state.listen(local_socket("127.0.0.1:23012"));
-    }
+    listen_and_start(&mut app, "127.0.0.1:23012");
     app.update();
 
     thread::sleep(Duration::from_millis(10));
 
-    let state = app.world().resource::<PluginInternalState>();
-    state.park_workers();
-    // Now safely borrow the CoordHandle via the pipeline.
-    let sim_handle_opt = {
-        let mut res = app.world_mut().resource_mut::<PipelinedServer>();
-        res.0.as_mut().map(|p| p.take_coord())
-    };
+    Server::pipeline_park(app.world());
+    let borrowed = Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
+        let Some(ps) = ws.as_pipelined_mut() else {
+            return false;
+        };
+        // Borrow + restore the CoordHandle while parked.
+        let coord = ps.take_coord();
+        ps.restore_coord(coord);
+        true
+    });
     assert!(
-        sim_handle_opt.is_some(),
-        "CoordHandle borrowable while parked"
+        borrowed,
+        "pipeline reachable + CoordHandle borrowable while parked"
     );
-    {
-        let mut res = app.world_mut().resource_mut::<PipelinedServer>();
-        if let (Some(sim), Some(p)) = (sim_handle_opt, res.0.as_mut()) {
-            p.restore_coord(sim);
-        }
-    }
-    let state = app.world().resource::<PluginInternalState>();
-    state.unpark_workers();
+    Server::pipeline_unpark(app.world());
 }

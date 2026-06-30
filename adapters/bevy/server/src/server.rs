@@ -253,6 +253,23 @@ impl ServerImpl {
             Self::WorldOnly(server) => server.resource_authority_status::<R>(),
         }
     }
+
+    /// Borrow the underlying [`WorldServer`] when this is the `WorldOnly` arm
+    /// (the pipelined plugin's resource shape); `None` for `Full`.
+    pub(crate) fn as_world_server(&self) -> Option<&NaiaWorldServer<Entity>> {
+        match self {
+            Self::WorldOnly(server) => Some(server),
+            Self::Full(_) => None,
+        }
+    }
+
+    /// Mutable variant of [`Self::as_world_server`].
+    pub(crate) fn as_world_server_mut(&mut self) -> Option<&mut NaiaWorldServer<Entity>> {
+        match self {
+            Self::WorldOnly(server) => Some(server),
+            Self::Full(_) => None,
+        }
+    }
 }
 
 // Server
@@ -748,6 +765,88 @@ impl<'w> Server<'w> {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
             crate::apply_receive_output::apply_receive_output(world, &mut *server, output);
         });
+    }
+
+    // ====================================================================
+    // Pipelined-server lifecycle (§2f) — static helpers that drive the
+    // pipeline stored in the `ServerImpl::WorldOnly(WorldServer)` resource.
+    //
+    // The pipelined plugin (`Plugin::pipelined`) installs a `WorldServer`
+    // built via `WorldServer::from_pipelined`, so the underlying
+    // `PipelinedWorldServer` is reachable through the unified enum. These
+    // replace the removed `PluginInternalState` lifecycle surface.
+    // ====================================================================
+
+    /// Build the per-stage timing hooks for the pipeline runtime. Empty
+    /// (zero-overhead) unless the `pipeline_timing` bench feature is on.
+    fn pipeline_timing_hooks() -> naia_server::pipeline_actors::RuntimeTimingHooks {
+        #[allow(unused_mut)]
+        let mut timing = naia_server::pipeline_actors::RuntimeTimingHooks::default();
+        #[cfg(feature = "pipeline_timing")]
+        {
+            timing.record_recv = Some(crate::pipeline_timing::record_recv);
+            timing.record_send = Some(crate::pipeline_timing::record_send);
+            timing.record_barrier = Some(crate::pipeline_timing::record_barrier);
+        }
+        timing
+    }
+
+    /// Bind the pipeline's socket (the bind-only startup step). Pair with
+    /// [`Self::pipeline_start`], which spawns the worker runtime.
+    pub fn pipeline_listen(world: &mut World, socket: impl Into<Box<dyn Socket>>) {
+        Self::world_only_resource_scope(world, |_world, ws| ws.listen(socket));
+    }
+
+    /// The separate spawn step: stand up the worker runtime (`Armed →
+    /// Running`). Call after [`Self::pipeline_listen`]. No-op in
+    /// deterministic builds (no worker threads).
+    pub fn pipeline_start(world: &mut World) {
+        let timing = Self::pipeline_timing_hooks();
+        Self::world_only_resource_scope(world, |_world, ws| ws.start_workers(timing));
+    }
+
+    /// Park both worker threads (open the park window). No-op when not
+    /// `Running`. Safe because the pipelined plugin only ever installs a
+    /// Pipelined `WorldServer`.
+    pub fn pipeline_park(world: &World) {
+        if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
+            ws.park_workers();
+        }
+    }
+
+    /// Resume both worker threads (close the park window). No-op when not
+    /// `Running`.
+    pub fn pipeline_unpark(world: &World) {
+        if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
+            ws.unpark_workers();
+        }
+    }
+
+    /// Re-panic on the main thread if a worker thread has panicked.
+    pub fn pipeline_propagate_panics(world: &World) {
+        if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
+            ws.propagate_panic_if_any();
+        }
+    }
+
+    /// `true` once the worker runtime is `Running`. `false` for a resident
+    /// (`Full`) server or a not-yet-started / deterministic pipeline.
+    pub fn pipeline_is_running(world: &World) -> bool {
+        world
+            .resource::<ServerImpl>()
+            .as_world_server()
+            .map_or(false, |ws| ws.is_running())
+    }
+
+    /// Test/dev hook: request that the pipeline workers panic on their next
+    /// loop iteration. No-op when no worker runtime is present.
+    #[cfg(any(test, feature = "test_time"))]
+    pub fn pipeline_request_worker_panic_for_test(world: &World) {
+        if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
+            if let Some(ps) = ws.as_pipelined() {
+                ps.request_worker_panic_for_test();
+            }
+        }
     }
 }
 

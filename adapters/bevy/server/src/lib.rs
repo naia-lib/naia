@@ -133,14 +133,13 @@ pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::Plugin;
-// `TickCtx` re-exported directly; core `PipelinedServer<E>` accessible via
-// `naia_bevy_server::pipeline_actors::PipelinedServer`. The Bevy resource
-// `PipelinedServer` exported from plugin_full below.
+// `TickCtx` re-exported directly; the core pipeline `PipelinedWorldServer<E>` is
+// accessible via `naia_bevy_server::pipeline_actors`. The pipelined plugin stores
+// it inside the unified `WorldServer` resource (§2f) and drives lifecycle via the
+// `Server::pipeline_*` static helpers — there is no longer a `PipelinedServer`
+// Bevy resource or per-handle `Res` wrappers.
 pub use naia_server::pipeline_actors::TickCtx;
-pub use plugin_full::{
-    drain_recv_impl, drain_recv_impl_split, PluginInternalState, PipelineConfig, RecvHandleRes,
-    SendHandleRes, EventReceiverRes, PipelinedServer, SnapshotReceiverRes, SnapshotSenderRes,
-};
+pub use plugin_full::{EventReceiverRes, PipelineConfig};
 pub use server::Server;
 pub use server_entity_converter::ServerEntityConverter;
 pub use snapshot_builder::{build_snapshot, build_snapshot_full};

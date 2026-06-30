@@ -45,39 +45,28 @@ use naia_server::{RecvHandle, SendHandle};
 /// missing components on insert) but routes through
 /// [`run_with_world_server`] instead of `ResMut<ServerImpl>`.
 ///
-/// Calling pattern (cyberlith Sim main schedule). Under
-/// `Plugin::pipelined`, `RecvHandleRes` / `SendHandleRes`
-/// wrap shared park-window slots: the workers must be parked (via
-/// [`crate::PluginInternalState::park_workers`]) before taking them, and
-/// unparked after returning them. The sim handle lives inside `PipelinedServer`:
+/// Calling pattern (cyberlith Sim main schedule). Under `Plugin::pipelined` the
+/// pipeline lives inside the unified `WorldServer` resource (§2f); reach it via
+/// [`crate::Server::world_only_resource_scope`] + `WorldServer::as_pipelined_mut`,
+/// park the workers (via [`crate::Server::pipeline_park`]) before taking the
+/// handles, and unpark (via [`crate::Server::pipeline_unpark`]) after returning
+/// them:
 /// ```ignore
 /// fn sim_to_host_sync(world: &mut World) {
-///     let state = world.resource::<PluginInternalState>();
-///     state.park_workers();
-///
-///     let mut sim_handle = world.resource_mut::<PipelinedServer>()
-///         .0.as_mut().map(|p| p.take_coord()).unwrap();
-///     let recv_slot = world.resource::<RecvHandleRes>().0.clone();
-///     let send_slot = world.resource::<SendHandleRes>().0.clone();
-///     let recv = recv_slot.lock().take().unwrap();
-///     let send = send_slot.lock().take().unwrap();
-///
-///     let (sim_handle, recv, send) =
-///         drain_host_sync_into_pipeline(world, sim_handle, recv, send);
-///
-///     if let Some(p) = world.resource_mut::<PipelinedServer>().0.as_mut() {
-///         p.restore_coord(sim_handle);
-///     }
-///     *recv_slot.lock() = Some(recv);
-///     *send_slot.lock() = Some(send);
-///
-///     world.resource::<PluginInternalState>().unpark_workers();
+///     crate::Server::pipeline_park(world);
+///     crate::Server::world_only_resource_scope(world, |world, ws| {
+///         let ps = ws.as_pipelined_mut().unwrap();
+///         let (sim_handle, recv, send) = ps.take_handles();
+///         let (sim_handle, recv, send) =
+///             drain_host_sync_into_pipeline(world, sim_handle, recv, send);
+///         ps.restore_handles(sim_handle, recv, send);
+///     });
+///     crate::Server::pipeline_unpark(world);
 /// }
 /// ```
 ///
-/// Returns the three handles re-split so the caller can park them back
-/// into their resources. Matches [`run_with_world_server`]'s
-/// take-then-return convention.
+/// Returns the three handles re-split so the caller can restore them onto the
+/// pipeline. Matches [`run_with_world_server`]'s take-then-return convention.
 ///
 /// If no `HostSyncEvent`s are pending the function returns the handles
 /// unchanged without rebuilding `WorldServer` (zero-cost no-op path).
