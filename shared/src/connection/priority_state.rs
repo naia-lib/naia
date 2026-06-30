@@ -138,6 +138,37 @@ impl<E: Copy + Eq + Hash> UserPriorityState<E> {
             .unwrap_or(0.0)
     }
 
+    /// task #13 (naia-server pipelined coord→send priority publish): merge this
+    /// **per-tick coord staging** layer INTO `target` (the live `send` layer),
+    /// preserving `target`'s accumulators, then clear self.
+    ///
+    /// For each staged entity:
+    /// - if its gain was EXPLICITLY written this tick (`gain_dirty` — set_gain or
+    ///   reset, NOT a boost-only touch), copy `gain_override` to `target` (this
+    ///   replays both an explicit set AND a `reset()`-to-default);
+    /// - always ADD the staged boost delta (`accumulated`) to `target`'s live
+    ///   accumulator (one-shot — the staging is cleared, so boosts apply once).
+    ///
+    /// This reproduces, at the send preamble, exactly what the resident borrow
+    /// API does by writing the live map directly between `receive` and `send` —
+    /// byte-identical by construction (the accumulator advance/reset stays
+    /// entirely send-side; eviction parity holds because the staging never
+    /// persists across ticks). See MISSION_PIPELINE_API_BOUNDARY task #13.
+    pub fn drain_merge_into(&mut self, target: &mut UserPriorityState<E>) {
+        for (entity, data) in self.entries.drain() {
+            let t = target.entries.entry(entity).or_default();
+            if data.gain_dirty {
+                t.gain_override = data.gain_override;
+            }
+            t.accumulated += data.accumulated;
+        }
+    }
+
+    /// `true` if this layer has no entries (used to skip empty staging drains).
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
     /// Reset the accumulator to 0 and stamp `last_sent_tick`. Called for each
     /// entity whose update bundle fully drained in the current send cycle —
     /// the canonical reset-on-send rule from III.7.5.
@@ -185,5 +216,76 @@ mod tests {
         s.on_despawn(&7);
         assert_eq!(s.get_ref(7).gain(), None);
         assert_eq!(s.get_ref(9).gain(), Some(2.0));
+    }
+
+    // ── task #13: drain_merge_into (the byte-critical coord-staging → send merge)
+    //
+    // Each test models one tick: a fresh `staging` layer (the per-tick coord
+    // writes) merged into a `send` layer (the live, persisted send-side state),
+    // and asserts the result equals what resident's direct write to `send` would
+    // have produced.
+
+    #[test]
+    fn merge_set_gain_applies_to_send() {
+        let mut send = UserPriorityState::<u32>::new();
+        let mut staging = UserPriorityState::<u32>::new();
+        staging.get_mut(7).set_gain(5.0);
+        staging.drain_merge_into(&mut send);
+        assert_eq!(send.get_ref(7).gain(), Some(5.0));
+        assert!(staging.is_empty(), "staging is drained");
+    }
+
+    #[test]
+    fn merge_boost_only_preserves_send_accumulator_and_gain() {
+        // send already has a gain + accumulator from prior ticks.
+        let mut send = UserPriorityState::<u32>::new();
+        send.get_mut(7).set_gain(3.0);
+        send.advance(7, 10.0); // live accumulator = 10
+        // This tick: a boost-only touch (no gain write).
+        let mut staging = UserPriorityState::<u32>::new();
+        staging.get_mut(7).boost_once(4.0);
+        staging.drain_merge_into(&mut send);
+        // Gain must be UNTOUCHED (boost-only must not clobber it to None).
+        assert_eq!(send.get_ref(7).gain(), Some(3.0));
+        // Boost is ADDED to the live accumulator (10 + 4), not replaced.
+        assert_eq!(send.accumulated(&7), 14.0);
+    }
+
+    #[test]
+    fn merge_reset_clears_send_gain_in_a_later_tick() {
+        // tick 1: set_gain → send gain = 5.
+        let mut send = UserPriorityState::<u32>::new();
+        {
+            let mut t1 = UserPriorityState::<u32>::new();
+            t1.get_mut(7).set_gain(5.0);
+            t1.drain_merge_into(&mut send);
+        }
+        assert_eq!(send.get_ref(7).gain(), Some(5.0));
+        // tick 2 (staging empty/cleared): reset() must still reach send.gain → None.
+        let mut t2 = UserPriorityState::<u32>::new();
+        t2.get_mut(7).reset();
+        t2.drain_merge_into(&mut send);
+        assert_eq!(send.get_ref(7).gain(), None, "reset clears the persisted send gain");
+    }
+
+    #[test]
+    fn merge_set_gain_then_boost_same_tick() {
+        let mut send = UserPriorityState::<u32>::new();
+        let mut staging = UserPriorityState::<u32>::new();
+        staging.get_mut(7).set_gain(2.0).boost_once(8.0);
+        staging.drain_merge_into(&mut send);
+        assert_eq!(send.get_ref(7).gain(), Some(2.0));
+        assert_eq!(send.accumulated(&7), 8.0);
+    }
+
+    #[test]
+    fn merge_does_not_touch_unstaged_send_entries() {
+        let mut send = UserPriorityState::<u32>::new();
+        send.get_mut(9).set_gain(1.5);
+        let mut staging = UserPriorityState::<u32>::new();
+        staging.get_mut(7).set_gain(5.0);
+        staging.drain_merge_into(&mut send);
+        assert_eq!(send.get_ref(9).gain(), Some(1.5), "untouched entry preserved");
+        assert_eq!(send.get_ref(7).gain(), Some(5.0));
     }
 }

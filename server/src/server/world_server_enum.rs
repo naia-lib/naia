@@ -882,29 +882,23 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
-    /// A read-only **per-user** priority handle for an entity.
+    /// A read-only **per-user** priority handle for an entity (both modes).
     ///
-    /// # Panics (pipelined)
-    /// Per-user priority layers are **send-resident** (`send.user_priorities`)
-    /// AND borrow-returning (`EntityPriorityRef` holds `&EntityPriorityData`),
-    /// so unlike the coord-resident *global* layer they cannot be served from a
-    /// parked-slot borrow. The clean fix is a symmetric coord-side
-    /// `user_priority_mirror` + publish-on-send (mirroring the 4-E.2e global
-    /// path); until that lands, use [`Self::global_entity_priority`] on a
-    /// pipelined server. Tracked: MISSION_PIPELINE_API_BOUNDARY §2e backlog.
+    /// On a pipelined server the read reflects this tick's pending coord-side
+    /// staging writes (task #13); the live send-side accumulator is not coord-
+    /// reachable across ticks, but reads never affect wire output.
     pub fn user_entity_priority(&self, user_key: &UserKey, entity: E) -> EntityPriorityRef<'_, E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user_entity_priority(user_key, entity),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_entity_priority is not yet available on a pipelined server: \
-                 the per-user priority layer is send-resident and borrow-returning (needs a \
-                 coord-side user_priority_mirror, §2e backlog). Use global_entity_priority for now."
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.user_entity_priority(user_key, entity),
         }
     }
 
-    /// A mutable **per-user** priority handle for an entity. See
-    /// [`Self::user_entity_priority`] for why this panics on a pipelined server.
+    /// A mutable **per-user** priority handle for an entity (both modes).
+    ///
+    /// Pipelined writes target the per-tick coord staging, drained into
+    /// `send.user_priorities` at the next `send` (task #13) — byte-identical to
+    /// the resident direct write.
     pub fn user_entity_priority_mut(
         &mut self,
         user_key: &UserKey,
@@ -912,11 +906,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> EntityPriorityMut<'_, E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_entity_priority_mut(user_key, entity),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::user_entity_priority_mut is not yet available on a pipelined server: \
-                 the per-user priority layer is send-resident and borrow-returning (needs a \
-                 coord-side user_priority_mirror, §2e backlog). Use global_entity_priority_mut for now."
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.user_entity_priority_mut(user_key, entity),
         }
     }
 

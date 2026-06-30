@@ -748,6 +748,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord_mut().global_entity_priority_mut(entity)
     }
 
+    /// Forwards to [`CoordHandle::user_entity_priority`] (per-user staging, task #13).
+    pub fn user_entity_priority(&self, user_key: &UserKey, entity: E) -> EntityPriorityRef<'_, E> {
+        self.coord().user_entity_priority(user_key, entity)
+    }
+
+    /// Forwards to [`CoordHandle::user_entity_priority_mut`] (per-user staging, task #13).
+    pub fn user_entity_priority_mut(
+        &mut self,
+        user_key: &UserKey,
+        entity: E,
+    ) -> EntityPriorityMut<'_, E> {
+        self.coord_mut().user_entity_priority_mut(user_key, entity)
+    }
+
     // ── Send/recv-resident `&self` reads (slot-lock) ──
 
     /// `true` once the transport is bound + listening. Send-resident
@@ -989,8 +1003,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // can borrow it without aliasing `&mut self` (the handles are also taken
         // from `self`). It is a plain clone-able channel sender; move it back after.
         let publisher = self.send_publisher.take();
-        let (coord, recv, mut send) = self.take_handles();
-        Self::drain_and_send(&coord, &mut send, world, publisher.as_ref());
+        let (mut coord, recv, mut send) = self.take_handles();
+        Self::drain_and_send(&mut coord, &mut send, world, publisher.as_ref());
         self.restore_handles(coord, recv, send);
         self.send_publisher = publisher;
         // §2f: CLOSE the park window — resume the workers (the send worker picks
@@ -1015,11 +1029,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// until its queue exists, and any future op class MUST be slotted explicitly
     /// into this order rather than appended ad hoc. D8/D9 are live now.
     fn drain_and_send<W: WorldRefType<E> + Sync>(
-        coord: &CoordHandle<E>,
+        coord: &mut CoordHandle<E>,
         send: &mut SendHandle<E>,
         world: &W,
         publisher: Option<&super::SnapshotSender<E>>,
     ) {
+        // task #13: priority publish (coord → send) at the TOP — see
+        // [`Self::publish_priority`]. Runs before `apply_pending_scope_changes`
+        // so a same-tick scope-exit evicts a just-published per-user entry
+        // exactly as resident's `update_entity_scopes` does.
+        Self::publish_priority(coord, send);
+
         // D1 entity-replication registrations (spawn_replicated/enable_replication)
         //    — queue introduced by G4/G5. Must drain before resource & host-sync.
         // D2 resource-replication registrations (Res<R> carriers) — G6. Before host-sync.
@@ -1097,6 +1117,43 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 publisher.send(snapshot);
             }
         }
+    }
+
+    /// task #13 — publish the coord-side priority writes into the live `send`
+    /// layer. The split-engine analog of the resident `run_send_preamble`
+    /// `clone_from` (world_server.rs:1102): without it, coord-side priority
+    /// writes never reach the wire in pipelined mode.
+    ///
+    /// - **GLOBAL**: wholesale `clone_from` of `global_priority_mirror` → `send`
+    ///   (the global accumulator is dormant — the hook reads only its
+    ///   `gain_override` — so a full replace is safe and identical to resident).
+    /// - **PER-USER**: drain the per-tick staging into `send.user_priorities`
+    ///   via `drain_merge_into` (gain-dirty aware, accumulator-preserving), then
+    ///   clear the staging. Clearing each tick is what gives eviction parity
+    ///   with the resident direct-write path for free.
+    fn publish_priority(coord: &mut CoordHandle<E>, send: &mut SendHandle<E>) {
+        send.state
+            .global_priority
+            .clone_from(&coord.state.global_priority_mirror);
+        for (user_key, layer) in coord.state.user_priority_staging.iter_mut() {
+            if layer.is_empty() {
+                continue;
+            }
+            let send_layer = send.state.user_priorities.entry(*user_key).or_default();
+            layer.drain_merge_into(send_layer);
+        }
+        coord.state.user_priority_staging.clear();
+    }
+
+    /// Test-only driver for [`Self::publish_priority`]: runs the REAL publish
+    /// against the parked handles (no world needed), so a unit test can exercise
+    /// the byte-critical coord→send priority publish + inspect `send` state via
+    /// [`Self::send_slot`]. Workers must be parked / not spawned.
+    #[cfg(test)]
+    pub(crate) fn publish_priority_for_test(&mut self) {
+        let (mut coord, recv, mut send) = self.take_handles();
+        Self::publish_priority(&mut coord, &mut send);
+        self.restore_handles(coord, recv, send);
     }
 }
 

@@ -762,3 +762,81 @@ fn send_handle_user_scope_has_entity_room_default() {
         "entity in a different room should NOT be in-scope by default"
     );
 }
+
+// ── task #13: pipelined priority publish (coord → send) ──────────────────────
+//
+// Drives the REAL `publish_priority` (the split-engine analog of resident
+// `run_send_preamble`'s `clone_from`) and inspects the live `send` state via the
+// park-window slot. Proves coord-side priority writes reach `send` — the gap
+// task #13 closes — and that the per-user merge preserves accumulators across
+// publishes, handles `reset()` across ticks, and clears the staging each tick.
+
+#[test]
+fn pipelined_priority_publish_global_and_per_user() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let mut server =
+        crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+
+    let uk = UserKey::from_u64(7);
+    let e: u64 = 42;
+
+    // Coord-side writes (global mirror + per-user staging) — not yet in `send`.
+    server.global_entity_priority_mut(e).set_gain(3.0);
+    server.user_entity_priority_mut(&uk, e).set_gain(5.0).boost_once(10.0);
+
+    server.publish_priority_for_test();
+
+    {
+        let slot = server.send_slot();
+        let lock = slot.lock();
+        let send = lock.as_ref().unwrap();
+        assert_eq!(send.state.global_priority.gain_override(&e), Some(3.0));
+        let layer = send
+            .state
+            .user_priorities
+            .get(&uk)
+            .expect("per-user layer published into send");
+        assert_eq!(layer.gain_override(&e), Some(5.0));
+        assert_eq!(layer.accumulated(&e), 10.0);
+    }
+    // Staging is drained + cleared.
+    assert!(
+        server
+            .coord()
+            .state
+            .user_priority_staging
+            .get(&uk)
+            .map_or(true, |l| l.is_empty()),
+        "per-user staging must be cleared after publish",
+    );
+
+    // A second publish with NO new coord writes: global gain re-clones
+    // (idempotent), per-user gain persists send-side, accumulator is NOT
+    // re-boosted (no double-application).
+    server.publish_priority_for_test();
+    {
+        let slot = server.send_slot();
+        let lock = slot.lock();
+        let send = lock.as_ref().unwrap();
+        assert_eq!(send.state.global_priority.gain_override(&e), Some(3.0));
+        let layer = send.state.user_priorities.get(&uk).unwrap();
+        assert_eq!(layer.gain_override(&e), Some(5.0), "per-user gain persists send-side");
+        assert_eq!(layer.accumulated(&e), 10.0, "no double-boost from a no-op publish");
+    }
+
+    // `reset()` in a LATER tick (staging already cleared) must still reach the
+    // persisted send gain — the case a state-based mirror cannot express and the
+    // `gain_dirty` flag exists for.
+    server.user_entity_priority_mut(&uk, e).reset();
+    server.publish_priority_for_test();
+    {
+        let slot = server.send_slot();
+        let lock = slot.lock();
+        let send = lock.as_ref().unwrap();
+        let layer = send.state.user_priorities.get(&uk).unwrap();
+        assert_eq!(layer.gain_override(&e), None, "reset reached send across ticks");
+        assert_eq!(layer.accumulated(&e), 10.0, "reset must not touch the accumulator");
+    }
+}

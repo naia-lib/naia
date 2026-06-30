@@ -14,11 +14,12 @@
 //! Per the LOCK ORDER in `server_shared.rs`, no field on this struct is
 //! locked — coordinator-thread access is single-threaded by definition.
 
-use std::hash::Hash;
+use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{GlobalPriorityState, ResourceRegistry};
+use naia_shared::{GlobalPriorityState, ResourceRegistry, UserPriorityState};
 
 use crate::request::{GlobalRequestManager, GlobalResponseManager};
+use crate::user::UserKey;
 
 use super::{room_store::RoomStore, user_store::UserStore};
 
@@ -43,6 +44,15 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// `global_entity_priority_mut` borrow API or `on_despawn`); the
     /// publish-on-read step keeps `send.global_priority` in sync.
     pub(crate) global_priority_mirror: GlobalPriorityState<E>,
+    /// task #13 — per-user priority **staging** (the per-tick borrow-API write
+    /// target on the pipelined coord side). Unlike `global_priority_mirror`
+    /// (which persists + republishes via `clone_from`), this is DRAINED+CLEARED
+    /// into `SendState.user_priorities` every `send` (`drain_merge_into`),
+    /// because the per-user layer carries the LIVE accumulator that lives
+    /// send-side and must not be clobbered. Clearing each tick is what gives
+    /// eviction parity with the resident direct-write path for free. `None`
+    /// entries are never created; absent ⇒ no pending per-user writes.
+    pub(crate) user_priority_staging: HashMap<UserKey, UserPriorityState<E>>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.

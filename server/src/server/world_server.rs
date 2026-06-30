@@ -318,6 +318,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             global_request_manager: GlobalRequestManager::new(),
             global_response_manager: GlobalResponseManager::new(),
             global_priority_mirror: GlobalPriorityState::new(),
+            user_priority_staging: std::collections::HashMap::new(),
             resource_registry: ResourceRegistry::new(),
             historian: None,
         };

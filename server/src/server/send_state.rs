@@ -2276,6 +2276,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         for layer in self.user_priorities.values_mut() {
             layer.on_scope_exit(world_entity);
         }
+        // task #13: evict any PENDING (not-yet-drained) per-user priority staging
+        // for this entity too. Despawn runs in consumer code BEFORE the `send`
+        // staging drain, so without this a staged set_gain on a just-despawned
+        // entity would be (re)published into `send.user_priorities` at the drain —
+        // whereas resident's direct write was already evicted here. Clearing the
+        // staged entry keeps the two byte-identical.
+        for layer in sim_handle.user_priority_staging.values_mut() {
+            layer.on_scope_exit(world_entity);
+        }
         // Drop every (*, *, world_entity) tuple from the scope-checks cache.
         self.scope_checks_cache.on_entity_despawned(*world_entity);
 

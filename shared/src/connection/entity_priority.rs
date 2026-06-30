@@ -12,6 +12,14 @@ pub(crate) struct EntityPriorityData {
     /// Sender's game tick at last successful send. Telemetry only; not used in
     /// priority calculation (the accumulator itself encodes staleness).
     pub(crate) last_sent_tick: Option<u32>,
+    /// Transient: `true` once `gain_override` has been WRITTEN through the borrow
+    /// API this access (set by `set_gain`/`reset`, NOT by `boost_once`). Read +
+    /// cleared by naia-server's pipelined coord→send priority-staging drain to
+    /// distinguish an explicit gain write (incl. a `reset()` to `None`) from a
+    /// boost-only touch — the two are otherwise indistinguishable as state
+    /// (`gain_override == None`). Inert in the resident/client paths, which write
+    /// the live map directly and never read this flag.
+    pub(crate) gain_dirty: bool,
 }
 
 /// Read-only view of an entity's priority state in one priority layer
@@ -99,7 +107,9 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     /// Set a persistent per-tick gain override for this layer. Stays in effect
     /// until `reset()` or another `set_gain()` call. Lazy-creates the entry.
     pub fn set_gain(&mut self, gain: f32) -> &mut Self {
-        self.entries.entry(self.entity).or_default().gain_override = Some(gain);
+        let entry = self.entries.entry(self.entity).or_default();
+        entry.gain_override = Some(gain);
+        entry.gain_dirty = true;
         self
     }
 
@@ -114,9 +124,12 @@ impl<'a, E: Copy + Eq + Hash> EntityPriorityMut<'a, E> {
     /// Clear the gain override — return to default (1.0). Does NOT clear the
     /// accumulator value itself, and does NOT remove the entry.
     pub fn reset(&mut self) -> &mut Self {
-        if let Some(data) = self.entries.get_mut(&self.entity) {
-            data.gain_override = None;
-        }
+        // Lazy-create so a `reset()` on an absent entry still records an explicit
+        // gain write (`gain_dirty`) — the pipelined staging drain must be able to
+        // replay "gain cleared to default" to `send`, not treat it as a no-op.
+        let data = self.entries.entry(self.entity).or_default();
+        data.gain_override = None;
+        data.gain_dirty = true;
         self
     }
 }
@@ -185,14 +198,23 @@ mod tests {
     }
 
     #[test]
-    fn reset_on_absent_entry_is_noop() {
+    fn reset_on_absent_entry_records_gain_clear() {
+        // task #13: `reset()` lazy-creates so the pipelined coord→send staging
+        // drain can replay "gain cleared to default" to `send` even when the
+        // local entry doesn't exist yet (e.g. a reset in a tick AFTER the
+        // set_gain, once the per-tick staging has been drained+cleared). The
+        // created entry is wire-harmless (gain None == default; accumulator 0).
         let mut entries = fresh();
         let mut m = EntityPriorityMut {
             entries: &mut entries,
             entity: 7u32,
         };
         m.reset();
-        assert!(!entries.contains_key(&7u32));
+        assert!(entries.contains_key(&7u32), "reset records an explicit gain-clear entry");
+        let data = &entries[&7u32];
+        assert_eq!(data.gain_override, None);
+        assert!(data.gain_dirty, "reset marks the gain explicitly written");
+        assert_eq!(data.accumulated, 0.0);
     }
 
     // B-BDD-4: set_gain(5.0) then reset() → default applied;

@@ -1106,4 +1106,34 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
         self.state.global_priority_mirror.get_mut(entity)
     }
+
+    /// Read-only handle to the **per-user** priority state for `entity` on
+    /// `user_key` (task #13). Reads the per-tick coord staging (the pending
+    /// writes for THIS tick) — the live accumulator lives send-side and is not
+    /// reachable from coord, so cross-tick accumulator reads return defaults.
+    /// Wire-irrelevant (reads never affect output). Mirrors
+    /// `InternalWorldServer::user_entity_priority`.
+    pub fn user_entity_priority(&self, user_key: &UserKey, entity: E) -> EntityPriorityRef<'_, E> {
+        match self.state.user_priority_staging.get(user_key) {
+            Some(layer) => layer.get_ref(entity),
+            None => EntityPriorityRef::empty(entity),
+        }
+    }
+
+    /// Mutable handle to the **per-user** priority state for `entity` on
+    /// `user_key` (task #13). Writes target the per-tick coord staging
+    /// (`state.user_priority_staging`); the next `send`'s preamble drains it into
+    /// `SendState.user_priorities` via `drain_merge_into` (gain-dirty aware,
+    /// accumulator-preserving). Byte-identical to the resident direct write.
+    pub fn user_entity_priority_mut(
+        &mut self,
+        user_key: &UserKey,
+        entity: E,
+    ) -> EntityPriorityMut<'_, E> {
+        self.state
+            .user_priority_staging
+            .entry(*user_key)
+            .or_default()
+            .get_mut(entity)
+    }
 }
