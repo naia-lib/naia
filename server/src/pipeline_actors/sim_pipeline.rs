@@ -463,6 +463,89 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord().current_tick()
     }
 
+    /// Forwards to [`CoordHandle::historian`].
+    pub fn historian(&self) -> Option<&crate::historian::Historian> {
+        self.coord().historian()
+    }
+
+    /// Forwards to [`CoordHandle::average_tick_duration`].
+    pub fn average_tick_duration(&self) -> std::time::Duration {
+        self.coord().average_tick_duration()
+    }
+
+    /// Forwards to [`CoordHandle::entity_count`].
+    pub fn entity_count(&self) -> usize {
+        self.coord().entity_count()
+    }
+
+    /// Forwards to [`CoordHandle::users_count`].
+    pub fn users_count(&self) -> usize {
+        self.coord().users_count()
+    }
+
+    /// Forwards to [`CoordHandle::user_count`].
+    pub fn user_count(&self) -> usize {
+        self.coord().user_count()
+    }
+
+    /// Forwards to [`CoordHandle::room_exists`].
+    pub fn room_exists(&self, room_key: &RoomKey) -> bool {
+        self.coord().room_exists(room_key)
+    }
+
+    /// Forwards to [`CoordHandle::room_keys`].
+    pub fn room_keys(&self) -> Vec<RoomKey> {
+        self.coord().room_keys()
+    }
+
+    /// Forwards to [`CoordHandle::rooms_count`].
+    pub fn rooms_count(&self) -> usize {
+        self.coord().rooms_count()
+    }
+
+    /// Forwards to [`CoordHandle::room_count`].
+    pub fn room_count(&self) -> usize {
+        self.coord().room_count()
+    }
+
+    /// Forwards to [`CoordHandle::has_resource`].
+    pub fn has_resource<R: naia_shared::ReplicatedComponent>(&self) -> bool {
+        self.coord().has_resource::<R>()
+    }
+
+    /// Forwards to [`CoordHandle::resource_entity`].
+    pub fn resource_entity<R: naia_shared::ReplicatedComponent>(&self) -> Option<E> {
+        self.coord().resource_entity::<R>()
+    }
+
+    /// Forwards to [`CoordHandle::resources_count`].
+    pub fn resources_count(&self) -> usize {
+        self.coord().resources_count()
+    }
+
+    /// Forwards to [`CoordHandle::resource_authority_status`].
+    pub fn resource_authority_status<R: naia_shared::ReplicatedComponent>(
+        &self,
+    ) -> Option<EntityAuthStatus> {
+        self.coord().resource_authority_status::<R>()
+    }
+
+    /// Forwards to [`CoordHandle::global_entity_to_entity`].
+    pub fn global_entity_to_entity(
+        &self,
+        global_entity: &naia_shared::GlobalEntity,
+    ) -> Result<E, naia_shared::EntityDoesNotExistError> {
+        self.coord().global_entity_to_entity(global_entity)
+    }
+
+    /// Forwards to [`CoordHandle::entity_to_global_entity`].
+    pub fn entity_to_global_entity(
+        &self,
+        world_entity: &E,
+    ) -> Result<naia_shared::GlobalEntity, naia_shared::EntityDoesNotExistError> {
+        self.coord().entity_to_global_entity(world_entity)
+    }
+
     /// Forwards to [`CoordHandle::scope_change_queue_len`].
     pub fn scope_change_queue_len(&self) -> usize {
         self.coord().scope_change_queue_len()

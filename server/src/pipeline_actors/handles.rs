@@ -17,8 +17,11 @@
 
 use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
+use std::time::Duration;
+
 use naia_shared::{
-    DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntitySpawner, Tick,
+    DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    GlobalEntity, GlobalEntitySpawner, ReplicatedComponent, Tick,
 };
 
 use crate::room::{Room, RoomKey};
@@ -126,6 +129,100 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// manager).
     pub fn current_tick(&self) -> Tick {
         self.shared.time_manager.read().current_tick()
+    }
+
+    /// Returns a read-only reference to the coord-resident Historian, or
+    /// `None` if lag-compensation snapshotting has not been enabled.
+    pub fn historian(&self) -> Option<&crate::historian::Historian> {
+        self.state.historian.as_ref()
+    }
+
+    /// Average tick duration (read from the shared time manager).
+    pub fn average_tick_duration(&self) -> Duration {
+        self.shared.time_manager.read().average_tick_duration()
+    }
+
+    /// Total number of replicated entities.
+    pub fn entity_count(&self) -> usize {
+        self.shared.global_entity_map.read().entity_count()
+    }
+
+    /// Number of users currently tracked.
+    pub fn users_count(&self) -> usize {
+        self.state.user_store.len()
+    }
+
+    /// Number of fully-connected users.
+    pub fn user_count(&self) -> usize {
+        self.user_keys().len()
+    }
+
+    /// Whether a room exists for the given key.
+    pub fn room_exists(&self, room_key: &RoomKey) -> bool {
+        self.state.room_store.contains(room_key)
+    }
+
+    /// Keys of all rooms.
+    pub fn room_keys(&self) -> Vec<RoomKey> {
+        self.state.room_store.keys()
+    }
+
+    /// Number of rooms.
+    pub fn rooms_count(&self) -> usize {
+        self.state.room_store.len()
+    }
+
+    /// Number of rooms (alias).
+    pub fn room_count(&self) -> usize {
+        self.room_keys().len()
+    }
+
+    /// True iff a resource of type `R` is currently inserted.
+    pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
+        self.state.resource_registry.entity_for::<R>().is_some()
+    }
+
+    /// The hidden entity carrying resource `R`, or `None`.
+    pub fn resource_entity<R: ReplicatedComponent>(&self) -> Option<E> {
+        let global_entity = self.state.resource_registry.entity_for::<R>()?;
+        self.shared
+            .global_entity_map
+            .read()
+            .global_entity_to_entity(&global_entity)
+            .ok()
+    }
+
+    /// Number of currently-inserted resources.
+    pub fn resources_count(&self) -> usize {
+        self.state.resource_registry.len()
+    }
+
+    /// Server-side authority status for resource `R`, or `None`.
+    pub fn resource_authority_status<R: ReplicatedComponent>(&self) -> Option<EntityAuthStatus> {
+        let entity = self.resource_entity::<R>()?;
+        self.entity_authority_status(&entity)
+    }
+
+    /// Convert a [`GlobalEntity`] to the consumer's entity handle.
+    pub fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<E, EntityDoesNotExistError> {
+        self.shared
+            .global_entity_map
+            .read()
+            .global_entity_to_entity(global_entity)
+    }
+
+    /// Convert the consumer's entity handle to a [`GlobalEntity`].
+    pub fn entity_to_global_entity(
+        &self,
+        world_entity: &E,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        self.shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
     }
 
     /// MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — return a

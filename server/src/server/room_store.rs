@@ -33,7 +33,7 @@ impl RoomStore {
         self.rooms.insert(room)
     }
 
-    pub(super) fn contains(&self, key: &RoomKey) -> bool {
+    pub(crate) fn contains(&self, key: &RoomKey) -> bool {
         self.rooms.contains_key(key)
     }
 
@@ -45,7 +45,7 @@ impl RoomStore {
         self.rooms.get_mut(key)
     }
 
-    pub(super) fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.rooms.len()
     }
 
@@ -53,7 +53,7 @@ impl RoomStore {
         self.rooms.iter_mut()
     }
 
-    pub(super) fn keys(&self) -> Vec<RoomKey> {
+    pub(crate) fn keys(&self) -> Vec<RoomKey> {
         self.rooms.iter().map(|(k, _)| k).collect()
     }
 
