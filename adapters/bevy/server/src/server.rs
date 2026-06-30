@@ -147,7 +147,7 @@ impl ServerImpl {
         }
         match self {
             Self::Full(server) => server.entity(world, entity).authority(),
-            Self::WorldOnly(server) => server.entity_authority_status(world, entity),
+            Self::WorldOnly(server) => server.entity_authority_status(entity),
         }
     }
 
@@ -158,7 +158,7 @@ impl ServerImpl {
     ) -> EntityOwner {
         match self {
             Self::Full(server) => server.entity(world, entity).owner(),
-            Self::WorldOnly(server) => server.entity_owner(world, entity),
+            Self::WorldOnly(server) => server.entity_owner(entity),
         }
     }
 

@@ -12,7 +12,10 @@ use crate::Historian;
 use crate::{
     connection::tick_buffer_messages::TickBufferMessages,
     events::main_events::WorldPacketEvent,
-    server::{main_server::MainServer, world_server::InternalWorldServer},
+    server::{
+        main_server::MainServer,
+        world_server_enum::{ServerMode, WorldServer},
+    },
     transport::Socket,
     transport::{PacketChannel, PacketSender},
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
@@ -48,14 +51,14 @@ use crate::{
 ///
 /// Steps 1–5 must run in this order every frame; skipping any step causes
 /// missed events or stale replication state.
-pub struct Server<E: Copy + Eq + Hash + Send + Sync> {
+pub struct Server<E: Copy + Eq + Hash + Send + Sync + 'static> {
     main_server: MainServer,
     outstanding_main_events: MainEvents,
-    world_server: InternalWorldServer<E>,
+    world_server: WorldServer<E>,
     to_world_sender_opt: Option<Box<dyn PacketSender>>,
 }
 
-impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// Creates a new server with the given config and protocol.
     ///
     /// Call [`listen`](Server::listen) before entering the main loop.
@@ -77,14 +80,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
         protocol: Protocol,
         protocol_id: ProtocolId,
     ) -> Self {
+        Self::with_mode(ServerMode::Resident, server_config, protocol, protocol_id)
+    }
+
+    /// Creates a new **pipelined** server (worker-thread drive shape) with the
+    /// given config and protocol.
+    ///
+    /// Identical to [`new`](Server::new) except the inner [`WorldServer`] is
+    /// constructed in [`ServerMode::Pipelined`]. The connection layer
+    /// (`MainServer`) is mode-agnostic, so the listen/accept/disconnect surface
+    /// is unchanged.
+    pub fn new_pipelined<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
+        protocol.lock();
+        let protocol_id = protocol.protocol_id();
+        Self::with_mode(ServerMode::Pipelined, server_config, protocol, protocol_id)
+    }
+
+    fn with_mode(
+        mode: ServerMode,
+        server_config: ServerConfig,
+        protocol: Protocol,
+        protocol_id: ProtocolId,
+    ) -> Self {
+        let world_server = match mode {
+            ServerMode::Resident => WorldServer::new(server_config.clone(), protocol.clone()),
+            ServerMode::Pipelined => {
+                WorldServer::new_pipelined(server_config.clone(), protocol.clone())
+            }
+        };
         Self {
-            main_server: MainServer::new_with_protocol_id(
-                server_config.clone(),
-                protocol.clone(),
-                protocol_id,
-            ),
+            main_server: MainServer::new_with_protocol_id(server_config, protocol, protocol_id),
             outstanding_main_events: MainEvents::default(),
-            world_server: InternalWorldServer::new(server_config, protocol),
+            world_server,
             to_world_sender_opt: None,
         }
     }
@@ -162,10 +190,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// call.
     ///
     /// [`Events`]: crate::Events
-    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
-        // Public API stays by-value; `InternalWorldServer::process_all_packets` now takes
-        // `&mut W` (G8b) — reborrow here, byte-identical.
-        self.world_server.process_all_packets(&mut world, now);
+    pub fn process_all_packets<W: WorldMutType<E>>(&mut self, world: W, now: &Instant) {
+        // Public API stays by-value; `WorldServer::process_all_packets` takes the
+        // world by value and reborrows internally — byte-identical.
+        self.world_server.process_all_packets(world, now);
     }
 
     /// Drains and returns all accumulated world events since the last call.
@@ -804,7 +832,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// key may be stale (e.g., stored across a disconnect event).
     pub fn user(&'_ self, user_key: &UserKey) -> UserRef<'_, E> {
         if self.user_exists(user_key) {
-            return UserRef::new(&self.world_server, user_key);
+            return self.world_server.user(user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -812,7 +840,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns `Some(UserRef)` if the user exists, `None` if the key is stale.
     pub fn user_opt(&'_ self, user_key: &UserKey) -> Option<UserRef<'_, E>> {
         if self.user_exists(user_key) {
-            Some(UserRef::new(&self.world_server, user_key))
+            self.world_server.user_opt(user_key)
         } else {
             None
         }
@@ -826,7 +854,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// key may be stale.
     pub fn user_mut(&'_ mut self, user_key: &UserKey) -> UserMut<'_, E> {
         if self.user_exists(user_key) {
-            return UserMut::new(&mut self.world_server, user_key);
+            return self.world_server.user_mut(user_key);
         }
         panic!("No User exists for given Key!");
     }
@@ -834,7 +862,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     /// Returns `Some(UserMut)` if the user exists, `None` if the key is stale.
     pub fn user_mut_opt(&'_ mut self, user_key: &UserKey) -> Option<UserMut<'_, E>> {
         if self.user_exists(user_key) {
-            Some(UserMut::new(&mut self.world_server, user_key))
+            self.world_server.user_mut_opt(user_key)
         } else {
             None
         }
@@ -1122,7 +1150,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
     }
 }
 
-impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Server<E> {
+impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter<E> for Server<E> {
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
@@ -1143,7 +1171,7 @@ cfg_if! {
 
         use naia_shared::LocalEntity;
 
-        impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
+        impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
             /// Returns all LocalEntity IDs for entities replicated to the given user.
             ///
             /// Returns the set of LocalEntity IDs that currently exist for that user
@@ -1193,7 +1221,7 @@ cfg_if! {
 }
 
 #[cfg(feature = "test_utils")]
-impl<E: Copy + Eq + Hash + Send + Sync> Server<E> {
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     #[doc(hidden)]
     pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
         self.world_server.set_global_entity_counter_for_test(value);

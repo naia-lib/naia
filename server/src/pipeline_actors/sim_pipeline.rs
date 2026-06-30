@@ -836,6 +836,133 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         })
     }
 
+    /// Total outgoing bandwidth averaged over the monitor window (bytes/sec).
+    /// Send-resident (`send.send_io`); reads the parked send handle.
+    pub fn outgoing_bandwidth_total(&self) -> f32 {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::outgoing_bandwidth_total: SendHandle not in slot")
+            .state
+            .send_io
+            .outgoing_bandwidth_total()
+    }
+
+    /// Bytes sent during the most recent send. Send-resident (`send.send_io`).
+    pub fn outgoing_bytes_last_tick(&self) -> u64 {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::outgoing_bytes_last_tick: SendHandle not in slot")
+            .state
+            .send_io
+            .outgoing_bytes_last_tick()
+    }
+
+    /// Total incoming bandwidth averaged over the monitor window (bytes/sec).
+    /// Recv-resident (`recv.recv_io`); reads the parked recv handle.
+    pub fn incoming_bandwidth_total(&self) -> f32 {
+        self.recv_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::incoming_bandwidth_total: RecvHandle not in slot")
+            .state
+            .recv_io
+            .incoming_bandwidth_total()
+    }
+
+    /// Outgoing bandwidth to a specific client address (bytes/sec). Send-resident.
+    pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::outgoing_bandwidth_to_client: SendHandle not in slot")
+            .state
+            .send_io
+            .outgoing_bandwidth_to_client(address)
+    }
+
+    /// Incoming bandwidth from a specific client address (bytes/sec). Recv-resident.
+    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
+        self.recv_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::incoming_bandwidth_from_client: RecvHandle not in slot")
+            .state
+            .recv_io
+            .incoming_bandwidth_from_client(address)
+    }
+
+    /// Whether the entity's replication config is `Delegated`. Reads the
+    /// coord-resident `shared` (`global_entity_map` + `global_world_manager`) —
+    /// byte-identical to the resident path.
+    pub fn entity_is_delegated(&self, world_entity: &E) -> bool {
+        use naia_shared::EntityAndGlobalEntityConverter;
+        let coord = self.coord();
+        let Ok(global_entity) = coord
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return false;
+        };
+        coord
+            .shared
+            .global_world_manager
+            .read()
+            .entity_is_delegated(&global_entity)
+    }
+
+    /// A [`SendStateView`] backed by this server's shared state (coord-resident
+    /// `shared` Arc — byte-identical to the resident `from_shared`).
+    pub fn send_state_view(&self) -> crate::pipeline_actors::SendStateView<E> {
+        crate::pipeline_actors::SendStateView::from_shared(Arc::clone(&self.coord().shared))
+    }
+
+    /// Test-only diagnostics (`&self` reads of coord-resident `shared` and the
+    /// parked send handle). Mirror the fused [`InternalWorldServer`] readers.
+    #[cfg(feature = "test_utils")]
+    pub fn diff_handler_global_count(&self) -> usize {
+        self.coord().shared.global_world_manager.read().global_diff_handler_count()
+    }
+
+    /// Test-only: per-component-kind global diff-handler counts (coord `shared`).
+    #[cfg(feature = "test_utils")]
+    pub fn diff_handler_global_count_by_kind(
+        &self,
+    ) -> std::collections::HashMap<naia_shared::ComponentKind, usize> {
+        self.coord().shared.global_world_manager.read().global_diff_handler_count_by_kind()
+    }
+
+    /// Test-only: per-user diff-handler receiver counts (parked send handle).
+    #[cfg(feature = "test_utils")]
+    pub fn diff_handler_user_counts(&self) -> std::collections::HashMap<UserKey, usize> {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::diff_handler_user_counts: SendHandle not in slot")
+            .state
+            .send_user_connections
+            .values()
+            .map(|c| (c.user_key, c.diff_handler_receiver_count()))
+            .collect()
+    }
+
+    /// Test-only: summed dirty-update count across all send connections.
+    #[cfg(feature = "test_utils")]
+    pub fn total_dirty_update_count(&self) -> usize {
+        self.send_slot
+            .lock()
+            .as_ref()
+            .expect("PipelinedWorldServer::total_dirty_update_count: SendHandle not in slot")
+            .state
+            .send_user_connections
+            .values()
+            .map(|c| c.base.world_manager.dirty_update_count())
+            .sum()
+    }
+
     /// Whether `world_entity` is in `user_key`'s explicit scope — a `&self`
     /// read (used by `UserScopeRef`/`UserScopeMut::has`). Reads the parked send
     /// handle's scope/room maps plus coord user/resource state, and shares the

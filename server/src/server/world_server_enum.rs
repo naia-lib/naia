@@ -20,18 +20,20 @@
 //! the shell (construction + lifecycle); Phase 3 adds the unified `receive`/`send`
 //! drives; Phase 4 adds the `entity_mut` builder.
 
-use std::{hash::Hash, time::Duration};
+use std::{hash::Hash, net::SocketAddr, time::Duration};
 
 use naia_shared::{
-    AuthorityError, Channel, ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityDoesNotExistError, GlobalEntity, Instant, Message, Protocol, Replicate,
-    ReplicatedComponent, Request, ResourceAlreadyExists, Response, ResponseReceiveKey,
-    ResponseSendKey, Tick, WorldMutType, WorldRefType,
+    AuthorityError, Channel, ComponentKind, ConnectionStats, DisconnectReason,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity,
+    Instant, Message, Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists,
+    Response, ResponseReceiveKey, ResponseSendKey, SendPlan, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
     events::{world_events::WorldEvents, TickEvents},
+    pipeline_actors::SendStateView,
     world::entity_mut::{EntityMut, EntityMutTarget},
+    world::entity_ref::{EntityRef, EntityRefTarget},
     EntityOwner, EntityPriorityMut, EntityPriorityRef, Historian, InternalWorldServer,
     NaiaServerError, PipelinedWorldServer, ReceiveOutput, ReplicationConfig, RoomKey, RoomMut,
     RoomRef, ServerConfig, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
@@ -192,6 +194,21 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Load the world-io transport endpoints (sender + receiver). This is the
+    /// channel-fed entry point used by [`crate::Server::listen`] (the io source is
+    /// a [`crate::transport::PacketChannel`] driven by `MainServer`, not a socket).
+    /// The pipelined arm feeds the same endpoints into the parked engine.
+    pub fn io_load(
+        &mut self,
+        sender: Box<dyn crate::transport::PacketSender>,
+        receiver: Box<dyn crate::transport::PacketReceiver>,
+    ) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.io_load(sender, receiver),
+            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.io_load(sender, receiver)),
+        }
+    }
+
     /// The current server tick.
     pub fn current_tick(&self) -> Tick {
         match &self.inner {
@@ -272,26 +289,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
-    /// Server-side authority status for `entity`, or `None` if it does not
-    /// exist in `world`.
-    pub fn entity_authority_status<W: WorldRefType<E>>(
-        &self,
-        world: W,
-        entity: &E,
-    ) -> Option<EntityAuthStatus> {
-        if !world.has_entity(entity) {
-            return None;
-        }
+    /// Server-side authority status for `entity`, or `None` if it is not
+    /// configured as `Delegated`.
+    pub fn entity_authority_status(&self, entity: &E) -> Option<EntityAuthStatus> {
         match &self.inner {
-            WorldServerImpl::Resident(ws) => ws.entity(world, entity).authority(),
+            WorldServerImpl::Resident(ws) => ws.entity_authority_status(entity),
             WorldServerImpl::Pipelined(ps) => ps.entity_authority_status(entity),
         }
     }
 
     /// The owner of `entity`.
-    pub fn entity_owner<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityOwner {
+    pub fn entity_owner(&self, entity: &E) -> EntityOwner {
         match &self.inner {
-            WorldServerImpl::Resident(ws) => ws.entity(world, entity).owner(),
+            WorldServerImpl::Resident(ws) => ws.entity_owner(entity),
             WorldServerImpl::Pipelined(ps) => ps.entity_owner(entity),
         }
     }
@@ -749,6 +759,22 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Enable the lag-compensation snapshot buffer, snapshotting only the given
+    /// component kinds.
+    pub fn enable_historian_filtered(
+        &mut self,
+        max_ticks: u16,
+        filter: impl IntoIterator<Item = ComponentKind>,
+    ) {
+        let filter: Vec<ComponentKind> = filter.into_iter().collect();
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.enable_historian_filtered(max_ticks, filter),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.enable_historian_filtered(max_ticks, filter))
+            }
+        }
+    }
+
     /// Record a Historian snapshot of all replicated component values.
     pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
         match &mut self.inner {
@@ -780,6 +806,182 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.entity_to_global_entity(entity),
             WorldServerImpl::Pipelined(ps) => ps.entity_to_global_entity(entity),
+        }
+    }
+
+    // ── G-unify P1: remaining NaiaServer-delegated surface ───────────────
+
+    /// Register a user (post-handshake) with the world/replication layer.
+    pub fn receive_user(&mut self, user_key: UserKey, user_address: SocketAddr) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.receive_user(user_key, user_address),
+            WorldServerImpl::Pipelined(ps) => ps.receive_user(user_key, user_address),
+        }
+    }
+
+    /// Queue a verified-handshake disconnect for the given user.
+    pub fn user_queue_disconnect(&mut self, user_key: &UserKey, reason: DisconnectReason) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.user_queue_disconnect(user_key, reason),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.user_queue_disconnect(user_key, reason))
+            }
+        }
+    }
+
+    /// Register an already-spawned entity as a static (immutable) entity.
+    pub fn enable_static_entity_replication(&mut self, entity: &E) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.enable_static_entity_replication(entity),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.enable_static_entity_replication(entity))
+            }
+        }
+    }
+
+    /// Whether the entity was spawned as static.
+    pub fn entity_is_static(&self, world_entity: &E) -> bool {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.entity_is_static(world_entity),
+            WorldServerImpl::Pipelined(ps) => ps.entity_is_static(world_entity),
+        }
+    }
+
+    /// Whether the entity's replication config is `Delegated`.
+    pub fn entity_is_delegated(&self, world_entity: &E) -> bool {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.entity_is_delegated(world_entity),
+            WorldServerImpl::Pipelined(ps) => ps.entity_is_delegated(world_entity),
+        }
+    }
+
+    /// Server releases authority back to `Available` (without revoking from a
+    /// specific client unless `origin_user` is given).
+    pub fn entity_release_authority(
+        &mut self,
+        origin_user: Option<&UserKey>,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.entity_release_authority(origin_user, world_entity),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.entity_release_authority(origin_user, world_entity))
+            }
+        }
+    }
+
+    /// Switch a `Public` server entity to `Delegated`, enabling client authority
+    /// requests. Returns `true` on success.
+    pub fn enable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: &E,
+    ) -> bool {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.enable_delegation(world, world_entity),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.enable_delegation(world, world_entity))
+            }
+        }
+    }
+
+    /// All entities currently present in `world` (mode-agnostic).
+    pub fn entities<W: WorldRefType<E>>(&self, world: W) -> Vec<E> {
+        world.entities()
+    }
+
+    /// Read-only handle to the per-resource priority state, or `None` if `R` is
+    /// not currently inserted. Composed from the unified resource/priority ops.
+    pub fn resource_priority<R: ReplicatedComponent>(&self) -> Option<EntityPriorityRef<'_, E>> {
+        let entity = self.resource_entity::<R>()?;
+        Some(self.global_entity_priority(entity))
+    }
+
+    /// Mutable handle to the per-resource priority state, or `None` if `R` is
+    /// not currently inserted.
+    pub fn resource_priority_mut<R: ReplicatedComponent>(
+        &mut self,
+    ) -> Option<EntityPriorityMut<'_, E>> {
+        let entity = self.resource_entity::<R>()?;
+        Some(self.global_entity_priority_mut(entity))
+    }
+
+    // ── Diagnostics / bandwidth ──────────────────────────────────────────
+
+    /// Rolling-average outgoing bandwidth (bytes/sec) across all clients.
+    pub fn outgoing_bandwidth_total(&self) -> f32 {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.outgoing_bandwidth_total(),
+            WorldServerImpl::Pipelined(ps) => ps.outgoing_bandwidth_total(),
+        }
+    }
+
+    /// Bytes sent during the most recent `send_all_packets` tick.
+    pub fn outgoing_bytes_last_tick(&self) -> u64 {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.outgoing_bytes_last_tick(),
+            WorldServerImpl::Pipelined(ps) => ps.outgoing_bytes_last_tick(),
+        }
+    }
+
+    /// Rolling-average incoming bandwidth (bytes/sec) across all clients.
+    pub fn incoming_bandwidth_total(&self) -> f32 {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.incoming_bandwidth_total(),
+            WorldServerImpl::Pipelined(ps) => ps.incoming_bandwidth_total(),
+        }
+    }
+
+    /// Rolling-average outgoing bandwidth (bytes/sec) to one client address.
+    pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.outgoing_bandwidth_to_client(address),
+            WorldServerImpl::Pipelined(ps) => ps.outgoing_bandwidth_to_client(address),
+        }
+    }
+
+    /// Rolling-average incoming bandwidth (bytes/sec) from one client address.
+    pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.incoming_bandwidth_from_client(address),
+            WorldServerImpl::Pipelined(ps) => ps.incoming_bandwidth_from_client(address),
+        }
+    }
+
+    // ── L3 send-state seam (lagged transmit) ─────────────────────────────
+
+    /// Build the self-contained per-user [`SendPlan`] at the freeze point.
+    pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.prepare_send_job(world),
+            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.prepare_send_job(world)),
+        }
+    }
+
+    /// Serialize + send a prepared [`SendPlan`] against the snapshot `world`.
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.transmit_send_job(world, plan),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.transmit_send_job(world, plan))
+            }
+        }
+    }
+
+    /// Send-side ACK drain (worker-preamble equivalent).
+    pub fn drain_all_acks(&mut self) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.drain_all_acks(),
+            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.drain_all_acks()),
+        }
+    }
+
+    /// A [`SendStateView`] backed by this server's shared state (registry-free
+    /// snapshot assembler).
+    pub fn send_state_view(&self) -> SendStateView<E> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.send_state_view(),
+            WorldServerImpl::Pipelined(ps) => ps.send_state_view(),
         }
     }
 
@@ -944,6 +1146,158 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
                 }
                 RoomMut::with_pipeline(ps, room_key)
             }
+        }
+    }
+
+    /// Spawn a new entity, register it for replication, and return the imperative
+    /// builder. Mirrors [`crate::Server::spawn_entity`].
+    pub fn spawn_entity<W: WorldMutType<E>>(&mut self, mut world: W) -> EntityMut<'_, E, W> {
+        let world_entity = world.spawn_entity();
+        let target = match &mut self.inner {
+            WorldServerImpl::Resident(ws) => {
+                ws.enable_entity_replication(&world_entity);
+                EntityMutTarget::Resident(ws)
+            }
+            WorldServerImpl::Pipelined(ps) => {
+                ps.enable_entity_replication(&world_entity);
+                EntityMutTarget::Pipelined(ps)
+            }
+        };
+        EntityMut::with_target(target, world, &world_entity)
+    }
+
+    /// A read-only handle to `entity`. Panics if `entity` does not exist in
+    /// `world` (matching the resident [`crate::Server::entity`] contract).
+    pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<'_, E, W> {
+        if !world.has_entity(entity) {
+            panic!("No Entity exists for given Key!");
+        }
+        let target = match &self.inner {
+            WorldServerImpl::Resident(ws) => EntityRefTarget::Resident(ws),
+            WorldServerImpl::Pipelined(ps) => EntityRefTarget::Pipelined(ps),
+        };
+        EntityRef::with_target(target, world, entity)
+    }
+}
+
+#[cfg(feature = "interior_visibility")]
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
+    /// All LocalEntity ids replicated to the given user. Mirrors
+    /// [`crate::Server::local_entities`].
+    pub fn local_entities(&self, user_key: &UserKey) -> Vec<naia_shared::LocalEntity> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.local_entities(user_key),
+            WorldServerImpl::Pipelined(_) => panic!(
+                "WorldServer::local_entities is unsupported in pipelined mode \
+                 (interior_visibility scope state is send-resident)"
+            ),
+        }
+    }
+
+    /// A read-only handle to the entity identified by `local_entity` for the
+    /// given user. Resident-only (see [`crate::EntityRef::local_entity`]).
+    pub fn local_entity<W: WorldRefType<E>>(
+        &self,
+        world: W,
+        user_key: &UserKey,
+        local_entity: &naia_shared::LocalEntity,
+    ) -> Option<EntityRef<'_, E, W>> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.local_entity(world, user_key, local_entity),
+            WorldServerImpl::Pipelined(_) => panic!(
+                "WorldServer::local_entity is unsupported in pipelined mode \
+                 (interior_visibility scope state is send-resident)"
+            ),
+        }
+    }
+
+    /// A mutable handle to the entity identified by `local_entity` for the
+    /// given user. Resident-only.
+    pub fn local_entity_mut<W: WorldMutType<E>>(
+        &mut self,
+        world: W,
+        user_key: &UserKey,
+        local_entity: &naia_shared::LocalEntity,
+    ) -> Option<EntityMut<'_, E, W>> {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.local_entity_mut(world, user_key, local_entity),
+            WorldServerImpl::Pipelined(_) => panic!(
+                "WorldServer::local_entity_mut is unsupported in pipelined mode \
+                 (interior_visibility scope state is send-resident)"
+            ),
+        }
+    }
+}
+
+#[cfg(feature = "test_utils")]
+impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
+    #[doc(hidden)]
+    pub fn set_global_entity_counter_for_test(&mut self, value: u64) {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.set_global_entity_counter_for_test(value),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.set_global_entity_counter_for_test(value))
+            }
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn diff_handler_global_count(&self) -> usize {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.diff_handler_global_count(),
+            WorldServerImpl::Pipelined(ps) => ps.diff_handler_global_count(),
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn diff_handler_global_count_by_kind(
+        &self,
+    ) -> std::collections::HashMap<ComponentKind, usize> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.diff_handler_global_count_by_kind(),
+            WorldServerImpl::Pipelined(ps) => ps.diff_handler_global_count_by_kind(),
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn diff_handler_user_counts(&self) -> std::collections::HashMap<UserKey, usize> {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.diff_handler_user_counts(),
+            WorldServerImpl::Pipelined(ps) => ps.diff_handler_user_counts(),
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn scope_change_queue_len(&self) -> usize {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.scope_change_queue_len(),
+            WorldServerImpl::Pipelined(ps) => ps.scope_change_queue_len(),
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn total_dirty_update_count(&self) -> usize {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.total_dirty_update_count(),
+            WorldServerImpl::Pipelined(ps) => ps.total_dirty_update_count(),
+        }
+    }
+
+    #[doc(hidden)]
+    pub fn inject_tick_buffer_message<C: Channel, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        host_tick: &Tick,
+        message_tick: &Tick,
+        message: &M,
+    ) -> bool {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => {
+                ws.inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
+            }
+            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| {
+                ws.inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
+            }),
         }
     }
 }
