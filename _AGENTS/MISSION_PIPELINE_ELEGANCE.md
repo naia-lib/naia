@@ -506,8 +506,86 @@ throughout.
       no snapshot regenerated, no assertion relaxed; each phase landed GREEN
       before the next began.
 
-## Appendix — `with_world_server` call-site inventory (fill during Phase C step 1)
+## Appendix — `with_world_server` call-site inventory  *(Phase C step 1 — DONE 2026-06-30)*
 
-| Call site (file:line) | Class (a/b/c) | Target staged-op / D-slot / notes |
+Scope = **non-test** call sites in `server/src` (the adapter `tests/*.rs` uses of
+`run_with_world_server` are test harness scaffolding that drive the oracle directly;
+they are out of scope — they exercise the surviving monolithic path deliberately).
+
+Line numbers are from the Phase-B-landed tree (`7cec6ca0`); re-grep before editing.
+
+### (c) KEEP — whole-engine synchronous drives (`io_load` + deterministic oracle)
+These are the two sanctioned survivors: `io_load` (one-time) and the oracle's
+synchronous recv/send/event drives. Reassembling the whole engine IS the intent.
+
+| Call site | Method | Why keep |
 |---|---|---|
-| _(to fill)_ | | |
+| `sim_pipeline.rs:313` | `io_load` | one-time socket load |
+| `world_server_enum.rs:294` | `io_load` | enum → same |
+| `world_server_enum.rs:570` | `receive_all_packets` | oracle recv drive |
+| `world_server_enum.rs:579` | `process_all_packets` | oracle recv drive |
+| `world_server_enum.rs:588` | `take_world_events` | oracle event drain |
+| `world_server_enum.rs:596` | `take_tick_events` | oracle event drain |
+| `world_server_enum.rs:604` | `send_all_packets` | oracle send drive |
+| `world_server_enum.rs:637` | `receive_tick_buffer_messages` | oracle recv-side drain |
+| `world_server_enum.rs:678` | `receive_response` | oracle recv-side read |
+| `world_server_enum.rs:1060` | `prepare_send_job` | oracle send |
+| `world_server_enum.rs:1069` | `transmit_send_job` | oracle send |
+| `world_server_enum.rs:1078` | `drain_all_acks` | oracle send-side ack drain |
+| `world_server_enum.rs:1344` | `set_global_entity_counter_for_test` | test-only |
+| `world_server_enum.rs:1418` | (test helper) | test-only |
+
+### (a) INVESTIGATE — possibly already coord-resident (latent reassembly bug)
+Convert to a coord fast-path (no reassembly) if the state is coord-resident.
+
+| Call site | Method | Note |
+|---|---|---|
+| `world_server_enum.rs:688` | `mark_scope_checks_pending_handled` | scope-checks cache — check if coord-resident |
+| `world_server_enum.rs:698` | `mark_all_scope_checks_pending` | same |
+
+### (b) CONVERT — send-resident mutations → D-slot staged coord-side ops
+Grouped by class = the PR unit (Step 3 order: messages → scope → resource →
+lifecycle/registration → authority/delegation → historian). Each class: add a
+coord-side pending queue (mirror `publish_priority`), drain in its D-slot, add a
+resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
+
+| Call site | Method | Class → D-slot |
+|---|---|---|
+| `world_server_enum.rs:617` | `send_message` | **messages → D6** |
+| `world_server_enum.rs:627` | `broadcast_message` | messages → D6 |
+| `world_server_enum.rs:651` | `send_request` | messages → D6 |
+| `world_server_enum.rs:665` | `send_response` | messages → D6 |
+| `sim_pipeline.rs:1102` | `room_broadcast_message` | messages → D6 |
+| `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** |
+| `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 |
+| `world_server_enum.rs:770` | `insert_resource` | **resource → D2** |
+| `world_server_enum.rs:780` | `remove_resource` | resource → D2 |
+| `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** |
+| `world_server_enum.rs:798` | `disable_entity_replication` | registration → D1 |
+| `world_server_enum.rs:808` | `pause_entity_replication` | registration → D1 |
+| `world_server_enum.rs:818` | `resume_entity_replication` | registration → D1 |
+| `world_server_enum.rs:940` | `enable_static_entity_replication` | registration → D1 |
+| `world_server_enum.rs:733` | `insert_component_worldless` | **lifecycle → D3** |
+| `world_server_enum.rs:745` | `remove_component_worldless` | lifecycle → D3 |
+| `world_server_enum.rs:755` | `despawn_entity_worldless` | lifecycle → D3 |
+| `entity_mut.rs:127` | `despawn_entity` | lifecycle → D3 |
+| `entity_mut.rs:161` | `insert_component` | lifecycle → D3 |
+| `entity_mut.rs:183` | `remove_component` | lifecycle → D3 |
+| `world_server_enum.rs:930` | `user_queue_disconnect` | lifecycle → D3 |
+| `world_server_enum.rs:836` | `entity_take_authority` | **authority → D4** |
+| `world_server_enum.rs:850` | `entity_give_authority` | authority → D4 |
+| `world_server_enum.rs:971` | `entity_release_authority` | authority → D4 |
+| `world_server_enum.rs:986` | `enable_delegation` | authority/delegation → D4 |
+| `entity_mut.rs:247` | `entity_give_authority` | authority → D4 |
+| `entity_mut.rs:263` | `entity_take_authority` | authority → D4 |
+| `entity_mut.rs:280` | `entity_release_authority` | authority → D4 |
+| `world_server_enum.rs:860` | `enable_historian` | **historian → D5** |
+| `world_server_enum.rs:876` | `enable_historian_filtered` | historian → D5 |
+| `world_server_enum.rs:886` | `record_historian_tick` | historian → D5 |
+
+**Caveat before converting (b):** several of these run TODAY only when the workers
+are parked (control ops issued during the consumer's park window). Confirm each
+class's live callers actually flow through the pipelined arm before spending a PR —
+if cyberlith never issues an op-class on the pipelined server (e.g. historian is
+resident-oracle-only), reclassify it (c) with a `log`/note rather than build a
+dead queue. Do NOT silently skip — record the reclassification in this table.
