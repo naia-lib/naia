@@ -642,6 +642,38 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect()
     }
+
+    fn lifecycle_trace(mut self) -> Vec<Vec<u8>> {
+        let user_key = self.connect();
+        let entity = self.setup_scoped_entity(&user_key);
+        self.hub.enable_packet_recording();
+
+        self.server
+            .entity_mut(self.server_world.proxy_mut(), &entity)
+            .insert_component(TestScore::new(4, 2));
+        self.tick_bracket();
+        self.tick_bracket();
+
+        let removed = self
+            .server
+            .entity_mut(self.server_world.proxy_mut(), &entity)
+            .remove_component::<TestScore>();
+        assert!(removed.is_some(), "TestScore must be present before removal");
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_mut(self.server_world.proxy_mut(), &entity)
+            .despawn();
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect()
+    }
 }
 
 #[test]
@@ -691,6 +723,26 @@ fn phase_c_d1_registration_resident_pipelined_oracle_byte_identity() {
     assert_eq!(
         resident, pipelined,
         "Phase C D1: replication-config registration must emit byte-identical \
+         server-to-client packets through resident and the real pipelined-oracle \
+         WorldServer::send bracket"
+    );
+}
+
+#[test]
+fn phase_c_d3_lifecycle_resident_pipelined_oracle_byte_identity() {
+    let resident = DirectScopeRun::new(ServerMode::Resident).lifecycle_trace();
+    let pipelined = DirectScopeRun::new(ServerMode::Pipelined).lifecycle_trace();
+
+    hexdump("D3 RESIDENT ", &resident);
+    hexdump("D3 PIPELINED", &pipelined);
+
+    assert!(
+        !resident.is_empty(),
+        "Phase C D3 test must exercise wire-producing lifecycle transitions"
+    );
+    assert_eq!(
+        resident, pipelined,
+        "Phase C D3: component insert/remove/despawn must emit byte-identical \
          server-to-client packets through resident and the real pipelined-oracle \
          WorldServer::send bracket"
     );

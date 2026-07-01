@@ -17,7 +17,8 @@
 use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    GlobalEntity, GlobalEntityIndex, GlobalPriorityState, ResourceRegistry, UserPriorityState,
+    ComponentKind, GlobalEntity, GlobalEntityIndex, GlobalPriorityState, ResourceRegistry,
+    UserPriorityState,
 };
 
 use crate::request::{GlobalRequestManager, GlobalResponseManager};
@@ -65,6 +66,9 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// cleanup authored by the coord/world half of `insert_resource` and
     /// `remove_resource`.
     pub(crate) pending_resource_ops: Vec<PendingResourceOp<E>>,
+    /// Phase C / D3 — pending lifecycle send-side mutations authored by coord
+    /// APIs after applying their coord/global effects synchronously.
+    pub(crate) pending_lifecycle_ops: Vec<PendingLifecycleOp<E>>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.
@@ -90,6 +94,23 @@ pub(crate) enum PendingResourceOp<E> {
         world_entity: E,
     },
     Remove {
+        world_entity: E,
+        global_entity: GlobalEntity,
+        entity_idx: GlobalEntityIndex,
+    },
+}
+
+/// Phase C / D3 — concrete lifecycle mutations staged on coord.
+pub(crate) enum PendingLifecycleOp<E> {
+    InsertComponent {
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
+    },
+    RemoveComponent {
+        global_entity: GlobalEntity,
+        component_kind: ComponentKind,
+    },
+    DespawnEntity {
         world_entity: E,
         global_entity: GlobalEntity,
         entity_idx: GlobalEntityIndex,

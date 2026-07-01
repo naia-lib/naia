@@ -321,6 +321,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             user_priority_staging: std::collections::HashMap::new(),
             pending_scope_ledger_ops: Vec::new(),
             pending_resource_ops: Vec::new(),
+            pending_lifecycle_ops: Vec::new(),
             resource_registry: ResourceRegistry::new(),
             historian: None,
         };

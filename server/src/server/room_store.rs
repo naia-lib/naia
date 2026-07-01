@@ -96,6 +96,14 @@ impl RoomStore {
             .unwrap_or(false)
     }
 
+    pub(crate) fn remove_global_entity_from_all_rooms(&mut self, entity: &GlobalEntity) {
+        for (_, room) in self.rooms.iter_mut() {
+            if room.has_entity(entity) {
+                room.remove_entity(entity, true);
+            }
+        }
+    }
+
     pub(crate) fn entities_count(&self, room_key: &RoomKey) -> usize {
         self.rooms
             .get(room_key)

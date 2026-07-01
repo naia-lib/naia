@@ -33,7 +33,7 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use naia_shared::{
-    ChannelKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    ChannelKind, ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
     EntityPriorityMut, EntityPriorityRef, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner,
     GlobalWorldManagerType, Message, Protocol, Replicate, ReplicatedComponent,
     ResourceAlreadyExists, Tick, WorldMutType, WorldRefType,
@@ -43,13 +43,13 @@ use parking_lot::Mutex;
 use crate::{
     room::RoomKey,
     server::{
-        coord_state::{PendingResourceOp, PendingScopeLedgerOp},
+        coord_state::{PendingLifecycleOp, PendingResourceOp, PendingScopeLedgerOp},
         ServerShared,
     },
     user::UserKey,
     world::server_auth_handler::AuthOwner,
-    EntityOwner, InternalWorldServer, Publicity, ReceiveOutput, RecvHandle, ReplicationConfig,
-    SendHandle, ServerConfig,
+    DisconnectReason, EntityOwner, InternalWorldServer, Publicity, ReceiveOutput, RecvHandle,
+    ReplicationConfig, SendHandle, ServerConfig,
 };
 
 use super::handles::CoordHandle;
@@ -584,6 +584,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord_mut().disconnect_user(user_key)
     }
 
+    /// Queue a verified-handshake disconnect without reassembling the split engine.
+    pub fn user_queue_disconnect(&mut self, user_key: &UserKey, reason: DisconnectReason) {
+        if !self.coord().user_exists(user_key) {
+            return;
+        }
+        self.coord()
+            .shared
+            .pending_disconnect_requests
+            .lock()
+            .push((*user_key, reason));
+    }
+
     // ── Room ops ──
 
     /// Forwards to [`CoordHandle::create_room`].
@@ -697,6 +709,172 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .global_world_manager
             .write()
             .resume_entity_replication(&global_entity);
+    }
+
+    /// Disable replication for an entity without reassembling the split engine.
+    pub fn disable_entity_replication(&mut self, world_entity: &E) {
+        self.despawn_entity_worldless(world_entity);
+    }
+
+    /// Stage component insertion's send-side fanout after applying coord/global
+    /// component records synchronously.
+    pub fn insert_component_worldless(
+        &mut self,
+        world_entity: &E,
+        component: &mut dyn Replicate,
+    ) {
+        let component_kind = component.kind();
+        let global_entity = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        if self
+            .coord()
+            .shared
+            .global_world_manager
+            .read()
+            .has_component_record(&global_entity, &component_kind)
+        {
+            log::warn!(
+                "Attempted to add component `{:?}` to entity `{:?}` that already has it, this can happen if a delegated entity's auth is transferred to the Server before the Server Adapter has been able to process the newly inserted Component. Skipping this action.",
+                component.name(),
+                global_entity,
+            );
+            return;
+        }
+
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .insert_component_record(&global_entity, &component_kind);
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .insert_component_diff_handler(
+                &self.coord().shared.component_kinds,
+                &global_entity,
+                component,
+            );
+
+        if self
+            .coord()
+            .shared
+            .global_world_manager
+            .read()
+            .entity_is_delegated(&global_entity)
+        {
+            let accessor = self
+                .coord()
+                .shared
+                .global_world_manager
+                .read()
+                .get_entity_auth_accessor(&global_entity);
+            component.enable_delegation(&accessor, None);
+        }
+
+        self.coord_mut()
+            .state
+            .pending_lifecycle_ops
+            .push(PendingLifecycleOp::InsertComponent {
+                global_entity,
+                component_kind,
+            });
+    }
+
+    /// Stage component removal's send-side fanout after applying coord/global
+    /// component cleanup synchronously.
+    pub fn remove_component_worldless(
+        &mut self,
+        world_entity: &E,
+        component_kind: &ComponentKind,
+    ) {
+        let global_entity = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        self.coord_mut()
+            .state
+            .pending_lifecycle_ops
+            .push(PendingLifecycleOp::RemoveComponent {
+                global_entity,
+                component_kind: *component_kind,
+            });
+
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .remove_component_record(&global_entity, component_kind);
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .remove_component_diff_handler(&global_entity, component_kind);
+    }
+
+    /// Stage entity despawn's send-side cleanup after applying coord/global
+    /// entity cleanup synchronously.
+    pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
+        let Ok(global_entity) = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return;
+        };
+        let entity_idx = Self::entity_global_idx(self.coord(), &global_entity);
+
+        self.coord_mut()
+            .state
+            .global_priority_mirror
+            .on_despawn(world_entity);
+        for layer in self.coord_mut().state.user_priority_staging.values_mut() {
+            layer.on_scope_exit(world_entity);
+        }
+        self.coord_mut()
+            .state
+            .room_store
+            .remove_global_entity_from_all_rooms(&global_entity);
+        if entity_idx.is_valid() {
+            self.coord().shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+        }
+
+        self.coord_mut()
+            .state
+            .pending_lifecycle_ops
+            .push(PendingLifecycleOp::DespawnEntity {
+                world_entity: *world_entity,
+                global_entity,
+                entity_idx,
+            });
+
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .remove_entity_diff_handlers(&global_entity);
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .remove_entity_record(&global_entity);
+        self.coord()
+            .shared
+            .global_entity_map
+            .write()
+            .despawn_by_global(&global_entity);
     }
 
     // ── Tick / queue introspection ──
@@ -1495,6 +1673,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // D2 resource-replication registrations (Res<R> carriers) — G6. Before host-sync.
         Self::drain_pending_resource_ops(coord, send, world);
         // D3 lifecycle (despawn/insert/remove) — G4/G5. After spawns, before authority.
+        Self::drain_pending_lifecycle_ops(coord, send);
         // D4 authority/editor ops (take_authority) — G5b. Before host-sync.
         // D5 host-sync (change-detection → repl config) — G6b. After all entity mutations.
         // D6 outbound messages (send_message/broadcast, incl. desync snapshot) — §2e.
@@ -1813,6 +1992,122 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .global_entity_map
             .write()
             .despawn_by_global(global_entity);
+    }
+
+    /// Phase C / D3 — publish coord-staged lifecycle mutations into
+    /// send-resident per-connection and scope state.
+    fn drain_pending_lifecycle_ops(coord: &mut CoordHandle<E>, send: &mut SendHandle<E>) {
+        let ops = std::mem::take(&mut coord.state.pending_lifecycle_ops);
+        if ops.is_empty() {
+            return;
+        }
+
+        for op in ops {
+            match op {
+                PendingLifecycleOp::InsertComponent {
+                    global_entity,
+                    component_kind,
+                } => {
+                    Self::apply_lifecycle_insert_component(
+                        send,
+                        &global_entity,
+                        &component_kind,
+                    );
+                }
+                PendingLifecycleOp::RemoveComponent {
+                    global_entity,
+                    component_kind,
+                } => {
+                    Self::apply_lifecycle_remove_component(
+                        send,
+                        &global_entity,
+                        &component_kind,
+                    );
+                }
+                PendingLifecycleOp::DespawnEntity {
+                    world_entity,
+                    global_entity,
+                    entity_idx,
+                } => {
+                    Self::apply_lifecycle_despawn(
+                        send,
+                        &world_entity,
+                        &global_entity,
+                        entity_idx,
+                    );
+                }
+            }
+        }
+    }
+
+    fn apply_lifecycle_insert_component(
+        send: &mut SendHandle<E>,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        for send_conn in send.state.send_user_connections.values_mut() {
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
+                continue;
+            }
+            send_conn
+                .base
+                .world_manager
+                .insert_component(global_entity, component_kind);
+        }
+    }
+
+    fn apply_lifecycle_remove_component(
+        send: &mut SendHandle<E>,
+        global_entity: &GlobalEntity,
+        component_kind: &ComponentKind,
+    ) {
+        for send_conn in send.state.send_user_connections.values_mut() {
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
+                continue;
+            }
+            send_conn
+                .base
+                .world_manager
+                .remove_component(global_entity, component_kind);
+        }
+    }
+
+    fn apply_lifecycle_despawn(
+        send: &mut SendHandle<E>,
+        world_entity: &E,
+        global_entity: &GlobalEntity,
+        entity_idx: GlobalEntityIndex,
+    ) {
+        send.state.global_priority.on_despawn(world_entity);
+        for layer in send.state.user_priorities.values_mut() {
+            layer.on_scope_exit(world_entity);
+        }
+        send.state
+            .scope_checks_cache
+            .on_entity_despawned(*world_entity);
+
+        for send_conn in send.state.send_user_connections.values_mut() {
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
+                continue;
+            }
+            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.clear_entity_visible(entity_idx);
+        }
+
+        send.state.entity_scope_map.remove_entity(global_entity);
+        let _ = send.state.entity_room_map.remove_from_all_rooms(global_entity);
     }
 
     fn entity_global_idx(

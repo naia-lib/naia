@@ -731,9 +731,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.insert_component_worldless(world_entity, component),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.insert_component_worldless(world_entity, component))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.insert_component_worldless(world_entity, component),
         }
     }
 
@@ -743,9 +741,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => {
                 ws.remove_component_worldless(world_entity, component_kind)
             }
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| {
-                ws.remove_component_worldless(world_entity, component_kind)
-            }),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.remove_component_worldless(world_entity, component_kind)
+            }
         }
     }
 
@@ -753,9 +751,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.despawn_entity_worldless(world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.despawn_entity_worldless(world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.despawn_entity_worldless(world_entity),
         }
     }
 
@@ -795,9 +791,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn disable_entity_replication(&mut self, world_entity: &E) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.disable_entity_replication(world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.disable_entity_replication(world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.disable_entity_replication(world_entity),
         }
     }
 
@@ -923,9 +917,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn user_queue_disconnect(&mut self, user_key: &UserKey, reason: DisconnectReason) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_queue_disconnect(user_key, reason),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.user_queue_disconnect(user_key, reason))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.user_queue_disconnect(user_key, reason),
         }
     }
 

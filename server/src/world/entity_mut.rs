@@ -124,7 +124,11 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         match server {
             EntityMutTarget::Resident(ws) => ws.despawn_entity(world, &entity),
             EntityMutTarget::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.despawn_entity(world, &entity));
+                if !world.has_entity(&entity) {
+                    panic!("attempted to de-spawn nonexistent entity");
+                }
+                world.despawn_entity(&entity);
+                ps.despawn_entity_worldless(&entity);
             }
         }
     }
@@ -158,7 +162,21 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         match server {
             EntityMutTarget::Resident(ws) => ws.insert_component(world, &entity, component_ref),
             EntityMutTarget::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.insert_component(world, &entity, component_ref));
+                if !world.has_entity(&entity) {
+                    panic!("attempted to add component to non-existent entity");
+                }
+
+                let mut component = component_ref;
+                let component_kind = component.kind();
+                if world.has_component_of_kind(&entity, &component_kind) {
+                    let Some(mut component_mut) = world.component_mut::<R>(&entity) else {
+                        panic!("Should never happen because we checked for this above");
+                    };
+                    component_mut.mirror(&component);
+                } else {
+                    ps.insert_component_worldless(&entity, &mut component);
+                    world.insert_component(&entity, component);
+                }
             }
         }
 
@@ -180,7 +198,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         match server {
             EntityMutTarget::Resident(ws) => ws.remove_component::<R, W>(world, &entity),
             EntityMutTarget::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.remove_component::<R, W>(world, &entity))
+                ps.remove_component_worldless(&entity, &naia_shared::ComponentKind::of::<R>());
+                world.remove_component::<R>(&entity)
             }
         }
     }
