@@ -448,6 +448,22 @@ per-gameplay-event reassembly remains.
   delegated replication reconfiguration. Verification:
   `cargo test --workspace --all-targets` GREEN; namako lint/gate GREEN;
   cyberlith moat GREEN ×10.
+- ✅ **D3 lifecycle staged/coord op landed 2026-07-01** (`53d456db`):
+  component insert/remove and despawn now enqueue coord-side
+  `PendingLifecycleOp`s and drain in D3 after resources, before authority and
+  host-sync. `EntityMut` preserves immediate world mutation and panic/duplicate
+  behavior while staging the send-resident work; despawn synchronously evicts coord
+  mirrors so same-call visibility remains resident-equivalent. Liveness
+  re-verified against cyberlith production usage in
+  `services/game/cell/src/server_access.rs` (`disable_entity_replication`), so
+  the class remains **(b) CONVERT** rather than reclassified. `user_queue_disconnect`
+  moved to the existing coord-side pending-disconnect fast path instead of a D3
+  send queue because it is recv-only. Added namako scenario
+  `[pipeline-d3-lifecycle-01]` plus the Rust contract test
+  `phase_c_d3_lifecycle_resident_pipelined_oracle_byte_identity`, both asserting
+  resident ≡ pipelined-oracle server-to-client byte equality for component
+  insert/remove and despawn. Verification: `cargo test --workspace --all-targets`
+  GREEN; namako lint/gate GREEN; cyberlith moat GREEN ×10.
 
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
@@ -626,17 +642,17 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `world_server_enum.rs:770` | `insert_resource` | **resource → D2** ✅ DONE 2026-07-01 (`815ac293`); live in cyberlith `tile_startup.rs` |
 | `world_server_enum.rs:780` | `remove_resource` | resource → D2 ✅ DONE 2026-07-01 (`815ac293`); removal covered in cyberlith `level_lighting_replication.rs` |
 | `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** ✅ DONE 2026-07-01 (`669695a9`); live in cyberlith `server_access.rs`; drains `ConfigureReplication` in D1 |
-| `world_server_enum.rs:798` | `disable_entity_replication` | reclassified to lifecycle → D3; resident path funnels through `despawn_entity_worldless` |
+| `world_server_enum.rs:798` | `disable_entity_replication` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); live in cyberlith `server_access.rs`; resident path funnels through `despawn_entity_worldless` |
 | `world_server_enum.rs:808` | `pause_entity_replication` | registration → D1 ✅ DONE 2026-07-01 (`669695a9`); coord fast-path |
 | `world_server_enum.rs:818` | `resume_entity_replication` | registration → D1 ✅ DONE 2026-07-01 (`669695a9`); coord fast-path |
 | `world_server_enum.rs:940` | `enable_static_entity_replication` | registration → D1 ✅ DONE 2026-07-01 (`669695a9`); coord fast-path |
-| `world_server_enum.rs:733` | `insert_component_worldless` | **lifecycle → D3** |
-| `world_server_enum.rs:745` | `remove_component_worldless` | lifecycle → D3 |
-| `world_server_enum.rs:755` | `despawn_entity_worldless` | lifecycle → D3 |
-| `entity_mut.rs:127` | `despawn_entity` | lifecycle → D3 |
-| `entity_mut.rs:161` | `insert_component` | lifecycle → D3 |
-| `entity_mut.rs:183` | `remove_component` | lifecycle → D3 |
-| `world_server_enum.rs:930` | `user_queue_disconnect` | lifecycle → D3 |
+| `world_server_enum.rs:733` | `insert_component_worldless` | **lifecycle → D3** ✅ DONE 2026-07-01 (`53d456db`); staged in `PendingLifecycleOp` |
+| `world_server_enum.rs:745` | `remove_component_worldless` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); staged in `PendingLifecycleOp` |
+| `world_server_enum.rs:755` | `despawn_entity_worldless` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); staged in `PendingLifecycleOp` |
+| `entity_mut.rs:127` | `despawn_entity` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); immediate world mutation plus staged send work |
+| `entity_mut.rs:161` | `insert_component` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); immediate world mutation plus staged send work |
+| `entity_mut.rs:183` | `remove_component` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); immediate world mutation plus staged send work |
+| `world_server_enum.rs:930` | `user_queue_disconnect` | lifecycle/recv fast-path ✅ DONE 2026-07-01 (`53d456db`); uses existing pending-disconnect queue, no send queue |
 | `world_server_enum.rs:836` | `entity_take_authority` | **authority → D4** |
 | `world_server_enum.rs:850` | `entity_give_authority` | authority → D4 |
 | `world_server_enum.rs:971` | `entity_release_authority` | authority → D4 |
