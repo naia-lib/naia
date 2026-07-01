@@ -8,9 +8,8 @@
 //! makes to drain naia's per-user tick-buffered `PlayerCommands`. Under §2f the
 //! pipeline lives inside the unified `WorldServer` resource; the consumer:
 //!   1. parks the workers (`Server::pipeline_park`),
-//!   2. reaches the pipeline via `Server::world_only_resource_scope` +
-//!      `as_pipelined_mut` and takes the `RecvHandle` from its shared slot
-//!      (`PipelinedWorldServer::recv_slot`),
+//!   2. reaches the pipeline via `Server::world_only_resource_scope` and takes
+//!      the `RecvHandle` from its shared slot (`WorldServer::recv_slot`),
 //!   3. calls `receive_tick_buffer_messages(tick)` per tick,
 //!   4. returns the handle and unparks.
 //! The park barrier makes the take/return race-free (D6 / Phase-G discipline).

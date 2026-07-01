@@ -384,15 +384,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             self.shared.server_config.max_replicated_entities as usize,
         );
 
-        // 4-C.3: register the new connection's shared atomic cell into the
-        // ServerShared map. Coordinator-side reads (e.g. UserMut::disconnect
-        // signalling recv via `set_should_disconnect`) take this Arc by
-        // address. Both halves carry the same Arc; clone from the recv half.
-        self.shared
-            .connection_shared
-            .write()
-            .insert(*user_address, std::sync::Arc::clone(&recv_conn.shared));
-
         // 4-E.2e: recv-side insertion happens directly (same thread
         // owns recv_user_connections). The send half is queued via
         // `SendStateUpdate::ConnectionAdded` — in serial mode the queue
@@ -538,7 +529,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // Swap the queue out under the lock so we don't hold it across
         // the apply loop (the apply step takes no other locks but the
         // pattern stays cheap and lock-order-friendly).
-        let pending: Vec<SendStateUpdate<E>> = {
+        let pending: Vec<SendStateUpdate> = {
             let mut guard = self.shared.pending_send_state_updates.lock();
             std::mem::take(&mut *guard)
         };
@@ -549,22 +540,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 }
                 SendStateUpdate::ConnectionRemoved(addr) => {
                     self.send.state.send_user_connections.remove(&addr);
-                }
-                SendStateUpdate::PriorityChanged { entity, gain } => {
-                    // 4-E.2e: reserved variant. The borrow API still
-                    // writes through `sim_handle.global_priority_mirror` and
-                    // publish-on-read carries it over. If a future
-                    // commit rewires the borrow API to push here, apply
-                    // the gain directly to `send.global_priority`.
-                    let mut entry = self.send.state.global_priority.get_mut(entity);
-                    match gain {
-                        Some(g) => {
-                            entry.set_gain(g);
-                        }
-                        None => {
-                            entry.reset();
-                        }
-                    }
                 }
             }
         }
@@ -1097,9 +1072,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // writes go into `sim_handle.global_priority_mirror`; Iris below reads
         // from `send.global_priority`. Cost is O(N entities-with-overrides)
         // — typically 0 unless the game has actively tuned priorities.
-        // The future per-entity SendStateUpdate::PriorityChanged path will
-        // shrink this to incremental updates; for now the full clone keeps
-        // semantics simple and correct.
+        // This bulk clone is the single, mutation-source-agnostic priority
+        // mechanism: a per-entity incremental push was considered and rejected
+        // (break-even-to-slower at realistic churn + a per-mutation enqueue
+        // obligation the byte-exact moat can't afford to miss).
         self.send.state
             .global_priority
             .clone_from(&self.sim_handle.state.global_priority_mirror);
@@ -2156,8 +2132,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     ///
     /// 4-E.2e: writes target `sim_handle.global_priority_mirror`. The publish
     /// step at the top of the next `send_all_packets` carries the change
-    /// over to `send.global_priority`. See `SendStateUpdate::PriorityChanged`
-    /// for the future per-entity sync path.
+    /// over to `send.global_priority` via the wholesale publish-on-read clone.
     pub fn global_entity_priority_mut(&mut self, entity: E) -> EntityPriorityMut<'_, E> {
         self.sim_handle.state.global_priority_mirror.get_mut(entity)
     }
@@ -3347,11 +3322,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let user_addr = user.address();
 
         info!("deleting authenticated user for {}", user.address());
-        // 4-C.3: drop the per-connection shared-state Arc from the map.
-        // Any send-thread holders of a clone keep their Arc until they
-        // observe the disconnect through ConnectionShared::should_disconnect
-        // (set elsewhere by the coordinator-initiated disconnect path).
-        self.shared.connection_shared.write().remove(&user_addr);
         // 4-E.2d: drop recv-side directly (coordinator owns the recv map
         // in pipeline mode too).
         // 4-E.2e: send-side removal routes through the SendStateUpdate

@@ -177,6 +177,78 @@ fn sim_resource_round_trip_update_and_remove() {
     let _ = (recv, send, sim_handle);
 }
 
+/// Regression (naia dev `5abdbd63` / B1-active `replicated_resource_reinsert`):
+/// removing a replicated resource and then RE-INSERTING it must leave the
+/// carrier fully re-registered — a fresh host-owned carrier entity, a re-attached
+/// native `PropertyMutator`, and `Res<R>` repopulated with the new value. The
+/// original liveness bug surfaced under active send workers (a stale one-tick-lag
+/// job masked the re-insert); the logical carrier-retention correctness proven
+/// here is the deterministic sim-integration half of that coverage (the
+/// worker-flush half is cyberlith's B1-active moat).
+#[test]
+fn sim_resource_remove_reinsert_retained_carrier() {
+    let mut app = build_app();
+    let (sim_handle, recv, send) = build_handles_listening(next_addr());
+
+    // Round 1: spawn + register the carrier.
+    let entity1 = app
+        .world_mut()
+        .spawn((TestScore::new(7, 3), HostOwned::new::<Singleton>()))
+        .id();
+    assert_eq!(res_home(&app), Some(7), "round-1 carrier populates Res<R>");
+    app.update();
+    let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
+        ws.enable_entity_replication(&entity1);
+    });
+    let (sim_handle, recv, send) =
+        drain_host_sync_into_pipeline(app.world_mut(), sim_handle, recv, send);
+    assert!(
+        component_registered(&sim_handle, entity1, &ComponentKind::of::<TestScore>()),
+        "round-1 carrier registered after drain",
+    );
+
+    // Remove via the despawn chokepoint → Res<R> cleared. Per the chokepoint
+    // contract (`world_proxy::despawn_entity`) the now-empty carrier ENTITY is
+    // RETAINED in place (a resource follows bevy's resource lifecycle, not the
+    // entity lifecycle) — this is the carrier the re-insert reuses.
+    {
+        let world = app.world_mut();
+        let mut proxy = world.proxy_mut();
+        WorldMutType::<Entity>::despawn_entity(&mut proxy, &entity1);
+    }
+    assert_eq!(res_home(&app), None, "remove clears Res<R>");
+    assert!(
+        app.world().get_entity(entity1).is_ok(),
+        "the emptied carrier entity is retained (resource, not entity, lifecycle)"
+    );
+    app.update();
+
+    // Round 2: RE-INSERT the resource onto the RETAINED carrier. Re-adding the
+    // component repopulates Res<R> (aliasing) with the new value and must
+    // re-register cleanly through a second host-sync drain — no stale-record
+    // panic, no missed registration.
+    {
+        let world = app.world_mut();
+        let mut proxy = world.proxy_mut();
+        WorldMutType::<Entity>::insert_component(&mut proxy, &entity1, TestScore::new(42, 5));
+    }
+    assert_eq!(
+        res_home(&app),
+        Some(42),
+        "re-inserting onto the retained carrier repopulates Res<R> with the new value"
+    );
+    app.update();
+    let (sim_handle, recv, send) =
+        drain_host_sync_into_pipeline(app.world_mut(), sim_handle, recv, send);
+    assert!(
+        component_registered(&sim_handle, entity1, &ComponentKind::of::<TestScore>()),
+        "the re-inserted carrier must be registered again after the second drain \
+         (the retention/re-registration path)",
+    );
+
+    let _ = (recv, send, sim_handle);
+}
+
 use std::sync::atomic::{AtomicUsize, Ordering};
 static PORT_COUNTER: AtomicUsize = AtomicUsize::new(58500);
 fn next_addr() -> &'static str {

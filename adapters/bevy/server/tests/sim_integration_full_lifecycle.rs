@@ -4,7 +4,7 @@
 //!   - Plugin install registers the expected consumer-facing Resources
 //!     (`ServerEntityConverter`, `EventReceiverRes`) and stores the pipeline
 //!     inside the unified `WorldServer` resource (reachable via
-//!     `Server::world_only_resource_scope` + `as_pipelined`).
+//!     `Server::world_only_resource_scope` + `take_handles`).
 //!   - Before `pipeline_listen`, the pipeline is not listening.
 //!   - After `pipeline_listen` + `pipeline_start`, the pipeline is bound
 //!     (listening) and reachable.

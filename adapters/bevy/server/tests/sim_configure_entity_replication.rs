@@ -66,7 +66,7 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
     let (sim_handle, recv, send) = handles();
 
     // Build a sim-app holding the Bevy world that owns the entity. In
-    // Sim-Owns-World cyberlith, this is the SimApp world.
+    // single-world cyberlith, this is the unified game world.
     let mut sim_app = App::new();
     sim_app.add_plugins(ServerPlugin::sim_integration(
         ServerConfig::default(),

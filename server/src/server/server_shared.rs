@@ -12,8 +12,7 @@
 //! order below. Any inversion is a bug.
 //!
 //! ```text
-//! 1. connection_shared (RwLock<HashMap>)    — outermost
-//! 2. global_world_manager (outer RwLock)    — wraps the field
+//! 2. global_world_manager (outer RwLock)    — outermost
 //! 2a. global_world_manager.diff_handler()   — internal RwLock (acquired AFTER the outer #2 guard)
 //! 3. global_entity_map / idx_to_world       — RwLock
 //! 4. time_manager                           — RwLock
@@ -30,7 +29,7 @@
 //! the locked fields under this order.
 
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::VecDeque,
     hash::Hash,
     net::SocketAddr,
     sync::Arc,
@@ -49,8 +48,8 @@ use naia_shared::DisconnectReason;
 
 use crate::{
     server::{
-        configure_replication::ConfigureWorldOp, connection_shared::ConnectionShared,
-        scope_change::ScopeChange, send_state_update::SendStateUpdate,
+        configure_replication::ConfigureWorldOp, scope_change::ScopeChange,
+        send_state_update::SendStateUpdate,
     },
     time_manager::TimeManager,
     world::global_world_manager::GlobalWorldManager,
@@ -108,7 +107,7 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// `ConnectionRemoved`. Drained inline at `InternalWorldServer::receive`'s
     /// tail in serial mode; drained by the coordinator at step 6.5 in
     /// pipeline mode. See `send_state_update.rs` for variant semantics.
-    pub(crate) pending_send_state_updates: Mutex<Vec<SendStateUpdate<E>>>,
+    pub(crate) pending_send_state_updates: Mutex<Vec<SendStateUpdate>>,
 
     /// Queue of scope-change events accumulated by coordinator code and
     /// drained at the top of `send_all_packets`. Mutex held briefly on
@@ -135,17 +134,6 @@ pub struct ServerShared<E: Copy + Eq + Hash + Send + Sync> {
     /// via `sim_handle.user_store.take_disconnected` and calls
     /// `finalize_connection`. LOCK ORDER position #9 (last).
     pub(crate) pending_handshakes: Mutex<Vec<SocketAddr>>,
-
-    /// Per-connection `ConnectionShared` cells (atomics for ACK/RTT and
-    /// coordinator → recv `should_disconnect` per B4). Outermost lock per
-    /// the LOCK ORDER block above. Populated when a connection is finalized;
-    /// removed when the user disconnects. `RecvConnection` and
-    /// `SendConnection` will each hold a clone of the inner `Arc<>` once
-    /// step 4-C lands the Connection split — the map itself stays here so
-    /// the coordinator and the bevy event-application layer can address
-    /// per-user atomics by `SocketAddr` without touching either state half.
-    #[allow(dead_code)]
-    pub(crate) connection_shared: RwLock<HashMap<SocketAddr, Arc<ConnectionShared>>>,
 
     /// Server tick clock + tick-duration EWMA (step 4-E.2b). LOCK ORDER
     /// position #4. The recv thread takes the **write** guard once per
@@ -228,7 +216,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             pending_auth_grants: Mutex::new(Vec::new()),
             pending_outbound_packets: Mutex::new(Vec::new()),
             pending_handshakes: Mutex::new(Vec::new()),
-            connection_shared: RwLock::new(HashMap::new()),
             time_manager: RwLock::new(TimeManager::new(tick_interval)),
             global_world_manager: RwLock::new(global_world_manager),
             global_entity_map: RwLock::new(GlobalEntityMap::new()),

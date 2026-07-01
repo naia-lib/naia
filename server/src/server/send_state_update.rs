@@ -23,28 +23,25 @@
 //!   `shared.connection_shared` map are torn down directly on the
 //!   coordinator thread (it owns those).
 //!
-//! * `PriorityChanged { entity, gain }` — **defined but unused in
-//!   4-E.2e.** The borrow API (`global_entity_priority_mut`) returns
-//!   `EntityPriorityMut<'_, E>` which holds `&mut HashMap` from
-//!   `naia-shared`; routing every mutation through this queue would
-//!   require breaking changes to that public type. The 4-E.2e
-//!   `global_priority` move uses **publish-on-read** at the start of
-//!   `send_all_packets` instead — `sim_handle.global_priority_mirror` is
-//!   cloned into `send.global_priority`. The `PriorityChanged` variant
-//!   exists so a future commit (likely 4-F when the coordinator and
-//!   send threads truly diverge) can rewire the borrow API to push
-//!   per-entity updates here without needing a second enum migration.
+//! Global-entity priority does NOT travel through this queue: the
+//! `global_priority` move uses **publish-on-read** at the start of
+//! `send_all_packets` — `sim_handle.global_priority_mirror` is cloned
+//! wholesale into `send.global_priority` each tick. That is the single,
+//! source-agnostic mechanism; it stays correct even if the coordinator
+//! and send threads diverge (only the clone becomes redundant, never
+//! wrong). A per-entity push path was considered and rejected: at
+//! realistic churn it is break-even-to-slower than the bulk clone and
+//! adds a per-mutation-site enqueue obligation the byte-exact moat can't
+//! afford to have silently missed.
 
-use std::{hash::Hash, net::SocketAddr};
+use std::net::SocketAddr;
 
 use crate::connection::SendConnection;
 
 /// Recv-side → send-side handoff event.
 ///
-/// See module docs for variant intent and the publish-on-read note on
-/// `PriorityChanged`.
-#[allow(dead_code)]
-pub enum SendStateUpdate<E: Copy + Eq + Hash + Send + Sync> {
+/// See module docs for variant intent.
+pub enum SendStateUpdate {
     /// A new connection was finalized on the recv thread; insert the
     /// matching `SendConnection` into `SendState.send_user_connections`.
     ConnectionAdded(SocketAddr, Box<SendConnection>),
@@ -52,13 +49,4 @@ pub enum SendStateUpdate<E: Copy + Eq + Hash + Send + Sync> {
     /// A connection was torn down on the coordinator thread; drop the
     /// matching `SendConnection` from `SendState.send_user_connections`.
     ConnectionRemoved(SocketAddr),
-
-    /// Future-use placeholder (see module docs). The 4-E.2e
-    /// `global_priority` move uses publish-on-read; this variant is
-    /// reserved for when the borrow API is rewired to push per-entity
-    /// updates through the queue.
-    ///
-    /// `gain == None` means "clear the override" (revert to the default
-    /// 1.0); `Some(g)` sets an explicit gain.
-    PriorityChanged { entity: E, gain: Option<f32> },
 }

@@ -87,15 +87,13 @@ impl BandwidthAccumulator {
     }
 
     /// Current remaining budget (may be negative when overshoot occurred).
-    /// D13 telemetry hook — no callers inside naia; used by external observability adapters.
-    #[allow(dead_code)]
+    /// D13 telemetry hook, surfaced via `BaseSendConnection::bandwidth_remaining`.
     pub(crate) fn remaining(&self) -> f64 {
         self.budget_bytes
     }
 
     /// Bytes spent during the most-recently-completed tick (D13 telemetry).
-    /// D13 telemetry hook — no callers inside naia; used by external observability adapters.
-    #[allow(dead_code)]
+    /// Surfaced via `BaseSendConnection::bandwidth_bytes_sent_last_tick`.
     pub(crate) fn bytes_sent_last_tick(&self) -> u64 {
         self.bytes_sent_last_tick
     }
@@ -112,8 +110,7 @@ impl BandwidthAccumulator {
 
     /// Packets deferred due to the budget gate during the most-recently-completed
     /// tick. Always returns 0 unless `bench_instrumentation` is enabled.
-    /// D13 telemetry hook — no callers inside naia; used by external observability adapters.
-    #[allow(dead_code)]
+    /// Surfaced via `BaseSendConnection::bandwidth_packets_deferred_last_tick`.
     pub(crate) fn packets_deferred_last_tick(&self) -> u32 {
         #[cfg(feature = "bench_instrumentation")]
         {

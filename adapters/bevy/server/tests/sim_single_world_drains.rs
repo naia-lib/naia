@@ -1,6 +1,7 @@
 //! MISSION_SINGLE_WORLD_CELL — coverage for the single-world pipeline drains
-//! `Server::pipeline_drain_resource_registrations_single` and
-//! `Server::pipeline_drain_host_sync_single`.
+//! `Server::pipeline_drain_resource_registrations_single`,
+//! `Server::pipeline_drain_host_sync_single`, and
+//! `Server::pipeline_drain_scope_authority_ops_single`.
 //!
 //! In the single-world collapse the coordinator (`ServerImpl::WorldOnly`
 //! resource) and the host-owned gameplay entities live in ONE `World`. The
@@ -25,7 +26,8 @@ use bevy_app::{App, Update};
 use bevy_ecs::system::Commands;
 
 use naia_bevy_server::{
-    transport, PipelineConfig, Plugin as ServerPlugin, ReplicationConfig, Server, ServerConfig,
+    transport, PendingScopeAuthorityOps, PipelineConfig, PipelineScopeAuthorityOp,
+    Plugin as ServerPlugin, ReplicationConfig, Server, ServerConfig,
 };
 use naia_bevy_shared::{HostOwned, Protocol as BevyProtocol};
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
@@ -136,6 +138,49 @@ fn host_sync_single_drains_in_park_without_alias_panic() {
     assert!(
         app.world().get_entity(entity).is_ok(),
         "the host-owned entity must survive the single-world host-sync drain"
+    );
+    Server::pipeline_propagate_panics(app.world());
+    drop(app);
+}
+
+#[test]
+fn scope_authority_ops_single_drains_in_park_without_alias_panic() {
+    let mut app = build_app();
+    listen_and_start(&mut app, next_addr());
+    app.update();
+    thread::sleep(Duration::from_millis(10));
+
+    // Spawn + replication-enable a host-owned entity (RoomAdd/authority ops
+    // require a registered entity, mirroring the host-sync drain).
+    let entity = app
+        .world_mut()
+        .spawn((Position::new(3.0, 4.0), HostOwned::new::<Singleton>()))
+        .id();
+    app.update();
+
+    Server::pipeline_park(app.world());
+    let room_key =
+        Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
+            ws.enable_entity_replication(&entity);
+            ws.create_room().key()
+        });
+
+    // Enqueue a RoomAdd + a TakeAuthority for the same entity onto the single
+    // world's pending queue (the two-phase drain must normalize the RoomAdd
+    // ahead of the authority op).
+    app.world_mut().insert_resource(PendingScopeAuthorityOps(vec![
+        PipelineScopeAuthorityOp::TakeAuthority(entity),
+        PipelineScopeAuthorityOp::RoomAdd(entity),
+    ]));
+
+    Server::pipeline_drain_scope_authority_ops_single(app.world_mut(), &room_key);
+    // Second drain proves the queue emptied (clean no-op, no panic).
+    Server::pipeline_drain_scope_authority_ops_single(app.world_mut(), &room_key);
+    Server::pipeline_unpark(app.world());
+
+    assert!(
+        app.world().get_entity(entity).is_ok(),
+        "the entity must survive the single-world scope/authority drain"
     );
     Server::pipeline_propagate_panics(app.world());
     drop(app);

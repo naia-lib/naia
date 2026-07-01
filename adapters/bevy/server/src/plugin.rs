@@ -307,8 +307,9 @@ impl PluginType for Plugin {
         //
         // Phase D (pipelined): we DO construct the three
         // handles here (state_external=true AND full_pipelining=true)
-        // and stash them in `PluginInternalState` for `listen()` to
-        // adopt. See `plugin_full.rs`.
+        // and stash them inside the unified `ServerImpl::WorldOnly(
+        // WorldServer)` resource for `listen()` to adopt. See
+        // `plugin_full.rs`.
         let server_impl = if self.state_external {
             if self.full_pipelining {
                 crate::plugin_full::install_full_pipelining(

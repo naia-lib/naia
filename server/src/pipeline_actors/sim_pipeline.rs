@@ -210,6 +210,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         world: &mut W,
         body: impl FnOnce(&mut TickCtx<'_, E, W>),
     ) {
+        // See `take_handles`: a worker panic during the preceding park leaves a
+        // slot empty; re-panic with the true payload before the misleading
+        // "park workers before calling tick()" expects fire.
+        self.propagate_panic_if_any();
         let mut coord = self.coord.take().expect(
             "PipelinedWorldServer::tick: CoordHandle not available — re-entrant tick?",
         );
@@ -268,6 +272,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// oracle/test path (a panic there already aborts the run) but a debugger
     /// chasing the second panic should look upstream for the first.
     pub fn take_handles(&mut self) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>) {
+        // A worker that panicked during the preceding `park_workers()` never
+        // deposits its handle (park breaks early on a finished worker), so a
+        // slot may be empty for a reason the `expect`s below misdescribe
+        // ("park workers first"). Surface the true worker-panic payload first
+        // so the diagnostic points at the real fault (runtime.rs park docs).
+        self.propagate_panic_if_any();
         let coord = self.coord.take().expect(
             "PipelinedWorldServer::take_handles: CoordHandle not available",
         );
@@ -1072,6 +1082,24 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Workers parked (or not spawned). The bevy adapter's `ReceivePackets` set
     /// brackets this with park/unpark (G8); the synchronous oracle needs none.
     pub fn receive<W: WorldMutType<E>>(&mut self, world: &mut W) -> Vec<ReceiveOutput<E>> {
+        // Allocating convenience shape. The hot per-tick path uses
+        // `receive_into` with a caller-owned reusable buffer to avoid the
+        // per-tick allocation.
+        let mut outputs = Vec::new();
+        self.receive_into(world, &mut outputs);
+        outputs
+    }
+
+    /// Buffer-reusing form of [`Self::receive`]. Fills `out` (cleared first)
+    /// with this tick's [`ReceiveOutput`]s in the identical FIFO order, so the
+    /// caller can retain `out`'s allocation across ticks (the per-tick recv
+    /// path is otherwise allocation-heavy). Byte-identical to `receive`.
+    pub fn receive_into<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        out: &mut Vec<ReceiveOutput<E>>,
+    ) {
+        out.clear();
         // §2f: when the worker runtime is owned + `Running`, OPEN the park window
         // here — the workers deposit their handles in the slots and block, so the
         // `take_handles` below is race-free. No-op for the synchronous oracle
@@ -1085,20 +1113,19 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // Worker shape: drain everything the recv worker shipped to its output
         // channel since the last park window, FIFO (unbounded → nothing dropped).
         // Oracle shape (`recv_subscriber == None`): there is no worker channel.
-        let mut outputs: Vec<ReceiveOutput<E>> = match &self.recv_subscriber {
-            Some(rx) => rx.try_iter().collect(),
-            None => Vec::new(),
-        };
+        if let Some(rx) = &self.recv_subscriber {
+            out.extend(rx.try_iter());
+        }
         // Synchronous straggler-catch (BOTH shapes): in worker mode this catches
         // packets delivered after the recv worker's last iteration; in oracle mode
         // it is the sole drain.
-        outputs.push(recv.receive());
+        out.push(recv.receive());
 
         // D0 (cont.): apply each non-empty output's decoded entity ops to `world`
         // in FIFO order, threading the handles. Reborrow `world` per output. Empty
         // outputs skip the `InternalWorldServer` reassembly (matches the prior early
         // return) — the handles round-trip unchanged.
-        for output in outputs.iter_mut() {
+        for output in out.iter_mut() {
             if output.is_empty() {
                 continue;
             }
@@ -1116,7 +1143,6 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         }
 
         self.restore_handles(coord, recv, send);
-        outputs
     }
 
     /// **D8 + D9 — send.** Send-prep (preamble → scope → refresh), core snapshot

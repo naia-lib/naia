@@ -21,7 +21,6 @@ struct ClientConnection {
     // Data channels (server -> client) - server sends
     server_data_tx: mpsc::Sender<Vec<u8>>,
     // Data channels (client -> server) - server "receives" via this sender (injection)
-    #[allow(dead_code)]
     client_data_tx_injection: mpsc::Sender<Vec<u8>>,
 
     // Link conditioner configuration (bidirectional)

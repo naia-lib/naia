@@ -871,51 +871,6 @@ impl<'w> Server<'w> {
         }
     }
 
-    /// G1 — park + drain (the recv half of the park-window bracket). Owns the
-    /// resource-scope nesting, the coord-handle acquisition, and the per-output
-    /// loop, so the consumer supplies only the recv-world choice and the
-    /// per-output applier (policy). Replaces the hand-rolled
-    /// `world_only_resource_scope` + `as_pipelined().expect().coord()` + output
-    /// loop in a consumer's `open_park_window`.
-    ///
-    /// `recv_world`: `None` receives entity ops into `world` itself (the
-    /// single-world path); `Some(sim)` receives into a disjoint sim world (the
-    /// delegated/editor path). For each non-empty output the applier is called
-    /// with `(&mut world, recv_world, coord, output)`.
-    pub fn pipeline_recv(
-        world: &mut World,
-        mut recv_world: Option<&mut World>,
-        mut apply: impl FnMut(
-            &mut World,
-            Option<&mut World>,
-            &naia_server::WorldServer<Entity>,
-            naia_server::ReceiveOutput<Entity>,
-        ),
-    ) {
-        Self::world_only_resource_scope(world, |world, ws| {
-            let outputs = match recv_world.as_deref_mut() {
-                Some(sim) => ws.receive(naia_bevy_shared::WorldProxyMut::proxy_mut(&mut *sim)),
-                None => ws.receive(naia_bevy_shared::WorldProxyMut::proxy_mut(&mut *world)),
-            };
-            for output in outputs {
-                if output.is_empty() {
-                    continue;
-                }
-                apply(world, recv_world.as_deref_mut(), ws, output);
-            }
-        });
-    }
-
-    /// G1 — snapshot + unpark (the send half of the park-window bracket). Owns
-    /// the resource-scope + immutable world proxy. Replaces the consumer's
-    /// `world_only_resource_scope(|_, ws| ws.send(WorldProxy::proxy(..)))` in
-    /// `close_park_window`.
-    pub fn pipeline_send(world: &mut World, send_world: &World) {
-        Self::world_only_resource_scope(world, |_world, ws| {
-            ws.send(naia_bevy_shared::WorldProxy::proxy(send_world));
-        });
-    }
-
     /// G6 — register a replicated resource from a sim-mode (pipelined) world.
     /// The sim-mode counterpart of the resident
     /// [`crate::ServerCommandsExt::replicate_resource`].
@@ -1047,7 +1002,7 @@ impl<'w> Server<'w> {
     ///
     /// The drain genuinely needs the handles taken out (it calls `&mut SendHandle`
     /// worldless insert/remove/despawn ops + `&mut CoordHandle::state`, which are
-    /// not reachable through the in-place `as_pipelined_mut` forwarding methods).
+    /// not reachable through the unified `WorldServer` in-place forwarding methods).
     /// The take/restore is wrapped so the handles are restored to their slots even
     /// if the drain unwinds — otherwise a mid-drain panic would leave the slots
     /// empty and mask the real fault with a misleading "park workers first" on the
@@ -1099,7 +1054,7 @@ impl<'w> Server<'w> {
     /// calls into the engine.
     ///
     /// Order matches the prior hand-rolled path: all `RoomAdd`s first (in queue
-    /// order, via the Coord-only `as_pipelined_mut().room_add_entity`), then the
+    /// order, via the unified `WorldServer::room_add_entity`), then the
     /// authority ops (`TakeAuthority` / `GiveAuthority`) in queue order — so a
     /// room-add is normalized ahead of any authority op. Byte-identical to the
     /// legacy two-phase drain. No-op early-return when the queue is empty.
@@ -1116,6 +1071,47 @@ impl<'w> Server<'w> {
             return;
         }
         Self::world_only_resource_scope(main_world, |_main, ws| {
+            // Phase 1: room adds (first-class unified op).
+            for op in &ops {
+                if let PipelineScopeAuthorityOp::RoomAdd(entity) = op {
+                    ws.room_add_entity(room_key, entity);
+                }
+            }
+            // Phase 2: authority ops, in queue order.
+            for op in &ops {
+                match op {
+                    PipelineScopeAuthorityOp::TakeAuthority(entity) => {
+                        let _ = ws.entity_take_authority(entity);
+                    }
+                    PipelineScopeAuthorityOp::GiveAuthority(user, entity) => {
+                        let _ = ws.entity_give_authority(user, entity);
+                    }
+                    PipelineScopeAuthorityOp::RoomAdd(_) => {}
+                }
+            }
+        });
+    }
+
+    /// G5b (single-world) — coordinator + entities share ONE `World`
+    /// (MISSION_SINGLE_WORLD_CELL). Byte-identical to the two-world
+    /// [`Self::pipeline_drain_scope_authority_ops`]: extract the
+    /// [`PendingScopeAuthorityOps`] queue, then run the same two-phase drain
+    /// (all `RoomAdd`s first, then authority ops in queue order) against the
+    /// parked coordinator. The only difference is the ops source: they come from
+    /// the same `world` that holds the `ServerImpl` rather than a separate sim
+    /// world. Because the queue is drained into an owned `Vec` before the
+    /// `world_only_resource_scope`, the coord borrow never aliases it. No-op
+    /// early-return when the queue is empty. Call inside the park window, BEFORE
+    /// the host-sync drain.
+    pub fn pipeline_drain_scope_authority_ops_single(world: &mut World, room_key: &RoomKey) {
+        let ops: Vec<PipelineScopeAuthorityOp> = world
+            .get_resource_mut::<PendingScopeAuthorityOps>()
+            .map(|mut q| std::mem::take(&mut q.0))
+            .unwrap_or_default();
+        if ops.is_empty() {
+            return;
+        }
+        Self::world_only_resource_scope(world, |_world, ws| {
             // Phase 1: room adds (first-class unified op).
             for op in &ops {
                 if let PipelineScopeAuthorityOp::RoomAdd(entity) = op {

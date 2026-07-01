@@ -164,7 +164,7 @@ fn sim_handle_borrowable_while_parked() {
     // Demonstrates the cyberlith Phase E pattern: park workers, take the
     // CoordHandle from the pipeline for cross-handle work in a Sim system,
     // restore it, unpark. The pipeline is reached through the unified
-    // WorldServer resource via `as_pipelined_mut`.
+    // WorldServer resource via `world_only_resource_scope` + `take_handles`.
     let mut app = build_app();
     listen_and_start(&mut app, "127.0.0.1:23012");
     app.update();

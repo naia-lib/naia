@@ -87,7 +87,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// Add `world_entity` to `room_key` (coarse scope membership). First-class
-    /// over both modes (replaces the old `as_pipelined().coord().room_add_entity`).
+    /// over both modes (the unified replacement for the former raw coord-handle
+    /// `room_add_entity`).
     pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.room_add_entity(room_key, world_entity),
@@ -310,10 +311,27 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// its fused `receive_with_world` (one output); the pipelined variant drains
     /// its recv path (one output in the oracle shape, N in the worker shape).
     /// Both ultimately apply through the same `process_all_packets` path.
-    pub fn receive<W: WorldMutType<E>>(&mut self, mut world: W) -> Vec<ReceiveOutput<E>> {
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Vec<ReceiveOutput<E>> {
+        let mut out = Vec::new();
+        self.receive_into(world, &mut out);
+        out
+    }
+
+    /// Buffer-reusing form of [`Self::receive`]: fills `out` (cleared first)
+    /// with this tick's outputs so the caller can retain the allocation across
+    /// ticks. The hot per-tick recv system uses this to avoid a per-tick
+    /// `Vec` allocation; byte-identical to `receive`.
+    pub fn receive_into<W: WorldMutType<E>>(
+        &mut self,
+        mut world: W,
+        out: &mut Vec<ReceiveOutput<E>>,
+    ) {
         match &mut self.inner {
-            WorldServerImpl::Resident(ws) => vec![ws.receive_with_world(world)],
-            WorldServerImpl::Pipelined(ps) => ps.receive(&mut world),
+            WorldServerImpl::Resident(ws) => {
+                out.clear();
+                out.push(ws.receive_with_world(world));
+            }
+            WorldServerImpl::Pipelined(ps) => ps.receive_into(&mut world, out),
         }
     }
 

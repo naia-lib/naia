@@ -66,11 +66,10 @@ pub struct SendState<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Sender-wide priority layer (step 4-E.2e). Authoritative for the
     /// Iris send-path read. Kept in sync with `sim_handle.global_priority_mirror`
-    /// via publish-on-read at the top of `send_all_packets` — the borrow
-    /// API `global_entity_priority_mut` would need a public-API change in
-    /// `naia-shared::EntityPriorityMut` to push per-entity updates through
-    /// the `SendStateUpdate` queue. A later commit can rewire that path
-    /// (the `SendStateUpdate::PriorityChanged` variant is already defined).
+    /// via publish-on-read at the top of `send_all_packets`: the mirror is
+    /// cloned wholesale into this map each tick. That bulk copy is the single,
+    /// mutation-source-agnostic priority-propagation mechanism (a per-entity
+    /// push path was considered and rejected — see `SendStateUpdate` docs).
     pub global_priority: GlobalPriorityState<E>,
 
     /// Periodic heartbeat send cadence (relocated from `RecvState` in

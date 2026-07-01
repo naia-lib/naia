@@ -175,12 +175,18 @@ pub(crate) fn install_full_pipelining(
 /// `EventReceiver`. `receive` parks the workers internally for the duration of
 /// the call. No-op until the worker runtime is `Running` (so recv-draining
 /// before `listen()`/`start()` cannot panic in `Server::receive_packet`).
-fn pipelined_receive(world: &mut World) {
+fn pipelined_receive(
+    world: &mut World,
+    // Reused across ticks so the per-tick recv drain allocates no `Vec`
+    // (retains capacity via `drain(..)`; `receive_into` clears + refills it).
+    mut recv_buf: bevy_ecs::system::Local<Vec<naia_server::ReceiveOutput<Entity>>>,
+) {
     use naia_bevy_shared::WorldProxyMut;
 
     // Clone the event fan-out target before the `&mut World` resource_scope.
     let sim_receiver = world.resource::<EventReceiverRes>().0.clone();
 
+    let recv_buf = &mut *recv_buf;
     world.resource_scope(|world, mut server: bevy_ecs::world::Mut<ServerImpl>| {
         let Some(ws) = server.as_world_server_mut() else {
             return;
@@ -190,8 +196,8 @@ fn pipelined_receive(world: &mut World) {
         }
         // Core parks internally, drains the recv worker's output channel + a
         // synchronous straggler, and applies every output to the entity world.
-        let outputs = ws.receive(world.proxy_mut());
-        for output in outputs {
+        ws.receive_into(world.proxy_mut(), recv_buf);
+        for output in recv_buf.drain(..) {
             if output.is_empty() {
                 continue;
             }
