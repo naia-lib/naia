@@ -450,3 +450,15 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
       And the client and entity share a room
       And the entity is in-scope for the client
       Then replication eventually converges despite packet loss
+
+  # ==========================================================================
+  # === Phase C D1: Resident/pipelined byte identity ===
+  # ==========================================================================
+
+  @Rule(12)
+  Rule: Pipelined registration staging preserves wire bytes
+
+    @Scenario(01)
+    Scenario: [pipeline-d1-registration-01] Pipelined registration bytes match resident oracle
+      Given a test scenario
+      Then pipelined D1 registration bytes match the resident oracle

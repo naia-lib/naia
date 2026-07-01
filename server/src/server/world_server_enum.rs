@@ -712,9 +712,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => {
                 ws.configure_entity_replication(world, world_entity, config)
             }
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| {
-                ws.configure_entity_replication(world, world_entity, config)
-            }),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.configure_entity_replication(world_entity, config);
+                ps.apply_pending_world_hooks(world);
+            }
         }
     }
 
@@ -804,9 +805,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn pause_entity_replication(&mut self, world_entity: &E) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.pause_entity_replication(world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.pause_entity_replication(world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.pause_entity_replication(world_entity),
         }
     }
 
@@ -814,9 +813,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn resume_entity_replication(&mut self, world_entity: &E) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.resume_entity_replication(world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.resume_entity_replication(world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.resume_entity_replication(world_entity),
         }
     }
 
@@ -936,9 +933,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn enable_static_entity_replication(&mut self, entity: &E) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.enable_static_entity_replication(entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.enable_static_entity_replication(entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.enable_static_entity_replication(entity),
         }
     }
 

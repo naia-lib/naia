@@ -628,6 +628,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord_mut().mark_entity_as_static(world_entity)
     }
 
+    /// Register an already-spawned entity as static without reassembling the split engine.
+    pub fn enable_static_entity_replication(&mut self, world_entity: &E) {
+        let global_entity = self
+            .coord()
+            .shared
+            .global_entity_map
+            .write()
+            .spawn(*world_entity, None);
+        let idx = self
+            .coord()
+            .shared
+            .global_world_manager
+            .write()
+            .insert_static_entity_record(&global_entity, EntityOwner::Server);
+        if idx.is_valid() {
+            self.coord().shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
+        }
+    }
+
     /// Forwards to [`CoordHandle::configure_entity_replication`].
     pub fn configure_entity_replication(&mut self, world_entity: &E, config: ReplicationConfig) {
         self.coord_mut()
@@ -640,6 +659,44 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         W: WorldMutType<E>,
     {
         self.coord().apply_pending_world_hooks(world)
+    }
+
+    /// Pause replication for an entity without reassembling the split engine.
+    pub fn pause_entity_replication(&mut self, world_entity: &E) {
+        let Ok(global_entity) = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            log::warn!("pause_entity_replication: entity not found in global map");
+            return;
+        };
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .pause_entity_replication(&global_entity);
+    }
+
+    /// Resume replication for an entity without reassembling the split engine.
+    pub fn resume_entity_replication(&mut self, world_entity: &E) {
+        let Ok(global_entity) = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            log::warn!("resume_entity_replication: entity not found in global map");
+            return;
+        };
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .resume_entity_replication(&global_entity);
     }
 
     // ── Tick / queue introspection ──
@@ -1434,6 +1491,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
         // D1 entity-replication registrations (spawn_replicated/enable_replication)
         //    — queue introduced by G4/G5. Must drain before resource & host-sync.
+        Self::drain_pending_registration_ops(send);
         // D2 resource-replication registrations (Res<R> carriers) — G6. Before host-sync.
         Self::drain_pending_resource_ops(coord, send, world);
         // D3 lifecycle (despawn/insert/remove) — G4/G5. After spawns, before authority.
@@ -1536,6 +1594,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             layer.drain_merge_into(send_layer);
         }
         coord.state.user_priority_staging.clear();
+    }
+
+    /// Phase C / D1 — publish coord-captured replication-config leaf ops into
+    /// send-resident state before resource/lifecycle/authority/host-sync work.
+    fn drain_pending_registration_ops(send: &mut SendHandle<E>) {
+        let shared = Arc::clone(&send.state.shared);
+        send.state
+            .apply_pending_configure_replication(&shared.scope_change_queue);
     }
 
     fn spawn_resource_entity(

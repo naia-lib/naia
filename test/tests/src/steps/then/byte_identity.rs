@@ -195,6 +195,25 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect())
     }
+
+    fn registration_trace(mut self) -> Result<Vec<Vec<u8>>, String> {
+        let user_key = self.connect()?;
+        let entity = self.setup_scoped_entity(&user_key);
+        self.hub.enable_packet_recording();
+
+        self.server
+            .entity_mut(self.server_world.proxy_mut(), &entity)
+            .configure_replication(ReplicationConfig::delegated());
+        self.tick_bracket();
+        self.tick_bracket();
+
+        Ok(self
+            .hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect())
+    }
 }
 
 /// Then pipelined D7 scope-ledger bytes match the resident oracle.
@@ -241,6 +260,37 @@ fn then_pipelined_d2_resource_bytes_match_resident_oracle(
     } else {
         AssertOutcome::Failed(format!(
             "D2 resource byte trace diverged: resident={} pipelined={}",
+            trace_summary(&resident),
+            trace_summary(&pipelined)
+        ))
+    }
+}
+
+/// Then pipelined D1 registration bytes match the resident oracle.
+#[then("pipelined D1 registration bytes match the resident oracle")]
+fn then_pipelined_d1_registration_bytes_match_resident_oracle(
+    _ctx: &TestWorldRef,
+) -> AssertOutcome<()> {
+    let resident = match DirectScopeRun::new(ServerMode::Resident).registration_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("resident setup failed: {error}")),
+    };
+    let pipelined = match DirectScopeRun::new(ServerMode::Pipelined).registration_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("pipelined setup failed: {error}")),
+    };
+
+    if resident.is_empty() {
+        return AssertOutcome::Failed(
+            "D1 registration trace did not emit any server-to-client packets".into(),
+        );
+    }
+
+    if resident == pipelined {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "D1 registration byte trace diverged: resident={} pipelined={}",
             trace_summary(&resident),
             trace_summary(&pipelined)
         ))

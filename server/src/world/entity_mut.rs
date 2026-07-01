@@ -196,9 +196,12 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
             EntityMutTarget::Resident(ws) => {
                 ws.configure_entity_replication(world, &entity, config)
             }
-            // Pipelined: coord-only fast path — the send-side work is deferred
-            // (D.2.2) and applied at the next send preamble; no world needed.
-            EntityMutTarget::Pipelined(ps) => ps.configure_entity_replication(&entity, config),
+            // Pipelined: capture coord/send work without reassembly, then apply
+            // world hooks immediately because this API already holds `&mut World`.
+            EntityMutTarget::Pipelined(ps) => {
+                ps.configure_entity_replication(&entity, config);
+                ps.apply_pending_world_hooks(world);
+            }
         }
 
         self
