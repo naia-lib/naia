@@ -403,7 +403,7 @@ per-gameplay-event reassembly remains.
    two surviving monolithic uses (consider renaming to signal "monolithic-only").
 
 ### Phase C progress
-- ✅ **D7 scope-ledger staged op landed 2026-07-01** (commit pending at doc update):
+- ✅ **D7 scope-ledger staged op landed 2026-07-01** (`45eca186`):
   `user_scope_set_entity` / `user_scope_remove_user` now enqueue coord-side
   `PendingScopeLedgerOp`s and drain in D7 before send-prep. Liveness re-verified
   against cyberlith production usage in `services/game/cell/src/send_helpers.rs`
@@ -587,8 +587,8 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `world_server_enum.rs:651` | `send_request` | messages → D6 |
 | `world_server_enum.rs:665` | `send_response` | messages → D6 |
 | `sim_pipeline.rs:1102` | `room_broadcast_message` | messages → D6 |
-| `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** ✅ DONE 2026-07-01 (commit pending); live in cyberlith `send_helpers.rs` |
-| `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 ✅ DONE 2026-07-01 (commit pending); same staged queue |
+| `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** ✅ DONE 2026-07-01 (`45eca186`); live in cyberlith `send_helpers.rs` |
+| `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 ✅ DONE 2026-07-01 (`45eca186`); same staged queue |
 | `world_server_enum.rs:770` | `insert_resource` | **resource → D2** |
 | `world_server_enum.rs:780` | `remove_resource` | resource → D2 |
 | `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** |
