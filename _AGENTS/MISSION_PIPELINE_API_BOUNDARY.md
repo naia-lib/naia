@@ -653,3 +653,25 @@ Each pending group = design sub-pass + Connor sign-off before impl.
   **registration floor** above (not empty), each entry justified.
 - naia sim-namako specs cover G1–G6 behavior (incl. resource remove→re-insert).
 - cyberlith determinism moat green; naia-isolation green; native + wasm32 build.
+
+## 7. Deferred follow-ups (post-remediation, 2026-06-30)
+
+The adversarial-audit remediation pass landed on `dev` (`447b2d43`): PriorityChanged
++ `connection_shared` + `pipeline_recv`/`pipeline_send` dead-code cut;
+`take_handles`/`tick` panic-propagation ordering (surface the real worker-panic
+payload before the misleading "park workers first" expect); `receive_into` reused-buffer
+refactor (no per-tick recv Vec alloc); single-world `pipeline_drain_scope_authority_ops_single`
++ `sim_resource_remove_reinsert_retained_carrier` regression test; stale-doc sweep.
+naia-server + naia-bevy-server suites green.
+
+These items were explicitly deferred (not blockers) and must NOT be forgotten:
+
+| ID | Item | Why deferred / what it needs |
+|----|------|------------------------------|
+| **T-F1** | `workers_active` naia-side test target | The true worker-liveness reinsert race is only reproducible under the `workers_active` (production, live worker threads) build. naia's default/deterministic test build runs the parked-service oracle, so a naia `#[test]` cannot exercise it. Today it is covered ONLY by **cyberlith's B1-active moat** (`replicated_resource_reinsert`, 55/55). Goal: stand up a naia-side `workers_active` integration target so the race has coverage inside naia itself (independent of cyberlith). Hard — needs a `workers_active` test harness that spawns real threads deterministically. |
+| **T-F5** | sim-namako NPA (naia-pipelined-adapter) coverage | The sim-pipelined mode has **zero namako BDD scenarios** — see [[project_naia_sim_namako_coverage_gap]] and gate line "naia sim-namako specs cover G1–G6 behavior (incl. resource remove→re-insert)". Build the sim NPA adapter + feature specs (incl. the resource-reinsert regression) so naia's PRIMARY testing surface (namako SDD, not raw `#[test]`) covers pipelined mode. This is the executable-contract reshaping of **M2** (§5). |
+| **A-M2** | (audit A-M2) | Left as-is per YAGNI (Connor). Re-open only if a concrete need appears. |
+
+**Not deferred but noted:** the audit's A-M1 was resolved as a NON-issue — panicking when
+a lifecycle method is called on the Resident variant is the CORRECT naia pattern (fail
+loudly when a method doesn't make sense for the underlying impl), per Connor. No change.
