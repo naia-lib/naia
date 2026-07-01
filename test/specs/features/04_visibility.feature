@@ -548,3 +548,14 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       When the server migrates the entity to client B's room
       Then the entity is out-of-scope for client A
       And the entity is in-scope for client B
+
+  # ==========================================================================
+  # === Phase C D7: Resident/pipelined byte identity ===
+  # ==========================================================================
+
+  @Rule(20)
+  Rule: Pipelined scope-ledger staging preserves wire bytes
+
+    @Scenario(01)
+    Scenario: [pipeline-d7-scope-ledger-01] Pipelined scope include/exclude bytes match resident oracle
+      Then pipelined D7 scope-ledger bytes match the resident oracle

@@ -34,13 +34,17 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 use crossbeam_channel::Receiver;
 use parking_lot::Mutex;
 use naia_shared::{
-    ChannelKind, ConnectionStats, EntityAuthStatus, EntityPriorityMut, EntityPriorityRef, Message,
-    Protocol, Tick, WorldMutType, WorldRefType,
+    ChannelKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityPriorityMut, EntityPriorityRef, Message, Protocol, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::{
-    room::RoomKey, server::ServerShared, user::UserKey, EntityOwner, ReceiveOutput, RecvHandle,
-    ReplicationConfig, SendHandle, ServerConfig, InternalWorldServer,
+    room::RoomKey,
+    server::{coord_state::PendingScopeLedgerOp, ServerShared},
+    user::UserKey,
+    world::server_auth_handler::AuthOwner,
+    EntityOwner, InternalWorldServer, Publicity, ReceiveOutput, RecvHandle, ReplicationConfig,
+    SendHandle, ServerConfig,
 };
 
 use super::handles::CoordHandle;
@@ -710,7 +714,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     // backings forward to `CoordHandle`; the send-resident reads lock the
     // park-window send/recv slot (occupied during the `receive()`→`send()`
     // window — fail-loud `.expect` if a caller reads outside it while workers
-    // run); the send-resident mutations reassemble via `with_world_server`.
+    // run); send-resident mutations are either staged into D-slots or still use
+    // the legacy `with_world_server` bridge until their Phase C class lands.
 
     // ── Coord-resident room/user reads ──
 
@@ -1074,19 +1079,29 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         )
     }
 
-    // ── Send-resident `&mut` mutations (with_world_server reassembly) ──
+    // ── Send-resident `&mut` mutations (D-slot staging or legacy reassembly) ──
 
     /// Include/exclude `world_entity` in `user_key`'s explicit scope.
-    /// Send-resident (`send.entity_scope_map` + `scope_change_queue`); applied
-    /// via park-window reassembly. Mirrors `InternalWorldServer::user_scope_set_entity`.
+    /// Send-resident (`send.entity_scope_map` + `scope_change_queue`); staged
+    /// on coord and drained in D7 before send-prep.
     pub fn user_scope_set_entity(&mut self, user_key: &UserKey, world_entity: &E, is_contained: bool) {
-        self.with_world_server(|ws| ws.user_scope_set_entity(user_key, world_entity, is_contained))
+        self.coord_mut()
+            .state
+            .pending_scope_ledger_ops
+            .push(PendingScopeLedgerOp::Set {
+                user_key: *user_key,
+                world_entity: *world_entity,
+                is_contained,
+            });
     }
 
     /// Remove all entities from `user_key`'s explicit scope. Send-resident;
-    /// applied via reassembly. Mirrors `InternalWorldServer::user_scope_remove_user`.
+    /// staged on coord and drained in D7 before send-prep.
     pub fn user_scope_remove_user(&mut self, user_key: &UserKey) {
-        self.with_world_server(|ws| ws.user_scope_remove_user(user_key))
+        self.coord_mut()
+            .state
+            .pending_scope_ledger_ops
+            .push(PendingScopeLedgerOp::RemoveUser { user_key: *user_key });
     }
 
     /// Broadcast a message to all users in `room_key`. Reaches send state
@@ -1280,7 +1295,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // D5 host-sync (change-detection → repl config) — G6b. After all entity mutations.
         // D6 outbound messages (send_message/broadcast, incl. desync snapshot) — §2e.
         // D7 scope-ledger writes (ScopeToggled enqueue) — before send-prep.
-        //    (D1–D7: no queues exist yet at G7; intentionally empty — see doc.)
+        Self::drain_pending_scope_ledger_ops(coord, send);
 
         // D8 send-prep — STRICT sub-order (`server_access.rs:1691-1706`):
         //    ack-drain (consume the cross-half ACK channel: trim acked
@@ -1375,6 +1390,125 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             layer.drain_merge_into(send_layer);
         }
         coord.state.user_priority_staging.clear();
+    }
+
+    /// Phase C / D7 — publish coord-staged explicit user-scope mutations into
+    /// the send-resident scope ledger, preserving `InternalWorldServer`'s direct
+    /// write semantics without reassembling the split engine.
+    fn drain_pending_scope_ledger_ops(coord: &mut CoordHandle<E>, send: &mut SendHandle<E>) {
+        let ops = std::mem::take(&mut coord.state.pending_scope_ledger_ops);
+        if ops.is_empty() {
+            return;
+        }
+
+        for op in ops {
+            match op {
+                PendingScopeLedgerOp::Set {
+                    user_key,
+                    world_entity,
+                    is_contained,
+                } => {
+                    Self::apply_scope_ledger_set(coord, send, &user_key, &world_entity, is_contained);
+                }
+                PendingScopeLedgerOp::RemoveUser { user_key } => {
+                    send.state.entity_scope_map.remove_user(&user_key);
+                }
+            }
+        }
+    }
+
+    fn apply_scope_ledger_set(
+        coord: &mut CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        user_key: &UserKey,
+        world_entity: &E,
+        is_contained: bool,
+    ) {
+        let global_entity = coord
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        let is_authority_holder = coord
+            .shared
+            .global_world_manager
+            .read()
+            .user_is_authority_holder(user_key, &global_entity);
+        if !is_contained && is_authority_holder {
+            let releaser = AuthOwner::Client(*user_key);
+            if coord
+                .shared
+                .global_world_manager
+                .write()
+                .client_release_authority(&global_entity, &releaser)
+                .is_ok()
+            {
+                Self::send_reset_authority_messages(coord, send, &global_entity);
+            }
+        }
+
+        if is_contained {
+            let is_private = coord
+                .shared
+                .global_world_manager
+                .read()
+                .entity_replication_config(&global_entity)
+                .map(|c| matches!(c.publicity, Publicity::Private))
+                .unwrap_or(false);
+            if is_private {
+                let is_owner = match coord
+                    .shared
+                    .global_world_manager
+                    .read()
+                    .entity_owner(&global_entity)
+                {
+                    Some(
+                        EntityOwner::Client(owner_key)
+                        | EntityOwner::ClientWaiting(owner_key)
+                        | EntityOwner::ClientPublic(owner_key),
+                    ) => owner_key == *user_key,
+                    _ => false,
+                };
+                if !is_owner {
+                    return;
+                }
+            }
+        }
+
+        send.state
+            .entity_scope_map
+            .insert(*user_key, global_entity, is_contained);
+        coord.shared.scope_change_queue.lock().push_back(
+            crate::server::scope_change::ScopeChange::ScopeToggled(
+                *user_key,
+                global_entity,
+                is_contained,
+            ),
+        );
+    }
+
+    fn send_reset_authority_messages(
+        coord: &CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        global_entity: &naia_shared::GlobalEntity,
+    ) {
+        for (_user_key, user) in coord.state.user_store.iter() {
+            if let Some(send_conn) = send.state.send_user_connections.get_mut(&user.address()) {
+                if !send_conn
+                    .base
+                    .world_manager
+                    .has_global_entity(global_entity)
+                {
+                    continue;
+                }
+                send_conn
+                    .base
+                    .world_manager
+                    .host_send_set_auth(global_entity, EntityAuthStatus::Available);
+            }
+        }
     }
 
     /// Test-only driver for [`Self::publish_priority`]: runs the REAL publish

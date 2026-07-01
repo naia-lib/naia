@@ -10,6 +10,7 @@
 //!
 //! Phase A.1: stub. A.3 moves existing Then bindings here.
 
+pub mod byte_identity;
 pub mod event_assertions;
 pub mod ordering;
 pub mod state_assertions_delegation;

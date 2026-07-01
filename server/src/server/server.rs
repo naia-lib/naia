@@ -20,8 +20,8 @@ use crate::{
     transport::{PacketChannel, PacketSender},
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
     ConnectEvent, ConnectionStats, DisconnectEvent, EntityOwner, Events, MainEvents,
-    NaiaServerError, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig, TickEvents,
-    UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
+    NaiaServerError, ReceiveOutput, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig,
+    TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
 };
 
 /// The naia server — accepts connections, replicates entities, and routes
@@ -183,6 +183,41 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         // Public API stays by-value; `WorldServer::process_all_packets` takes the
         // world by value and reborrows internally — byte-identical.
         self.world_server.process_all_packets(world, now);
+    }
+
+    /// Receive one tick's worth of inbound traffic and apply it to `world` via
+    /// the unified [`WorldServer`] bracket.
+    ///
+    /// This is the bracket-shaped counterpart to
+    /// [`receive_all_packets`](Server::receive_all_packets) +
+    /// [`process_all_packets`](Server::process_all_packets). It preserves the
+    /// same connection-handshake routing through `MainServer`, then delegates to
+    /// [`WorldServer::receive`] so a pipelined server exercises the split
+    /// coord/recv/send path instead of whole-engine reassembly.
+    pub fn receive<W: WorldMutType<E>>(&mut self, world: W) -> Vec<ReceiveOutput<E>> {
+        let mut main_events = self.main_server.receive();
+
+        for user_key in main_events.read::<ConnectEvent>() {
+            let user_address = self.main_server.user_address(&user_key).unwrap();
+            self.world_server.receive_user(user_key, user_address);
+        }
+
+        for user_key in main_events.read::<crate::events::main_events::QueuedDisconnectEvent>() {
+            self.world_server.user_queue_disconnect(
+                &user_key,
+                naia_shared::DisconnectReason::ClientDisconnected,
+            );
+        }
+
+        let to_world_sender = self.to_world_sender_opt.as_mut().unwrap();
+        for (_, addr, payload) in main_events.read::<WorldPacketEvent>() {
+            if let Err(_e) = to_world_sender.send(&addr, &payload) {
+                main_events.push_error(NaiaServerError::SendError(addr));
+            }
+        }
+
+        self.outstanding_main_events.append(main_events);
+        self.world_server.receive(world)
     }
 
     /// Drains and returns all accumulated world events since the last call.
@@ -382,6 +417,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// not called, clients never receive any updates.
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
         self.world_server.send_all_packets(world);
+    }
+
+    /// Flush one tick's worth of outbound traffic via the unified
+    /// [`WorldServer`] bracket.
+    ///
+    /// This is the bracket-shaped counterpart to
+    /// [`send_all_packets`](Server::send_all_packets). Resident mode is
+    /// byte-identical to `send_all_packets`; pipelined mode drains D0-D9 staged
+    /// operations and sends through the pipelined oracle/worker path.
+    pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+        self.world_server.send(world);
     }
 
     /// MISSION_PIPELINE_API_BOUNDARY G7: a [`crate::pipeline_actors::SendStateView`]

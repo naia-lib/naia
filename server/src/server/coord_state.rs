@@ -53,8 +53,26 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// eviction parity with the resident direct-write path for free. `None`
     /// entries are never created; absent ⇒ no pending per-user writes.
     pub(crate) user_priority_staging: HashMap<UserKey, UserPriorityState<E>>,
+    /// Phase C / D7 — pending explicit user-scope mutations authored on coord
+    /// and published into `SendState.entity_scope_map` immediately before D8
+    /// send-prep. This mirrors `user_priority_staging`: public APIs can enqueue
+    /// without reassembling the split engine, while the D-slot preserves the
+    /// byte-critical send order.
+    pub(crate) pending_scope_ledger_ops: Vec<PendingScopeLedgerOp<E>>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.
     pub(crate) historian: Option<crate::historian::Historian>,
+}
+
+/// Phase C / D7 — concrete scope-ledger mutations staged on coord.
+pub(crate) enum PendingScopeLedgerOp<E> {
+    Set {
+        user_key: UserKey,
+        world_entity: E,
+        is_contained: bool,
+    },
+    RemoveUser {
+        user_key: UserKey,
+    },
 }

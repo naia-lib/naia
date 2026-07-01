@@ -402,6 +402,19 @@ per-gameplay-event reassembly remains.
 4. Once the (b) set is empty, narrow `with_world_server`'s visibility/doc to the
    two surviving monolithic uses (consider renaming to signal "monolithic-only").
 
+### Phase C progress
+- ✅ **D7 scope-ledger staged op landed 2026-07-01** (commit pending at doc update):
+  `user_scope_set_entity` / `user_scope_remove_user` now enqueue coord-side
+  `PendingScopeLedgerOp`s and drain in D7 before send-prep. Liveness re-verified
+  against cyberlith production usage in `services/game/cell/src/send_helpers.rs`
+  (`user_scope_mut().include/exclude`), so the class remains **(b) CONVERT**
+  rather than reclassified. Added a namako primary-surface scenario
+  `[pipeline-d7-scope-ledger-01]` plus the Rust contract test
+  `phase_c_d7_scope_ledger_resident_pipelined_oracle_byte_identity`, both
+  asserting resident ≡ pipelined-oracle server-to-client byte equality for
+  explicit scope exclude/include. Verification: naia workspace GREEN; namako
+  lint/gate GREEN; cyberlith moat GREEN ×10.
+
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
   equality namako specs GREEN. Moat GREEN ×10 (determinism under repetition).
@@ -562,8 +575,8 @@ Convert to a coord fast-path (no reassembly) if the state is coord-resident.
 | `world_server_enum.rs:698` | `mark_all_scope_checks_pending` | same |
 
 ### (b) CONVERT — send-resident mutations → D-slot staged coord-side ops
-Grouped by class = the PR unit (Step 3 order: messages → scope → resource →
-lifecycle/registration → authority/delegation → historian). Each class: add a
+Grouped by class = the PR unit (Step 3 order: scope-ledger → resource →
+registration → lifecycle → authority/delegation → historian → messages). Each class: add a
 coord-side pending queue (mirror `publish_priority`), drain in its D-slot, add a
 resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 
@@ -574,8 +587,8 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `world_server_enum.rs:651` | `send_request` | messages → D6 |
 | `world_server_enum.rs:665` | `send_response` | messages → D6 |
 | `sim_pipeline.rs:1102` | `room_broadcast_message` | messages → D6 |
-| `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** |
-| `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 |
+| `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** ✅ DONE 2026-07-01 (commit pending); live in cyberlith `send_helpers.rs` |
+| `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 ✅ DONE 2026-07-01 (commit pending); same staged queue |
 | `world_server_enum.rs:770` | `insert_resource` | **resource → D2** |
 | `world_server_enum.rs:780` | `remove_resource` | resource → D2 |
 | `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** |

@@ -40,16 +40,26 @@
 
 #![allow(unused_imports)]
 
-use std::time::Duration;
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
-use naia_client::{ClientConfig, JitterBufferType};
-use naia_server::{ReplicationConfig, ServerConfig};
-use naia_shared::{ComponentKind, Replicate, SnapshotWorld, WorldRefType};
+use naia_client::{
+    transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket},
+    Client, ClientConfig, JitterBufferType,
+};
+use naia_server::{
+    transport::local::{LocalServerSocket, Socket as ServerSocket},
+    ConnectEvent, ReplicationConfig, Server, ServerConfig, ServerMode,
+};
+use naia_shared::{
+    transport::local::LocalTransportHub, ComponentKind, Instant, Replicate, SnapshotWorld,
+    TestClock, WorldMutType, WorldRefType,
+};
 
 use naia_test_harness::{
-    protocol, Auth, ClientKey, EntityKey, ExpectResult, Position, Scenario, TestEntity,
+    protocol, Auth, ClientKey, EntityKey, ExpectResult, Position, Scenario, TestEntity, TestWorld,
     TraceDirection, TracePacket,
 };
+use parking_lot::Mutex;
 
 mod _helpers;
 use _helpers::client_connect;
@@ -119,6 +129,10 @@ fn client_config() -> ClientConfig {
     c.send_handshake_interval = Duration::from_millis(0);
     c.jitter_buffer = JitterBufferType::Bypass;
     c
+}
+
+fn direct_server_config() -> ServerConfig {
+    ServerConfig::default()
 }
 
 /// Identical setup for both modes: connect one client, spawn NUM_ENTITIES
@@ -452,6 +466,155 @@ fn hexdump(label: &str, packets: &[Vec<u8>]) {
         let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
         println!("      [{i}] len={:>3}  {hex}", b.len());
     }
+}
+
+struct DirectScopeRun {
+    hub: LocalTransportHub,
+    server: Server<TestEntity>,
+    server_world: TestWorld,
+    client: Client<TestEntity>,
+    client_world: TestWorld,
+}
+
+impl DirectScopeRun {
+    fn new(mode: ServerMode) -> Self {
+        TestClock::init(0);
+        let server_addr: SocketAddr = "127.0.0.1:54590".parse().unwrap();
+        let hub = LocalTransportHub::new(server_addr);
+
+        let mut server = Server::new(mode, direct_server_config(), protocol());
+        let server_socket = ServerSocket::new(LocalServerSocket::new(hub.clone()), None);
+        server.listen(server_socket);
+
+        let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =
+            hub.register_client();
+        let addr_cell = LocalAddrCell::new();
+        addr_cell.set_sync(hub.server_addr());
+        let identity_token = Arc::new(Mutex::new(None));
+        let rejection_code = Arc::new(Mutex::new(None));
+        let inner_socket = LocalClientSocket::new_with_tokens(
+            client_addr,
+            hub.server_addr(),
+            auth_req_tx,
+            auth_resp_rx,
+            client_data_tx,
+            client_data_rx,
+            addr_cell,
+            identity_token,
+            rejection_code,
+        );
+        let socket = ClientSocket::new(inner_socket, None);
+        let mut client = Client::new(client_config(), protocol());
+        client.auth(Auth::new("user", "password"));
+        client.connect(socket);
+
+        Self {
+            hub,
+            server,
+            server_world: TestWorld::default(),
+            client,
+            client_world: TestWorld::default(),
+        }
+    }
+
+    fn tick_classic(&mut self) {
+        TestClock::advance(16);
+        let now = Instant::now();
+        self.hub.process_time_queues();
+
+        self.client.receive_all_packets();
+        self.client
+            .process_all_packets(self.client_world.proxy_mut(), &now);
+        self.client.send_all_packets(self.client_world.proxy_mut());
+
+        self.server.receive_all_packets();
+        self.server
+            .process_all_packets(self.server_world.proxy_mut(), &now);
+        self.server.send_all_packets(self.server_world.proxy());
+    }
+
+    fn tick_bracket(&mut self) {
+        TestClock::advance(16);
+        let now = Instant::now();
+        self.hub.process_time_queues();
+
+        self.client.receive_all_packets();
+        self.client
+            .process_all_packets(self.client_world.proxy_mut(), &now);
+        self.client.send_all_packets(self.client_world.proxy_mut());
+
+        self.server.receive(self.server_world.proxy_mut());
+        self.server.send(self.server_world.proxy());
+    }
+
+    fn connect(&mut self) -> naia_server::UserKey {
+        for _ in 0..64 {
+            self.tick_classic();
+            let mut events = self.server.take_world_events();
+            let auths: Vec<_> = events
+                .read::<naia_server::AuthEvent<Auth>>()
+                .map(|(user_key, _auth)| user_key)
+                .collect();
+            for user_key in auths {
+                self.server.accept_connection(&user_key);
+            }
+            if let Some(user_key) = events.read::<ConnectEvent>().next() {
+                return user_key;
+            }
+        }
+        panic!("client did not connect");
+    }
+
+    fn setup_scoped_entity(&mut self, user_key: &naia_server::UserKey) -> TestEntity {
+        let room_key = self.server.create_room().key();
+        self.server.room_mut(&room_key).add_user(user_key);
+        let entity = self.server_world.proxy_mut().spawn_entity();
+        self.server
+            .entity_mut(self.server_world.proxy_mut(), &entity)
+            .enable_replication()
+            .configure_replication(ReplicationConfig::public())
+            .enter_room(&room_key);
+
+        for _ in 0..32 {
+            self.tick_classic();
+        }
+        entity
+    }
+
+    fn scope_trace(mut self) -> Vec<Vec<u8>> {
+        let user_key = self.connect();
+        let entity = self.setup_scoped_entity(&user_key);
+        self.hub.enable_packet_recording();
+
+        self.server.user_scope_mut(&user_key).exclude(&entity);
+        self.tick_bracket();
+        self.tick_bracket();
+        self.server.user_scope_mut(&user_key).include(&entity);
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect()
+    }
+}
+
+#[test]
+fn phase_c_d7_scope_ledger_resident_pipelined_oracle_byte_identity() {
+    let resident = DirectScopeRun::new(ServerMode::Resident).scope_trace();
+    let pipelined = DirectScopeRun::new(ServerMode::Pipelined).scope_trace();
+
+    hexdump("D7 RESIDENT ", &resident);
+    hexdump("D7 PIPELINED", &pipelined);
+
+    assert_eq!(
+        resident, pipelined,
+        "Phase C D7: explicit user-scope exclude/include must emit byte-identical \
+         server-to-client packets through resident and the real pipelined-oracle \
+         WorldServer::send bracket"
+    );
 }
 
 #[test]

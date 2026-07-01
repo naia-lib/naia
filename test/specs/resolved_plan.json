@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "cdcf5eb72c1e62634051ee6240dc5ea14204785ee813c8cfbb54b600eda810fa",
-    "step_registry_hash": "ab98251f4a326da47bdba3c25b8525667b133b020eb92144a8b53bb117e276ae",
-    "resolved_plan_hash": "88be121c354f765fe0d0836c849e9f88d21814b7a0cccd5e7e7abb22b830e6a8"
+    "feature_fingerprint_hash": "10c2b5968dfef8ad35369337f0ec76156977860aba0027b71177c4efb8504935",
+    "step_registry_hash": "8ca7ffa4e3d0e608019917225c9f553238a533d321661c62f51de5324bb147cf",
+    "resolved_plan_hash": "fa22549f0caf8426068fd916a402d4638c2e4b03dd80c300d333611dd2f4729c"
   },
   "scenarios": [
     {
@@ -13259,6 +13259,22 @@
     {
       "scenario_key": "messaging:Rule(04):Scenario(14)",
       "feature_path": "features/02_messaging.feature",
+      "scenario_name": "[messaging-16b] Large request/response bodies are fragmented and reassembled transparently",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        }
+      ]
+    },
+    {
+      "scenario_key": "messaging:Rule(04):Scenario(15)",
+      "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-17] OrderedReliable channel deduplicates retransmitted messages",
       "steps": [
         {
@@ -13309,7 +13325,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(15)",
+      "scenario_key": "messaging:Rule(04):Scenario(16)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-18] EntityProperty message buffering",
       "steps": [
@@ -13370,7 +13386,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(16)",
+      "scenario_key": "messaging:Rule(04):Scenario(17)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-19] EntityProperty message TTL",
       "steps": [
@@ -13386,7 +13402,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(17)",
+      "scenario_key": "messaging:Rule(04):Scenario(18)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-20] EntityProperty buffer caps with FIFO eviction",
       "steps": [
@@ -13456,7 +13472,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(18)",
+      "scenario_key": "messaging:Rule(04):Scenario(19)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-23] Unanswered request does not crash the client",
       "steps": [
@@ -13508,7 +13524,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(19)",
+      "scenario_key": "messaging:Rule(04):Scenario(20)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-24] Client disconnect cancels its pending requests without panic",
       "steps": [
@@ -13571,7 +13587,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(20)",
+      "scenario_key": "messaging:Rule(04):Scenario(21)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-25] Deduplicated request delivers exactly one response",
       "steps": [
@@ -13632,7 +13648,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(21)",
+      "scenario_key": "messaging:Rule(04):Scenario(22)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-26] Requests on ordered channel are received by the server",
       "steps": [
@@ -13693,7 +13709,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(22)",
+      "scenario_key": "messaging:Rule(04):Scenario(23)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-27] Client can send a fire-and-forget request without panic",
       "steps": [
@@ -13745,7 +13761,7 @@
       ]
     },
     {
-      "scenario_key": "messaging:Rule(04):Scenario(23)",
+      "scenario_key": "messaging:Rule(04):Scenario(24)",
       "feature_path": "features/02_messaging.feature",
       "scenario_name": "[messaging-28] TickBuffered input arrives at correct server tick under 10% packet loss",
       "steps": [
@@ -19854,6 +19870,31 @@
           "docstring": null,
           "datatable": null,
           "payload_hash": "1a72430b911b29e3cc718884447d1b46ed43c099f8a57b2d28b71230d394d05d"
+        }
+      ]
+    },
+    {
+      "scenario_key": "visibility:Rule(20):Scenario(01)",
+      "feature_path": "features/04_visibility.feature",
+      "scenario_name": "[pipeline-d7-scope-ledger-01] Pipelined scope include/exclude bytes match resident oracle",
+      "steps": [
+        {
+          "effective_kind": "Given",
+          "step_text": "a server is running",
+          "binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "dfc3012a27ccfa8e104adbfe0e5d5c806737ceb9bac9922d7a1cdd88acd67b68"
+        },
+        {
+          "effective_kind": "Then",
+          "step_text": "pipelined D7 scope-ledger bytes match the resident oracle",
+          "binding_id": "9d3f41cbd580dc4ee179076f2fc9dfe0fb9317b79bc245d10f9c9f91db0ba8aa",
+          "captures": [],
+          "docstring": null,
+          "datatable": null,
+          "payload_hash": "f349984854d5e12705a10fcf216662dcdf246e43298f82064171f6298d9d6583"
         }
       ]
     }
