@@ -272,8 +272,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => {
-                let (_auth_tx, _auth_rx, ps, pr) =
-                    crate::transport::Socket::listen(socket.into());
+                let (_auth_tx, _auth_rx, ps, pr) = crate::transport::Socket::listen(socket.into());
                 ws.io_load(ps, pr);
             }
             WorldServerImpl::Pipelined(ps) => ps.listen(socket),
@@ -291,7 +290,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.io_load(sender, receiver),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.io_load(sender, receiver)),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_world_server(|ws| ws.io_load(sender, receiver))
+            }
         }
     }
 
@@ -711,9 +712,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => {
                 ws.configure_entity_replication(world, world_entity, config)
             }
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.configure_entity_replication(world, world_entity, config))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| {
+                ws.configure_entity_replication(world, world_entity, config)
+            }),
         }
     }
 
@@ -741,9 +742,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => {
                 ws.remove_component_worldless(world_entity, component_kind)
             }
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.remove_component_worldless(world_entity, component_kind))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| {
+                ws.remove_component_worldless(world_entity, component_kind)
+            }),
         }
     }
 
@@ -766,19 +767,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> Result<E, ResourceAlreadyExists> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.insert_resource(world, value, is_static),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.insert_resource(world, value, is_static))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.insert_resource(world, value, is_static),
         }
     }
 
     /// Remove the resource of type `R` if present.
-    pub fn remove_resource<W: WorldMutType<E>, R: ReplicatedComponent>(&mut self, world: W) -> bool {
+    pub fn remove_resource<W: WorldMutType<E>, R: ReplicatedComponent>(
+        &mut self,
+        world: W,
+    ) -> bool {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.remove_resource::<W, R>(world),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.remove_resource::<W, R>(world))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.remove_resource::<W, R>(world),
         }
     }
 
@@ -1392,9 +1392,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// the handle out (while workers are parked) to inject/drain tick-buffer
     /// messages directly. Panics on a resident server.
     #[doc(hidden)]
-    pub fn recv_slot(
-        &self,
-    ) -> std::sync::Arc<parking_lot::Mutex<Option<crate::RecvHandle<E>>>> {
+    pub fn recv_slot(&self) -> std::sync::Arc<parking_lot::Mutex<Option<crate::RecvHandle<E>>>> {
         match &self.inner {
             WorldServerImpl::Pipelined(ps) => ps.recv_slot(),
             WorldServerImpl::Resident(_) => {
@@ -1432,10 +1430,7 @@ impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter
         WorldServer::global_entity_to_entity(self, global_entity)
     }
 
-    fn entity_to_global_entity(
-        &self,
-        entity: &E,
-    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+    fn entity_to_global_entity(&self, entity: &E) -> Result<GlobalEntity, EntityDoesNotExistError> {
         WorldServer::entity_to_global_entity(self, entity)
     }
 }

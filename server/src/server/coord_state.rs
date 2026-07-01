@@ -16,7 +16,9 @@
 
 use std::{collections::HashMap, hash::Hash};
 
-use naia_shared::{GlobalPriorityState, ResourceRegistry, UserPriorityState};
+use naia_shared::{
+    GlobalEntity, GlobalEntityIndex, GlobalPriorityState, ResourceRegistry, UserPriorityState,
+};
 
 use crate::request::{GlobalRequestManager, GlobalResponseManager};
 use crate::user::UserKey;
@@ -59,6 +61,10 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// without reassembling the split engine, while the D-slot preserves the
     /// byte-critical send order.
     pub(crate) pending_scope_ledger_ops: Vec<PendingScopeLedgerOp<E>>,
+    /// Phase C / D2 — pending replicated-resource send-side publication and
+    /// cleanup authored by the coord/world half of `insert_resource` and
+    /// `remove_resource`.
+    pub(crate) pending_resource_ops: Vec<PendingResourceOp<E>>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.
@@ -74,5 +80,18 @@ pub(crate) enum PendingScopeLedgerOp<E> {
     },
     RemoveUser {
         user_key: UserKey,
+    },
+}
+
+/// Phase C / D2 — concrete resource mutations staged on coord.
+pub(crate) enum PendingResourceOp<E> {
+    AutoScopeUsers {
+        user_keys: Vec<UserKey>,
+        world_entity: E,
+    },
+    Remove {
+        world_entity: E,
+        global_entity: GlobalEntity,
+        entity_idx: GlobalEntityIndex,
     },
 }

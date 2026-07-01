@@ -1714,6 +1714,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             &user_key,
                             global_entity,
                             world_entity,
+                            false,
                         );
                     }
                 }
@@ -1809,6 +1810,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             user_key,
                             &global_entity,
                             &world_entity,
+                            false,
                         );
                     }
                 }
@@ -1828,6 +1830,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         &user_key,
                         &global_entity,
                         &world_entity,
+                        false,
                     );
                 }
                 ScopeChange::RoomChange(_) | ScopeChange::ConfigureReplication(_) => {
@@ -1847,22 +1850,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     ///
     /// Two contract deviations vs legacy:
     ///
-    /// 1. `resource_registry` lives on `CoordinatorState`; not reachable
-    ///    from `SendState`. Replicated resources publish via their own
-    ///    code path (server/src/server/world_server.rs §RESOURCES_PLAN)
-    ///    and are NOT exercised by the cyberlith pipeline's
-    ///    `apply_pending_scope_changes` call (the legacy InternalWorldServer
-    ///    `send_all_packets` path still runs `drain_scope_change_queue`
-    ///    with the live registry). Treating `is_resource` as `false`
-    ///    here is safe for the pipeline-mode caller: it only flips the
-    ///    "in scope for all users regardless of room" override, which
-    ///    is independently published by the resource path.
+    /// 1. `resource_registry` lives on `CoordinatorState`; generic scope-change
+    ///    drains pass `is_resource = false`. Phase C / D2 resource staging uses
+    ///    [`Self::apply_resource_scope_for_user`] to pass `is_resource = true`
+    ///    for resource carrier publication.
     ///
     /// 2. On `!world.has_entity(world_entity)` the legacy version
     ///    re-queues a `ScopeToggled(user, entity, true)` so the entity
     ///    enters scope next tick. Same behavior here — push onto
     ///    `scope_change_queue` for the next tick's drain.
     #[allow(clippy::too_many_lines)]
+    pub(crate) fn apply_resource_scope_for_user<W: WorldRefType<E>>(
+        &mut self,
+        world: &W,
+        user_key: &UserKey,
+        global_entity: &GlobalEntity,
+        world_entity: &E,
+    ) {
+        let user_addresses: HashMap<UserKey, SocketAddr> = self
+            .send_user_connections
+            .iter()
+            .map(|(addr, conn)| (conn.user_key, *addr))
+            .collect();
+        self.apply_scope_for_user(
+            world,
+            &user_addresses,
+            user_key,
+            global_entity,
+            world_entity,
+            true,
+        );
+    }
+
     fn apply_scope_for_user<W: WorldRefType<E>>(
         &mut self,
         world: &W,
@@ -1870,6 +1889,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         user_key: &UserKey,
         global_entity: &GlobalEntity,
         world_entity: &E,
+        is_resource: bool,
     ) {
         // Resolve dense GlobalEntityIndex before any mutable borrows.
         let entity_idx = {
@@ -1995,9 +2015,6 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 false
             };
         let explicit = self.entity_scope_map.get(user_key, global_entity).copied();
-        // See doc-comment deviation #1: resource_registry not reachable
-        // here; treat as `false`. Resources publish via their own path.
-        let is_resource = false;
         let entity_is_roomless = self
             .entity_room_map
             .entity_get_rooms(global_entity)

@@ -56,8 +56,8 @@ use naia_shared::{
 };
 
 use naia_test_harness::{
-    protocol, Auth, ClientKey, EntityKey, ExpectResult, Position, Scenario, TestEntity, TestWorld,
-    TraceDirection, TracePacket,
+    protocol, Auth, ClientKey, EntityKey, ExpectResult, Position, Scenario, TestEntity, TestScore,
+    TestWorld, TraceDirection, TracePacket,
 };
 use parking_lot::Mutex;
 
@@ -306,7 +306,7 @@ fn g9pre_freeze_isolates_transmit_from_concurrent_mutation() {
         apply_mutations(&mut scenario, &entities, &frozen_case);
         let snap = snapshot_of(&mut scenario, &entities, &frozen_case); // captures FROZEN
         let plan = scenario.prepare_send_job(); // freeze point: mask captured + live mask cleared
-        // Concurrent next-tick mutation — must NOT appear on the wire this tick.
+        // Concurrent next-tick mutation must not appear on the wire this tick.
         let live_after = Case {
             label: "live after freeze",
             mutations: vec![EntityMutation {
@@ -383,7 +383,10 @@ fn g9pre_core_assembler_byte_identity() {
                 mismatches
             ));
         } else {
-            println!("    ✓ byte-identical via core assembler ({} packet(s))", r.len());
+            println!(
+                "    ✓ byte-identical via core assembler ({} packet(s))",
+                r.len()
+            );
         }
     }
 
@@ -599,6 +602,28 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect()
     }
+
+    fn resource_trace(mut self) -> Vec<Vec<u8>> {
+        let _user_key = self.connect();
+        self.hub.enable_packet_recording();
+
+        self.server
+            .insert_resource(self.server_world.proxy_mut(), TestScore::new(7, 3), false)
+            .expect("resource insert must succeed");
+        self.tick_bracket();
+        self.tick_bracket();
+        assert!(self
+            .server
+            .remove_resource::<_, TestScore>(self.server_world.proxy_mut()));
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect()
+    }
 }
 
 #[test]
@@ -612,6 +637,22 @@ fn phase_c_d7_scope_ledger_resident_pipelined_oracle_byte_identity() {
     assert_eq!(
         resident, pipelined,
         "Phase C D7: explicit user-scope exclude/include must emit byte-identical \
+         server-to-client packets through resident and the real pipelined-oracle \
+         WorldServer::send bracket"
+    );
+}
+
+#[test]
+fn phase_c_d2_resource_resident_pipelined_oracle_byte_identity() {
+    let resident = DirectScopeRun::new(ServerMode::Resident).resource_trace();
+    let pipelined = DirectScopeRun::new(ServerMode::Pipelined).resource_trace();
+
+    hexdump("D2 RESIDENT ", &resident);
+    hexdump("D2 PIPELINED", &pipelined);
+
+    assert_eq!(
+        resident, pipelined,
+        "Phase C D2: resource insert/remove must emit byte-identical \
          server-to-client packets through resident and the real pipelined-oracle \
          WorldServer::send bracket"
     );

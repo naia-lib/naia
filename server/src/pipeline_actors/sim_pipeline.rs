@@ -32,15 +32,20 @@
 use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
-use parking_lot::Mutex;
 use naia_shared::{
     ChannelKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityPriorityMut, EntityPriorityRef, Message, Protocol, Tick, WorldMutType, WorldRefType,
+    EntityPriorityMut, EntityPriorityRef, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner,
+    GlobalWorldManagerType, Message, Protocol, Replicate, ReplicatedComponent,
+    ResourceAlreadyExists, Tick, WorldMutType, WorldRefType,
 };
+use parking_lot::Mutex;
 
 use crate::{
     room::RoomKey,
-    server::{coord_state::PendingScopeLedgerOp, ServerShared},
+    server::{
+        coord_state::{PendingResourceOp, PendingScopeLedgerOp},
+        ServerShared,
+    },
     user::UserKey,
     world::server_auth_handler::AuthOwner,
     EntityOwner, InternalWorldServer, Publicity, ReceiveOutput, RecvHandle, ReplicationConfig,
@@ -123,11 +128,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let ws = InternalWorldServer::<E>::new(server_config, protocol);
         let (coord_state, recv, send) = ws.into_pipeline_handles();
         let shared: Arc<ServerShared<E>> = Arc::clone(&recv.state.shared);
-        let coord = CoordHandle { state: coord_state, shared };
+        let coord = CoordHandle {
+            state: coord_state,
+            shared,
+        };
         Self::from_handles(coord, recv, send)
     }
 
-    pub(super) fn from_handles(coord: CoordHandle<E>, recv: RecvHandle<E>, send: SendHandle<E>) -> Self {
+    pub(super) fn from_handles(
+        coord: CoordHandle<E>,
+        recv: RecvHandle<E>,
+        send: SendHandle<E>,
+    ) -> Self {
         Self {
             coord: Some(coord),
             recv_slot: Arc::new(Mutex::new(Some(recv))),
@@ -174,12 +186,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
     /// [`Self::with_world_server`] — both restore it before returning).
     pub fn coord(&self) -> &CoordHandle<E> {
-        self.coord.as_ref().expect("PipelinedWorldServer: CoordHandle temporarily unavailable")
+        self.coord
+            .as_ref()
+            .expect("PipelinedWorldServer: CoordHandle temporarily unavailable")
     }
 
     /// Mutably borrow the coordination handle.
     pub fn coord_mut(&mut self) -> &mut CoordHandle<E> {
-        self.coord.as_mut().expect("PipelinedWorldServer: CoordHandle temporarily unavailable")
+        self.coord
+            .as_mut()
+            .expect("PipelinedWorldServer: CoordHandle temporarily unavailable")
     }
 
     /// `Arc` clone of the recv worker's park-window slot.
@@ -218,9 +234,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // slot empty; re-panic with the true payload before the misleading
         // "park workers before calling tick()" expects fire.
         self.propagate_panic_if_any();
-        let mut coord = self.coord.take().expect(
-            "PipelinedWorldServer::tick: CoordHandle not available — re-entrant tick?",
-        );
+        let mut coord = self
+            .coord
+            .take()
+            .expect("PipelinedWorldServer::tick: CoordHandle not available — re-entrant tick?");
         let recv = self.recv_slot.lock().take().expect(
             "PipelinedWorldServer::tick: RecvHandle not in slot — park workers before calling tick()",
         );
@@ -237,7 +254,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // Destructure to release the `coord` borrow (ctx.coord = &mut coord) before
         // moving coord back into the Option slot. The reference fields (coord, world)
         // are bound to `_` and dropped here, expiring their borrows.
-        let TickCtx { coord: _, recv: recv_out, send: send_out, world: _ } = ctx;
+        let TickCtx {
+            coord: _,
+            recv: recv_out,
+            send: send_out,
+            world: _,
+        } = ctx;
         self.coord = Some(coord);
         *self.recv_slot.lock() = Some(recv_out);
         *self.send_slot.lock() = Some(send_out);
@@ -250,7 +272,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// `SendHandleRes`). MUST be followed by [`Self::restore_coord`] before the
     /// pipeline is used again.
     pub fn take_coord(&mut self) -> CoordHandle<E> {
-        self.coord.take().expect("PipelinedWorldServer::take_coord: CoordHandle not available")
+        self.coord
+            .take()
+            .expect("PipelinedWorldServer::take_coord: CoordHandle not available")
     }
 
     /// Restore a coordination handle previously taken by [`Self::take_coord`].
@@ -282,9 +306,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // ("park workers first"). Surface the true worker-panic payload first
         // so the diagnostic points at the real fault (runtime.rs park docs).
         self.propagate_panic_if_any();
-        let coord = self.coord.take().expect(
-            "PipelinedWorldServer::take_handles: CoordHandle not available",
-        );
+        let coord = self
+            .coord
+            .take()
+            .expect("PipelinedWorldServer::take_handles: CoordHandle not available");
         let recv = self.recv_slot.lock().take().expect(
             "PipelinedWorldServer::take_handles: RecvHandle not in slot — park workers first",
         );
@@ -295,7 +320,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Restore handles previously taken by [`Self::take_handles`].
-    pub fn restore_handles(&mut self, coord: CoordHandle<E>, recv: RecvHandle<E>, send: SendHandle<E>) {
+    pub fn restore_handles(
+        &mut self,
+        coord: CoordHandle<E>,
+        recv: RecvHandle<E>,
+        send: SendHandle<E>,
+    ) {
         self.coord = Some(coord);
         *self.recv_slot.lock() = Some(recv);
         *self.send_slot.lock() = Some(send);
@@ -450,15 +480,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         &mut self,
         f: impl FnOnce(&mut crate::InternalWorldServer<E>) -> R,
     ) -> R {
-        let coord = self.coord.take().expect(
-            "PipelinedWorldServer::with_world_server: CoordHandle not available",
-        );
-        let recv = self.recv_slot.lock().take().expect(
-            "PipelinedWorldServer::with_world_server: RecvHandle not in slot",
-        );
-        let send = self.send_slot.lock().take().expect(
-            "PipelinedWorldServer::with_world_server: SendHandle not in slot",
-        );
+        let coord = self
+            .coord
+            .take()
+            .expect("PipelinedWorldServer::with_world_server: CoordHandle not available");
+        let recv = self
+            .recv_slot
+            .lock()
+            .take()
+            .expect("PipelinedWorldServer::with_world_server: RecvHandle not in slot");
+        let send = self
+            .send_slot
+            .lock()
+            .take()
+            .expect("PipelinedWorldServer::with_world_server: SendHandle not in slot");
 
         let coord_state = coord.state;
         let mut ws = InternalWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
@@ -466,7 +501,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let (coord_state, recv_state, send_state) = ws.into_pipeline_states();
         let shared = Arc::clone(&recv_state.shared);
 
-        self.coord = Some(CoordHandle { state: coord_state, shared });
+        self.coord = Some(CoordHandle {
+            state: coord_state,
+            shared,
+        });
         *self.recv_slot.lock() = Some(RecvHandle { state: recv_state });
         *self.send_slot.lock() = Some(SendHandle { state: send_state });
 
@@ -505,10 +543,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Forwards to [`CoordHandle::entity_replication_config`].
-    pub fn entity_replication_config(
-        &self,
-        world_entity: &E,
-    ) -> Option<crate::ReplicationConfig> {
+    pub fn entity_replication_config(&self, world_entity: &E) -> Option<crate::ReplicationConfig> {
         self.coord().entity_replication_config(world_entity)
     }
 
@@ -681,6 +716,89 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord().resource_authority_status::<R>()
     }
 
+    /// Insert a Replicated Resource without reassembling the split engine.
+    ///
+    /// The hidden entity and component records are coord/world work and happen
+    /// synchronously so the API can return the carrier entity exactly like the
+    /// resident path. The per-user resource publication is staged into D2, before
+    /// later lifecycle/authority/host-sync/send phases.
+    pub fn insert_resource<W, R>(
+        &mut self,
+        mut world: W,
+        value: R,
+        is_static: bool,
+    ) -> Result<E, ResourceAlreadyExists>
+    where
+        W: WorldMutType<E>,
+        R: ReplicatedComponent,
+    {
+        let world_entity = world.spawn_entity();
+        let (global_entity, entity_idx) =
+            Self::spawn_resource_entity(self.coord_mut(), &world_entity, is_static);
+
+        if let Err(error) = self
+            .coord_mut()
+            .state
+            .resource_registry
+            .insert::<R>(global_entity)
+        {
+            Self::remove_coord_resource_entity(self.coord_mut(), &global_entity, entity_idx);
+            world.despawn_entity(&world_entity);
+            return Err(error);
+        }
+
+        let mut component = value;
+        Self::insert_resource_component_record(self.coord_mut(), &global_entity, &mut component);
+        world.insert_component(&world_entity, component);
+
+        let user_keys = self.coord().state.user_store.keys_copied();
+        self.coord_mut()
+            .state
+            .pending_resource_ops
+            .push(PendingResourceOp::AutoScopeUsers {
+                user_keys,
+                world_entity,
+            });
+
+        Ok(world_entity)
+    }
+
+    /// Remove a Replicated Resource without reassembling the split engine.
+    ///
+    /// The registry removal and world despawn remain synchronous. Send-resident
+    /// connection/scope/priority cleanup is staged into D2 and drained before
+    /// send-prep.
+    pub fn remove_resource<W, R>(&mut self, mut world: W) -> bool
+    where
+        W: WorldMutType<E>,
+        R: ReplicatedComponent,
+    {
+        let Some(global_entity) = self.coord_mut().state.resource_registry.remove::<R>() else {
+            return false;
+        };
+        let world_entity = match self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .global_entity_to_entity(&global_entity)
+        {
+            Ok(entity) => entity,
+            Err(_) => return true,
+        };
+        let entity_idx = Self::entity_global_idx(self.coord(), &global_entity);
+        self.coord_mut()
+            .state
+            .pending_resource_ops
+            .push(PendingResourceOp::Remove {
+                world_entity,
+                global_entity,
+                entity_idx,
+            });
+        world.despawn_entity(&world_entity);
+        true
+    }
+
     /// Forwards to [`CoordHandle::global_entity_to_entity`].
     pub fn global_entity_to_entity(
         &self,
@@ -818,10 +936,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     pub fn rtt(&self, user_key: &UserKey) -> Option<f32> {
         let addr = self.coord().user_address(user_key)?;
         let recv = self.recv_slot.lock();
-        let recv = recv
-            .as_ref()
-            .expect("PipelinedWorldServer::rtt: RecvHandle not in slot — read between receive() and send()");
-        Some(recv.state.recv_user_connections.get(&addr)?.ping_manager.rtt_average)
+        let recv = recv.as_ref().expect(
+            "PipelinedWorldServer::rtt: RecvHandle not in slot — read between receive() and send()",
+        );
+        Some(
+            recv.state
+                .recv_user_connections
+                .get(&addr)?
+                .ping_manager
+                .rtt_average,
+        )
     }
 
     /// Average jitter to the given user's client, or `None` if not connected.
@@ -831,7 +955,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let recv = recv
             .as_ref()
             .expect("PipelinedWorldServer::jitter: RecvHandle not in slot — read between receive() and send()");
-        Some(recv.state.recv_user_connections.get(&addr)?.ping_manager.jitter_average)
+        Some(
+            recv.state
+                .recv_user_connections
+                .get(&addr)?
+                .ping_manager
+                .jitter_average,
+        )
     }
 
     /// Per-connection diagnostics for the given user, or `None` if not connected.
@@ -948,7 +1078,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// parked send handle). Mirror the fused [`InternalWorldServer`] readers.
     #[cfg(feature = "test_utils")]
     pub fn diff_handler_global_count(&self) -> usize {
-        self.coord().shared.global_world_manager.read().global_diff_handler_count()
+        self.coord()
+            .shared
+            .global_world_manager
+            .read()
+            .global_diff_handler_count()
     }
 
     /// Test-only: per-component-kind global diff-handler counts (coord `shared`).
@@ -956,7 +1090,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     pub fn diff_handler_global_count_by_kind(
         &self,
     ) -> std::collections::HashMap<naia_shared::ComponentKind, usize> {
-        self.coord().shared.global_world_manager.read().global_diff_handler_count_by_kind()
+        self.coord()
+            .shared
+            .global_world_manager
+            .read()
+            .global_diff_handler_count_by_kind()
     }
 
     /// Test-only: per-user diff-handler receiver counts (parked send handle).
@@ -1084,7 +1222,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Include/exclude `world_entity` in `user_key`'s explicit scope.
     /// Send-resident (`send.entity_scope_map` + `scope_change_queue`); staged
     /// on coord and drained in D7 before send-prep.
-    pub fn user_scope_set_entity(&mut self, user_key: &UserKey, world_entity: &E, is_contained: bool) {
+    pub fn user_scope_set_entity(
+        &mut self,
+        user_key: &UserKey,
+        world_entity: &E,
+        is_contained: bool,
+    ) {
         self.coord_mut()
             .state
             .pending_scope_ledger_ops
@@ -1101,7 +1244,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord_mut()
             .state
             .pending_scope_ledger_ops
-            .push(PendingScopeLedgerOp::RemoveUser { user_key: *user_key });
+            .push(PendingScopeLedgerOp::RemoveUser {
+                user_key: *user_key,
+            });
     }
 
     /// Broadcast a message to all users in `room_key`. Reaches send state
@@ -1290,6 +1435,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // D1 entity-replication registrations (spawn_replicated/enable_replication)
         //    — queue introduced by G4/G5. Must drain before resource & host-sync.
         // D2 resource-replication registrations (Res<R> carriers) — G6. Before host-sync.
+        Self::drain_pending_resource_ops(coord, send, world);
         // D3 lifecycle (despawn/insert/remove) — G4/G5. After spawns, before authority.
         // D4 authority/editor ops (take_authority) — G5b. Before host-sync.
         // D5 host-sync (change-detection → repl config) — G6b. After all entity mutations.
@@ -1392,6 +1538,228 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         coord.state.user_priority_staging.clear();
     }
 
+    fn spawn_resource_entity(
+        coord: &mut CoordHandle<E>,
+        world_entity: &E,
+        is_static: bool,
+    ) -> (GlobalEntity, GlobalEntityIndex) {
+        let global_entity = coord
+            .shared
+            .global_entity_map
+            .write()
+            .spawn(*world_entity, None);
+        let entity_idx = if is_static {
+            coord
+                .shared
+                .global_world_manager
+                .write()
+                .insert_static_entity_record(&global_entity, EntityOwner::Server)
+        } else {
+            coord
+                .shared
+                .global_world_manager
+                .write()
+                .insert_entity_record(&global_entity, EntityOwner::Server)
+        };
+        if entity_idx.is_valid() {
+            coord.shared.idx_to_world.write()[entity_idx.as_usize()] = Some(*world_entity);
+        }
+        (global_entity, entity_idx)
+    }
+
+    fn remove_coord_resource_entity(
+        coord: &mut CoordHandle<E>,
+        global_entity: &GlobalEntity,
+        entity_idx: GlobalEntityIndex,
+    ) {
+        if entity_idx.is_valid() {
+            coord.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+        }
+        coord
+            .shared
+            .global_world_manager
+            .write()
+            .remove_entity_record(global_entity);
+        coord
+            .shared
+            .global_entity_map
+            .write()
+            .despawn_by_global(global_entity);
+    }
+
+    fn insert_resource_component_record<R: Replicate>(
+        coord: &mut CoordHandle<E>,
+        global_entity: &GlobalEntity,
+        component: &mut R,
+    ) {
+        let component_kind = component.kind();
+        if coord
+            .shared
+            .global_world_manager
+            .read()
+            .has_component_record(global_entity, &component_kind)
+        {
+            log::warn!(
+                "Attempted to add component `{:?}` to resource entity `{:?}` that already has it. Skipping this action.",
+                component.name(),
+                global_entity,
+            );
+            return;
+        }
+
+        coord
+            .shared
+            .global_world_manager
+            .write()
+            .insert_component_record(global_entity, &component_kind);
+        coord
+            .shared
+            .global_world_manager
+            .write()
+            .insert_component_diff_handler(&coord.shared.component_kinds, global_entity, component);
+
+        if coord
+            .shared
+            .global_world_manager
+            .read()
+            .entity_is_delegated(global_entity)
+        {
+            let accessor = coord
+                .shared
+                .global_world_manager
+                .read()
+                .get_entity_auth_accessor(global_entity);
+            component.enable_delegation(&accessor, None)
+        }
+    }
+
+    /// Phase C / D2 — publish coord-staged replicated-resource carrier work into
+    /// send-resident state before any later lifecycle/authority/host-sync ops.
+    fn drain_pending_resource_ops<W: WorldRefType<E>>(
+        coord: &mut CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        world: &W,
+    ) {
+        let ops = std::mem::take(&mut coord.state.pending_resource_ops);
+        if ops.is_empty() {
+            return;
+        }
+
+        for op in ops {
+            match op {
+                PendingResourceOp::AutoScopeUsers {
+                    user_keys,
+                    world_entity,
+                } => {
+                    for user_key in user_keys {
+                        let global_entity = coord
+                            .shared
+                            .global_entity_map
+                            .read()
+                            .entity_to_global_entity(&world_entity)
+                            .unwrap();
+                        send.state
+                            .entity_scope_map
+                            .insert(user_key, global_entity, true);
+                        send.state.apply_resource_scope_for_user(
+                            world,
+                            &user_key,
+                            &global_entity,
+                            &world_entity,
+                        );
+                    }
+                }
+                PendingResourceOp::Remove {
+                    world_entity,
+                    global_entity,
+                    entity_idx,
+                } => {
+                    Self::apply_resource_remove(
+                        coord,
+                        send,
+                        &world_entity,
+                        &global_entity,
+                        entity_idx,
+                    );
+                }
+            }
+        }
+    }
+
+    fn apply_resource_remove(
+        coord: &mut CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        world_entity: &E,
+        global_entity: &GlobalEntity,
+        entity_idx: GlobalEntityIndex,
+    ) {
+        coord.state.global_priority_mirror.on_despawn(world_entity);
+        send.state.global_priority.on_despawn(world_entity);
+        for layer in send.state.user_priorities.values_mut() {
+            layer.on_scope_exit(world_entity);
+        }
+        send.state
+            .scope_checks_cache
+            .on_entity_despawned(*world_entity);
+
+        if entity_idx.is_valid() {
+            coord.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+        }
+        for send_conn in send.state.send_user_connections.values_mut() {
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
+                continue;
+            }
+            send_conn.base.world_manager.despawn_entity(global_entity);
+            send_conn.clear_entity_visible(entity_idx);
+        }
+
+        send.state.entity_scope_map.remove_entity(global_entity);
+        if let Some(room_keys) = send
+            .state
+            .entity_room_map
+            .remove_from_all_rooms(global_entity)
+        {
+            let entity_map = coord.shared.global_entity_map.read();
+            for room_key in room_keys {
+                let _ = coord
+                    .state
+                    .room_store
+                    .remove_entity(&room_key, world_entity, &*entity_map);
+            }
+        }
+
+        coord
+            .shared
+            .global_world_manager
+            .write()
+            .remove_entity_diff_handlers(global_entity);
+        coord
+            .shared
+            .global_world_manager
+            .write()
+            .remove_entity_record(global_entity);
+        coord
+            .shared
+            .global_entity_map
+            .write()
+            .despawn_by_global(global_entity);
+    }
+
+    fn entity_global_idx(
+        coord: &CoordHandle<E>,
+        global_entity: &GlobalEntity,
+    ) -> GlobalEntityIndex {
+        let handler = coord.shared.global_world_manager.read().diff_handler();
+        let guard = handler.read().expect("GlobalDiffHandler lock poisoned");
+        guard
+            .entity_to_global_idx(global_entity)
+            .unwrap_or(GlobalEntityIndex::INVALID)
+    }
+
     /// Phase C / D7 — publish coord-staged explicit user-scope mutations into
     /// the send-resident scope ledger, preserving `InternalWorldServer`'s direct
     /// write semantics without reassembling the split engine.
@@ -1408,7 +1776,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     world_entity,
                     is_contained,
                 } => {
-                    Self::apply_scope_ledger_set(coord, send, &user_key, &world_entity, is_contained);
+                    Self::apply_scope_ledger_set(
+                        coord,
+                        send,
+                        &user_key,
+                        &world_entity,
+                        is_contained,
+                    );
                 }
                 PendingScopeLedgerOp::RemoveUser { user_key } => {
                     send.state.entity_scope_map.remove_user(&user_key);

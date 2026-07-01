@@ -264,3 +264,15 @@ Feature: Replicated Resources
       When the server removes PlayerSelection
       And one replication round trip elapses
       Then alice no longer has the PlayerSelection resource
+
+  # ==========================================================================
+  # === Phase C D2: Resident/pipelined byte identity ===
+  # ==========================================================================
+
+  @Rule(12)
+  Rule: Pipelined resource staging preserves wire bytes
+
+    @Scenario(01)
+    Scenario: [pipeline-d2-resource-01] Pipelined resource insert/remove bytes match resident oracle
+      Given a test scenario
+      Then pipelined D2 resource bytes match the resident oracle

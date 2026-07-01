@@ -320,6 +320,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             global_priority_mirror: GlobalPriorityState::new(),
             user_priority_staging: std::collections::HashMap::new(),
             pending_scope_ledger_ops: Vec::new(),
+            pending_resource_ops: Vec::new(),
             resource_registry: ResourceRegistry::new(),
             historian: None,
         };
@@ -357,10 +358,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Registers a newly-accepted user so the world server can track their scope (adapter use only).
     pub fn receive_user(&mut self, user_key: UserKey, user_addr: SocketAddr) {
-        self.sim_handle.state
+        self.sim_handle
+            .state
             .user_store
             .insert(user_key, WorldUser::new(user_addr));
-        self.sim_handle.state
+        self.sim_handle
+            .state
             .user_store
             .register_disconnected(user_addr, user_key);
         // Auto-include of Replicated Resources happens in
@@ -392,7 +395,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // observe any difference; in pipeline mode the coordinator
         // drains at step 6.5 so the recv thread never touches the
         // send-side map directly.
-        self.recv.state
+        self.recv
+            .state
             .recv_user_connections
             .insert(*user_address, recv_conn);
         self.shared.pending_send_state_updates.lock().push(
@@ -426,7 +430,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             self.user_scope_set_entity(user_key, &world_entity, true);
         }
 
-        self.recv.state.incoming_world_events.push_connection(user_key);
+        self.recv
+            .state
+            .incoming_world_events
+            .push_connection(user_key);
     }
 
     /// Maintain connection with a client and read all incoming packet data
@@ -446,7 +453,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // `SendState`; recv-side `ping_manager` access flows in via the
         // `&mut recv_user_connections` borrow. Pipeline coordinator
         // calls the same method directly on `SendHandle`.
-        self.send.state.send_pings(&mut self.recv.state.recv_user_connections);
+        self.send
+            .state
+            .send_pings(&mut self.recv.state.recv_user_connections);
         // 4-F.naia.c.2a: handle_heartbeats + handle_empty_acks fire at
         // the top of `send_all_packets`, not here.
 
@@ -490,7 +499,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     pub(crate) fn drain_pending_handshakes(&mut self) {
         let pending: Vec<SocketAddr> = std::mem::take(&mut *self.shared.pending_handshakes.lock());
         for address in pending {
-            let Some(user_key) = self.sim_handle.state.user_store.take_disconnected(&address) else {
+            let Some(user_key) = self.sim_handle.state.user_store.take_disconnected(&address)
+            else {
                 // Repeat Handshake retry (already finalized) — silently
                 // skip. The Connect Response was already queued by the
                 // recv path so the client will observe the retry as
@@ -537,7 +547,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         for update in pending {
             match update {
                 SendStateUpdate::ConnectionAdded(addr, send_conn) => {
-                    self.send.state.send_user_connections.insert(addr, *send_conn);
+                    self.send
+                        .state
+                        .send_user_connections
+                        .insert(addr, *send_conn);
                 }
                 SendStateUpdate::ConnectionRemoved(addr) => {
                     self.send.state.send_user_connections.remove(&addr);
@@ -763,7 +776,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             );
             return Err(NaiaServerError::UserNotFound);
         };
-        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+        let Some(send_conn) = self
+            .send
+            .state
+            .send_user_connections
+            .get_mut(&user.address())
+        else {
             #[cfg(feature = "f3_diag")]
             eprintln!(
                 "[F3-DIAG naia/InternalWorldServer] send_message_inner no_send_conn user={:?} addr={:?} channel={:?}",
@@ -850,7 +868,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             warn!("user does not exist");
             return Err(NaiaServerError::Message("user does not exist".to_string()));
         };
-        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+        let Some(send_conn) = self
+            .send
+            .state
+            .send_user_connections
+            .get_mut(&user.address())
+        else {
             warn!("currently not connected to user");
             return Err(NaiaServerError::Message(
                 "currently not connected to user".to_string(),
@@ -901,7 +924,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let Some(user) = self.sim_handle.state.user_store.get(&user_key) else {
             return false;
         };
-        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+        let Some(send_conn) = self
+            .send
+            .state
+            .send_user_connections
+            .get_mut(&user.address())
+        else {
             return false;
         };
         let gwm = self.shared.global_world_manager.read();
@@ -1035,7 +1063,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         // Defense-in-depth: drainer is also called by every InternalWorldServer::room_*
         // method, so the queue should be empty here for in-process callers.
-        self.send.state
+        self.send
+            .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
         self.run_send_preamble(world);
         self.send.state.prepare_send_job(world)
@@ -1077,7 +1106,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // mechanism: a per-entity incremental push was considered and rejected
         // (break-even-to-slower at realistic churn + a per-mutation enqueue
         // obligation the byte-exact moat can't afford to miss).
-        self.send.state
+        self.send
+            .state
             .global_priority
             .clone_from(&self.sim_handle.state.global_priority_mirror);
 
@@ -1105,11 +1135,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let pending_grants = std::mem::take(&mut *self.shared.pending_auth_grants.lock());
         for (owner_user_key, global_entity, _granted_status) in pending_grants {
             // Collect addresses first to avoid borrowing issues
-            let user_addresses: Vec<SocketAddr> =
-                self.send.state.send_user_connections.keys().copied().collect();
+            let user_addresses: Vec<SocketAddr> = self
+                .send
+                .state
+                .send_user_connections
+                .keys()
+                .copied()
+                .collect();
             // Send SetAuthority to all users in scope (canonical path)
             for address in user_addresses {
-                let Some(send_conn) = self.send.state.send_user_connections.get_mut(&address) else {
+                let Some(send_conn) = self.send.state.send_user_connections.get_mut(&address)
+                else {
                     continue;
                 };
                 if !send_conn
@@ -1363,7 +1399,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .entity_to_global_entity(&world_entity)
             .expect("entity just spawned must be in global map");
 
-        if let Err(e) = self.sim_handle.state.resource_registry.insert::<R>(global_entity) {
+        if let Err(e) = self
+            .sim_handle
+            .state
+            .resource_registry
+            .insert::<R>(global_entity)
+        {
             self.despawn_entity_worldless(&world_entity);
             world.despawn_entity(&world_entity);
             return Err(e);
@@ -1429,7 +1470,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// True iff a resource of type `R` is currently inserted.
     pub fn has_resource<R: ReplicatedComponent>(&self) -> bool {
-        self.sim_handle.state
+        self.sim_handle
+            .state
             .resource_registry
             .entity_for::<R>()
             .is_some()
@@ -1520,7 +1562,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             // - If there was a client holder (Granted→Denied): send only to that client
             // - If no holder (Available→Denied): send to all clients in scope
             self.send_take_authority_messages(&global_entity, previous_owner);
-            self.recv.state
+            self.recv
+                .state
                 .incoming_world_events
                 .push_auth_reset(world_entity);
         }
@@ -1538,8 +1581,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 // There was a client holder - only they need to transition (Granted→Denied)
                 // Other clients were already Denied, no message needed
                 if let Some(user) = self.sim_handle.state.user_store.get(&prev_holder_key) {
-                    if let Some(send_conn) =
-                        self.send.state.send_user_connections.get_mut(&user.address())
+                    if let Some(send_conn) = self
+                        .send
+                        .state
+                        .send_user_connections
+                        .get_mut(&user.address())
                     {
                         if send_conn
                             .base
@@ -1557,8 +1603,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             AuthOwner::None => {
                 // No holder - all clients were Available, all need to transition to Denied
                 for (_user_key, user) in self.sim_handle.state.user_store.iter() {
-                    if let Some(send_conn) =
-                        self.send.state.send_user_connections.get_mut(&user.address())
+                    if let Some(send_conn) = self
+                        .send
+                        .state
+                        .send_user_connections
+                        .get_mut(&user.address())
                     {
                         if !send_conn
                             .base
@@ -1587,7 +1636,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (_user_key, user) in self.sim_handle.state.user_store.iter() {
-            if let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) {
+            if let Some(send_conn) = self
+                .send
+                .state
+                .send_user_connections
+                .get_mut(&user.address())
+            {
                 // Check if entity exists on the client (as either HostEntity or RemoteEntity)
                 // After migration, the entity is a RemoteEntity on the client, but the server
                 // still sends from HostEntity perspective and the client's routing handles it
@@ -1801,7 +1855,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // TODO: we can make this more efficient in the future by caching which Entities
         // are in each User's scope
         for (user_key, user) in self.sim_handle.state.user_store.iter() {
-            let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+            let Some(send_conn) = self
+                .send
+                .state
+                .send_user_connections
+                .get_mut(&user.address())
+            else {
                 continue;
             };
             // Check if entity exists on the client (as either HostEntity or RemoteEntity)
@@ -1842,7 +1901,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         // Push to events for external systems (e.g., Bevy adapter, test harness)
         // Events are separate from network messages - they're notifications for external consumers
-        self.recv.state
+        self.recv
+            .state
             .incoming_world_events
             .push_auth_grant(origin_user, world_entity);
 
@@ -1872,7 +1932,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .client_request_authority(&global_entity, &requester)?;
 
         for (user_key, user) in self.sim_handle.state.user_store.iter() {
-            let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+            let Some(send_conn) = self
+                .send
+                .state
+                .send_user_connections
+                .get_mut(&user.address())
+            else {
                 continue;
             };
             if !send_conn
@@ -1893,7 +1958,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 .host_send_set_auth(&global_entity, new_status);
         }
 
-        self.recv.state
+        self.recv
+            .state
             .incoming_world_events
             .push_auth_grant(requester_user, world_entity);
 
@@ -2164,7 +2230,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         user_key: &UserKey,
         entity: E,
     ) -> EntityPriorityMut<'_, E> {
-        let layer = self.send.state.user_priorities.entry(*user_key).or_default();
+        let layer = self
+            .send
+            .state
+            .user_priorities
+            .entry(*user_key)
+            .or_default();
         layer.get_mut(entity)
     }
 
@@ -2251,12 +2322,18 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Outgoing bandwidth to a specific client address, averaged over the monitor window (bytes/sec).
     pub fn outgoing_bandwidth_to_client(&self, address: &SocketAddr) -> f32 {
-        self.send.state.send_io.outgoing_bandwidth_to_client(address)
+        self.send
+            .state
+            .send_io
+            .outgoing_bandwidth_to_client(address)
     }
 
     /// Incoming bandwidth from a specific client address, averaged over the monitor window (bytes/sec).
     pub fn incoming_bandwidth_from_client(&self, address: &SocketAddr) -> f32 {
-        self.recv.state.recv_io.incoming_bandwidth_from_client(address)
+        self.recv
+            .state
+            .recv_io
+            .incoming_bandwidth_from_client(address)
     }
 
     // Ping
@@ -2390,7 +2467,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // send-side authoritative copy — publish-on-read at next
         // `send_all_packets` would also clear it, but doing it eagerly
         // here keeps the two copies bit-identical between ticks.
-        self.sim_handle.state
+        self.sim_handle
+            .state
             .global_priority_mirror
             .on_despawn(world_entity);
         self.send.state.global_priority.on_despawn(world_entity);
@@ -2401,7 +2479,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // Single linear retain — covers all rooms that previously contained
         // the entity, replacing what would otherwise be one retain per
         // affected room.
-        self.send.state
+        self.send
+            .state
             .scope_checks_cache
             .on_entity_despawned(*world_entity);
         self.cleanup_entity_replication(&global_entity);
@@ -2419,7 +2498,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         self.despawn_entity_from_all_connections(global_entity);
 
         // Delete scope
-        self.send.state.entity_scope_map.remove_entity(global_entity);
+        self.send
+            .state
+            .entity_scope_map
+            .remove_entity(global_entity);
 
         // Delete room cache entry
         if let Some(room_keys) = self
@@ -2539,7 +2621,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             }
         }
 
-        self.send.state
+        self.send
+            .state
             .entity_scope_map
             .insert(*user_key, global_entity, is_contained);
         self.shared
@@ -2666,7 +2749,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     ) {
         let excluding_addr_opt: Option<SocketAddr> = {
             if let Some(user_key) = excluding_user_opt {
-                self.sim_handle.state
+                self.sim_handle
+                    .state
                     .user_store
                     .get(user_key)
                     .map(|user| user.address())
@@ -2780,7 +2864,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             };
             // Send PublishEntity action through EntityActionEvent system
             if let Some(user) = self.sim_handle.state.user_store.get(&user_key) {
-                if let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) {
+                if let Some(send_conn) = self
+                    .send
+                    .state
+                    .send_user_connections
+                    .get_mut(&user.address())
+                {
                     send_conn
                         .base
                         .world_manager
@@ -2844,7 +2933,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     None
                 }
             })
-            .and_then(|k| self.sim_handle.state.user_store.get(&k).map(|u| u.address()));
+            .and_then(|k| {
+                self.sim_handle
+                    .state
+                    .user_store
+                    .get(&k)
+                    .map(|u| u.address())
+            });
 
         if server_origin {
             // Send UnpublishEntity action through EntityActionEvent system
@@ -2926,7 +3021,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     }
                 }
 
-                let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address())
+                let Some(send_conn) = self
+                    .send
+                    .state
+                    .send_user_connections
+                    .get_mut(&user.address())
                 else {
                     continue;
                 };
@@ -3055,7 +3154,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .get(&user_key, global_entity)
             .is_none()
         {
-            self.send.state
+            self.send
+                .state
                 .entity_scope_map
                 .insert(user_key, *global_entity, true);
         }
@@ -3064,7 +3164,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let Some(user) = self.sim_handle.state.user_store.get(&user_key) else {
             panic!("user should exist");
         };
-        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+        let Some(send_conn) = self
+            .send
+            .state
+            .send_user_connections
+            .get_mut(&user.address())
+        else {
             panic!("connection does not exist")
         };
 
@@ -3209,7 +3314,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             // TODO: we can make this more efficient in the future by caching which Entities
             // are in each User's scope
             for (_user_key, user) in self.sim_handle.state.user_store.iter() {
-                let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address())
+                let Some(send_conn) = self
+                    .send
+                    .state
+                    .send_user_connections
+                    .get_mut(&user.address())
                 else {
                     continue;
                 };
@@ -3290,7 +3399,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             }
         }
         let user = self.user_delete(user_key);
-        self.recv.state
+        self.recv
+            .state
             .incoming_world_events
             .push_disconnection(user_key, user.address(), reason);
     }
@@ -3300,7 +3410,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             // User already disconnected, this is fine (disconnect packets may arrive multiple times)
             return;
         };
-        let Some(recv_conn) = self.recv.state.recv_user_connections.get_mut(&user.address()) else {
+        let Some(recv_conn) = self
+            .recv
+            .state
+            .recv_user_connections
+            .get_mut(&user.address())
+        else {
             // Connection already gone, user is being/has been disconnected
             return;
         };
@@ -3312,7 +3427,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         recv_conn.manual_disconnect = true;
         // Add to outstanding_disconnects immediately so it gets processed in the next process_all_packets call
-        self.recv.state.outstanding_disconnects.push((*user_key, reason));
+        self.recv
+            .state
+            .outstanding_disconnects
+            .push((*user_key, reason));
     }
 
     pub(crate) fn user_delete(&mut self, user_key: &UserKey) -> WorldUser {
@@ -3343,14 +3461,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         // Clean up all user data
         for room_key in user.room_keys() {
-            self.sim_handle.state
+            self.sim_handle
+                .state
                 .room_store
                 .get_mut(room_key)
                 .unwrap()
                 .unsubscribe_user(user_key);
             // Mirror the room→user removal into the scope-checks cache —
             // this path bypasses `room_remove_user`.
-            self.send.state
+            self.send
+                .state
                 .scope_checks_cache
                 .on_user_removed_from_room(*room_key, *user_key);
         }
@@ -3361,8 +3481,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             self.send.state.send_io.deregister_client(&user.address());
         }
 
-        self.sim_handle.state.global_request_manager.purge_user(user_key);
-        self.sim_handle.state.global_response_manager.purge_user(user_key);
+        self.sim_handle
+            .state
+            .global_request_manager
+            .purge_user(user_key);
+        self.sim_handle
+            .state
+            .global_response_manager
+            .purge_user(user_key);
 
         user
     }
@@ -3376,7 +3502,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
             panic!("Attempting to despawn entities for a nonexistent user");
         };
-        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address()) else {
+        let Some(send_conn) = self
+            .send
+            .state
+            .send_user_connections
+            .get_mut(&user.address())
+        else {
             panic!("Attempting to despawn entities on a nonexistent connection");
         };
 
@@ -3410,7 +3541,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             let mut q = self.shared.scope_change_queue.lock();
             q.push_back(ScopeChange::RoomChange(room_change));
         }
-        self.send.state
+        self.send
+            .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
         existed
     }
@@ -3420,7 +3552,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Returns whether or not an User is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_user(&self, room_key: &RoomKey, user_key: &UserKey) -> bool {
-        self.sim_handle.state.room_store.has_user(room_key, user_key)
+        self.sim_handle
+            .state
+            .room_store
+            .has_user(room_key, user_key)
     }
 
     /// Add an User to a Room, given the appropriate RoomKey & UserKey
@@ -3445,7 +3580,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             q.push_back(legacy_change);
             q.push_back(ScopeChange::RoomChange(room_change));
         }
-        self.send.state
+        self.send
+            .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
@@ -3465,7 +3601,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             q.push_back(legacy_change);
             q.push_back(ScopeChange::RoomChange(room_change));
         }
-        self.send.state
+        self.send
+            .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
@@ -3509,7 +3646,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// Returns whether or not an Entity is currently in a specific Room, given
     /// their keys.
     pub(crate) fn room_has_entity(&self, room_key: &RoomKey, entity: &GlobalEntity) -> bool {
-        self.sim_handle.state.room_store.has_entity(room_key, entity)
+        self.sim_handle
+            .state
+            .room_store
+            .has_entity(room_key, entity)
     }
 
     /// Add an Entity to a Room associated with the given RoomKey.
@@ -3518,7 +3658,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     pub(crate) fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            self.sim_handle.state
+            self.sim_handle
+                .state
                 .room_store
                 .add_entity(room_key, world_entity, &*entity_map)
         };
@@ -3527,7 +3668,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             q.push_back(legacy_change);
             q.push_back(ScopeChange::RoomChange(room_change));
         }
-        self.send.state
+        self.send
+            .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
@@ -3535,7 +3677,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     pub(crate) fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         let pair_opt = {
             let entity_map = self.shared.global_entity_map.read();
-            self.sim_handle.state
+            self.sim_handle
+                .state
                 .room_store
                 .remove_entity(room_key, world_entity, &*entity_map)
         };
@@ -3544,7 +3687,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             q.push_back(legacy_change);
             q.push_back(ScopeChange::RoomChange(room_change));
         }
-        self.send.state
+        self.send
+            .state
             .apply_pending_room_changes(&self.shared.scope_change_queue);
     }
 
@@ -3643,7 +3787,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .read()
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.recv.state
+                    self.recv
+                        .state
                         .incoming_world_events
                         .push_spawn(user_key, &world_entity);
                     let idx = self
@@ -3696,7 +3841,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                             );
                         }
                     }
-                    self.recv.state
+                    self.recv
+                        .state
                         .incoming_world_events
                         .push_despawn(user_key, &world_entity);
                     deferred_events.push(EntityEvent::Despawn(global_entity));
@@ -3768,9 +3914,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .read()
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.recv.state
-                        .incoming_world_events
-                        .push_remove(user_key, &world_entity, component);
+                    self.recv.state.incoming_world_events.push_remove(
+                        user_key,
+                        &world_entity,
+                        component,
+                    );
                     if self
                         .shared
                         .global_world_manager
@@ -3826,7 +3974,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         continue;
                     }
                     self.publish_entity(world, &global_entity, &world_entity, false);
-                    self.recv.state
+                    self.recv
+                        .state
                         .incoming_world_events
                         .push_publish(user_key, &world_entity);
 
@@ -3844,7 +3993,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         continue;
                     }
                     self.unpublish_entity(world, &global_entity, &world_entity, false);
-                    self.recv.state
+                    self.recv
+                        .state
                         .incoming_world_events
                         .push_unpublish(user_key, &world_entity);
                 }
@@ -3869,7 +4019,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         &world_entity,
                         Some(*user_key),
                     );
-                    self.recv.state
+                    self.recv
+                        .state
                         .incoming_world_events
                         .push_delegate(user_key, &world_entity);
                 }
@@ -3890,7 +4041,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .entity_handle_client_request_authority(user_key, &world_entity)
                         .is_err()
                     {
-                        self.recv.state
+                        self.recv
+                            .state
                             .incoming_world_events
                             .push_auth_denied(user_key, &world_entity);
                     }
@@ -3907,7 +4059,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .entity_release_authority(Some(user_key), &world_entity)
                         .is_ok()
                     {
-                        self.recv.state
+                        self.recv
+                            .state
                             .incoming_world_events
                             .push_auth_reset(&world_entity);
                     }
@@ -3933,7 +4086,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .read()
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
-                    self.recv.state
+                    self.recv
+                        .state
                         .incoming_world_events
                         .push_despawn(user_key, &world_entity);
                     let owner = self
@@ -4017,7 +4171,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 let Some(user) = self.sim_handle.state.user_store.get(&removed_user) else {
                     continue;
                 };
-                let Some(send_conn) = self.send.state.send_user_connections.get_mut(&user.address())
+                let Some(send_conn) = self
+                    .send
+                    .state
+                    .send_user_connections
+                    .get_mut(&user.address())
                 else {
                     continue;
                 };
@@ -4141,8 +4299,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     };
                     for global_entity in &entity_list {
                         // Only despawn if the user has no other room in common with the entity.
-                        if let Some(entity_rooms) =
-                            self.send.state.entity_room_map.entity_get_rooms(global_entity)
+                        if let Some(entity_rooms) = self
+                            .send
+                            .state
+                            .entity_room_map
+                            .entity_get_rooms(global_entity)
                         {
                             if entity_rooms.iter().any(|rk| user_rooms.contains(rk)) {
                                 continue;
@@ -4310,12 +4471,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // the room rule entirely and are unconditionally in-scope for
         // every connected user, but the explicit-exclude override still
         // applies defensively.
-        let in_common_room =
-            if let Some(entity_rooms) = self.send.state.entity_room_map.entity_get_rooms(global_entity) {
-                entity_rooms.intersection(user.room_keys()).next().is_some()
-            } else {
-                false
-            };
+        let in_common_room = if let Some(entity_rooms) = self
+            .send
+            .state
+            .entity_room_map
+            .entity_get_rooms(global_entity)
+        {
+            entity_rooms.intersection(user.room_keys()).next().is_some()
+        } else {
+            false
+        };
         let explicit = self
             .send
             .state
@@ -4475,7 +4640,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     // `RecvState::handle_disconnects` (recv-only).
 }
 
-impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for InternalWorldServer<E> {
+impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E>
+    for InternalWorldServer<E>
+{
     fn global_entity_to_entity(
         &self,
         global_entity: &GlobalEntity,
@@ -4744,7 +4911,10 @@ pub(crate) fn user_scope_has_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
         EntityOwner::Client(owner_key)
         | EntityOwner::ClientWaiting(owner_key)
         | EntityOwner::ClientPublic(owner_key),
-    ) = shared.global_world_manager.read().entity_owner(&global_entity)
+    ) = shared
+        .global_world_manager
+        .read()
+        .entity_owner(&global_entity)
     {
         owner_key == *user_key
     } else {

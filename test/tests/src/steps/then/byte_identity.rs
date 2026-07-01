@@ -11,10 +11,8 @@ use naia_server::{
     transport::local::{LocalServerSocket, Socket as ServerSocket},
     ConnectEvent, ReplicationConfig, Server, ServerConfig, ServerMode,
 };
-use naia_shared::{
-    transport::local::LocalTransportHub, Instant, TestClock, WorldMutType,
-};
-use naia_test_harness::{protocol, Auth, TestEntity, TestWorld};
+use naia_shared::{transport::local::LocalTransportHub, Instant, TestClock, WorldMutType};
+use naia_test_harness::{protocol, Auth, TestEntity, TestScore, TestWorld};
 use parking_lot::Mutex;
 
 fn client_config() -> ClientConfig {
@@ -171,6 +169,32 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect())
     }
+
+    fn resource_trace(mut self) -> Result<Vec<Vec<u8>>, String> {
+        let _user_key = self.connect()?;
+        self.hub.enable_packet_recording();
+
+        self.server
+            .insert_resource(self.server_world.proxy_mut(), TestScore::new(7, 3), false)
+            .map_err(|error| format!("resource insert failed: {error:?}"))?;
+        self.tick_bracket();
+        self.tick_bracket();
+        if !self
+            .server
+            .remove_resource::<_, TestScore>(self.server_world.proxy_mut())
+        {
+            return Err("resource remove returned false".into());
+        }
+        self.tick_bracket();
+        self.tick_bracket();
+
+        Ok(self
+            .hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect())
+    }
 }
 
 /// Then pipelined D7 scope-ledger bytes match the resident oracle.
@@ -192,6 +216,31 @@ fn then_pipelined_d7_scope_ledger_bytes_match_resident_oracle(
     } else {
         AssertOutcome::Failed(format!(
             "D7 scope-ledger byte trace diverged: resident={} pipelined={}",
+            trace_summary(&resident),
+            trace_summary(&pipelined)
+        ))
+    }
+}
+
+/// Then pipelined D2 resource bytes match the resident oracle.
+#[then("pipelined D2 resource bytes match the resident oracle")]
+fn then_pipelined_d2_resource_bytes_match_resident_oracle(
+    _ctx: &TestWorldRef,
+) -> AssertOutcome<()> {
+    let resident = match DirectScopeRun::new(ServerMode::Resident).resource_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("resident setup failed: {error}")),
+    };
+    let pipelined = match DirectScopeRun::new(ServerMode::Pipelined).resource_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("pipelined setup failed: {error}")),
+    };
+
+    if resident == pipelined {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "D2 resource byte trace diverged: resident={} pipelined={}",
             trace_summary(&resident),
             trace_summary(&pipelined)
         ))
