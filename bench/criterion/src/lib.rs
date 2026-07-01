@@ -12,7 +12,7 @@ use naia_client::{
 use naia_demo_world::World;
 use naia_server::{
     transport::local::{LocalServerSocket, Socket as ServerSocket},
-    ConnectEvent, RoomKey, Server as NaiaServer, ServerConfig, UserKey,
+    ConnectEvent, RoomKey, Server as NaiaServer, ServerConfig, ServerMode, UserKey,
 };
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
@@ -234,7 +234,8 @@ impl BenchWorld {
         if uncapped_bandwidth {
             server_config.connection.bandwidth.target_bytes_per_sec = u32::MAX;
         }
-        let mut server: NaiaServer<BenchEntity> = NaiaServer::new(server_config, protocol.clone());
+        let mut server: NaiaServer<BenchEntity> =
+            NaiaServer::new(ServerMode::Resident, server_config, protocol.clone());
         server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
 
         let mut server_world = World::default();

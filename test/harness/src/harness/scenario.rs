@@ -15,7 +15,7 @@ use naia_client::{
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{
     transport::local::{LocalServerSocket, Socket as ServerSocket},
-    RoomKey, Server as NaiaServer, ServerConfig, UserKey,
+    RoomKey, Server as NaiaServer, ServerConfig, ServerMode, UserKey,
 };
 use naia_shared::{
     transport::local::{LocalTransportHub, FAKE_SERVER_ADDR},
@@ -274,7 +274,7 @@ impl Scenario {
             panic!("server_start() called multiple times");
         }
 
-        let mut server = Server::new(server_config, protocol);
+        let mut server = Server::new(ServerMode::Resident, server_config, protocol);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 
@@ -291,7 +291,8 @@ impl Scenario {
             panic!("server_start() called multiple times");
         }
 
-        let mut server = Server::new_with_protocol_id(server_config, protocol, protocol_id);
+        let mut server =
+            Server::new_with_protocol_id(ServerMode::Resident, server_config, protocol, protocol_id);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 

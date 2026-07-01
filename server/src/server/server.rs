@@ -59,45 +59,34 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
-    /// Creates a new server with the given config and protocol.
+    /// Creates a new server with the given drive shape, config, and protocol.
+    ///
+    /// The [`ServerMode`] argument is **required and explicit** — the caller
+    /// must choose the inner [`WorldServer`]'s drive shape
+    /// ([`Resident`](ServerMode::Resident) synchronous, or
+    /// [`Pipelined`](ServerMode::Pipelined) worker-thread). The connection layer
+    /// (`MainServer`) is mode-agnostic, so the listen/accept/disconnect surface
+    /// is identical in either mode.
     ///
     /// Call [`listen`](Server::listen) before entering the main loop.
-    pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+    pub fn new<P: Into<Protocol>>(
+        mode: ServerMode,
+        server_config: ServerConfig,
+        protocol: P,
+    ) -> Self {
         let mut protocol: Protocol = protocol.into();
         protocol.lock();
         let protocol_id = protocol.protocol_id();
-        Self::new_with_protocol_id(server_config, protocol, protocol_id)
+        Self::new_with_protocol_id(mode, server_config, protocol, protocol_id)
     }
 
-    /// Creates a new server with an explicit protocol ID.
+    /// Creates a new server with an explicit drive shape and protocol ID.
     ///
     /// # Adapter use only
     ///
     /// Bevy and macroquad adapters use this to inject a pre-computed ID.
     /// Prefer [`new`](Server::new) in application code.
     pub fn new_with_protocol_id(
-        server_config: ServerConfig,
-        protocol: Protocol,
-        protocol_id: ProtocolId,
-    ) -> Self {
-        Self::with_mode(ServerMode::Resident, server_config, protocol, protocol_id)
-    }
-
-    /// Creates a new **pipelined** server (worker-thread drive shape) with the
-    /// given config and protocol.
-    ///
-    /// Identical to [`new`](Server::new) except the inner [`WorldServer`] is
-    /// constructed in [`ServerMode::Pipelined`]. The connection layer
-    /// (`MainServer`) is mode-agnostic, so the listen/accept/disconnect surface
-    /// is unchanged.
-    pub fn new_pipelined<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
-        let mut protocol: Protocol = protocol.into();
-        protocol.lock();
-        let protocol_id = protocol.protocol_id();
-        Self::with_mode(ServerMode::Pipelined, server_config, protocol, protocol_id)
-    }
-
-    fn with_mode(
         mode: ServerMode,
         server_config: ServerConfig,
         protocol: Protocol,

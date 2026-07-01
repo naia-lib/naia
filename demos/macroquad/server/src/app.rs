@@ -4,7 +4,7 @@ use naia_server::{
     shared::{Instant, Random},
     transport::webrtc,
     AuthEvent, ConnectEvent, DisconnectEvent, ErrorEvent, PublishEntityEvent, RoomKey,
-    Server as NaiaServer, ServerConfig, TickEvent, UserKey,
+    Server as NaiaServer, ServerConfig, ServerMode, TickEvent, UserKey,
 };
 
 use naia_demo_world::{Entity, World};
@@ -47,7 +47,7 @@ impl App {
 
         let socket = webrtc::Socket::new(&server_addresses, &protocol.socket);
 
-        let mut server = Server::new(ServerConfig::default(), protocol);
+        let mut server = Server::new(ServerMode::Resident, ServerConfig::default(), protocol);
         server.listen(socket);
 
         // Create a new, singular room, which will contain Users and Entities that they
