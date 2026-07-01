@@ -391,6 +391,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         }
     }
 
+    /// Like [`Self::park_workers`], but flushes the send pipeline to io first so
+    /// snapshot delivery is deterministic under active workers (test/harness
+    /// liveness barrier). No-op when not `Running`.
+    pub fn park_workers_flushing(&self) {
+        if let Some(rt) = &self.runtime {
+            rt.park_workers_flushing();
+        }
+    }
+
     /// Explicitly CLOSE the park window (resume the workers). Pair with
     /// [`Self::park_workers`]. No-op when not `Running`.
     pub fn unpark_workers(&self) {

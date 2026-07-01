@@ -227,6 +227,23 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Like [`Self::park_workers`], but flushes the send pipeline to io first so
+    /// snapshot delivery is deterministic under active workers (test/harness
+    /// liveness barrier).
+    ///
+    /// # Panics
+    /// Panics on a resident server (no park window exists — fail loud).
+    pub fn park_workers_flushing(&self) {
+        match &self.inner {
+            WorldServerImpl::Pipelined(ps) => ps.park_workers_flushing(),
+            WorldServerImpl::Resident(_) => {
+                panic!(
+                    "WorldServer::park_workers_flushing called on a resident server (pipelined-only)"
+                )
+            }
+        }
+    }
+
     /// Explicitly close the pipelined park window.
     ///
     /// # Panics

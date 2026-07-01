@@ -852,6 +852,17 @@ impl<'w> Server<'w> {
         }
     }
 
+    /// Park both worker threads, first **flushing the send pipeline to io** so
+    /// every snapshot produced up to this point is transmitted before the
+    /// consumer advances its clock. The deterministic delivery barrier a
+    /// test/harness bounded-tick liveness poll needs under active workers; a
+    /// plain park otherwise. No-op when not `Running`.
+    pub fn pipeline_park_flushing(world: &World) {
+        if let Some(ws) = world.resource::<ServerImpl>().as_world_server() {
+            ws.park_workers_flushing();
+        }
+    }
+
     /// Resume both worker threads (close the park window). No-op when not
     /// `Running`.
     pub fn pipeline_unpark(world: &World) {

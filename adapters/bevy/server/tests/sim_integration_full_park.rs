@@ -102,12 +102,61 @@ fn park_unpark_cycle_progresses_test_clock_safely() {
 }
 
 #[test]
+fn park_workers_flushing_returns_promptly() {
+    // The flush-park handshake (park → arm flush → unpark → re-park) must
+    // quiesce both workers and return promptly, never deadlock — in BOTH build
+    // modes (this test build is `deterministic`, where it is a plain park; the
+    // active-worker delivery-flush is exercised by cyberlith's B1 moat).
+    let mut app = build_app();
+    listen_and_start(&mut app, "127.0.0.1:23013");
+    app.update();
+
+    thread::sleep(Duration::from_millis(20));
+
+    let start = std::time::Instant::now();
+    Server::pipeline_park_flushing(app.world());
+    let elapsed = start.elapsed();
+    assert!(
+        elapsed < Duration::from_secs(2),
+        "pipeline_park_flushing returned within 2s (took {:?})",
+        elapsed,
+    );
+    Server::pipeline_unpark(app.world());
+    // Workers still healthy after a flush-park cycle.
+    Server::pipeline_propagate_panics(app.world());
+}
+
+#[test]
+fn park_flushing_cycle_progresses_test_clock_safely() {
+    // Same D6 contract as `park_unpark_cycle_progresses_test_clock_safely`, but
+    // via the flushing park: repeated flush-park / advance / unpark cycles make
+    // progress and drop cleanly.
+    TestClock::reset();
+    let mut app = build_app();
+    listen_and_start(&mut app, "127.0.0.1:23014");
+    app.update();
+
+    thread::sleep(Duration::from_millis(20));
+
+    for _ in 0..5 {
+        Server::pipeline_park_flushing(app.world());
+        TestClock::advance(40);
+        Server::pipeline_unpark(app.world());
+        thread::sleep(Duration::from_millis(5));
+        Server::pipeline_propagate_panics(app.world());
+    }
+
+    drop(app);
+}
+
+#[test]
 fn unpark_without_prior_park_is_noop() {
     let app = build_app();
     // Before listen+start the runtime is still Armed (no worker threads yet), so
     // unpark/park are no-ops.
     Server::pipeline_unpark(app.world()); // No panic.
     Server::pipeline_park(app.world()); // No-op too.
+    Server::pipeline_park_flushing(app.world()); // No-op before start, too.
 }
 
 #[test]

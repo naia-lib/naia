@@ -113,4 +113,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> SnapshotReceiver<E> {
     pub fn take_latest(&self) -> Option<SnapshotWorld<E>> {
         self.slot.lock().take()
     }
+
+    /// `true` if a snapshot has been published and not yet drained. Used by
+    /// the send worker's flush-park drain to decide when the publish queue is
+    /// empty (not load-bearing for the normal lagged path).
+    pub fn has_pending(&self) -> bool {
+        self.slot.lock().is_some()
+    }
 }

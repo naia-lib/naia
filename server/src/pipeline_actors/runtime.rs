@@ -83,6 +83,15 @@ pub enum RuntimeState {
 struct ParkControl {
     /// `true` ⇒ workers should park at the top of their loop iteration.
     park: AtomicBool,
+    /// `true` ⇒ the send worker must, on its next iteration, drain the
+    /// one-tick-lag buffer (`held_job`) plus every published-but-untransmitted
+    /// snapshot straight to io BEFORE parking. A test/harness barrier
+    /// (`park_workers_flushing`) that makes snapshot delivery deterministic
+    /// under active workers; the send worker `swap`s it back to `false` once it
+    /// has drained. Ignored on the `not(workers_active)` path (no worker
+    /// threads → nothing to flush). See `park_workers_flushing`.
+    #[cfg_attr(not(workers_active), allow(dead_code))]
+    flush: AtomicBool,
     /// Number of workers currently parked. Main waits until this hits the
     /// worker count in [`PipelineRuntime::park_workers`].
     parked_count: Mutex<u32>,
@@ -135,6 +144,7 @@ impl ParkControl {
         let (control_tx, control_rx) = smol::channel::bounded(1);
         Self {
             park: AtomicBool::new(false),
+            flush: AtomicBool::new(false),
             parked_count: Mutex::new(0),
             parked_cv: parking_lot::Condvar::new(),
             resume_cv: parking_lot::Condvar::new(),
@@ -477,6 +487,45 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         }
     }
 
+    /// Like [`Self::park_workers`], but first **flushes the send pipeline**: on
+    /// return, every snapshot published up to this point (the one-tick-lag
+    /// buffer + any pending publish) has been transmitted to io, so a consumer
+    /// that now advances its clock + pumps its transport sees them
+    /// deterministically. A test/harness barrier for bounded-tick liveness
+    /// assertions under active workers.
+    ///
+    /// Mechanism (race-free, reusing the existing park handshake): quiesce both
+    /// workers, request a flush, resume so the send worker drains to io, then
+    /// re-park. The final `park_workers()` cannot return until the send worker
+    /// reaches its checkpoint — which is strictly AFTER the flush-drain block —
+    /// so completion is proof the drain ran. No-op / plain park on
+    /// `not(workers_active)` (delivery is already synchronous there).
+    pub fn park_workers_flushing(&self) {
+        if self.state() != RuntimeState::Running {
+            return;
+        }
+        #[cfg(not(workers_active))]
+        {
+            self.park_workers();
+        }
+        #[cfg(workers_active)]
+        {
+            // 1. Quiesce at checkpoints (deterministic starting point).
+            self.park_workers();
+            // 2. Arm the flush, then resume: the send worker observes `flush`
+            //    (set-before-unpark, so no lost transition) and drains to io.
+            self.park.flush.store(true, Ordering::SeqCst);
+            self.unpark_workers();
+            // 3. Re-park. Its checkpoint-wait completes only once the send
+            //    worker has passed the flush-drain block above, so the transmit
+            //    is guaranteed on the transport by the time this returns.
+            self.park_workers();
+            // Defensive: clear in case no send worker consumed it (e.g. it had
+            // already exited); a stale `flush` would spend one no-op drain-loop.
+            self.park.flush.store(false, Ordering::SeqCst);
+        }
+    }
+
     /// Resume both worker threads. **Synchronous**: does not return until every
     /// parked worker has observed `park=false` and left the checkpoint
     /// (`parked_count` back to 0). This is what makes the next `park_workers()`
@@ -786,6 +835,55 @@ fn send_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
 
         #[cfg(workers_active)]
         {
+            // FLUSH-PARK barrier (`park_workers_flushing`): drain the one-tick-lag
+            // buffer plus every published-but-untransmitted snapshot straight to
+            // io, THEN loop back so the pending park request quiesces us. This
+            // makes snapshot delivery deterministic under active workers (a
+            // bounded-tick liveness poll can otherwise race the free-running send
+            // thread). Only the WHEN of transmit changes — the (snapshot, plan)
+            // bytes are byte-identical to the normal lagged path below — and this
+            // arm compiles out entirely on not(workers_active), so the
+            // deterministic determinism moat is untouched. Bounded: `held_job`
+            // holds ≤1 job and `snap_rx` is latest-wins (≤1), so ≤2 transmits.
+            if park.flush.swap(false, Ordering::SeqCst) {
+                loop {
+                    let job_to_send = match snap_rx.take_latest() {
+                        Some(new_job) => held_job.replace(new_job),
+                        None => held_job.take(),
+                    };
+                    if let Some(mut job) = job_to_send {
+                        let mut send = loop {
+                            match send_slot.try_lock().and_then(|mut g| g.take()) {
+                                Some(h) => break h,
+                                None => thread::sleep(Duration::from_micros(100)),
+                            }
+                        };
+                        let _ = job.take_frozen_dirty();
+                        match job.take_send_plan() {
+                            Some(plan) => {
+                                send.drain_all_acks();
+                                send.transmit_send_job(job, plan);
+                            }
+                            None => send.send_all_packets(job),
+                        }
+                        loop {
+                            match send_slot.try_lock() {
+                                Some(mut g) => {
+                                    *g = Some(send);
+                                    break;
+                                }
+                                None => thread::sleep(Duration::from_micros(100)),
+                            }
+                        }
+                    }
+                    // Drained once the lag buffer AND the publish slot are empty.
+                    if held_job.is_none() && !snap_rx.has_pending() {
+                        break;
+                    }
+                }
+                continue;
+            }
+
             // Don't start send work if park was requested — send_all_packets
             // holds time_manager.read() for its entire loop, which can block the
             // recv worker's time_manager.write(); skipping lets this worker reach
