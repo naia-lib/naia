@@ -414,6 +414,20 @@ per-gameplay-event reassembly remains.
   asserting resident ≡ pipelined-oracle server-to-client byte equality for
   explicit scope exclude/include. Verification: naia workspace GREEN; namako
   lint/gate GREEN; cyberlith moat GREEN ×10.
+- ✅ **D2 resource staged op landed 2026-07-01** (`815ac293`):
+  `insert_resource` / `remove_resource` now stage coord-side
+  `PendingResourceOp`s and drain in D2 before later lifecycle/authority/host-sync
+  phases. Liveness re-verified against cyberlith production usage in
+  `services/game/cell/src/sim_systems/tile_startup.rs`
+  (`pipeline_replicate_resource` for `NetworkedLevelLighting` and `MatchState`)
+  and the removal coverage in
+  `test/game/harness/tests/simulation/level_lighting_replication.rs`, so the
+  class remains **(b) CONVERT** rather than reclassified. Added namako scenario
+  `[pipeline-d2-resource-01]` plus the Rust contract test
+  `phase_c_d2_resource_resident_pipelined_oracle_byte_identity`, both asserting
+  resident ≡ pipelined-oracle server-to-client byte equality for resource
+  insert/remove. Verification: `cargo test --workspace --all-targets` GREEN;
+  namako lint/gate GREEN; cyberlith moat GREEN ×10.
 
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
@@ -589,8 +603,8 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `sim_pipeline.rs:1102` | `room_broadcast_message` | messages → D6 |
 | `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** ✅ DONE 2026-07-01 (`45eca186`); live in cyberlith `send_helpers.rs` |
 | `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 ✅ DONE 2026-07-01 (`45eca186`); same staged queue |
-| `world_server_enum.rs:770` | `insert_resource` | **resource → D2** |
-| `world_server_enum.rs:780` | `remove_resource` | resource → D2 |
+| `world_server_enum.rs:770` | `insert_resource` | **resource → D2** ✅ DONE 2026-07-01 (`815ac293`); live in cyberlith `tile_startup.rs` |
+| `world_server_enum.rs:780` | `remove_resource` | resource → D2 ✅ DONE 2026-07-01 (`815ac293`); removal covered in cyberlith `level_lighting_replication.rs` |
 | `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** |
 | `world_server_enum.rs:798` | `disable_entity_replication` | registration → D1 |
 | `world_server_enum.rs:808` | `pause_entity_replication` | registration → D1 |
