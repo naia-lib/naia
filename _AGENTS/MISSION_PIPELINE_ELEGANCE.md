@@ -378,9 +378,27 @@ per-gameplay-event reassembly remains.
    (`sim_pipeline.rs:1204-1213`) already reserves D1=entity-registration,
    D2=resource, D3=lifecycle, D4=authority/editor, D5=host-sync, D6=outbound
    messages, D7=scope-ledger. Place each op in its class; do not invent new order.
-3. **Convert one op class per PR**, in dependency order (messages → scope →
-   resource → authority → historian). Moat GREEN + a namako spec asserting
-   resident≡pipelined-oracle **byte-equality** for that class before each merge.
+3. **Convert one op class per PR.** **START with scope-ledger, NOT messages**
+   (revised from the original "messages first" — see finding below), then:
+   scope-ledger(D7) → resource(D2) → registration(D1) → lifecycle(D3) →
+   authority/delegation(D4) → historian(D5) → messages(D6, do LAST). Moat GREEN +
+   a namako spec asserting resident≡pipelined-oracle **byte-equality** for that
+   class before each merge.
+
+   > **Finding (Phase C step 1, 2026-06-30):** `send_message`/`broadcast_message`/
+   > `send_request`/`send_response` are **generic over `<C, M>`**, so a D6 pending
+   > queue must **type-erase** the payload (box it / pre-serialize at enqueue) —
+   > materially harder than the concrete `PendingScopeAuthorityOps` shape. The
+   > concrete op classes (scope-ledger's `user_scope_set_entity`, resource,
+   > authority) stage trivially by value, so do those first to prove the D-slot
+   > machinery on easy cases before tackling message type-erasure last.
+   > **Liveness verified** (so these PRs are worth doing): messages live via
+   > cyberlith `services/game/cell/src/server_access.rs:363` (EntityAssignment)
+   > + `:616` (DesyncDetection); scope-ledger live via
+   > `services/game/cell/src/send_helpers.rs` `user_scope_mut().include/exclude`.
+   > Before each remaining class's PR, re-run the liveness check in the appendix
+   > caveat — reclassify (c) with a note if a class never flows through the
+   > pipelined arm.
 4. Once the (b) set is empty, narrow `with_world_server`'s visibility/doc to the
    two surviving monolithic uses (consider renaming to signal "monolithic-only").
 
