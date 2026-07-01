@@ -428,6 +428,26 @@ per-gameplay-event reassembly remains.
   resident ≡ pipelined-oracle server-to-client byte equality for resource
   insert/remove. Verification: `cargo test --workspace --all-targets` GREEN;
   namako lint/gate GREEN; cyberlith moat GREEN ×10.
+- ✅ **D1 registration staged/coord op landed 2026-07-01** (`669695a9`):
+  `configure_entity_replication` now captures coord-side registration work and
+  drains the resulting `ConfigureReplication` scope changes explicitly in D1
+  before D2 resources; world-hook effects still apply immediately at call sites
+  that hold `&mut World`, preserving same-call behavior. `pause_entity_replication`,
+  `resume_entity_replication`, and `enable_static_entity_replication` are now
+  coord fast-paths because their resident effects target global entity/world
+  manager state rather than send serialization state. Liveness re-verified
+  against cyberlith production usage in
+  `services/game/cell/src/server_access.rs` (`configure_entity_replication`) and
+  `services/game/cell/src/sim_systems/tile_startup.rs`, so the class remains
+  **(b) CONVERT** rather than reclassified. `disable_entity_replication` was
+  reclassified to lifecycle D3 because the resident path funnels through
+  `despawn_entity_worldless`. Added namako scenario
+  `[pipeline-d1-registration-01]` plus the Rust contract test
+  `phase_c_d1_registration_resident_pipelined_oracle_byte_identity`, both
+  asserting resident ≡ pipelined-oracle server-to-client byte equality for a
+  delegated replication reconfiguration. Verification:
+  `cargo test --workspace --all-targets` GREEN; namako lint/gate GREEN;
+  cyberlith moat GREEN ×10.
 
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
@@ -605,11 +625,11 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 ✅ DONE 2026-07-01 (`45eca186`); same staged queue |
 | `world_server_enum.rs:770` | `insert_resource` | **resource → D2** ✅ DONE 2026-07-01 (`815ac293`); live in cyberlith `tile_startup.rs` |
 | `world_server_enum.rs:780` | `remove_resource` | resource → D2 ✅ DONE 2026-07-01 (`815ac293`); removal covered in cyberlith `level_lighting_replication.rs` |
-| `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** |
-| `world_server_enum.rs:798` | `disable_entity_replication` | registration → D1 |
-| `world_server_enum.rs:808` | `pause_entity_replication` | registration → D1 |
-| `world_server_enum.rs:818` | `resume_entity_replication` | registration → D1 |
-| `world_server_enum.rs:940` | `enable_static_entity_replication` | registration → D1 |
+| `world_server_enum.rs:715` | `configure_entity_replication` | **registration → D1** ✅ DONE 2026-07-01 (`669695a9`); live in cyberlith `server_access.rs`; drains `ConfigureReplication` in D1 |
+| `world_server_enum.rs:798` | `disable_entity_replication` | reclassified to lifecycle → D3; resident path funnels through `despawn_entity_worldless` |
+| `world_server_enum.rs:808` | `pause_entity_replication` | registration → D1 ✅ DONE 2026-07-01 (`669695a9`); coord fast-path |
+| `world_server_enum.rs:818` | `resume_entity_replication` | registration → D1 ✅ DONE 2026-07-01 (`669695a9`); coord fast-path |
+| `world_server_enum.rs:940` | `enable_static_entity_replication` | registration → D1 ✅ DONE 2026-07-01 (`669695a9`); coord fast-path |
 | `world_server_enum.rs:733` | `insert_component_worldless` | **lifecycle → D3** |
 | `world_server_enum.rs:745` | `remove_component_worldless` | lifecycle → D3 |
 | `world_server_enum.rs:755` | `despawn_entity_worldless` | lifecycle → D3 |
