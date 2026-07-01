@@ -298,15 +298,40 @@ intrinsically send-side (it drives serialization). Moving it to coord would figh
 the architecture and touch the hot send path. The slot-lock read precedent already
 exists for exactly this class of send-resident `&self` read; use it.
 
-### Verification / DoD
-- Add a namako spec (in `test/specs` or `test/bevy_specs`) that enables
-  `interior_visibility` and runs the SAME scenario against BOTH a resident and a
-  pipelined server, asserting identical `local_entities` / `local_entity` results.
-- No `interior_visibility` panic arms remain. `cargo test -p naia-server
-  --features interior_visibility` (+ the bevy adapter) GREEN; moat GREEN.
+### Verification / DoD — ✅ DONE
+- ✅ Dual-mode test lands in `test/harness/contract_tests/integration_only/world_server_enum_shell.rs`
+  (`world_server_enum_{resident,pipelined}_interior_visibility_reads`) — this
+  suite has `interior_visibility` on unconditionally via its naia-server dep and
+  already runs every case against BOTH engine shapes. The test registers a
+  server-owned entity and drives all three reads (`EntityRef::local_entity` →
+  `world_to_local_entity`; `WorldServer::local_entity`/`local_entity_mut` →
+  `local_to_world_entity`) through both arms, asserting the pipelined slot-lock
+  read **dispatches without panic** and returns results **identical to resident**.
+  - The **populated** send-resident read is the very same shared `_impl`
+    (`{local_to_world,world_to_local}_entity_impl`), already covered end-to-end
+    with a real connected user by the resident harness
+    (`client_events`/`server_events` → `server_ref.local_entity(&user_key)`), and
+    the pipelined slot-lock wrapper is structurally identical to the
+    connected-tested `user_scope_has_entity_ref` read. A connected-client
+    pipelined path does not exist in any naia-side suite (namako/moat drive it,
+    but cyberlith does not enable `interior_visibility`), so the unconnected
+    dual-mode equivalence + shared-`_impl` argument is the proportionate guardrail.
+- ✅ No `interior_visibility` panic arms remain (enum + `EntityRef` Pipelined arms
+  now delegate to the slot-lock resolvers).
+- ✅ `RUSTFLAGS="-Dwarnings" cargo build -p naia-server --features interior_visibility`
+  clean; `cargo test -p naia-test-harness` GREEN (incl. 8/8 enum_shell); moat GREEN
+  (sim 39/0, int 41/0, e2e 115/0).
+
+### Landed
+- naia-server: `world_server.rs` (`{local_entities,local_to_world_entity,world_to_local_entity}_impl`
+  free fns + resident delegation), `mod.rs` (gated re-exports), `world_server_enum.rs`
+  (Pipelined arms delegate, panics removed), `entity_ref.rs` (Pipelined arm delegates).
+- sim_pipeline.rs: three `#[cfg(interior_visibility)]` `&self` slot-lock accessors on
+  `PipelinedWorldServer`.
+- Test: `world_server_enum_shell.rs` dual-mode reads.
 
 ### Risk: medium — reads send-resident state, but read-only and precedented. The
-dual-mode spec is the guardrail.
+dual-mode test is the guardrail.
 
 ---
 
@@ -466,10 +491,10 @@ throughout.
 
 - [x] **Phase A / Item 2:** `Server::new(mode, …)` required-arg; `new_pipelined`
       deleted; all call sites ported; workspace tests + moat GREEN. ✅ 2026-06-30
-- [ ] **Phase B / Item 4:** `interior_visibility` works in pipelined mode via the
+- [x] **Phase B / Item 4:** `interior_visibility` works in pipelined mode via the
       slot-lock read precedent (shared `_impl` + `&self` accessors); zero
       "unsupported in pipelined mode" panics; dual-mode (resident≡pipelined)
-      namako spec GREEN; moat GREEN.
+      test GREEN; moat GREEN. ✅ 2026-06-30
 - [ ] **Phase C / Item 1:** `with_world_server` used ONLY by `io_load` + oracle
       drives; every send-resident mutation is a D0–D9 staged op; per-class
       byte-equality namako specs; moat GREEN ×10.

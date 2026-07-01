@@ -1004,6 +1004,76 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         )
     }
 
+    // ── `interior_visibility` send-resident `&self` reads (slot-lock, no reassembly) ──
+    //
+    // Same shape as `user_scope_has_entity_ref`: lock the parked send handle
+    // read-only (`send_slot.lock().as_ref()`, NO take), take a coord snapshot,
+    // and share the canonical body with the fused engine via the
+    // `crate::server::*_impl` free functions — zero drift, no `with_world_server`
+    // reassembly. Fail-loud if the send handle is not parked (a read issued
+    // between `receive()` and `send()`).
+
+    /// All LocalEntity ids replicated to `user_key`. Panics if the user does not
+    /// exist (matches the resident contract). Mirrors
+    /// `InternalWorldServer::local_entities`.
+    #[cfg(feature = "interior_visibility")]
+    pub fn local_entities(&self, user_key: &UserKey) -> Vec<naia_shared::LocalEntity> {
+        let coord = self.coord();
+        let send = self.send_slot.lock();
+        let send = send.as_ref().expect(
+            "PipelinedWorldServer::local_entities: SendHandle not in slot — read between receive() and send()",
+        );
+        crate::server::local_entities_impl(
+            &coord.state.user_store,
+            &send.state.send_user_connections,
+            user_key,
+        )
+    }
+
+    /// Resolve the world entity a `local_entity` maps to for `user_key`. Mirrors
+    /// `InternalWorldServer::local_to_world_entity`.
+    #[cfg(feature = "interior_visibility")]
+    pub fn local_to_world_entity(
+        &self,
+        user_key: &UserKey,
+        local_entity: &naia_shared::LocalEntity,
+    ) -> Option<E> {
+        let coord = self.coord();
+        let send = self.send_slot.lock();
+        let send = send.as_ref().expect(
+            "PipelinedWorldServer::local_to_world_entity: SendHandle not in slot — read between receive() and send()",
+        );
+        crate::server::local_to_world_entity_impl(
+            &coord.shared,
+            &coord.state.user_store,
+            &send.state.send_user_connections,
+            user_key,
+            local_entity,
+        )
+    }
+
+    /// Resolve the `LocalEntity` a `world_entity` maps to for `user_key`. Mirrors
+    /// `InternalWorldServer::world_to_local_entity`.
+    #[cfg(feature = "interior_visibility")]
+    pub fn world_to_local_entity(
+        &self,
+        user_key: &UserKey,
+        world_entity: &E,
+    ) -> Option<naia_shared::LocalEntity> {
+        let coord = self.coord();
+        let send = self.send_slot.lock();
+        let send = send.as_ref().expect(
+            "PipelinedWorldServer::world_to_local_entity: SendHandle not in slot — read between receive() and send()",
+        );
+        crate::server::world_to_local_entity_impl(
+            &coord.shared,
+            &coord.state.user_store,
+            &send.state.send_user_connections,
+            user_key,
+            world_entity,
+        )
+    }
+
     // ── Send-resident `&mut` mutations (with_world_server reassembly) ──
 
     /// Include/exclude `world_entity` in `user_key`'s explicit scope.

@@ -100,17 +100,10 @@ cfg_if! {
             pub fn local_entity(&self, user_key: &UserKey) -> Option<LocalEntity> {
                 match &self.server {
                     EntityRefTarget::Resident(ws) => ws.world_to_local_entity(user_key, &self.entity),
-                    EntityRefTarget::Pipelined(_) => {
-                        // The user→local-entity scope map is send-resident state, not
-                        // immutably reachable from a `&PipelinedWorldServer` (reassembly
-                        // needs `&mut`). `interior_visibility` + pipelined is not a
-                        // supported configuration — fail loud rather than return a wrong
-                        // `None`.
-                        panic!(
-                            "EntityRef::local_entity is unsupported in pipelined mode \
-                             (interior_visibility scope state is send-resident)"
-                        )
-                    }
+                    // The user→local-entity scope map is send-resident; the
+                    // pipelined arm reads it via a `&self` slot-lock read that
+                    // shares the resident body (`world_to_local_entity_impl`).
+                    EntityRefTarget::Pipelined(ps) => ps.world_to_local_entity(user_key, &self.entity),
                 }
             }
         }

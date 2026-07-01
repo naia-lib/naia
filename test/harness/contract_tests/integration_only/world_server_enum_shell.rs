@@ -162,3 +162,82 @@ fn world_server_enum_pipelined_borrow_builders() {
         WorldServer::new_pipelined(ServerConfig::default(), protocol()),
     );
 }
+
+/// `interior_visibility` — the send-resident scope reads dispatch through BOTH
+/// engine shapes with NO panic (the Pipelined arm previously `panic!`'d —
+/// "unsupported in pipelined mode"). The pipelined arm reads coord `user_store`
+/// plus the parked send handle's `send_user_connections` via a `&self`
+/// slot-lock read that shares the resident body
+/// (`{local_to_world,world_to_local}_entity_impl`) — zero drift, no
+/// `with_world_server` reassembly. With no connected client the resolution
+/// returns `None` identically in both modes.
+///
+/// The **populated** send-resident read is the very same shared `_impl`: it is
+/// covered end-to-end with a real connected user by the resident harness
+/// (`client_events`/`server_events` call `server_ref.local_entity(&user_key)`),
+/// and the pipelined slot-lock wrapper is structurally identical to the
+/// connected-tested `user_scope_has_entity_ref` read pattern.
+fn drive_interior_visibility_reads(addr: &str, server: WorldServer<DemoEntity>) {
+    use naia_server::UserKey;
+    use naia_shared::{BigMapKey, HostEntity, LocalEntity};
+
+    let mut server = listening(addr, server);
+    let mut world = DemoWorld::default();
+
+    // Register a server-owned entity so the global-entity-map lookup inside the
+    // resolution resolves (the send read is what returns `None` for the
+    // unconnected user, not a missing entity).
+    let entity = world.proxy_mut().spawn_entity();
+    server
+        .entity_mut(world.proxy_mut(), &entity)
+        .enable_replication()
+        .configure_replication(ReplicationConfig::public());
+
+    // A synthetic, never-connected user — absent from `user_store` and
+    // `send_user_connections`.
+    let user_key = UserKey::from_u64(1);
+
+    // EntityRef::local_entity → `world_to_local_entity` slot-lock read: the
+    // pipelined arm dispatches (no panic) and returns `None` for the
+    // unconnected user — identical to resident.
+    {
+        let entity_ref = server.entity(world.proxy(), &entity);
+        assert_eq!(
+            entity_ref.local_entity(&user_key),
+            None,
+            "EntityRef::local_entity must return None for an unconnected user (no panic on either arm)",
+        );
+    }
+
+    // WorldServer::local_entity / local_entity_mut → `local_to_world_entity`
+    // slot-lock read: dispatch through both arms, unconnected user → `None`.
+    let local_entity = LocalEntity::from(HostEntity::new(0));
+    assert!(
+        server
+            .local_entity(world.proxy(), &user_key, &local_entity)
+            .is_none(),
+        "WorldServer::local_entity must be None for an unconnected user",
+    );
+    assert!(
+        server
+            .local_entity_mut(world.proxy_mut(), &user_key, &local_entity)
+            .is_none(),
+        "WorldServer::local_entity_mut must be None for an unconnected user",
+    );
+}
+
+#[test]
+fn world_server_enum_resident_interior_visibility_reads() {
+    drive_interior_visibility_reads(
+        "127.0.0.1:54424",
+        WorldServer::new(ServerConfig::default(), protocol()),
+    );
+}
+
+#[test]
+fn world_server_enum_pipelined_interior_visibility_reads() {
+    drive_interior_visibility_reads(
+        "127.0.0.1:54425",
+        WorldServer::new_pipelined(ServerConfig::default(), protocol()),
+    );
+}

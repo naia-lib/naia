@@ -4543,6 +4543,79 @@ cfg_if! {
 
         use naia_shared::{LocalEntity, OwnedLocalEntity};
 
+        // ── Shared `interior_visibility` read bodies (task-#9 `_impl` pattern) ──
+        //
+        // The user→local-entity converter is send-resident (it lives in each
+        // user's `SendConnection.base.world_manager`). These free functions take
+        // `&` refs to the coord-resident `user_store`, the send-resident
+        // `send_user_connections`, and shared `global_entity_map`, so BOTH the
+        // fused engine (resident) and the pipelined `&self` slot-lock read path
+        // (`PipelinedWorldServer::{local_entities,local_to_world_entity,
+        // world_to_local_entity}`) share ONE body — zero semantic drift across
+        // the engine split. They mutate nothing. Mirrors
+        // [`user_scope_has_entity_impl`].
+
+        /// Panics if the user (or their send connection) does not exist — matches
+        /// the resident `local_entities` contract.
+        pub(crate) fn local_entities_impl(
+            user_store: &UserStore,
+            send_user_connections: &std::collections::HashMap<std::net::SocketAddr, crate::connection::SendConnection>,
+            user_key: &UserKey,
+        ) -> Vec<LocalEntity> {
+            let user = user_store.get(user_key).expect("User does not exist");
+            let send_conn = send_user_connections
+                .get(&user.address())
+                .expect("User connection does not exist");
+            send_conn.base.world_manager.local_entities()
+        }
+
+        pub(crate) fn local_to_world_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
+            shared: &crate::server::ServerShared<E>,
+            user_store: &UserStore,
+            send_user_connections: &std::collections::HashMap<std::net::SocketAddr, crate::connection::SendConnection>,
+            user_key: &UserKey,
+            local_entity: &LocalEntity,
+        ) -> Option<E> {
+            let user = user_store.get(user_key)?;
+            let send_conn = send_user_connections.get(&user.address())?;
+            let converter = send_conn.base.world_manager.entity_converter();
+
+            let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
+            let global_entity = converter
+                .owned_entity_to_global_entity(&owned_local_entity)
+                .ok()?;
+            let world_entity = shared
+                .global_entity_map
+                .read()
+                .global_entity_to_entity(&global_entity)
+                .ok()?;
+
+            Some(world_entity)
+        }
+
+        pub(crate) fn world_to_local_entity_impl<E: Copy + Eq + Hash + Send + Sync>(
+            shared: &crate::server::ServerShared<E>,
+            user_store: &UserStore,
+            send_user_connections: &std::collections::HashMap<std::net::SocketAddr, crate::connection::SendConnection>,
+            user_key: &UserKey,
+            world_entity: &E,
+        ) -> Option<LocalEntity> {
+            let global_entity = shared
+                .global_entity_map
+                .read()
+                .entity_to_global_entity(world_entity)
+                .ok()?;
+
+            let user = user_store.get(user_key)?;
+            let send_conn = send_user_connections.get(&user.address())?;
+            let converter = send_conn.base.world_manager.entity_converter();
+            let owned_entity = converter
+                .global_entity_to_owned_entity(&global_entity)
+                .ok()?;
+
+            Some(LocalEntity::from(owned_entity))
+        }
+
         impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             /// Returns all LocalEntity IDs for entities replicated to the given user.
             ///
@@ -4554,13 +4627,11 @@ cfg_if! {
             ///
             /// Panics if the user does not exist.
             pub fn local_entities(&self, user_key: &UserKey) -> Vec<LocalEntity> {
-                let user = self.sim_handle.state.user_store.get(user_key).expect("User does not exist");
-                let send_conn = self.send.state
-                    .send_user_connections
-                    .get(&user.address())
-                    .expect("User connection does not exist");
-
-                send_conn.base.world_manager.local_entities()
+                local_entities_impl(
+                    &self.sim_handle.state.user_store,
+                    &self.send.state.send_user_connections,
+                    user_key,
+                )
             }
 
             /// Retrieves an EntityRef that exposes read-only operations for the Entity
@@ -4608,17 +4679,13 @@ cfg_if! {
                 user_key: &UserKey,
                 local_entity: &LocalEntity
             ) -> Option<E> {
-                let user = self.sim_handle.state.user_store.get(user_key)?;
-                let send_conn = self.send.state.send_user_connections.get(&user.address())?;
-                let converter = send_conn.base.world_manager.entity_converter();
-
-                let owned_local_entity: OwnedLocalEntity = (*local_entity).into();
-                let global_entity = converter.owned_entity_to_global_entity(&owned_local_entity).ok()?;
-                let world_entity = self.shared.global_entity_map.read()
-                    .global_entity_to_entity(&global_entity)
-                    .ok()?;
-
-                Some(world_entity)
+                local_to_world_entity_impl(
+                    &self.shared,
+                    &self.sim_handle.state.user_store,
+                    &self.send.state.send_user_connections,
+                    user_key,
+                    local_entity,
+                )
             }
 
             pub(crate) fn world_to_local_entity(
@@ -4626,14 +4693,13 @@ cfg_if! {
                 user_key: &UserKey,
                 world_entity: &E,
             ) -> Option<LocalEntity> {
-                let global_entity = self.shared.global_entity_map.read().entity_to_global_entity(world_entity).ok()?;
-
-                let user = self.sim_handle.state.user_store.get(user_key)?;
-                let send_conn = self.send.state.send_user_connections.get(&user.address())?;
-                let converter = send_conn.base.world_manager.entity_converter();
-                let owned_entity = converter.global_entity_to_owned_entity(&global_entity).ok()?;
-
-                Some(LocalEntity::from(owned_entity))
+                world_to_local_entity_impl(
+                    &self.shared,
+                    &self.sim_handle.state.user_store,
+                    &self.send.state.send_user_connections,
+                    user_key,
+                    world_entity,
+                )
             }
         }
     }

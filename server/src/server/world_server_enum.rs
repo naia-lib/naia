@@ -1290,45 +1290,47 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn local_entities(&self, user_key: &UserKey) -> Vec<naia_shared::LocalEntity> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.local_entities(user_key),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::local_entities is unsupported in pipelined mode \
-                 (interior_visibility scope state is send-resident)"
-            ),
+            WorldServerImpl::Pipelined(ps) => ps.local_entities(user_key),
         }
     }
 
     /// A read-only handle to the entity identified by `local_entity` for the
-    /// given user. Resident-only (see [`crate::EntityRef::local_entity`]).
+    /// given user (see [`crate::EntityRef::local_entity`]). Works in both drive
+    /// shapes: the user→local-entity resolution reads send-resident state
+    /// (directly on the fused engine, via a slot-lock read on the pipelined arm),
+    /// then delegates to the shared [`entity`](Self::entity) tail.
     pub fn local_entity<W: WorldRefType<E>>(
         &self,
         world: W,
         user_key: &UserKey,
         local_entity: &naia_shared::LocalEntity,
     ) -> Option<EntityRef<'_, E, W>> {
-        match &self.inner {
-            WorldServerImpl::Resident(ws) => ws.local_entity(world, user_key, local_entity),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::local_entity is unsupported in pipelined mode \
-                 (interior_visibility scope state is send-resident)"
-            ),
+        let world_entity = match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.local_to_world_entity(user_key, local_entity),
+            WorldServerImpl::Pipelined(ps) => ps.local_to_world_entity(user_key, local_entity),
+        }?;
+        if !world.has_entity(&world_entity) {
+            return None;
         }
+        Some(self.entity(world, &world_entity))
     }
 
-    /// A mutable handle to the entity identified by `local_entity` for the
-    /// given user. Resident-only.
+    /// A mutable handle to the entity identified by `local_entity` for the given
+    /// user. Works in both drive shapes (see [`local_entity`](Self::local_entity)).
     pub fn local_entity_mut<W: WorldMutType<E>>(
         &mut self,
         world: W,
         user_key: &UserKey,
         local_entity: &naia_shared::LocalEntity,
     ) -> Option<EntityMut<'_, E, W>> {
-        match &mut self.inner {
-            WorldServerImpl::Resident(ws) => ws.local_entity_mut(world, user_key, local_entity),
-            WorldServerImpl::Pipelined(_) => panic!(
-                "WorldServer::local_entity_mut is unsupported in pipelined mode \
-                 (interior_visibility scope state is send-resident)"
-            ),
+        let world_entity = match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.local_to_world_entity(user_key, local_entity),
+            WorldServerImpl::Pipelined(ps) => ps.local_to_world_entity(user_key, local_entity),
+        }?;
+        if !world.has_entity(&world_entity) {
+            return None;
         }
+        Some(self.entity_mut(world, &world_entity))
     }
 }
 

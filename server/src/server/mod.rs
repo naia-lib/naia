@@ -10,6 +10,10 @@ pub use main_server::MainServer;
 pub mod world_server;
 pub use world_server::InternalWorldServer;
 pub(crate) use world_server::user_scope_has_entity_impl;
+#[cfg(feature = "interior_visibility")]
+pub(crate) use world_server::{
+    local_entities_impl, local_to_world_entity_impl, world_to_local_entity_impl,
+};
 
 /// The unified `WorldServer` enum (G-unify Phase 2c) over the resident +
 /// pipelined engine shapes.
