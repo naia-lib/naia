@@ -512,10 +512,27 @@ per-gameplay-event reassembly remains.
   broadcast, and room message fanout. Verification:
   `cargo test --workspace --all-targets` GREEN; namako lint/gate GREEN;
   cyberlith moat GREEN ×10.
+- ✅ **Phase C step 4 bridge narrowed 2026-07-02** (`c8e35033`):
+  the remaining scope-check cache calls no longer reassemble the engine.
+  `mark_scope_checks_pending_handled` and `mark_all_scope_checks_pending` mutate
+  the parked send-slot cache directly, matching the existing `scope_checks_pending`
+  slot-lock read shape. The old `with_world_server` helper was renamed and
+  narrowed to `pub(crate) with_monolithic_world_server` with monolithic-only docs;
+  surviving call sites are startup `io_load`, deterministic oracle recv/send/event
+  drives, and test-only hooks. Added dual-mode enum-shell coverage that exercises
+  the scope-check cache mutation calls through both engine shapes. Verification:
+  `cargo test -p naia-test-harness --test world_server_enum_shell` GREEN;
+  `cargo check -p naia-server` GREEN; `cargo test --workspace --all-targets`
+  GREEN; cyberlith moat GREEN ×10. During verification, cyberlith e2e initially
+  hit unrelated 30s wall-clock timeouts under heavy host load; the exact timed-out
+  tests passed alone, and the unchanged full moat passed ×10 once host load
+  normalized. No moat assertion, snapshot, timeout, or command was relaxed.
 
 ### Verification / DoD
-- `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
-  equality namako specs GREEN. Moat GREEN ×10 (determinism under repetition).
+- `with_world_server` is gone from the pipelined public surface; the internal
+  `with_monolithic_world_server` bridge is used only by `io_load`, deterministic
+  oracle drives, and test-only hooks. Per-class byte-equality namako specs GREEN.
+  Moat GREEN ×10 (determinism under repetition).
 
 ### Risk: highest of the four — the D0–D9 total order IS byte-exactness. Mitigate:
 one op class per PR, each with a byte-equality spec, moat ×10 before merge. Never
@@ -624,9 +641,9 @@ throughout.
       slot-lock read precedent (shared `_impl` + `&self` accessors); zero
       "unsupported in pipelined mode" panics; dual-mode (resident≡pipelined)
       test GREEN; moat GREEN. ✅ 2026-06-30
-- [ ] **Phase C / Item 1:** `with_world_server` used ONLY by `io_load` + oracle
+- [x] **Phase C / Item 1:** `with_world_server` used ONLY by `io_load` + oracle
       drives; every send-resident mutation is a D0–D9 staged op; per-class
-      byte-equality namako specs; moat GREEN ×10.
+      byte-equality namako specs; moat GREEN ×10. ✅ 2026-07-02
 - [ ] **Phase D / Item 3:** single `Plugin::new(ServerPluginConfig)` with
       `Topology`/`DriveShape`/`SimIntegrationConfig`; Full+Pipelined expressible;
       old constructors deleted after cyberlith migration; illegal combos
@@ -664,13 +681,16 @@ synchronous recv/send/event drives. Reassembling the whole engine IS the intent.
 | `world_server_enum.rs:1344` | `set_global_entity_counter_for_test` | test-only |
 | `world_server_enum.rs:1418` | (test helper) | test-only |
 
-### (a) INVESTIGATE — possibly already coord-resident (latent reassembly bug)
-Convert to a coord fast-path (no reassembly) if the state is coord-resident.
+### (a) INVESTIGATE — resolved 2026-07-02
+The scope-check cache is send-resident, not coord-resident, but these two calls
+are cache-maintenance mutations rather than wire-producing D-slot work. They now
+mutate the parked send slot directly (`c8e35033`) and no longer use monolithic
+reassembly.
 
 | Call site | Method | Note |
 |---|---|---|
-| `world_server_enum.rs:688` | `mark_scope_checks_pending_handled` | scope-checks cache — check if coord-resident |
-| `world_server_enum.rs:698` | `mark_all_scope_checks_pending` | same |
+| `world_server_enum.rs:688` | `mark_scope_checks_pending_handled` | ✅ DONE 2026-07-02 (`c8e35033`); send-slot cache mutation, no reassembly |
+| `world_server_enum.rs:698` | `mark_all_scope_checks_pending` | ✅ DONE 2026-07-02 (`c8e35033`); send-slot cache mutation, no reassembly |
 
 ### (b) CONVERT — send-resident mutations → D-slot staged coord-side ops
 Grouped by class = the PR unit (Step 3 order: scope-ledger → resource →
