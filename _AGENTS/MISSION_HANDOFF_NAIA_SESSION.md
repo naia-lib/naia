@@ -30,6 +30,12 @@ if you need the history. Read this fully before touching anything.
 
 ## MISSION 2 — sim-pipelined namako BDD coverage (OPEN)
 
+> **Still open after `MISSION_PIPELINE_ELEGANCE` (verified 2026-07-02):** the
+> Phase C/D pipeline elegance work added resident≡pipelined-oracle byte-equality
+> specs for the staged op classes, but it did **not** build the sim-mode NPA
+> adapter requested here. Fresh check: no `test/sim_npa/`, no `test/sim_specs/`,
+> no `sim_*.feature`, and no `g8_real_ack_byte_identity.rs` exist.
+
 **The gap:** naia's sim-pipelined / sim-integration mode (the mode cyberlith runs
 in prod) has ZERO namako BDD coverage — only raw `#[test]` files in
 `adapters/bevy/server/tests/` (currently 17, prefixed `sim_*` /

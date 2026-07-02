@@ -52,6 +52,12 @@ governing_rule: "naia owns ALL pipelined-sim functionality; cyberlith consumes O
 > P5 (write the new test, run it under both `ServerMode::Resident` and `ServerMode::Pipelined`).
 > Companion: memory `project_naia_g10_cyberlith_cutover.md` (final ledger bullet) carries the same
 > plan.
+>
+> **Still open after `MISSION_PIPELINE_ELEGANCE` (verified 2026-07-02):** the Phase
+> C/D elegance work completed the D0-D9 send-resident staging and Bevy plugin
+> constructor cleanup, but did not implement this doc's P4/P5. Fresh checks:
+> `rg -n "Scenario::new\\(" test -g '*.rs' | wc -l` → 132; no
+> `g8_real_ack_byte_identity.rs` exists.
 
 ### The reframe
 
