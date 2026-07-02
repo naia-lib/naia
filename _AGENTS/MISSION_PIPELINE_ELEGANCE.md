@@ -494,6 +494,24 @@ per-gameplay-event reassembly remains.
   disabled, enabled, filtered-enabled, and record paths behave identically.
   Verification: `cargo test --workspace --all-targets` GREEN; cyberlith moat
   GREEN ×10.
+- ✅ **D6 outbound messages staged op landed 2026-07-02** (`7b4e4104`):
+  `send_message`, `broadcast_message`, `send_request`, `send_response`, and
+  `room_broadcast_message` now enqueue coord-side `PendingOutboundMessageOp`s and
+  drain in D6 after authority and before scope-ledger. The generic `<C, M>`
+  payloads are type-erased as `MessageContainer`s at enqueue time; request and
+  response id bookkeeping remains synchronous, while broadcast and room fanout
+  targets are captured at call time to preserve resident ordering. Liveness was
+  re-verified against cyberlith production usage in
+  `services/game/cell/src/server_access.rs` (`EntityAssignmentChannel` /
+  `DesyncDetectionChannel`) plus the session/asset-editor response and
+  level-editor broadcast call sites, so the class remains **(b) CONVERT** rather
+  than reclassified. Added namako scenario `[pipeline-d6-messages-01]` plus the
+  Rust contract test
+  `phase_c_d6_messages_resident_pipelined_oracle_byte_identity`, both asserting
+  resident ≡ pipelined-oracle server-to-client byte equality for direct,
+  broadcast, and room message fanout. Verification:
+  `cargo test --workspace --all-targets` GREEN; namako lint/gate GREEN;
+  cyberlith moat GREEN ×10.
 
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
@@ -662,11 +680,11 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 
 | Call site | Method | Class → D-slot |
 |---|---|---|
-| `world_server_enum.rs:617` | `send_message` | **messages → D6** |
-| `world_server_enum.rs:627` | `broadcast_message` | messages → D6 |
-| `world_server_enum.rs:651` | `send_request` | messages → D6 |
-| `world_server_enum.rs:665` | `send_response` | messages → D6 |
-| `sim_pipeline.rs:1102` | `room_broadcast_message` | messages → D6 |
+| `world_server_enum.rs:617` | `send_message` | **messages → D6** ✅ DONE 2026-07-02 (`7b4e4104`); live in cyberlith `server_access.rs` (`EntityAssignmentChannel` / `DesyncDetectionChannel`) |
+| `world_server_enum.rs:627` | `broadcast_message` | messages → D6 ✅ DONE 2026-07-02 (`7b4e4104`); staged fanout, live in level-editor flows |
+| `world_server_enum.rs:651` | `send_request` | messages → D6 ✅ DONE 2026-07-02 (`7b4e4104`); staged request payload, sync id bookkeeping |
+| `world_server_enum.rs:665` | `send_response` | messages → D6 ✅ DONE 2026-07-02 (`7b4e4104`); live in session/asset-editor response flows |
+| `sim_pipeline.rs:1102` | `room_broadcast_message` | messages → D6 ✅ DONE 2026-07-02 (`7b4e4104`); staged room fanout with call-time target capture |
 | `sim_pipeline.rs:1083` | `user_scope_set_entity` | **scope-ledger → D7** ✅ DONE 2026-07-01 (`45eca186`); live in cyberlith `send_helpers.rs` |
 | `sim_pipeline.rs:1089` | `user_scope_remove_user` | scope-ledger → D7 ✅ DONE 2026-07-01 (`45eca186`); same staged queue |
 | `world_server_enum.rs:770` | `insert_resource` | **resource → D2** ✅ DONE 2026-07-01 (`815ac293`); live in cyberlith `tile_startup.rs` |
