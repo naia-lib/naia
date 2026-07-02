@@ -481,6 +481,19 @@ per-gameplay-event reassembly remains.
   grant, reset, and release authority fanout. Verification:
   `cargo test --workspace --all-targets` GREEN; namako lint/gate GREEN;
   cyberlith moat GREEN ×10.
+- ✅ **D5 historian reclassified/fast-pathed 2026-07-02** (`9b7ad06b`):
+  `enable_historian`, `enable_historian_filtered`, and `record_historian_tick`
+  were re-verified before conversion and have no live cyberlith production
+  callers (`rg` only found archived design docs). The implementation check showed
+  the class is not send-resident: `CoordState::historian` already owns the
+  buffer, and recording only needs coord/shared reads plus the caller's world
+  reference. The pipelined arms now mutate/read coord state directly instead of
+  reassembling the engine; no dead D5 send queue was added. Added dual-mode Rust
+  coverage in `world_server_enum_shell`
+  (`world_server_enum_{resident,pipelined}_historian_fast_path`) asserting the
+  disabled, enabled, filtered-enabled, and record paths behave identically.
+  Verification: `cargo test --workspace --all-targets` GREEN; cyberlith moat
+  GREEN ×10.
 
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
@@ -677,9 +690,9 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `entity_mut.rs:247` | `entity_give_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); same staged queue |
 | `entity_mut.rs:263` | `entity_take_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); same staged queue |
 | `entity_mut.rs:280` | `entity_release_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); same staged queue |
-| `world_server_enum.rs:860` | `enable_historian` | **historian → D5** |
-| `world_server_enum.rs:876` | `enable_historian_filtered` | historian → D5 |
-| `world_server_enum.rs:886` | `record_historian_tick` | historian → D5 |
+| `world_server_enum.rs:860` | `enable_historian` | **historian → D5** ✅ RECLASSIFIED/FAST-PATH 2026-07-02 (`9b7ad06b`); coord-resident `CoordState::historian`, no live cyberlith production caller |
+| `world_server_enum.rs:876` | `enable_historian_filtered` | historian → D5 ✅ RECLASSIFIED/FAST-PATH 2026-07-02 (`9b7ad06b`); same coord-resident buffer |
+| `world_server_enum.rs:886` | `record_historian_tick` | historian → D5 ✅ RECLASSIFIED/FAST-PATH 2026-07-02 (`9b7ad06b`); records directly from coord/shared reads plus caller world |
 
 **Caveat before converting (b):** several of these run TODAY only when the workers
 are parked (control ops issued during the consumer's park window). Confirm each
