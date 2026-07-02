@@ -30,6 +30,9 @@ if you need the history. Read this fully before touching anything.
 
 ## MISSION 2 — sim-pipelined namako BDD coverage (OPEN)
 
+> Canonical standalone follow-up doc:
+> `_AGENTS/MISSION_SIM_PIPELINED_NAMAKO_BDD.md`.
+
 > **Still open after `MISSION_PIPELINE_ELEGANCE` and boundary P4/P5 (verified
 > 2026-07-02):** the Phase C/D pipeline elegance work added
 > resident≡pipelined-oracle byte-equality specs for the staged op classes, and
