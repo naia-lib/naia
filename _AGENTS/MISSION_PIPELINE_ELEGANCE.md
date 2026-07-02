@@ -610,22 +610,59 @@ Full, legal-only matrix:
    and `Plugin::new(config)`; route the existing `new_impl` internals from the
    config (the 5 booleans become a pure function of the enum — encode that mapping
    once, centrally).
-2. Turn the 7 old constructors into thin **`#[deprecated]` shims** that build a
-   config and call `Plugin::new` — keeps naia + cyberlith compiling while they
-   migrate in separate commits.
+2. **DECISION 2026-07-02:** land the final surface directly instead of adding
+   deprecated shims. Rust inherent methods cannot overload by arity, so the old
+   two-argument `Plugin::new(server_config, protocol)` cannot coexist with
+   `Plugin::new(ServerPluginConfig)`. The deprecated shim bridge is therefore
+   impossible for the old `new` name. The old constructors were removed in the
+   same working set that migrated naia, cyberlith, and slag call sites.
 3. Migrate cyberlith call sites (in `/home/connor/Work/specops/cyberlith`):
    - `services/game/cell/src/init.rs:102` `NaiaServerPlugin::pipelined(...)` →
-     `WorldProxied(Pipelined(cfg))`.
+     `WorldProxied(Pipelined(cfg))`. ✅ DONE 2026-07-02
+     (`cyberlith` `edcac92bb`)
    - game cell Sim `sim_integration_with_schedule(SimMain)` (see
-     `services/game/cell/src/sim_app.rs`) → `SimIntegration{ schedule: Some(SimMain), … }`.
+     `services/game/cell/src/sim_app.rs`) → **not a live old-constructor call
+     site in the Phase-D tree; no migration required.**
    - `services/asset_editor/src/main.rs:93` & `src/server_local.rs:145`
-     `ServerPlugin::new(...)` → `Standalone(Resident)`.
+     `ServerPlugin::new(...)` → `Standalone(Resident)`. ✅ DONE 2026-07-02
+     (`cyberlith` `edcac92bb`)
+   - `/home/connor/Work/specops/slag/services/session/src/user/plugin.rs`
+     `NaiaServerPlugin::new(...)` → `Standalone(Resident)` because the
+     cyberlith moat compiles through slag. ✅ DONE 2026-07-02 (`slag`
+     `c061c29`)
 4. Delete the deprecated shims once cyberlith is fully moved. Moat GREEN.
+   ✅ DONE 2026-07-02 (`7f2155aa`).
+
+### Phase-D landing — DONE 2026-07-02 (`7f2155aa`)
+- Added the single public constructor surface:
+  `Plugin::new(ServerPluginConfig { server_config, protocol, topology })`.
+  The public config exports are `ServerPluginConfig`, `Topology`, `DriveShape`,
+  and `SimIntegrationConfig`.
+- Removed the old constructors: `pipelined`, `world_only`,
+  `world_only_pipeline`, `types_and_sets_only`, `sim_integration`, and
+  `sim_integration_with_schedule`. The old two-argument `Plugin::new` was
+  replaced by `Plugin::new(ServerPluginConfig)`.
+- `Standalone(Pipelined(cfg))` is now expressible. It constructs a full
+  `Server::<Entity>::new(ServerMode::Pipelined, ...)` instead of being limited
+  to the world-proxied path.
+- `WorldProxied(Pipelined(cfg))` remains the former full-pipelining shape:
+  `ServerImpl::WorldOnly(WorldServer::from_pipelined(...))`.
+- `SimIntegration(cfg)` represents the external-world/handles-only shape.
+- `world_only_pipeline` was deprecated by deletion: there were no live call
+  sites, and the name described a pipelined engine even though the old path built
+  a Resident engine with externally driven recv/send. No replacement constructor
+  was added for that mislabeled shape.
+- Verification: `cargo check -p naia-bevy-server` GREEN;
+  `cargo test -p naia-bevy-server --tests` GREEN;
+  `cargo test --workspace --all-targets` GREEN;
+  cyberlith `cargo check -p game_cell -p asset_editor_server` GREEN;
+  cyberlith moat GREEN ×10. Sibling migrations landed as `cyberlith`
+  `edcac92bb` and `slag` `c061c29`.
 
 ### Verification / DoD
 - One `Plugin::new(ServerPluginConfig)`; `Standalone(Pipelined)` expressible;
   illegal combos unrepresentable at the type level; old constructors gone after
-  migration. naia tests + cyberlith moat GREEN.
+  migration. naia tests + cyberlith moat GREEN ×10.
 
 ### Risk: medium — touches the public plugin surface + cyberlith init. The
 deprecated-shim bridge lets naia and cyberlith move independently, moat GREEN
@@ -644,13 +681,13 @@ throughout.
 - [x] **Phase C / Item 1:** `with_world_server` used ONLY by `io_load` + oracle
       drives; every send-resident mutation is a D0–D9 staged op; per-class
       byte-equality namako specs; moat GREEN ×10. ✅ 2026-07-02
-- [ ] **Phase D / Item 3:** single `Plugin::new(ServerPluginConfig)` with
+- [x] **Phase D / Item 3:** single `Plugin::new(ServerPluginConfig)` with
       `Topology`/`DriveShape`/`SimIntegrationConfig`; Full+Pipelined expressible;
       old constructors deleted after cyberlith migration; illegal combos
-      unrepresentable; moat GREEN.
-- [ ] Across ALL phases: naia on `dev`; no wire-format change; moat never loosened,
+      unrepresentable; moat GREEN. ✅ 2026-07-02 (`7f2155aa`)
+- [x] Across ALL phases: naia on `dev`; no wire-format change; moat never loosened,
       no snapshot regenerated, no assertion relaxed; each phase landed GREEN
-      before the next began.
+      before the next began. ✅ 2026-07-02
 
 ## Appendix — `with_world_server` call-site inventory  *(Phase C step 1 — DONE 2026-06-30)*
 
