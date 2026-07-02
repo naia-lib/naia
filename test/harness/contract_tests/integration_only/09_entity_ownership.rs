@@ -36,7 +36,7 @@ use _helpers::{client_connect, server_and_client_connected, test_client_config};
 ///     entity cannot revert to client ownership.
 #[test]
 fn client_owned_entity_migrates_to_server_owned_delegated() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -122,7 +122,7 @@ fn client_owned_entity_migrates_to_server_owned_delegated() {
 /// The owning client A retains the entity and never receives a despawn event for it.
 #[test]
 fn private_entity_owner_retains_across_scope_changes() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -212,7 +212,7 @@ fn private_entity_owner_retains_across_scope_changes() {
 /// a despawn event. A — as the owner — does NOT receive a despawn and retains the entity.
 #[test]
 fn owner_retains_entity_when_non_owner_leaves_scope() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

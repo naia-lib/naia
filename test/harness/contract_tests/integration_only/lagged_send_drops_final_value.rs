@@ -60,7 +60,7 @@ fn build_snap(entity: TestEntity, (x, y): (f32, f32)) -> SnapshotWorld<TestEntit
 
 #[test]
 fn lagged_send_delivers_final_consecutive_value() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let proto = protocol();
 
     let mut client_config = ClientConfig::default();

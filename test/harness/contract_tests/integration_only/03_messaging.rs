@@ -49,7 +49,7 @@ use _helpers::{
 /// DO follow the spec (return Result), and documents known gaps.
 #[test]
 fn messaging_01_user_errors_return_result() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -110,7 +110,7 @@ fn messaging_01_user_errors_return_result() {
 fn messaging_02_remote_input_no_panic() {
     use std::panic::{catch_unwind, AssertUnwindSafe};
 
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -199,7 +199,7 @@ fn messaging_02_remote_input_no_panic() {
 /// then send_message returns Result::Err rather than panicking or fragmenting.
 #[test]
 fn messaging_15_unreliable_fragmentation_limit() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -243,7 +243,7 @@ fn messaging_15_unreliable_fragmentation_limit() {
 /// fragment limit (2^16); then the message sends successfully (may be fragmented).
 #[test]
 fn messaging_16_reliable_fragmentation_allowed() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -296,7 +296,7 @@ fn messaging_16_reliable_fragmentation_allowed() {
 ///   view of due messages under retransmission (no raw-index sort)
 #[test]
 fn messaging_16b_reliable_request_response_fragmentation() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol_with_large_req_resp();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -392,7 +392,7 @@ fn messaging_16b_reliable_request_response_fragmentation() {
 /// when entity spawns and is mapped; then the buffered message is delivered.
 #[test]
 fn messaging_18_entity_property_message_buffering() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -466,7 +466,7 @@ fn messaging_18_entity_property_message_buffering() {
 /// when time advances > 60 seconds; then buffered messages are dropped.
 #[test]
 fn messaging_19_entity_property_ttl() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -544,7 +544,7 @@ fn messaging_19_entity_property_ttl() {
 /// when the entity enters scope; then exactly 128 messages are delivered (oldest evicted, FIFO).
 #[test]
 fn messaging_20_entity_property_buffer_caps() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -663,7 +663,7 @@ fn misusing_channel_types_yields_defined_failure() {
 fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
 
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
 
     // Create the standard protocol for the server
     let server_protocol = protocol();
@@ -765,7 +765,7 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
 /// demonstrating that channel compatibility is guaranteed by protocol_id match.
 #[test]
 fn matched_protocol_id_enables_successful_messaging() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -814,7 +814,7 @@ fn matched_protocol_id_enables_successful_messaging() {
 /// updated to verify timeout events are emitted and tracking is released.
 #[test]
 fn request_timeouts_are_surfaced_and_cleaned_up() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -882,7 +882,7 @@ fn request_timeouts_are_surfaced_and_cleaned_up() {
 /// should verify that cancellation events are emitted.
 #[test]
 fn requests_fail_cleanly_on_disconnect_mid_flight() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -961,7 +961,7 @@ fn requests_fail_cleanly_on_disconnect_mid_flight() {
 /// then with no loss all messages arrive once; with configured loss some messages never arrive and are not retried.
 #[test]
 fn unordered_unreliable_channel_shows_best_effort_semantics() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1013,7 +1013,7 @@ fn unordered_unreliable_channel_shows_best_effort_semantics() {
 /// and nothing is misrouted/decoded as wrong type.
 #[test]
 fn multi_type_mapping_across_messages_components_and_channels() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1136,7 +1136,7 @@ fn multi_type_mapping_across_messages_components_and_channels() {
 /// then client drops U3,U4 and only applies newest sequence, never reverting.
 #[test]
 fn sequenced_unreliable_channel_discards_late_outdated_updates() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1188,7 +1188,7 @@ fn sequenced_unreliable_channel_discards_late_outdated_updates() {
 /// then client eventually observes exactly one matching response for that ID, even under packet duplication.
 #[test]
 fn client_to_server_request_yields_exactly_one_response() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1267,7 +1267,7 @@ fn client_to_server_request_yields_exactly_one_response() {
 /// then each client only sees responses to its own requests and no response is misrouted to another client.
 #[test]
 fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1392,7 +1392,7 @@ fn concurrent_requests_from_multiple_clients_stay_isolated_per_client() {
 /// then client gets exactly one response per request and correctly matches responses to original requests without collisions.
 #[test]
 fn many_concurrent_requests_from_a_single_client_remain_distinct() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1485,7 +1485,7 @@ fn many_concurrent_requests_from_a_single_client_remain_distinct() {
 /// then A sees exactly one response after its request, no other client sees it, and from A's perspective response comes after its request.
 #[test]
 fn reliable_point_to_point_request_response() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1581,7 +1581,7 @@ fn reliable_point_to_point_request_response() {
 /// then A and B each receive exactly one copy in-order on that channel, and C receives none.
 #[test]
 fn reliable_server_to_clients_broadcast_respects_rooms() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1662,7 +1662,7 @@ fn reliable_server_to_clients_broadcast_respects_rooms() {
 /// then they arrive in the order promised by the contract (e.g., completion order), and the test forces a send-order/completion-order mismatch to verify behavior.
 #[test]
 fn response_completion_order_is_well_defined_and_documented() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1761,7 +1761,7 @@ fn response_completion_order_is_well_defined_and_documented() {
 /// then server observes exactly one matching response for Q with no duplicates even if packets duplicate.
 #[test]
 fn server_to_client_request_yields_exactly_one_response() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1831,7 +1831,7 @@ fn server_to_client_request_yields_exactly_one_response() {
 /// then client receives exactly one A,B,C in some order not guaranteed to match send order.
 #[test]
 fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1883,7 +1883,7 @@ fn unordered_reliable_channel_delivers_all_messages_but_in_arbitrary_order() {
 /// then client still surfaces exactly one A and one B in order with no duplicates.
 #[test]
 fn ordered_reliable_channel_ignores_duplicated_packets() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1931,7 +1931,7 @@ fn ordered_reliable_channel_ignores_duplicated_packets() {
 /// then client receives exactly one A,B,C in order A→B→C.
 #[test]
 fn ordered_reliable_channel_keeps_order_under_latency_and_reordering() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1979,7 +1979,7 @@ fn ordered_reliable_channel_keeps_order_under_latency_and_reordering() {
 /// then on A and B each channel preserves its own order (M1→M2→M3; N1→N2) regardless of interleaving between channels.
 #[test]
 fn per_channel_ordering() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2072,7 +2072,7 @@ fn per_channel_ordering() {
 /// then client may drop older states but ends up exposing S3 only and never reverts to S1 or S2 after seeing S3.
 #[test]
 fn sequenced_reliable_channel_only_exposes_the_latest_message_in_a_stream() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2139,7 +2139,7 @@ fn serialization_failures_are_surfaced_without_poisoning_the_connection() {
 /// then client observes A1,A2 only through ChannelA API and B1,B2 only through ChannelB API.
 #[test]
 fn channel_separation_for_different_message_types() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2202,7 +2202,7 @@ fn channel_separation_for_different_message_types() {
 /// then client exposes buffered messages grouped by tick and never surfaces messages for T+1 before it has processed tick T.
 #[test]
 fn tick_buffered_channel_groups_messages_by_tick() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2310,7 +2310,7 @@ fn tick_buffered_channel_groups_messages_by_tick() {
 /// then late tick-T messages are discarded and not applied to current state.
 #[test]
 fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2344,7 +2344,7 @@ fn tick_buffered_channel_discards_messages_for_ticks_that_are_too_old() {
 /// far-ahead messages are dropped silently.
 #[test]
 fn tick_buffered_channel_discards_too_far_ahead_ticks() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2476,7 +2476,7 @@ fn tick_buffered_channel_discards_too_far_ahead_ticks() {
 /// when requests are created; then each has a unique ID within the connection.
 #[test]
 fn request_id_uniqueness() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2525,7 +2525,7 @@ fn request_id_uniqueness() {
 /// when response arrives; then correct handler is invoked.
 #[test]
 fn response_matching_to_request() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2596,7 +2596,7 @@ fn response_matching_to_request() {
 /// when timeout expires; then request is canceled locally.
 #[test]
 fn request_timeout_semantics() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2634,7 +2634,7 @@ fn request_timeout_semantics() {
 /// when connection disconnects; then all pending requests are canceled.
 #[test]
 fn disconnect_cancels_pending_requests() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2679,7 +2679,7 @@ fn disconnect_cancels_pending_requests() {
 /// when duplicates arrive; then handler is invoked only once.
 #[test]
 fn request_deduplication() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2747,7 +2747,7 @@ fn request_deduplication() {
 /// when requests are sent; then they maintain send order.
 #[test]
 fn rpc_ordering_on_ordered_channel() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -2794,7 +2794,7 @@ fn rpc_ordering_on_ordered_channel() {
 /// when response arrives; then it is dropped (valid usage).
 #[test]
 fn fire_and_forget_request() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

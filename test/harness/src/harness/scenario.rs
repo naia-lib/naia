@@ -161,6 +161,7 @@ pub struct Scenario {
     /// this by comparing the live thread + `TestClock::is_shared()`.
     created_thread: std::thread::ThreadId,
 
+    server_mode: ServerMode,
     hub: LocalTransportHub,
     server: Option<Server>,
     server_world: TestWorld,
@@ -222,14 +223,8 @@ pub struct OperationResult {
     pub panic_msg: Option<String>,
 }
 
-impl Default for Scenario {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl Scenario {
-    pub fn new() -> Self {
+    pub fn new(server_mode: ServerMode) -> Self {
         // Initialize simulated clock for deterministic test time
         TestClock::init(0);
 
@@ -238,6 +233,7 @@ impl Scenario {
 
         Self {
             created_thread: std::thread::current().id(),
+            server_mode,
             hub,
             server: None,
             server_world: TestWorld::default(),
@@ -274,7 +270,7 @@ impl Scenario {
             panic!("server_start() called multiple times");
         }
 
-        let mut server = Server::new(ServerMode::Resident, server_config, protocol);
+        let mut server = Server::new(self.server_mode, server_config, protocol);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 
@@ -292,7 +288,7 @@ impl Scenario {
         }
 
         let mut server =
-            Server::new_with_protocol_id(ServerMode::Resident, server_config, protocol, protocol_id);
+            Server::new_with_protocol_id(self.server_mode, server_config, protocol, protocol_id);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
 
@@ -1681,7 +1677,7 @@ mod tests {
     /// Tests that trace events are appended in order.
     #[test]
     fn trace_appends_in_order() {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
 
         scenario.trace_push("first");
         scenario.trace_push("second");
@@ -1694,7 +1690,7 @@ mod tests {
     /// Tests that trace_clear empties the trace.
     #[test]
     fn trace_clear_empties() {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
 
         scenario.trace_push("A");
         scenario.trace_push("B");
@@ -1711,7 +1707,7 @@ mod tests {
     /// Tests trace_contains_subsequence with various patterns.
     #[test]
     fn trace_contains_subsequence_patterns() {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
 
         scenario.trace_push("A");
         scenario.trace_push("B");
@@ -1755,7 +1751,7 @@ mod tests {
         use crate::test_protocol::protocol;
         use naia_server::ServerConfig;
 
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
         scenario.server_start(ServerConfig::default(), protocol());
 
         let snap = scenario.diff_handler_snapshot();
@@ -1775,7 +1771,7 @@ mod tests {
     /// trace is empty before any ticks are run.
     #[test]
     fn trace_capture_empty_before_traffic() {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
         scenario.enable_trace_capture();
         let trace = scenario.take_trace();
         assert_eq!(trace.packet_count(), 0);
@@ -1822,7 +1818,7 @@ mod tests {
         use naia_server::ServerConfig;
         use naia_shared::ComponentKind;
 
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
         scenario.server_start(ServerConfig::default(), protocol());
 
         {

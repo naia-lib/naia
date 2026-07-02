@@ -38,7 +38,7 @@ const NUM_CLIENTS: usize = 8;
 /// converges to the correct per-entity Position after both the initial
 /// replication round and a mutation round.
 fn run_replication_oracle() {
-    let mut scenario = Scenario::new(); // resets TestClock to 0
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident); // resets TestClock to 0
     let proto = protocol();
 
     let mut client_config = ClientConfig::default();

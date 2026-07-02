@@ -36,8 +36,8 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};
 use naia_server::{
-    CoordinatorState, RecvHandle, RecvState, ReplicationConfig, SendHandle, SendState,
-    ServerConfig, InternalWorldServer,
+    CoordinatorState, InternalWorldServer, RecvHandle, RecvState, ReplicationConfig, SendHandle,
+    SendState, ServerConfig,
 };
 
 use naia_test_harness::{
@@ -116,7 +116,7 @@ fn into_pipeline_handles_returns_three_way() {
 /// produces identical client-visible packets.
 #[test]
 fn pipeline_recv_send_independent() {
-    let mut scenario = Scenario::new(); // resets TestClock to 0
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident); // resets TestClock to 0
     let proto = protocol();
 
     let mut client_config = ClientConfig::default();

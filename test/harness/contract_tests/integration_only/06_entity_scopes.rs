@@ -44,7 +44,7 @@ use _helpers::{
 /// then A sees only E, B sees only F, and server room state is E∈Room1, F∈Room2.
 #[test]
 fn entities_only_replicate_when_room_scope_match() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -134,7 +134,7 @@ fn entities_only_replicate_when_room_scope_match() {
 /// then B spawns E, A continues to see E, and B never sees entities that exist only in Room2.
 #[test]
 fn moving_user_between_rooms_updates_scope() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -231,7 +231,7 @@ fn moving_user_between_rooms_updates_scope() {
 /// then A and B despawn E, and clients in Room2 see E.
 #[test]
 fn moving_entity_between_rooms_updates_scope() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -339,7 +339,7 @@ fn custom_viewport_scoping_function() {
     // by the current harness. For now, we'll test basic room-based scoping.
     // A full implementation would require custom scope functions.
 
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -416,7 +416,7 @@ fn custom_viewport_scoping_function() {
 /// users whose visibility depended on that room.
 #[test]
 fn entity_in_multiple_rooms_projects_correctly() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -545,7 +545,7 @@ fn entity_in_multiple_rooms_projects_correctly() {
 /// Given delegated E where A holds authority and B observes Denied; when server removes E from A's scope (so A despawns E); then authority MUST release to None, and B MUST observe Denied→Available.
 #[test]
 fn authority_releases_when_holder_goes_out_of_scope() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -660,7 +660,7 @@ fn authority_releases_when_holder_goes_out_of_scope() {
 /// (even though E stays in RoomA).
 #[test]
 fn manual_user_scope_include_overrides_room_absence() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -739,7 +739,7 @@ fn manual_user_scope_include_overrides_room_absence() {
 /// then U does not see E while override is active, and E reappears for U once override is removed.
 #[test]
 fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -817,7 +817,7 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 /// Given delegated E where A holds authority and B is in scope; when A disconnects; then authority MUST release to None, and B MUST observe Available (or Denied→Available if previously denied), with E still alive and replicated per server policy.
 #[test]
 fn authority_releases_when_holder_disconnects() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -928,7 +928,7 @@ fn authority_releases_when_holder_disconnects() {
 /// then behavior matches the chosen model (new lifetime vs reappearance of same logical entity), and the test asserts the chosen contract.
 #[test]
 fn scope_leave_and_re_enter_semantics() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1015,7 +1015,7 @@ fn scope_leave_and_re_enter_semantics() {
 /// then A first sees E as a coherent snapshot of its current state, without replaying older intermediate diffs.
 #[test]
 fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

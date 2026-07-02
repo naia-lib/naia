@@ -40,7 +40,7 @@ use _helpers::{client_connect, test_client_config};
 #[test]
 fn remote_untrusted_input_does_not_panic() {
     // This test verifies that the framework handles remote input gracefully
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -87,7 +87,7 @@ fn remote_untrusted_input_does_not_panic() {
 #[test]
 fn framework_invariant_violations_are_internal_bugs() {
     // Normal operation should not trigger any framework panics
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -124,7 +124,7 @@ fn framework_invariant_violations_are_internal_bugs() {
 #[test]
 fn warnings_are_debug_only_and_non_normative() {
     // Test behavior is the same regardless of warnings
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -160,7 +160,7 @@ fn warnings_are_debug_only_and_non_normative() {
 #[test]
 fn determinism_under_deterministic_inputs() {
     // Same scenario setup should produce consistent results
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -211,7 +211,7 @@ fn determinism_under_deterministic_inputs() {
 /// when tick is processed; then operations resolve in deterministic order.
 #[test]
 fn per_tick_operations_resolve_deterministically() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -274,7 +274,7 @@ fn per_tick_operations_resolve_deterministically() {
 #[test]
 fn tests_do_not_assert_on_logs() {
     // This test demonstrates proper assertion style - events and state, not logs
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -313,7 +313,7 @@ fn tests_do_not_assert_on_logs() {
 fn test_obligation_template_followed() {
     // This test demonstrates the contract annotation pattern
     // Tests are annotated with /// Contract: [contract-id]
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -349,7 +349,7 @@ fn test_obligation_template_followed() {
 #[test]
 fn observable_signals_are_defined() {
     // This test uses documented observable signals
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -386,7 +386,7 @@ fn fixed_invariants_are_locked() {
     // Tick type is u16 (invariant)
     // Wrap-safe half-range is 32768 (invariant)
     // These are used correctly in the framework
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -419,7 +419,7 @@ fn fixed_invariants_are_locked() {
 #[test]
 fn configurable_defaults_can_be_overridden() {
     // ServerConfig and ClientConfig have configurable defaults
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     // Use default config (demonstrates configurability)
@@ -457,7 +457,7 @@ fn configurable_defaults_can_be_overridden() {
 fn new_constants_start_as_invariants() {
     // MAX_COMMANDS_PER_TICK_PER_CONNECTION = 64 (invariant)
     // This value is fixed and documented
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -490,7 +490,7 @@ fn new_constants_start_as_invariants() {
 #[test]
 fn reading_metrics_does_not_influence_behavior() {
     // Metrics are read-only observations
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -529,7 +529,7 @@ fn test_tolerance_constants_documented() {
     // RTT_TOLERANCE_PERCENT = 20
     // RTT_MIN_SAMPLES = 10
     // These are test-only values
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -564,7 +564,7 @@ fn test_tolerance_constants_documented() {
 /// when metrics are read; then they do not affect state, authority, scope, or delivery.
 #[test]
 fn metrics_do_not_affect_replicated_state() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -615,7 +615,7 @@ fn metrics_do_not_affect_replicated_state() {
 /// when reconnect completes; then it's a fresh session (no resumed state).
 #[test]
 fn reconnect_is_fresh_session() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

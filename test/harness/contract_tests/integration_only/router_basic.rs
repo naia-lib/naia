@@ -19,7 +19,7 @@ use naia_server::pipeline_actors::{
     TickMessageRouter,
 };
 use naia_server::transport::local::{LocalServerSocket, LocalTransportHub, Socket};
-use naia_server::{ServerConfig, InternalWorldServer};
+use naia_server::{InternalWorldServer, ServerConfig};
 use naia_shared::Tick;
 
 use naia_test_harness::protocol;
@@ -54,7 +54,8 @@ fn build_pipeline_split() -> (
     naia_server::RecvHandle<u64>,
     naia_server::SendHandle<u64>,
 ) {
-    let mut ws: InternalWorldServer<u64> = InternalWorldServer::new(ServerConfig::default(), protocol());
+    let mut ws: InternalWorldServer<u64> =
+        InternalWorldServer::new(ServerConfig::default(), protocol());
 
     let hub = LocalTransportHub::new(FAKE_SERVER_ADDR.parse().unwrap());
     let inner = LocalServerSocket::new(hub);
@@ -94,7 +95,8 @@ fn spawn_server_handles_facade_matches_into_pipeline_handles() {
     // `InternalWorldServer::new + into_pipeline_handles`. From the harness side
     // we can confirm it returns the same three-way decomposition that
     // `into_pipeline_handles` does.
-    let (coord, recv, send) = spawn_server_handles::<u64, _>(ServerConfig::default(), protocol()).take_handles();
+    let (coord, recv, send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol()).take_handles();
     // CoordHandle::shared and recv.state.shared / send.state.shared all
     // alias the same Arc<ServerShared>; strong-count must be ≥ 3.
     let strong = std::sync::Arc::strong_count(&coord.shared);

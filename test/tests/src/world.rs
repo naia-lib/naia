@@ -44,7 +44,8 @@ impl TestWorld {
 
     /// Initialize with a new scenario.
     pub fn init(&mut self) -> &mut Scenario {
-        self.0.insert(Scenario::new())
+        self.0
+            .insert(Scenario::new(naia_server::ServerMode::Resident))
     }
 
     /// Check if scenario is initialized.

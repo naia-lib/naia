@@ -142,7 +142,7 @@ fn registration_sets_resource_kind_in_protocol() {
 
 #[test]
 fn insert_dynamic_resource_replicates_to_connected_client() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let client_key = server_with_one_client(&mut scenario);
 
     // Server inserts a dynamic resource.
@@ -181,7 +181,7 @@ fn insert_dynamic_resource_replicates_to_connected_client() {
 
 #[test]
 fn insert_static_resource_replicates_to_connected_client() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let client_key = server_with_one_client(&mut scenario);
 
     scenario.mutate(|ctx| {
@@ -203,7 +203,7 @@ fn insert_static_resource_replicates_to_connected_client() {
 
 #[test]
 fn re_inserting_same_resource_returns_false() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let _client_key = server_with_one_client(&mut scenario);
 
     scenario.mutate(|ctx| {
@@ -229,7 +229,7 @@ fn re_inserting_same_resource_returns_false() {
 
 #[test]
 fn remove_resource_propagates_to_client() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let client_key = server_with_one_client(&mut scenario);
 
     scenario.mutate(|ctx| {
@@ -260,7 +260,7 @@ fn remove_resource_propagates_to_client() {
 
 #[test]
 fn server_mutation_replicates_to_client() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let client_key = server_with_one_client(&mut scenario);
 
     scenario.mutate(|ctx| {
@@ -329,7 +329,7 @@ fn server_mutation_replicates_to_client() {
 #[test]
 fn per_field_diff_one_field_sends_fewer_bytes_than_two() {
     fn measure(mutate_both: bool) -> u64 {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
         let _client_key = server_with_one_client(&mut scenario);
 
         // Insert + steady-state.
@@ -392,7 +392,7 @@ fn per_field_diff_one_field_sends_fewer_bytes_than_two() {
 
 #[test]
 fn delegated_resource_supports_client_authority_request() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let client_key = server_with_one_client(&mut scenario);
 
     // Insert resource (use TestScore which we've verified replicates).
@@ -483,7 +483,7 @@ fn delegated_resource_supports_client_authority_request() {
 
 #[test]
 fn resource_priority_gain_is_settable() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let _client_key = server_with_one_client(&mut scenario);
 
     scenario.mutate(|ctx| {
@@ -500,7 +500,7 @@ fn resource_priority_gain_is_settable() {
 
 #[test]
 fn late_joining_client_observes_pre_existing_resource() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));

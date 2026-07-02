@@ -87,6 +87,10 @@ name = "g9pre_resident_pipelined_byte_identity"
 path = "contract_tests/integration_only/g9pre_resident_pipelined_byte_identity.rs"
 
 [[test]]
+name = "g8_real_ack_byte_identity"
+path = "contract_tests/integration_only/g8_real_ack_byte_identity.rs"
+
+[[test]]
 name = "pipeline_bracket"
 path = "contract_tests/integration_only/pipeline_bracket.rs"
 

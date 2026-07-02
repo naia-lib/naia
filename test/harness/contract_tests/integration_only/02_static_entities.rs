@@ -18,7 +18,7 @@ mod _helpers;
 #[test]
 #[should_panic]
 fn server_static_entity_panics_on_insert_after_construction() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let proto = protocol();
     scenario.server_start(ServerConfig::default(), proto);
 
@@ -59,7 +59,7 @@ fn client_static_entity_panics_on_insert_after_construction() {
     use naia_client::ClientConfig;
     use naia_test_harness::Auth;
 
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let proto = protocol();
     scenario.server_start(ServerConfig::default(), proto.clone());
 

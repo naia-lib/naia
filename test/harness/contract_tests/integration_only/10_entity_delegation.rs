@@ -43,7 +43,7 @@ use _helpers::{
 /// Given client-owned Unpublished E owned by A; when server (or A) attempts to delegate E; then operation fails with ErrNotPublished and E remains client-owned Unpublished.
 #[test]
 fn cannot_delegate_client_owned_unpublished_err_not_published() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -112,7 +112,7 @@ fn cannot_delegate_client_owned_unpublished_err_not_published() {
 /// Given server-owned undelegated E in scope for A; when A calls request_authority(E); then the call returns ErrNotDelegated and no state/events change.
 #[test]
 fn client_request_authority_on_non_delegated_returns_err_not_delegated() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -189,7 +189,7 @@ fn client_request_authority_on_non_delegated_returns_err_not_delegated() {
 /// Given delegated E in scope for A and B with some current authority holder; when server disables delegation on E; then E becomes server-owned undelegated and clients MUST NOT receive further authority statuses/events for E; subsequent client request_authority returns ErrNotDelegated.
 #[test]
 fn disable_delegation_clears_authority_semantics() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -334,7 +334,7 @@ fn disable_delegation_clears_authority_semantics() {
 /// Given delegated E held by A; when server disables delegation; then A emits AuthLost(E) (since it lost Granted), all clients stop having auth semantics, and client mutations are rejected as non-delegated.
 #[test]
 fn disable_delegation_while_client_holds_authority() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -488,7 +488,7 @@ fn disable_delegation_while_client_holds_authority() {
 /// Given server-owned undelegated E in scope for A and B; when server enables delegation on E; then A and B observe E as Available (no holder), and no client has Granted.
 #[test]
 fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -582,7 +582,7 @@ fn enable_delegation_makes_entity_available_for_all_in_scope_clients() {
 /// Given server-owned undelegated E; when server calls give_authority/take_authority/release_authority for E; then each returns ErrNotDelegated and E remains undelegated.
 #[test]
 fn server_authority_apis_on_non_delegated_return_err_not_delegated() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -650,7 +650,7 @@ fn server_authority_apis_on_non_delegated_return_err_not_delegated() {
 /// Given server-owned undelegated E in scope for A and B; when A or B attempts to mutate E; then changes are ignored/rejected; when server mutates E; then A and B observe server's updates.
 #[test]
 fn server_owned_undelegated_accepts_only_server_writes() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -782,7 +782,7 @@ fn server_owned_undelegated_accepts_only_server_writes() {
 /// Given server-owned undelegated E in scope for A; then A MUST observe no authority events for E under any circumstance.
 #[test]
 fn server_owned_undelegated_has_no_authority_status_and_no_auth_events() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -845,7 +845,7 @@ fn server_owned_undelegated_has_no_authority_status_and_no_auth_events() {
 /// Given client-owned Published E owned by A and in scope for A and B; when server (or A) delegates E; then E remains the same identity on clients (continuity), and becomes server-owned delegated.
 #[test]
 fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -928,7 +928,7 @@ fn delegating_client_owned_published_migrates_identity_without_despawn_spawn() {
 /// Given client-owned Published E owned by A and InScope(A,E); when E is delegated (migrates); then resulting delegated E has holder Client(A): A observes Granted + AuthGranted(E), and every other in-scope client observes Denied + AuthDenied(E).
 #[test]
 fn migration_assigns_initial_authority_to_owner_if_owner_in_scope() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1017,7 +1017,7 @@ fn migration_assigns_initial_authority_to_owner_if_owner_in_scope() {
 /// Given any non-delegated entity (server-owned undelegated or any client-owned); then AuthGranted/AuthDenied/AuthLost MUST NOT be emitted regardless of scope/mutations.
 #[test]
 fn no_auth_events_for_non_delegated_entities_ever() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1108,7 +1108,7 @@ fn no_auth_events_for_non_delegated_entities_ever() {
 /// Given migrated delegated E; when owner A is not the authority holder; then A's mutations are ignored/rejected; when A later acquires authority (Available→Granted) then A's mutations are accepted.
 #[test]
 fn after_migration_writes_follow_delegated_rules() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1218,7 +1218,7 @@ fn after_migration_writes_follow_delegated_rules() {
 /// Given delegated E in a stable status S for client C; when server re-sends SetAuthority(S) (same status); then C emits no additional auth events and status remains S.
 #[test]
 fn duplicate_set_authority_does_not_emit_duplicate_events() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1324,7 +1324,7 @@ fn duplicate_set_authority_does_not_emit_duplicate_events() {
 /// Given delegated E Available for A; when A becomes holder (via request_authority or give_authority); then exactly one AuthGranted(E) is emitted to A for that transition.
 #[test]
 fn auth_granted_emitted_exactly_once_on_available_to_granted() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1417,7 +1417,7 @@ fn auth_granted_emitted_exactly_once_on_available_to_granted() {
 /// Given delegated E where client A transitions from Granted to (Denied or Available); then exactly one AuthLost(E) is emitted for that transition.
 #[test]
 fn auth_lost_emitted_exactly_once_per_transition_out_of_granted() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

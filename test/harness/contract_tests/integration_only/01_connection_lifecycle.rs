@@ -44,7 +44,7 @@ use _helpers::{
 /// then connect events are [A, B], only B remains connected, and all entities/scope for A are cleaned up.
 #[test]
 fn basic_connect_disconnect_lifecycle() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -159,7 +159,7 @@ fn basic_connect_disconnect_lifecycle() {
 /// A never appears as connected, and receives no replication.
 #[test]
 fn invalid_credentials_rejected() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     let server_config = ServerConfig {
@@ -250,7 +250,7 @@ fn invalid_credentials_rejected() {
 /// then exactly two connect events appear in order [A, B] with no duplicates.
 #[test]
 fn connect_event_ordering_stable() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -414,7 +414,7 @@ fn connect_event_ordering_stable() {
 /// then only one disconnect event for A is exposed, A is fully removed from users and scoping, and B never sees ghost entities from A.
 #[test]
 fn disconnect_idempotent_and_clean() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -489,7 +489,7 @@ fn disconnect_idempotent_and_clean() {
 /// A becomes connected, and scoped entities replicate.
 #[test]
 fn successful_auth_with_require_auth() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     let server_config = ServerConfig {
@@ -562,7 +562,7 @@ fn successful_auth_with_require_auth() {
 /// fully connected user.
 #[test]
 fn auth_disabled_connects_without_auth_event() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     let server_config = ServerConfig {
@@ -622,7 +622,7 @@ fn auth_disabled_connects_without_auth_event() {
 /// and receives no replicated entities or data-plane events.
 #[test]
 fn no_replication_before_auth_decision() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     let server_config = ServerConfig {
@@ -728,7 +728,7 @@ fn no_replication_before_auth_decision() {
 /// (optionally causing disconnect), and no silent identity swap occurs.
 #[test]
 fn no_mid_session_reauth() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     let server_config = ServerConfig {
@@ -812,7 +812,7 @@ fn no_mid_session_reauth() {
 /// then a reject event is emitted to B, no connect event is emitted, and B remains disconnected.
 #[test]
 fn server_reject_connection_produces_reject_event() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -907,7 +907,7 @@ fn server_reject_connection_produces_reject_event() {
 /// then both sides eventually emit a timeout disconnect event and all entities for that connection are cleaned up.
 #[test]
 fn client_disconnects_due_to_heartbeat_timeout() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     let mut server_config = ServerConfig::default();
@@ -1010,7 +1010,7 @@ fn protocol_handshake_mismatch_fails() {
     // For now, we'll test with a basic protocol mismatch scenario
     // Note: Actual protocol versioning may require more setup
 
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1054,7 +1054,7 @@ fn protocol_handshake_mismatch_fails() {
 /// then handshake fails, client never becomes connected, an error/reject is surfaced, and no half-connected state remains.
 #[test]
 fn malformed_identity_token_rejected() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1125,7 +1125,7 @@ fn malformed_identity_token_rejected() {
 /// B receives ClientRejectEvent, not ClientConnectEvent.
 #[test]
 fn expired_or_reused_token_obeys_semantics() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1246,7 +1246,7 @@ fn expired_or_reused_token_obeys_semantics() {
 /// server-issued token completed the full roundtrip: server → auth channel → client observable.
 #[test]
 fn valid_identity_token_roundtrips() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1285,7 +1285,7 @@ fn valid_identity_token_roundtrips() {
 /// when handshake completes; then protocol_id is verified before any ConnectEvent.
 #[test]
 fn protocol_id_verified_before_connect_event() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1323,7 +1323,7 @@ fn protocol_id_verified_before_connect_event() {
 /// when reconnect completes; then client receives fresh entity spawns (not resumed).
 #[test]
 fn reconnect_is_fresh_session() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1416,7 +1416,7 @@ fn same_protocol_produces_same_id() {
     let protocol2 = protocol();
 
     // Both should work with the same server
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
 
     scenario.server_start(ServerConfig::default(), protocol1.clone());
     let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
@@ -1463,7 +1463,7 @@ fn same_protocol_produces_same_id() {
 /// Note: Wire encoding is verified by successful connections with matching protocols.
 #[test]
 fn protocol_id_wire_encoding_allows_connection() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1499,7 +1499,7 @@ fn protocol_id_wire_encoding_allows_connection() {
 /// when handshake occurs; then connection proceeds successfully.
 #[test]
 fn matched_protocol_id_allows_connection() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1536,7 +1536,7 @@ fn matched_protocol_id_allows_connection() {
 /// Note: In E2E tests, we verify matching protocols connect; mismatched would fail.
 #[test]
 fn protocol_id_determined_by_wire_relevant_aspects() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());
@@ -1569,7 +1569,7 @@ fn protocol_id_determined_by_wire_relevant_aspects() {
 /// Note: Verified implicitly - matching protocols connect, different would fail.
 #[test]
 fn no_partial_protocol_compatibility() {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let test_protocol = protocol();
 
     scenario.server_start(ServerConfig::default(), test_protocol.clone());

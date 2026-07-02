@@ -89,7 +89,7 @@ fn connect_one_client(scenario: &mut Scenario) -> crate::harness::ClientKey {
 /// for a single connected client (spawn + component delivery). Representative
 /// of the scope-change propagation path that Phases 2 and 3 must preserve.
 pub fn contract06_scope_entry() -> Trace {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     scenario.server_start(ServerConfig::default(), protocol());
     let room_key = scenario.mutate(|ctx| ctx.server(|s| s.create_room().key()));
     scenario.set_last_room(room_key);
@@ -133,7 +133,7 @@ pub fn contract06_scope_entry() -> Trace {
 /// is already in scope. Representative of the update-dispatch path that Phase 3
 /// must preserve.
 pub fn contract07_component_update() -> Trace {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     scenario.server_start(ServerConfig::default(), protocol());
     let room_key = scenario.mutate(|ctx| ctx.server(|s| s.create_room().key()));
     scenario.set_last_room(room_key);
@@ -202,7 +202,7 @@ pub fn contract07_component_update() -> Trace {
 /// status delivered) + client authority request + server authority grant
 /// (Granted status delivered). Representative of the delegation path.
 pub fn contract10_delegation_grant() -> Trace {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     scenario.server_start(ServerConfig::default(), protocol());
     let room_key = scenario.mutate(|ctx| ctx.server(|s| s.create_room().key()));
     scenario.set_last_room(room_key);

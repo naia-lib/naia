@@ -258,7 +258,7 @@ fn snapshot_via_core_assembler(scenario: &mut Scenario) -> SnapshotWorld<TestEnt
 /// RESIDENT mode: mutate the live world, then one tick → `send_all_packets`
 /// transmits synchronously against the live world.
 fn run_resident(case: &Case) -> Vec<TracePacket> {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let (_client_key, entities) = setup_and_settle(&mut scenario);
     apply_mutations(&mut scenario, &entities, case);
     let _ = scenario.expect_once(|_| ExpectResult::Passed(()));
@@ -268,7 +268,7 @@ fn run_resident(case: &Case) -> Vec<TracePacket> {
 /// PIPELINED mode: mutate the live world, build the frozen plan + snapshot at the
 /// freeze point, then one tick → `transmit_send_job` against the snapshot.
 fn run_pipelined(case: &Case) -> Vec<TracePacket> {
-    let mut scenario = Scenario::new();
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let (_client_key, entities) = setup_and_settle(&mut scenario);
     apply_mutations(&mut scenario, &entities, case);
     let snap = snapshot_of(&mut scenario, &entities, case);
@@ -303,7 +303,7 @@ fn g9pre_freeze_isolates_transmit_from_concurrent_mutation() {
 
     // Pipelined WITH a concurrent post-freeze mutation to LIVE_AFTER.
     let pipelined = {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
         let (_ck, entities) = setup_and_settle(&mut scenario);
         apply_mutations(&mut scenario, &entities, &frozen_case);
         let snap = snapshot_of(&mut scenario, &entities, &frozen_case); // captures FROZEN
@@ -349,7 +349,7 @@ fn g9pre_core_assembler_byte_identity() {
         let r = s2c(&run_resident(&case));
 
         let p = {
-            let mut scenario = Scenario::new();
+            let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
             let (_ck, entities) = setup_and_settle(&mut scenario);
             apply_mutations(&mut scenario, &entities, &case);
             let snap = snapshot_via_core_assembler(&mut scenario); // REAL assembler
@@ -425,7 +425,7 @@ fn g9pre_core_assembler_freeze_isolation() {
     let resident = s2c(&run_resident(&frozen_case));
 
     let pipelined = {
-        let mut scenario = Scenario::new();
+        let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
         let (_ck, entities) = setup_and_settle(&mut scenario);
         apply_mutations(&mut scenario, &entities, &frozen_case);
         let snap = snapshot_via_core_assembler(&mut scenario); // REAL assembler, captures FROZEN
