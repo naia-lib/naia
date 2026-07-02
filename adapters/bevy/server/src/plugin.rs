@@ -13,7 +13,9 @@ use naia_bevy_shared::{
     HostSyncOwnedAddedTracking, ProcessPackets, Protocol, ReceivePackets, SendPackets,
     SharedPlugin, TranslateTickEvents, TranslateWorldEvents, WorldToHostSync, WorldUpdate,
 };
-use naia_server::{shared::Protocol as NaiaProtocol, Server, ServerConfig, ServerMode, WorldServer};
+use naia_server::{
+    shared::Protocol as NaiaProtocol, Server, ServerConfig, ServerMode, WorldServer,
+};
 
 use super::{
     component_event_registry::ComponentEventRegistry,
@@ -39,6 +41,58 @@ impl PluginConfig {
             server_config,
             protocol,
         }
+    }
+}
+
+/// Explicit configuration for the Bevy server plugin.
+pub struct ServerPluginConfig {
+    pub server_config: ServerConfig,
+    pub protocol: Protocol,
+    pub topology: Topology,
+}
+
+impl ServerPluginConfig {
+    pub fn new(server_config: ServerConfig, protocol: Protocol, topology: Topology) -> Self {
+        Self {
+            server_config,
+            protocol,
+            topology,
+        }
+    }
+}
+
+/// Which Bevy world owns naia's server state.
+pub enum Topology {
+    /// Naia owns the full server, including connection accept/reject APIs.
+    Standalone(DriveShape),
+    /// An upstream service proxies connections; naia owns only the world server.
+    WorldProxied(DriveShape),
+    /// The consumer owns the simulation world and installs/drives pipeline handles.
+    SimIntegration(SimIntegrationConfig),
+}
+
+/// How naia drives the server engine.
+pub enum DriveShape {
+    Resident,
+    Pipelined(crate::plugin_full::PipelineConfig),
+}
+
+/// Configuration for [`Topology::SimIntegration`].
+#[derive(Default)]
+pub struct SimIntegrationConfig {
+    pub change_detection_schedule: Option<InternedScheduleLabel>,
+    pub skip_host_sync_change_tracking: bool,
+}
+
+impl SimIntegrationConfig {
+    pub fn with_schedule<S: ScheduleLabel>(mut self, schedule: S) -> Self {
+        self.change_detection_schedule = Some(schedule.intern());
+        self
+    }
+
+    pub fn skip_host_sync(mut self, skip: bool) -> Self {
+        self.skip_host_sync_change_tracking = skip;
+        self
     }
 }
 
@@ -75,7 +129,8 @@ pub struct Plugin {
     /// `Update` — the coordinator invokes `run_schedule(Update)` between the
     /// `PhysicsSyncSchedule` and the send kick.
     pipeline: bool,
-    /// `types_and_sets_only` mode (Phase B.7 of MISSION_SIM_OWNS_WORLD).
+    server_mode: ServerMode,
+    /// `Topology::SimIntegration` mode.
     /// When `true`, the plugin registers shared types + message types +
     /// `ComponentEventRegistry` + system sets + `world_to_host_sync`, but
     /// SKIPS constructing the `ServerImpl` resource. The caller installs
@@ -87,13 +142,13 @@ pub struct Plugin {
     /// Optional override for the schedule under which per-Replicate
     /// `on_component_added` / `on_component_removed` change-tracking
     /// systems are registered. When `None`, the default `Update` schedule
-    /// is used (backward compatible with all existing callers — namako,
-    /// the existing cyberlith integration). Set via
-    /// [`Plugin::sim_integration_with_schedule`] to register under a
-    /// custom schedule like cyberlith Sim's `SimMain`.
+    /// is used. Set through [`SimIntegrationConfig::with_schedule`] or
+    /// [`crate::PipelineConfig::with_schedule`] for custom schedules like
+    /// cyberlith Sim's `SimMain`.
     change_detection_schedule: Option<InternedScheduleLabel>,
     /// MISSION_USER_ONLY_SEES_SIM Phase D: when `true`,
-    /// [`Plugin::pipelined`] builds the pipeline, stores it inside the unified
+    /// `Topology::WorldProxied(DriveShape::Pipelined(_))` builds the pipeline,
+    /// stores it inside the unified
     /// `ServerImpl::WorldOnly(WorldServer)` resource (§2f), installs the
     /// `ServerEntityConverter` + `EventReceiverRes` Sim resources, and registers
     /// the panic-propagation (and, when opted in, park-window bracket) systems in
@@ -101,137 +156,88 @@ pub struct Plugin {
     full_pipelining: bool,
     /// When `true`, `build` SKIPS registering the per-`Replicate` host-sync
     /// change-tracking systems (`WorldData::add_systems[_to_schedule]`). Set
-    /// only by `pipelined` from `PipelineConfig`; all other
-    /// constructors pass `false`. MISSION_OVERLAP_FRONTIER T2 — lets an app
+    /// by config. MISSION_OVERLAP_FRONTIER T2 — lets an app
     /// whose world hosts no replicated entities (cyberlith base game cell's
     /// main world) drop ~2 no-op change-tracking systems per component type.
     skip_host_sync_change_tracking: bool,
     /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l) — when `true`, `install_full_pipelining`
     /// registers the adapter-driven park-window bracket in the `ReceivePackets`
     /// / `SendPackets` sets (see [`crate::PipelineConfig::drive_bracket_in_update`]).
-    /// Set only by `pipelined` from `PipelineConfig`; all other constructors pass `false`.
+    /// Set only by `Topology::WorldProxied(DriveShape::Pipelined(_))`.
     drive_bracket_in_update: bool,
 }
 
 impl Plugin {
-    /// Creates the plugin with the given server configuration and protocol.
-    pub fn new(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, false, false, false, None, false)
-    }
-
-    /// MISSION_USER_ONLY_SEES_SIM Phase D — full-pipelining variant
-    /// that internally spawns Recv + Send worker threads.
-    ///
-    /// See `plugin_full.rs` for the API contract. Lifecycle (listen / start /
-    /// park / unpark / panic-propagation) is driven via the
-    /// [`crate::Server::pipeline_listen`] family of static helpers.
-    pub fn pipelined(
-        server_config: ServerConfig,
-        protocol: Protocol,
-        cfg: crate::plugin_full::PipelineConfig,
-    ) -> Self {
-        let mut plugin = Self::new_impl(
+    /// Creates the plugin from an explicit topology and drive shape.
+    pub fn new(config: ServerPluginConfig) -> Self {
+        let ServerPluginConfig {
             server_config,
             protocol,
-            true,
-            true,
-            true,
-            cfg.change_detection_schedule,
-            true,
-        );
-        plugin.skip_host_sync_change_tracking = cfg.skip_main_world_host_sync;
-        plugin.drive_bracket_in_update = cfg.drive_bracket_in_update;
-        plugin
-    }
+            topology,
+        } = config;
 
-    /// World-only variant. Skips full `Server` setup (auth, accept_connection,
-    /// etc.) and registers a `WorldServer` instead. Used by services that
-    /// proxy connections (e.g., the game cell behind a session server).
-    pub fn world_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, false, false, None, false)
-    }
-
-    /// Pipeline + world-only variant (Phase 4 capacity uplift). Builds the
-    /// same `WorldServer` as `world_only`, but skips the recv/translate/send
-    /// `Update` systems — those phases are driven explicitly by the
-    /// pipeline coordinator via `RecvHandle`/`SendHandle`. Naia's host-sync
-    /// systems (`HostSyncOwnedAddedTracking`, `HostSyncChangeTracking`,
-    /// `WorldToHostSync`) remain in `Update`.
-    pub fn world_only_pipeline(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, false, None, false)
-    }
-
-    /// Phase B.7 variant: installs shared types + system sets +
-    /// `world_to_host_sync` but does NOT construct a `ServerImpl`. Used
-    /// by the SubApp pipeline coordinator (cyberlith) which installs
-    /// `CoordHandle`/`RecvHandle`/`SendHandle` via `spawn_server_handles`
-    /// and drives recv/apply/send via the `apply_*_pipeline` family.
-    ///
-    /// `server_config` is unused by this variant (no `ServerImpl` is
-    /// built) but kept in the signature for symmetry with the other
-    /// constructors; callers may pass `ServerConfig::default()`.
-    pub fn types_and_sets_only(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, true, None, false)
-    }
-
-    /// Iris 2 (MISSION_IRIS_2 / SPEC_IRIS_2_NAIA.md §1.4) — pipelined
-    /// Sim-side variant.
-    ///
-    /// Functionally identical to [`Plugin::types_and_sets_only`]:
-    /// installs shared types + system sets + per-`Replicate`
-    /// `on_component_added` / `on_component_removed` / `on_despawn`
-    /// change-tracking systems via `WorldData::add_systems`, but skips
-    /// `world_to_host_sync` (no `ServerImpl` in pipeline mode).
-    ///
-    /// What's new vs. `types_and_sets_only` is the **documented
-    /// intended use**: this constructor signals that the host bevy
-    /// world being plugged in is cyberlith's Sim SubApp world (the
-    /// gameplay source of truth), NOT the Send-mirror world that
-    /// `types_and_sets_only` historically targeted.
-    ///
-    /// Cyberlith Sim drives the host-sync drain step via the new
-    /// [`crate::drain_host_sync_into_pipeline`] helper (called from a
-    /// Sim main-schedule system) — this replaces the
-    /// `world_to_host_sync` body byte-for-byte but routes through the
-    /// three pipeline handles instead of `ResMut<ServerImpl>`.
-    ///
-    /// Spawn-side semantics are unchanged from the non-pipelined
-    /// plugin: cyberlith Sim entities marked with `enable_replication`
-    /// (or `commands.spawn((...))` followed by `commands.enable_replication`)
-    /// get the `HostOwned` marker, which triggers per-component
-    /// `on_component_added` → `HostSyncEvent::Insert` → drain →
-    /// `insert_component_worldless` → diff-handler attach. Subsequent
-    /// `Mut<R>::deref_mut()` mutations fire the
-    /// `PropertyMutate` callback → `GlobalDirtyBitset` mark — exactly
-    /// the same chain as today's Send-mirror flow.
-    pub fn sim_integration(server_config: ServerConfig, protocol: Protocol) -> Self {
-        Self::new_impl(server_config, protocol, true, true, true, None, false)
-    }
-
-    /// Variant of [`Plugin::sim_integration`] that registers all per-Replicate
-    /// `on_component_added` / `on_component_removed` change-tracking systems
-    /// in `schedule` instead of the canonical `Update`.
-    ///
-    /// Cyberlith's Sim SubApp drives its gameplay logic in a non-`Update`
-    /// schedule (`SimMain`). For the Sim-side host-sync flow to fire
-    /// correctly, the per-component change-detection systems must also
-    /// run in that schedule — `Update` is never invoked on the Sim
-    /// SubApp. This constructor threads the schedule label through to
-    /// [`crate::naia_bevy_shared::WorldData::add_systems_to_schedule`].
-    pub fn sim_integration_with_schedule<S: ScheduleLabel>(
-        server_config: ServerConfig,
-        protocol: Protocol,
-        schedule: S,
-    ) -> Self {
-        Self::new_impl(
-            server_config,
-            protocol,
-            true,
-            true,
-            true,
-            Some(schedule.intern()),
-            false,
-        )
+        match topology {
+            Topology::Standalone(DriveShape::Resident) => Self::new_impl(
+                server_config,
+                protocol,
+                false,
+                false,
+                false,
+                None,
+                false,
+                ServerMode::Resident,
+                false,
+                false,
+            ),
+            Topology::Standalone(DriveShape::Pipelined(cfg)) => Self::new_impl(
+                server_config,
+                protocol,
+                false,
+                false,
+                false,
+                cfg.change_detection_schedule,
+                false,
+                ServerMode::Pipelined,
+                cfg.skip_main_world_host_sync,
+                false,
+            ),
+            Topology::WorldProxied(DriveShape::Resident) => Self::new_impl(
+                server_config,
+                protocol,
+                true,
+                false,
+                false,
+                None,
+                false,
+                ServerMode::Resident,
+                false,
+                false,
+            ),
+            Topology::WorldProxied(DriveShape::Pipelined(cfg)) => Self::new_impl(
+                server_config,
+                protocol,
+                true,
+                true,
+                true,
+                cfg.change_detection_schedule,
+                true,
+                ServerMode::Pipelined,
+                cfg.skip_main_world_host_sync,
+                cfg.drive_bracket_in_update,
+            ),
+            Topology::SimIntegration(cfg) => Self::new_impl(
+                server_config,
+                protocol,
+                true,
+                true,
+                true,
+                cfg.change_detection_schedule,
+                false,
+                ServerMode::Resident,
+                cfg.skip_host_sync_change_tracking,
+                false,
+            ),
+        }
     }
 
     fn new_impl(
@@ -242,21 +248,21 @@ impl Plugin {
         state_external: bool,
         change_detection_schedule: Option<InternedScheduleLabel>,
         full_pipelining: bool,
+        server_mode: ServerMode,
+        skip_host_sync_change_tracking: bool,
+        drive_bracket_in_update: bool,
     ) -> Self {
         let config = PluginConfig::new(server_config, protocol);
         Self {
             config: Mutex::new(Some(config)),
             world_only,
             pipeline,
+            server_mode,
             state_external,
             change_detection_schedule,
             full_pipelining,
-            // Default: register host-sync change-tracking. Only
-            // `pipelined` overrides this from `PipelineConfig`.
-            skip_host_sync_change_tracking: false,
-            // Default: adapter does NOT auto-drive the bracket. Only `pipelined`
-            // overrides this from `PipelineConfig` (G8 §2l).
-            drive_bracket_in_update: false,
+            skip_host_sync_change_tracking,
+            drive_bracket_in_update,
         }
     }
 }
@@ -324,12 +330,20 @@ impl PluginType for Plugin {
             }
             None
         } else if !self.world_only {
-            let server =
-                Server::<Entity>::new(ServerMode::Resident, config.server_config, config.protocol.into());
+            let server = Server::<Entity>::new(
+                self.server_mode,
+                config.server_config,
+                config.protocol.into(),
+            );
             Some(ServerImpl::full(server))
         } else {
             let protocol: NaiaProtocol = config.protocol.into();
-            let server = WorldServer::<Entity>::new(config.server_config, protocol);
+            let server = match self.server_mode {
+                ServerMode::Resident => WorldServer::<Entity>::new(config.server_config, protocol),
+                ServerMode::Pipelined => {
+                    WorldServer::<Entity>::new_pipelined(config.server_config, protocol)
+                }
+            };
             Some(ServerImpl::world_only(server))
         };
 

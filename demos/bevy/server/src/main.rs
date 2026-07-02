@@ -11,7 +11,8 @@ use naia_bevy_demo_shared::{
 };
 
 use naia_bevy_server::{
-    AppRegisterComponentEvents, HandleWorldEvents, Plugin as ServerPlugin, ServerConfig,
+    AppRegisterComponentEvents, DriveShape, HandleWorldEvents, Plugin as ServerPlugin,
+    ServerConfig, ServerPluginConfig, Topology,
 };
 
 mod resources;
@@ -33,7 +34,11 @@ fn main() {
         // this is needed to avoid running the server at uncapped FPS
         .add_plugins(ScheduleRunnerPlugin::run_loop(Duration::from_millis(3)))
         .add_plugins(LogPlugin::default())
-        .add_plugins(ServerPlugin::new(server_config, protocol()))
+        .add_plugins(ServerPlugin::new(ServerPluginConfig::new(
+            server_config,
+            protocol(),
+            Topology::Standalone(DriveShape::Resident),
+        )))
         // Startup System
         .add_systems(Startup, init)
         // Add Component Events

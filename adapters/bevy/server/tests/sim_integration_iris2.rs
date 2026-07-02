@@ -1,10 +1,10 @@
 //! Iris 2 (MISSION_IRIS_2 / SPEC_IRIS_2_NAIA.md §1.4) integration test
-//! for `Plugin::sim_integration` + `drain_host_sync_into_pipeline`.
+//! for `Topology::SimIntegration` + `drain_host_sync_into_pipeline`.
 //!
 //! Exercises the smallest end-to-end flow that the pipelined-Sim
 //! consumer (cyberlith Sim SubApp) relies on:
 //!
-//! 1. Build a bevy `App` with `Plugin::sim_integration`.
+//! 1. Build a bevy `App` with `Topology::SimIntegration`.
 //! 2. Construct + park the three pipeline handles.
 //! 3. Register an entity with naia via `run_with_world_server` +
 //!    `enable_entity_replication`, add `HostOwned`, then insert a
@@ -40,12 +40,17 @@ fn protocol() -> BevyProtocol {
     p.build()
 }
 
-/// Build a bevy App with `Plugin::sim_integration` installed.
+/// Build a bevy App with `Topology::SimIntegration` installed.
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     // Stub a Last system in Update so the per-Replicate
     // `on_component_added::<R>` system fires when we run.

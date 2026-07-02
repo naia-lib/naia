@@ -1,11 +1,11 @@
 //! Pipeline-mode equivalent of `world_to_host_sync` — Phase 1 of the
-//! `Plugin::sim_integration` (Iris 2) host-side wiring.
+//! `Topology::SimIntegration` (Iris 2) host-side wiring.
 //!
 //! Today's [`crate::systems::world_to_host_sync`] takes
 //! `ResMut<ServerImpl>` and drains `Messages<HostSyncEvent>` into naia's
 //! `insert_component_worldless` / `remove_component_worldless` /
 //! `despawn_entity_worldless` machinery. Under the three-handle pipeline
-//! (`Plugin::types_and_sets_only` / `Plugin::sim_integration`)
+//! (`Topology::SimIntegration`)
 //! `ServerImpl` does not exist; the equivalent drain runs against the
 //! three pipeline handles directly.
 //!
@@ -45,7 +45,8 @@ use naia_server::{RecvHandle, SendHandle};
 /// missing components on insert) but routes through
 /// [`run_with_world_server`] instead of `ResMut<ServerImpl>`.
 ///
-/// Calling pattern (cyberlith Sim main schedule). Under `Plugin::pipelined` the
+/// Calling pattern (cyberlith Sim main schedule). Under
+/// `Topology::WorldProxied(DriveShape::Pipelined(_))` the
 /// pipeline lives inside the unified `WorldServer` resource (§2f); reach it via
 /// [`crate::Server::world_only_resource_scope`], park the workers (via
 /// [`crate::Server::pipeline_park`]) before taking the handles with

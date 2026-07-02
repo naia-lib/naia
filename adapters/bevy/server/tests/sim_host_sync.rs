@@ -91,9 +91,14 @@ fn handles() -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
 /// entity carrying a `Position` component. Returns the app + entity.
 fn sim_app_with_entity() -> (App, Entity) {
     let mut sim_app = App::new();
-    sim_app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol_bevy(),
+    sim_app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol_bevy(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     // Ensure the HostSyncEvent message buffer exists (the drain reads it).
     sim_app
@@ -290,9 +295,14 @@ fn queries_match_world_server() {
     // handles vs the reassembled WorldServer.
     let (mut sim_handle, recv, send) = handles();
     let mut sim_app = App::new();
-    sim_app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol_bevy(),
+    sim_app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol_bevy(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     let entity = sim_app.world_mut().spawn(()).id();
     sim_handle.enable_entity_replication(&entity);
@@ -325,9 +335,14 @@ fn not_listening_short_circuits() {
     assert!(!send.is_listening(), "fresh handles are not listening");
 
     let mut sim_app = App::new();
-    sim_app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol_bevy(),
+    sim_app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol_bevy(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     sim_app
         .world_mut()

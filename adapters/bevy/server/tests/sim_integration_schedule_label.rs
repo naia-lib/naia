@@ -1,6 +1,6 @@
-//! C.6 Addition 1 — schedule-label knob on `Plugin::sim_integration`.
+//! C.6 Addition 1 — schedule-label knob on `Topology::SimIntegration`.
 //!
-//! Verifies that `Plugin::sim_integration_with_schedule(...)` registers
+//! Verifies that `Topology::SimIntegration(...with_schedule(...))` registers
 //! the per-`Replicate` `on_component_added::<R>` / `on_component_removed::<R>`
 //! change-tracking systems in the supplied custom schedule rather than
 //! the canonical `Update`.
@@ -39,17 +39,21 @@ fn protocol() -> BevyProtocol {
     p.build()
 }
 
-/// Build a bevy App with `Plugin::sim_integration_with_schedule(CustomSchedule)`
+/// Build a bevy App with `Topology::SimIntegration(...with_schedule(CustomSchedule))`
 /// installed. Pre-registers the `CustomSchedule` so plugin's
 /// `app.add_systems(schedule, ...)` call succeeds without auto-creating
 /// a schedule that no other code runs.
 fn build_app_with_custom_schedule() -> App {
     let mut app = App::new();
     app.add_schedule(Schedule::new(CustomSchedule));
-    app.add_plugins(ServerPlugin::sim_integration_with_schedule(
-        ServerConfig::default(),
-        protocol(),
-        CustomSchedule,
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default().with_schedule(CustomSchedule),
+            ),
+        ),
     ));
     app
 }
@@ -116,9 +120,14 @@ fn custom_schedule_run_yields_insert_host_sync_event() {
 #[test]
 fn default_sim_integration_still_registers_under_update() {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     app.world_mut()
         .spawn((HostOwned::new::<Singleton>(), Position::new(5.0, 6.0)));

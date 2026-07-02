@@ -68,9 +68,14 @@ fn configure_entity_replication_scope_exit_toggle_via_facade() {
     // Build a sim-app holding the Bevy world that owns the entity. In
     // single-world cyberlith, this is the unified game world.
     let mut sim_app = App::new();
-    sim_app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol_bevy(),
+    sim_app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol_bevy(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     let entity = sim_app.world_mut().spawn(()).id();
 
@@ -134,9 +139,14 @@ fn configure_entity_replication_facade_matches_legacy_path_for_scope_exit() {
     fn run_with(facade: bool) -> ReplicationConfig {
         let (sim_handle, recv, send) = handles();
         let mut sim_app = App::new();
-        sim_app.add_plugins(ServerPlugin::sim_integration(
-            ServerConfig::default(),
-            protocol_bevy(),
+        sim_app.add_plugins(ServerPlugin::new(
+            naia_bevy_server::ServerPluginConfig::new(
+                ServerConfig::default(),
+                protocol_bevy(),
+                naia_bevy_server::Topology::SimIntegration(
+                    naia_bevy_server::SimIntegrationConfig::default(),
+                ),
+            ),
         ));
         let entity = sim_app.world_mut().spawn(()).id();
 

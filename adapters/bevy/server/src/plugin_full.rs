@@ -1,5 +1,5 @@
-//! `Plugin::pipelined` — Plugin variant that internally owns the Recv + Send
-//! worker threads and the pipeline runtime.
+//! `Topology::WorldProxied(DriveShape::Pipelined(_))` — plugin variant that
+//! internally owns the Recv + Send worker threads and the pipeline runtime.
 //!
 //! # MISSION_PIPELINE_API_BOUNDARY §2f — PipelinedServer resource removal
 //!
@@ -36,8 +36,8 @@
 use bevy_app::App;
 use bevy_ecs::{
     entity::Entity,
-    schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
     resource::Resource,
+    schedule::{InternedScheduleLabel, IntoScheduleConfigs, ScheduleLabel},
     world::World,
 };
 
@@ -54,13 +54,13 @@ use crate::server_entity_converter::ServerEntityConverter;
 
 // ─── PipelineConfig ────────────────────────────────────────────────────────
 
-/// Tunables for [`Plugin::pipelined`].
+/// Tunables for [`crate::DriveShape::Pipelined`].
 #[derive(Default)]
 pub struct PipelineConfig {
     /// Schedule under which per-`Replicate` `on_component_added` /
     /// `on_component_removed` change-tracking systems are registered.
     /// When `None`, defaults to bevy's `Update` (matches
-    /// `Plugin::sim_integration`).
+    /// `Topology::SimIntegration`).
     pub change_detection_schedule: Option<InternedScheduleLabel>,
     /// When `true`, SKIP registering the per-`Replicate` host-sync
     /// change-tracking systems (`on_component_added`/`on_component_removed`,
@@ -145,7 +145,9 @@ pub(crate) fn install_full_pipelining(
     // The pipeline lives inside the unified `WorldServer` enum so the standard
     // `Server` SystemParam works in pipelined mode. The worker runtime + snapshot
     // channel + recv subscriber are created internally by `start_workers`.
-    app.insert_resource(ServerImpl::world_only(WorldServer::from_pipelined(pipeline)));
+    app.insert_resource(ServerImpl::world_only(WorldServer::from_pipelined(
+        pipeline,
+    )));
     app.insert_resource(sim_converter);
     app.insert_resource(EventReceiverRes(sim_event_receiver));
 

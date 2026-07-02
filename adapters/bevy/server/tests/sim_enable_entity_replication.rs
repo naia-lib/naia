@@ -65,9 +65,14 @@ fn sim_enable_matches_legacy_observables() {
     fn run_with(sim_path: bool) -> (ReplicationConfig, EntityOwner) {
         let (mut sim_handle, recv, send) = handles();
         let mut sim_app = App::new();
-        sim_app.add_plugins(ServerPlugin::sim_integration(
-            ServerConfig::default(),
-            protocol_bevy(),
+        sim_app.add_plugins(ServerPlugin::new(
+            naia_bevy_server::ServerPluginConfig::new(
+                ServerConfig::default(),
+                protocol_bevy(),
+                naia_bevy_server::Topology::SimIntegration(
+                    naia_bevy_server::SimIntegrationConfig::default(),
+                ),
+            ),
         ));
         let entity = sim_app.world_mut().spawn(()).id();
 
@@ -117,9 +122,14 @@ fn sim_enable_composes_with_configure_in_same_tick() {
     fn run_with(sim_enable: bool) -> ReplicationConfig {
         let (mut sim_handle, recv, send) = handles();
         let mut sim_app = App::new();
-        sim_app.add_plugins(ServerPlugin::sim_integration(
-            ServerConfig::default(),
-            protocol_bevy(),
+        sim_app.add_plugins(ServerPlugin::new(
+            naia_bevy_server::ServerPluginConfig::new(
+                ServerConfig::default(),
+                protocol_bevy(),
+                naia_bevy_server::Topology::SimIntegration(
+                    naia_bevy_server::SimIntegrationConfig::default(),
+                ),
+            ),
         ));
         let entity = sim_app.world_mut().spawn(()).id();
 

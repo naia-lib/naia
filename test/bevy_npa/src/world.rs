@@ -223,7 +223,13 @@ impl BevyTestHarness {
         let hub_for_startup = hub.clone();
 
         let mut server_app = App::new();
-        server_app.add_plugins(ServerPlugin::new(ServerConfig::default(), bevy_protocol()));
+        server_app.add_plugins(ServerPlugin::new(
+            naia_bevy_server::ServerPluginConfig::new(
+                ServerConfig::default(),
+                bevy_protocol(),
+                naia_bevy_server::Topology::Standalone(naia_bevy_server::DriveShape::Resident),
+            ),
+        ));
         naia_bevy_server::AppRegisterComponentEvents::add_resource_events::<TestScore>(
             &mut server_app,
         );

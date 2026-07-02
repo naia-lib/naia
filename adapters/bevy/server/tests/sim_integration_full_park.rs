@@ -1,5 +1,5 @@
 //! MISSION_PIPELINE_API_BOUNDARY §2f — park / unpark TestClock integration
-//! smoke for `Plugin::pipelined`, driven through the `Server::pipeline_*`
+//! smoke for `Topology::WorldProxied(DriveShape::Pipelined(_))`, driven through the `Server::pipeline_*`
 //! static lifecycle helpers (the `PluginInternalState` resource is gone; the
 //! pipeline now lives inside the unified `WorldServer` resource).
 //!
@@ -36,10 +36,14 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::pipelined(
-        ServerConfig::default(),
-        protocol(),
-        PipelineConfig::default(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::WorldProxied(naia_bevy_server::DriveShape::Pipelined(
+                PipelineConfig::default(),
+            )),
+        ),
     ));
     app
 }

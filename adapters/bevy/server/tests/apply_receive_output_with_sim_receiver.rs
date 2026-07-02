@@ -34,9 +34,7 @@ use bevy_ecs::{entity::Entity, message::Messages};
 
 use naia_bevy_server::{
     apply_receive_output_pipeline, apply_receive_output_pipeline_with_event_receiver,
-    events::TickEvent,
-    pipeline_actors::EventReceiver,
-    Plugin, ServerConfig,
+    events::TickEvent, pipeline_actors::EventReceiver, Plugin, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_test_harness::test_protocol::Position;
@@ -60,7 +58,11 @@ fn bevy_protocol() -> naia_bevy_shared::Protocol {
 /// `Messages<X>` resources the helper writes to are registered.
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(Plugin::new(ServerConfig::default(), bevy_protocol()));
+    app.add_plugins(Plugin::new(naia_bevy_server::ServerPluginConfig::new(
+        ServerConfig::default(),
+        bevy_protocol(),
+        naia_bevy_server::Topology::Standalone(naia_bevy_server::DriveShape::Resident),
+    )));
     app
 }
 
@@ -144,8 +146,10 @@ fn byte_parity_with_legacy_apply_receive_output_pipeline_ticks() {
     let mut app_combined = build_app();
     let mut app_legacy = build_app();
 
-    let sim_a = naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
-    let sim_b = naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
+    let sim_a =
+        naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
+    let sim_b =
+        naia_server::WorldServer::<Entity>::new_pipelined(ServerConfig::default(), naia_protocol());
     let sim_receiver = EventReceiver::<Entity>::new();
 
     let make_output = || naia_server::ReceiveOutput::<Entity> {

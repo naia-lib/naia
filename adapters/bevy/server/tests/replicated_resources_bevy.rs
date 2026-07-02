@@ -146,7 +146,13 @@ impl BevyHarness {
         // -- Server App --
         let hub_for_server = hub.clone();
         let mut server_app = App::new();
-        server_app.add_plugins(ServerPlugin::new(ServerConfig::default(), protocol()));
+        server_app.add_plugins(ServerPlugin::new(
+            naia_bevy_server::ServerPluginConfig::new(
+                ServerConfig::default(),
+                protocol(),
+                naia_bevy_server::Topology::Standalone(naia_bevy_server::DriveShape::Resident),
+            ),
+        ));
         ServerAppEvents::add_resource_events::<TestScore>(&mut server_app);
         server_app
             .init_resource::<ServerConnected>()
@@ -512,13 +518,11 @@ fn f7_client_disconnect_with_resource_no_panic() {
 
     // Drive a real client disconnect: `despawn_all_remote_entities` runs
     // during the client's process loop and despawns the carrier entity.
-    let id = h
-        .client_app
-        .register_system(|mut client: Client<Main>| {
-            if client.connection_status() == naia_bevy_client::ConnectionStatus::Connected {
-                client.disconnect();
-            }
-        });
+    let id = h.client_app.register_system(|mut client: Client<Main>| {
+        if client.connection_status() == naia_bevy_client::ConnectionStatus::Connected {
+            client.disconnect();
+        }
+    });
     h.client_app.world_mut().run_system(id).expect("disconnect");
 
     // Several updates so the disconnect + despawn_all_remote_entities path

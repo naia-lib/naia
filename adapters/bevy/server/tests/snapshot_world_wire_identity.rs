@@ -45,13 +45,18 @@ fn protocol() -> Protocol {
     p.build()
 }
 
-/// Build an App with `Plugin::sim_integration` so `WorldData<Protocol>`
+/// Build an App with `Topology::SimIntegration` so `WorldData<Protocol>`
 /// is registered — the bevy `WorldProxy::proxy()` impl requires this.
 fn make_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     app
 }
@@ -292,9 +297,14 @@ fn dyn_write_bytes_match_across_views() {
     let component_kinds = &proto.inner().component_kinds;
 
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
 
     // Case 1: freshly-spawned entity, single component, distinctive value.

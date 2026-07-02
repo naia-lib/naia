@@ -63,9 +63,14 @@ fn handles() -> (CoordHandle<Entity>, RecvHandle<Entity>, SendHandle<Entity>) {
 
 fn sim_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol_bevy(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol_bevy(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     app
 }

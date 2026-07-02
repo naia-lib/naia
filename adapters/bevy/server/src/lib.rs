@@ -11,11 +11,15 @@
 //!
 //! ```no_run
 //! # use bevy_app::App;
-//! # use naia_bevy_server::Plugin;
+//! # use naia_bevy_server::{DriveShape, Plugin, ServerPluginConfig, Topology};
 //! fn main() {
 //!     App::new()
 //!         // .add_plugins(DefaultPlugins)
-//!         .add_plugins(Plugin::new(server_config(), protocol()))
+//!         .add_plugins(Plugin::new(ServerPluginConfig::new(
+//!             server_config(),
+//!             protocol(),
+//!             Topology::Standalone(DriveShape::Resident),
+//!         )))
 //!         // .add_systems(Startup, init)
 //!         .run();
 //! }
@@ -34,13 +38,17 @@
 //! use bevy_ecs::message::MessageReader;
 //! use naia_bevy_server::{
 //!     events::ConnectEvent,
-//!     transport, Plugin, Server, ServerConfig, UserKey,
+//!     transport, DriveShape, Plugin, Server, ServerConfig, ServerPluginConfig, Topology, UserKey,
 //! };
 //! use naia_bevy_shared::Protocol;
 //!
 //! fn main() {
 //!     App::new()
-//!         .add_plugins(Plugin::new(ServerConfig::default(), Protocol::builder().build()))
+//!         .add_plugins(Plugin::new(ServerPluginConfig::new(
+//!             ServerConfig::default(),
+//!             Protocol::builder().build(),
+//!             Topology::Standalone(DriveShape::Resident),
+//!         )))
 //!         .add_systems(Startup, init)
 //!         .add_systems(Update, on_connect)
 //!         .run();
@@ -81,9 +89,10 @@ pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
     HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
     Instant, ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, ResponseSendKey, SendPackets,
-    SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType, WorldOpCommand,
-    WorldProxy, WorldProxyMut, WorldRef, WorldRefType, WorldToHostSync, WorldUpdate,
+    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, ResponseSendKey,
+    SendPackets, SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType,
+    WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef, WorldRefType, WorldToHostSync,
+    WorldUpdate,
 };
 pub use naia_server::{
     pipeline_actors,
@@ -122,17 +131,16 @@ mod snapshot_builder;
 mod systems;
 
 pub use app_ext::AppRegisterComponentEvents;
-pub use protocol_ext::ProtocolServerExt;
 pub use apply_receive_output::{
-    apply_receive_output_pipeline,
-    apply_receive_output_pipeline_with_event_receiver,
+    apply_receive_output_pipeline, apply_receive_output_pipeline_with_event_receiver,
     apply_receive_output_pipeline_with_event_receiver_split,
 };
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use component_event_registry::ComponentEventRegistry;
 pub use components::{ClientOwned, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
-pub use plugin::Plugin;
+pub use plugin::{DriveShape, Plugin, ServerPluginConfig, SimIntegrationConfig, Topology};
+pub use protocol_ext::ProtocolServerExt;
 // `TickCtx` re-exported directly; the core pipeline `PipelinedWorldServer<E>` is
 // accessible via `naia_bevy_server::pipeline_actors`. The pipelined plugin stores
 // it inside the unified `WorldServer` resource (§2f) and drives lifecycle via the

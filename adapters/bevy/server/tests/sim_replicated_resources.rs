@@ -49,9 +49,14 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     // Stub system so the per-Replicate change-tracking systems fire.
     app.add_systems(Update, |_: Commands| {});
@@ -130,13 +135,13 @@ fn sim_resource_round_trip_update_and_remove() {
     // replicates — assert both the resource view and the entity-component
     // reflect it.
     let cell = parking_lot::Mutex::new(Some(()));
-    let id = app
-        .world_mut()
-        .register_system(move |mut score: bevy_ecs::system::ResMut<TestScore>| {
-            if cell.lock().take().is_some() {
-                *score.home = 99;
-            }
-        });
+    let id =
+        app.world_mut()
+            .register_system(move |mut score: bevy_ecs::system::ResMut<TestScore>| {
+                if cell.lock().take().is_some() {
+                    *score.home = 99;
+                }
+            });
     app.world_mut().run_system(id).expect("mutate via ResMut");
     app.update();
 

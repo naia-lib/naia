@@ -12,7 +12,11 @@
 //!
 //! // 2. Add the plugin:
 //! App::new()
-//!     .add_plugins(NaiaServerPlugin::new(server_config(), protocol()))
+//!     .add_plugins(NaiaServerPlugin::new(ServerPluginConfig::new(
+//!         server_config(),
+//!         protocol(),
+//!         Topology::Standalone(DriveShape::Resident),
+//!     )))
 //!     .add_plugins(NaiaServerMetricsPlugin)
 //!     .run();
 //! ```

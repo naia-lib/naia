@@ -49,14 +49,22 @@ fn sim_converter_installs_as_sim_resource() {
     let sim_converter = ServerEntityConverter::from_coord(&sim_handle);
 
     let mut sim_app = App::new();
-    sim_app.add_plugins(ServerPlugin::sim_integration(
-        ServerConfig::default(),
-        protocol_bevy(),
+    sim_app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol_bevy(),
+            naia_bevy_server::Topology::SimIntegration(
+                naia_bevy_server::SimIntegrationConfig::default(),
+            ),
+        ),
     ));
     sim_app.insert_resource(sim_converter);
 
     assert!(
-        sim_app.world().get_resource::<ServerEntityConverter>().is_some(),
+        sim_app
+            .world()
+            .get_resource::<ServerEntityConverter>()
+            .is_some(),
         "ServerEntityConverter must install as a Sim Bevy Resource",
     );
 }

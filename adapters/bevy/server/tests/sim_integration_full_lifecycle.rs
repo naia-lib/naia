@@ -1,4 +1,4 @@
-//! MISSION_PIPELINE_API_BOUNDARY §2f — lifecycle smoke for `Plugin::pipelined`.
+//! MISSION_PIPELINE_API_BOUNDARY §2f — lifecycle smoke for `Topology::WorldProxied(DriveShape::Pipelined(_))`.
 //!
 //! Verifies:
 //!   - Plugin install registers the expected consumer-facing Resources
@@ -33,10 +33,14 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::pipelined(
-        ServerConfig::default(),
-        protocol(),
-        PipelineConfig::default(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::WorldProxied(naia_bevy_server::DriveShape::Pipelined(
+                PipelineConfig::default(),
+            )),
+        ),
     ));
     app
 }
@@ -48,7 +52,10 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 
 /// Reach into the pipeline stored in the `WorldServer` resource and run `f`
 /// against it; returns `false` if the resource is not a Pipelined WorldServer.
-fn with_pipeline<R>(app: &mut App, f: impl FnOnce(&mut naia_server::WorldServer<bevy_ecs::entity::Entity>) -> R) -> Option<R> {
+fn with_pipeline<R>(
+    app: &mut App,
+    f: impl FnOnce(&mut naia_server::WorldServer<bevy_ecs::entity::Entity>) -> R,
+) -> Option<R> {
     Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
         (ws.mode() == naia_server::ServerMode::Pipelined).then(|| f(ws))
     })
@@ -95,7 +102,10 @@ fn listen_and_start_binds_pipeline() {
     app.update();
     // The pipeline is reachable and reports its current tick (coord in slot).
     let tick = with_pipeline(&mut app, |ps| ps.current_tick());
-    assert!(tick.is_some(), "pipeline reachable + coord borrowable after start");
+    assert!(
+        tick.is_some(),
+        "pipeline reachable + coord borrowable after start"
+    );
 }
 
 #[test]

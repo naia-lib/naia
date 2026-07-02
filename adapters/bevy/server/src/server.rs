@@ -17,8 +17,9 @@ use naia_server::{
 
 use naia_bevy_shared::{
     Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalEntity, HostOwned, Instant, Message, ReplicatedResource, Request,
-    Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType, WorldProxyMut, WorldRefType,
+    EntityDoesNotExistError, GlobalEntity, HostOwned, Instant, Message, ReplicatedResource,
+    Request, Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType, WorldProxyMut,
+    WorldRefType,
 };
 
 use crate::plugin::Singleton;
@@ -100,11 +101,7 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn process_all_packets<W: WorldMutType<Entity>>(
-        &mut self,
-        world: W,
-        now: &Instant,
-    ) {
+    pub(crate) fn process_all_packets<W: WorldMutType<Entity>>(&mut self, world: W, now: &Instant) {
         match self {
             // Both the `Server` and the unified `WorldServer` enum take the
             // world by value here. Byte-identical either way.
@@ -809,7 +806,7 @@ impl<'w> Server<'w> {
     // Pipelined-server lifecycle (§2f) — static helpers that drive the
     // pipeline stored in the `ServerImpl::WorldOnly(WorldServer)` resource.
     //
-    // The pipelined plugin (`Plugin::pipelined`) installs a `WorldServer`
+    // The `WorldProxied(Pipelined(_))` plugin topology installs a `WorldServer`
     // built via `WorldServer::from_pipelined`, so the underlying
     // `PipelinedWorldServer` is reachable through the unified enum. These
     // replace the removed `PluginInternalState` lifecycle surface.

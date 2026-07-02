@@ -1,5 +1,5 @@
 //! MISSION_PIPELINE_API_BOUNDARY §2f — PlayerCommand tick-buffer drain through
-//! `Plugin::pipelined`.
+//! `Topology::WorldProxied(DriveShape::Pipelined(_))`.
 //!
 //! # The mechanism (under test)
 //!
@@ -52,10 +52,14 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::pipelined(
-        ServerConfig::default(),
-        protocol(),
-        PipelineConfig::default(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::WorldProxied(naia_bevy_server::DriveShape::Pipelined(
+                PipelineConfig::default(),
+            )),
+        ),
     ));
     app
 }
@@ -74,9 +78,7 @@ fn listen(app: &mut App, addr: &str) {
 
 /// Clone the pipeline's recv-handle slot (the same `Arc` the recv worker borrows
 /// from in active builds). The workers must be parked before taking the handle.
-fn recv_slot(
-    app: &mut App,
-) -> std::sync::Arc<parking_lot::Mutex<Option<RecvHandle<Entity>>>> {
+fn recv_slot(app: &mut App) -> std::sync::Arc<parking_lot::Mutex<Option<RecvHandle<Entity>>>> {
     Server::world_only_resource_scope(app.world_mut(), |_world, ws| ws.recv_slot())
 }
 

@@ -39,10 +39,14 @@ fn protocol() -> BevyProtocol {
 /// Pipelined app with the adapter driving the bracket from the system sets.
 fn build_driving_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::pipelined(
-        ServerConfig::default(),
-        protocol(),
-        PipelineConfig::default().drive_in_update(true),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::WorldProxied(naia_bevy_server::DriveShape::Pipelined(
+                PipelineConfig::default().drive_in_update(true),
+            )),
+        ),
     ));
     app
 }
@@ -55,9 +59,7 @@ fn local_socket(addr: &str) -> Box<dyn transport::Socket> {
 /// Borrow the pipeline's current tick — `expect`s the coord handle is back in
 /// its slot, so this panics if the bracket failed to restore the handles.
 fn current_tick(app: &mut App) -> u16 {
-    Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
-        ws.current_tick()
-    })
+    Server::world_only_resource_scope(app.world_mut(), |_world, ws| ws.current_tick())
 }
 
 #[test]

@@ -215,7 +215,13 @@ impl BevyHarness {
         // ── Server App ────────────────────────────────────────────────────
         let hub_for_server = hub.clone();
         let mut server_app = App::new();
-        server_app.add_plugins(ServerPlugin::new(ServerConfig::default(), protocol()));
+        server_app.add_plugins(ServerPlugin::new(
+            naia_bevy_server::ServerPluginConfig::new(
+                ServerConfig::default(),
+                protocol(),
+                naia_bevy_server::Topology::Standalone(naia_bevy_server::DriveShape::Resident),
+            ),
+        ));
         server_app
             .insert_resource(ServerState {
                 give_mode,

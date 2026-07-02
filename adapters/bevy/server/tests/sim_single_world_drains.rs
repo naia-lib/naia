@@ -17,7 +17,7 @@
 //! helpers (proven by `sim_replicated_resources.rs` / `sim_host_sync.rs`); the
 //! UNIQUE risk these variants introduce is the single-world borrow discipline —
 //! does it alias-panic? These tests run both drains against the REAL
-//! `Plugin::pipelined` server inside a park window and assert they complete
+//! `Topology::WorldProxied(DriveShape::Pipelined(_))` server inside a park window and assert they complete
 //! without panic while preserving the carrier/entity state.
 
 use std::{thread, time::Duration};
@@ -49,10 +49,14 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::pipelined(
-        ServerConfig::default(),
-        protocol(),
-        PipelineConfig::default(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::WorldProxied(naia_bevy_server::DriveShape::Pipelined(
+                PipelineConfig::default(),
+            )),
+        ),
     ));
     // Stub system so the per-Replicate change-tracking systems fire.
     app.add_systems(Update, |_: Commands| {});
@@ -159,19 +163,19 @@ fn scope_authority_ops_single_drains_in_park_without_alias_panic() {
     app.update();
 
     Server::pipeline_park(app.world());
-    let room_key =
-        Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
-            ws.enable_entity_replication(&entity);
-            ws.create_room().key()
-        });
+    let room_key = Server::world_only_resource_scope(app.world_mut(), |_world, ws| {
+        ws.enable_entity_replication(&entity);
+        ws.create_room().key()
+    });
 
     // Enqueue a RoomAdd + a TakeAuthority for the same entity onto the single
     // world's pending queue (the two-phase drain must normalize the RoomAdd
     // ahead of the authority op).
-    app.world_mut().insert_resource(PendingScopeAuthorityOps(vec![
-        PipelineScopeAuthorityOp::TakeAuthority(entity),
-        PipelineScopeAuthorityOp::RoomAdd(entity),
-    ]));
+    app.world_mut()
+        .insert_resource(PendingScopeAuthorityOps(vec![
+            PipelineScopeAuthorityOp::TakeAuthority(entity),
+            PipelineScopeAuthorityOp::RoomAdd(entity),
+        ]));
 
     Server::pipeline_drain_scope_authority_ops_single(app.world_mut(), &room_key);
     // Second drain proves the queue emptied (clean no-op, no panic).

@@ -1,5 +1,5 @@
 //! MISSION_PIPELINE_API_BOUNDARY §2f — panic propagation smoke for
-//! `Plugin::pipelined`, driven through the `Server::pipeline_*` static helpers.
+//! `Topology::WorldProxied(DriveShape::Pipelined(_))`, driven through the `Server::pipeline_*` static helpers.
 //!
 //! Verifies that a panic on a worker thread surfaces on the main thread via
 //! [`naia_bevy_server::Server::pipeline_propagate_panics`].
@@ -28,10 +28,14 @@ fn protocol() -> BevyProtocol {
 
 fn build_app() -> App {
     let mut app = App::new();
-    app.add_plugins(ServerPlugin::pipelined(
-        ServerConfig::default(),
-        protocol(),
-        PipelineConfig::default(),
+    app.add_plugins(ServerPlugin::new(
+        naia_bevy_server::ServerPluginConfig::new(
+            ServerConfig::default(),
+            protocol(),
+            naia_bevy_server::Topology::WorldProxied(naia_bevy_server::DriveShape::Pipelined(
+                PipelineConfig::default(),
+            )),
+        ),
     ));
     app
 }
