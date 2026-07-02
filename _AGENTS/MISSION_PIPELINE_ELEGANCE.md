@@ -1,10 +1,10 @@
 # MISSION: Pipeline Elegance — collapse the coord/send seam & unify the server surface
 
 **Status:** DONE (2026-07-02). Successor to `MISSION_PIPELINE_API_BOUNDARY.md`.
-Completed Phases A-D on `dev` and pushed; cyberlith moat GREEN ×10. This
-mission does **not** close the separate open follow-ups in
-`MISSION_PIPELINE_API_BOUNDARY.md` (P4/P5 harness/real-ack work) or
-`MISSION_HANDOFF_NAIA_SESSION.md` (sim-pipelined namako BDD coverage).
+Completed Phases A-D on `dev` and pushed; cyberlith moat GREEN ×10. The
+separate `MISSION_PIPELINE_API_BOUNDARY.md` P4/P5 follow-ups were completed
+afterward in `3bdaa367`. The separate `MISSION_HANDOFF_NAIA_SESSION.md`
+sim-pipelined namako BDD coverage mission remains open.
 **Audience:** an implementing agent with ZERO prior context on this repo. Read
 Phase 0 in full before touching code — it contains the mental model, the build/
 test/verify commands, and the invariants you must not break. Then execute the

@@ -1,6 +1,6 @@
 ---
 title: "MISSION — naia pipelined-sim consumer API + boundary restoration"
-status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 ✅ (worker-thread runtime + park/unpark barrier + worker loops + Armed→Running→Stopped lifecycle MOVED into core `pipeline_actors::PipelineRuntime<E>`; bevy `PluginInternalState` now a thin delegating wrapper; `workers_active` cfg + `deterministic` feature + `build.rs` moved to naia-server; bench timing via fn-ptr hooks; GREEN — naia-server lib 42, full naia harness ~150, bevy adapter deterministic suite incl. cross-thread panic-propagation). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. **✅ G10 cyberlith cutover COMPLETE + MERGED TO TRUNK (2026-06-30):** naia `dev 3cada463`, diax `main 339efe6`, cyberlith `main 014e080ec`; determinism/desync moat **54/54** on the real merged checkouts; naia-isolation clean; worktrees + feature branches deleted. **G4 + G5 STRUCK (Connor 2026-06-30)** — net-new sugar for marginal gain; entity registration stays on the (byte-exact) `world_only_resource_scope`+coord path, the accepted floor. **S6 ergonomic collapse COMPLETE (2026-06-30): G1 ✅ (naia dev `d98f81d0`), G6 ✅ (`286bdbab`), G6b ✅ (`00f09b2a`), G5b ✅ (`6d8b80e9`).** **Enforcement Item 1 ✅ — `cybertool check naia-primitive-reach` tripwire (cyberlith main `80faa1aa8`):** zero-tier (retired reassembly/handle prims pinned at 0) + floor ratchet (per-file baseline, 8 files/35 reaches all in services/game/cell). **FINISH G-UNIFY P1/P2/P3/P6 ✅ COMPLETE + PUSHED (2026-06-30):** P1 (naia dev `98d39a6b` — grow `WorldServer`'s unified surface, swap `NaiaServer.world_server` → `WorldServer<E>`, add `new_pipelined`); P3+P6 (naia dev `1935f6d1` — bevy adapter de-downcast onto the unified surface + DELETE `as_pipelined`/`as_pipelined_mut` entirely, confirmed gone from `server/src/server/world_server_enum.rs`); P2 (cyberlith main `4b0c61800` — the 8 `as_pipelined_mut()` reach sites in `services/game/cell` migrated to direct `&mut WorldServer<Entity>` calls; companion diax main `fce3437` updated `handle_scope_actions` to take `&mut WorldServer`). Follow-up naia dev `59f4b25d` added `WorldServer::disconnect_user` (needed by cyberlith's out-of-band cell-disconnect path once the downcast was gone). **NOW: only P4 (harness `Scenario::new(ServerMode)`, ~132 call sites/15 files) and P5 (the real-ack byte-identity test) remain — see the dedicated section below.** See cyberlith `_AGENTS/MISSION_G10_CYBERLITH_CUTOVER.md` §S6 for the consumer collapse map.
+status: G7 SIGNED OFF + IMPL UNDERWAY (Connor 2026-06-29). G7-1 ✅ (core registry-free `SendStateView::build_needed_snapshot` assembler + N4 byte-identity tests GREEN — `g9pre_core_assembler_*`). G7-2 ✅ (`PipelinedServer::{receive,send}` bracket + the N1 D0–D9 `drain_and_send` ordering contract; structural drive GREEN — `pipeline_bracket`). G7-3 ✅ (worker-thread runtime + park/unpark barrier + worker loops + Armed→Running→Stopped lifecycle MOVED into core `pipeline_actors::PipelineRuntime<E>`; bevy `PluginInternalState` now a thin delegating wrapper; `workers_active` cfg + `deterministic` feature + `build.rs` moved to naia-server; bench timing via fn-ptr hooks; GREEN — naia-server lib 42, full naia harness ~150, bevy adapter deterministic suite incl. cross-thread panic-propagation). Prior: two adversarial audits incorporated (§2h, §2j); G9pre §2i. **✅ G10 cyberlith cutover COMPLETE + MERGED TO TRUNK (2026-06-30):** naia `dev 3cada463`, diax `main 339efe6`, cyberlith `main 014e080ec`; determinism/desync moat **54/54** on the real merged checkouts; naia-isolation clean; worktrees + feature branches deleted. **G4 + G5 STRUCK (Connor 2026-06-30)** — net-new sugar for marginal gain; entity registration stays on the (byte-exact) `world_only_resource_scope`+coord path, the accepted floor. **S6 ergonomic collapse COMPLETE (2026-06-30): G1 ✅ (naia dev `d98f81d0`), G6 ✅ (`286bdbab`), G6b ✅ (`00f09b2a`), G5b ✅ (`6d8b80e9`).** **Enforcement Item 1 ✅ — `cybertool check naia-primitive-reach` tripwire (cyberlith main `80faa1aa8`):** zero-tier (retired reassembly/handle prims pinned at 0) + floor ratchet (per-file baseline, 8 files/35 reaches all in services/game/cell). **FINISH G-UNIFY P1/P2/P3/P4/P5/P6 ✅ COMPLETE:** P1 (naia dev `98d39a6b`); P3+P6 (naia dev `1935f6d1`); P2 (cyberlith main `4b0c61800`, diax main `fce3437`); P4+P5 (naia `3bdaa367` — explicit `Scenario::new(ServerMode)` plus `g8_real_ack_byte_identity`). Follow-up naia dev `59f4b25d` added `WorldServer::disconnect_user`. See cyberlith `_AGENTS/MISSION_G10_CYBERLITH_CUTOVER.md` §S6 for the consumer collapse map.
 domain: architecture / engine-boundary
 owner: connorcarpenter
 origin: "2026-06-29 cyberlith↔naia boundary audit (after resource_replication.rs layering regression)"
@@ -41,23 +41,17 @@ governing_rule: "naia owns ALL pipelined-sim functionality; cyberlith consumes O
 >   now-deleted `as_pipelined_mut` — not one of the 6 named phases, but required to keep P6 from
 >   stranding that call site.
 >
-> **REMAINING — pick up here: P4 + P5 only.** P4 (harness `Scenario::new(ServerMode)`) — verified
-> count: `grep -rln "Scenario::new(" test/` → exactly **132 call sites across 15 files** (re-counted
-> fresh, matches the figure already in the P4 bullet below). P5 (the real-ack byte-identity test) —
-> verified the target file does not exist yet: only
-> `test/harness/contract_tests/integration_only/g9pre_resident_pipelined_byte_identity.rs` is
-> present (the settle-to-silence sidestep P5 exists to close);
-> `g8_real_ack_byte_identity.rs` is unwritten. Start with P4 (it's a mechanical
-> `Scenario::new()` → `Scenario::new(ServerMode::Resident)` sweep + `server_start` dispatch), then
-> P5 (write the new test, run it under both `ServerMode::Resident` and `ServerMode::Pipelined`).
-> Companion: memory `project_naia_g10_cyberlith_cutover.md` (final ledger bullet) carries the same
-> plan.
->
-> **Still open after `MISSION_PIPELINE_ELEGANCE` (verified 2026-07-02):** the Phase
-> C/D elegance work completed the D0-D9 send-resident staging and Bevy plugin
-> constructor cleanup, but did not implement this doc's P4/P5. Fresh checks:
-> `rg -n "Scenario::new\\(" test -g '*.rs' | wc -l` → 132; no
-> `g8_real_ack_byte_identity.rs` exists.
+> **P4 + P5 DONE 2026-07-02 (`3bdaa367`).** P4 made `Scenario::new` require an
+> explicit `ServerMode` and moved every existing harness call site to
+> `ServerMode::Resident`; `server_start` now constructs resident vs pipelined
+> from the stored mode. P5 added
+> `test/harness/contract_tests/integration_only/g8_real_ack_byte_identity.rs`,
+> which runs the same connected-client mutation loop under
+> `ServerMode::Resident` and `ServerMode::Pipelined` and asserts the full
+> direction+bytes trace is identical while client ACKs flow between mutation
+> ticks. Focused verification: `cargo test -p naia-test-harness --test
+> g8_real_ack_byte_identity --test g9pre_resident_pipelined_byte_identity --test
+> pipeline_recv_send_independent --test world_server_enum_shell` GREEN.
 
 ### The reframe
 
@@ -136,17 +130,17 @@ floor reduction. Connor's three architecture calls (all correct, verified):
   (sim 38 / int 41 / e2e 115) + `check naia-primitive-reach` green.
 - **P3 ✅ DONE (naia dev `1935f6d1`) — (naia bevy adapter):** de-downcast the 10 reaches in `adapters/bevy/server/src/`
   (server.rs, plugin_full.rs, host_sync_pipeline.rs) onto the unified surface.
-- **P4 — REMAINING, pick up here (harness):** `Scenario::new(mode: ServerMode)` — Connor wants it REQUIRED/explicit (no default);
-  ~132 `Scenario::new()` callers across 15 files (re-verified 2026-06-30: `grep -rln "Scenario::new(" test/`
-  → 132 occurrences / 15 files, exact) → `Scenario::new(ServerMode::Resident)`. `server_start`
-  builds NaiaServer resident vs pipelined per stored mode. ServerMut/MutateCtx machinery unchanged (still
-  NaiaServer).
-- **P5 — REMAINING (the test):** `test/harness/contract_tests/integration_only/g8_real_ack_byte_identity.rs` (verified 2026-06-30: file does not exist yet) — ONE
-  body, run under `Scenario::new(ServerMode::Resident)` and `(Pipelined)`, connect a real client,
-  register an entity in a room, then LOOP N× {mutate Position; tick so client receives + ACKs; server
-  drains acks on next send}, capture hub trace, assert per-packet byte-identity Resident==Pipelined.
-  Closes the audit #1 / G8 obligation (`pipeline_bracket.rs:34-46`) — proves `drain_all_acks` is
-  byte-transparent under live acks, which g9pre sidesteps by settling-to-silence before capture.
+- **P4 ✅ DONE (naia `3bdaa367`) — (harness):** `Scenario::new(mode:
+  ServerMode)` is now required/explicit (no default); existing harness call
+  sites use `ServerMode::Resident`; `server_start` builds NaiaServer resident vs
+  pipelined per stored mode. ServerMut/MutateCtx machinery unchanged.
+- **P5 ✅ DONE (naia `3bdaa367`) — (the test):**
+  `test/harness/contract_tests/integration_only/g8_real_ack_byte_identity.rs`
+  runs one body under `Scenario::new(ServerMode::Resident)` and
+  `Scenario::new(ServerMode::Pipelined)`, connects a real client, registers an
+  entity in a room, then loops through Position mutations with fixed ACK-drain
+  ticks. The captured full packet trace is byte-identical across modes,
+  including client-to-server ACK packets.
 - **P6 ✅ DONE (naia dev `1935f6d1`, same commit as P3) — (cleanup):** delete `WorldServer::as_pipelined`/`as_pipelined_mut` once no consumer downcasts. Verified deleted: `grep -rn "as_pipelined" --include="*.rs" .` only matches stale doc-comments, no live method/call sites.
 
 Constraints: NO new wire/protocol; naia dev-trunk (never commit naia main); byte-exact determinism moat
