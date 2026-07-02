@@ -79,7 +79,11 @@ fn drive_entity_builder(mut server: WorldServer<DemoEntity>) {
     // Reads dispatch through the same builder: enabling a server entity makes
     // it Server-owned and registers a replication config.
     let em = server.entity_mut(world.proxy_mut(), &entity);
-    assert_eq!(em.owner(), EntityOwner::Server, "enabled entity must be Server-owned");
+    assert_eq!(
+        em.owner(),
+        EntityOwner::Server,
+        "enabled entity must be Server-owned"
+    );
     assert!(
         em.replication_config().is_some(),
         "configured entity must report a replication config",
@@ -93,7 +97,76 @@ fn world_server_enum_resident_entity_builder() {
 
 #[test]
 fn world_server_enum_pipelined_entity_builder() {
-    drive_entity_builder(WorldServer::new_pipelined(ServerConfig::default(), protocol()));
+    drive_entity_builder(WorldServer::new_pipelined(
+        ServerConfig::default(),
+        protocol(),
+    ));
+}
+
+/// Phase C / D5 — historian state is coord-resident, so the Pipelined arm must
+/// not reassemble the whole server just to enable or record snapshots. Both
+/// engine shapes expose the same public behavior: disabled record is a no-op,
+/// enable creates an empty buffer, and record stores a snapshot for the exact
+/// tick.
+fn drive_historian_fast_path(mut server: WorldServer<DemoEntity>) {
+    let world = DemoWorld::default();
+
+    assert!(
+        server.historian().is_none(),
+        "historian starts disabled in both engine shapes",
+    );
+    server.record_historian_tick(world.proxy(), 7);
+    assert!(
+        server.historian().is_none(),
+        "recording while disabled must remain a no-op",
+    );
+
+    server.enable_historian(4);
+    assert!(
+        server
+            .historian()
+            .is_some_and(|historian| historian.is_empty()),
+        "enable_historian creates an empty coord-resident buffer",
+    );
+    server.record_historian_tick(world.proxy(), 8);
+    {
+        let historian = server.historian().expect("historian must be enabled");
+        assert_eq!(historian.len(), 1, "one snapshot must be retained");
+        assert!(
+            historian.snapshot_at_tick(8).is_some(),
+            "recorded tick must be queryable",
+        );
+    }
+
+    server.enable_historian_filtered(4, std::iter::empty::<naia_shared::ComponentKind>());
+    assert!(
+        server
+            .historian()
+            .is_some_and(|historian| historian.is_empty()),
+        "filtered enable replaces the buffer in both modes",
+    );
+    server.record_historian_tick(world.proxy(), 9);
+    {
+        let historian = server.historian().expect("historian must be enabled");
+        assert_eq!(historian.len(), 1, "filtered buffer records the tick");
+        assert!(
+            historian.snapshot_at_tick(9).is_some(),
+            "filtered recorded tick must be queryable",
+        );
+    }
+}
+
+#[test]
+fn world_server_enum_resident_historian_fast_path() {
+    drive_historian_fast_path(WorldServer::new(ServerConfig::default(), protocol()));
+}
+
+#[test]
+fn world_server_enum_pipelined_historian_fast_path() {
+    drive_historian_fast_path(WorldServer::new_pipelined(
+        ServerConfig::default(),
+        protocol(),
+    ));
 }
 
 /// task #9 — the Room/global-priority borrow-returning builders + send/recv
@@ -110,7 +183,10 @@ fn drive_borrow_builders(addr: &str, server: WorldServer<DemoEntity>) {
     let mut world = DemoWorld::default();
 
     // Send-resident `&self` read via the parked slot — no panic.
-    assert!(server.is_listening(), "server must report listening after listen()");
+    assert!(
+        server.is_listening(),
+        "server must report listening after listen()"
+    );
     assert!(
         server.scope_checks_pending().is_empty(),
         "no scope checks pending on a fresh server",
@@ -130,14 +206,24 @@ fn drive_borrow_builders(addr: &str, server: WorldServer<DemoEntity>) {
     // RoomRef / RoomMut reads dispatch through the same builder.
     {
         let room = server.room(&room_key);
-        assert_eq!(room.entities_count(), 1, "room must contain the added entity");
-        assert!(room.has_entity(&entity), "room.has_entity must see the added entity");
+        assert_eq!(
+            room.entities_count(),
+            1,
+            "room must contain the added entity"
+        );
+        assert!(
+            room.has_entity(&entity),
+            "room.has_entity must see the added entity"
+        );
         assert_eq!(room.entities(), vec![entity], "room.entities must list it");
         assert_eq!(room.users_count(), 0, "no users in the room yet");
     }
 
     // Global (sender-wide) priority builder — coord-resident; works in both modes.
-    server.global_entity_priority_mut(entity).set_gain(5.0).boost_once(10.0);
+    server
+        .global_entity_priority_mut(entity)
+        .set_gain(5.0)
+        .boost_once(10.0);
     let pr = server.global_entity_priority(entity);
     assert_eq!(pr.gain(), Some(5.0), "global priority gain persists");
     assert_eq!(pr.accumulated(), 10.0, "global priority boost accumulates");

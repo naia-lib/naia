@@ -1035,6 +1035,34 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord().historian()
     }
 
+    /// Enable the coord-resident lag-compensation snapshot buffer.
+    pub fn enable_historian(&mut self, max_ticks: u16) {
+        self.coord_mut().state.historian = Some(crate::historian::Historian::new(max_ticks));
+    }
+
+    /// Enable the coord-resident lag-compensation snapshot buffer with a
+    /// component-kind filter.
+    pub fn enable_historian_filtered(
+        &mut self,
+        max_ticks: u16,
+        filter: impl IntoIterator<Item = ComponentKind>,
+    ) {
+        self.coord_mut().state.historian =
+            Some(crate::historian::Historian::new_filtered(max_ticks, filter));
+    }
+
+    /// Record a coord-resident historian snapshot without reassembling the
+    /// split engine.
+    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
+        let shared = Arc::clone(&self.coord().shared);
+        let entity_map = shared.global_entity_map.read();
+        let global_world_manager = shared.global_world_manager.read();
+
+        if let Some(historian) = &mut self.coord_mut().state.historian {
+            historian.record_tick(tick, &*global_world_manager, &*entity_map, &world);
+        }
+    }
+
     /// Forwards to [`CoordHandle::average_tick_duration`].
     pub fn average_tick_duration(&self) -> std::time::Duration {
         self.coord().average_tick_duration()

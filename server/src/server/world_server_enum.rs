@@ -845,9 +845,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn enable_historian(&mut self, max_ticks: u16) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.enable_historian(max_ticks),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.enable_historian(max_ticks))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.enable_historian(max_ticks),
         }
     }
 
@@ -861,9 +859,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         let filter: Vec<ComponentKind> = filter.into_iter().collect();
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.enable_historian_filtered(max_ticks, filter),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.enable_historian_filtered(max_ticks, filter))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.enable_historian_filtered(max_ticks, filter),
         }
     }
 
@@ -871,9 +867,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.record_historian_tick(world, tick),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.record_historian_tick(world, tick))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.record_historian_tick(world, tick),
         }
     }
 
