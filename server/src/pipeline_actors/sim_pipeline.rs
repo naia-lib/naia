@@ -33,17 +33,19 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use naia_shared::{
-    ChannelKind, ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityPriorityMut, EntityPriorityRef, GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner,
-    GlobalWorldManagerType, Message, Protocol, Replicate, ReplicatedComponent,
-    ResourceAlreadyExists, Tick, WorldMutType, WorldRefType,
+    AuthorityError, ChannelKind, ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, EntityPriorityMut, EntityPriorityRef, GlobalEntity, GlobalEntityIndex,
+    GlobalEntitySpawner, GlobalWorldManagerType, HostType, Message, Protocol, Replicate,
+    ReplicatedComponent, ResourceAlreadyExists, Tick, WorldMutType, WorldRefType,
 };
 use parking_lot::Mutex;
 
 use crate::{
     room::RoomKey,
     server::{
-        coord_state::{PendingLifecycleOp, PendingResourceOp, PendingScopeLedgerOp},
+        coord_state::{
+            PendingAuthorityOp, PendingLifecycleOp, PendingResourceOp, PendingScopeLedgerOp,
+        },
         ServerShared,
     },
     user::UserKey,
@@ -673,6 +675,158 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         self.coord().apply_pending_world_hooks(world)
     }
 
+    /// Server takes authority without reassembling the split engine.
+    pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
+        let global_entity = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+        let result = self
+            .coord()
+            .shared
+            .global_world_manager
+            .write()
+            .server_take_authority(&global_entity);
+
+        if let Ok(previous_owner) = result {
+            self.coord_mut()
+                .state
+                .pending_authority_ops
+                .push(PendingAuthorityOp::Take {
+                    global_entity,
+                    previous_owner,
+                });
+            self.recv_slot
+                .lock()
+                .as_mut()
+                .expect("PipelinedWorldServer::entity_take_authority: RecvHandle not in slot")
+                .state
+                .incoming_world_events
+                .push_auth_reset(world_entity);
+        }
+        result.map(|_| ())
+    }
+
+    /// Server grants authority to a user without reassembling the split engine.
+    pub fn entity_give_authority(
+        &mut self,
+        user_key: &UserKey,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
+        let global_entity = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+
+        if !self.user_scope_has_entity_ref(user_key, world_entity) {
+            return Err(AuthorityError::NotInScope);
+        }
+
+        let previous_owner = self
+            .coord()
+            .shared
+            .global_world_manager
+            .write()
+            .server_give_authority_to_client(&global_entity, user_key)?;
+        if previous_owner == AuthOwner::Client(*user_key) {
+            return Ok(());
+        }
+
+        self.coord_mut()
+            .state
+            .pending_authority_ops
+            .push(PendingAuthorityOp::Give {
+                global_entity,
+                target_user: *user_key,
+            });
+        self.recv_slot
+            .lock()
+            .as_mut()
+            .expect("PipelinedWorldServer::entity_give_authority: RecvHandle not in slot")
+            .state
+            .incoming_world_events
+            .push_auth_grant(user_key, world_entity);
+
+        Ok(())
+    }
+
+    /// Server/client releases authority without reassembling the split engine.
+    pub fn entity_release_authority(
+        &mut self,
+        origin_user: Option<&UserKey>,
+        world_entity: &E,
+    ) -> Result<(), AuthorityError> {
+        let releaser = AuthOwner::from_user_key(origin_user);
+        let global_entity = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+            .unwrap();
+        let result = self
+            .coord()
+            .shared
+            .global_world_manager
+            .write()
+            .client_release_authority(&global_entity, &releaser);
+        if result.is_ok() {
+            self.coord_mut()
+                .state
+                .pending_authority_ops
+                .push(PendingAuthorityOp::Release { global_entity });
+        }
+        result
+    }
+
+    /// Enable server-origin delegation without reassembling the split engine.
+    pub fn enable_delegation<W: WorldMutType<E>>(
+        &mut self,
+        world: &mut W,
+        world_entity: &E,
+    ) -> bool {
+        let global_entity = match self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        {
+            Ok(global_entity) => global_entity,
+            Err(_) => return false,
+        };
+
+        if !self.entity_owner(world_entity).is_server() {
+            return false;
+        }
+
+        self.coord()
+            .shared
+            .global_world_manager
+            .write()
+            .entity_enable_delegation(&global_entity);
+        {
+            let entity_map = self.coord().shared.global_entity_map.read();
+            world.entity_enable_delegation(
+                &self.coord().shared.component_kinds,
+                &*entity_map,
+                &*self.coord().shared.global_world_manager.read(),
+                world_entity,
+            );
+        }
+        self.coord_mut()
+            .state
+            .pending_authority_ops
+            .push(PendingAuthorityOp::EnableDelegation { global_entity });
+        true
+    }
+
     /// Pause replication for an entity without reassembling the split engine.
     pub fn pause_entity_replication(&mut self, world_entity: &E) {
         let Ok(global_entity) = self
@@ -718,11 +872,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Stage component insertion's send-side fanout after applying coord/global
     /// component records synchronously.
-    pub fn insert_component_worldless(
-        &mut self,
-        world_entity: &E,
-        component: &mut dyn Replicate,
-    ) {
+    pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         let component_kind = component.kind();
         let global_entity = self
             .coord()
@@ -789,11 +939,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
     /// Stage component removal's send-side fanout after applying coord/global
     /// component cleanup synchronously.
-    pub fn remove_component_worldless(
-        &mut self,
-        world_entity: &E,
-        component_kind: &ComponentKind,
-    ) {
+    pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         let global_entity = self
             .coord()
             .shared
@@ -1675,6 +1821,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // D3 lifecycle (despawn/insert/remove) — G4/G5. After spawns, before authority.
         Self::drain_pending_lifecycle_ops(coord, send);
         // D4 authority/editor ops (take_authority) — G5b. Before host-sync.
+        Self::drain_pending_authority_ops(coord, send);
         // D5 host-sync (change-detection → repl config) — G6b. After all entity mutations.
         // D6 outbound messages (send_message/broadcast, incl. desync snapshot) — §2e.
         // D7 scope-ledger writes (ScopeToggled enqueue) — before send-prep.
@@ -2008,33 +2155,20 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     global_entity,
                     component_kind,
                 } => {
-                    Self::apply_lifecycle_insert_component(
-                        send,
-                        &global_entity,
-                        &component_kind,
-                    );
+                    Self::apply_lifecycle_insert_component(send, &global_entity, &component_kind);
                 }
                 PendingLifecycleOp::RemoveComponent {
                     global_entity,
                     component_kind,
                 } => {
-                    Self::apply_lifecycle_remove_component(
-                        send,
-                        &global_entity,
-                        &component_kind,
-                    );
+                    Self::apply_lifecycle_remove_component(send, &global_entity, &component_kind);
                 }
                 PendingLifecycleOp::DespawnEntity {
                     world_entity,
                     global_entity,
                     entity_idx,
                 } => {
-                    Self::apply_lifecycle_despawn(
-                        send,
-                        &world_entity,
-                        &global_entity,
-                        entity_idx,
-                    );
+                    Self::apply_lifecycle_despawn(send, &world_entity, &global_entity, entity_idx);
                 }
             }
         }
@@ -2107,7 +2241,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         }
 
         send.state.entity_scope_map.remove_entity(global_entity);
-        let _ = send.state.entity_room_map.remove_from_all_rooms(global_entity);
+        let _ = send
+            .state
+            .entity_room_map
+            .remove_from_all_rooms(global_entity);
     }
 
     fn entity_global_idx(
@@ -2119,6 +2256,152 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         guard
             .entity_to_global_idx(global_entity)
             .unwrap_or(GlobalEntityIndex::INVALID)
+    }
+
+    /// Phase C / D4 — publish coord-staged authority/delegation fanout into
+    /// send-resident per-connection state.
+    fn drain_pending_authority_ops(coord: &mut CoordHandle<E>, send: &mut SendHandle<E>) {
+        let ops = std::mem::take(&mut coord.state.pending_authority_ops);
+        if ops.is_empty() {
+            return;
+        }
+
+        for op in ops {
+            match op {
+                PendingAuthorityOp::Take {
+                    global_entity,
+                    previous_owner,
+                } => {
+                    Self::apply_authority_take(coord, send, &global_entity, previous_owner);
+                }
+                PendingAuthorityOp::Give {
+                    global_entity,
+                    target_user,
+                } => {
+                    Self::apply_authority_give(coord, send, &global_entity, &target_user);
+                }
+                PendingAuthorityOp::Release { global_entity } => {
+                    Self::send_reset_authority_messages(coord, send, &global_entity);
+                }
+                PendingAuthorityOp::EnableDelegation { global_entity } => {
+                    Self::apply_enable_delegation_fanout(coord, send, &global_entity);
+                }
+            }
+        }
+    }
+
+    fn apply_authority_take(
+        coord: &CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        global_entity: &GlobalEntity,
+        previous_owner: AuthOwner,
+    ) {
+        match previous_owner {
+            AuthOwner::Client(prev_holder_key) => {
+                if let Some(user) = coord.state.user_store.get(&prev_holder_key) {
+                    if let Some(send_conn) =
+                        send.state.send_user_connections.get_mut(&user.address())
+                    {
+                        if send_conn
+                            .base
+                            .world_manager
+                            .has_global_entity(global_entity)
+                        {
+                            send_conn
+                                .base
+                                .world_manager
+                                .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                        }
+                    }
+                }
+            }
+            AuthOwner::None => {
+                for (_user_key, user) in coord.state.user_store.iter() {
+                    if let Some(send_conn) =
+                        send.state.send_user_connections.get_mut(&user.address())
+                    {
+                        if !send_conn
+                            .base
+                            .world_manager
+                            .has_global_entity(global_entity)
+                        {
+                            continue;
+                        }
+                        send_conn
+                            .base
+                            .world_manager
+                            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+                    }
+                }
+            }
+            AuthOwner::Server => {}
+        }
+    }
+
+    fn apply_authority_give(
+        coord: &CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        global_entity: &GlobalEntity,
+        target_user: &UserKey,
+    ) {
+        for (user_key, user) in coord.state.user_store.iter() {
+            let Some(send_conn) = send.state.send_user_connections.get_mut(&user.address()) else {
+                continue;
+            };
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
+                continue;
+            }
+
+            let new_status = if target_user == user_key {
+                EntityAuthStatus::Granted
+            } else {
+                EntityAuthStatus::Denied
+            };
+            send_conn
+                .base
+                .world_manager
+                .host_send_set_auth(global_entity, new_status);
+            #[cfg(feature = "e2e_debug")]
+            if new_status == EntityAuthStatus::Granted {
+                crate::server::world_server::SERVER_SET_AUTH_ENQUEUED
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                crate::server::world_server::SERVER_AUTH_GRANTED_EMITTED
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            }
+        }
+    }
+
+    fn apply_enable_delegation_fanout(
+        coord: &CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        global_entity: &GlobalEntity,
+    ) {
+        for (_user_key, user) in coord.state.user_store.iter() {
+            let Some(send_conn) = send.state.send_user_connections.get_mut(&user.address()) else {
+                continue;
+            };
+            if !send_conn
+                .base
+                .world_manager
+                .has_global_entity(global_entity)
+            {
+                continue;
+            }
+            log::info!(
+                "Sending EnableDelegation command for entity: {:?} for user: {:?}",
+                global_entity,
+                user.address()
+            );
+            send_conn.base.world_manager.send_enable_delegation(
+                HostType::Server,
+                false,
+                global_entity,
+            );
+        }
     }
 
     /// Phase C / D7 — publish coord-staged explicit user-scope mutations into

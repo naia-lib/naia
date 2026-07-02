@@ -731,7 +731,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn insert_component_worldless(&mut self, world_entity: &E, component: &mut dyn Replicate) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.insert_component_worldless(world_entity, component),
-            WorldServerImpl::Pipelined(ps) => ps.insert_component_worldless(world_entity, component),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.insert_component_worldless(world_entity, component)
+            }
         }
     }
 
@@ -823,9 +825,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn entity_take_authority(&mut self, world_entity: &E) -> Result<(), AuthorityError> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.entity_take_authority(world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.entity_take_authority(world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.entity_take_authority(world_entity),
         }
     }
 
@@ -837,9 +837,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> Result<(), AuthorityError> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.entity_give_authority(user_key, world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.entity_give_authority(user_key, world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.entity_give_authority(user_key, world_entity),
         }
     }
 
@@ -955,7 +953,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.entity_release_authority(origin_user, world_entity),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.entity_release_authority(origin_user, world_entity))
+                ps.entity_release_authority(origin_user, world_entity)
             }
         }
     }
@@ -969,9 +967,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> bool {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.enable_delegation(world, world_entity),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.enable_delegation(world, world_entity))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.enable_delegation(world, world_entity),
         }
     }
 

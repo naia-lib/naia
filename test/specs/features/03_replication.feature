@@ -474,3 +474,15 @@ Feature: Entity Replication, Spawn-with-Components, Immutable Components
     Scenario: [pipeline-d3-lifecycle-01] Pipelined lifecycle bytes match resident oracle
       Given a test scenario
       Then pipelined D3 lifecycle bytes match the resident oracle
+
+  # ==========================================================================
+  # === Phase C D4: Resident/pipelined byte identity ===
+  # ==========================================================================
+
+  @Rule(14)
+  Rule: Pipelined authority staging preserves wire bytes
+
+    @Scenario(01)
+    Scenario: [pipeline-d4-authority-01] Pipelined authority bytes match resident oracle
+      Given a test scenario
+      Then pipelined D4 authority bytes match the resident oracle

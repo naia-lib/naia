@@ -306,7 +306,7 @@ fn g9pre_freeze_isolates_transmit_from_concurrent_mutation() {
         apply_mutations(&mut scenario, &entities, &frozen_case);
         let snap = snapshot_of(&mut scenario, &entities, &frozen_case); // captures FROZEN
         let plan = scenario.prepare_send_job(); // freeze point: mask captured + live mask cleared
-        // Concurrent next-tick mutation must not appear on the wire this tick.
+                                                // Concurrent next-tick mutation must not appear on the wire this tick.
         let live_after = Case {
             label: "live after freeze",
             mutations: vec![EntityMutation {
@@ -658,13 +658,53 @@ impl DirectScopeRun {
             .server
             .entity_mut(self.server_world.proxy_mut(), &entity)
             .remove_component::<TestScore>();
-        assert!(removed.is_some(), "TestScore must be present before removal");
+        assert!(
+            removed.is_some(),
+            "TestScore must be present before removal"
+        );
         self.tick_bracket();
         self.tick_bracket();
 
         self.server
             .entity_mut(self.server_world.proxy_mut(), &entity)
             .despawn();
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect()
+    }
+
+    fn authority_trace(mut self) -> Vec<Vec<u8>> {
+        let user_key = self.connect();
+        let entity = self.setup_scoped_entity(&user_key);
+        self.hub.enable_packet_recording();
+
+        {
+            let mut world = self.server_world.proxy_mut();
+            assert!(self.server.enable_delegation(&mut world, &entity));
+        }
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_give_authority(&user_key, &entity)
+            .expect("give_authority must succeed for in-scope delegated entity");
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_take_authority(&entity)
+            .expect("take_authority must succeed for delegated entity");
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_release_authority(None, &entity)
+            .expect("release_authority must succeed for delegated entity");
         self.tick_bracket();
         self.tick_bracket();
 
@@ -745,6 +785,26 @@ fn phase_c_d3_lifecycle_resident_pipelined_oracle_byte_identity() {
         "Phase C D3: component insert/remove/despawn must emit byte-identical \
          server-to-client packets through resident and the real pipelined-oracle \
          WorldServer::send bracket"
+    );
+}
+
+#[test]
+fn phase_c_d4_authority_resident_pipelined_oracle_byte_identity() {
+    let resident = DirectScopeRun::new(ServerMode::Resident).authority_trace();
+    let pipelined = DirectScopeRun::new(ServerMode::Pipelined).authority_trace();
+
+    hexdump("D4 RESIDENT ", &resident);
+    hexdump("D4 PIPELINED", &pipelined);
+
+    assert!(
+        !resident.is_empty(),
+        "Phase C D4 test must exercise wire-producing authority transitions"
+    );
+    assert_eq!(
+        resident, pipelined,
+        "Phase C D4: enable_delegation/give/take/release authority must emit \
+         byte-identical server-to-client packets through resident and the real \
+         pipelined-oracle WorldServer::send bracket"
     );
 }
 

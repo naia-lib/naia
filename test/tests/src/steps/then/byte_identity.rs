@@ -249,6 +249,46 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect())
     }
+
+    fn authority_trace(mut self) -> Result<Vec<Vec<u8>>, String> {
+        let user_key = self.connect()?;
+        let entity = self.setup_scoped_entity(&user_key);
+        self.hub.enable_packet_recording();
+
+        {
+            let mut world = self.server_world.proxy_mut();
+            if !self.server.enable_delegation(&mut world, &entity) {
+                return Err("enable_delegation returned false".into());
+            }
+        }
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_give_authority(&user_key, &entity)
+            .map_err(|error| format!("give_authority failed: {error:?}"))?;
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_take_authority(&entity)
+            .map_err(|error| format!("take_authority failed: {error:?}"))?;
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .entity_release_authority(None, &entity)
+            .map_err(|error| format!("release_authority failed: {error:?}"))?;
+        self.tick_bracket();
+        self.tick_bracket();
+
+        Ok(self
+            .hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect())
+    }
 }
 
 /// Then pipelined D7 scope-ledger bytes match the resident oracle.
@@ -357,6 +397,37 @@ fn then_pipelined_d3_lifecycle_bytes_match_resident_oracle(
     } else {
         AssertOutcome::Failed(format!(
             "D3 lifecycle byte trace diverged: resident={} pipelined={}",
+            trace_summary(&resident),
+            trace_summary(&pipelined)
+        ))
+    }
+}
+
+/// Then pipelined D4 authority bytes match the resident oracle.
+#[then("pipelined D4 authority bytes match the resident oracle")]
+fn then_pipelined_d4_authority_bytes_match_resident_oracle(
+    _ctx: &TestWorldRef,
+) -> AssertOutcome<()> {
+    let resident = match DirectScopeRun::new(ServerMode::Resident).authority_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("resident setup failed: {error}")),
+    };
+    let pipelined = match DirectScopeRun::new(ServerMode::Pipelined).authority_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("pipelined setup failed: {error}")),
+    };
+
+    if resident.is_empty() {
+        return AssertOutcome::Failed(
+            "D4 authority trace did not emit any server-to-client packets".into(),
+        );
+    }
+
+    if resident == pipelined {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "D4 authority byte trace diverged: resident={} pipelined={}",
             trace_summary(&resident),
             trace_summary(&pipelined)
         ))

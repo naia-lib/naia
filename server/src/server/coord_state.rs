@@ -23,6 +23,7 @@ use naia_shared::{
 
 use crate::request::{GlobalRequestManager, GlobalResponseManager};
 use crate::user::UserKey;
+use crate::world::server_auth_handler::AuthOwner;
 
 use super::{room_store::RoomStore, user_store::UserStore};
 
@@ -69,6 +70,9 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// Phase C / D3 — pending lifecycle send-side mutations authored by coord
     /// APIs after applying their coord/global effects synchronously.
     pub(crate) pending_lifecycle_ops: Vec<PendingLifecycleOp<E>>,
+    /// Phase C / D4 — pending authority/delegation send-side fanout authored by
+    /// coord APIs after applying authority state synchronously.
+    pub(crate) pending_authority_ops: Vec<PendingAuthorityOp>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.
@@ -114,5 +118,23 @@ pub(crate) enum PendingLifecycleOp<E> {
         world_entity: E,
         global_entity: GlobalEntity,
         entity_idx: GlobalEntityIndex,
+    },
+}
+
+/// Phase C / D4 — concrete authority/delegation mutations staged on coord.
+pub(crate) enum PendingAuthorityOp {
+    Take {
+        global_entity: GlobalEntity,
+        previous_owner: AuthOwner,
+    },
+    Give {
+        global_entity: GlobalEntity,
+        target_user: UserKey,
+    },
+    Release {
+        global_entity: GlobalEntity,
+    },
+    EnableDelegation {
+        global_entity: GlobalEntity,
     },
 }

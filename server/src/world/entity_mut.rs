@@ -57,11 +57,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         Self::with_target(EntityMutTarget::Resident(server), world, entity)
     }
 
-    pub(crate) fn with_target(
-        server: EntityMutTarget<'s, E>,
-        world: W,
-        entity: &E,
-    ) -> Self {
+    pub(crate) fn with_target(server: EntityMutTarget<'s, E>, world: W, entity: &E) -> Self {
         Self {
             server,
             world,
@@ -265,9 +261,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         let entity = self.entity;
         match &mut self.server {
             EntityMutTarget::Resident(ws) => ws.entity_give_authority(user_key, &entity),
-            EntityMutTarget::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.entity_give_authority(user_key, &entity))
-            }
+            EntityMutTarget::Pipelined(ps) => ps.entity_give_authority(user_key, &entity),
         }?;
         Ok(self)
     }
@@ -281,9 +275,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         let entity = self.entity;
         match &mut self.server {
             EntityMutTarget::Resident(ws) => ws.entity_take_authority(&entity),
-            EntityMutTarget::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.entity_take_authority(&entity))
-            }
+            EntityMutTarget::Pipelined(ps) => ps.entity_take_authority(&entity),
         }?;
         Ok(self)
     }
@@ -298,9 +290,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         let entity = self.entity;
         match &mut self.server {
             EntityMutTarget::Resident(ws) => ws.entity_release_authority(None, &entity),
-            EntityMutTarget::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.entity_release_authority(None, &entity))
-            }
+            EntityMutTarget::Pipelined(ps) => ps.entity_release_authority(None, &entity),
         }?;
         Ok(self)
     }

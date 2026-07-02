@@ -322,6 +322,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             pending_scope_ledger_ops: Vec::new(),
             pending_resource_ops: Vec::new(),
             pending_lifecycle_ops: Vec::new(),
+            pending_authority_ops: Vec::new(),
             resource_registry: ResourceRegistry::new(),
             historian: None,
         };
