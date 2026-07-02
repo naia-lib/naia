@@ -464,6 +464,23 @@ per-gameplay-event reassembly remains.
   resident ≡ pipelined-oracle server-to-client byte equality for component
   insert/remove and despawn. Verification: `cargo test --workspace --all-targets`
   GREEN; namako lint/gate GREEN; cyberlith moat GREEN ×10.
+- ✅ **D4 authority/delegation staged op landed 2026-07-02** (`c366ae01`):
+  `entity_take_authority`, `entity_give_authority`, `entity_release_authority`,
+  and `enable_delegation` now stage coord-side `PendingAuthorityOp`s and drain in
+  D4 after lifecycle, before host-sync and scope-ledger. Authority ownership
+  state and immediate world/event effects remain synchronous so same-call behavior
+  stays resident-equivalent; only send-resident fanout is staged. Liveness
+  re-verified against cyberlith production usage in
+  `services/game/cell/src/server_access.rs` (`entity_take_authority` /
+  `entity_give_authority`), so the class remains **(b) CONVERT** rather than
+  reclassified. `enable_delegation` is included in the D4 direct API byte oracle
+  and stages the server-origin delegation fanout. Added namako scenario
+  `[pipeline-d4-authority-01]` plus the Rust contract test
+  `phase_c_d4_authority_resident_pipelined_oracle_byte_identity`, both asserting
+  resident ≡ pipelined-oracle server-to-client byte equality for delegation,
+  grant, reset, and release authority fanout. Verification:
+  `cargo test --workspace --all-targets` GREEN; namako lint/gate GREEN;
+  cyberlith moat GREEN ×10.
 
 ### Verification / DoD
 - `with_world_server` used only by `io_load` + oracle drives. Per-class byte-
@@ -653,13 +670,13 @@ resident≡pipelined-oracle byte-equality spec, moat ×10, then merge.
 | `entity_mut.rs:161` | `insert_component` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); immediate world mutation plus staged send work |
 | `entity_mut.rs:183` | `remove_component` | lifecycle → D3 ✅ DONE 2026-07-01 (`53d456db`); immediate world mutation plus staged send work |
 | `world_server_enum.rs:930` | `user_queue_disconnect` | lifecycle/recv fast-path ✅ DONE 2026-07-01 (`53d456db`); uses existing pending-disconnect queue, no send queue |
-| `world_server_enum.rs:836` | `entity_take_authority` | **authority → D4** |
-| `world_server_enum.rs:850` | `entity_give_authority` | authority → D4 |
-| `world_server_enum.rs:971` | `entity_release_authority` | authority → D4 |
-| `world_server_enum.rs:986` | `enable_delegation` | authority/delegation → D4 |
-| `entity_mut.rs:247` | `entity_give_authority` | authority → D4 |
-| `entity_mut.rs:263` | `entity_take_authority` | authority → D4 |
-| `entity_mut.rs:280` | `entity_release_authority` | authority → D4 |
+| `world_server_enum.rs:836` | `entity_take_authority` | **authority → D4** ✅ DONE 2026-07-02 (`c366ae01`); live in cyberlith `server_access.rs`; stages authority reset fanout |
+| `world_server_enum.rs:850` | `entity_give_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); live in cyberlith `server_access.rs`; stages grant/deny fanout |
+| `world_server_enum.rs:971` | `entity_release_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); staged release/reset fanout |
+| `world_server_enum.rs:986` | `enable_delegation` | authority/delegation → D4 ✅ DONE 2026-07-02 (`c366ae01`); server-origin delegation fanout staged |
+| `entity_mut.rs:247` | `entity_give_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); same staged queue |
+| `entity_mut.rs:263` | `entity_take_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); same staged queue |
+| `entity_mut.rs:280` | `entity_release_authority` | authority → D4 ✅ DONE 2026-07-02 (`c366ae01`); same staged queue |
 | `world_server_enum.rs:860` | `enable_historian` | **historian → D5** |
 | `world_server_enum.rs:876` | `enable_historian_filtered` | historian → D5 |
 | `world_server_enum.rs:886` | `record_historian_tick` | historian → D5 |
