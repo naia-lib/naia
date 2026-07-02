@@ -56,8 +56,10 @@ use naia_shared::{
 };
 
 use naia_test_harness::{
-    protocol, Auth, ClientKey, EntityKey, ExpectResult, Position, Scenario, TestEntity, TestScore,
-    TestWorld, TraceDirection, TracePacket,
+    protocol,
+    test_protocol::{ReliableChannel, TestMessage},
+    Auth, ClientKey, EntityKey, ExpectResult, Position, Scenario, TestEntity, TestScore, TestWorld,
+    TraceDirection, TracePacket,
 };
 use parking_lot::Mutex;
 
@@ -714,6 +716,36 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect()
     }
+
+    fn message_trace(mut self) -> Vec<Vec<u8>> {
+        let user_key = self.connect();
+        let room_key = self.server.create_room().key();
+        self.server.room_mut(&room_key).add_user(&user_key);
+        self.hub.enable_packet_recording();
+
+        self.server
+            .send_message::<ReliableChannel, TestMessage>(&user_key, &TestMessage::new(11))
+            .expect("direct send_message must succeed for connected user");
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .broadcast_message::<ReliableChannel, TestMessage>(&TestMessage::new(22));
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .room_mut(&room_key)
+            .broadcast_message::<ReliableChannel, TestMessage>(&TestMessage::new(33));
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect()
+    }
 }
 
 #[test]
@@ -803,6 +835,26 @@ fn phase_c_d4_authority_resident_pipelined_oracle_byte_identity() {
     assert_eq!(
         resident, pipelined,
         "Phase C D4: enable_delegation/give/take/release authority must emit \
+         byte-identical server-to-client packets through resident and the real \
+         pipelined-oracle WorldServer::send bracket"
+    );
+}
+
+#[test]
+fn phase_c_d6_messages_resident_pipelined_oracle_byte_identity() {
+    let resident = DirectScopeRun::new(ServerMode::Resident).message_trace();
+    let pipelined = DirectScopeRun::new(ServerMode::Pipelined).message_trace();
+
+    hexdump("D6 RESIDENT ", &resident);
+    hexdump("D6 PIPELINED", &pipelined);
+
+    assert!(
+        !resident.is_empty(),
+        "Phase C D6 test must exercise wire-producing outbound messages"
+    );
+    assert_eq!(
+        resident, pipelined,
+        "Phase C D6: send_message/broadcast/room_broadcast must emit \
          byte-identical server-to-client packets through resident and the real \
          pipelined-oracle WorldServer::send bracket"
     );

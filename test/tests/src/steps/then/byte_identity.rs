@@ -12,7 +12,11 @@ use naia_server::{
     ConnectEvent, ReplicationConfig, Server, ServerConfig, ServerMode,
 };
 use naia_shared::{transport::local::LocalTransportHub, Instant, TestClock, WorldMutType};
-use naia_test_harness::{protocol, Auth, TestEntity, TestScore, TestWorld};
+use naia_test_harness::{
+    protocol,
+    test_protocol::{ReliableChannel, TestMessage},
+    Auth, TestEntity, TestScore, TestWorld,
+};
 use parking_lot::Mutex;
 
 fn client_config() -> ClientConfig {
@@ -289,6 +293,37 @@ impl DirectScopeRun {
             .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
             .collect())
     }
+
+    fn message_trace(mut self) -> Result<Vec<Vec<u8>>, String> {
+        let user_key = self.connect()?;
+        let room_key = self.server.create_room().key();
+        self.server.room_mut(&room_key).add_user(&user_key);
+        self.hub.enable_packet_recording();
+
+        self.server
+            .send_message::<ReliableChannel, TestMessage>(&user_key, &TestMessage::new(11))
+            .map_err(|error| format!("direct send_message failed: {error:?}"))?;
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .broadcast_message::<ReliableChannel, TestMessage>(&TestMessage::new(22));
+        self.tick_bracket();
+        self.tick_bracket();
+
+        self.server
+            .room_mut(&room_key)
+            .broadcast_message::<ReliableChannel, TestMessage>(&TestMessage::new(33));
+        self.tick_bracket();
+        self.tick_bracket();
+
+        Ok(self
+            .hub
+            .take_recorded_packets()
+            .into_iter()
+            .filter_map(|(server_to_client, bytes)| server_to_client.then_some(bytes))
+            .collect())
+    }
 }
 
 /// Then pipelined D7 scope-ledger bytes match the resident oracle.
@@ -428,6 +463,35 @@ fn then_pipelined_d4_authority_bytes_match_resident_oracle(
     } else {
         AssertOutcome::Failed(format!(
             "D4 authority byte trace diverged: resident={} pipelined={}",
+            trace_summary(&resident),
+            trace_summary(&pipelined)
+        ))
+    }
+}
+
+/// Then pipelined D6 message bytes match the resident oracle.
+#[then("pipelined D6 message bytes match the resident oracle")]
+fn then_pipelined_d6_message_bytes_match_resident_oracle(_ctx: &TestWorldRef) -> AssertOutcome<()> {
+    let resident = match DirectScopeRun::new(ServerMode::Resident).message_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("resident setup failed: {error}")),
+    };
+    let pipelined = match DirectScopeRun::new(ServerMode::Pipelined).message_trace() {
+        Ok(trace) => trace,
+        Err(error) => return AssertOutcome::Failed(format!("pipelined setup failed: {error}")),
+    };
+
+    if resident.is_empty() {
+        return AssertOutcome::Failed(
+            "D6 message trace did not emit any server-to-client packets".into(),
+        );
+    }
+
+    if resident == pipelined {
+        AssertOutcome::Passed(())
+    } else {
+        AssertOutcome::Failed(format!(
+            "D6 message byte trace diverged: resident={} pipelined={}",
             trace_summary(&resident),
             trace_summary(&pipelined)
         ))

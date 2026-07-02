@@ -614,9 +614,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> Result<(), NaiaServerError> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_message::<C, M>(user_key, message),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.send_message::<C, M>(user_key, message))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.send_message::<C, M>(user_key, message),
         }
     }
 
@@ -624,9 +622,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.broadcast_message::<C, M>(message),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.broadcast_message::<C, M>(message))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.broadcast_message::<C, M>(message),
         }
     }
 
@@ -648,9 +644,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_request::<C, Q>(user_key, request),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.send_request::<C, Q>(user_key, request))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.send_request::<C, Q>(user_key, request),
         }
     }
 
@@ -662,9 +656,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) -> bool {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_response::<S>(response_key, response),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.send_response::<S>(response_key, response))
-            }
+            WorldServerImpl::Pipelined(ps) => ps.send_response::<S>(response_key, response),
         }
     }
 

@@ -33,10 +33,12 @@ use std::{hash::Hash, net::SocketAddr, sync::Arc};
 
 use crossbeam_channel::Receiver;
 use naia_shared::{
-    AuthorityError, ChannelKind, ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, EntityPriorityMut, EntityPriorityRef, GlobalEntity, GlobalEntityIndex,
-    GlobalEntitySpawner, GlobalWorldManagerType, HostType, Message, Protocol, Replicate,
-    ReplicatedComponent, ResourceAlreadyExists, Tick, WorldMutType, WorldRefType,
+    AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityPriorityMut, EntityPriorityRef,
+    GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
+    Message, MessageContainer, Protocol, Replicate, ReplicatedComponent, Request,
+    ResourceAlreadyExists, Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType,
+    WorldRefType,
 };
 use parking_lot::Mutex;
 
@@ -44,14 +46,15 @@ use crate::{
     room::RoomKey,
     server::{
         coord_state::{
-            PendingAuthorityOp, PendingLifecycleOp, PendingResourceOp, PendingScopeLedgerOp,
+            PendingAuthorityOp, PendingLifecycleOp, PendingOutboundMessageOp, PendingResourceOp,
+            PendingScopeLedgerOp,
         },
         ServerShared,
     },
     user::UserKey,
     world::server_auth_handler::AuthOwner,
-    DisconnectReason, EntityOwner, InternalWorldServer, Publicity, ReceiveOutput, RecvHandle,
-    ReplicationConfig, SendHandle, ServerConfig,
+    DisconnectReason, EntityOwner, InternalWorldServer, NaiaServerError, Publicity, ReceiveOutput,
+    RecvHandle, ReplicationConfig, SendHandle, ServerConfig,
 };
 
 use super::handles::CoordHandle;
@@ -1658,17 +1661,184 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             });
     }
 
-    /// Broadcast a message to all users in `room_key`. Reaches send state
-    /// (`send_message_inner`); applied via park-window reassembly — consistent
-    /// with the unified `send_message`/`broadcast_message` (which also reassemble
-    /// at the Pipelined arm). Mirrors `InternalWorldServer::room_broadcast_message`.
+    /// Queue a message to one user for the D6 outbound-message drain.
+    pub fn send_message<C: Channel, M: Message>(
+        &mut self,
+        user_key: &UserKey,
+        message: &M,
+    ) -> Result<(), NaiaServerError> {
+        let channel_kind = ChannelKind::of::<C>();
+        let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
+        if !channel_settings.can_send_to_client() {
+            panic!("Cannot send message to Client on this Channel");
+        }
+        self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
+
+        self.coord_mut()
+            .state
+            .pending_outbound_message_ops
+            .push(PendingOutboundMessageOp::Send {
+                user_key: *user_key,
+                channel_kind,
+                message: MessageContainer::new(M::clone_box(message)),
+            });
+        Ok(())
+    }
+
+    /// Queue a broadcast for all users connected at call time.
+    pub fn broadcast_message<C: Channel, M: Message>(&mut self, message: &M) {
+        let channel_kind = ChannelKind::of::<C>();
+        let user_keys = self.connected_user_keys_snapshot();
+        self.enqueue_message_fanout(channel_kind, user_keys, M::clone_box(message));
+    }
+
+    /// Queue a typed request to one user for the D6 outbound-message drain.
+    pub fn send_request<C: Channel, Q: Request>(
+        &mut self,
+        user_key: &UserKey,
+        request: &Q,
+    ) -> Result<ResponseReceiveKey<Q::Response>, NaiaServerError> {
+        let channel_kind = ChannelKind::of::<C>();
+        let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
+        if !channel_settings.can_request_and_respond() {
+            panic!("Requests can only be sent over Bidirectional, Reliable Channels");
+        }
+
+        let request_id = self
+            .coord_mut()
+            .state
+            .global_request_manager
+            .create_request_id(user_key);
+        self.require_live_send_connection(
+            user_key,
+            NaiaServerError::Message("user does not exist".to_string()),
+        )
+        .map_err(|_| {
+            if self.coord().state.user_store.get(user_key).is_some() {
+                NaiaServerError::Message("currently not connected to user".to_string())
+            } else {
+                NaiaServerError::Message("user does not exist".to_string())
+            }
+        })?;
+
+        self.coord_mut().state.pending_outbound_message_ops.push(
+            PendingOutboundMessageOp::Request {
+                user_key: *user_key,
+                channel_kind,
+                request_id,
+                message: MessageContainer::new(Q::clone_box(request)),
+            },
+        );
+        Ok(ResponseReceiveKey::new(request_id))
+    }
+
+    /// Queue a response for the D6 outbound-message drain.
+    pub fn send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> bool {
+        let Some((user_key, channel_kind, local_response_id)) = self
+            .coord_mut()
+            .state
+            .global_response_manager
+            .destroy_response_id(&response_key.response_id())
+        else {
+            return false;
+        };
+        if self
+            .require_live_send_connection(&user_key, NaiaServerError::UserNotFound)
+            .is_err()
+        {
+            return false;
+        }
+
+        self.coord_mut().state.pending_outbound_message_ops.push(
+            PendingOutboundMessageOp::Response {
+                user_key,
+                channel_kind,
+                local_response_id,
+                message: MessageContainer::new(S::clone_box(response)),
+            },
+        );
+        true
+    }
+
+    /// Broadcast a message to all users in `room_key`.
     pub(crate) fn room_broadcast_message(
         &mut self,
         channel_kind: &ChannelKind,
         room_key: &RoomKey,
         message_box: Box<dyn Message>,
     ) {
-        self.with_world_server(|ws| ws.room_broadcast_message(channel_kind, room_key, message_box))
+        let user_keys: Vec<UserKey> = self
+            .coord()
+            .state
+            .room_store
+            .user_keys_iter(room_key)
+            .copied()
+            .collect();
+        self.enqueue_message_fanout(*channel_kind, user_keys, message_box);
+    }
+
+    fn enqueue_message_fanout(
+        &mut self,
+        channel_kind: ChannelKind,
+        user_keys: Vec<UserKey>,
+        message_box: Box<dyn Message>,
+    ) {
+        let channel_settings = self.coord().shared.channel_kinds.channel(&channel_kind);
+        if !channel_settings.can_send_to_client() {
+            panic!("Cannot send message to Client on this Channel");
+        }
+        self.coord_mut().state.pending_outbound_message_ops.push(
+            PendingOutboundMessageOp::Fanout {
+                user_keys,
+                channel_kind,
+                message: MessageContainer::new(message_box),
+            },
+        );
+    }
+
+    fn connected_user_keys_snapshot(&self) -> Vec<UserKey> {
+        let send_slot = self.send_slot.lock();
+        let Some(send) = send_slot.as_ref() else {
+            return Vec::new();
+        };
+        self.coord()
+            .state
+            .user_store
+            .iter()
+            .filter_map(|(user_key, user)| {
+                send.state
+                    .send_user_connections
+                    .contains_key(&user.address())
+                    .then_some(*user_key)
+            })
+            .collect()
+    }
+
+    fn require_live_send_connection(
+        &self,
+        user_key: &UserKey,
+        missing_user_error: NaiaServerError,
+    ) -> Result<(), NaiaServerError> {
+        let Some(user) = self.coord().state.user_store.get(user_key) else {
+            return Err(missing_user_error);
+        };
+        let send_slot = self.send_slot.lock();
+        let Some(send) = send_slot.as_ref() else {
+            return Err(NaiaServerError::UserNotFound);
+        };
+        if send
+            .state
+            .send_user_connections
+            .contains_key(&user.address())
+        {
+            Ok(())
+        } else {
+            Err(NaiaServerError::UserNotFound)
+        }
     }
 }
 
@@ -1852,6 +2022,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         Self::drain_pending_authority_ops(coord, send);
         // D5 host-sync (change-detection → repl config) — G6b. After all entity mutations.
         // D6 outbound messages (send_message/broadcast, incl. desync snapshot) — §2e.
+        Self::drain_pending_outbound_message_ops(coord, send);
         // D7 scope-ledger writes (ScopeToggled enqueue) — before send-prep.
         Self::drain_pending_scope_ledger_ops(coord, send);
 
@@ -2284,6 +2455,95 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         guard
             .entity_to_global_idx(global_entity)
             .unwrap_or(GlobalEntityIndex::INVALID)
+    }
+
+    /// Phase C / D6 — publish coord-staged outbound messages into send-side
+    /// per-connection message managers before scope-ledger/send-prep.
+    fn drain_pending_outbound_message_ops(coord: &mut CoordHandle<E>, send: &mut SendHandle<E>) {
+        let ops = std::mem::take(&mut coord.state.pending_outbound_message_ops);
+        if ops.is_empty() {
+            return;
+        }
+
+        for op in ops {
+            match op {
+                PendingOutboundMessageOp::Send {
+                    user_key,
+                    channel_kind,
+                    message,
+                } => {
+                    Self::apply_outbound_message_send(
+                        coord,
+                        send,
+                        &user_key,
+                        &channel_kind,
+                        message,
+                    );
+                }
+                PendingOutboundMessageOp::Fanout {
+                    user_keys,
+                    channel_kind,
+                    message,
+                } => {
+                    for user_key in user_keys {
+                        Self::apply_outbound_message_send(
+                            coord,
+                            send,
+                            &user_key,
+                            &channel_kind,
+                            message.clone(),
+                        );
+                    }
+                }
+                PendingOutboundMessageOp::Request {
+                    user_key,
+                    channel_kind,
+                    request_id,
+                    message,
+                } => {
+                    let Some(user) = coord.state.user_store.get(&user_key) else {
+                        continue;
+                    };
+                    let _ = send.state.send_request_container_to_address(
+                        &user.address(),
+                        &channel_kind,
+                        request_id,
+                        message,
+                    );
+                }
+                PendingOutboundMessageOp::Response {
+                    user_key,
+                    channel_kind,
+                    local_response_id,
+                    message,
+                } => {
+                    let Some(user) = coord.state.user_store.get(&user_key) else {
+                        continue;
+                    };
+                    let _ = send.state.send_response_container_to_address(
+                        &user.address(),
+                        &channel_kind,
+                        local_response_id,
+                        message,
+                    );
+                }
+            }
+        }
+    }
+
+    fn apply_outbound_message_send(
+        coord: &CoordHandle<E>,
+        send: &mut SendHandle<E>,
+        user_key: &UserKey,
+        channel_kind: &ChannelKind,
+        message: MessageContainer,
+    ) {
+        let Some(user) = coord.state.user_store.get(user_key) else {
+            return;
+        };
+        let _ =
+            send.state
+                .send_message_container_to_address(&user.address(), channel_kind, message);
     }
 
     /// Phase C / D4 — publish coord-staged authority/delegation fanout into

@@ -29,10 +29,11 @@ use log::warn;
 use naia_shared::{
     BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner,
-    GlobalPriorityState, GlobalWorldManagerType, HostType, Instant,
-    LocalEntityAndGlobalEntityConverter, Message, MessageContainer, OutgoingPacket,
-    OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan, SendUpdateEvents, Serde,
-    SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState, WorldMutType, WorldRefType,
+    GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
+    OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
+    SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -601,6 +602,54 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             channel_kind,
             message,
         )
+    }
+
+    /// Channel-erased request enqueue used by the pipelined D6 staged message
+    /// drain after coord has synchronously allocated the global request id.
+    pub fn send_request_container_to_address(
+        &mut self,
+        address: &std::net::SocketAddr,
+        channel_kind: &ChannelKind,
+        global_request_id: GlobalRequestId,
+        request: MessageContainer,
+    ) -> bool {
+        let Some(send_conn) = self.send_user_connections.get_mut(address) else {
+            return false;
+        };
+        let gwm = self.shared.global_world_manager.read();
+        let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
+        send_conn.base.message_manager.send_request(
+            &self.shared.message_kinds,
+            &mut converter,
+            channel_kind,
+            global_request_id,
+            request,
+        );
+        true
+    }
+
+    /// Channel-erased response enqueue used by the pipelined D6 staged message
+    /// drain after coord has synchronously consumed the response send key.
+    pub fn send_response_container_to_address(
+        &mut self,
+        address: &std::net::SocketAddr,
+        channel_kind: &ChannelKind,
+        local_response_id: LocalResponseId,
+        response: MessageContainer,
+    ) -> bool {
+        let Some(send_conn) = self.send_user_connections.get_mut(address) else {
+            return false;
+        };
+        let gwm = self.shared.global_world_manager.read();
+        let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
+        send_conn.base.message_manager.send_response(
+            &self.shared.message_kinds,
+            &mut converter,
+            channel_kind,
+            local_response_id,
+            response,
+        );
+        true
     }
 
     /// Build and dispatch all outbound packets for this tick.

@@ -17,8 +17,8 @@
 use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
-    ComponentKind, GlobalEntity, GlobalEntityIndex, GlobalPriorityState, ResourceRegistry,
-    UserPriorityState,
+    ChannelKind, ComponentKind, GlobalEntity, GlobalEntityIndex, GlobalPriorityState,
+    GlobalRequestId, LocalResponseId, MessageContainer, ResourceRegistry, UserPriorityState,
 };
 
 use crate::request::{GlobalRequestManager, GlobalResponseManager};
@@ -73,6 +73,10 @@ pub struct CoordinatorState<E: Copy + Eq + Hash + Send + Sync> {
     /// Phase C / D4 — pending authority/delegation send-side fanout authored by
     /// coord APIs after applying authority state synchronously.
     pub(crate) pending_authority_ops: Vec<PendingAuthorityOp>,
+    /// Phase C / D6 — pending outbound message/request/response writes authored
+    /// by public APIs after preserving their synchronous coord-side bookkeeping
+    /// and call-time targeting.
+    pub(crate) pending_outbound_message_ops: Vec<PendingOutboundMessageOp>,
     /// Per-`TypeId<R>` ↔ `GlobalEntity` registry for Replicated Resources.
     pub(crate) resource_registry: ResourceRegistry,
     /// Optional lag-compensation snapshot buffer. `None` until enabled.
@@ -136,5 +140,31 @@ pub(crate) enum PendingAuthorityOp {
     },
     EnableDelegation {
         global_entity: GlobalEntity,
+    },
+}
+
+/// Phase C / D6 — type-erased outbound message mutations staged on coord.
+pub(crate) enum PendingOutboundMessageOp {
+    Send {
+        user_key: UserKey,
+        channel_kind: ChannelKind,
+        message: MessageContainer,
+    },
+    Fanout {
+        user_keys: Vec<UserKey>,
+        channel_kind: ChannelKind,
+        message: MessageContainer,
+    },
+    Request {
+        user_key: UserKey,
+        channel_kind: ChannelKind,
+        request_id: GlobalRequestId,
+        message: MessageContainer,
+    },
+    Response {
+        user_key: UserKey,
+        channel_kind: ChannelKind,
+        local_response_id: LocalResponseId,
+        message: MessageContainer,
     },
 }
