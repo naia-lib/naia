@@ -114,8 +114,8 @@ impl Room {
 /// [`crate::world::entity_mut::EntityMutTarget`]: ONE builder type over both
 /// variants. Room state is **coord-resident** (`room_store`), so the Pipelined
 /// arm uses [`PipelinedWorldServer`]'s coord fast paths directly (no panic);
-/// `broadcast_message` is the lone send-touching op and reassembles via
-/// `with_world_server`, exactly like the unified `send_message`.
+/// `broadcast_message` is the lone send-touching op and uses D6 outbound-message
+/// staging, exactly like the unified `send_message`.
 enum RoomRefTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     Resident(&'s InternalWorldServer<E>),
     Pipelined(&'s PipelinedWorldServer<E>),
@@ -137,11 +137,17 @@ pub struct RoomRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomRef<'s, E> {
     pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &RoomKey) -> Self {
-        Self { server: RoomRefTarget::Resident(server), key: *key }
+        Self {
+            server: RoomRefTarget::Resident(server),
+            key: *key,
+        }
     }
 
     pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: &RoomKey) -> Self {
-        Self { server: RoomRefTarget::Pipelined(server), key: *key }
+        Self {
+            server: RoomRefTarget::Pipelined(server),
+            key: *key,
+        }
     }
 
     /// Returns the [`RoomKey`] for this room.
@@ -214,11 +220,17 @@ pub struct RoomMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> RoomMut<'s, E> {
     pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &RoomKey) -> Self {
-        Self { server: RoomMutTarget::Resident(server), key: *key }
+        Self {
+            server: RoomMutTarget::Resident(server),
+            key: *key,
+        }
     }
 
     pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: &RoomKey) -> Self {
-        Self { server: RoomMutTarget::Pipelined(server), key: *key }
+        Self {
+            server: RoomMutTarget::Pipelined(server),
+            key: *key,
+        }
     }
 
     /// Returns the [`RoomKey`] for this room.
@@ -368,7 +380,10 @@ fn resident_room_entities<E: Copy + Eq + Hash + Send + Sync + 'static>(
 ) -> Vec<E> {
     let mut output = Vec::new();
     for global_entity in server.room_entities(key) {
-        if let Ok(entity) = server.entity_converter().global_entity_to_entity(global_entity) {
+        if let Ok(entity) = server
+            .entity_converter()
+            .global_entity_to_entity(global_entity)
+        {
             output.push(entity);
         }
     }

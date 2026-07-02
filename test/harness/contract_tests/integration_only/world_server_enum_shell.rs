@@ -191,6 +191,12 @@ fn drive_borrow_builders(addr: &str, server: WorldServer<DemoEntity>) {
         server.scope_checks_pending().is_empty(),
         "no scope checks pending on a fresh server",
     );
+    server.mark_scope_checks_pending_handled();
+    server.mark_all_scope_checks_pending();
+    assert!(
+        server.scope_checks_pending().is_empty(),
+        "scope-check cache mutation calls dispatch without reassembly in both modes",
+    );
 
     // create_room → RoomMut (coord-resident). Chain entity membership.
     let entity = world.proxy_mut().spawn_entity();
@@ -255,7 +261,7 @@ fn world_server_enum_pipelined_borrow_builders() {
 /// plus the parked send handle's `send_user_connections` via a `&self`
 /// slot-lock read that shares the resident body
 /// (`{local_to_world,world_to_local}_entity_impl`) — zero drift, no
-/// `with_world_server` reassembly. With no connected client the resolution
+/// `with_monolithic_world_server` reassembly. With no connected client the resolution
 /// returns `None` identically in both modes.
 ///
 /// The **populated** send-resident read is the very same shared `_impl`: it is

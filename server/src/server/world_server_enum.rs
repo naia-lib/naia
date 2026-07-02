@@ -291,7 +291,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.io_load(sender, receiver),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.io_load(sender, receiver))
+                ps.with_monolithic_world_server(|ws| ws.io_load(sender, receiver))
             }
         }
     }
@@ -568,7 +568,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn receive_all_packets(&mut self) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.receive_all_packets(),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.receive_all_packets()),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_monolithic_world_server(|ws| ws.receive_all_packets())
+            }
         }
     }
 
@@ -577,7 +579,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.process_all_packets(&mut world, now),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.process_all_packets(&mut world, now))
+                ps.with_monolithic_world_server(|ws| ws.process_all_packets(&mut world, now))
             }
         }
     }
@@ -586,7 +588,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn take_world_events(&mut self) -> WorldEvents<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.take_world_events(),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.take_world_events()),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_monolithic_world_server(|ws| ws.take_world_events())
+            }
         }
     }
 
@@ -594,7 +598,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn take_tick_events(&mut self, now: &Instant) -> TickEvents {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.take_tick_events(now),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.take_tick_events(now)),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_monolithic_world_server(|ws| ws.take_tick_events(now))
+            }
         }
     }
 
@@ -602,7 +608,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_all_packets(world),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.send_all_packets(world)),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_monolithic_world_server(|ws| ws.send_all_packets(world))
+            }
         }
     }
 
@@ -631,7 +639,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.receive_tick_buffer_messages(tick),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.receive_tick_buffer_messages(tick))
+                ps.with_monolithic_world_server(|ws| ws.receive_tick_buffer_messages(tick))
             }
         }
     }
@@ -668,7 +676,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.receive_response::<S>(response_key),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.receive_response::<S>(response_key))
+                ps.with_monolithic_world_server(|ws| ws.receive_response::<S>(response_key))
             }
         }
     }
@@ -677,9 +685,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn mark_scope_checks_pending_handled(&mut self) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.mark_scope_checks_pending_handled(),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.mark_scope_checks_pending_handled())
-            }
+            WorldServerImpl::Pipelined(ps) => ps.mark_scope_checks_pending_handled(),
         }
     }
 
@@ -687,9 +693,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn mark_all_scope_checks_pending(&mut self) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.mark_all_scope_checks_pending(),
-            WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.mark_all_scope_checks_pending())
-            }
+            WorldServerImpl::Pipelined(ps) => ps.mark_all_scope_checks_pending(),
         }
     }
 
@@ -1026,7 +1030,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn prepare_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W) -> SendPlan {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.prepare_send_job(world),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.prepare_send_job(world)),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_monolithic_world_server(|ws| ws.prepare_send_job(world))
+            }
         }
     }
 
@@ -1035,7 +1041,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.transmit_send_job(world, plan),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.transmit_send_job(world, plan))
+                ps.with_monolithic_world_server(|ws| ws.transmit_send_job(world, plan))
             }
         }
     }
@@ -1044,7 +1050,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn drain_all_acks(&mut self) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.drain_all_acks(),
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| ws.drain_all_acks()),
+            WorldServerImpl::Pipelined(ps) => {
+                ps.with_monolithic_world_server(|ws| ws.drain_all_acks())
+            }
         }
     }
 
@@ -1062,10 +1070,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     // The builders are ONE type over both engine shapes (the `EntityMut`
     // precedent): the Resident arm borrows the fused `InternalWorldServer`; the
     // Pipelined arm borrows this `PipelinedWorldServer` and each builder method
-    // dispatches to a coord fast path (room/user state is coord-resident) or a
-    // park-window reassembly (`with_world_server`, for the send-resident
-    // scope/broadcast ops). No method panics — except per-USER priority (see
-    // below), whose backing layer is send-resident AND borrow-returning.
+    // dispatches to a coord fast path, D-slot staging, or direct parked-slot
+    // cache mutation. No method panics — except per-USER priority (see below),
+    // whose backing layer is send-resident AND borrow-returning.
 
     /// A read-only handle to the given user. Panics if no user exists.
     pub fn user(&self, user_key: &UserKey) -> UserRef<'_, E> {
@@ -1310,7 +1317,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.set_global_entity_counter_for_test(value),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_world_server(|ws| ws.set_global_entity_counter_for_test(value))
+                ps.with_monolithic_world_server(|ws| ws.set_global_entity_counter_for_test(value))
             }
         }
     }
@@ -1382,7 +1389,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => {
                 ws.inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
             }
-            WorldServerImpl::Pipelined(ps) => ps.with_world_server(|ws| {
+            WorldServerImpl::Pipelined(ps) => ps.with_monolithic_world_server(|ws| {
                 ws.inject_tick_buffer_message::<C, M>(user_key, host_tick, message_tick, message)
             }),
         }

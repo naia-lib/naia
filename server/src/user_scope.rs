@@ -6,7 +6,7 @@ use crate::PipelinedWorldServer;
 /// Which engine shape a [`UserScopeRef`]/[`UserScopeMut`] acts on (task #9).
 /// Scope state is **send-resident** (`entity_scope_map`): the Pipelined arm
 /// reads via a `&self` slot-lock (`user_scope_has_entity_ref`) and writes via
-/// park-window reassembly (`with_world_server`) — no panic.
+/// D7 scope-ledger staging — no panic.
 enum UserScopeRefTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     Resident(&'s InternalWorldServer<E>),
     Pipelined(&'s PipelinedWorldServer<E>),
@@ -31,11 +31,17 @@ pub struct UserScopeRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeRef<'s, E> {
     pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserScopeRefTarget::Resident(server), key: *key }
+        Self {
+            server: UserScopeRefTarget::Resident(server),
+            key: *key,
+        }
     }
 
     pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserScopeRefTarget::Pipelined(server), key: *key }
+        Self {
+            server: UserScopeRefTarget::Pipelined(server),
+            key: *key,
+        }
     }
 
     /// Returns `true` if the entity is currently in this user's explicit scope.
@@ -69,11 +75,17 @@ pub struct UserScopeMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserScopeMutTarget::Resident(server), key: *key }
+        Self {
+            server: UserScopeMutTarget::Resident(server),
+            key: *key,
+        }
     }
 
     pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserScopeMutTarget::Pipelined(server), key: *key }
+        Self {
+            server: UserScopeMutTarget::Pipelined(server),
+            key: *key,
+        }
     }
 
     /// Returns `true` if the entity is currently in this user's explicit scope.

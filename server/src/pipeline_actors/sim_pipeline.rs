@@ -189,7 +189,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Borrow the coordination handle.
     ///
     /// Panics if `coord` is temporarily absent (only during [`Self::tick`] or
-    /// [`Self::with_world_server`] — both restore it before returning).
+    /// [`Self::with_monolithic_world_server`] — both restore it before returning).
     pub fn coord(&self) -> &CoordHandle<E> {
         self.coord
             .as_ref()
@@ -342,14 +342,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// This is the G2 startup-window entry point. Equivalent to:
     /// ```ignore
     /// let (_auth_tx, _auth_rx, ps, pr) = socket.into().listen();
-    /// server.with_world_server(|ws| ws.io_load(ps, pr));
+    /// server.with_monolithic_world_server(|ws| ws.io_load(ps, pr));
     /// ```
     ///
     /// Must be called while workers are not yet spawned (or parked). After
     /// this call the pipeline is ready for `tick()`.
     pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
         let (_auth_tx, _auth_rx, ps, pr) = crate::transport::Socket::listen(socket.into());
-        self.with_world_server(|ws| ws.io_load(ps, pr));
+        self.with_monolithic_world_server(|ws| ws.io_load(ps, pr));
     }
 
     /// §2f — the **separate spawn step**: stand up the worker-thread runtime and
@@ -477,28 +477,26 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// Temporarily reassemble a [`crate::InternalWorldServer`] and invoke `f` against it.
     ///
     /// All three handles are moved into the `InternalWorldServer`; after `f` returns
-    /// they are re-split and restored. Used for ops that require full-server
-    /// access (e.g. `entity_replication_config` until G3 adds it to `CoordHandle`).
+    /// they are re-split and restored. This is the monolithic-only bridge for
+    /// startup socket load, deterministic oracle drives, and test hooks. Gameplay
+    /// control mutations should use coord fast paths or D-slot staging instead.
     ///
     /// Workers must be parked (or not yet started) before calling this.
-    pub fn with_world_server<R>(
+    pub(crate) fn with_monolithic_world_server<R>(
         &mut self,
         f: impl FnOnce(&mut crate::InternalWorldServer<E>) -> R,
     ) -> R {
-        let coord = self
-            .coord
-            .take()
-            .expect("PipelinedWorldServer::with_world_server: CoordHandle not available");
-        let recv = self
-            .recv_slot
-            .lock()
-            .take()
-            .expect("PipelinedWorldServer::with_world_server: RecvHandle not in slot");
-        let send = self
-            .send_slot
-            .lock()
-            .take()
-            .expect("PipelinedWorldServer::with_world_server: SendHandle not in slot");
+        let coord = self.coord.take().expect(
+            "PipelinedWorldServer::with_monolithic_world_server: CoordHandle not available",
+        );
+        let recv =
+            self.recv_slot.lock().take().expect(
+                "PipelinedWorldServer::with_monolithic_world_server: RecvHandle not in slot",
+            );
+        let send =
+            self.send_slot.lock().take().expect(
+                "PipelinedWorldServer::with_monolithic_world_server: SendHandle not in slot",
+            );
 
         let coord_state = coord.state;
         let mut ws = InternalWorldServer::from_pipeline_states(coord_state, recv.state, send.state);
@@ -524,7 +522,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 // method so consumers operate on the unified [`PipelinedWorldServer<E>`] handle
 // directly — no `pipeline.coord_mut().method()` ceremony, no `InternalWorldServer`
 // reassembly. All methods delegate to `self.coord()` / `self.coord_mut()`,
-// which panic only inside an in-flight `tick`/`with_world_server` window (the
+// which panic only inside an in-flight `tick`/`with_monolithic_world_server` window (the
 // pipelined consumer calls these from the parked main thread, outside that
 // window). `enable_entity_replication` is intentionally NOT forwarded here —
 // it is superseded by the G5 `enable_replication_for_existing_entity` op.
@@ -1244,8 +1242,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     // backings forward to `CoordHandle`; the send-resident reads lock the
     // park-window send/recv slot (occupied during the `receive()`→`send()`
     // window — fail-loud `.expect` if a caller reads outside it while workers
-    // run); send-resident mutations are either staged into D-slots or still use
-    // the legacy `with_world_server` bridge until their Phase C class lands.
+    // run); send-resident mutations use coord-side D-slot staging or direct
+    // parked-slot mutations for cache maintenance.
 
     // ── Coord-resident room/user reads ──
 
@@ -1341,6 +1339,30 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .scope_checks_cache
             .pending_slice()
             .to_vec()
+    }
+
+    /// Clears the pending scope-check queue. Send-resident
+    /// (`send.scope_checks_cache`); mutates the parked send handle.
+    pub fn mark_scope_checks_pending_handled(&mut self) {
+        self.send_slot
+            .lock()
+            .as_mut()
+            .expect("PipelinedWorldServer::mark_scope_checks_pending_handled: SendHandle not in slot — call between receive() and send()")
+            .state
+            .scope_checks_cache
+            .mark_pending_handled();
+    }
+
+    /// Re-enqueues every current scope-check tuple. Send-resident
+    /// (`send.scope_checks_cache`); mutates the parked send handle.
+    pub fn mark_all_scope_checks_pending(&mut self) {
+        self.send_slot
+            .lock()
+            .as_mut()
+            .expect("PipelinedWorldServer::mark_all_scope_checks_pending: SendHandle not in slot — call between receive() and send()")
+            .state
+            .scope_checks_cache
+            .mark_all_pending();
     }
 
     /// Average RTT to the given user's client, or `None` if not connected.
@@ -1564,7 +1586,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     // Same shape as `user_scope_has_entity_ref`: lock the parked send handle
     // read-only (`send_slot.lock().as_ref()`, NO take), take a coord snapshot,
     // and share the canonical body with the fused engine via the
-    // `crate::server::*_impl` free functions — zero drift, no `with_world_server`
+    // `crate::server::*_impl` free functions — zero drift, no `with_monolithic_world_server`
     // reassembly. Fail-loud if the send handle is not parked (a read issued
     // between `receive()` and `send()`).
 
@@ -1629,7 +1651,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         )
     }
 
-    // ── Send-resident `&mut` mutations (D-slot staging or legacy reassembly) ──
+    // ── Send-resident `&mut` mutations (D-slot staging / parked-slot cache ops) ──
 
     /// Include/exclude `world_entity` in `user_key`'s explicit scope.
     /// Send-resident (`send.entity_scope_map` + `scope_change_queue`); staged

@@ -14,10 +14,9 @@ use crate::{
 /// The builder is ONE type over both variants (no `PipelinedEntityMut`): the
 /// `Resident` arm calls the fused `InternalWorldServer` ops directly; the
 /// `Pipelined` arm uses `PipelinedWorldServer`'s coord-only fast paths where they
-/// exist and otherwise reassembles the engine transiently via
-/// [`PipelinedWorldServer::with_world_server`] (valid inside the park window /
-/// before workers start). This keeps the imperative builder identical for
-/// consumers regardless of drive shape.
+/// exist and stages send-resident mutations into the pipeline's D-slots. This
+/// keeps the imperative builder identical for consumers regardless of drive
+/// shape.
 pub(crate) enum EntityMutTarget<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
     Resident(&'s mut InternalWorldServer<E>),
     Pipelined(&'s mut PipelinedWorldServer<E>),
