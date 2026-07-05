@@ -314,7 +314,10 @@ pub fn send_packets<T: Send + Sync + 'static>(world: &mut World) {
         if !should_send {
             world.resource_scope(
                 |world, mut events_reader_state: Mut<CachedClientTickEventsState<T>>| {
-                    let (messages, mut cursor) = events_reader_state.event_state.get_mut(world);
+                    let Ok((messages, mut cursor)) = events_reader_state.event_state.get_mut(world)
+                    else {
+                        return;
+                    };
 
                     for _event in cursor.read(&messages) {
                         should_send = true;

@@ -164,6 +164,7 @@ pub struct ImmutableLabel;
 /// Server-authoritative scoreboard resource. Used by integration tests
 /// to assert end-to-end resource replication and per-field diff updates.
 #[derive(Replicate, bevy_ecs::resource::Resource)]
+#[replicate(bevy_resource)]
 pub struct TestScore {
     pub home: Property<u32>,
     pub away: Property<u32>,
@@ -177,6 +178,7 @@ impl TestScore {
 
 /// Server-authoritative match-state resource (used by static-pool tests).
 #[derive(Replicate, bevy_ecs::resource::Resource)]
+#[replicate(bevy_resource)]
 pub struct TestMatchState {
     pub phase: Property<u8>,
 }
@@ -191,6 +193,7 @@ impl TestMatchState {
 /// authority-delegation tests configure delegation at insert time via
 /// `configure_replicated_resource`.
 #[derive(Replicate, bevy_ecs::resource::Resource)]
+#[replicate(bevy_resource)]
 pub struct TestPlayerSelection {
     pub selected_id: Property<u16>,
 }

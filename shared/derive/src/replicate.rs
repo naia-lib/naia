@@ -37,14 +37,20 @@ pub enum Property {
     NonReplicated(NonReplicatedProperty),
 }
 
-/// Returns true if the struct has `#[replicate(immutable)]` on it.
-fn is_immutable_attr(input: &DeriveInput) -> bool {
+fn has_replicate_flag(input: &DeriveInput, flag: &str) -> bool {
     input.attrs.iter().any(|attr| {
-        attr.path().is_ident("replicate")
-            && attr
-                .parse_args::<syn::Ident>()
-                .map(|id| id == "immutable")
-                .unwrap_or(false)
+        if !attr.path().is_ident("replicate") {
+            return false;
+        }
+
+        let mut found = false;
+        let _ = attr.parse_nested_meta(|meta| {
+            if meta.path.is_ident(flag) {
+                found = true;
+            }
+            Ok(())
+        });
+        found
     })
 }
 
@@ -55,7 +61,8 @@ pub fn replicate_impl(
 ) -> proc_macro::TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
 
-    let is_immutable = is_immutable_attr(&input);
+    let is_immutable = has_replicate_flag(&input, "immutable");
+    let is_bevy_resource = has_replicate_flag(&input, "bevy_resource");
 
     // Helper Properties
     let properties = get_properties(&input);
@@ -168,7 +175,7 @@ pub fn replicate_impl(
     let split_update_method =
         get_split_update_method(&replica_name, &properties, &untyped_generics);
 
-    let bevy_component_impl = if auto_emit_bevy_component {
+    let bevy_component_impl = if auto_emit_bevy_component && !is_bevy_resource {
         bevy_component_impl(
             &replica_name,
             &typed_generics,
