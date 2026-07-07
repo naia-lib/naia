@@ -2,10 +2,7 @@ use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 use syn::DeriveInput;
 
-pub fn client_marker_impl(
-    input: DeriveInput,
-    root: TokenStream,
-) -> TokenStream {
+pub fn client_marker_impl(input: DeriveInput, root: TokenStream) -> TokenStream {
     let m = &input.ident;
 
     // All generated names follow {Marker}{Suffix} via format_ident! (no paste).

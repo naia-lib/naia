@@ -28,13 +28,7 @@
 //! Step 4-A introduces this discipline; subsequent steps (4-B onwards) add
 //! the locked fields under this order.
 
-use std::{
-    collections::VecDeque,
-    hash::Hash,
-    net::SocketAddr,
-    sync::Arc,
-    time::Duration,
-};
+use std::{collections::VecDeque, hash::Hash, net::SocketAddr, sync::Arc, time::Duration};
 
 use parking_lot::{Mutex, RwLock};
 

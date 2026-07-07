@@ -40,7 +40,6 @@ pub use naia_socket_shared::{
     Random, SocketConfig, TimeQueue,
 };
 
-
 #[cfg(all(
     feature = "test_time",
     not(all(target_arch = "wasm32", any(feature = "wbindgen", feature = "mquad")))
@@ -153,7 +152,10 @@ pub use world::{
             ReplicaDynRefTrait, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
             ReplicaRefTrait, ReplicaRefWrapper,
         },
-        replicate::{HostComponent, Replicate, Replicate as ReplicateTrait, ReplicateBuilder, ReplicatedComponent},
+        replicate::{
+            HostComponent, Replicate, Replicate as ReplicateTrait, ReplicateBuilder,
+            ReplicatedComponent,
+        },
     },
     delegation::{
         auth_channel::EntityAuthAccessor,

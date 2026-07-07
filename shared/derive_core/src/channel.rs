@@ -4,10 +4,7 @@ use syn::{DeriveInput, LitStr};
 
 use super::shared::{get_struct_type, StructType};
 
-pub fn channel_impl(
-    input: DeriveInput,
-    shared_crate_name: TokenStream,
-) -> TokenStream {
+pub fn channel_impl(input: DeriveInput, shared_crate_name: TokenStream) -> TokenStream {
     // Helper Properties
     let struct_type = get_struct_type(&input);
     match struct_type {

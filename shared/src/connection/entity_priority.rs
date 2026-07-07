@@ -210,7 +210,10 @@ mod tests {
             entity: 7u32,
         };
         m.reset();
-        assert!(entries.contains_key(&7u32), "reset records an explicit gain-clear entry");
+        assert!(
+            entries.contains_key(&7u32),
+            "reset records an explicit gain-clear entry"
+        );
         let data = &entries[&7u32];
         assert_eq!(data.gain_override, None);
         assert!(data.gain_dirty, "reset marks the gain explicitly written");

@@ -123,11 +123,10 @@ impl HostWorldManager {
         // the `pending_outbound` contract; premature retire is the bug this
         // guards against.
         let delivered = self.delivered_component_kinds.get(global_entity);
-        host_channel.component_kinds().iter().all(|k| {
-            delivered
-                .map(|set| set.contains(k))
-                .unwrap_or(false)
-        })
+        host_channel
+            .component_kinds()
+            .iter()
+            .all(|k| delivered.map(|set| set.contains(k)).unwrap_or(false))
     }
 
     /// L3 send-state seam variant: build the converter holding a write guard on

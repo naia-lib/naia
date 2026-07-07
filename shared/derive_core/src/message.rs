@@ -1,8 +1,7 @@
 use proc_macro2::{Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    Data, DataEnum, DeriveInput, Fields, GenericParam, Generics, Ident, Index,
-    LitStr, Member, Type,
+    Data, DataEnum, DeriveInput, Fields, GenericParam, Generics, Ident, Index, LitStr, Member, Type,
 };
 
 use super::shared::{get_builder_generic_fields, get_generics, get_struct_type, StructType};

@@ -1,8 +1,8 @@
 use proc_macro2::{Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use syn::{
-    Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident,
-    Index, LitStr, Member, PathArguments, Type,
+    Data, DeriveInput, Fields, GenericArgument, GenericParam, Generics, Ident, Index, LitStr,
+    Member, PathArguments, Type,
 };
 
 use crate::{
@@ -53,7 +53,6 @@ pub fn replicate_impl(
     shared_crate_name: TokenStream,
     _auto_emit_bevy_component: bool,
 ) -> TokenStream {
-
     let is_immutable = is_immutable_attr(&input);
 
     // Helper Properties
@@ -185,7 +184,6 @@ pub fn replicate_impl(
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
     let split_update_method =
         get_split_update_method(&replica_name, &properties, &untyped_generics);
-
 
     let gen = quote! {
         mod #module_name {

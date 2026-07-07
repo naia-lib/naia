@@ -25,7 +25,7 @@ use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
 use super::{
-    drain_lifecycle, drain_tick_buffer, spawn_server_handles, RecvLifecycleEvent, CoordHandle,
+    drain_lifecycle, drain_tick_buffer, spawn_server_handles, CoordHandle, RecvLifecycleEvent,
 };
 
 /// Compile-time assertion that `T: Send`.
@@ -776,15 +776,17 @@ fn pipelined_priority_publish_global_and_per_user() {
     let mut proto = Protocol::builder();
     proto.lock();
     let protocol = proto.build();
-    let mut server =
-        crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let mut server = crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
 
     let uk = UserKey::from_u64(7);
     let e: u64 = 42;
 
     // Coord-side writes (global mirror + per-user staging) — not yet in `send`.
     server.global_entity_priority_mut(e).set_gain(3.0);
-    server.user_entity_priority_mut(&uk, e).set_gain(5.0).boost_once(10.0);
+    server
+        .user_entity_priority_mut(&uk, e)
+        .set_gain(5.0)
+        .boost_once(10.0);
 
     server.publish_priority_for_test();
 
@@ -822,8 +824,16 @@ fn pipelined_priority_publish_global_and_per_user() {
         let send = lock.as_ref().unwrap();
         assert_eq!(send.state.global_priority.gain_override(&e), Some(3.0));
         let layer = send.state.user_priorities.get(&uk).unwrap();
-        assert_eq!(layer.gain_override(&e), Some(5.0), "per-user gain persists send-side");
-        assert_eq!(layer.accumulated(&e), 10.0, "no double-boost from a no-op publish");
+        assert_eq!(
+            layer.gain_override(&e),
+            Some(5.0),
+            "per-user gain persists send-side"
+        );
+        assert_eq!(
+            layer.accumulated(&e),
+            10.0,
+            "no double-boost from a no-op publish"
+        );
     }
 
     // `reset()` in a LATER tick (staging already cleared) must still reach the
@@ -836,7 +846,15 @@ fn pipelined_priority_publish_global_and_per_user() {
         let lock = slot.lock();
         let send = lock.as_ref().unwrap();
         let layer = send.state.user_priorities.get(&uk).unwrap();
-        assert_eq!(layer.gain_override(&e), None, "reset reached send across ticks");
-        assert_eq!(layer.accumulated(&e), 10.0, "reset must not touch the accumulator");
+        assert_eq!(
+            layer.gain_override(&e),
+            None,
+            "reset reached send across ticks"
+        );
+        assert_eq!(
+            layer.accumulated(&e),
+            10.0,
+            "reset must not touch the accumulator"
+        );
     }
 }

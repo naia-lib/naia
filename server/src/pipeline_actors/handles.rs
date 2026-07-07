@@ -552,10 +552,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
     /// `InternalWorldServer::entity_replication_config`, reads only `shared`);
     /// returns `None` for an unknown entity rather than panicking (the safe
     /// fallback shared with the other `CoordHandle` reads).
-    pub fn entity_replication_config(
-        &self,
-        world_entity: &E,
-    ) -> Option<crate::ReplicationConfig> {
+    pub fn entity_replication_config(&self, world_entity: &E) -> Option<crate::ReplicationConfig> {
         let Ok(global_entity) = self
             .shared
             .global_entity_map
