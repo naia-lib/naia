@@ -1,4 +1,3 @@
-use log::warn;
 use std::ops::{Deref, DerefMut};
 
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
@@ -414,12 +413,22 @@ impl<T: Serde> HostOwnedProperty<T> {
             // Immutable (seed-only) components are never diff-tracked, so the
             // permanent absence of a mutator is expected — the host sim mutates
             // the value every tick and each new observer is seeded with the
-            // current value at spawn. Only a *mutable* component reaching here
-            // is a bug (mutated before its mutator was installed).
-            if !self.immutable {
-                warn!("Host Property should have a mutator immediately after creation.");
+            // current value at spawn. For those, mutation is a legitimate no-op.
+            if self.immutable {
+                return;
             }
-            return;
+            // A *mutable* HostOwned Property reaching here was mutated before
+            // its replication mutator was installed — an invariant violation
+            // that silently drops the change from every observer's diff. This
+            // used to `warn!`-and-continue, which let the bug rot. The two
+            // legitimate ways to mutate a mutatorless Property are: build the
+            // finished value in one shot via `new_complete` (no mutation), or
+            // `localize()` it first (converts to a mutate-freely `Local`).
+            panic!(
+                "mutable HostOwned Property mutated before its mutator was \
+                 installed — construct it complete (no pre-registration \
+                 mutation) or `localize()` it before mutating"
+            );
         };
         mutator.mutate(self.index);
     }
