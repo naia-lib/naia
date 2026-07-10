@@ -1,4 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 
 use parking_lot::Mutex;
 
@@ -46,7 +46,15 @@ type ClientChannels = (
 #[derive(Clone)]
 pub struct LocalTransportHub {
     server_addr: SocketAddr,
-    connections: Arc<Mutex<HashMap<SocketAddr, ClientConnection>>>,
+    // BTreeMap (not HashMap): the server drains auth/data by iterating this map
+    // (`try_recv_auth_request`, `process_time_queues`), so its iteration order
+    // decides the order clients are assigned user_keys — and therefore spawn
+    // slots / teams. HashMap's per-process randomized iteration made that order
+    // nondeterministic across runs, breaking bit-identical replay with >1
+    // concurrent client (nydus-1h9 6-cell 3v3 gate). Ordering by SocketAddr
+    // makes drain order deterministic; client addrs are assigned in a stable
+    // sequence by `register_client`.
+    connections: Arc<Mutex<BTreeMap<SocketAddr, ClientConnection>>>,
     next_client_id: Arc<Mutex<u16>>,
     traffic_paused: Arc<Mutex<bool>>,
     /// Wire-level packet recorder. `None` = disabled; `Some(buf)` = recording.
@@ -60,7 +68,7 @@ impl LocalTransportHub {
         Self {
             // shared,
             server_addr,
-            connections: Arc::new(Mutex::new(HashMap::new())),
+            connections: Arc::new(Mutex::new(BTreeMap::new())),
             next_client_id: Arc::new(Mutex::new(1)),
             traffic_paused: Arc::new(Mutex::new(false)),
             packet_recorder: Arc::new(Mutex::new(None)),
@@ -303,7 +311,7 @@ impl LocalTransportHub {
     /// Returns the number of packets delivered
     fn deliver_all_queued_packets_to_clients(
         &self,
-        connections: &mut HashMap<SocketAddr, ClientConnection>,
+        connections: &mut BTreeMap<SocketAddr, ClientConnection>,
         now: &Instant,
     ) -> usize {
         let mut total_delivered = 0;
