@@ -11,7 +11,7 @@ use crate::{server::InternalWorldServer, PipelinedWorldServer, RoomKey};
 /// stable for the lifetime of the connection and may be stored freely; they
 /// are invalidated (and must not be used) after the corresponding
 /// `DisconnectEvent` fires.
-#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug)]
+#[derive(PartialEq, Eq, Hash, Clone, Copy, Debug, PartialOrd, Ord)]
 pub struct UserKey(u64);
 
 impl BigMapKey for UserKey {
