@@ -64,6 +64,46 @@ fn pipeline_handles_are_send() {
     // via the generic bounds on `spawn_server_handles`.
 }
 
+#[test]
+fn send_connection_readiness_is_pure_and_tracks_materialization() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let (mut sim, _recv, mut send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+
+    let address: SocketAddr = "127.0.0.1:54321".parse().unwrap();
+    let user_key = UserKey::from_u64(7);
+    sim.receive_user(user_key, address);
+
+    assert!(!crate::server::world_server::user_connection_ready_impl(
+        &sim.state.user_store,
+        &send.state.send_user_connections,
+        &user_key,
+    ));
+
+    let gwm = send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &send.state.shared.server_config.connection,
+        &send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &send.state.shared.channel_kinds,
+        &*gwm,
+        send.state.shared.server_config.max_replicated_entities as usize,
+    );
+    drop(gwm);
+    send.state.send_user_connections.insert(address, send_conn);
+
+    // No bandwidth monitor was enabled: this query must remain a pure
+    // park-window membership read and must not panic.
+    assert!(crate::server::world_server::user_connection_ready_impl(
+        &sim.state.user_store,
+        &send.state.send_user_connections,
+        &user_key,
+    ));
+}
+
 fn make_empty_receive_output() -> ReceiveOutput<u64> {
     ReceiveOutput {
         world_events: WorldEvents::<u64>::new(),

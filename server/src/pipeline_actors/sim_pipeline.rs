@@ -1430,14 +1430,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// reads only canonical send-connection membership; if the send handle is
     /// not parked, readiness is false rather than a slot-precondition panic.
     pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
-        let Some(addr) = self.coord().user_address(user_key) else {
+        if self.coord().user_address(user_key).is_none() {
             return false;
-        };
+        }
         let send = self.send_slot.lock();
         let Some(send) = send.as_ref() else {
             return false;
         };
-        send.state.send_user_connections.contains_key(&addr)
+        crate::server::world_server::user_connection_ready_impl(
+            &self.coord().state.user_store,
+            &send.state.send_user_connections,
+            user_key,
+        )
     }
 
     /// Total outgoing bandwidth averaged over the monitor window (bytes/sec).

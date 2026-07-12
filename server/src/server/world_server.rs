@@ -2442,13 +2442,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// canonical `send_user_connections` membership and does not require
     /// bandwidth monitoring to be enabled.
     pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
-        let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
-            return false;
-        };
-        self.send
-            .state
-            .send_user_connections
-            .contains_key(&user.address())
+        user_connection_ready_impl(
+            &self.sim_handle.state.user_store,
+            &self.send.state.send_user_connections,
+            user_key,
+        )
     }
 
     // Crate-Public methods
@@ -4656,6 +4654,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     // 4-F.naia.c.2b: `handle_disconnects` moved to
     // `RecvState::handle_disconnects` (recv-only).
+}
+
+pub(crate) fn user_connection_ready_impl(
+    user_store: &UserStore,
+    send_user_connections: &std::collections::HashMap<
+        std::net::SocketAddr,
+        crate::connection::SendConnection,
+    >,
+    user_key: &UserKey,
+) -> bool {
+    let Some(user) = user_store.get(user_key) else {
+        return false;
+    };
+    send_user_connections.contains_key(&user.address())
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E>
