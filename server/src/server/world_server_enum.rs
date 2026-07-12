@@ -554,6 +554,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Whether the user's canonical send-side connection is materialized.
+    pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.user_connection_ready(user_key),
+            WorldServerImpl::Pipelined(ps) => ps.user_connection_ready(user_key),
+        }
+    }
+
     /// Read-only reference to the Historian, or `None` if not enabled.
     pub fn historian(&self) -> Option<&Historian> {
         match &self.inner {

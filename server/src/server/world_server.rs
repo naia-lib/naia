@@ -2436,6 +2436,21 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         })
     }
 
+    /// Whether the user's send-side connection has been materialized.
+    ///
+    /// This is a side-effect-free park-window query. It reads only the
+    /// canonical `send_user_connections` membership and does not require
+    /// bandwidth monitoring to be enabled.
+    pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
+        let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
+            return false;
+        };
+        self.send
+            .state
+            .send_user_connections
+            .contains_key(&user.address())
+    }
+
     // Crate-Public methods
 
     //// Entities

@@ -1424,6 +1424,22 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         })
     }
 
+    /// Whether the user's send-side connection has been materialized.
+    ///
+    /// Safe during the park window between `receive()` and `send()`. This
+    /// reads only canonical send-connection membership; if the send handle is
+    /// not parked, readiness is false rather than a slot-precondition panic.
+    pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
+        let Some(addr) = self.coord().user_address(user_key) else {
+            return false;
+        };
+        let send = self.send_slot.lock();
+        let Some(send) = send.as_ref() else {
+            return false;
+        };
+        send.state.send_user_connections.contains_key(&addr)
+    }
+
     /// Total outgoing bandwidth averaged over the monitor window (bytes/sec).
     /// Send-resident (`send.send_io`); reads the parked send handle.
     pub fn outgoing_bandwidth_total(&self) -> f32 {

@@ -1105,6 +1105,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world_server.connection_stats(user_key)
     }
 
+    /// Whether the user's canonical send-side connection is materialized.
+    pub fn user_connection_ready(&self, user_key: &UserKey) -> bool {
+        self.world_server.user_connection_ready(user_key)
+    }
+
     // Historian — lag-compensation snapshot buffer
 
     /// Enable the per-tick snapshot buffer for server-side lag compensation.
