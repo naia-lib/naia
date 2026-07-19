@@ -87,6 +87,19 @@ fn snapshot_mirror(app: &App, entries: &[Entity]) -> SnapshotWorld<Entity> {
     snap
 }
 
+/// Replace a test component with a complete HostOwned value.
+///
+/// These tests intentionally use an isolated, non-listening app, so no
+/// replication mutator is installed for the Bevy component. Mutating a field
+/// in place would therefore exercise the invalid pre-registration path in
+/// `HostOwnedProperty::mutate()`. Replacing the component keeps the test's
+/// state transition while preserving HostOwned wire serialization.
+fn replace_position(app: &mut App, entity: Entity, x: f32, y: f32) {
+    app.world_mut()
+        .entity_mut(entity)
+        .insert(Position::new(x, y));
+}
+
 /// Verify that for every entity in `entries`, both views agree on
 /// `has_entity` (in this test scaffolding, the bevy `WorldRef`'s
 /// `entities()` returns only entities tracked in `WorldData` — populated
@@ -193,11 +206,7 @@ fn lifecycle_spawn_insert_mutate_remove_despawn_all_parity() {
     assert!(snap.has_component_of_kind(&entity, &kind));
 
     // 3. Mutate value. Re-snapshot, both views show the new value.
-    {
-        let mut pos = app.world_mut().get_mut::<Position>(entity).unwrap();
-        *pos.x = 10.0;
-        *pos.y = 20.0;
-    }
+    replace_position(&mut app, entity, 10.0, 20.0);
     let snap = snapshot_mirror(&app, &[entity]);
     let bevy_view = app.world().proxy();
     assert_eq!(read_position(&bevy_view, entity), Some((10.0, 20.0)));
@@ -245,10 +254,7 @@ fn multi_entity_multi_component_parity() {
     }
 
     // Mutate e2, leave others alone — parity preserved.
-    {
-        let mut pos = app.world_mut().get_mut::<Position>(e2).unwrap();
-        *pos.x = 999.0;
-    }
+    replace_position(&mut app, e2, 999.0, 7.0);
     let snap = snapshot_mirror(&app, &entries);
     let bevy_view = app.world().proxy();
     for &e in &entries {
@@ -331,11 +337,7 @@ fn dyn_write_bytes_match_across_views() {
 
     // Mutate, re-snapshot, re-compare: the post-mutation value must
     // serialize identically through both views.
-    {
-        let mut pos = app.world_mut().get_mut::<Position>(e1).unwrap();
-        *pos.x = -42.0;
-        *pos.y = 99.75;
-    }
+    replace_position(&mut app, e1, -42.0, 99.75);
     let snap = snapshot_mirror(&app, &entries);
     let bevy_view = app.world().proxy();
     let bevy_bytes = serialize_via_dyn_write(&bevy_view, e1, &kind, component_kinds);
