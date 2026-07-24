@@ -25,7 +25,8 @@ use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
 use super::{
-    drain_lifecycle, drain_tick_buffer, spawn_server_handles, CoordHandle, RecvLifecycleEvent,
+    drain_lifecycle, drain_tick_buffer, spawn_server_handles, CoordHandle, PipelinedWorldServer,
+    RecvLifecycleEvent,
 };
 
 /// Compile-time assertion that `T: Send`.
@@ -101,6 +102,77 @@ fn send_connection_readiness_is_pure_and_tracks_materialization() {
         &sim.state.user_store,
         &send.state.send_user_connections,
         &user_key,
+    ));
+}
+
+mod outbound_message_test_protocol {
+    use naia_shared::{Channel, Message};
+
+    #[derive(Channel)]
+    pub struct TestServerChannel;
+
+    #[derive(Message, PartialEq, Eq, Hash)]
+    pub struct TestServerMessage {
+        pub value: u32,
+    }
+}
+
+#[test]
+fn pipelined_send_message_fails_before_materialization_and_after_disconnect() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use outbound_message_test_protocol::{TestServerChannel, TestServerMessage};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestServerChannel>(
+            ChannelDirection::ServerToClient,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestServerMessage>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54322".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let message = TestServerMessage { value: 9 };
+    server.receive_user(user_key, address);
+
+    assert!(matches!(
+        server.send_message::<TestServerChannel, _>(&user_key, &message),
+        Err(NaiaServerError::UserNotFound)
+    ));
+
+    let (coord, recv, mut send) = server.take_handles();
+    let gwm = send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &send.state.shared.server_config.connection,
+        &send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &send.state.shared.channel_kinds,
+        &*gwm,
+        send.state.shared.server_config.max_replicated_entities as usize,
+    );
+    drop(gwm);
+    send.state.send_user_connections.insert(address, send_conn);
+    server.restore_handles(coord, recv, send);
+
+    assert!(
+        server
+            .send_message::<TestServerChannel, _>(&user_key, &message)
+            .is_ok(),
+        "materialized send connection must accept the message"
+    );
+
+    let (coord, recv, mut send) = server.take_handles();
+    send.state.send_user_connections.remove(&address);
+    server.restore_handles(coord, recv, send);
+
+    assert!(matches!(
+        server.send_message::<TestServerChannel, _>(&user_key, &message),
+        Err(NaiaServerError::UserNotFound)
     ));
 }
 

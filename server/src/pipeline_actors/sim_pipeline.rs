@@ -1704,7 +1704,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             });
     }
 
-    /// Queue a message to one user for the D6 outbound-message drain.
+    /// Queue a message directly on one user's parked send connection.
+    ///
+    /// This operation is synchronous with respect to the per-connection
+    /// message manager: `Ok(())` means that manager accepted the message.
+    /// Holding the send slot through the enqueue prevents a disconnect between
+    /// a readiness check and the old D6 staged drain from turning `Ok(())`
+    /// into a silent drop.
     pub fn send_message<C: Channel, M: Message>(
         &mut self,
         user_key: &UserKey,
@@ -1715,17 +1721,25 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         if !channel_settings.can_send_to_client() {
             panic!("Cannot send message to Client on this Channel");
         }
-        self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
-
-        self.coord_mut()
-            .state
-            .pending_outbound_message_ops
-            .push(PendingOutboundMessageOp::Send {
-                user_key: *user_key,
-                channel_kind,
-                message: MessageContainer::new(M::clone_box(message)),
-            });
-        Ok(())
+        let Some(user) = self.coord().state.user_store.get(user_key) else {
+            return Err(NaiaServerError::UserNotFound);
+        };
+        let address = user.address();
+        let mut send_slot = self.send_slot.lock();
+        let Some(send) = send_slot.as_mut() else {
+            return Err(NaiaServerError::UserNotFound);
+        };
+        if !send.state.send_user_connections.contains_key(&address) {
+            return Err(NaiaServerError::UserNotFound);
+        }
+        send.state
+            .send_message_container_to_address(
+                &address,
+                &channel_kind,
+                MessageContainer::new(M::clone_box(message)),
+            )
+            .then_some(())
+            .ok_or(NaiaServerError::MessageQueueFull)
     }
 
     /// Queue a broadcast for all users connected at call time.
@@ -2528,19 +2542,6 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
 
         for op in ops {
             match op {
-                PendingOutboundMessageOp::Send {
-                    user_key,
-                    channel_kind,
-                    message,
-                } => {
-                    Self::apply_outbound_message_send(
-                        coord,
-                        send,
-                        &user_key,
-                        &channel_kind,
-                        message,
-                    );
-                }
                 PendingOutboundMessageOp::Fanout {
                     user_keys,
                     channel_kind,
