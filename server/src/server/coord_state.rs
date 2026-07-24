@@ -145,11 +145,6 @@ pub(crate) enum PendingAuthorityOp {
 
 /// Phase C / D6 — type-erased outbound message mutations staged on coord.
 pub(crate) enum PendingOutboundMessageOp {
-    Send {
-        user_key: UserKey,
-        channel_kind: ChannelKind,
-        message: MessageContainer,
-    },
     Fanout {
         user_keys: Vec<UserKey>,
         channel_kind: ChannelKind,
