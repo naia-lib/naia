@@ -20,7 +20,8 @@ use crate::{
     transport::{PacketChannel, PacketSender},
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
     ConnectEvent, ConnectionStats, DisconnectEvent, EntityOwner, Events, MainEvents,
-    NaiaServerError, ReceiveOutput, ReplicationConfig, RoomKey, RoomMut, RoomRef, ServerConfig,
+    NaiaServerError, ReceiveOutput, ReplicationConfig, ResponseSendOutcome, RoomKey, RoomMut,
+    RoomRef, ServerConfig,
     TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
 };
 
@@ -348,6 +349,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         response: &S,
     ) -> bool {
         self.world_server.send_response(response_key, response)
+    }
+
+    /// Like [`Self::send_response`], but reports whether a refusal was transient
+    /// (retry) or permanent (discard). Required by callers that park refused
+    /// responses and retry them in order — see [`ResponseSendOutcome`].
+    pub fn try_send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> ResponseSendOutcome {
+        self.world_server.try_send_response(response_key, response)
     }
 
     /// Polls for a response to a previously sent server request.

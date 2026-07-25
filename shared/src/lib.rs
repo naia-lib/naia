@@ -96,7 +96,7 @@ cfg_if! {
 
 pub use backends::{Timer, Timestamp};
 pub use connection::{
-    ack_manager::AckManager,
+    ack_manager::{AckManager, REDUNDANT_PACKET_ACKS_SIZE},
     bandwidth::BandwidthConfig,
     bandwidth_monitor::BandwidthMonitor,
     base_connection::{BaseConnection, BaseRecvConnection, BaseSendConnection},

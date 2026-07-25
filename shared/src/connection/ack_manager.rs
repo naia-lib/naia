@@ -9,6 +9,10 @@ use super::{
     sequence_buffer::SequenceBuffer, standard_header::StandardHeader,
 };
 
+/// Width of the ack bitfield carried in every packet header. A header therefore
+/// acknowledges at most this many packets plus the one explicit index it names, so
+/// a sender that emits more packets between a remote peer's headers than that
+/// window can cover leaves the excess permanently unacknowledged.
 pub const REDUNDANT_PACKET_ACKS_SIZE: u16 = 32;
 const DEFAULT_SEND_PACKETS_SIZE: usize = 256;
 // Sized to comfortably hold the worst-case burst of 33 samples per

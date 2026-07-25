@@ -120,7 +120,7 @@ impl MessageChannelSender for UnorderedUnreliableSender {
         _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         _: GlobalRequestId,
         _: MessageContainer,
-    ) {
+    ) -> bool {
         panic!("UnorderedUnreliable channel does not support requests");
     }
 
@@ -134,7 +134,7 @@ impl MessageChannelSender for UnorderedUnreliableSender {
         _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         _: LocalResponseId,
         _: MessageContainer,
-    ) {
+    ) -> bool {
         panic!("UnorderedUnreliable channel does not support requests");
     }
 }

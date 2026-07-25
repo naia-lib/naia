@@ -624,8 +624,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             channel_kind,
             global_request_id,
             request,
-        );
-        true
+        )
     }
 
     /// Channel-erased response enqueue used by the pipelined D6 staged message
@@ -648,8 +647,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             channel_kind,
             local_response_id,
             response,
-        );
-        true
+        )
     }
 
     /// Build and dispatch all outbound packets for this tick.

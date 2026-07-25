@@ -116,6 +116,7 @@ pub use pipeline_actors::{
     spawn_server_handles, CoordHandle, PipelinedWorldServer,
     PipelinedWorldServer as PipelinedServer,
 };
+pub use request::ResponseSendOutcome;
 pub use room::{RoomKey, RoomMut, RoomRef};
 #[cfg(feature = "bench_instrumentation")]
 pub use server::world_server::{bench_iris_counters, bench_scope_counters};

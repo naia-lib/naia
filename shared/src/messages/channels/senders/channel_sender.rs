@@ -42,7 +42,7 @@ pub trait MessageChannelSender: ChannelSender<MessageContainer> {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
         request: MessageContainer,
-    );
+    ) -> bool;
 
     /// Queues a Response to be transmitted to the remote host into an internal buffer
     fn send_outgoing_response(
@@ -51,7 +51,7 @@ pub trait MessageChannelSender: ChannelSender<MessageContainer> {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         local_response_id: LocalResponseId,
         response: MessageContainer,
-    );
+    ) -> bool;
 
     /// Request is finished, so clean up the local request id and return the global request id
     fn process_incoming_response(

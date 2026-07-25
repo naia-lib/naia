@@ -37,21 +37,35 @@ impl ReliableMessageSender {
 
 impl ReliableMessageSender {
     /// Queue `message` directly if it fits in one packet, or fragment it first.
+    /// Returns `false` if the queue-depth cap left no room, in which case NOTHING
+    /// was enqueued — a fragmented message is all-or-nothing.
+    ///
+    /// The all-or-nothing part is load-bearing. Pushing fragments one at a time and
+    /// ignoring the per-fragment result can enqueue a *prefix* of a fragmented
+    /// message: the receiver's `FragmentReceiver` then holds an entry that can never
+    /// complete, so the logical message is lost even though the queue later drains,
+    /// and on an ordered channel every later message behind it is stuck too. Testing
+    /// capacity for the whole fragment set up front makes a full queue a clean,
+    /// reportable refusal instead of silent corruption.
     fn send_or_fragment(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         message: MessageContainer,
-    ) {
+    ) -> bool {
         if message.bit_length(message_kinds, converter) > FRAGMENTATION_LIMIT_BITS {
-            for fragment in
-                self.message_fragmenter
-                    .fragment_message(message_kinds, converter, message)
-            {
+            let fragments = self
+                .message_fragmenter
+                .fragment_message(message_kinds, converter, message);
+            if !self.reliable_sender.has_capacity_for(fragments.len()) {
+                return false;
+            }
+            for fragment in fragments {
                 self.reliable_sender.send_message(fragment);
             }
+            true
         } else {
-            self.reliable_sender.send_message(message);
+            self.reliable_sender.send_message(message)
         }
     }
 }
@@ -103,14 +117,14 @@ impl MessageChannelSender for ReliableMessageSender {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
         request: MessageContainer,
-    ) {
+    ) -> bool {
         let processed = self.request_sender.process_outgoing_request(
             message_kinds,
             converter,
             global_request_id,
             request,
         );
-        self.send_or_fragment(message_kinds, converter, processed);
+        self.send_or_fragment(message_kinds, converter, processed)
     }
 
     fn send_outgoing_response(
@@ -119,14 +133,14 @@ impl MessageChannelSender for ReliableMessageSender {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         local_response_id: LocalResponseId,
         response: MessageContainer,
-    ) {
+    ) -> bool {
         let processed = self.request_sender.process_outgoing_response(
             message_kinds,
             converter,
             local_response_id,
             response,
         );
-        self.send_or_fragment(message_kinds, converter, processed);
+        self.send_or_fragment(message_kinds, converter, processed)
     }
 
     fn process_incoming_response(

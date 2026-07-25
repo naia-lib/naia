@@ -1,5 +1,6 @@
 use std::{collections::VecDeque, mem, time::Duration};
 
+use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{messages::channels::senders::channel_sender::ChannelSender, types::MessageIndex};
@@ -94,6 +95,18 @@ impl<P: Send + Sync> ReliableSender<P> {
         }
     }
 
+    /// Is there room for `count` more messages under the queue-depth cap?
+    ///
+    /// Exists so a fragmented message can be enqueued all-or-nothing: the caller
+    /// asks once for the whole fragment set rather than discovering the cap
+    /// half-way through and leaving an un-completable prefix on the wire.
+    pub(crate) fn has_capacity_for(&self, count: usize) -> bool {
+        match self.max_queue_depth {
+            Some(max) => self.sending_messages.len() + count <= max,
+            None => true,
+        }
+    }
+
     /// Drains and returns all messages currently staged for transmission this tick.
     pub fn take_next_messages(&mut self) -> VecDeque<(MessageIndex, P)> {
         mem::take(&mut self.outgoing_messages)
@@ -138,6 +151,13 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
     fn send_message(&mut self, message: P) -> bool {
         if let Some(max) = self.max_queue_depth {
             if self.sending_messages.len() >= max {
+                // Terminal for this message — nothing retries it from in here, so say
+                // so loudly. Callers must propagate the `false` and retry themselves.
+                warn!(
+                    "reliable channel send queue full ({}/{}) — refusing message; caller must retry",
+                    self.sending_messages.len(),
+                    max
+                );
                 return false;
             }
         }
@@ -172,9 +192,13 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         self.outgoing_messages.clear();
         let mut new_min: Option<Instant> = None;
         let mut any_unsent = false;
-        for (message_index, last_sent_opt, message) in self.sending_messages.iter().flatten() {
+        for (message_index, last_sent_opt, message) in
+            self.sending_messages.iter().flatten()
+        {
             let due = match last_sent_opt {
-                Some(last_sent) => last_sent.elapsed(now) >= resend_duration,
+                Some(last_sent) => {
+                    last_sent.elapsed(now) >= resend_duration
+                }
                 None => true,
             };
             if due {

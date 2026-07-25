@@ -89,7 +89,7 @@ pub use naia_bevy_shared::{
     ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
     HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
     Instant, ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, ResponseSendKey,
+    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, Response, ResponseSendKey,
     SendPackets, SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType,
     WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef, WorldRefType, WorldToHostSync,
     WorldUpdate,
@@ -102,7 +102,7 @@ pub use naia_server::{
         SignedVariableInteger, SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
     transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, ReplicationConfig,
-    RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
+    ResponseSendOutcome, RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
     WorldServer,
 };
 

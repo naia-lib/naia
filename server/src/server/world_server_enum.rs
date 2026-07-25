@@ -35,7 +35,8 @@ use crate::{
     world::entity_mut::{EntityMut, EntityMutTarget},
     world::entity_ref::{EntityRef, EntityRefTarget},
     EntityOwner, EntityPriorityMut, EntityPriorityRef, Historian, InternalWorldServer,
-    NaiaServerError, PipelinedWorldServer, ReceiveOutput, ReplicationConfig, RoomKey, RoomMut,
+    NaiaServerError, PipelinedWorldServer, ReceiveOutput, ReplicationConfig, ResponseSendOutcome,
+    RoomKey, RoomMut,
     RoomRef, ServerConfig, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
     UserScopeRef,
 };
@@ -673,6 +674,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_response::<S>(response_key, response),
             WorldServerImpl::Pipelined(ps) => ps.send_response::<S>(response_key, response),
+        }
+    }
+
+    /// Outcome-reporting form of [`Self::send_response`] — see [`ResponseSendOutcome`].
+    pub fn try_send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> ResponseSendOutcome {
+        match &mut self.inner {
+            WorldServerImpl::Resident(ws) => ws.try_send_response::<S>(response_key, response),
+            WorldServerImpl::Pipelined(ps) => ps.try_send_response::<S>(response_key, response),
         }
     }
 

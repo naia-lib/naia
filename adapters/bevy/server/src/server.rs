@@ -10,7 +10,8 @@ use bevy_ecs::{
 
 use naia_server::{
     shared::SocketConfig, transport::Socket, ConnectionStats, EntityOwner, EntityPriorityMut,
-    EntityPriorityRef, Events, Historian, NaiaServerError, ReplicationConfig, RoomKey, RoomMut,
+    EntityPriorityRef, Events, Historian, NaiaServerError, ReplicationConfig, ResponseSendOutcome,
+    RoomKey, RoomMut,
     RoomRef, Server as NaiaServer, TickBufferMessages, TickEvents, UserKey, UserMut, UserRef,
     UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
 };
@@ -402,6 +403,20 @@ impl<'w> Server<'w> {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.send_response(response_key, response),
             ServerImpl::Full(server) => server.send_response(response_key, response),
+        }
+    }
+
+    /// Outcome-reporting form of [`Self::send_response`]: distinguishes a transient
+    /// refusal (retry) from a permanent one (discard). Callers that park refused
+    /// responses in order MUST use this — see [`ResponseSendOutcome`].
+    pub fn try_send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> ResponseSendOutcome {
+        match &mut *self.server_impl {
+            ServerImpl::WorldOnly(server) => server.try_send_response(response_key, response),
+            ServerImpl::Full(server) => server.try_send_response(response_key, response),
         }
     }
 

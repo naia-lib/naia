@@ -26,7 +26,7 @@ use crate::{
         connection::new_connection_pair, io::new_io_pair, tick_buffer_messages::TickBufferMessages,
     },
     events::{world_events::WorldEvents, TickEvents},
-    request::{GlobalRequestManager, GlobalResponseManager},
+    request::{GlobalRequestManager, GlobalResponseManager, ResponseSendOutcome},
     room::Room,
     server::scope_checks_cache::ScopeChecksCache,
     transport::{PacketReceiver, PacketSender},
@@ -886,23 +886,54 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
 
         let message = MessageContainer::new(request_box);
-        send_conn.base.message_manager.send_request(
+        if !send_conn.base.message_manager.send_request(
             &self.shared.message_kinds,
             &mut converter,
             channel_kind,
             request_id,
             message,
-        );
+        ) {
+            // Queue-depth cap reached: nothing was enqueued. Report it rather than
+            // handing back an id whose response will never arrive.
+            return Err(NaiaServerError::Message(
+                "channel send queue full; retry later".to_string(),
+            ));
+        }
 
         Ok(request_id)
     }
 
     /// Sends a Response for a given Request. Returns whether or not was successful.
+    ///
+    /// `false` means the response was NOT enqueued — either the request is no longer
+    /// routable (user gone) or the channel's reliable send queue is full. In the
+    /// queue-full case the `response_key` is still valid, so the caller should hold
+    /// the response and retry on a later frame; dropping it instead strands whatever
+    /// the requester is waiting on, since a request gets at most one response.
     pub fn send_response<S: Response>(
         &mut self,
         response_key: &ResponseSendKey<S>,
         response: &S,
     ) -> bool {
+        self.try_send_response(response_key, response) == ResponseSendOutcome::Sent
+    }
+
+    /// Like [`Self::send_response`], but distinguishes a *transient* refusal from a
+    /// *permanent* one.
+    ///
+    /// `send_response`'s single `bool` collapses two opposite meanings: "the queue is
+    /// momentarily full, hold this and retry" and "this response can never be
+    /// delivered". A caller that parks refused responses in a FIFO to preserve
+    /// ordering cannot act correctly on that bool — retrying forever head-of-line
+    /// blocks every later response behind an undeliverable one, while discarding
+    /// strands requesters whose response was merely backpressured. Callers that hold
+    /// and retry must use this method; the `bool` form remains for callers that
+    /// fire-and-forget.
+    pub fn try_send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> ResponseSendOutcome {
         let response_id = response_key.response_id();
 
         let cloned_response = S::clone_box(response);
@@ -910,22 +941,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         self.send_response_inner(&response_id, cloned_response)
     }
 
-    // returns whether was successful
     fn send_response_inner(
         &mut self,
         response_id: &GlobalResponseId,
         response_box: Box<dyn Message>,
-    ) -> bool {
+    ) -> ResponseSendOutcome {
+        // Peek, don't consume: if the enqueue is refused below, the mapping must
+        // survive so the caller can retry with the same key.
         let Some((user_key, channel_kind, local_response_id)) = self
             .sim_handle
             .state
             .global_response_manager
-            .destroy_response_id(response_id)
+            .peek_response_id(response_id)
         else {
-            return false;
+            // No routing for this id: already answered, or the request is gone.
+            return ResponseSendOutcome::Undeliverable;
         };
         let Some(user) = self.sim_handle.state.user_store.get(&user_key) else {
-            return false;
+            return ResponseSendOutcome::Undeliverable;
         };
         let Some(send_conn) = self
             .send
@@ -933,19 +966,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .send_user_connections
             .get_mut(&user.address())
         else {
-            return false;
+            return ResponseSendOutcome::Undeliverable;
         };
-        let gwm = self.shared.global_world_manager.read();
-        let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
-        let response = MessageContainer::new(response_box);
-        send_conn.base.message_manager.send_response(
-            &self.shared.message_kinds,
-            &mut converter,
-            &channel_kind,
-            local_response_id,
-            response,
-        );
-        true
+        let accepted = {
+            let gwm = self.shared.global_world_manager.read();
+            let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
+            let response = MessageContainer::new(response_box);
+            send_conn.base.message_manager.send_response(
+                &self.shared.message_kinds,
+                &mut converter,
+                &channel_kind,
+                local_response_id,
+                response,
+            )
+        };
+        if accepted {
+            self.sim_handle
+                .state
+                .global_response_manager
+                .destroy_response_id(response_id);
+            ResponseSendOutcome::Sent
+        } else {
+            ResponseSendOutcome::Backpressured
+        }
     }
 
     /// Polls for a response to a previously sent request; returns `None` if not yet received.

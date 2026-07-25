@@ -91,6 +91,18 @@ impl GlobalResponseManager {
         id
     }
 
+    /// Look up a response id's routing WITHOUT consuming it.
+    ///
+    /// Sending a response can be refused (the reliable channel's queue-depth cap),
+    /// and a refused send must stay retryable — so the mapping is only destroyed
+    /// once the enqueue actually succeeds.
+    pub(crate) fn peek_response_id(
+        &self,
+        global_response_id: &GlobalResponseId,
+    ) -> Option<(UserKey, ChannelKind, LocalResponseId)> {
+        self.map.get(global_response_id).cloned()
+    }
+
     pub(crate) fn destroy_response_id(
         &mut self,
         global_response_id: &GlobalResponseId,
@@ -102,4 +114,22 @@ impl GlobalResponseManager {
     pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
         self.map.retain(|_, (key, _, _)| key != user_key);
     }
+}
+
+/// Why a `send_response` did or did not enqueue.
+///
+/// The distinction is load-bearing for any caller that holds refused responses and
+/// retries them in order: `Backpressured` must be retried (the `ResponseSendKey` is
+/// still valid and the requester is still waiting), while `Undeliverable` must be
+/// dropped, or it head-of-line blocks every response queued behind it forever.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResponseSendOutcome {
+    /// Enqueued on the reliable channel; the response id has been consumed.
+    Sent,
+    /// The channel's send queue is at its depth cap. Nothing was enqueued, the key
+    /// is still valid — hold the response and retry on a later frame.
+    Backpressured,
+    /// Can never be delivered (the user disconnected, or the response id is no
+    /// longer routable because it was already answered). Discard it.
+    Undeliverable,
 }

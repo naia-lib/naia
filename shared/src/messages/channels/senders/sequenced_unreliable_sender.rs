@@ -87,7 +87,7 @@ impl MessageChannelSender for SequencedUnreliableSender {
         _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         _: GlobalRequestId,
         _: MessageContainer,
-    ) {
+    ) -> bool {
         panic!("SequencedUnreliable channel does not support requests");
     }
 
@@ -97,7 +97,7 @@ impl MessageChannelSender for SequencedUnreliableSender {
         _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         _: LocalResponseId,
         _: MessageContainer,
-    ) {
+    ) -> bool {
         panic!("SequencedUnreliable channel does not support requests");
     }
 

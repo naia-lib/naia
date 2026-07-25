@@ -42,6 +42,7 @@ use naia_shared::{
 };
 use parking_lot::Mutex;
 
+use crate::ResponseSendOutcome;
 use crate::{
     room::RoomKey,
     server::{
@@ -1775,6 +1776,24 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     }
 
     /// Queue a response for the D6 outbound-message drain.
+    /// Outcome-reporting form. The pipelined path enqueues onto the coordinator's
+    /// outbound op queue rather than the reliable channel directly, so it never
+    /// observes channel backpressure here: the only refusal it can report is
+    /// `Undeliverable`.
+    pub fn try_send_response<S: Response>(
+        &mut self,
+        response_key: &ResponseSendKey<S>,
+        response: &S,
+    ) -> ResponseSendOutcome {
+        if self.send_response(response_key, response) {
+            ResponseSendOutcome::Sent
+        } else {
+            ResponseSendOutcome::Undeliverable
+        }
+    }
+
+    /// Enqueue a response onto the coordinator's outbound op queue. Returns
+    /// `false` if the response id is no longer routable or the user is gone.
     pub fn send_response<S: Response>(
         &mut self,
         response_key: &ResponseSendKey<S>,

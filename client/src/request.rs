@@ -89,6 +89,18 @@ impl GlobalResponseManager {
         id
     }
 
+    /// Look up a response id's routing WITHOUT consuming it.
+    ///
+    /// Sending a response can be refused (the reliable channel's queue-depth cap),
+    /// and a refused send must stay retryable — so the mapping is only destroyed
+    /// once the enqueue actually succeeds.
+    pub(crate) fn peek_response_id(
+        &self,
+        global_response_id: &GlobalResponseId,
+    ) -> Option<(ChannelKind, LocalResponseId)> {
+        self.map.get(global_response_id).cloned()
+    }
+
     pub(crate) fn destroy_response_id(
         &mut self,
         global_response_id: &GlobalResponseId,

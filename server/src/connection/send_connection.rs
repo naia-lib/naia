@@ -21,7 +21,12 @@ use naia_shared::{
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, MessageIndex,
     MessageKinds, OutgoingPacket, PacketNotifiable, PacketType, Serde, SerdeErr, SnapshotMap,
     StandardHeader, Tick, UpdateKinds, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    REDUNDANT_PACKET_ACKS_SIZE,
 };
+
+/// Cap on packets built in one send pass, matched to what a single remote header
+/// can acknowledge (1 explicit + a 32-bit bitfield). See `build_all_packets`.
+const MAX_PACKETS_PER_SEND_PASS: usize = REDUNDANT_PACKET_ACKS_SIZE as usize + 1;
 
 #[cfg(feature = "bench_instrumentation")]
 use crate::connection::connection::bench_send_counters;
@@ -481,6 +486,28 @@ impl SendConnection {
     /// IO-free variant of `send_packets`. Builds all outgoing packets for this
     /// connection without sending them. Returns `(packets, any_built)`.
     /// `rtt_millis` is supplied by the caller (see `send_packets`).
+    ///
+    /// # Why the packet count is bounded per pass
+    ///
+    /// Bandwidth is not the only ceiling — the ACK CHANNEL is. A remote header can
+    /// acknowledge at most `REDUNDANT_PACKET_ACKS_SIZE + 1` (33) packets: one
+    /// explicit index plus a 32-bit bitfield of its predecessors
+    /// (`naia_shared::connection::ack_manager`). A client sends on the order of one
+    /// packet per tick, so beyond ~33 packets per tick the ack window slides past the
+    /// excess and those packets are NEVER acknowledged. Since a reliable message is
+    /// retired only by an ack, its send queue then stops draining, every entry
+    /// retransmits forever, and the added duplicates make it worse — congestion
+    /// collapse whose cause is the ack window, not the link.
+    ///
+    /// Measured on the World Editor tile stream (localhost, 25 Hz, 2 MB/s budget,
+    /// ~34 fragments per 64×64 raster): with only the bandwidth bound the send queue
+    /// pinned at 991 of 1024 with 0 messages due, delivery stopped entirely, and
+    /// 10,745 packet writes produced 1,070 deliveries. Bounding a pass to the ack
+    /// window makes throughput ack-paced: the queue drains monotonically and nothing
+    /// is orphaned. Deferred messages are not dropped — they stay queued and go out
+    /// on the next pass, exactly like the bandwidth-deferred case.
+    ///
+    /// This is a pacing bound, not a wire change: no bytes are packed differently.
     #[allow(clippy::too_many_arguments)]
     pub fn build_all_packets<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
@@ -504,7 +531,7 @@ impl SendConnection {
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
-        loop {
+        while packets.len() < MAX_PACKETS_PER_SEND_PASS {
             let Some(pkt) = self.build_one_packet(
                 channel_kinds,
                 message_kinds,

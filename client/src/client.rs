@@ -590,13 +590,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let request_id = connection.global_request_manager.create_request_id();
         let message = MessageContainer::new(request_box);
-        connection.base.send.message_manager.send_request(
+        if !connection.base.send.message_manager.send_request(
             &self.protocol.message_kinds,
             &mut converter,
             channel_kind,
             request_id,
             message,
-        );
+        ) {
+            // Queue-depth cap reached: nothing was enqueued. Report it rather than
+            // handing back an id whose response will never arrive.
+            return Err(NaiaClientError::Message(
+                "channel send queue full; retry later".to_string(),
+            ));
+        }
 
         Ok(request_id)
     }
@@ -629,9 +635,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         let Some(connection) = &mut self.server_connection else {
             return false;
         };
+        // Peek, don't consume: if the enqueue is refused below, the mapping must
+        // survive so the caller can retry with the same key.
         let Some((channel_kind, local_response_id)) = connection
             .global_response_manager
-            .destroy_response_id(response_id)
+            .peek_response_id(response_id)
         else {
             return false;
         };
@@ -642,14 +650,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_converter_mut(&self.global_world_manager);
 
         let response = MessageContainer::new(response_box);
-        connection.base.send.message_manager.send_response(
+        let accepted = connection.base.send.message_manager.send_response(
             &self.protocol.message_kinds,
             &mut converter,
             &channel_kind,
             local_response_id,
             response,
         );
-        true
+        if accepted {
+            connection
+                .global_response_manager
+                .destroy_response_id(response_id);
+        }
+        accepted
     }
 
     /// Returns `true` if a response to the given request has arrived.

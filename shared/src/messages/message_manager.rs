@@ -235,6 +235,9 @@ impl MessageManager {
     }
 
     /// Queues a request with `global_request_id` into the given channel's send buffer.
+    ///
+    /// Returns `false` if the channel refused it (reliable queue-depth cap
+    /// reached); nothing was enqueued and the caller must retry later.
     pub fn send_request(
         &mut self,
         message_kinds: &MessageKinds,
@@ -242,14 +245,17 @@ impl MessageManager {
         channel_kind: &ChannelKind,
         global_request_id: GlobalRequestId,
         request: MessageContainer,
-    ) {
+    ) -> bool {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
-        channel.send_outgoing_request(message_kinds, converter, global_request_id, request);
+        channel.send_outgoing_request(message_kinds, converter, global_request_id, request)
     }
 
     /// Queues a response keyed by `local_response_id` into the given channel's send buffer.
+    ///
+    /// Returns `false` if the channel refused it (reliable queue-depth cap
+    /// reached); nothing was enqueued and the caller must retry later.
     pub fn send_response(
         &mut self,
         message_kinds: &MessageKinds,
@@ -257,11 +263,11 @@ impl MessageManager {
         channel_kind: &ChannelKind,
         local_response_id: LocalResponseId,
         response: MessageContainer,
-    ) {
+    ) -> bool {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
-        channel.send_outgoing_response(message_kinds, converter, local_response_id, response);
+        channel.send_outgoing_response(message_kinds, converter, local_response_id, response)
     }
 
     /// Advances all channel senders, re-queuing any messages due for retransmission given current RTT.
