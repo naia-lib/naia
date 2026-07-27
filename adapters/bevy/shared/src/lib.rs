@@ -31,6 +31,9 @@ pub use naia_shared::{
     SnapshotWorld, Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger,
     UnsignedVariableFloat, UnsignedVariableInteger, WorldMutType, WorldRefType,
     CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES, MTU_SIZE_BYTES,
+    // Named by `#[derive(Replicate)]`'s generated `max_bit_length`, which
+    // resolves everything through this crate for bevy consumers.
+    MaxBits, MaxBitsFallback, UNBOUNDED_BIT_LENGTH,
 };
 
 mod bundle;

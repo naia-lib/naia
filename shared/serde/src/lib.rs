@@ -29,6 +29,7 @@ pub use number::{
 };
 pub use outgoing_packet::OutgoingPacket;
 pub use serde::{
-    ConstBitLength, Serde, Serde as SerdeBevyClient, Serde as SerdeBevyServer,
-    Serde as SerdeBevyShared, Serde as SerdeInternal,
+    ConstBitLength, MaxBits, MaxBitsFallback, Serde, Serde as SerdeBevyClient,
+    Serde as SerdeBevyServer, Serde as SerdeBevyShared, Serde as SerdeInternal,
+    UNBOUNDED_BIT_LENGTH,
 };

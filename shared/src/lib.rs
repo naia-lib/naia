@@ -30,7 +30,8 @@ pub use naia_derive::{Channel, Message, Replicate};
 pub use naia_serde::bench_serde_counters;
 pub use naia_serde::{
     BitCounter, BitReader, BitWrite, BitWriter, CachedComponentUpdate, ConstBitLength,
-    FileBitWriter, OutgoingPacket, OwnedBitReader, Serde, SerdeBevyClient, SerdeBevyServer,
+    FileBitWriter, MaxBits, MaxBitsFallback, OutgoingPacket, OwnedBitReader, Serde,
+    SerdeBevyClient, SerdeBevyServer, UNBOUNDED_BIT_LENGTH,
     SerdeBevyShared, SerdeErr, SerdeFloatConversion, SerdeIntegerConversion, SerdeInternal,
     SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat,
     CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES,

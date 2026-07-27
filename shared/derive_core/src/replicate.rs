@@ -133,9 +133,7 @@ pub fn replicate_impl(
         quote! {}
     };
 
-    let max_bit_length_method: TokenStream = quote! {
-        fn max_bit_length() -> u32 where Self: Sized { u32::MAX }
-    };
+    let max_bit_length_method: TokenStream = get_max_bit_length_method(&properties);
 
     // Methods
     let new_complete_method =
@@ -189,11 +187,15 @@ pub fn replicate_impl(
         mod #module_name {
 
             use std::{rc::Rc, cell::RefCell, io::Cursor, any::Any, collections::HashSet};
+            // `MaxBitsFallback` is only *named* when a property type lacks a
+            // static bound; it must still be in scope for the probe to resolve.
+            #[allow(unused_imports)]
             use #shared_crate_name::{
                 DiffMask, PropertyMutate, PropertyMutator, PendingComponentUpdate,
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
+                MaxBits, MaxBitsFallback, UNBOUNDED_BIT_LENGTH,
             };
             use super::*;
 
@@ -1287,6 +1289,71 @@ fn get_write_method(properties: &[Property], struct_type: &StructType) -> TokenS
         fn write(&self, component_kinds: &ComponentKinds, writer: &mut dyn BitWrite, converter: &mut dyn LocalEntityAndGlobalEntityConverterMut) {
             self.kind().ser(component_kinds, writer);
             #property_writes
+        }
+    }
+}
+
+/// Emits `Replicate::max_bit_length` — the *static* upper bound on one
+/// component update, which `ComponentKinds::add_component` asserts against the
+/// `CachedComponentUpdate` ceiling.
+///
+/// This mirrors `write_update` exactly (see below): an update writes, per
+/// replicated property, one presence bit and then — when that bit is set — the
+/// property's own encoding. So the bound is `sum(1 + width(prop))`, maximized
+/// when every property is dirty.
+///
+/// A property's width is only knowable statically if its inner type implements
+/// `ConstBitLength`; a `Vec`/`String`/variable-length field has no such bound,
+/// and an `EntityProperty` encodes per-connection. Any such property makes the
+/// whole component unbounded, and the method returns `UNBOUNDED_BIT_LENGTH`.
+/// `MaxBits`' inherent-vs-trait probe is what lets the macro make that
+/// distinction without being able to see the field type's trait impls.
+///
+/// Before 2026-07-27 this unconditionally returned the sentinel, which meant the
+/// registration assert was *never* evaluated for any component in any protocol —
+/// an over-large component booted fine and then panicked inside `world_writer`
+/// the first time it serialized. Computing the bound is what makes that assert
+/// real.
+fn get_max_bit_length_method(properties: &[Property]) -> TokenStream {
+    // Decided here rather than as a `return` inside the generated body: an early
+    // return ahead of the remaining property terms is correct but makes rustc
+    // (rightly) flag them unreachable in the user's crate.
+    if properties.iter().any(|p| matches!(p, Property::Entity(_))) {
+        return quote! {
+            fn max_bit_length() -> u32 where Self: Sized { UNBOUNDED_BIT_LENGTH }
+        };
+    }
+
+    let mut terms = quote! {};
+    for property in properties.iter() {
+        let term = match property {
+            Property::Normal(property) => {
+                let inner_type = &property.inner_type;
+                quote! {
+                    {
+                        let bits = MaxBits::<#inner_type>::new().probe();
+                        if bits == UNBOUNDED_BIT_LENGTH {
+                            return UNBOUNDED_BIT_LENGTH;
+                        }
+                        // +1 for the presence bit `write_update` always writes.
+                        output = output.saturating_add(bits).saturating_add(1);
+                    }
+                }
+            }
+            // Handled above (whole component is unbounded).
+            Property::Entity(_) => continue,
+            // Never crosses the wire.
+            Property::NonReplicated(_) => continue,
+        };
+        terms = quote! { #terms #term };
+    }
+
+    quote! {
+        fn max_bit_length() -> u32 where Self: Sized {
+            #[allow(unused_mut)]
+            let mut output: u32 = 0;
+            #terms
+            output
         }
     }
 }

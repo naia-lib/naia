@@ -315,3 +315,66 @@ mod has_entity_props_tests {
         assert!(EntityRefComp::has_entity_properties());
     }
 }
+
+// ─── max_bit_length tests ────────────────────────────────────────────────
+//
+// The derived bound is what makes `ComponentKinds::add_component`'s ceiling
+// assert real. Before 2026-07-27 the derive returned the sentinel for every
+// component, so the assert was universally skipped and an over-large component
+// panicked at serialize time instead of at registration.
+
+mod max_bit_length_tests {
+    use naia_shared::{
+        EntityProperty, Property, Replicate, SignedFloat, UnsignedInteger, UNBOUNDED_BIT_LENGTH,
+    };
+
+    #[derive(Replicate)]
+    pub struct BoundedComp {
+        pub flag: Property<bool>,
+        pub count: Property<UnsignedInteger<12>>,
+    }
+
+    #[derive(Replicate)]
+    pub struct RasterComp {
+        pub cells: Property<[Option<SignedFloat<16, 4>>; 8]>,
+    }
+
+    #[derive(Replicate)]
+    pub struct UnboundedComp {
+        pub name: Property<String>,
+        pub flag: Property<bool>,
+    }
+
+    #[derive(Replicate)]
+    pub struct EntityRefComp {
+        pub entity: EntityProperty,
+    }
+
+    #[test]
+    fn a_bounded_component_reports_the_sum_of_its_fields_plus_presence_bits() {
+        // `write_update` emits one presence bit per property, then the property
+        // itself when dirty. Worst case = every property dirty.
+        assert_eq!(BoundedComp::max_bit_length(), (1 + 1) + (1 + 12));
+    }
+
+    #[test]
+    fn a_const_bounded_array_property_is_bounded() {
+        // The raster shape the World Editor depends on: `Option<T>` contributes
+        // its own 1-bit tag, `SignedFloat<16, 4>` is 1 sign + 16 magnitude.
+        let expected = 1 + 8 * (1 + 17);
+        assert_eq!(RasterComp::max_bit_length(), expected);
+        assert_ne!(RasterComp::max_bit_length(), UNBOUNDED_BIT_LENGTH);
+    }
+
+    #[test]
+    fn one_unbounded_field_makes_the_whole_component_unbounded() {
+        // A `String` has no static width, so no honest bound exists — the
+        // sentinel is the correct answer, not a large number.
+        assert_eq!(UnboundedComp::max_bit_length(), UNBOUNDED_BIT_LENGTH);
+    }
+
+    #[test]
+    fn an_entity_property_is_unbounded_because_it_encodes_per_connection() {
+        assert_eq!(EntityRefComp::max_bit_length(), UNBOUNDED_BIT_LENGTH);
+    }
+}
