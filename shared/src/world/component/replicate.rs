@@ -76,7 +76,8 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
         false
     }
     /// Upper bound on this component's serialized bit length (all fields dirty).
-    /// Returns `u32::MAX` if not precisely known (sentinel — skips the 512-bit assertion).
+    /// Returns `u32::MAX` if not precisely known (sentinel — skips the registration
+    /// assertion against `CACHED_UPDATE_BITS`).
     /// The derive macro may override with a precise sum via `ConstBitLength` impls.
     fn max_bit_length() -> u32
     where

@@ -386,7 +386,7 @@ mod wire_cache_tests {
     use crate::bigmap::BigMapKey;
 
     fn make_update(bit_count: u32) -> CachedComponentUpdate {
-        let mut bytes = [0u8; 64];
+        let mut bytes = [0u8; naia_serde::CACHED_UPDATE_BYTES];
         bytes[0] = 0xAB;
         CachedComponentUpdate { bytes, bit_count }
     }

@@ -15,7 +15,10 @@ pub use bit_counter::BitCounter;
 pub use bit_reader::{BitReader, OwnedBitReader};
 #[cfg(feature = "bench_instrumentation")]
 pub use bit_writer::bench_serde_counters;
-pub use bit_writer::{BitWrite, BitWriter, CachedComponentUpdate, VecBitWriter};
+pub use bit_writer::{
+    BitWrite, BitWriter, CachedComponentUpdate, VecBitWriter, CACHED_UPDATE_BITS,
+    CACHED_UPDATE_BYTES,
+};
 pub use constants::{MTU_SIZE_BITS, MTU_SIZE_BYTES};
 pub use error::SerdeErr;
 pub use file_bit_writer::FileBitWriter;

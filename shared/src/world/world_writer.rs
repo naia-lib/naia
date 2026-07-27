@@ -1070,7 +1070,11 @@ impl WorldWriter {
                                     .expect("Component does not exist in World")
                                     .write_update(&diff_mask, &mut temp, &mut converter);
                                 let c = CachedComponentUpdate::capture(&temp)
-                                    .expect("component exceeds 512 bits; impossible after registration check");
+                                    .expect(
+                                        "component exceeds the CachedComponentUpdate \
+                                         ceiling; impossible after registration check \
+                                         unless max_bit_length() returned the sentinel",
+                                    );
                                 gdh.set_wire_cache(entity_idx, kind_bit, diff_mask_key, c);
                                 c
                             }

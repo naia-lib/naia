@@ -251,28 +251,50 @@ impl BitWrite for VecBitWriter {
     }
 }
 
+/// Size of a [`CachedComponentUpdate`]'s inline body, in bytes.
+///
+/// This is a **cache** dimension, not a protocol dimension: it bounds how large a
+/// single component may serialize, and nothing about it reaches the wire. Raising
+/// it is therefore not a wire-encoding change.
+///
+/// Sized against the component, not the packet. The wire cache is a dense
+/// `entities × max_kind_count` table (`global_diff_handler.rs`) and every cache
+/// *hit* copies this struct by value, so the cost of this constant is paid in both
+/// resident memory and per-hit `memcpy` bandwidth. 160 B is the smallest power-of-
+/// ten-ish bound that clears the largest component any consumer registers (a
+/// 144 B world-editor tile raster) with headroom, while staying well under the
+/// 400 B `FRAGMENTATION_LIMIT_BYTES` and the 430 B [`MTU_SIZE_BYTES`] packet
+/// buffer — a component that approached either of those would leave no room for
+/// the packet header and its own framing.
+pub const CACHED_UPDATE_BYTES: usize = 160;
+
+/// The same bound in bits — the ceiling enforced at component-registration time.
+pub const CACHED_UPDATE_BITS: u32 = (CACHED_UPDATE_BYTES * 8) as u32;
+
 /// Pre-serialized component body. Inline array, zero heap allocation.
-/// 64 bytes = 512 bits. All registered components must fit within this limit
-/// (enforced at ComponentKinds::add_component time via Replicate::max_bit_length()).
+/// Bounded by [`CACHED_UPDATE_BYTES`]; all registered components must fit within
+/// that limit (enforced at ComponentKinds::add_component time via
+/// Replicate::max_bit_length()).
 #[derive(Copy, Clone)]
 pub struct CachedComponentUpdate {
-    pub bytes: [u8; 64],
+    pub bytes: [u8; CACHED_UPDATE_BYTES],
     pub bit_count: u32,
 }
 
 impl CachedComponentUpdate {
     /// Captures a BitWriter's current content into a CachedComponentUpdate.
-    /// Must be called before finalize(). Returns None if total bit_count > 512.
+    /// Must be called before finalize(). Returns None if the total bit count
+    /// exceeds [`CACHED_UPDATE_BITS`].
     pub fn capture(writer: &BitWriter) -> Option<Self> {
         let bit_count = writer.bits_written();
-        if bit_count > 512 {
+        if bit_count > CACHED_UPDATE_BITS {
             return None;
         }
 
         let flushed = writer.bytes_written_slice();
         let (scratch, scratch_bits) = writer.scratch_bits_pending();
 
-        let mut bytes = [0u8; 64];
+        let mut bytes = [0u8; CACHED_UPDATE_BYTES];
         bytes[..flushed.len()].copy_from_slice(flushed);
 
         if scratch_bits > 0 {
@@ -339,7 +361,9 @@ impl BitWriter {
 
 #[cfg(test)]
 mod tests {
-    use super::{BitWrite, BitWriter, CachedComponentUpdate};
+    use super::{
+        BitWrite, BitWriter, CachedComponentUpdate, CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES,
+    };
 
     // ─── word-boundary regression tests (targets for word-aligned optimization) ─
 
@@ -711,16 +735,36 @@ mod tests {
         read_n_known_bits(&mut reader, 33);
     }
 
-    /// 512-bit capture succeeds; 513-bit returns None
+    /// Capture succeeds exactly at the ceiling and fails one bit past it.
+    ///
+    /// Written against `CACHED_UPDATE_BITS` rather than a literal, so raising the
+    /// ceiling moves the assertion with it instead of silently testing an interior
+    /// point. The `is_none()` half is the one that matters: `capture` returning
+    /// `None` is what makes `world_writer`'s cache miss fall back to a fresh
+    /// serialize instead of writing past the end of `bytes`.
     #[test]
-    fn capture_512_succeeds_513_fails() {
-        let mut src512 = BitWriter::with_max_capacity();
-        write_n_known_bits(&mut src512, 512);
-        assert!(CachedComponentUpdate::capture(&src512).is_some());
+    fn capture_succeeds_at_the_ceiling_and_fails_one_bit_past_it() {
+        let mut at = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut at, CACHED_UPDATE_BITS);
+        assert!(CachedComponentUpdate::capture(&at).is_some());
 
-        let mut src513 = BitWriter::with_max_capacity();
-        write_n_known_bits(&mut src513, 513);
-        assert!(CachedComponentUpdate::capture(&src513).is_none());
+        let mut past = BitWriter::with_max_capacity();
+        write_n_known_bits(&mut past, CACHED_UPDATE_BITS + 1);
+        assert!(CachedComponentUpdate::capture(&past).is_none());
+    }
+
+    /// The inline buffer must be able to hold a capture of the maximum permitted
+    /// size, including a partially-filled scratch word. `capture` writes flushed
+    /// bytes then up to 8 more scratch bytes at `flushed.len()`, so the two
+    /// constants have to stay in lockstep — bumping `CACHED_UPDATE_BITS` without
+    /// `CACHED_UPDATE_BYTES` would panic inside `copy_from_slice` rather than fail
+    /// a bound.
+    #[test]
+    fn the_bit_ceiling_and_the_byte_buffer_agree() {
+        assert_eq!(CACHED_UPDATE_BITS as usize, CACHED_UPDATE_BYTES * 8);
+        // And the whole thing must still fit in one packet, or a cached update
+        // could never be appended to a writer that also carries a header.
+        assert!(CACHED_UPDATE_BYTES < crate::constants::MTU_SIZE_BYTES);
     }
 
     // ─── BitCounter::count_bits behavior test ─────────────────────────────────

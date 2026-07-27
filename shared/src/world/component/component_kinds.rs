@@ -3,7 +3,7 @@ use std::{
     collections::{HashMap, HashSet},
 };
 
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::{BitReader, BitWrite, Serde, SerdeErr, CACHED_UPDATE_BITS};
 
 use crate::world::component::replicate::SplitUpdateResult;
 use crate::{
@@ -160,16 +160,22 @@ impl ComponentKinds {
         // `u16` NetId (cap 65,535) — that's the real ceiling and well
         // beyond any realistic protocol size.
 
-        // Enforce 512-bit CachedComponentUpdate ceiling. u32::MAX is the sentinel
-        // value returned by components that don't precisely compute their max bit length.
+        // Enforce the CachedComponentUpdate ceiling. u32::MAX is the sentinel
+        // value returned by components that don't precisely compute their max bit
+        // length — note that the sentinel SKIPS this assert rather than failing it,
+        // so a component with a `Vec` field is not checked here and instead trips
+        // the `capture()` expect in `world_writer.rs` the first time it serializes.
+        // Prefer const-bounded fields (`ConstBitLength`) for anything large enough
+        // to care.
         let max_bits = C::max_bit_length();
         if max_bits != u32::MAX {
             assert!(
-                max_bits <= 512,
-                "Component {} serializes to {} bits, exceeding the 512-bit \
+                max_bits <= CACHED_UPDATE_BITS,
+                "Component {} serializes to {} bits, exceeding the {}-bit \
                  CachedComponentUpdate ceiling. Slim the component before registering.",
                 std::any::type_name::<C>(),
-                max_bits
+                max_bits,
+                CACHED_UPDATE_BITS
             );
         }
         if C::has_entity_properties() {
