@@ -920,6 +920,22 @@ impl WorldWriter {
                 (*ge, *idx, *we)
             };
 
+            // MISSION_TICK_FLOOR Lever 3 despawn race: the plan was FROZEN by
+            // `prepare_send_job` one tick ago and is transmitted here, possibly
+            // while the gameplay thread runs the next Sim. An entity despawned in
+            // that window still has plan entries, but its components are gone from
+            // the World — serializing them would panic (`component_of_kind` →
+            // `expect`), and replaying PATH A's cached bytes would be worse: the
+            // cache is keyed by `GlobalEntityIndex`, which is recyclable, so a
+            // stale hit can emit ANOTHER entity's bytes. The update is moot either
+            // way — the client is about to receive the Despawn — so drop the whole
+            // entry. Legitimate runtime state, not an error.
+            if !world.has_entity(&world_entity) {
+                update_list[i].3.clear();
+                i += 1;
+                continue;
+            }
+
             let local_entity = world_manager
                 .entity_converter()
                 .global_entity_to_owned_entity(&global_entity)
@@ -1060,15 +1076,23 @@ impl WorldWriter {
                                 #[cfg(feature = "bench_instrumentation")]
                                 bench_write_counters::N_PATH_A_CACHE_MISSES
                                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                // Same freeze→transmit window as the entity check in
+                                // `write_updates`, one level finer: the entity is
+                                // still alive but THIS component was removed. The
+                                // planned update has nothing left to serialize, so
+                                // drop it rather than panicking.
+                                let Some(component) =
+                                    world.component_of_kind(world_entity, &component_kind)
+                                else {
+                                    written_count += 1;
+                                    continue;
+                                };
                                 let mut converter =
                                     world_manager.entity_converter_mut(global_world_manager);
                                 let mut temp = BitWriter::new();
                                 true.ser(&mut temp);
                                 component_kind.ser(component_kinds, &mut temp);
-                                world
-                                    .component_of_kind(world_entity, &component_kind)
-                                    .expect("Component does not exist in World")
-                                    .write_update(&diff_mask, &mut temp, &mut converter);
+                                component.write_update(&diff_mask, &mut temp, &mut converter);
                                 let c = CachedComponentUpdate::capture(&temp)
                                     .expect(
                                         "component exceeds the CachedComponentUpdate \
@@ -1142,6 +1166,12 @@ impl WorldWriter {
             if !optimized_write {
                 // Old two-pass path: used by the client (global_diff_handler = None) and as
                 // fallback for cases not handled by PATH A or PATH B above.
+                // See the cache-miss arm above: a component removed inside the
+                // freeze→transmit window has a stale plan entry, not an error.
+                if !world.has_component_of_kind(world_entity, &component_kind) {
+                    written_count += 1;
+                    continue;
+                }
                 let mut converter = world_manager.entity_converter_mut(global_world_manager);
                 let mut counter = writer.counter();
                 true.ser(&mut counter);
