@@ -29,7 +29,8 @@ pub use naia_shared::{
     ResponseReceiveKey, ResponseSendKey, SerdeBevyShared as Serde, SerdeErr, SerdeFloatConversion,
     SerdeIntegerConversion, SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger,
     SnapshotWorld, Tick, TickBufferSettings, Timer, UnsignedFloat, UnsignedInteger,
-    UnsignedVariableFloat, UnsignedVariableInteger, WorldMutType, WorldRefType, MTU_SIZE_BYTES,
+    UnsignedVariableFloat, UnsignedVariableInteger, WorldMutType, WorldRefType,
+    CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES, MTU_SIZE_BYTES,
 };
 
 mod bundle;
