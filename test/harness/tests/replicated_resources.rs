@@ -107,6 +107,18 @@ fn mirror_single_field_copies_only_indexed_field() {
     let src = TestScore::new(99, 88);
     let mut dst = TestScore::new(0, 0);
 
+    // `mirror` routes through `Property::mutate`, which panics on a *mutable*
+    // HostOwned Property that has no mutator installed — mutating one silently
+    // drops the change from every observer's diff, so the invariant is
+    // deliberate. These fixtures are bare locals that were never registered
+    // with a replication host, so `localize()` them first: that is one of the
+    // two escape hatches the invariant itself names, and it converts the
+    // Properties to `Local`, which mirrors freely. It does not weaken what this
+    // test covers — `mirror_single_field`'s generated match arms are the same
+    // code either way, and the field-index routing they assert is exactly what
+    // is under test.
+    dst.localize();
+
     // Mirror index 0 (home) only.
     dst.mirror_single_field(0, &src as &dyn Replicate);
     assert_eq!(*dst.home, 99, "home (index 0) should be mirrored");
@@ -119,6 +131,7 @@ fn mirror_single_field_copies_only_indexed_field() {
 
     // Out-of-range index: silently ignored.
     let mut dst2 = TestScore::new(7, 7);
+    dst2.localize();
     dst2.mirror_single_field(99, &src as &dyn Replicate);
     assert_eq!((*dst2.home, *dst2.away), (7, 7), "OOB index must no-op");
 }
