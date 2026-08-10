@@ -242,10 +242,26 @@ impl UserDiffHandler {
         };
         let slot = self.slot(entity_idx, kind_bit);
         if slot < self.receivers_dense.len() {
+            // Clear the mask BEFORE dropping the receiver. `GlobalDirtyBitset` is a
+            // refcount matrix whose invariant is `ref_count > 0 ↔ dirty bit set`, and
+            // `MutReceiver::clear_mask` → `notify_clean` → `decrement` is its ONLY
+            // decrement path. Dropping a receiver whose mask is still dirty therefore
+            // leaks that refcount permanently: the bit stays set at
+            // `(entity_idx, kind_bit)` with nothing left able to clear it. Because
+            // `GlobalEntityIndex` is recyclable and the per-user update plan is built
+            // index-keyed from the frozen bitset, the next entity to occupy this index
+            // inherits the dead component's dirty bit and is asked to serialize a kind
+            // it never had — wasted framing at best, and another entity's update at
+            // worst. `clear_mask` is a no-op when the mask is already clean.
+            if let Some(receiver) = &self.receivers_dense[slot] {
+                receiver.clear_mask();
+            }
             self.receivers_dense[slot] = None;
         }
 
-        // Only the client path has a DirtySet to cancel from.
+        // Only the client path has a DirtySet to cancel from. (The server path's
+        // equivalent is the `clear_mask` above, which reaches `global_dirty` through
+        // the receiver's notifier.)
         if let Some(dirty_set) = &self.dirty_set {
             dirty_set.cancel(entity_idx, kind_bit);
         }
@@ -584,5 +600,236 @@ mod dense_receiver_tests {
         // Register B at the same slot.
         vec[slot_b] = Some(99u32);
         assert_eq!(vec[slot_b], Some(99u32));
+    }
+}
+
+#[cfg(test)]
+mod global_dirty_refcount_tests {
+    //! Pins the `GlobalDirtyBitset` refcount invariant across component
+    //! deregistration (world editor §69p, 2026-08-10).
+    //!
+    //! `GlobalDirtyBitset` is a refcount matrix: `ref_count > 0 ↔ dirty bit set`.
+    //! Its ONLY decrement path is `MutReceiver::clear_mask` → `notify_clean` →
+    //! `decrement`. `deregister_component` used to drop the receiver without
+    //! clearing its mask, so a component removed while dirty leaked its refcount
+    //! permanently — the bit stayed set with nothing left able to clear it. Since
+    //! `GlobalEntityIndex` is recyclable and the per-user update plan is built
+    //! index-keyed from the frozen bitset, the next entity to occupy that index
+    //! inherited a dead component's dirty bit and was asked to serialize a kind it
+    //! never had. Measured in the wild as 649 skipped entities across 649 distinct
+    //! indices, every one planning a kind the live entity did not hold.
+    //!
+    //! These drive the REAL `UserDiffHandler` / `GlobalDiffHandler` /
+    //! `GlobalDirtyBitset` on the server path (a present `GlobalDirtyBitset`, so
+    //! `dirty_set` is `None` — exactly the path whose cleanup was missing).
+
+    use std::collections::HashMap;
+    use std::net::SocketAddr;
+    use std::sync::{Arc, RwLock};
+
+    use super::*;
+    use crate::world::component::property::Property;
+    use crate::world::delegation::auth_channel::EntityAuthAccessor;
+    use crate::world::update::mut_channel::{MutChannelType, MutReceiver};
+    use crate::bigmap::BigMapKey;
+    use crate::{ComponentKinds, InScopeEntities, PropertyMutator, Replicate};
+
+    #[derive(Replicate)]
+    struct Ghost {
+        value: Property<u8>,
+    }
+
+    /// Mirrors the server's `MutChannelData`: one receiver per address, cached,
+    /// with `send` fanning mutations out to all of them.
+    struct TestMutChannel {
+        diff_mask_length: u8,
+        receivers: Vec<MutReceiver>,
+        receiver_index: HashMap<SocketAddr, usize>,
+    }
+
+    impl MutChannelType for TestMutChannel {
+        fn new_receiver(&mut self, address_opt: &Option<SocketAddr>) -> Option<MutReceiver> {
+            let address = address_opt.expect("test channel requires an address");
+            if let Some(&idx) = self.receiver_index.get(&address) {
+                return Some(self.receivers[idx].clone());
+            }
+            let receiver = MutReceiver::new(self.diff_mask_length);
+            let idx = self.receivers.len();
+            self.receivers.push(receiver.clone());
+            self.receiver_index.insert(address, idx);
+            Some(receiver)
+        }
+
+        fn send(&self, property_index: u8) {
+            for receiver in &self.receivers {
+                receiver.mutate(property_index);
+            }
+        }
+    }
+
+    struct TestGwm {
+        diff_handler: Arc<RwLock<GlobalDiffHandler>>,
+        global_dirty: Arc<GlobalDirtyBitset>,
+    }
+
+    impl InScopeEntities<GlobalEntity> for TestGwm {
+        fn has_entity(&self, _: &GlobalEntity) -> bool {
+            true
+        }
+    }
+
+    impl GlobalWorldManagerType for TestGwm {
+        fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
+            None
+        }
+        fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
+            true
+        }
+        fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
+            Arc::new(RwLock::new(TestMutChannel {
+                diff_mask_length,
+                receivers: Vec::new(),
+                receiver_index: HashMap::new(),
+            }))
+        }
+        fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>> {
+            self.diff_handler.clone()
+        }
+        fn register_component(
+            &self,
+            _: &ComponentKinds,
+            _: &GlobalEntity,
+            _: &ComponentKind,
+            _: u8,
+        ) -> PropertyMutator {
+            unreachable!("not exercised by these tests")
+        }
+        fn get_entity_auth_accessor(&self, _: &GlobalEntity) -> EntityAuthAccessor {
+            unreachable!("not exercised by these tests")
+        }
+        fn entity_needs_mutator_for_delegation(&self, _: &GlobalEntity) -> bool {
+            false
+        }
+        fn entity_is_replicating(&self, _: &GlobalEntity) -> bool {
+            true
+        }
+        fn entity_is_static(&self, _: &GlobalEntity) -> bool {
+            false
+        }
+        fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+            Some(self.global_dirty.clone())
+        }
+    }
+
+    struct Fixture {
+        gwm: TestGwm,
+        kinds: ComponentKinds,
+        addr: Option<SocketAddr>,
+        kind: ComponentKind,
+    }
+
+    fn fixture() -> Fixture {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+
+        let diff_handler = Arc::new(RwLock::new(GlobalDiffHandler::new()));
+        diff_handler
+            .write()
+            .unwrap()
+            .set_protocol_kind_count(kinds.kind_count());
+        let global_dirty = Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize));
+
+        Fixture {
+            gwm: TestGwm {
+                diff_handler,
+                global_dirty,
+            },
+            kinds,
+            addr: Some("127.0.0.1:4000".parse().unwrap()),
+            kind: ComponentKind::of::<Ghost>(),
+        }
+    }
+
+    /// Allocates `entity`, registers `Ghost` on it with both handlers, dirties it,
+    /// and returns the index it landed on. Asserts the bit is genuinely set.
+    fn register_and_dirty(
+        fx: &Fixture,
+        udh: &mut UserDiffHandler,
+        entity: GlobalEntity,
+    ) -> (GlobalEntityIndex, u16) {
+        let (idx, kind_bit) = {
+            let mut gdh = fx.gwm.diff_handler.write().unwrap();
+            let idx = gdh.alloc_entity(entity);
+            gdh.register_component(&fx.kinds, &fx.gwm, &entity, &fx.kind, 1);
+            let kind_bit = gdh.kind_bit(&fx.kind).expect("kind_bit must resolve");
+            (idx, kind_bit)
+        };
+        udh.register_component(&fx.addr, &entity, &fx.kind);
+
+        let receiver = fx
+            .gwm
+            .diff_handler
+            .read()
+            .unwrap()
+            .receiver(&fx.addr, &entity, &fx.kind)
+            .expect("receiver must exist after registration");
+        receiver.mutate(0);
+
+        // Anti-vacuity: the rest of each test is meaningless if this never fired.
+        assert!(
+            fx.gwm.global_dirty.is_component_dirty(idx, kind_bit),
+            "the fixture failed to make the component dirty in the first place"
+        );
+        (idx, kind_bit)
+    }
+
+    #[test]
+    fn deregistering_a_dirty_component_releases_its_global_refcount() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let entity = GlobalEntity::from_u64(1);
+
+        let (idx, kind_bit) = register_and_dirty(&fx, &mut udh, entity);
+
+        udh.deregister_component(&entity, &fx.kind);
+
+        assert!(
+            !fx.gwm.global_dirty.is_component_dirty(idx, kind_bit),
+            "deregistering a DIRTY component leaked its GlobalDirtyBitset refcount — \
+             the bit is still set with no receiver left that could ever clear it"
+        );
+    }
+
+    #[test]
+    fn a_recycled_index_does_not_inherit_a_ghost_kind() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+
+        let entity_a = GlobalEntity::from_u64(1);
+        let (idx_a, kind_bit) = register_and_dirty(&fx, &mut udh, entity_a);
+
+        // Despawn A while it is still dirty, exactly as the server does.
+        udh.deregister_component(&entity_a, &fx.kind);
+        {
+            let mut gdh = fx.gwm.diff_handler.write().unwrap();
+            gdh.deregister_component(&entity_a, &fx.kind);
+            gdh.free_entity(&entity_a);
+        }
+
+        // B takes over A's index.
+        let entity_b = GlobalEntity::from_u64(2);
+        let idx_b = fx.gwm.diff_handler.write().unwrap().alloc_entity(entity_b);
+
+        // Anti-vacuity: without recycling this test proves nothing.
+        assert_eq!(
+            idx_a, idx_b,
+            "the index was not recycled, so this test cannot observe inheritance"
+        );
+
+        assert!(
+            !fx.gwm.global_dirty.is_component_dirty(idx_b, kind_bit),
+            "a recycled index inherited the despawned component's dirty bit — the next \
+             update plan built from this index would name a kind the new entity never held"
+        );
     }
 }

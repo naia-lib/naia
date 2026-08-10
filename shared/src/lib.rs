@@ -21,6 +21,13 @@ cfg_if! {
     }
 }
 
+// `#[derive(Replicate)]` expands to `naia_shared::…` paths, which do not resolve
+// inside this crate itself. This alias makes the crate reachable by its own
+// external name so in-crate unit tests can use the derive on a fixture component.
+// Test-only, zero runtime effect.
+#[cfg(test)]
+extern crate self as naia_shared;
+
 // Bevy-flavored Serde derive macros — live in naia-bevy-derive.
 // The corresponding type aliases (Serde trait) for these names come from naia_serde below,
 // coexisting in different namespaces (macro-ns vs type-ns).
