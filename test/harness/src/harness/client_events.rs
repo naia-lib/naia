@@ -709,7 +709,7 @@ fn register_client_spawns(
 /// Uses `OwnedLocalEntity::id()` from naia_shared, which centralizes the variant
 /// match. If a new variant is ever added without an `id` field, the compile error
 /// surfaces in naia_shared rather than silently here.
-fn extract_local_entity_value(local_entity: &LocalEntity) -> u16 {
+fn extract_local_entity_value(local_entity: &LocalEntity) -> u32 {
     let owned: OwnedLocalEntity = (*local_entity).into();
     owned.id()
 }

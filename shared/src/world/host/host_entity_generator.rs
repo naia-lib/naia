@@ -10,10 +10,23 @@ use crate::world::local::local_entity_map::LocalEntityMap;
 use crate::{GlobalEntity, KeyGenerator};
 
 /// Issues and recycles wire-level [`HostEntity`] identifiers for a single connected user.
+///
+/// The pools are `u32`-wide, and that width is load-bearing rather than
+/// defensive. A freed id is quarantined for 60 s before reissue, so the ceiling
+/// is not "ids live at once" but **ids issued per 60 s window** — and every
+/// camera move that changes a client's scope despawns and respawns entities, so
+/// the currency being spent is scope turnovers. At `u16` the budget was 65 536
+/// issues per minute, which a multi-thousand-entity scope exhausts in ~13 full
+/// rebuilds; ordinary interaction exceeds that. At `u32` the same scope would
+/// need ~71 million spawns per second to reach the ceiling.
+///
+/// This costs nothing on the wire: [`HostEntity`] already encodes its id as a
+/// `UnsignedVariableInteger<7>`, so ids below 65 536 serialize to byte-identical
+/// output and only genuinely larger ids pay more bits.
 pub struct HostEntityGenerator {
     user_key: u64,
-    generator: KeyGenerator<u16>,
-    static_generator: KeyGenerator<u16>,
+    generator: KeyGenerator<u32, u32>,
+    static_generator: KeyGenerator<u32, u32>,
     reserved_host_entities: HashMap<GlobalEntity, HostEntity>,
     reserved_host_entity_ttl: Duration,
     reserved_host_entities_ttls: VecDeque<(Instant, GlobalEntity)>,

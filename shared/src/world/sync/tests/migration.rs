@@ -113,8 +113,8 @@ mod reserve_first_command_tests {
         EntityCommand::MigrateResponse(
             None,
             GlobalEntity::from_u64(id),
-            RemoteEntity::new(id as u16),
-            HostEntity::new(id as u16),
+            RemoteEntity::new(id as u32),
+            HostEntity::new(id as u32),
         )
     }
 

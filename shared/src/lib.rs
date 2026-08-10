@@ -203,7 +203,7 @@ pub use protocol_id::ProtocolId;
 pub use types::{DisconnectReason, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
 pub use world::entity_event::EntityEvent;
-pub use world::entity_index::{KeyGenerator32, LocalEntityIndex};
+pub use world::entity_index::LocalEntityIndex;
 pub use world::host::host_entity_generator::HostEntityGenerator;
 pub use world::host::host_world_manager::SubCommandId;
 pub use world::local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity};

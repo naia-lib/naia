@@ -300,18 +300,18 @@ fn performance_perfect() {
     // Test many entity operations
     for i in 0..1000 {
         let global_entity = GlobalEntity::from_u64(90000 + i);
-        let remote_entity = crate::world::local::local_entity::RemoteEntity::new(i as u16);
+        let remote_entity = crate::world::local::local_entity::RemoteEntity::new(i as u32);
         entity_map.insert_with_remote_entity(global_entity, remote_entity);
     }
 
     // Test many redirects
     for i in 0..1000 {
         let old_entity = OwnedLocalEntity::Remote {
-            id: i as u16,
+            id: i as u32,
             is_static: false,
         };
         let new_entity = OwnedLocalEntity::Host {
-            id: (i as u16).wrapping_add(10000),
+            id: i as u32 + 10_000,
             is_static: false,
         };
         entity_map.install_entity_redirect(old_entity, new_entity);
@@ -320,11 +320,11 @@ fn performance_perfect() {
     // Test redirect performance
     for i in 0..1000 {
         let old_entity = OwnedLocalEntity::Remote {
-            id: i as u16,
+            id: i as u32,
             is_static: false,
         };
         let expected_new_entity = OwnedLocalEntity::Host {
-            id: (i as u16).wrapping_add(10000),
+            id: i as u32 + 10_000,
             is_static: false,
         };
         let redirected = entity_map.apply_entity_redirect(&old_entity);

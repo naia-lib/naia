@@ -8,14 +8,14 @@ pub enum OwnedLocalEntity {
     /// Entity whose authoritative state originates on this side of the connection.
     Host {
         /// Wire-level entity ID within the host pool.
-        id: u16,
+        id: u32,
         /// `true` if this entity belongs to the static pool.
         is_static: bool,
     },
     /// Entity whose authoritative state originates on the far side of the connection.
     Remote {
         /// Wire-level entity ID within the remote pool.
-        id: u16,
+        id: u32,
         /// `true` if this entity belongs to the static pool.
         is_static: bool,
     },
@@ -30,16 +30,16 @@ impl OwnedLocalEntity {
         }
     }
 
-    /// Creates a dynamic `Host` variant from a raw `u16` ID.
-    pub fn new_host_dynamic(id: u16) -> Self {
+    /// Creates a dynamic `Host` variant from a raw `u32` ID.
+    pub fn new_host_dynamic(id: u32) -> Self {
         Self::Host {
             id,
             is_static: false,
         }
     }
 
-    /// Creates a static `Host` variant from a raw `u16` ID.
-    pub fn new_host_static(id: u16) -> Self {
+    /// Creates a static `Host` variant from a raw `u32` ID.
+    pub fn new_host_static(id: u32) -> Self {
         Self::Host {
             id,
             is_static: true,
@@ -54,16 +54,16 @@ impl OwnedLocalEntity {
         }
     }
 
-    /// Creates a dynamic `Remote` variant from a raw `u16` ID.
-    pub fn new_remote_dynamic(id: u16) -> Self {
+    /// Creates a dynamic `Remote` variant from a raw `u32` ID.
+    pub fn new_remote_dynamic(id: u32) -> Self {
         Self::Remote {
             id,
             is_static: false,
         }
     }
 
-    /// Creates a static `Remote` variant from a raw `u16` ID.
-    pub fn new_remote_static(id: u16) -> Self {
+    /// Creates a static `Remote` variant from a raw `u32` ID.
+    pub fn new_remote_static(id: u32) -> Self {
         Self::Remote {
             id,
             is_static: true,
@@ -91,8 +91,8 @@ impl OwnedLocalEntity {
         }
     }
 
-    /// Returns the raw `u16` wire ID for this entity, regardless of variant.
-    pub fn id(&self) -> u16 {
+    /// Returns the raw `u32` wire ID for this entity, regardless of variant.
+    pub fn id(&self) -> u32 {
         match self {
             Self::Host { id, .. } | Self::Remote { id, .. } => *id,
         }
@@ -118,7 +118,7 @@ impl OwnedLocalEntity {
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let is_host = bool::de(reader)?;
         let is_static = bool::de(reader)?;
-        let id = UnsignedVariableInteger::<7>::de(reader)?.get() as u16;
+        let id = UnsignedVariableInteger::<7>::de(reader)?.get() as u32;
         if is_host {
             Ok(Self::Host { id, is_static })
         } else {
@@ -216,13 +216,13 @@ impl OwnedLocalEntity {
 /// entities from pools that both start at 0 remain distinct as hash map keys.
 #[derive(Copy, Eq, Hash, Clone, PartialEq, Debug)]
 pub struct HostEntity {
-    id: u16,
+    id: u32,
     is_static: bool,
 }
 
 impl HostEntity {
     /// Creates a dynamic host entity with the given `id`.
-    pub fn new(id: u16) -> Self {
+    pub fn new(id: u32) -> Self {
         Self {
             id,
             is_static: false,
@@ -230,15 +230,15 @@ impl HostEntity {
     }
 
     /// Creates a static host entity with the given `id`.
-    pub fn new_static(id: u16) -> Self {
+    pub fn new_static(id: u32) -> Self {
         Self {
             id,
             is_static: true,
         }
     }
 
-    /// Returns the raw `u16` wire ID.
-    pub fn value(&self) -> u16 {
+    /// Returns the raw `u32` wire ID.
+    pub fn value(&self) -> u32 {
         self.id
     }
 
@@ -265,7 +265,7 @@ impl HostEntity {
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
         Ok(Self {
-            id: value as u16,
+            id: value as u32,
             is_static: false,
         }) // authority messages only use dynamic entities
     }
@@ -303,13 +303,13 @@ impl HostEntity {
 /// A connection-local entity ID assigned by the remote peer, used on the receiving side of replication.
 #[derive(Copy, Eq, Hash, Clone, PartialEq, Debug)]
 pub struct RemoteEntity {
-    id: u16,
+    id: u32,
     is_static: bool,
 }
 
 impl RemoteEntity {
     /// Creates a dynamic remote entity with the given `id`.
-    pub fn new(id: u16) -> Self {
+    pub fn new(id: u32) -> Self {
         Self {
             id,
             is_static: false,
@@ -317,15 +317,15 @@ impl RemoteEntity {
     }
 
     /// Creates a static remote entity with the given `id`.
-    pub fn new_static(id: u16) -> Self {
+    pub fn new_static(id: u32) -> Self {
         Self {
             id,
             is_static: true,
         }
     }
 
-    /// Returns the raw `u16` wire ID.
-    pub fn value(&self) -> u16 {
+    /// Returns the raw `u32` wire ID.
+    pub fn value(&self) -> u32 {
         self.id
     }
 
@@ -352,7 +352,7 @@ impl RemoteEntity {
     pub fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let value = UnsignedVariableInteger::<7>::de(reader)?.get();
         Ok(Self {
-            id: value as u16,
+            id: value as u32,
             is_static: false,
         })
     }
