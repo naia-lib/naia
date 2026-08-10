@@ -936,6 +936,29 @@ impl WorldWriter {
                 continue;
             }
 
+            // Same freeze→transmit race, but caught BEFORE the per-entity header is
+            // committed. Below, `write_update` drops planned components whose kind
+            // no longer exists in the World — correctly, but not for free: the
+            // UpdateContinue bit + LocalEntity (~20 bits) have already been written
+            // by then, and nothing rolls them back. An entity whose planned kinds are
+            // ALL stale therefore contributes pure framing and zero payload, leaving
+            // `has_written` false. Under heavy scope churn enough of those accumulate
+            // to consume the whole packet, and `write_commands` then sees a full
+            // packet with `has_written == false` and takes the "this component is too
+            // big to ever send" panic path — which does not describe the state at all.
+            // Measured (world editor §69o, refined tile scope): 167 entities, 167
+            // stale, 3437 of 3440 bits spent on headers, 5081 spawns starved behind
+            // it. Skipping here makes the wasted header not exist.
+            if !update_list[i]
+                .3
+                .iter()
+                .any(|(kind, _, _)| world.has_component_of_kind(&world_entity, kind))
+            {
+                update_list[i].3.clear();
+                i += 1;
+                continue;
+            }
+
             let local_entity = world_manager
                 .entity_converter()
                 .global_entity_to_owned_entity(&global_entity)
