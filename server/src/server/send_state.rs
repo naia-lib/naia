@@ -1080,6 +1080,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                         snapshot_map_ref,
                     );
 
+                    // The freeze CONSUMED the live per-user diff mask
+                    // (`clear_diff_mask_fast` in `prepare_send_job`) on the
+                    // promise that the frozen copy would be serialized. Anything
+                    // still sitting in `update_list` was never written — the
+                    // packet filled, or the per-user budget ran out — and the
+                    // plan is dropped at the end of this closure. Without giving
+                    // those bits back, the mutation is gone: a property rewritten
+                    // every tick self-heals on the next freeze, but a ONE-SHOT
+                    // write (a scrub head, a phase change, a retention floor) is
+                    // lost permanently and the client stays stale forever.
+                    // `write_update` drains the serialized prefix and the moot-
+                    // entity paths clear their kinds, so what remains here is
+                    // exactly the un-transmitted set.
+                    {
+                        let ledger = send_conn.base.world_manager.replication_ledger();
+                        for (global_entity, _, _, kinds) in update_list.iter() {
+                            for (component_kind, _, diff_mask) in kinds.iter() {
+                                ledger.or_diff_mask(global_entity, component_kind, diff_mask);
+                            }
+                        }
+                    }
+
                     let current_tick = time_manager.current_tick();
                     let remaining: HashSet<GlobalEntity> =
                         update_list.iter().map(|(ge, _, _, _)| *ge).collect();

@@ -36,7 +36,7 @@ use naia_bevy_client::{
 use naia_bevy_server::{
     events::{AuthEvents, ConnectEvent},
     AppRegisterComponentEvents as ServerAppEvents, Plugin as ServerPlugin, Server,
-    ServerCommandsExt, ServerConfig,
+    CommandsExt as ServerEntityCommandsExt, ProtocolServerExt, ServerCommandsExt, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_client::transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket};
@@ -44,7 +44,7 @@ use naia_server::transport::local::{LocalServerSocket, Socket as ServerSocket};
 use naia_shared::{
     transport::local::LocalTransportHub, ChannelDirection, ChannelMode, ReliableSettings,
 };
-use naia_test_harness::test_protocol::{Auth, ReliableChannel, TestScore};
+use naia_test_harness::test_protocol::{Auth, Position, ReliableChannel, TestScore};
 
 const FAKE_SERVER_ADDR: &str = "127.0.0.1:14191";
 
@@ -58,6 +58,7 @@ fn protocol() -> BevyProtocol {
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
         )
+        .add_component::<Position>()
         .add_resource::<TestScore>();
     // Sub-millisecond tick so back-to-back `app.update()` calls in tests
     // exercise real ticks (default 50ms would mean only one tick per
@@ -535,5 +536,83 @@ fn f7_client_disconnect_with_resource_no_panic() {
     assert!(
         h.client_app.world().get_resource::<TestScore>().is_none(),
         "client Res<TestScore> should be cleared after disconnect (carrier removed, not despawned)"
+    );
+}
+
+/// Regression pin — **a one-shot property write must survive a starved tick**
+/// (world editor Wall 3, 2026-08-11).
+///
+/// `SendState::prepare_send_job` CONSUMES the live per-user diff mask at the
+/// freeze point and hands the frozen copy to the transmit half. Under packet
+/// pressure the transmit half writes only as many planned entities as fit; the
+/// rest of the plan is dropped when the closure returns. Before the fix those
+/// dropped bits were gone for good — the mask had already been cleared, so the
+/// mutation was never retransmitted and the client stayed stale FOREVER.
+///
+/// A property rewritten every tick hides this (the next tick re-dirties it and
+/// the client is at most a tick behind), which is why it survived so long. A
+/// ONE-SHOT write does not: measured in the world editor as a scrubbed timeline
+/// where the server held `view_step = 1` and the client held `view_step = 128`
+/// indefinitely, on the SAME replicated resource whose `step` field kept
+/// arriving normally.
+///
+/// The load below exists to fill packets so the resource carrier loses the
+/// priority race at least once. With the restore in place the bits come back on
+/// the next freeze and the client converges.
+#[test]
+fn a_one_shot_resource_write_survives_a_packet_starved_tick() {
+    let mut h = BevyHarness::new();
+    h.tick_n(60);
+    h.server_inserts_score(TestScore::new(0, 0));
+    h.tick_n(60);
+
+    // Load: enough replicated entities, all mutated every tick, that a single
+    // packet cannot carry every planned update.
+    let spawn = h.server_app.register_system(
+        |mut commands: bevy_ecs::system::Commands, mut server: Server| {
+            let room_key = server.room_keys().first().copied().expect("room");
+            for i in 0..5000u32 {
+                let e = commands
+                    .spawn(Position::new(i as f32, i as f32))
+                    .enable_replication(&mut server)
+                    .id();
+                server.room_mut(&room_key).add_entity(&e);
+            }
+        },
+    );
+    h.server_app.world_mut().run_system(spawn).expect("spawn");
+    h.server_app.update();
+    h.tick_n(60);
+
+    let churn = h.server_app.register_system(
+        |mut q: bevy_ecs::system::Query<&mut Position>| {
+            for mut p in q.iter_mut() {
+                let n = *p.x;
+                *p.x = n + 1.0;
+                *p.y = n + 2.0;
+            }
+        },
+    );
+    let one_shot = h
+        .server_app
+        .register_system(|mut score: bevy_ecs::system::ResMut<TestScore>| {
+            *score.away = 777;
+        });
+
+    for _ in 0..40 {
+        h.server_app.world_mut().run_system(churn).expect("churn");
+        h.tick();
+    }
+    h.server_app.world_mut().run_system(one_shot).expect("one shot");
+    for _ in 0..200 {
+        h.server_app.world_mut().run_system(churn).expect("churn");
+        h.tick();
+    }
+
+    let score = h.client_app.world().get_resource::<TestScore>().expect("res");
+    assert_eq!(
+        *score.away, 777,
+        "the one-shot write never reached the client: its diff bit was consumed \
+         by a freeze whose plan was then dropped unsent"
     );
 }
