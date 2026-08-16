@@ -132,6 +132,11 @@ pub use server::world_server::{
     SERVER_SEND_ALL_PACKETS_CALLS, SERVER_SET_AUTH_ENQUEUED, SERVER_SPAWN_APPLIED,
     SERVER_TX_FRAMES, SERVER_WORLD_MSGS_DRAINED, SERVER_WORLD_PKTS_SENT, SERVER_WROTE_SET_AUTH,
 };
+// `mod connection` is private, so the send-pass wall classifiers need an explicit
+// re-export to be reachable from a consumer's census — same shape as the
+// `world_server` counters above.
+#[cfg(feature = "e2e_debug")]
+pub use connection::send_connection::send_pass_walls;
 pub use user::{MainUser, MainUserRef, UserKey, UserMut, UserRef, WorldUser};
 pub use user_scope::{UserScopeMut, UserScopeRef};
 pub use world::{
