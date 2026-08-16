@@ -28,6 +28,30 @@ use naia_shared::{
 /// can acknowledge (1 explicit + a 32-bit bitfield). See `build_all_packets`.
 const MAX_PACKETS_PER_SEND_PASS: usize = REDUNDANT_PACKET_ACKS_SIZE as usize + 1;
 
+/// Which of the three walls ended each send pass.
+///
+/// `build_all_packets` can terminate in exactly three ways, and they are mutually
+/// exclusive within one pass: the loop hits [`MAX_PACKETS_PER_SEND_PASS`]
+/// (ack-window-limited), `build_one_packet` refuses on bandwidth
+/// (bandwidth-limited), or it refuses because nothing is queued (supply-limited).
+/// Classifying each pass is the only way to tell "the ack window is the wall" from
+/// "there was never enough to send" — a MEAN packets-per-pass cannot, because tile
+/// streaming is bursty and idle passes dominate the denominator.
+#[cfg(feature = "e2e_debug")]
+pub mod send_pass_walls {
+    use std::sync::atomic::AtomicUsize;
+
+    /// Passes that built the full `MAX_PACKETS_PER_SEND_PASS` — the ack window bound them.
+    pub static ACK_LIMITED: AtomicUsize = AtomicUsize::new(0);
+    /// Passes ended early by the bandwidth budget refusing a full MTU.
+    pub static BANDWIDTH_LIMITED: AtomicUsize = AtomicUsize::new(0);
+    /// Passes ended early because nothing was queued to send.
+    pub static SUPPLY_LIMITED: AtomicUsize = AtomicUsize::new(0);
+    /// Largest packet count any single pass reached. A mean hides burst saturation;
+    /// this does not.
+    pub static MAX_PACKETS_IN_A_PASS: AtomicUsize = AtomicUsize::new(0);
+}
+
 #[cfg(feature = "bench_instrumentation")]
 use crate::connection::connection::bench_send_counters;
 use crate::{
@@ -531,8 +555,13 @@ impl SendConnection {
         self.base.accumulate_bandwidth(now);
 
         let mut packets = Vec::new();
+        // Set by `build_one_packet` when it refuses on bandwidth rather than on an
+        // empty queue. Both refusals return `None`, so without this the caller cannot
+        // tell a bandwidth wall from a supply wall — see `send_pass_walls`.
+        let mut refused_on_bandwidth = false;
         while packets.len() < MAX_PACKETS_PER_SEND_PASS {
             let Some(pkt) = self.build_one_packet(
+                &mut refused_on_bandwidth,
                 channel_kinds,
                 message_kinds,
                 component_kinds,
@@ -549,6 +578,21 @@ impl SendConnection {
             };
             packets.push(pkt);
         }
+
+        #[cfg(feature = "e2e_debug")]
+        {
+            use send_pass_walls::*;
+            use std::sync::atomic::Ordering;
+            if packets.len() >= MAX_PACKETS_PER_SEND_PASS {
+                ACK_LIMITED.fetch_add(1, Ordering::Relaxed);
+            } else if refused_on_bandwidth {
+                BANDWIDTH_LIMITED.fetch_add(1, Ordering::Relaxed);
+            } else {
+                SUPPLY_LIMITED.fetch_add(1, Ordering::Relaxed);
+            }
+            MAX_PACKETS_IN_A_PASS.fetch_max(packets.len(), Ordering::Relaxed);
+        }
+
         let any_built = !packets.is_empty();
         if any_built {
             self.base.mark_sent();
@@ -559,6 +603,7 @@ impl SendConnection {
     #[allow(clippy::too_many_arguments)]
     fn build_one_packet<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
         &mut self,
+        refused_on_bandwidth: &mut bool,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
         component_kinds: &ComponentKinds,
@@ -590,6 +635,7 @@ impl SendConnection {
         if has_events || has_messages {
             if !self.base.can_spend_bandwidth(MTU_SIZE_BYTES as u32) {
                 self.base.record_bandwidth_deferred();
+                *refused_on_bandwidth = true;
                 return None;
             }
             let writer = self.write_packet(
