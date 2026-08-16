@@ -36,6 +36,10 @@ deterministic = [ "test_time", "naia-server/deterministic" ]
 pipeline_timing = []
 interior_visibility = [ "naia-server/interior_visibility" ]
 bench_instrumentation = [ "naia-server/bench_instrumentation" ]
+# Additive, default-off. Exposes naia-server's counter statics (pipeline seams
+# plus `send_pass_walls`, which classifies which of the three walls ended each
+# send pass). Zero cost when off.
+e2e_debug = [ "naia-server/e2e_debug" ]
 # Additive, default-off. Cascades to `naia-server/f3_diag` — see that
 # crate's `[features]` for details.
 f3_diag = [ "naia-server/f3_diag" ]
