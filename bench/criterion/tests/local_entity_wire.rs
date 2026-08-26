@@ -57,7 +57,7 @@ fn remote_entity_costs_10_bits() {
 #[test]
 fn round_trips_all_host_combinations() {
     for is_static in [false, true] {
-        for id in [0u16, 1, 127, 128, 16_383, 16_384, 65_535] {
+        for id in [0u32, 1, 127, 128, 16_383, 16_384, 65_535, 65_536] {
             let original = if is_static {
                 OwnedLocalEntity::new_host_static(id)
             } else {
@@ -75,7 +75,7 @@ fn round_trips_all_host_combinations() {
 #[test]
 fn round_trips_remote_entities() {
     for is_static in [false, true] {
-        for id in [0u16, 1, 127, 128, 16_383, 65_535] {
+        for id in [0u32, 1, 127, 128, 16_383, 65_535, 65_536] {
             let original = if is_static {
                 OwnedLocalEntity::new_remote_static(id)
             } else {
