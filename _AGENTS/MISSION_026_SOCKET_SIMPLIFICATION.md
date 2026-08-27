@@ -24,15 +24,24 @@ committed on `refactor/026-socket-simplification`.
 - [x] **C1** — one `HandshakeHeader`
 - [x] **C2** — one client handshaker
 - [x] **C3** — one server handshaker
-- [ ] **C4** — feature rename `advanced_handshake` → `address_validation`
-- [ ] **C5** — full validation gate + docs
+- [x] **C4** — feature rename `advanced_handshake` → `address_validation`
+- [x] **C5** — full validation gate + docs
 - [ ] **D** — version bump 0.25.0 → 0.26.0 + CHANGELOG
 
-Known pre-existing failure, unrelated to this mission and NOT to be "fixed"
-here: `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` panics in
-`shared/src/world/component/property.rs` ("mutable HostOwned Property mutated
-before its mutator was installed"). It fails identically before any of this
-work. Everything else in `cargo test --workspace` passes.
+Known pre-existing failures, unrelated to this mission and NOT to be "fixed"
+here. Both were reproduced on the branch point (`1fa28774`) in a throwaway
+worktree and fail identically there:
+
+- `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` panics in
+  `shared/src/world/component/property.rs` ("mutable HostOwned Property mutated
+  before its mutator was installed").
+- The namako bevy gate (`--specs-dir test/bevy_specs`) fails one scenario with
+  "assert_then: timed out after 500 ticks" at `test/bevy_npa/src/world.rs:786`.
+  Note this gate is not run by CI; only the `test/specs` gate is.
+
+Everything else passes: `cargo test --workspace --exclude naia-benches` (131
+suites green) and the CI namako gate
+(`namako gate --specs-dir test/specs --adapter-cmd target/debug/naia_npa`).
 
 ---
 

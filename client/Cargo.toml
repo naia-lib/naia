@@ -22,7 +22,7 @@ mquad = [ "naia-shared/mquad", "naia-client-socket?/mquad" ]
 zstd_support = ["naia-shared/zstd_support"]
 transport_webrtc = [ "naia-client-socket" ]
 transport_udp = [
-    "naia-shared/advanced_handshake", "naia-shared/transport_udp",
+    "naia-shared/address_validation", "naia-shared/transport_udp",
     "local_ipaddress", "base64", "ureq", "parking_lot",
 ]
 transport_local = [ "http", "base64", "parking_lot", "naia-shared/transport_local" ]

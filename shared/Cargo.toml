@@ -29,7 +29,7 @@ e2e_debug = []
 bench_instrumentation = ["naia-serde/bench_instrumentation"]
 
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
-advanced_handshake = []
+address_validation = []
 observability = [ "dep:metrics" ]
 
 [dependencies]

@@ -5,7 +5,7 @@
     "feature_fingerprint_hash": "d3f03def300d3c484e64781f7733da89e1119b4b8670c83730996ac553643d3f",
     "step_registry_hash": "527c0ffac959012fabd1a14f3a1436146cb217fef7620593334b85f631b288e9",
     "resolved_plan_hash": "5879dceb6b4af0585d6de19b9f5cfca1cd596376f10c5dfb19ddc73af50cc11b",
-    "run_report_hash": "a86bf6828cab1196fe8dab083377b0e078b6a3dce1659a00f2cbe392cbd7d0c3"
+    "run_report_hash": "312b06217cb1cba2a9689ef812b718ebcf4c43abe2d34c34871a9fb892dc7bba"
   },
   "scenarios": [
     {
@@ -499,7 +499,7 @@
     },
     {
       "scenario_key": "bevy_replication:Rule(02):Scenario(04)",
-      "status": "passed",
+      "status": "failed",
       "steps": [
         {
           "planned_binding_id": "479972f440a609dcdd70639c3820df553b4b7d0a47b563234a5bab31b4089f6d",
@@ -579,8 +579,8 @@
           "planned_payload_hash": "84cd3df9229b3509d850576a051d9592c22eb3a8749202e3979522ef6fcc3f96",
           "executed_payload_hash": "84cd3df9229b3509d850576a051d9592c22eb3a8749202e3979522ef6fcc3f96",
           "executed_impl_hash": "ba3c77f3da8a04cdc4e3b6bea7ac75933852fe34a493b299278a61f03f2be84a",
-          "status": "passed",
-          "error_message": null
+          "status": "failed",
+          "error_message": "assert_then: timed out after 500 ticks"
         }
       ]
     },

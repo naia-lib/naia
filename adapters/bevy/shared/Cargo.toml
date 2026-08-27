@@ -14,7 +14,7 @@ maintenance = { status = "actively-developed" }
 
 [features]
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
-advanced_handshake = [ "naia-shared/advanced_handshake" ]
+address_validation = [ "naia-shared/address_validation" ]
 # Replaces wall-clock Instant with TestClock for deterministic test
 # tick advancement. Re-exports `TestClock` so bevy-app integration
 # tests can drive naia ticks via `TestClock::advance(ms)` between

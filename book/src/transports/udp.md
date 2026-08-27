@@ -60,3 +60,20 @@ server.listen(socket);
 
 Prefer [WebRTC](webrtc.md) for production unless you are intentionally accepting
 the plaintext UDP tradeoff.
+
+---
+
+## Client and Server Builds Must Agree on `transport_udp`
+
+Enabling `transport_udp` turns on source-address validation: an HMAC
+challenge/validate round-trip prepended to the handshake, which proves a client
+can actually receive at the address it claims before the server commits any
+per-connection state to it. Raw UDP needs this because forging a source address
+costs an attacker nothing; WebRTC does not, because ICE and DTLS already
+establish it.
+
+The handshake header is serialized by positional variant index, so the two
+builds do not share a wire format for the handshake. A client built without
+`transport_udp` cannot complete a handshake against a server built with it, or
+vice versa — the connection simply never establishes. Build both sides with the
+same setting.
