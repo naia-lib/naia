@@ -30,38 +30,39 @@ impl Socket {
     }
 }
 
-impl TransportSender for Box<dyn PacketSender> {
+// Note: the socket-crate types below are concrete structs/enums whose inherent
+// methods share names with the naia-level transport traits implemented here.
+// Fully-qualified calls keep these from resolving back into themselves.
+impl TransportSender for PacketSender {
     /// Sends a packet from the Server Socket
     fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError> {
-        self.as_ref().send(address, payload).map_err(|_| SendError)
+        PacketSender::send(self, address, payload).map_err(|_| SendError)
     }
 }
 
-impl TransportReceiver for Box<dyn PacketReceiver> {
+impl TransportReceiver for PacketReceiver {
     /// Receives a packet from the Server Socket
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        self.as_mut().receive().map_err(|_| RecvError)
+        PacketReceiver::receive(self).map_err(|_| RecvError)
     }
 }
 
-impl TransportAuthSender for Box<dyn AuthSender> {
+impl TransportAuthSender for AuthSender {
     fn accept(
         &self,
         address: &SocketAddr,
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
-        self.as_ref()
-            .accept(address, identity_token)
-            .map_err(|_| SendError)
+        AuthSender::accept(self, address, identity_token).map_err(|_| SendError)
     }
     fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
-        self.as_ref().reject(address).map_err(|_| SendError)
+        AuthSender::reject(self, address).map_err(|_| SendError)
     }
 }
 
-impl TransportAuthReceiver for Box<dyn AuthReceiver> {
+impl TransportAuthReceiver for AuthReceiver {
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        match self.as_mut().receive() {
+        match AuthReceiver::receive(self) {
             Ok(auth_opt) => match auth_opt {
                 Some((addr, payload)) => Ok(Some((addr, payload))),
                 None => Ok(None),

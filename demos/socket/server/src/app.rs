@@ -7,10 +7,10 @@ use naia_server_socket::{
 use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
 
 pub struct App {
-    auth_sender: Box<dyn AuthSender>,
-    auth_receiver: Box<dyn AuthReceiver>,
-    packet_sender: Box<dyn PacketSender>,
-    packet_receiver: Box<dyn PacketReceiver>,
+    auth_sender: AuthSender,
+    auth_receiver: AuthReceiver,
+    packet_sender: PacketSender,
+    packet_receiver: PacketReceiver,
 }
 
 impl App {

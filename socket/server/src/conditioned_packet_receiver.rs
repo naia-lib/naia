@@ -4,11 +4,11 @@ use smol::channel::Receiver;
 
 use naia_socket_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
-use super::{error::NaiaServerSocketError, packet_receiver::PacketReceiver};
+use super::error::NaiaServerSocketError;
 
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
-pub struct ConditionedPacketReceiverImpl {
+pub struct ConditionedPacketReceiver {
     #[allow(clippy::type_complexity)]
     channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     link_conditioner_config: LinkConditionerConfig,
@@ -16,8 +16,8 @@ pub struct ConditionedPacketReceiverImpl {
     last_payload: Option<Box<[u8]>>,
 }
 
-impl ConditionedPacketReceiverImpl {
-    /// Creates a new PacketReceiver
+impl ConditionedPacketReceiver {
+    /// Creates a new ConditionedPacketReceiver
     #[allow(clippy::type_complexity)]
     pub fn new(
         channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
@@ -30,10 +30,9 @@ impl ConditionedPacketReceiverImpl {
             last_payload: None,
         }
     }
-}
 
-impl PacketReceiver for ConditionedPacketReceiverImpl {
-    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
+    /// Receives a packet from the Server Socket
+    pub fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, NaiaServerSocketError> {
         while let Ok(result) = self.channel_receiver.try_recv() {
             match result {
                 Ok(packet) => {

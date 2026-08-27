@@ -5,35 +5,15 @@ use smol::channel;
 use naia_socket_shared::{IdentityToken, SocketConfig};
 
 use super::{
-    async_socket::Socket as AsyncSocket,
-    auth_receiver::{AuthReceiver, AuthReceiverImpl},
-    auth_sender::{AuthSender, AuthSenderImpl},
-    conditioned_packet_receiver::ConditionedPacketReceiverImpl,
-    executor,
-    packet_receiver::{PacketReceiver, PacketReceiverImpl},
-    packet_sender::{PacketSender, PacketSenderImpl},
-    server_addrs::ServerAddrs,
-    NaiaServerSocketError,
+    async_socket::Socket as AsyncSocket, auth_receiver::AuthReceiver, auth_sender::AuthSender,
+    executor, packet_receiver::PacketReceiver, packet_sender::PacketSender,
+    server_addrs::ServerAddrs, NaiaServerSocketError,
 };
 
 type ClientAuthSender = channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
 type ClientMsgReceiver = channel::Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
 type SenderChannelReceiver = channel::Receiver<channel::Sender<(SocketAddr, Box<[u8]>)>>;
-type AuthListenResult = (
-    Box<dyn AuthSender>,
-    Box<dyn AuthReceiver>,
-    Box<dyn PacketSender>,
-    Box<dyn PacketReceiver>,
-);
-
-/// Used to send packets from the Server Socket
-#[allow(dead_code)]
-pub trait SocketTrait {
-    fn listen(
-        server_addrs: &ServerAddrs,
-        config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>);
-}
+type AuthListenResult = (AuthSender, AuthReceiver, PacketSender, PacketReceiver);
 
 /// Socket is able to send and receive messages from remote Clients
 pub struct Socket;
@@ -43,7 +23,7 @@ impl Socket {
     pub fn listen(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (PacketSender, PacketReceiver) {
         let (from_client_receiver, sender_receiver) =
             Self::setup_receiver_loop(server_addrs, config, None, None);
 
@@ -67,13 +47,10 @@ impl Socket {
             Self::setup_sender_loop(config, from_client_receiver, sender_receiver);
 
         // Setup Sender
-        let auth_sender_impl = AuthSenderImpl::new(to_session_all_auth_sender);
-
-        let auth_sender: Box<dyn AuthSender> = Box::new(auth_sender_impl);
+        let auth_sender = AuthSender::new(to_session_all_auth_sender);
 
         // Setup Receiver
-        let auth_receiver: Box<dyn AuthReceiver> =
-            Box::new(AuthReceiverImpl::new(from_client_auth_receiver));
+        let auth_receiver = AuthReceiver::new(from_client_auth_receiver);
 
         (auth_sender, auth_receiver, packet_sender, packet_receiver)
     }
@@ -125,7 +102,7 @@ impl Socket {
         config: &SocketConfig,
         from_client_receiver: ClientMsgReceiver,
         sender_receiver: SenderChannelReceiver,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
+    ) -> (PacketSender, PacketReceiver) {
         // Set up sender loop
         let (to_client_sender, to_client_receiver) = channel::unbounded();
 
@@ -148,28 +125,11 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         // Setup Sender
-        let packet_sender_impl = PacketSenderImpl::new(to_client_sender);
-
-        let packet_sender: Box<dyn PacketSender> = Box::new(packet_sender_impl);
+        let packet_sender = PacketSender::new(to_client_sender);
 
         // Setup Receiver
-        let packet_receiver: Box<dyn PacketReceiver> = match &conditioner_config {
-            Some(config) => Box::new(ConditionedPacketReceiverImpl::new(
-                from_client_receiver,
-                config,
-            )),
-            None => Box::new(PacketReceiverImpl::new(from_client_receiver)),
-        };
+        let packet_receiver = PacketReceiver::new(from_client_receiver, &conditioner_config);
 
         (packet_sender, packet_receiver)
-    }
-}
-
-impl SocketTrait for Socket {
-    fn listen(
-        server_addrs: &ServerAddrs,
-        config: &SocketConfig,
-    ) -> (Box<dyn PacketSender>, Box<dyn PacketReceiver>) {
-        Socket::listen(server_addrs, config)
     }
 }
