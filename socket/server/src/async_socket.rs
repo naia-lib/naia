@@ -7,7 +7,7 @@ use webrtc_unreliable::{
 
 use naia_socket_shared::{parse_server_url, url_to_socket_addr, IdentityToken, SocketConfig};
 
-use super::session::start_session_server;
+use super::{session::start_session_server, smol_runtime::SmolRuntime};
 use crate::{error::NaiaServerSocketError, server_addrs::ServerAddrs};
 
 type ClientAuthSender =
@@ -119,13 +119,12 @@ impl Socket {
 }
 
 struct RtcServer {
-    inner: InnerRtcServer,
+    inner: InnerRtcServer<SmolRuntime>,
 }
 
 impl RtcServer {
     pub async fn new(listen_addr: SocketAddr, public_address: SocketAddr) -> RtcServer {
-        let inner = InnerRtcServer::new(listen_addr, public_address)
-            .await
+        let inner = InnerRtcServer::new(SmolRuntime, listen_addr, public_address)
             .expect("could not start RTC server");
 
         Self { inner }
