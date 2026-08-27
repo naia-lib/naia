@@ -51,7 +51,7 @@ cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 fastrand = { version = "2" }
 
-ring = { version = "0.16.15", optional = true }
+ring = { version = "0.17", optional = true }
 http = { version = "1.2", optional = true }
 base64 = { version = "0.13", optional = true }
 url = { version = "2.2.2", optional = true }
