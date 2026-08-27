@@ -59,6 +59,3 @@ wildcards = "allow"
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-# Temporary until webrtc-unreliable-client 0.4.0 is published to crates.io:
-# socket/client pins the slimmed security/slimdown branch by rev.
-allow-git = ["https://github.com/naia-lib/webrtc-unreliable-client"]
