@@ -1,22 +1,22 @@
 use js_sys::Uint8Array;
 use web_sys::MessagePort;
 
-use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, server_addr::ServerAddr};
+use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
 
 use super::{addr_cell::AddrCell, data_port::DataPort};
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone)]
-pub struct PacketSenderImpl {
+pub struct PacketSender {
     message_port: MessagePort,
     server_addr: AddrCell,
     connected: bool,
 }
 
-impl PacketSenderImpl {
+impl PacketSender {
     /// Create a new PacketSender
     pub fn new(data_port: &DataPort, addr_cell: &AddrCell) -> Self {
-        PacketSenderImpl {
+        PacketSender {
             message_port: data_port.message_port(),
             server_addr: addr_cell.clone(),
             connected: true,
@@ -24,9 +24,9 @@ impl PacketSenderImpl {
     }
 }
 
-impl PacketSender for PacketSenderImpl {
+impl PacketSender {
     /// Send a Packet to the Server
-    fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
+    pub fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         if self.connected {
             let uarray: Uint8Array = payload.into();
             self.message_port
@@ -39,15 +39,15 @@ impl PacketSender for PacketSenderImpl {
     }
 
     /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr {
+    pub fn server_addr(&self) -> ServerAddr {
         self.server_addr.get()
     }
 
-    fn connected(&self) -> bool {
+    pub fn connected(&self) -> bool {
         self.connected
     }
 
-    fn disconnect(&mut self) {
+    pub fn disconnect(&mut self) {
         if self.connected {
             self.connected = false;
             self.message_port.close();
@@ -58,5 +58,5 @@ impl PacketSender for PacketSenderImpl {
 // Safety: wasm32-unknown-unknown is single-threaded; there are no real OS threads and no
 // data races are possible. These impls are required by trait bounds in the naia transport
 // abstraction layer but are vacuously safe on this target.
-unsafe impl Send for PacketSenderImpl {}
-unsafe impl Sync for PacketSenderImpl {}
+unsafe impl Send for PacketSender {}
+unsafe impl Sync for PacketSender {}

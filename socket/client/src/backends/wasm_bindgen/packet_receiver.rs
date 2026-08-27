@@ -3,21 +3,19 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use crate::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
-};
+use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
 
 use super::{addr_cell::AddrCell, data_port::DataPort};
 
 /// Handles receiving messages from the Server through a given Client Socket
 #[derive(Clone)]
-pub struct PacketReceiverImpl {
+pub struct PlainPacketReceiver {
     message_queue: Arc<Mutex<VecDeque<Box<[u8]>>>>,
     server_addr: AddrCell,
     last_payload: Option<Box<[u8]>>,
 }
 
-impl PacketReceiverImpl {
+impl PlainPacketReceiver {
     /// Create a new PacketReceiver, if supplied with the RtcDataChannel and a
     /// reference to a list of dropped messages
     pub fn new(data_port: &DataPort, addr_cell: &AddrCell) -> Self {
@@ -29,8 +27,8 @@ impl PacketReceiverImpl {
     }
 }
 
-impl PacketReceiver for PacketReceiverImpl {
-    fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+impl PlainPacketReceiver {
+    pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         match self
             .message_queue
             .lock()
@@ -46,7 +44,7 @@ impl PacketReceiver for PacketReceiverImpl {
     }
 
     /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr {
+    pub fn server_addr(&self) -> ServerAddr {
         self.server_addr.get()
     }
 }

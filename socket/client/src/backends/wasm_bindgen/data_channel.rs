@@ -14,8 +14,9 @@ use web_sys::{
 
 use naia_socket_shared::{parse_server_url, IdentityToken, SocketConfig};
 
+use super::identity_receiver::IdentityReceiver;
 use super::{addr_cell::AddrCell, data_port::DataPort};
-use crate::{IdentityReceiverImpl, ServerAddr};
+use crate::ServerAddr;
 
 // FindAddrFuncInner
 pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
@@ -27,7 +28,7 @@ pub struct DataChannel {
     auth_headers_opt: Option<Vec<(String, String)>>,
     message_channel: MessageChannel,
     addr_cell: AddrCell,
-    id_cell: IdentityReceiverImpl,
+    id_cell: IdentityReceiver,
     find_addr_func: Rc<RefCell<FindAddrFuncInner>>,
 }
 
@@ -46,7 +47,7 @@ impl DataChannel {
             auth_headers_opt,
             message_channel: MessageChannel::new().expect("can't create message channel"),
             addr_cell: AddrCell::new(),
-            id_cell: IdentityReceiverImpl::new(),
+            id_cell: IdentityReceiver::new(),
             find_addr_func: Rc::new(RefCell::new(FindAddrFuncInner(Box::new(move |_| {})))),
         }
     }
@@ -59,7 +60,7 @@ impl DataChannel {
         DataPort::new(self.message_channel.port1())
     }
 
-    pub fn id_receiver(&self) -> IdentityReceiverImpl {
+    pub fn id_receiver(&self) -> IdentityReceiver {
         self.id_cell.clone()
     }
 

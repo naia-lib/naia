@@ -1,4 +1,4 @@
-use crate::{error::NaiaClientSocketError, packet_sender::PacketSender, ServerAddr};
+use crate::{error::NaiaClientSocketError, ServerAddr};
 
 use super::shared::{
     naia_create_u8_array, naia_disconnect, naia_is_connected, naia_send, SERVER_ADDR,
@@ -6,11 +6,11 @@ use super::shared::{
 
 /// Handles sending messages to the Server for a given Client Socket
 #[derive(Clone, Default)]
-pub struct PacketSenderImpl;
+pub struct PacketSender;
 
-impl PacketSender for PacketSenderImpl {
+impl PacketSender {
     /// Send a Packet to the Server
-    fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
+    pub fn send(&self, payload: &[u8]) -> Result<(), NaiaClientSocketError> {
         // Safety: naia_create_u8_array and naia_send are extern "C" FFI functions provided
         // by the miniquad JavaScript bridge. wasm32 is single-threaded; SERVER_ADDR and the
         // JS object handle are accessed without aliasing. The pointer passed to
@@ -28,20 +28,20 @@ impl PacketSender for PacketSenderImpl {
     }
 
     /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr {
+    pub fn server_addr(&self) -> ServerAddr {
         // Safety: SERVER_ADDR is a static mut set once at socket initialization before any
         // PacketSender is cloned. wasm32 is single-threaded; there are no concurrent writes.
         unsafe { SERVER_ADDR }
     }
 
-    fn connected(&self) -> bool {
+    pub fn connected(&self) -> bool {
         // Safety: naia_is_connected() is a read-only FFI call into the JS bridge; no preconditions.
         unsafe {
             return naia_is_connected();
         }
     }
 
-    fn disconnect(&mut self) {
+    pub fn disconnect(&mut self) {
         // Safety: naia_disconnect() is an FFI call with no return value or preconditions.
         unsafe {
             naia_disconnect();

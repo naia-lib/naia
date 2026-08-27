@@ -1,13 +1,12 @@
 use naia_socket_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
-use super::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
-};
+use super::{error::NaiaClientSocketError, server_addr::ServerAddr};
+use crate::backends::PlainPacketReceiver;
 
 /// Used to receive packets from the Client Socket
 #[derive(Clone)]
 pub struct ConditionedPacketReceiver {
-    inner_receiver: Box<dyn PacketReceiver>,
+    inner_receiver: PlainPacketReceiver,
     link_conditioner_config: LinkConditionerConfig,
     time_queue: TimeQueue<Box<[u8]>>,
     last_payload: Option<Box<[u8]>>,
@@ -16,7 +15,7 @@ pub struct ConditionedPacketReceiver {
 impl ConditionedPacketReceiver {
     /// Creates a new ConditionedPacketReceiver
     pub fn new(
-        inner_receiver: Box<dyn PacketReceiver>,
+        inner_receiver: PlainPacketReceiver,
         link_conditioner_config: &LinkConditionerConfig,
     ) -> Self {
         ConditionedPacketReceiver {
@@ -26,10 +25,9 @@ impl ConditionedPacketReceiver {
             last_payload: None,
         }
     }
-}
 
-impl PacketReceiver for ConditionedPacketReceiver {
-    fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+    /// Receives a packet from the Client Socket
+    pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         loop {
             match self.inner_receiver.receive() {
                 Ok(option) => match option {
@@ -60,7 +58,7 @@ impl PacketReceiver for ConditionedPacketReceiver {
     }
 
     /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr {
+    pub fn server_addr(&self) -> ServerAddr {
         self.inner_receiver.server_addr()
     }
 }

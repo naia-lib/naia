@@ -4,7 +4,7 @@ mod packet_sender;
 mod runtime;
 mod socket;
 
-pub use identity_receiver::IdentityReceiverImpl;
-pub use packet_receiver::PacketReceiverImpl;
-pub use packet_sender::PacketSenderImpl;
+pub use identity_receiver::IdentityReceiver;
+pub use packet_receiver::PlainPacketReceiver;
+pub use packet_sender::PacketSender;
 pub use socket::Socket;

@@ -1,12 +1,12 @@
 use super::shared::ID_CELL;
-use crate::{identity_receiver::IdentityReceiver, IdentityReceiverResult};
+use crate::IdentityReceiverResult;
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]
-pub struct IdentityReceiverImpl;
+pub struct IdentityReceiver;
 
-impl IdentityReceiver for IdentityReceiverImpl {
-    fn receive(&mut self) -> IdentityReceiverResult {
+impl IdentityReceiver {
+    pub fn receive(&mut self) -> IdentityReceiverResult {
         // Safety: ID_CELL is a static mut written by the JS identity callback.
         // wasm32 is single-threaded; no concurrent access is possible.
         unsafe {

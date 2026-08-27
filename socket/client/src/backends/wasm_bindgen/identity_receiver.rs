@@ -2,15 +2,15 @@ use std::sync::{Arc, Mutex};
 
 use naia_socket_shared::IdentityToken;
 
-use crate::{identity_receiver::IdentityReceiver, IdentityReceiverResult};
+use crate::IdentityReceiverResult;
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]
-pub struct IdentityReceiverImpl {
+pub struct IdentityReceiver {
     id_cell: Arc<Mutex<Option<Result<String, u16>>>>,
 }
 
-impl IdentityReceiverImpl {
+impl IdentityReceiver {
     /// Create a new IdentityReceiver, if supplied with the Server's address & a
     /// reference back to the parent Socket
     pub fn new() -> Self {
@@ -30,8 +30,8 @@ impl IdentityReceiverImpl {
     }
 }
 
-impl IdentityReceiver for IdentityReceiverImpl {
-    fn receive(&mut self) -> IdentityReceiverResult {
+impl IdentityReceiver {
+    pub fn receive(&mut self) -> IdentityReceiverResult {
         let mut token_guard = self
             .id_cell
             .lock()

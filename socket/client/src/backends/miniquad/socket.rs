@@ -2,15 +2,12 @@ use std::collections::VecDeque;
 
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
-use crate::{
-    backends::socket::SocketTrait, conditioned_packet_receiver::ConditionedPacketReceiver,
-    packet_receiver::PacketReceiver, packet_sender::PacketSender, IdentityReceiver,
-    IdentityReceiverImpl,
-};
+use crate::packet_receiver::PacketReceiver;
 
 use super::{
-    packet_receiver::PacketReceiverImpl,
-    packet_sender::PacketSenderImpl,
+    identity_receiver::IdentityReceiver,
+    packet_receiver::PlainPacketReceiver,
+    packet_sender::PacketSender,
     shared::{naia_connect, JsObject, ERROR_QUEUE, ID_CELL, MESSAGE_QUEUE},
 };
 
@@ -23,11 +20,7 @@ impl Socket {
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         return Self::connect_inner(server_session_url, config, None, None);
     }
 
@@ -36,11 +29,7 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         return Self::connect_inner(server_session_url, config, Some(auth_bytes), None);
     }
 
@@ -49,11 +38,7 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_headers: Vec<(String, String)>,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         return Self::connect_inner(server_session_url, config, None, Some(auth_headers));
     }
 
@@ -63,11 +48,7 @@ impl Socket {
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         return Self::connect_inner(
             server_session_url,
             config,
@@ -82,11 +63,7 @@ impl Socket {
         config: &SocketConfig,
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
+    ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         let server_url = parse_server_url(server_session_url);
 
         let auth_str: String = match auth_bytes_opt {
@@ -111,47 +88,15 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         // setup sender
-        let packet_sender: Box<dyn PacketSender> = Box::new(PacketSenderImpl);
+        let packet_sender = PacketSender;
 
         // setup receiver
-        let packet_receiver: Box<dyn PacketReceiver> = {
-            let inner_receiver = Box::new(PacketReceiverImpl::new());
-            if let Some(config) = &conditioner_config {
-                Box::new(ConditionedPacketReceiver::new(inner_receiver, config))
-            } else {
-                inner_receiver
-            }
-        };
+        let inner_receiver = PlainPacketReceiver::new();
+        let packet_receiver = PacketReceiver::new(inner_receiver, &conditioner_config);
 
         // setup id receiver
-        let id_receiver: Box<dyn IdentityReceiver> = Box::new(IdentityReceiverImpl);
+        let id_receiver = IdentityReceiver;
 
         return (id_receiver, packet_sender, packet_receiver);
-    }
-}
-
-impl SocketTrait for Socket {
-    /// Connects to the given server address
-    fn connect(
-        server_session_url: &str,
-        config: &SocketConfig,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
-        return Self::connect(server_session_url, config);
-    }
-    /// Connects to the given server address with authentication
-    fn connect_with_auth(
-        server_session_url: &str,
-        config: &SocketConfig,
-        auth_bytes: Vec<u8>,
-    ) -> (
-        Box<dyn IdentityReceiver>,
-        Box<dyn PacketSender>,
-        Box<dyn PacketReceiver>,
-    ) {
-        return Self::connect_with_auth(server_session_url, config, auth_bytes);
     }
 }

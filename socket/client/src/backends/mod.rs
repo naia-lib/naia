@@ -1,5 +1,3 @@
-mod socket;
-
 cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen"))] {
         mod wasm_bindgen;

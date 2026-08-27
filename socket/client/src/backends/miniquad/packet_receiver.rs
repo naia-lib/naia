@@ -1,25 +1,23 @@
-use crate::{
-    error::NaiaClientSocketError, packet_receiver::PacketReceiver, server_addr::ServerAddr,
-};
+use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
 
 use super::shared::{ERROR_QUEUE, MESSAGE_QUEUE, SERVER_ADDR};
 
 /// Handles receiving messages from the Server through a given Client Socket
 #[derive(Clone)]
-pub struct PacketReceiverImpl {
+pub struct PlainPacketReceiver {
     last_payload: Option<Box<[u8]>>,
 }
 
-impl PacketReceiverImpl {
+impl PlainPacketReceiver {
     /// Create a new PacketReceiver, if supplied with the RtcDataChannel and a
     /// reference to a list of dropped messages
     pub fn new() -> Self {
-        PacketReceiverImpl { last_payload: None }
+        PlainPacketReceiver { last_payload: None }
     }
 }
 
-impl PacketReceiver for PacketReceiverImpl {
-    fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+impl PlainPacketReceiver {
+    pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
         // Safety: MESSAGE_QUEUE, ERROR_QUEUE, and SERVER_ADDR are static muts written by the
         // JS bridge callbacks before receive() is ever called. wasm32 is single-threaded;
         // the JS bridge and Rust game loop are on the same thread and never run concurrently,
@@ -43,7 +41,7 @@ impl PacketReceiver for PacketReceiverImpl {
     }
 
     /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr {
+    pub fn server_addr(&self) -> ServerAddr {
         // Safety: SERVER_ADDR is set once at socket initialization; wasm32 is single-threaded.
         unsafe { SERVER_ADDR }
     }

@@ -1,27 +1,50 @@
-use super::{error::NaiaClientSocketError, server_addr::ServerAddr};
+use naia_socket_shared::LinkConditionerConfig;
 
-/// Used to receive packets from the Client Socket
-pub trait PacketReceiver: PacketReceiverClone + Send + Sync {
-    /// Receives a packet from the Client Socket
-    fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError>;
-    /// Get the Server's Socket address
-    fn server_addr(&self) -> ServerAddr;
+use super::{
+    conditioned_packet_receiver::ConditionedPacketReceiver, error::NaiaClientSocketError,
+    server_addr::ServerAddr,
+};
+use crate::backends::PlainPacketReceiver;
+
+/// Used to receive packets from the Client Socket.
+///
+/// A single concrete type covering both the plain and link-conditioned
+/// variants: `Socket::connect*` picks one at runtime based on `SocketConfig`.
+#[derive(Clone)]
+pub enum PacketReceiver {
+    /// Receives packets as they arrive
+    Plain(PlainPacketReceiver),
+    /// Receives packets through a link conditioner (latency/jitter/loss sim)
+    Conditioned(ConditionedPacketReceiver),
 }
 
-/// Used to clone Box<dyn PacketReceiver>
-pub trait PacketReceiverClone {
-    /// Clone the boxed PacketReceiver
-    fn clone_box(&self) -> Box<dyn PacketReceiver>;
-}
-
-impl<T: 'static + PacketReceiver + Clone> PacketReceiverClone for T {
-    fn clone_box(&self) -> Box<dyn PacketReceiver> {
-        Box::new(self.clone())
+impl PacketReceiver {
+    /// Creates a PacketReceiver, conditioned or not depending on the config
+    pub fn new(
+        inner_receiver: PlainPacketReceiver,
+        conditioner_config: &Option<LinkConditionerConfig>,
+    ) -> Self {
+        match conditioner_config {
+            Some(config) => {
+                PacketReceiver::Conditioned(ConditionedPacketReceiver::new(inner_receiver, config))
+            }
+            None => PacketReceiver::Plain(inner_receiver),
+        }
     }
-}
 
-impl Clone for Box<dyn PacketReceiver> {
-    fn clone(&self) -> Box<dyn PacketReceiver> {
-        PacketReceiverClone::clone_box(self.as_ref())
+    /// Receives a packet from the Client Socket
+    pub fn receive(&mut self) -> Result<Option<&[u8]>, NaiaClientSocketError> {
+        match self {
+            PacketReceiver::Plain(receiver) => receiver.receive(),
+            PacketReceiver::Conditioned(receiver) => receiver.receive(),
+        }
+    }
+
+    /// Get the Server's Socket address
+    pub fn server_addr(&self) -> ServerAddr {
+        match self {
+            PacketReceiver::Plain(receiver) => receiver.server_addr(),
+            PacketReceiver::Conditioned(receiver) => receiver.server_addr(),
+        }
     }
 }

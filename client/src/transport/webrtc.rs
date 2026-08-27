@@ -27,38 +27,41 @@ impl Socket {
     }
 }
 
-impl TransportSender for Box<dyn PacketSender> {
+// Note: the socket-crate types below are concrete structs/enums whose inherent
+// methods share names with the naia-level transport traits implemented here.
+// Fully-qualified calls keep these from resolving back into themselves.
+impl TransportSender for PacketSender {
     /// Sends a packet from the Client Socket
     fn send(&self, payload: &[u8]) -> Result<(), SendError> {
-        self.as_ref().send(payload).map_err(|_| SendError)
+        PacketSender::send(self, payload).map_err(|_| SendError)
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
-        match self.as_ref().server_addr() {
+        match PacketSender::server_addr(self) {
             ServerAddr::Found(addr) => TransportAddr::Found(addr),
             ServerAddr::Finding => TransportAddr::Finding,
         }
     }
 }
 
-impl TransportReceiver for Box<dyn PacketReceiver> {
+impl TransportReceiver for PacketReceiver {
     /// Receives a packet from the Client Socket
     fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
-        self.as_mut().receive().map_err(|_| RecvError)
+        PacketReceiver::receive(self).map_err(|_| RecvError)
     }
     /// Get the Server's Socket address
     fn server_addr(&self) -> TransportAddr {
-        match self.as_ref().server_addr() {
+        match PacketReceiver::server_addr(self) {
             ServerAddr::Found(addr) => TransportAddr::Found(addr),
             ServerAddr::Finding => TransportAddr::Finding,
         }
     }
 }
 
-impl TransportIdentityReceiver for Box<dyn IdentityReceiver> {
+impl TransportIdentityReceiver for IdentityReceiver {
     /// Receives an IdentityToken from the Client Socket
     fn receive(&mut self) -> IdentityReceiverResult {
-        match self.as_mut().receive() {
+        match IdentityReceiver::receive(self) {
             SocketIdentityReceiverResult::Waiting => IdentityReceiverResult::Waiting,
             SocketIdentityReceiverResult::Success(token) => IdentityReceiverResult::Success(token),
             SocketIdentityReceiverResult::ErrorResponseCode(code) => {

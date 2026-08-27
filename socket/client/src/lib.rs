@@ -20,16 +20,15 @@ mod conditioned_packet_receiver;
 mod error;
 mod identity_receiver;
 mod packet_receiver;
-mod packet_sender;
 mod server_addr;
 
 pub use naia_socket_shared as shared;
 
 pub use backends::*;
+pub use conditioned_packet_receiver::ConditionedPacketReceiver;
 pub use error::NaiaClientSocketError;
-pub use identity_receiver::{IdentityReceiver, IdentityReceiverResult};
+pub use identity_receiver::IdentityReceiverResult;
 pub use packet_receiver::PacketReceiver;
-pub use packet_sender::PacketSender;
 pub use server_addr::ServerAddr;
 
 cfg_if! {
