@@ -2,6 +2,8 @@ use std::time::Duration;
 
 use log::warn;
 
+#[cfg(feature = "transport_udp")]
+use naia_shared::Timestamp as stamp_time;
 use naia_shared::{
     handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType,
     ProtocolId, Serde, StandardHeader, Timer,
@@ -12,7 +14,23 @@ use crate::{
     handshake::{handshake_time_manager::HandshakeTimeManager, HandshakeResult, Handshaker},
 };
 
+#[cfg(feature = "transport_udp")]
+type Timestamp = u64;
+
+/// The client's side of the session negotiation.
+///
+/// Both builds run the same negotiation: present the identity token so the
+/// server can bind this socket address to an already-authenticated user, sync
+/// clocks, then request the connection. Builds with source-address validation
+/// (raw UDP, where a spoofed source address is cheap) prepend an HMAC
+/// challenge/validate round-trip; builds without it (WebRTC, where ICE/DTLS
+/// already proves address ownership) start at identify instead.
 enum HandshakeState {
+    #[cfg(feature = "transport_udp")]
+    AwaitingChallengeResponse,
+    #[cfg(feature = "transport_udp")]
+    AwaitingValidateResponse,
+    #[cfg(not(feature = "transport_udp"))]
     AwaitingIdentifyResponse,
     TimeSync(HandshakeTimeManager),
     AwaitingConnectResponse(TimeManager),
@@ -22,10 +40,15 @@ enum HandshakeState {
 impl HandshakeState {
     fn get_index(&self) -> u8 {
         match self {
-            Self::AwaitingIdentifyResponse => 0,
-            Self::TimeSync(_) => 1,
-            Self::AwaitingConnectResponse(_) => 2,
-            Self::Connected => 3,
+            #[cfg(feature = "transport_udp")]
+            HandshakeState::AwaitingChallengeResponse => 0,
+            #[cfg(feature = "transport_udp")]
+            HandshakeState::AwaitingValidateResponse => 1,
+            #[cfg(not(feature = "transport_udp"))]
+            HandshakeState::AwaitingIdentifyResponse => 0,
+            HandshakeState::TimeSync(_) => 2,
+            HandshakeState::AwaitingConnectResponse(_) => 3,
+            HandshakeState::Connected => 4,
         }
     }
 }
@@ -40,21 +63,21 @@ impl PartialEq for HandshakeState {
 
 pub struct HandshakeManager {
     protocol_id: ProtocolId,
+    ping_interval: Duration,
+    handshake_pings: u8,
     connection_state: HandshakeState,
     handshake_timer: Timer,
     identity_token: Option<IdentityToken>,
-    ping_interval: Duration,
-    handshake_pings: u8,
+    #[cfg(feature = "transport_udp")]
+    pre_connection_timestamp: Timestamp,
+    #[cfg(feature = "transport_udp")]
+    pre_connection_digest: Option<Vec<u8>>,
 }
 
 impl Handshaker for HandshakeManager {
     fn set_identity_token(&mut self, identity_token: IdentityToken) {
         self.identity_token = Some(identity_token);
     }
-
-    // fn is_connected(&self) -> bool {
-    //     self.connection_state == HandshakeState::Connected
-    // }
 
     // Give handshake manager the opportunity to send out messages to the server
     fn send(&mut self) -> Option<OutgoingPacket> {
@@ -65,12 +88,24 @@ impl Handshaker for HandshakeManager {
         self.handshake_timer.reset();
 
         match &mut self.connection_state {
+            #[cfg(feature = "transport_udp")]
+            HandshakeState::AwaitingChallengeResponse => {
+                let identity_token = self.identity_token.as_ref()?;
+                let writer = self.write_challenge_request(identity_token);
+                Some(writer.to_packet())
+            }
+            #[cfg(feature = "transport_udp")]
+            HandshakeState::AwaitingValidateResponse => {
+                let writer = self.write_validate_request();
+                Some(writer.to_packet())
+            }
+            #[cfg(not(feature = "transport_udp"))]
             HandshakeState::AwaitingIdentifyResponse => {
                 if let Some(identity_token) = &self.identity_token {
                     let writer = self.write_identify_request(identity_token);
                     Some(writer.to_packet())
                 } else {
-                    log::warn!("HandshakeManager: Timer ringing but Identity Token not set");
+                    warn!("HandshakeManager: Timer ringing but Identity Token not set");
                     None
                 }
             }
@@ -100,21 +135,28 @@ impl Handshaker for HandshakeManager {
                     return None;
                 };
                 match handshake_header {
+                    #[cfg(feature = "transport_udp")]
+                    HandshakeHeader::ServerChallengeResponse => {
+                        self.recv_challenge_response(reader);
+                        None
+                    }
+                    #[cfg(feature = "transport_udp")]
+                    HandshakeHeader::ServerValidateResponse => {
+                        if self.connection_state == HandshakeState::AwaitingValidateResponse {
+                            self.recv_validate_response();
+                        }
+                        None
+                    }
+                    #[cfg(not(feature = "transport_udp"))]
                     HandshakeHeader::ServerIdentifyResponse => {
-                        // info!("Received ServerIdentifyResponse");
                         self.recv_identify_response(reader);
                         None
                     }
-                    HandshakeHeader::ServerConnectResponse => {
-                        // info!("Received ServerConnectResponse");
-                        self.recv_connect_response()
-                    }
+                    HandshakeHeader::ServerConnectResponse => self.recv_connect_response(),
                     HandshakeHeader::ServerRejectResponse(reason) => {
                         Some(HandshakeResult::Rejected(reason))
                     }
-                    HandshakeHeader::ClientIdentifyRequest(_)
-                    | HandshakeHeader::ClientConnectRequest
-                    | HandshakeHeader::Disconnect => None,
+                    _ => None,
                 }
             }
             PacketType::Pong => {
@@ -144,6 +186,17 @@ impl Handshaker for HandshakeManager {
     }
 
     // Write a disconnect packet
+    #[cfg(feature = "transport_udp")]
+    fn write_disconnect(&self) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::Disconnect.ser(&mut writer);
+        self.write_signed_timestamp(&mut writer);
+        writer
+    }
+
+    // Write a disconnect packet
+    #[cfg(not(feature = "transport_udp"))]
     fn write_disconnect(&self) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
@@ -170,13 +223,80 @@ impl HandshakeManager {
             protocol_id,
             handshake_timer,
             identity_token: None,
+            #[cfg(feature = "transport_udp")]
+            pre_connection_timestamp: stamp_time::now(),
+            #[cfg(feature = "transport_udp")]
+            pre_connection_digest: None,
+            #[cfg(feature = "transport_udp")]
+            connection_state: HandshakeState::AwaitingChallengeResponse,
+            #[cfg(not(feature = "transport_udp"))]
             connection_state: HandshakeState::AwaitingIdentifyResponse,
             ping_interval,
             handshake_pings,
         }
     }
 
-    // Step 1 of Handshake
+    // Step 1 of Handshake (address-validating builds)
+    #[cfg(feature = "transport_udp")]
+    fn write_challenge_request(&self, identity_token: &IdentityToken) -> BitWriter {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ClientChallengeRequest(self.protocol_id).ser(&mut writer);
+
+        self.pre_connection_timestamp.ser(&mut writer);
+        identity_token.ser(&mut writer);
+
+        writer
+    }
+
+    // Step 2 of Handshake (address-validating builds)
+    #[cfg(feature = "transport_udp")]
+    fn recv_challenge_response(&mut self, reader: &mut BitReader) {
+        if self.connection_state == HandshakeState::AwaitingChallengeResponse {
+            let timestamp_result = Timestamp::de(reader);
+            if timestamp_result.is_err() {
+                return;
+            }
+            let timestamp = timestamp_result.unwrap();
+
+            if self.pre_connection_timestamp == timestamp {
+                let digest_bytes_result = Vec::<u8>::de(reader);
+                if digest_bytes_result.is_err() {
+                    return;
+                }
+                let digest_bytes = digest_bytes_result.unwrap();
+                self.pre_connection_digest = Some(digest_bytes);
+
+                self.connection_state = HandshakeState::AwaitingValidateResponse;
+            }
+        }
+    }
+
+    // Step 3 of Handshake (address-validating builds)
+    #[cfg(feature = "transport_udp")]
+    fn write_validate_request(&self) -> BitWriter {
+        let mut writer = BitWriter::new();
+
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ClientValidateRequest.ser(&mut writer);
+
+        // write timestamp & digest into payload
+        self.write_signed_timestamp(&mut writer);
+
+        writer
+    }
+
+    // Step 4 of Handshake (address-validating builds)
+    #[cfg(feature = "transport_udp")]
+    fn recv_validate_response(&mut self) {
+        self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(
+            self.ping_interval,
+            self.handshake_pings,
+        ));
+    }
+
+    // Step 1 of Handshake (builds without address validation)
+    #[cfg(not(feature = "transport_udp"))]
     fn write_identify_request(&self, identity_token: &IdentityToken) -> BitWriter {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
@@ -187,7 +307,8 @@ impl HandshakeManager {
         writer
     }
 
-    // Step 2 of Handshake
+    // Step 2 of Handshake (builds without address validation)
+    #[cfg(not(feature = "transport_udp"))]
     fn recv_identify_response(&mut self, _reader: &mut BitReader) {
         if self.connection_state == HandshakeState::AwaitingIdentifyResponse {
             self.connection_state = HandshakeState::TimeSync(HandshakeTimeManager::new(
@@ -215,5 +336,12 @@ impl HandshakeManager {
         };
 
         Some(HandshakeResult::Connected(Box::new(time_manager)))
+    }
+
+    #[cfg(feature = "transport_udp")]
+    fn write_signed_timestamp(&self, writer: &mut BitWriter) {
+        self.pre_connection_timestamp.ser(writer);
+        let digest: &Vec<u8> = self.pre_connection_digest.as_ref().unwrap();
+        digest.ser(writer);
     }
 }

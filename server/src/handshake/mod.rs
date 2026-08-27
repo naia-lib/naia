@@ -4,17 +4,11 @@ use naia_shared::{BitReader, IdentityToken, OutgoingPacket, SerdeErr};
 
 use crate::UserKey;
 
-cfg_if! {
-    if #[cfg(feature = "transport_udp")] {
-        mod cache_map;
+#[cfg(feature = "transport_udp")]
+mod cache_map;
 
-        mod advanced_handshaker;
-        pub use advanced_handshaker::HandshakeManager;
-    } else {
-        mod simple_handshaker;
-        pub use simple_handshaker::HandshakeManager;
-    }
-}
+mod handshaker;
+pub use handshaker::HandshakeManager;
 
 pub trait Handshaker: Send + Sync {
     fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey);

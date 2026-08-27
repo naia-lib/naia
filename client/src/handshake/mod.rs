@@ -4,15 +4,8 @@ use naia_shared::{handshake::RejectReason, BitReader, BitWriter, IdentityToken, 
 
 use crate::connection::time_manager::TimeManager;
 
-cfg_if! {
-    if #[cfg(feature = "transport_udp")] {
-        mod advanced_handshaker;
-        pub use advanced_handshaker::HandshakeManager;
-    } else {
-        mod simple_handshaker;
-        pub use simple_handshaker::HandshakeManager;
-    }
-}
+mod handshaker;
+pub use handshaker::HandshakeManager;
 
 pub enum HandshakeResult {
     Connected(Box<TimeManager>),
