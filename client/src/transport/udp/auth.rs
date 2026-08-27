@@ -9,6 +9,8 @@ use std::{
 
 use log::warn;
 
+use naia_shared::IdentityToken;
+
 use crate::transport::{udp::addr_cell::AddrCell, IdentityReceiver, IdentityReceiverResult};
 
 pub(crate) struct AuthIo {
@@ -50,7 +52,10 @@ impl AuthIo {
                 }
 
                 // read the rest of the bytes as the identity token
-                IdentityReceiverResult::Success(id_token)
+                match IdentityToken::from_signaling_string(&id_token) {
+                    Some(id_token) => IdentityReceiverResult::Success(id_token),
+                    None => IdentityReceiverResult::ErrorResponseCode(400),
+                }
             }
             Ok(None) => IdentityReceiverResult::Waiting,
             Err(HttpError::UreqError(e)) => {

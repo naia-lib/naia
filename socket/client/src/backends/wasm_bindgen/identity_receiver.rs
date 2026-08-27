@@ -7,7 +7,7 @@ use crate::IdentityReceiverResult;
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
 #[derive(Clone)]
 pub struct IdentityReceiver {
-    id_cell: Arc<Mutex<Option<Result<String, u16>>>>,
+    id_cell: Arc<Mutex<Option<Result<IdentityToken, u16>>>>,
 }
 
 impl IdentityReceiver {

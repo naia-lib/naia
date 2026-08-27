@@ -21,6 +21,8 @@ mquad = [ ]
 test_time = [ ]
 
 [dependencies]
+naia-serde = { version = "0.25", path = "../../shared/serde" }
+base64 = { version = "0.13" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }
 wasm-bindgen = { version = "0.2", optional = true }

@@ -217,7 +217,11 @@ impl AuthIo {
         identity_token: &IdentityToken,
     ) -> Result<(), SendError> {
         if let Some(mut stream) = self.outgoing_streams.remove(address) {
-            let response_body = format!("{}\r\n{}", identity_token, self.public_udp_addr);
+            let response_body = format!(
+                "{}\r\n{}",
+                identity_token.to_signaling_string(),
+                self.public_udp_addr
+            );
             let response_body_bytes = response_body.into_bytes();
 
             let response = http::Response::builder()

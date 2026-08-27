@@ -20,7 +20,7 @@ committed on `refactor/026-socket-simplification`.
 
 - [x] **B1** — naia-server-socket concrete types (commit `124b4af7`)
 - [x] **B2** — naia-client-socket concrete types (commit `975e34da`)
-- [ ] **B3** — IdentityToken opaque byte newtype
+- [x] **B3** — IdentityToken opaque byte newtype (commit pending)
 - [ ] **C1** — one `HandshakeHeader`
 - [ ] **C2** — one client handshaker
 - [ ] **C3** — one server handshaker

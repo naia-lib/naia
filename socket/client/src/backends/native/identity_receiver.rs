@@ -2,6 +2,8 @@ use std::sync::{Arc, Mutex};
 
 use tokio::sync::oneshot;
 
+use naia_socket_shared::IdentityToken;
+
 use crate::IdentityReceiverResult;
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
@@ -25,7 +27,14 @@ impl IdentityReceiver {
         if let Ok(mut receiver) = self.receiver_channel.lock() {
             if let Ok(recv_result) = receiver.try_recv() {
                 match recv_result {
-                    Ok(identity_token) => IdentityReceiverResult::Success(identity_token),
+                    Ok(identity_token_string) => {
+                        // webrtc-unreliable-client hands the signaling JSON's `id` field
+                        // across verbatim as an unvalidated String.
+                        match IdentityToken::from_signaling_string(&identity_token_string) {
+                            Some(identity_token) => IdentityReceiverResult::Success(identity_token),
+                            None => IdentityReceiverResult::ErrorResponseCode(400),
+                        }
+                    }
                     Err(error_code) => IdentityReceiverResult::ErrorResponseCode(error_code),
                 }
             } else {

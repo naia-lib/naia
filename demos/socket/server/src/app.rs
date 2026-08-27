@@ -1,5 +1,6 @@
 use std::{thread::sleep, time::Duration};
 
+use naia_server_socket::shared::IdentityToken;
 use naia_server_socket::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, ServerAddrs, Socket,
 };
@@ -54,7 +55,7 @@ impl App {
                 );
 
                 if auth_from_client.eq("12345") {
-                    let id_token = "id_token".to_string();
+                    let id_token = IdentityToken::from_bytes(b"id_token".to_vec());
                     if let Err(error) = self.auth_sender.accept(&address, &id_token) {
                         info!("Server Accept Auth error {}", error);
                     } else {

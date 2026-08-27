@@ -628,10 +628,10 @@ mod global_dirty_refcount_tests {
     use std::sync::{Arc, RwLock};
 
     use super::*;
+    use crate::bigmap::BigMapKey;
     use crate::world::component::property::Property;
     use crate::world::delegation::auth_channel::EntityAuthAccessor;
     use crate::world::update::mut_channel::{MutChannelType, MutReceiver};
-    use crate::bigmap::BigMapKey;
     use crate::{ComponentKinds, InScopeEntities, PropertyMutator, Replicate};
 
     #[derive(Replicate)]

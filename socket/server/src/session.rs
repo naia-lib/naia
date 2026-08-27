@@ -429,10 +429,11 @@ async fn serve(
 
                         let (_head, body) = resp.into_parts();
 
+                        let identity_token_string = identity_token.to_signaling_string();
                         let body = format!(
                             "{{\
                         \"sdp\":{body},\
-                        \"id\":\"{identity_token}\"\
+                        \"id\":\"{identity_token_string}\"\
                         }}",
                         );
 

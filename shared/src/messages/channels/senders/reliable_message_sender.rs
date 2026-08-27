@@ -54,9 +54,9 @@ impl ReliableMessageSender {
         message: MessageContainer,
     ) -> bool {
         if message.bit_length(message_kinds, converter) > FRAGMENTATION_LIMIT_BITS {
-            let fragments = self
-                .message_fragmenter
-                .fragment_message(message_kinds, converter, message);
+            let fragments =
+                self.message_fragmenter
+                    .fragment_message(message_kinds, converter, message);
             if !self.reliable_sender.has_capacity_for(fragments.len()) {
                 return false;
             }

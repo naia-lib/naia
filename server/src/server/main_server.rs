@@ -141,7 +141,7 @@ impl MainServer {
         let auth_addr = user.take_auth_address();
 
         // info!("adding authenticated user {}", &auth_addr);
-        let identity_token = naia_shared::generate_identity_token();
+        let identity_token = naia_shared::IdentityToken::generate();
         self.handshake_manager
             .authenticate_user(&identity_token, user_key);
 
@@ -316,7 +316,7 @@ impl MainServer {
                             // auto-accept: no ServerAuthEvent; generate token and send immediately
                             let user = self.users.get_mut(&user_key).expect("user just inserted");
                             let _ = user.take_auth_address(); // consume the auth address
-                            let identity_token = naia_shared::generate_identity_token();
+                            let identity_token = naia_shared::IdentityToken::generate();
                             self.handshake_manager
                                 .authenticate_user(&identity_token, &user_key);
                             if auth_sender.accept(&auth_addr, &identity_token).is_err() {

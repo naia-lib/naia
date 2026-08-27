@@ -48,7 +48,7 @@ pub extern "C" fn receive_id(id_token: JsObject) {
     // is safe on this target. None of the callback functions re-enter.
     unsafe {
         if let Some(id_cell) = &mut ID_CELL {
-            *id_cell = Some(id_token_string);
+            *id_cell = IdentityToken::from_signaling_string(&id_token_string);
         }
     }
 }

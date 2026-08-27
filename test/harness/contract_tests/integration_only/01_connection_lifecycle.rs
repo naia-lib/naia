@@ -1074,9 +1074,12 @@ fn malformed_identity_token_rejected() {
     scenario.mutate(|ctx| {
         ctx.client(client_a_key, |client| {
             if let Some(token) = client.identity_token() {
-                // Tamper with token (add invalid suffix)
-                let tampered = format!("{}_tampered", token);
-                client.set_identity_token(tampered);
+                // Tamper at the byte level: any byte vec is a syntactically valid
+                // token, so "tampered" means it no longer matches the one the
+                // server minted — which is exactly what this test asserts on.
+                let mut bytes = token.as_bytes().to_vec();
+                bytes.extend_from_slice(b"_tampered");
+                client.set_identity_token(naia_shared::IdentityToken::from_bytes(bytes));
             }
         });
     });

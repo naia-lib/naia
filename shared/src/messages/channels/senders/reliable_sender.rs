@@ -192,13 +192,9 @@ impl<P: Send + Sync + Clone> ChannelSender<P> for ReliableSender<P> {
         self.outgoing_messages.clear();
         let mut new_min: Option<Instant> = None;
         let mut any_unsent = false;
-        for (message_index, last_sent_opt, message) in
-            self.sending_messages.iter().flatten()
-        {
+        for (message_index, last_sent_opt, message) in self.sending_messages.iter().flatten() {
             let due = match last_sent_opt {
-                Some(last_sent) => {
-                    last_sent.elapsed(now) >= resend_duration
-                }
+                Some(last_sent) => last_sent.elapsed(now) >= resend_duration,
                 None => true,
             };
             if due {

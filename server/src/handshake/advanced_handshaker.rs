@@ -5,7 +5,8 @@ use ring::{hmac, rand};
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    BitReader, BitWriter, OutgoingPacket, PacketType, ProtocolId, Serde, SerdeErr, StandardHeader,
+    BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType, ProtocolId, Serde, SerdeErr,
+    StandardHeader,
 };
 
 use crate::{
@@ -14,7 +15,6 @@ use crate::{
 };
 
 type Timestamp = u64;
-type IdentityToken = String;
 
 pub struct HandshakeManager {
     protocol_id: ProtocolId,

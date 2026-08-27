@@ -354,7 +354,8 @@ fn get_session_response(input: &str) -> JsSessionResponse {
     let sdp_mid: String = sdp_mid_opt.unwrap().clone();
 
     let id_token_opt: Option<&String> = json_obj["id"].get();
-    let id_token: String = id_token_opt.unwrap().clone();
+    let id_token: IdentityToken =
+        IdentityToken::from_signaling_string(id_token_opt.unwrap()).unwrap();
 
     JsSessionResponse {
         id_token,

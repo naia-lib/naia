@@ -169,6 +169,9 @@ impl ClientAuthIo {
                     ClientServerAddr::Found(_addr) => {}
                 }
 
+                let Some(id_token) = IdentityToken::from_signaling_string(&id_token) else {
+                    return ClientIdentityReceiverResult::ErrorResponseCode(400);
+                };
                 *self.identity_token.lock() = Some(id_token.clone());
                 ClientIdentityReceiverResult::Success(id_token)
             }

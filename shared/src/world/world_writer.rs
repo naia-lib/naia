@@ -1084,48 +1084,44 @@ impl WorldWriter {
                     // Cache hit: replay stored bytes, zero ECS reads.
                     // Cache miss: one ECS read, one serialize, store for future users/ticks.
                     if let Some(diff_mask_key) = diff_mask.as_key() {
-                        let cached: CachedComponentUpdate = match gdh.get_wire_cache(
-                            entity_idx,
-                            kind_bit,
-                            diff_mask_key,
-                        ) {
-                            Some(c) => {
-                                #[cfg(feature = "bench_instrumentation")]
-                                bench_write_counters::N_PATH_A_CACHE_HITS
-                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                c
-                            }
-                            None => {
-                                #[cfg(feature = "bench_instrumentation")]
-                                bench_write_counters::N_PATH_A_CACHE_MISSES
-                                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-                                // Same freeze→transmit window as the entity check in
-                                // `write_updates`, one level finer: the entity is
-                                // still alive but THIS component was removed. The
-                                // planned update has nothing left to serialize, so
-                                // drop it rather than panicking.
-                                let Some(component) =
-                                    world.component_of_kind(world_entity, &component_kind)
-                                else {
-                                    written_count += 1;
-                                    continue;
-                                };
-                                let mut converter =
-                                    world_manager.entity_converter_mut(global_world_manager);
-                                let mut temp = BitWriter::new();
-                                true.ser(&mut temp);
-                                component_kind.ser(component_kinds, &mut temp);
-                                component.write_update(&diff_mask, &mut temp, &mut converter);
-                                let c = CachedComponentUpdate::capture(&temp)
-                                    .expect(
+                        let cached: CachedComponentUpdate =
+                            match gdh.get_wire_cache(entity_idx, kind_bit, diff_mask_key) {
+                                Some(c) => {
+                                    #[cfg(feature = "bench_instrumentation")]
+                                    bench_write_counters::N_PATH_A_CACHE_HITS
+                                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    c
+                                }
+                                None => {
+                                    #[cfg(feature = "bench_instrumentation")]
+                                    bench_write_counters::N_PATH_A_CACHE_MISSES
+                                        .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                                    // Same freeze→transmit window as the entity check in
+                                    // `write_updates`, one level finer: the entity is
+                                    // still alive but THIS component was removed. The
+                                    // planned update has nothing left to serialize, so
+                                    // drop it rather than panicking.
+                                    let Some(component) =
+                                        world.component_of_kind(world_entity, &component_kind)
+                                    else {
+                                        written_count += 1;
+                                        continue;
+                                    };
+                                    let mut converter =
+                                        world_manager.entity_converter_mut(global_world_manager);
+                                    let mut temp = BitWriter::new();
+                                    true.ser(&mut temp);
+                                    component_kind.ser(component_kinds, &mut temp);
+                                    component.write_update(&diff_mask, &mut temp, &mut converter);
+                                    let c = CachedComponentUpdate::capture(&temp).expect(
                                         "component exceeds the CachedComponentUpdate \
                                          ceiling; impossible after registration check \
                                          unless max_bit_length() returned the sentinel",
                                     );
-                                gdh.set_wire_cache(entity_idx, kind_bit, diff_mask_key, c);
-                                c
-                            }
-                        };
+                                    gdh.set_wire_cache(entity_idx, kind_bit, diff_mask_key, c);
+                                    c
+                                }
+                            };
 
                         let mut counter = writer.counter();
                         counter.count_bits(cached.bit_count);

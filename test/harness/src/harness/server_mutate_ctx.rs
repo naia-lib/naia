@@ -3,8 +3,8 @@ use log::warn;
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{NaiaServerError, RoomKey, TickBufferMessages};
 use naia_shared::{
-    generate_identity_token, Channel, IdentityToken, Message, Request, Response,
-    ResponseReceiveKey, ResponseSendKey, Tick, WorldRefType,
+    Channel, IdentityToken, Message, Request, Response, ResponseReceiveKey, ResponseSendKey, Tick,
+    WorldRefType,
 };
 
 use crate::harness::{
@@ -582,7 +582,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
     /// Useful for creating tokens that can be used in tests, including negative tests
     /// where you want to test with malformed, expired, or reused tokens.
     pub fn generate_identity_token(&self) -> IdentityToken {
-        generate_identity_token()
+        IdentityToken::generate()
     }
 
     /// Set the GlobalEntity counter for testing rollover behavior

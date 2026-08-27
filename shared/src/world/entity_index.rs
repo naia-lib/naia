@@ -28,7 +28,6 @@ impl From<LocalEntityIndex> for u32 {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use std::time::Duration;
@@ -42,8 +41,7 @@ mod tests {
     /// that genuinely withholds a freed index.
     #[test]
     fn generates_sequential_keys() {
-        let mut g: KeyGenerator<LocalEntityIndex, u32> =
-            KeyGenerator::new(Duration::from_secs(60));
+        let mut g: KeyGenerator<LocalEntityIndex, u32> = KeyGenerator::new(Duration::from_secs(60));
         assert_eq!(g.generate().0, 0);
         assert_eq!(g.generate().0, 1);
         assert_eq!(g.generate().0, 2);
@@ -51,8 +49,7 @@ mod tests {
 
     #[test]
     fn capacity_hint_matches_next_new_key() {
-        let mut g: KeyGenerator<LocalEntityIndex, u32> =
-            KeyGenerator::new(Duration::from_secs(60));
+        let mut g: KeyGenerator<LocalEntityIndex, u32> = KeyGenerator::new(Duration::from_secs(60));
         assert_eq!(g.capacity_hint(), 0);
         let _ = g.generate();
         let _ = g.generate();
@@ -61,8 +58,7 @@ mod tests {
 
     #[test]
     fn recycle_keeps_key_quarantined_until_timeout() {
-        let mut g: KeyGenerator<LocalEntityIndex, u32> =
-            KeyGenerator::new(Duration::from_secs(60));
+        let mut g: KeyGenerator<LocalEntityIndex, u32> = KeyGenerator::new(Duration::from_secs(60));
         let k = g.generate();
         g.recycle_key(&k);
         let next = g.generate();

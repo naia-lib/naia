@@ -48,7 +48,11 @@ impl ServerAuthIo {
         identity_token: &IdentityToken,
     ) -> Result<(), ServerSendError> {
         // Build HTTP 200 response with identity token and server address in body
-        let response_body = format!("{}\r\n{}", identity_token, self.hub.server_addr());
+        let response_body = format!(
+            "{}\r\n{}",
+            identity_token.to_signaling_string(),
+            self.hub.server_addr()
+        );
         let response = http::Response::builder()
             .status(200)
             .body(response_body.into_bytes())
