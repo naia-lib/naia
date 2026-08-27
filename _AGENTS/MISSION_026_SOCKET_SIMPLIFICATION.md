@@ -1,6 +1,6 @@
 # MISSION: naia 0.26 — socket trait-box removal, IdentityToken newtype, handshaker unification
 
-Status: PLANNED (authored 2026-08-27 by Nash, approved by Connor; adversarially
+Status: IN PROGRESS (authored 2026-08-27 by Nash, approved by Connor; adversarially
 audited 2026-08-27 by an independent fresh-context agent — verdict "sound with
 amendments", all amendments folded into this text, marked "audit")
 Branch: create a feature branch off `dev` (e.g. `refactor/026-socket-simplification`).
@@ -9,6 +9,30 @@ Trunk is `dev`. NEVER commit to or merge into `main`. No force pushes.
 This is a **breaking release** (0.25.0 → 0.26.0 across the workspace). All three
 phases land together in one release. Do the phases IN ORDER — each leaves the
 workspace compiling and tests passing, and each gets its own commit(s).
+
+---
+
+## Progress
+
+Nash keeps this checklist current as implementation proceeds. Each box is
+checked only after that phase's validation gate passes and the work is
+committed on `refactor/026-socket-simplification`.
+
+- [x] **B1** — naia-server-socket concrete types (commit `124b4af7`)
+- [x] **B2** — naia-client-socket concrete types (commit `975e34da`)
+- [ ] **B3** — IdentityToken opaque byte newtype
+- [ ] **C1** — one `HandshakeHeader`
+- [ ] **C2** — one client handshaker
+- [ ] **C3** — one server handshaker
+- [ ] **C4** — feature rename `advanced_handshake` → `address_validation`
+- [ ] **C5** — full validation gate + docs
+- [ ] **D** — version bump 0.25.0 → 0.26.0 + CHANGELOG
+
+Known pre-existing failure, unrelated to this mission and NOT to be "fixed"
+here: `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` panics in
+`shared/src/world/component/property.rs` ("mutable HostOwned Property mutated
+before its mutator was installed"). It fails identically before any of this
+work. Everything else in `cargo test --workspace` passes.
 
 ---
 
