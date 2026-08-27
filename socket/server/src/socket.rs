@@ -103,13 +103,17 @@ impl Socket {
             )
             .await;
 
-            sender_sender.send(async_socket.sender()).await.unwrap();
-            //TODO: handle result..
+            // A closed channel means the owning Socket was dropped: end this
+            // task instead of panicking (this runs on a shared executor).
+            if sender_sender.send(async_socket.sender()).await.is_err() {
+                return;
+            }
 
             loop {
                 let out_message = async_socket.receive().await;
-                from_client_sender.send(out_message).await.unwrap();
-                //TODO: handle result..
+                if from_client_sender.send(out_message).await.is_err() {
+                    return;
+                }
             }
         })
         .detach();
@@ -126,13 +130,16 @@ impl Socket {
         let (to_client_sender, to_client_receiver) = channel::unbounded();
 
         executor::spawn(async move {
-            // Create async socket
-            let async_sender = sender_receiver.recv().await.unwrap();
+            // Create async socket. A closed channel means the owning Socket
+            // was dropped: end this task instead of panicking or spinning
+            // (this runs on a shared executor).
+            let Ok(async_sender) = sender_receiver.recv().await else {
+                return;
+            };
 
-            loop {
-                if let Ok(msg) = to_client_receiver.recv().await {
-                    async_sender.send(msg).await.unwrap();
-                    //TODO: handle result..
+            while let Ok(msg) = to_client_receiver.recv().await {
+                if async_sender.send(msg).await.is_err() {
+                    return;
                 }
             }
         })

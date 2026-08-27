@@ -9,7 +9,6 @@ use async_dup::Arc;
 use futures_core::Stream;
 use http::{header, HeaderValue, Response};
 use log::{info, warn};
-use once_cell::sync::OnceCell;
 use smol::{
     io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
     lock::Mutex,
@@ -37,8 +36,14 @@ type AuthMuxMap = Arc<
     >,
 >;
 
-static RTC_URL_POST_PATH: OnceCell<String> = OnceCell::new();
-static RTC_URL_OPTIONS_PATH: OnceCell<String> = OnceCell::new();
+/// The request-line prefixes this listener accepts, derived from the
+/// SocketConfig. Per-listener (not global) so multiple server Sockets can
+/// coexist in one process (e.g. tests).
+#[derive(Clone)]
+struct RtcUrlPaths {
+    post: String,
+    options: String,
+}
 
 pub fn start_session_server(
     server_addrs: ServerAddrs,
@@ -49,12 +54,6 @@ pub fn start_session_server(
         smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
     >,
 ) {
-    RTC_URL_POST_PATH
-        .set(format!("POST /{}", config.rtc_endpoint_path))
-        .expect("unable to set the URL Path");
-    RTC_URL_OPTIONS_PATH
-        .set(format!("OPTIONS /{}", config.rtc_endpoint_path))
-        .expect("unable to set the URL Path");
     executor::spawn(async move {
         listen(
             server_addrs,
@@ -78,6 +77,10 @@ async fn listen(
         smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
     >,
 ) {
+    let rtc_url_paths = RtcUrlPaths {
+        post: format!("POST /{}", config.rtc_endpoint_path),
+        options: format!("OPTIONS /{}", config.rtc_endpoint_path),
+    };
     let socket_address = server_addrs.session_listen_addr;
 
     let listener = Async::<TcpListener>::bind(socket_address)
@@ -127,6 +130,7 @@ async fn listen(
         }
 
         let from_client_auth_sender = from_client_auth_sender.clone();
+        let rtc_url_paths = rtc_url_paths.clone();
         // Spawn a background task serving this connection.
         executor::spawn(async move {
             serve(
@@ -134,6 +138,7 @@ async fn listen(
                 Arc::new(response_stream),
                 from_client_auth_sender,
                 to_session_single_auth_receiver,
+                rtc_url_paths,
             )
             .await;
         })
@@ -173,8 +178,9 @@ async fn serve_auth_mux_in(
 ) {
     loop {
         let Ok((addr, answer)) = to_session_all_auth_receiver.recv().await else {
-            warn!("Unable to receive auth from session");
-            continue;
+            // Channel closed: the server Socket is gone; end this task
+            // (continuing would busy-loop forever on a closed channel).
+            return;
         };
 
         // info!("received auth answer from app, for addr: {}, answer: {:?}", addr, answer);
@@ -204,8 +210,8 @@ async fn serve_auth_mux_out(
 ) {
     loop {
         let Ok((addr, sender)) = sender_receiver.recv().await else {
-            warn!("Unable to receive auth sender from session");
-            continue;
+            // Channel closed: the listener is gone; end this task.
+            return;
         };
 
         // info!("received auth answer sender, for addr: {}", addr);
@@ -236,6 +242,7 @@ async fn serve(
     to_session_single_auth_receiver: Option<
         futures_channel::oneshot::Receiver<Option<IdentityToken>>,
     >,
+    rtc_url_paths: RtcUrlPaths,
 ) {
     let remote_addr = stream
         .get_ref()
@@ -303,18 +310,10 @@ async fn serve(
                     } else {
                         // info!("read leftover line 1: {}", str);
                     }
-                } else if str.starts_with(
-                    RTC_URL_POST_PATH
-                        .get()
-                        .expect("unable to retrieve URL path, was it not configured?"),
-                ) {
+                } else if str.starts_with(&rtc_url_paths.post) {
                     // info!("starting to match to RTC URL");
                     rtc_url_matched = true;
-                } else if str.starts_with(
-                    RTC_URL_OPTIONS_PATH
-                        .get()
-                        .expect("unable to retrieve URL path, was it not configured?"),
-                ) {
+                } else if str.starts_with(&rtc_url_paths.options) {
                     // info!("matched OPTIONS request for RTC URL");
                     rtc_url_matched = true;
                     is_options = true;
