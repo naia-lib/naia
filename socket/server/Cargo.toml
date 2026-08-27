@@ -21,7 +21,7 @@ log = { version = "0.4" }
 futures-channel = { version = "0.3", features = ["sink"] }
 futures-core = { version = "0.3" }
 futures-util = { version = "0.3", features = ["sink"] }
-smol = { version = "1.3" }
+smol = { version = "2" }
 once_cell = { version = "1.4.1" }
 webrtc-unreliable = { version = "0.6.0", default-features = false }
 async-dup = { version = "1.2.2" }

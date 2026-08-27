@@ -1,6 +1,6 @@
 use std::{io::Error as IoError, net::SocketAddr};
 
-use futures_util::{pin_mut, select, FutureExt, StreamExt};
+use futures_util::{pin_mut, select, FutureExt};
 use webrtc_unreliable::{
     MessageResult, MessageType, SendError, Server as InnerRtcServer, SessionEndpoint,
 };
@@ -64,7 +64,7 @@ impl Socket {
 
         loop {
             let next = {
-                let to_client_receiver_next = self.to_client_receiver.next().fuse();
+                let to_client_receiver_next = self.to_client_receiver.recv().fuse();
                 pin_mut!(to_client_receiver_next);
 
                 let rtc_server = &mut self.rtc_server;

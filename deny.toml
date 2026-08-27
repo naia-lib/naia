@@ -13,9 +13,6 @@ version = 2
 yanked = "deny"
 
 ignore = [
-    # ---- smol/fastrand chain via naia-server ----
-    { id = "RUSTSEC-2024-0384", reason = "instant unmaintained. Via fastrand 1.x -> futures-lite -> async-fs -> smol 1.3.0 -> naia-server. Resolved when smol bumps fastrand to 2.x." },
-
     # ---- demo crates only (not in published library) ----
     { id = "RUSTSEC-2025-0035", reason = "macroquad unsound. Demo crate only (demos/macroquad). Not in published library crates." },
     { id = "RUSTSEC-2026-0192", reason = "ttf-parser unmaintained. Via fontdue -> macroquad demo crates only. Not in published library crates." },
