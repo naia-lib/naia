@@ -139,10 +139,10 @@ cfg_if! {
 
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
-pub use reconnect::{ConnectAttempt, DisconnectAction, ReconnectPolicy};
 pub use command_history::CommandHistory;
 pub use connection::jitter_buffer::JitterBufferType;
 pub use error::NaiaClientError;
+pub use reconnect::{ConnectAttempt, DisconnectAction, ReconnectPolicy};
 pub use tick_events::{ClientTickEvent, ServerTickEvent, TickEvent, TickEvents};
 pub use world::{
     entity_mut::EntityMut, entity_owner::EntityOwner, entity_ref::EntityRef,

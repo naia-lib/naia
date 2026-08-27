@@ -241,7 +241,7 @@ mod tests {
         let mut send = UserPriorityState::<u32>::new();
         send.get_mut(7).set_gain(3.0);
         send.advance(7, 10.0); // live accumulator = 10
-        // This tick: a boost-only touch (no gain write).
+                               // This tick: a boost-only touch (no gain write).
         let mut staging = UserPriorityState::<u32>::new();
         staging.get_mut(7).boost_once(4.0);
         staging.drain_merge_into(&mut send);
@@ -265,7 +265,11 @@ mod tests {
         let mut t2 = UserPriorityState::<u32>::new();
         t2.get_mut(7).reset();
         t2.drain_merge_into(&mut send);
-        assert_eq!(send.get_ref(7).gain(), None, "reset clears the persisted send gain");
+        assert_eq!(
+            send.get_ref(7).gain(),
+            None,
+            "reset clears the persisted send gain"
+        );
     }
 
     #[test]
@@ -285,7 +289,11 @@ mod tests {
         let mut staging = UserPriorityState::<u32>::new();
         staging.get_mut(7).set_gain(5.0);
         staging.drain_merge_into(&mut send);
-        assert_eq!(send.get_ref(9).gain(), Some(1.5), "untouched entry preserved");
+        assert_eq!(
+            send.get_ref(9).gain(),
+            Some(1.5),
+            "untouched entry preserved"
+        );
         assert_eq!(send.get_ref(7).gain(), Some(5.0));
     }
 }

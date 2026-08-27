@@ -462,7 +462,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelineRuntime<E> {
         // blocked in its `future::or` select.
         self.park.ping_control();
 
-        let _t_barrier = self.timing.record_barrier.map(|_| std::time::Instant::now());
+        let _t_barrier = self
+            .timing
+            .record_barrier
+            .map(|_| std::time::Instant::now());
         let mut g = self.park.parked_count.lock();
         while *g < expected {
             // Break early if the not-yet-parked workers have all finished
@@ -609,7 +612,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Drop for PipelineRuntime<E> {
                         log::warn!("naia pipeline worker {name} panicked during shutdown");
                     }
                 } else {
-                    log::warn!("naia pipeline worker {name} did not exit within 5s; leaking thread");
+                    log::warn!(
+                        "naia pipeline worker {name} did not exit within 5s; leaking thread"
+                    );
                 }
             }
         }

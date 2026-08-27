@@ -26,6 +26,12 @@ use crate::{HostComponent, Replicate};
 ///
 /// A blanket impl covers any `T` satisfying all three; users do not
 /// implement this trait directly.
-pub trait ReplicatedResource: Replicate + HostComponent + Resource + Component<Mutability = Mutable> {}
+pub trait ReplicatedResource:
+    Replicate + HostComponent + Resource + Component<Mutability = Mutable>
+{
+}
 
-impl<T> ReplicatedResource for T where T: Replicate + HostComponent + Resource + Component<Mutability = Mutable> {}
+impl<T> ReplicatedResource for T where
+    T: Replicate + HostComponent + Resource + Component<Mutability = Mutable>
+{
+}

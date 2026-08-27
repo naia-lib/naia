@@ -15,10 +15,7 @@
 //! containing `Protocol` (which is `Clone`) can share them without
 //! copying.
 
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
 use bevy_ecs::{
     component::{Component, Mutable},
@@ -60,9 +57,7 @@ impl SnapshotReaderRegistry {
     pub(crate) fn register<C: Replicate + Component<Mutability = Mutable>>(&mut self) {
         let kind = ComponentKind::of::<C>();
         let reader: Arc<ReadAndBoxFn> =
-            Arc::new(move |entity_ref: &EntityRef| {
-                entity_ref.get::<C>().map(|c| c.copy_to_box())
-            });
+            Arc::new(move |entity_ref: &EntityRef| entity_ref.get::<C>().map(|c| c.copy_to_box()));
         self.readers.insert(kind, reader);
     }
 
@@ -73,11 +68,7 @@ impl SnapshotReaderRegistry {
     ///
     /// This is the **reusable read surface** `#9` (desync harness) and any
     /// future per-`ComponentKind` consumer will call.
-    pub fn read(
-        &self,
-        kind: &ComponentKind,
-        entity_ref: &EntityRef,
-    ) -> Option<Box<dyn Replicate>> {
+    pub fn read(&self, kind: &ComponentKind, entity_ref: &EntityRef) -> Option<Box<dyn Replicate>> {
         let reader = self.readers.get(kind)?;
         reader(entity_ref)
     }

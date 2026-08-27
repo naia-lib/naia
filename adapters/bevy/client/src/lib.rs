@@ -93,15 +93,15 @@ mod plugin;
 mod protocol_ext;
 mod systems;
 
-pub use naia_bevy_derive::ClientMarker;
 pub use app_ext::AppRegisterComponentEvents;
-pub use protocol_ext::ProtocolClientExt;
 pub use client::{take_received_updates_of_kind, Client, ClientWrapper};
+pub use naia_bevy_derive::ClientMarker;
+pub use protocol_ext::ProtocolClientExt;
 // Re-exported so consumers depend only on this adapter and never reach past it
 // into `naia-client` directly for the connection-lifecycle enum.
-pub use naia_client::ConnectionStatus;
 pub use commands::{ClientCommandsExt, CommandsExt};
 pub use components::{ClientOwned, ServerOwned};
+pub use naia_client::ConnectionStatus;
 pub use plugin::Plugin;
 
 /// Phantom tag type for single-client Bevy apps.

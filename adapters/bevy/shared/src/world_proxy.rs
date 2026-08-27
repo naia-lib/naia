@@ -8,9 +8,9 @@ use bevy_ecs::{
 use naia_shared::{
     ComponentFieldUpdate, ComponentKind, ComponentKinds, EntityAndGlobalEntityConverter,
     GlobalWorldManagerType, LocalEntityAndGlobalEntityConverter, PendingComponentUpdate,
-    ReplicaDynMutWrapper, ReplicaDynRefWrapper,
-    ReplicaMutTrait, ReplicaMutWrapper, ReplicaRefTrait, ReplicaRefWrapper, Replicate,
-    ReplicatedComponent, SerdeErr, WorldMutType, WorldRefType,
+    ReplicaDynMutWrapper, ReplicaDynRefWrapper, ReplicaMutTrait, ReplicaMutWrapper,
+    ReplicaRefTrait, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr, WorldMutType,
+    WorldRefType,
 };
 
 use super::world_data::WorldData;
@@ -397,7 +397,11 @@ impl<'w> WorldMutType<Entity> for WorldMut<'w> {
         let kind = ComponentKind::of::<R>();
         let boxed = self.remove_component_of_kind(entity, &kind)?;
         let boxed_any = boxed.to_boxed_any();
-        Some(*boxed_any.downcast::<R>().expect("remove_component: type mismatch"))
+        Some(
+            *boxed_any
+                .downcast::<R>()
+                .expect("remove_component: type mismatch"),
+        )
     }
 
     fn remove_component_of_kind(

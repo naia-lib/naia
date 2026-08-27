@@ -5,9 +5,7 @@
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
 use naia_derive_core::{
-    channel::channel_impl,
-    client_marker::client_marker_impl,
-    message::message_impl,
+    channel::channel_impl, client_marker::client_marker_impl, message::message_impl,
     replicate::replicate_impl,
 };
 use naia_serde_derive_core::derive_serde_common;

@@ -5,11 +5,7 @@
 
 #![deny(trivial_casts, trivial_numeric_casts, unstable_features)]
 
-use naia_derive_core::{
-    channel::channel_impl,
-    message::message_impl,
-    replicate::replicate_impl,
-};
+use naia_derive_core::{channel::channel_impl, message::message_impl, replicate::replicate_impl};
 use quote::quote;
 use syn::parse_macro_input;
 

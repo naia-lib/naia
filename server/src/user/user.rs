@@ -48,11 +48,17 @@ pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserRef<'s, E> {
     pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserRefTarget::Resident(server), key: *key }
+        Self {
+            server: UserRefTarget::Resident(server),
+            key: *key,
+        }
     }
 
     pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserRefTarget::Pipelined(server), key: *key }
+        Self {
+            server: UserRefTarget::Pipelined(server),
+            key: *key,
+        }
     }
 
     /// Returns the [`UserKey`] for this user.
@@ -99,11 +105,17 @@ pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserMutTarget::Resident(server), key: *key }
+        Self {
+            server: UserMutTarget::Resident(server),
+            key: *key,
+        }
     }
 
     pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: &UserKey) -> Self {
-        Self { server: UserMutTarget::Pipelined(server), key: *key }
+        Self {
+            server: UserMutTarget::Pipelined(server),
+            key: *key,
+        }
     }
 
     /// Returns the [`UserKey`] for this user.

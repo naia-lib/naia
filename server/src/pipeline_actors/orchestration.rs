@@ -248,7 +248,9 @@ where
 /// must re-package the result via this function (since the
 /// `Arc<ServerShared>` is `pub(crate)` to outside callers, they can't
 /// rebuild `CoordHandle` manually).
-pub fn split_world_server<E>(ws: InternalWorldServer<E>) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
+pub fn split_world_server<E>(
+    ws: InternalWorldServer<E>,
+) -> (CoordHandle<E>, RecvHandle<E>, SendHandle<E>)
 where
     E: Copy + Eq + Hash + Send + Sync,
 {
@@ -312,7 +314,8 @@ where
         &mut ws.recv.state.incoming_world_events,
         crate::events::WorldEvents::<E>::new(),
     );
-    ws.recv.state.incoming_world_events = std::mem::replace(&mut output.world_events, prior_world_events);
+    ws.recv.state.incoming_world_events =
+        std::mem::replace(&mut output.world_events, prior_world_events);
     // After the swap: output.world_events holds an empty fresh
     // WorldEvents (target of the merged drain below); ws.recv.state.incoming_world_events
     // holds the prior events ready to be augmented by process_all_packets.
