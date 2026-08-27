@@ -10,6 +10,46 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Breaking changes
 
+#### Transport sockets
+
+- **`naia-client-socket` and `naia-server-socket` no longer expose trait objects.**
+  `PacketSender`, `PacketReceiver`, `IdentityReceiver`, `AuthSender`, and `AuthReceiver`
+  were traits whose only implementors lived in the same crate, handed out as
+  `Box<dyn ...>`. They are now concrete types: the boxes, the `*Impl` suffixes, and the
+  `Clone`-for-`Box` helper machinery are gone. `PacketReceiver` is an enum covering the
+  plain and link-conditioned cases. Code holding `Box<dyn PacketSender>` (etc.) should
+  hold `PacketSender` directly.
+  These traits are not the ones you implement to add a transport — `naia_client::transport`
+  and `naia_server::transport` still define those, and they are unchanged.
+
+#### Identity tokens
+
+- **`IdentityToken` is an opaque byte newtype, not a `String` alias.** It was
+  `type IdentityToken = String`, so any string was a valid token. It is now
+  `struct IdentityToken(Vec<u8>)` with `generate()`, `from_bytes`, `as_bytes`, `len`,
+  and `is_empty`. The free function `generate_identity_token()` is replaced by
+  `IdentityToken::generate()`. Tokens no longer implement `Display`: to put one in the
+  signaling payload, use `to_signaling_string()` (base64, URL-safe, no padding) and
+  recover it with `from_signaling_string()`.
+- **Wire format change.** A token now serializes as `Vec<u8>` rather than `String`, which
+  changes the length prefix from an `UnsignedVariableInteger<9>` to a `<5>`. 0.26 peers
+  cannot handshake with 0.25 peers.
+
+#### Handshake
+
+- **The simple and advanced handshakers are merged.** `shared/src/handshake/{simple,advanced}/`,
+  `client/src/handshake/{simple,advanced}_handshaker.rs`, and the server pair are replaced by
+  one `HandshakeHeader` and one handshaker on each side. The two flows were always the same
+  session negotiation; the advanced one only prepended an HMAC challenge/validate round-trip
+  that validates the client's source address. That stage is now cfg-gated within the single
+  handshaker. Behavior is unchanged for both builds.
+- **Feature `advanced_handshake` renamed to `address_validation`** in `naia-shared`,
+  `naia-client`, `naia-server`, and `naia-bevy-shared`. The name now describes what the
+  feature does rather than how it was implemented. `transport_udp` still enables it.
+- Client and server binaries must be built with matching `transport_udp` settings to
+  interoperate, because `HandshakeHeader` is serialized by positional variant index. This
+  was already true; it is now documented in the UDP book page.
+
 #### Entities
 
 - **`spawn_static_entity` removed.** Use `server.spawn_entity(world).as_static()` instead.

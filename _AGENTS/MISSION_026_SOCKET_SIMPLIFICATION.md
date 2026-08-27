@@ -1,6 +1,6 @@
 # MISSION: naia 0.26 — socket trait-box removal, IdentityToken newtype, handshaker unification
 
-Status: IN PROGRESS (authored 2026-08-27 by Nash, approved by Connor; adversarially
+Status: IMPLEMENTED (authored 2026-08-27 by Nash, approved by Connor; adversarially
 audited 2026-08-27 by an independent fresh-context agent — verdict "sound with
 amendments", all amendments folded into this text, marked "audit")
 Branch: create a feature branch off `dev` (e.g. `refactor/026-socket-simplification`).
@@ -26,7 +26,7 @@ committed on `refactor/026-socket-simplification`.
 - [x] **C3** — one server handshaker
 - [x] **C4** — feature rename `advanced_handshake` → `address_validation`
 - [x] **C5** — full validation gate + docs
-- [ ] **D** — version bump 0.25.0 → 0.26.0 + CHANGELOG
+- [x] **D** — version bump 0.25.0 → 0.26.0 + CHANGELOG
 
 Known pre-existing failures, unrelated to this mission and NOT to be "fixed"
 here. Both were reproduced on the branch point (`1fa28774`) in a throwaway

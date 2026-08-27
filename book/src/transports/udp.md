@@ -6,8 +6,8 @@ provide your own security layer. It should not be the default choice for
 internet-facing games.
 
 ```toml
-naia-server = { version = "0.25", features = ["transport_udp"] }
-naia-client = { version = "0.25", features = ["transport_udp"] }
+naia-server = { version = "0.26", features = ["transport_udp"] }
+naia-client = { version = "0.26", features = ["transport_udp"] }
 ```
 
 The transport is exposed as `naia_server::transport::udp` and

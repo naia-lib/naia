@@ -25,14 +25,14 @@ path = "src/main.rs"
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline"] }
-naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
+naia-bevy-client = { version = "0.26", features = ["transport_webrtc"] }
 my-game-shared   = { path = "../shared" }
 ```
 
 For native or browser clients, enable the WebRTC transport:
 
 ```toml
-naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
+naia-bevy-client = { version = "0.26", features = ["transport_webrtc"] }
 ```
 
 ---

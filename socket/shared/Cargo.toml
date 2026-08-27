@@ -1,6 +1,6 @@
 [package]
 name = "naia-socket-shared"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Common data types shared between naia-server-socket & naia-client-socket crates"
@@ -21,7 +21,7 @@ mquad = [ ]
 test_time = [ ]
 
 [dependencies]
-naia-serde = { version = "0.25", path = "../../shared/serde" }
+naia-serde = { version = "0.26", path = "../../shared/serde" }
 base64 = { version = "0.13" }
 cfg-if = { version = "1.0" }
 log = { version = "0.4" }

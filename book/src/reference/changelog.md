@@ -10,6 +10,18 @@ For the newest release history, see
 
 ### Breaking Changes
 
+- `naia-client-socket` / `naia-server-socket`: `PacketSender`, `PacketReceiver`,
+  `IdentityReceiver`, `AuthSender`, and `AuthReceiver` are concrete types now,
+  not boxed trait objects. (The transport traits you implement in
+  `naia_client::transport` / `naia_server::transport` are unaffected.)
+- `IdentityToken` is an opaque byte newtype instead of a `String` alias.
+  `generate_identity_token()` becomes `IdentityToken::generate()`, and tokens
+  cross the signaling channel via `to_signaling_string()` /
+  `from_signaling_string()`. This changes the handshake wire format, so 0.26
+  peers cannot talk to 0.25 peers.
+- The simple and advanced handshakers are merged into one handshaker with a
+  cfg-gated source-address-validation stage.
+- Feature `advanced_handshake` renamed to `address_validation`.
 - `spawn_static_entity` removed. Use `server.spawn_entity(world).as_static()`
   before the first component insert.
 - `insert_static_resource` removed. Use

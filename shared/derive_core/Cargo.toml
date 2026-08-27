@@ -1,6 +1,6 @@
 [package]
 name = "naia-derive-core"
-version = "0.25.0"
+version = "0.26.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../.."
 description = "Shared proc-macro impl logic for naia derive crates (no adapter/facade names)"
