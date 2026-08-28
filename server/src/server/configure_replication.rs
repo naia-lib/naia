@@ -12,8 +12,8 @@
 //!     `entity_set_scope_exit`.
 //!   * Send-side per-connection writes — `send_publish` / `send_unpublish`
 //!     / `send_enable_delegation` / `send_disable_delegation` command
-//!     enqueues, despawn-from-non-owner, the `migrate_entity_remote_to_host`
-//!     + `host_local_enable_delegation` + `host_send_migrate_response`
+//!     enqueues, despawn-from-non-owner, the `migrate_entity_remote_to_host` +
+//!     `host_local_enable_delegation` + `host_send_migrate_response`
 //!     (delegation) sequence, the `host_send_set_auth` fan-out, and the
 //!     post-publish scope re-evaluation push.
 //!   * World-side hooks — `world.entity_publish` / `world.entity_unpublish`

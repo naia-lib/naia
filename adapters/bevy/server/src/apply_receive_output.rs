@@ -495,7 +495,7 @@ pub fn apply_receive_output_pipeline_with_event_receiver(
 /// `EventReceiver` pushes are unchanged in both modes.
 pub fn apply_receive_output_pipeline_with_event_receiver_split(
     world: &mut World,
-    mut entity_world: Option<&mut World>,
+    entity_world: Option<&mut World>,
     sim_handle: &WorldServer<Entity>,
     sim_receiver: &EventReceiver<Entity>,
     output: ReceiveOutput<Entity>,
@@ -606,7 +606,7 @@ pub fn apply_receive_output_pipeline_with_event_receiver_split(
     // ── Entity-scoped fan-out below: target the entity world (the world
     // that `apply_recv_to_world` mutated), which is `world` itself in the
     // single-world mode and the caller-provided split target otherwise.
-    let ew: &mut World = match entity_world.as_deref_mut() {
+    let ew: &mut World = match entity_world {
         Some(w) => w,
         None => world,
     };

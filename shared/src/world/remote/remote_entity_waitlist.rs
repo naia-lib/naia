@@ -190,10 +190,7 @@ impl RemoteEntityWaitlist {
     }
 
     fn check_handle_ttls(&mut self, now: &Instant) {
-        loop {
-            let Some((ttl, _)) = self.handle_ttls.front() else {
-                break;
-            };
+        while let Some((ttl, _)) = self.handle_ttls.front() {
             if ttl.elapsed(now) < self.handle_ttl {
                 break;
             }

@@ -208,7 +208,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                             if let Some(recv_conn) = self.recv_user_connections.get_mut(&address) {
                                 recv_conn.process_incoming_header(&header);
                                 let tm = self.shared.time_manager.read();
-                                recv_conn.ping_manager.process_pong(&*tm, &mut reader);
+                                recv_conn.ping_manager.process_pong(&tm, &mut reader);
                                 // 4-F.naia.h: mirror the recv-side RTT EMA into
                                 // `ConnectionShared::rtt_avg_ms` so the send half
                                 // (Iris Phase 3B in `SendState::send_all_packets`)
@@ -256,7 +256,7 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 
     /// Drain accumulated world events (step 4-F.naia.c.2b).
     pub fn take_world_events(&mut self) -> WorldEvents<E> {
-        std::mem::replace(&mut self.incoming_world_events, WorldEvents::<E>::new())
+        std::mem::take(&mut self.incoming_world_events)
     }
 
     /// Advance the tick clock and return any newly-fired tick events

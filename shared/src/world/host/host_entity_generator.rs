@@ -68,10 +68,7 @@ impl HostEntityGenerator {
     fn process_reserved_entity_timeouts(&mut self) {
         let now = Instant::now();
 
-        loop {
-            let Some((timeout, _)) = self.reserved_host_entities_ttls.front() else {
-                break;
-            };
+        while let Some((timeout, _)) = self.reserved_host_entities_ttls.front() {
             if timeout.elapsed(&now) < self.reserved_host_entity_ttl {
                 break;
             }

@@ -35,8 +35,7 @@ fn _phase_a2_exports_compile() {
     let _drain: fn(_) -> _ = drain_lifecycle::<u64>;
     let _drain2: fn(_, Tick) -> _ = drain_tick_buffer::<u64>;
     let _variant = RecvLifecycleEvent::RecvError {
-        error: naia_server::NaiaServerError::Wrapped(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        error: naia_server::NaiaServerError::Wrapped(Box::new(std::io::Error::other(
             "compile-time only",
         ))),
     };

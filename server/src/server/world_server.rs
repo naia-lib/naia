@@ -387,7 +387,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             user_address,
             user_key,
             &self.shared.channel_kinds,
-            &*self.shared.global_world_manager.read(),
+            &self.shared.global_world_manager.read(),
             self.shared.server_config.max_replicated_entities as usize,
         );
 
@@ -564,10 +564,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Drains and returns all pending world events for this frame.
     pub fn take_world_events(&mut self) -> WorldEvents<E> {
-        std::mem::replace(
-            &mut self.recv.state.incoming_world_events,
-            WorldEvents::<E>::new(),
-        )
+        std::mem::take(&mut self.recv.state.incoming_world_events)
     }
 
     /// Serial-equivalent pipeline-coordinator entry point (step 4-F.cyberlith.d).
@@ -589,8 +586,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     /// even though the binary packets decoded successfully.
     ///
     /// Pipeline-mode (4-F.cyberlith.e) callers that run the recv phase on a
-    /// background thread should use [`receive_all_packets`](Self::receive_all_packets)
-    /// + [`process_all_packets`](Self::process_all_packets) +
+    /// background thread should use [`receive_all_packets`](Self::receive_all_packets) +
+    /// [`process_all_packets`](Self::process_all_packets) +
     /// [`take_world_events`](Self::take_world_events) directly so the recv
     /// loop can run without holding `world`.
     pub fn receive_with_world<W: WorldMutType<E>>(
@@ -2460,7 +2457,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         if let Some(historian) = &mut self.sim_handle.state.historian {
             historian.record_tick(
                 tick,
-                &*self.shared.global_world_manager.read(),
+                &self.shared.global_world_manager.read(),
                 &*entity_map,
                 &world,
             );
@@ -3781,15 +3778,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     // Private methods
 
-    /// Recv-stage handler for a Data packet. Runs on the recv thread.
-    ///
-    /// 4-E.2e: recv-side does the bare minimum — process the standard
-    /// header (publishes ACK snapshot on the shared atomic), read the
-    /// client tick out of the wire stream, and buffer the remaining
-    /// reader into `RecvState::pending_data_packets`. The coordinator
-    /// thread later drains via `decode_pending_data_packets` (serial:
-    /// inline at recv tail; pipeline: 4-E.2f wires
-    /// `SendHandle::process_recv_packets`).
+    // Recv-stage handler for a Data packet. Runs on the recv thread.
+    //
+    // 4-E.2e: recv-side does the bare minimum — process the standard
+    // header (publishes ACK snapshot on the shared atomic), read the
+    // client tick out of the wire stream, and buffer the remaining
+    // reader into `RecvState::pending_data_packets`. The coordinator
+    // thread later drains via `decode_pending_data_packets` (serial:
+    // inline at recv tail; pipeline: 4-E.2f wires
+    // `SendHandle::process_recv_packets`).
     // 4-F.naia.c.2b: `read_data_packet` moved to `RecvState::read_data_packet`
     // (recv-only) so `RecvState::receive` can drive it without crossing
     // halves.
@@ -3842,7 +3839,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                     self.shared.client_authoritative_entities,
                     now,
                     &mut *entity_map,
-                    &mut *self.shared.global_world_manager.write(),
+                    &mut self.shared.global_world_manager.write(),
                     &mut self.sim_handle.state.global_request_manager,
                     &mut self.sim_handle.state.global_response_manager,
                     world,

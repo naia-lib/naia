@@ -69,7 +69,7 @@ pub(crate) enum RoomChange<E: Copy + Eq + Hash + Send + Sync> {
 
     /// Room destroyed — Send must:
     ///   1. for each (world_entity, global_entity) in removed_entities:
-    ///        entity_room_map.remove_from_room(&global_entity, &room_key)
+    ///      entity_room_map.remove_from_room(&global_entity, &room_key)
     ///   2. scope_checks_cache.on_room_destroyed(room_key)
     RoomDestroyed {
         room_key: RoomKey,

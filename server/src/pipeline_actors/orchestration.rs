@@ -310,10 +310,7 @@ where
     // tail returns the combined set in the original order
     // (handshake events first, then the data-packet-derived events
     // that process_all_packets appends).
-    let prior_world_events = std::mem::replace(
-        &mut ws.recv.state.incoming_world_events,
-        crate::events::WorldEvents::<E>::new(),
-    );
+    let prior_world_events = std::mem::take(&mut ws.recv.state.incoming_world_events);
     ws.recv.state.incoming_world_events =
         std::mem::replace(&mut output.world_events, prior_world_events);
     // After the swap: output.world_events holds an empty fresh

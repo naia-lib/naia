@@ -33,10 +33,11 @@ const MUTATIONS: &[Mutation] = &[
 ];
 
 fn client_config() -> ClientConfig {
-    let mut config = ClientConfig::default();
-    config.send_handshake_interval = Duration::from_millis(0);
-    config.jitter_buffer = JitterBufferType::Bypass;
-    config
+    ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..ClientConfig::default()
+    }
 }
 
 fn setup(mode: ServerMode) -> (Scenario, EntityKey) {

@@ -109,11 +109,7 @@ impl RemoteComponentChannel {
             return;
         }
 
-        loop {
-            let Some((id, insert)) = self.buffered_messages.peek_front() else {
-                break;
-            };
-
+        while let Some((id, insert)) = self.buffered_messages.peek_front() {
             let id = *id;
 
             match *insert {

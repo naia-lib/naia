@@ -356,7 +356,7 @@ fn run_plan(plan_path: &PathBuf, verbose: bool, jobs: Option<usize>) -> Result<S
                             "  [{done}/{total} {status}] {}  ({}ms)",
                             timing.scenario_key, timing.duration_ms
                         );
-                    } else if done % 50 == 0 {
+                    } else if done.is_multiple_of(50) {
                         eprintln!("  ... {done}/{total} scenarios done");
                     }
                     timing
@@ -405,7 +405,7 @@ fn run_plan(plan_path: &PathBuf, verbose: bool, jobs: Option<usize>) -> Result<S
 
     // Top 10 slowest
     let mut slow = timings.clone();
-    slow.sort_by(|a, b| b.duration_ms.cmp(&a.duration_ms));
+    slow.sort_by_key(|t| std::cmp::Reverse(t.duration_ms));
     let slow_scenarios = slow.into_iter().take(10).collect::<Vec<_>>();
 
     eprintln!("\n=== Results ===");

@@ -122,6 +122,7 @@ struct ParkControl {
     ///   - workers_active: the worker idle-waits on a BOUNDED `wait_for(100µs)`
     ///     between iterations; signalling here wakes it instantly instead of
     ///     after up to one ~100µs poll (the park-barrier win).
+    ///
     /// Separate from the *checkpoint* wait (`resume_cv`): a body-sleeping worker
     /// isn't yet counted in `parked_count`, whereas a checkpoint-waiting worker
     /// is.

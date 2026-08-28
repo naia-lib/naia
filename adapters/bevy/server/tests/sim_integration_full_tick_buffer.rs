@@ -12,6 +12,7 @@
 //!      the `RecvHandle` from its shared slot (`WorldServer::recv_slot`),
 //!   3. calls `receive_tick_buffer_messages(tick)` per tick,
 //!   4. returns the handle and unparks.
+//!
 //! The park barrier makes the take/return race-free (D6 / Phase-G discipline).
 //!
 //! # Why injection rather than a live client handshake

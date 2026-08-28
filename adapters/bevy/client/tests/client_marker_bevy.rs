@@ -6,6 +6,8 @@ struct TestMarker;
 
 // Reference a selection of the generated aliases to force the compiler to
 // resolve each one against naia_bevy_client paths.
+// One parameter per generated alias is exactly what this compile test asserts.
+#[allow(clippy::too_many_arguments)]
 fn _assert_aliases(
     _c: TestMarkerClient,
     _conn: TestMarkerConnectEvent,

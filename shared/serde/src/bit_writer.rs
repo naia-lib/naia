@@ -764,7 +764,7 @@ mod tests {
         assert_eq!(CACHED_UPDATE_BITS as usize, CACHED_UPDATE_BYTES * 8);
         // And the whole thing must still fit in one packet, or a cached update
         // could never be appended to a writer that also carries a header.
-        assert!(CACHED_UPDATE_BYTES < crate::constants::MTU_SIZE_BYTES);
+        const { assert!(CACHED_UPDATE_BYTES < crate::constants::MTU_SIZE_BYTES) };
     }
 
     // ─── BitCounter::count_bits behavior test ─────────────────────────────────

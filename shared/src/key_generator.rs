@@ -69,10 +69,7 @@ impl<K: From<I> + Into<I> + Copy, I: KeyInt> KeyGenerator<K, I> {
         let now = Instant::now();
 
         // Check whether we can recycle any keys
-        loop {
-            let Some((_, instant)) = self.recycling_keys.front() else {
-                break;
-            };
+        while let Some((_, instant)) = self.recycling_keys.front() {
             if instant.elapsed(&now) < self.recycle_timeout {
                 break;
             }

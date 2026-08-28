@@ -214,10 +214,7 @@ impl RemoteEntityChannel {
     }
 
     fn process_messages(&mut self) {
-        loop {
-            let Some((id, msg)) = self.buffered_messages.peek_front() else {
-                break;
-            };
+        while let Some((id, msg)) = self.buffered_messages.peek_front() {
             let id = *id;
 
             match msg.get_type() {

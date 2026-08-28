@@ -119,11 +119,7 @@ impl HostEntityChannel {
     }
 
     fn process_messages(&mut self) {
-        loop {
-            let Some((_id, msg)) = self.buffered_messages.peek_front() else {
-                break;
-            };
-
+        while let Some((_id, msg)) = self.buffered_messages.peek_front() {
             match msg.get_type() {
                 EntityMessageType::RequestAuthority
                 | EntityMessageType::ReleaseAuthority

@@ -18,15 +18,15 @@
 //!
 //! Stages:
 //! - `RECV`  — `recv.receive()` busy time (worker thread when active; main-side
-//!             straggler drain otherwise).
+//!   straggler drain otherwise).
 //! - `SIM`   — the Sim update (cyberlith `do_park_window_tick` Step 4), main thread.
 //! - `SEND`  — send preamble + scope + `send_all_packets` (worker thread when active).
 //! - `TICK`  — end-to-end `cell.update()` wall-clock, recorded by the driver.
-//!             Its **count is the sim-tick count `N`** used as the denominator.
+//!   Its **count is the sim-tick count `N`** used as the denominator.
 //! - `BARRIER` — time the main thread spends *blocked* inside `park_workers()`
-//!             waiting for workers to reach their checkpoint. Large ⇒ the main
-//!             thread is waiting on worker work ⇒ stages serialized through the
-//!             park barrier. ~0 ⇒ workers finished in the gaps.
+//!   waiting for workers to reach their checkpoint. Large ⇒ the main
+//!   thread is waiting on worker work ⇒ stages serialized through the
+//!   park barrier. ~0 ⇒ workers finished in the gaps.
 //!
 //! Gated behind `pipeline_timing`; the `record_*` fns compile to no-ops when off.
 

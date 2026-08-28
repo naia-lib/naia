@@ -102,11 +102,7 @@ impl AuthChannelReceiver {
             }
         }
 
-        loop {
-            let Some((_, msg)) = self.buffered_messages.peek_front() else {
-                break;
-            };
-
+        while let Some((_, msg)) = self.buffered_messages.peek_front() {
             let Some(subcommand_id) = msg.subcommand_id() else {
                 panic!("Expected a subcommand ID in the message: {:?}", msg);
             };

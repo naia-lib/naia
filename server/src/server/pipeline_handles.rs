@@ -165,7 +165,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> RecvHandle<E> {
                 &address,
                 user_key,
                 &self.state.shared.channel_kinds,
-                &*gwm_guard,
+                &gwm_guard,
                 self.state.shared.server_config.max_replicated_entities as usize,
             );
             drop(gwm_guard);

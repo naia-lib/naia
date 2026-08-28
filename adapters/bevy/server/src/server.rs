@@ -11,9 +11,8 @@ use bevy_ecs::{
 use naia_server::{
     shared::SocketConfig, transport::Socket, ConnectionStats, EntityOwner, EntityPriorityMut,
     EntityPriorityRef, Events, Historian, NaiaServerError, ReplicationConfig, ResponseSendOutcome,
-    RoomKey, RoomMut,
-    RoomRef, Server as NaiaServer, TickBufferMessages, TickEvents, UserKey, UserMut, UserRef,
-    UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
+    RoomKey, RoomMut, RoomRef, Server as NaiaServer, TickBufferMessages, TickEvents, UserKey,
+    UserMut, UserRef, UserScopeMut, UserScopeRef, WorldServer as NaiaWorldServer,
 };
 
 use naia_bevy_shared::{
@@ -813,7 +812,7 @@ impl<'w> Server<'w> {
     /// [`crate::apply_receive_output::apply_receive_output`].
     pub fn apply_receive_output(world: &mut World, output: naia_server::ReceiveOutput<Entity>) {
         world.resource_scope(|world, mut server: Mut<ServerImpl>| {
-            crate::apply_receive_output::apply_receive_output(world, &mut *server, output);
+            crate::apply_receive_output::apply_receive_output(world, &mut server, output);
         });
     }
 
@@ -1158,7 +1157,7 @@ impl<'w> Server<'w> {
         world
             .resource::<ServerImpl>()
             .as_world_server()
-            .map_or(false, |ws| ws.is_running())
+            .is_some_and(|ws| ws.is_running())
     }
 
     /// Test/dev hook: request that the pipeline workers panic on their next

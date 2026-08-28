@@ -20,10 +20,11 @@ use naia_test_harness::{
 use parking_lot::Mutex;
 
 fn client_config() -> ClientConfig {
-    let mut config = ClientConfig::default();
-    config.send_handshake_interval = Duration::from_millis(0);
-    config.jitter_buffer = JitterBufferType::Bypass;
-    config
+    ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..ClientConfig::default()
+    }
 }
 
 fn trace_summary(packets: &[Vec<u8>]) -> String {

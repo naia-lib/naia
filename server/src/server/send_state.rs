@@ -386,7 +386,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         self.heartbeat_timer.reset();
 
         let tm_guard = self.shared.time_manager.read();
-        let tm: &TimeManager = &*tm_guard;
+        let tm: &TimeManager = &tm_guard;
         for (user_address, send_conn) in self.send_user_connections.iter_mut() {
             if send_conn.base.should_send_heartbeat() {
                 Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
@@ -398,7 +398,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
     /// Relocated from `InternalWorldServer::handle_empty_acks` in 4-F.naia.h.
     pub(crate) fn handle_empty_acks(&mut self) {
         let tm_guard = self.shared.time_manager.read();
-        let tm: &TimeManager = &*tm_guard;
+        let tm: &TimeManager = &tm_guard;
         for (user_address, send_conn) in self.send_user_connections.iter_mut() {
             if send_conn.base.should_send_empty_ack() {
                 Self::send_heartbeat_packet(user_address, send_conn, tm, &mut self.send_io);
@@ -1008,13 +1008,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         let message_kinds = &self.shared.message_kinds;
         let component_kinds = &self.shared.component_kinds;
         let gwm_guard = self.shared.global_world_manager.read();
-        let gwm: &GlobalWorldManager = &*gwm_guard;
+        let gwm: &GlobalWorldManager = &gwm_guard;
         let global_entity_map_guard = self.shared.global_entity_map.read();
-        let global_entity_map: &GlobalEntityMap<E> = &*global_entity_map_guard;
+        let global_entity_map: &GlobalEntityMap<E> = &global_entity_map_guard;
         let idx_to_world_guard = self.shared.idx_to_world.read();
-        let idx_to_world: &Vec<Option<E>> = &*idx_to_world_guard;
+        let idx_to_world: &Vec<Option<E>> = &idx_to_world_guard;
         let time_manager_guard = self.shared.time_manager.read();
-        let time_manager: &TimeManager = &*time_manager_guard;
+        let time_manager: &TimeManager = &time_manager_guard;
         let global_priority = &self.global_priority;
         let snapshot_map_ref = &snapshot_map;
 

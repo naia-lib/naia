@@ -525,7 +525,7 @@ impl HostWorldManager {
         #[cfg(feature = "observability")]
         metrics::counter!(crate::SERVER_DESPAWNS_TOTAL).increment(1);
         if let Some(global_entity) = local_entity_map.global_entity_from_host(host_entity) {
-            self.delivered_component_kinds.remove(&global_entity);
+            self.delivered_component_kinds.remove(global_entity);
         }
         self.entity_generator
             .remove_by_host_entity(local_entity_map, host_entity);

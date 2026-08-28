@@ -10,13 +10,18 @@ use naia_shared::{
 
 use crate::{snapshot_reader_registry::SnapshotReaderRegistry, ProtocolPlugin, WorldData};
 
+/// A type-erased closure that registers Bevy events/systems on the `App`.
+/// Named because the bare `Arc<dyn Fn(&mut App) + Send + Sync>` appears in
+/// four places and reads as noise at each of them.
+pub type EventInstaller = Arc<dyn Fn(&mut App) + Send + Sync>;
+
 #[derive(Clone)]
 pub struct Protocol {
     inner: InnerProtocol,
     world_data: Option<WorldData>,
     snapshot_readers: SnapshotReaderRegistry,
-    client_event_installers: Vec<Arc<dyn Fn(&mut App) + Send + Sync>>,
-    server_event_installers: Vec<Arc<dyn Fn(&mut App) + Send + Sync>>,
+    client_event_installers: Vec<EventInstaller>,
+    server_event_installers: Vec<EventInstaller>,
 }
 
 impl Default for Protocol {
@@ -173,7 +178,7 @@ impl Protocol {
     /// `ProtocolClientExt::add_component` (in `naia-bevy-client`).  The
     /// closure names no client type, so there is no layering cycle between
     /// `naia-bevy-shared` and `naia-bevy-client`.
-    pub fn push_client_event_installer(&mut self, f: Arc<dyn Fn(&mut App) + Send + Sync>) {
+    pub fn push_client_event_installer(&mut self, f: EventInstaller) {
         self.client_event_installers.push(f);
     }
 
@@ -181,9 +186,7 @@ impl Protocol {
     /// `push_client_event_installer`.  The caller (`NaiaClientPlugin::<T>::build`)
     /// invokes them after `ComponentEventRegistry<T>` has been inserted into the
     /// `App`, and before the `Protocol` is consumed by `into()`.
-    pub fn take_client_event_installers(
-        &mut self,
-    ) -> Vec<std::sync::Arc<dyn Fn(&mut App) + Send + Sync>> {
+    pub fn take_client_event_installers(&mut self) -> Vec<EventInstaller> {
         std::mem::take(&mut self.client_event_installers)
     }
 
@@ -191,7 +194,7 @@ impl Protocol {
     /// `ProtocolServerExt::add_component` (in `naia-bevy-server`).  The
     /// closure is `C`-typed at the call site but erased here, so there is no
     /// layering cycle between `naia-bevy-shared` and `naia-bevy-server`.
-    pub fn push_server_event_installer(&mut self, f: Arc<dyn Fn(&mut App) + Send + Sync>) {
+    pub fn push_server_event_installer(&mut self, f: EventInstaller) {
         self.server_event_installers.push(f);
     }
 
@@ -199,9 +202,7 @@ impl Protocol {
     /// `push_server_event_installer`.  The caller (`NaiaServerPlugin::build`)
     /// invokes them after `ComponentEventRegistry` has been inserted into the
     /// `App`, and before the `Protocol` is consumed by `into()`.
-    pub fn take_server_event_installers(
-        &mut self,
-    ) -> Vec<std::sync::Arc<dyn Fn(&mut App) + Send + Sync>> {
+    pub fn take_server_event_installers(&mut self) -> Vec<EventInstaller> {
         std::mem::take(&mut self.server_event_installers)
     }
 

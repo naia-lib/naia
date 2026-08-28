@@ -24,7 +24,7 @@ struct DynRefDowncast<'a, R: Replicate> {
 }
 impl<'a, R: Replicate> ReplicaRefTrait<R> for DynRefDowncast<'a, R> {
     fn to_ref(&self) -> &R {
-        (&*self.inner)
+        (*self.inner)
             .to_any()
             .downcast_ref::<R>()
             .expect("DynRefDowncast: component type mismatch")
@@ -38,7 +38,7 @@ struct DynMutDowncast<'a, R: Replicate> {
 }
 impl<'a, R: Replicate> ReplicaRefTrait<R> for DynMutDowncast<'a, R> {
     fn to_ref(&self) -> &R {
-        (&*self.inner)
+        (*self.inner)
             .to_any()
             .downcast_ref::<R>()
             .expect("DynMutDowncast: component type mismatch")
@@ -46,7 +46,7 @@ impl<'a, R: Replicate> ReplicaRefTrait<R> for DynMutDowncast<'a, R> {
 }
 impl<'a, R: Replicate> ReplicaMutTrait<R> for DynMutDowncast<'a, R> {
     fn to_mut(&mut self) -> &mut R {
-        (&mut *self.inner)
+        (*self.inner)
             .to_any_mut()
             .downcast_mut::<R>()
             .expect("DynMutDowncast: component type mismatch (mut)")

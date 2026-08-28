@@ -36,8 +36,8 @@ pub struct ReceiveOutput<E: Copy + Eq + Hash + Send + Sync> {
     /// Addresses that delivered at least one packet during this recv phase
     /// (step 4-F.naia.c.2b). Populated by `RecvHandle::receive` /
     /// `InternalWorldServer::receive_all_packets`; consumed by
-    /// `SendHandle::process_recv_packets` for the per-address `drain_acks`
-    /// + `process_received_commands` sweep. The set is intentionally
+    /// `SendHandle::process_recv_packets` for the per-address `drain_acks` +
+    /// `process_received_commands` sweep. The set is intentionally
     /// broader than the data-only `addrs_with_new_packets` set on
     /// `RecvState`: any inbound Heartbeat / Ping / Pong / Data counts.
     pub received_addresses: HashSet<SocketAddr>,

@@ -127,10 +127,11 @@ fn cases() -> Vec<Case> {
 }
 
 fn client_config() -> ClientConfig {
-    let mut c = ClientConfig::default();
-    c.send_handshake_interval = Duration::from_millis(0);
-    c.jitter_buffer = JitterBufferType::Bypass;
-    c
+    ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..ClientConfig::default()
+    }
 }
 
 fn direct_server_config() -> ServerConfig {

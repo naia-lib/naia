@@ -190,9 +190,7 @@ mod tests {
             TestClock::init(100);
             assert_eq!(TestClock::current_time_ms(), 100);
 
-            let worker_value = thread::spawn(|| TestClock::current_time_ms())
-                .join()
-                .unwrap();
+            let worker_value = thread::spawn(TestClock::current_time_ms).join().unwrap();
             // Worker thread has its own LOCAL_CLOCK — uninitialized sentinel
             // lazy-inits to 0 on first read, independent of main.
             assert_eq!(worker_value, 0);

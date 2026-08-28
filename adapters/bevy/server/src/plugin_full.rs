@@ -78,6 +78,7 @@ pub struct PipelineConfig {
     /// `ReceivePackets` / `SendPackets` system sets:
     /// - `ReceivePackets` ⇒ [`PipelinedWorldServer::receive`] (parks internally).
     /// - `SendPackets`    ⇒ [`PipelinedWorldServer::send`] (unparks internally).
+    ///
     /// The consumer's own systems sit between the two sets via plain
     /// `add_systems(Update, …)`, running with the workers parked — turnkey
     /// pipelining with zero new consumer-facing concepts.

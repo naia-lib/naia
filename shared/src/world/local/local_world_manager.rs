@@ -492,7 +492,7 @@ impl LocalWorldManager {
         // BULLETPROOF: Step 8: Clean up old remote entity
         // This removes the old client-side entity channel
         self.remote.despawn_entity(
-            &mut *self
+            &mut self
                 .entity_map
                 .write()
                 .expect("LocalEntityMap lock poisoned"),
@@ -610,7 +610,7 @@ impl LocalWorldManager {
     /// Pre-allocates a `HostEntity` slot for `global_entity` before it is sent to the peer.
     pub fn host_reserve_entity(&mut self, global_entity: &GlobalEntity) -> HostEntity {
         self.host.host_reserve_entity(
-            &mut *self
+            &mut self
                 .entity_map
                 .write()
                 .expect("LocalEntityMap lock poisoned"),
@@ -956,7 +956,7 @@ impl LocalWorldManager {
         let host_events = self.host.take_incoming_events(
             spawner,
             global_world_manager,
-            &*self
+            &self
                 .entity_map
                 .read()
                 .expect("LocalEntityMap lock poisoned"),
@@ -966,7 +966,7 @@ impl LocalWorldManager {
         let mut remote_events = self.remote.take_incoming_events(
             spawner,
             global_world_manager,
-            &mut *self
+            &mut self
                 .entity_map
                 .write()
                 .expect("LocalEntityMap lock poisoned"),
@@ -1058,7 +1058,7 @@ impl LocalWorldManager {
             .global_entity_to_remote_entity(global_entity)
             .unwrap();
         self.remote.despawn_entity(
-            &mut *self
+            &mut self
                 .entity_map
                 .write()
                 .expect("LocalEntityMap lock poisoned"),
@@ -1659,7 +1659,7 @@ impl LocalWorldManager {
     /// Advances the delivery state machine, applying any newly acknowledged host-side commands to the delivered engine.
     pub fn process_delivered_commands(&mut self) {
         self.host.process_delivered_commands(
-            &mut *self
+            &mut self
                 .entity_map
                 .write()
                 .expect("LocalEntityMap lock poisoned"),

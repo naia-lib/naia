@@ -119,9 +119,11 @@ fn pipeline_recv_send_independent() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident); // resets TestClock to 0
     let proto = protocol();
 
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..ClientConfig::default()
+    };
 
     scenario.server_start(ServerConfig::default(), proto.clone());
 

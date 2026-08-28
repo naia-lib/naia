@@ -36,9 +36,8 @@ use crate::{
     world::entity_ref::{EntityRef, EntityRefTarget},
     EntityOwner, EntityPriorityMut, EntityPriorityRef, Historian, InternalWorldServer,
     NaiaServerError, PipelinedWorldServer, ReceiveOutput, ReplicationConfig, ResponseSendOutcome,
-    RoomKey, RoomMut,
-    RoomRef, ServerConfig, TickBufferMessages, UserKey, UserMut, UserRef, UserScopeMut,
-    UserScopeRef,
+    RoomKey, RoomMut, RoomRef, ServerConfig, TickBufferMessages, UserKey, UserMut, UserRef,
+    UserScopeMut, UserScopeRef,
 };
 
 /// Whether a [`WorldServer`] drives its engine synchronously (resident) or
@@ -58,6 +57,10 @@ pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
 
 /// Internal variant carrier. Kept private so the only way to act on a
 /// [`WorldServer`] is through its dispatched surface (no variant-pattern leak).
+// Both variants are large by construction -- they *are* the server engine.
+// Exactly one is built per process, so boxing would only add an indirection
+// on every dispatched call to save a one-time allocation difference.
+#[allow(clippy::large_enum_variant)]
 enum WorldServerImpl<E: Copy + Eq + Hash + Send + Sync + 'static> {
     Resident(InternalWorldServer<E>),
     Pipelined(PipelinedWorldServer<E>),

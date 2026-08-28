@@ -90,7 +90,7 @@ fn send_connection_readiness_is_pure_and_tracks_materialization() {
         &address,
         &user_key,
         &send.state.shared.channel_kinds,
-        &*gwm,
+        &gwm,
         send.state.shared.server_config.max_replicated_entities as usize,
     );
     drop(gwm);
@@ -152,7 +152,7 @@ fn pipelined_send_message_fails_before_materialization_and_after_disconnect() {
         &address,
         &user_key,
         &send.state.shared.channel_kinds,
-        &*gwm,
+        &gwm,
         send.state.shared.server_config.max_replicated_entities as usize,
     );
     drop(gwm);
@@ -213,8 +213,7 @@ fn drain_lifecycle_translates_connect_disconnect_error() {
         .push_disconnection(&user_b, addr_b, DisconnectReason::ClientDisconnected);
     output
         .world_events
-        .push_error(NaiaServerError::Wrapped(Box::new(std::io::Error::new(
-            std::io::ErrorKind::Other,
+        .push_error(NaiaServerError::Wrapped(Box::new(std::io::Error::other(
             "boom",
         ))));
 
@@ -332,7 +331,7 @@ fn drain_tick_buffer_returns_injected_message_under_test_utils() {
         &address,
         &user_key,
         &recv.state.shared.channel_kinds,
-        &*gwm_guard,
+        &gwm_guard,
         recv.state.shared.server_config.max_replicated_entities as usize,
     );
     drop(gwm_guard);
@@ -922,7 +921,7 @@ fn pipelined_priority_publish_global_and_per_user() {
             .state
             .user_priority_staging
             .get(&uk)
-            .map_or(true, |l| l.is_empty()),
+            .is_none_or(|l| l.is_empty()),
         "per-user staging must be cleared after publish",
     );
 

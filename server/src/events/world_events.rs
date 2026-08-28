@@ -46,6 +46,12 @@ pub struct WorldEvents<E: Hash + Copy + Eq + Sync + Send> {
     empty: bool,
 }
 
+impl<E: Hash + Copy + Eq + Sync + Send> Default for WorldEvents<E> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvents<E> {
     /// Construct an empty `WorldEvents<E>`. Used by pipeline-mode
     /// callers building synthetic `ReceiveOutput<E>` values (e.g. tests).

@@ -113,7 +113,7 @@ impl UserDiffHandler {
         let global_dirty = global_dirty_arc
             .as_ref()
             .map(Arc::downgrade)
-            .unwrap_or_else(Weak::new);
+            .unwrap_or_default();
         // Server path: GlobalDirtyBitset is present — the three-phase Iris send loop
         // reads GlobalDirtyBitset directly, so per-user DirtySet is never consumed.
         // Skip allocating it to avoid wasted push/cancel atomic ops on every mutation.
@@ -218,7 +218,7 @@ impl UserDiffHandler {
             .dirty_set
             .as_ref()
             .map(Arc::downgrade)
-            .unwrap_or_else(Weak::new);
+            .unwrap_or_default();
         receiver.attach_notifier(DirtyNotifier::new(
             entity_idx,
             kind_bit,

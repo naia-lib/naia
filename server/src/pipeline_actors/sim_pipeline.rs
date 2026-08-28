@@ -428,7 +428,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     pub fn is_running(&self) -> bool {
         self.runtime
             .as_ref()
-            .map_or(false, |rt| rt.state() == RuntimeState::Running)
+            .is_some_and(|rt| rt.state() == RuntimeState::Running)
     }
 
     /// Explicitly OPEN the park window (block until both workers deposit their
@@ -1061,7 +1061,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         let global_world_manager = shared.global_world_manager.read();
 
         if let Some(historian) = &mut self.coord_mut().state.historian {
-            historian.record_tick(tick, &*global_world_manager, &*entity_map, &world);
+            historian.record_tick(tick, &global_world_manager, &*entity_map, &world);
         }
     }
 

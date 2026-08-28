@@ -63,9 +63,11 @@ fn lagged_send_delivers_final_consecutive_value() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
     let proto = protocol();
 
-    let mut client_config = ClientConfig::default();
-    client_config.send_handshake_interval = Duration::from_millis(0);
-    client_config.jitter_buffer = JitterBufferType::Bypass;
+    let client_config = ClientConfig {
+        send_handshake_interval: Duration::from_millis(0),
+        jitter_buffer: JitterBufferType::Bypass,
+        ..ClientConfig::default()
+    };
 
     scenario.server_start(ServerConfig::default(), proto.clone());
     let room_key = scenario.mutate(|mctx| mctx.server(|s| s.create_room().key()));

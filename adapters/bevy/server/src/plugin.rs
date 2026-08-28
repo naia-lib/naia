@@ -240,6 +240,9 @@ impl Plugin {
         }
     }
 
+    // The single private funnel every public `new_*` constructor delegates
+    // to; one parameter per knob is the point.
+    #[allow(clippy::too_many_arguments)]
     fn new_impl(
         server_config: ServerConfig,
         protocol: Protocol,
