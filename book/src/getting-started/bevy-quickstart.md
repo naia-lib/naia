@@ -63,7 +63,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-naia-bevy-shared = "0.26"
+naia-bevy-shared = "0.25"
 bevy_ecs = { version = "0.18", default-features = false }
 ```
 
@@ -146,7 +146,7 @@ path = "src/main.rs"
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline", "bevy_log"] }
-naia-bevy-server = { version = "0.26", features = ["transport_webrtc"] }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared  = { path = "../shared" }
 ```
 
@@ -289,7 +289,7 @@ path = "src/main.rs"
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline", "bevy_log"] }
-naia-bevy-client = { version = "0.26", features = ["transport_webrtc"] }
+naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared  = { path = "../shared" }
 ```
 

@@ -34,7 +34,7 @@ path = "src/main.rs"
 
 [dependencies]
 bevy = { version = "0.18", default-features = false, features = ["bevy_core_pipeline"] }
-naia-bevy-server = { version = "0.26", features = ["transport_webrtc"] }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared   = { path = "../shared" }
 ```
 

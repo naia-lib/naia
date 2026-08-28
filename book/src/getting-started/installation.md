@@ -14,17 +14,17 @@ For Bevy, use the Bevy adapter crates in all three crates:
 ```toml
 # shared/Cargo.toml
 [dependencies]
-naia-bevy-shared = "0.26"
+naia-bevy-shared = "0.25"
 bevy_ecs = { version = "0.18", default-features = false }
 
 # server/Cargo.toml
 [dependencies]
-naia-bevy-server = { version = "0.26", features = ["transport_webrtc"] }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared = { path = "../shared" }
 
 # client/Cargo.toml
 [dependencies]
-naia-bevy-client = { version = "0.26", features = ["transport_webrtc"] }
+naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared = { path = "../shared" }
 ```
 
@@ -43,16 +43,16 @@ For macroquad or a custom engine, use the core crates directly:
 ```toml
 # shared/Cargo.toml
 [dependencies]
-naia-shared = "0.26"
+naia-shared = "0.25"
 
 # server/Cargo.toml
 [dependencies]
-naia-server = { version = "0.26", features = ["transport_webrtc"] }
+naia-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared = { path = "../shared" }
 
 # client/Cargo.toml
 [dependencies]
-naia-client = { version = "0.26", features = ["transport_webrtc"] }
+naia-client = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared = { path = "../shared" }
 ```
 
@@ -60,8 +60,8 @@ There is no separate macroquad adapter crate. Macroquad clients use `naia-client
 directly and enable the `mquad` feature when building through miniquad/macroquad:
 
 ```toml
-naia-client = { version = "0.26", features = ["mquad", "transport_webrtc"] }
-naia-shared = { version = "0.26", features = ["mquad"] }
+naia-client = { version = "0.25", features = ["mquad", "transport_webrtc"] }
+naia-shared = { version = "0.25", features = ["mquad"] }
 ```
 
 See [Core API Overview](../adapters/overview.md) and [Macroquad](../adapters/macroquad.md)
@@ -82,7 +82,7 @@ For a core client wrapper crate:
 wbindgen = ["naia-client/wbindgen", "my-game-shared/wbindgen"]
 
 [dependencies]
-naia-client = { version = "0.26", features = ["transport_webrtc"] }
+naia-client = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared = { path = "../shared" }
 ```
 

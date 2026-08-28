@@ -1,4 +1,4 @@
-# MISSION: naia 0.26 — socket trait-box removal, IdentityToken newtype, handshaker unification
+# MISSION: naia socket trait-box removal, IdentityToken newtype, handshaker unification
 
 Status: IMPLEMENTED (authored 2026-08-27 by Nash, approved by Connor; adversarially
 audited 2026-08-27 by an independent fresh-context agent — verdict "sound with
@@ -6,7 +6,8 @@ amendments", all amendments folded into this text, marked "audit")
 Branch: create a feature branch off `dev` (e.g. `refactor/026-socket-simplification`).
 Trunk is `dev`. NEVER commit to or merge into `main`. No force pushes.
 
-This is a **breaking release** (0.25.0 → 0.26.0 across the workspace). All three
+These are **breaking changes**, to ship in whatever release Connor next calls.
+The workspace version is NOT bumped as part of this work. All three
 phases land together in one release. Do the phases IN ORDER — each leaves the
 workspace compiling and tests passing, and each gets its own commit(s).
 
@@ -26,7 +27,7 @@ committed on `refactor/026-socket-simplification`.
 - [x] **C3** — one server handshaker
 - [x] **C4** — feature rename `advanced_handshake` → `address_validation`
 - [x] **C5** — full validation gate + docs
-- [x] **D** — version bump 0.25.0 → 0.26.0 + CHANGELOG
+- [x] **D** — CHANGELOG entries (NO version bump — see Phase D)
 
 Two failures were red at the branch point (`1fa28774`) and predated this
 mission. Connor asked for them afterwards, so they are fixed on this branch:
@@ -451,20 +452,18 @@ feature. Grep for stragglers: `grep -rn advanced_handshake --include='*.rs' --in
    down.
 4. Commit per sub-phase (C1..C4) or as logically small commits.
 
-## PHASE D — version bump + changelog
+## PHASE D — changelog
 
-1. Bump `version = "0.25.0"` → `"0.26.0"` in all six core crates
-   (`shared`, `client`, `server`, `socket/shared`, `socket/client`,
-   `socket/server`) AND their intra-workspace dependency version fields.
-2. ALSO bump the bevy adapters — this is unconditional, they DO carry
-   versioned path deps: `adapters/bevy/shared/Cargo.toml`,
-   `adapters/bevy/client/Cargo.toml`, `adapters/bevy/server/Cargo.toml`
-   (plus `naia-bevy-derive` if versioned the same way; `naia-metrics` /
-   `naia-bevy-metrics` are `publish = false` and excluded). Match the crate
-   table in `_AGENTS/ARCHIVE/PUBLISH_PLAN.md` (the 0.25.0 release plan —
-   NOTE: `_AGENTS/RELEASE_PROCESS.md` does NOT contain the publish order;
-   only the archived plan does).
-3. Add entries to the root `CHANGELOG.md` under `## [Unreleased]` /
+DO NOT bump any crate version. Connor's rule: incrementing the version number
+is part of publishing, and publishing happens only on his explicit order. This
+phase originally bumped the workspace to 0.26.0; that was wrong and has been
+reverted — the tree stays at 0.25.0 and the changes below sit under
+`## [Unreleased]` until Connor calls the release. When he does, the crate table
+and publish order are in `_AGENTS/ARCHIVE/PUBLISH_PLAN.md` (the 0.25.0 release
+plan — NOTE: `_AGENTS/RELEASE_PROCESS.md` does NOT contain the publish order;
+only the archived plan does).
+
+1. Add entries to the root `CHANGELOG.md` under `## [Unreleased]` /
    `### Breaking changes`, matching the existing format, for EACH of:
    socket-crate trait removal (public API of published crates
    naia-client-socket / naia-server-socket), IdentityToken String→byte

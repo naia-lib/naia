@@ -7,15 +7,15 @@ from the same server, with DTLS provided by WebRTC.
 Enable it on the crate you use:
 
 ```toml
-naia-bevy-server = { version = "0.26", features = ["transport_webrtc"] }
-naia-bevy-client = { version = "0.26", features = ["transport_webrtc"] }
+naia-bevy-server = { version = "0.25", features = ["transport_webrtc"] }
+naia-bevy-client = { version = "0.25", features = ["transport_webrtc"] }
 ```
 
 or, without Bevy:
 
 ```toml
-naia-server = { version = "0.26", features = ["transport_webrtc"] }
-naia-client = { version = "0.26", features = ["transport_webrtc"] }
+naia-server = { version = "0.25", features = ["transport_webrtc"] }
+naia-client = { version = "0.25", features = ["transport_webrtc"] }
 ```
 
 ---

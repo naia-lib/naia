@@ -14,17 +14,17 @@ native `naia-server` with a macroquad/miniquad client and a shared
 ```toml
 # shared/Cargo.toml
 [dependencies]
-naia-shared = { version = "0.26", features = ["mquad"] }
+naia-shared = { version = "0.25", features = ["mquad"] }
 
 # client/Cargo.toml
 [dependencies]
-naia-client = { version = "0.26", features = ["mquad", "transport_webrtc"] }
+naia-client = { version = "0.25", features = ["mquad", "transport_webrtc"] }
 macroquad = "0.3"
 my-game-shared = { path = "../shared" }
 
 # server/Cargo.toml
 [dependencies]
-naia-server = { version = "0.26", features = ["transport_webrtc"] }
+naia-server = { version = "0.25", features = ["transport_webrtc"] }
 my-game-shared = { path = "../shared" }
 ```
 

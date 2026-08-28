@@ -1,6 +1,6 @@
 [package]
 name = "naia-metrics"
-version = "0.26.0"
+version = "0.25.0"
 authors = ["naia authors"]
 description = "Observability emission layer for naia game networking — emits ConnectionStats via the metrics crate facade"
 documentation = "https://docs.rs/naia-metrics"
@@ -13,7 +13,7 @@ edition = "2021"
 
 [dependencies]
 metrics = "0.24"
-naia-shared = { version = "0.26", path = "../shared", features = ["observability"] }
+naia-shared = { version = "0.25", path = "../shared", features = ["observability"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
-naia-shared = { version = "0.26", path = "../shared", features = ["wbindgen", "observability"] }
+naia-shared = { version = "0.25", path = "../shared", features = ["wbindgen", "observability"] }

@@ -1,6 +1,6 @@
 [package]
 name = "naia-bevy-server"
-version = "0.26.0"
+version = "0.25.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Library to faciliate naia_server & Bevy interop"
@@ -46,8 +46,8 @@ f3_diag = [ "naia-server/f3_diag" ]
 
 [dependencies]
 parking_lot = "0.12"
-naia-server = { version = "0.26", path = "../../../server" }
-naia-bevy-shared = { version = "0.26", path = "../shared" }
+naia-server = { version = "0.25", path = "../../../server" }
+naia-bevy-shared = { version = "0.25", path = "../shared" }
 bevy_app = { version = "0.19", default-features=false }
 bevy_ecs = { version = "0.19", default-features=false }
 log = { version = "0.4" }

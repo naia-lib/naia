@@ -1,6 +1,6 @@
 [package]
 name = "naia-serde-derive-core"
-version = "0.26.0"
+version = "0.25.0"
 authors = ["connorcarpenter <connorcarpenter@gmail.com>"]
 workspace = "../../.."
 description = "Shared serde derive impl logic for naia serde derive crates (no adapter/facade names)"
