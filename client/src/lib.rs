@@ -139,7 +139,7 @@ cfg_if! {
 
 pub use client::{Client, ConnectionStatus};
 pub use client_config::ClientConfig;
-pub use command_history::CommandHistory;
+pub use command_history::{CommandHistory, DEFAULT_MAX_TICKS};
 pub use connection::jitter_buffer::JitterBufferType;
 pub use error::NaiaClientError;
 pub use reconnect::{ConnectAttempt, DisconnectAction, ReconnectPolicy};

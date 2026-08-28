@@ -8,6 +8,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **`CommandHistory` is now bounded.** Its only pruning happened in `replays`,
+  which runs on server acknowledgement, so a client that kept predicting while
+  acknowledgements stalled -- a hitching server, a stalled receive path, a long
+  burst of loss -- grew the buffer without limit. `insert` now also evicts
+  anything more than `max_ticks` behind the newest command. The bound is a span
+  of ticks rather than a count of entries, so sparsely inserted commands still
+  reach the full window back.
+
+  `CommandHistory::default()` retains `DEFAULT_MAX_TICKS` (1200 ticks -- one
+  minute at the default 50ms `tick_interval`), and `CommandHistory::new(max_ticks)`
+  sets it explicitly. Existing `default()` callers need no change; the ceiling is
+  far beyond any survivable round trip, so it only engages where the old
+  behaviour would have leaked.
+
 ### Breaking changes
 
 #### Transport sockets

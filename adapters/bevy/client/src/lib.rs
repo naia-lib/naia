@@ -78,7 +78,7 @@ pub use naia_bevy_shared::{
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},
     transport, ClientConfig, CommandHistory, ConnectAttempt, DisconnectAction, DisconnectReason,
-    JitterBufferType, NaiaClientError, Publicity, ReconnectPolicy,
+    JitterBufferType, NaiaClientError, Publicity, ReconnectPolicy, DEFAULT_MAX_TICKS,
 };
 
 pub mod events;
