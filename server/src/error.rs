@@ -12,7 +12,7 @@ pub enum NaiaServerError {
     /// A general descriptive error message.
     Message(String),
     /// An error from an underlying layer, boxed for type erasure.
-    Wrapped(Box<dyn Error>),
+    Wrapped(Box<dyn Error + Send + Sync>),
     /// A packet could not be delivered to the given address.
     SendError(SocketAddr),
     /// A packet could not be read from the socket.
@@ -57,10 +57,9 @@ impl fmt::Display for NaiaServerError {
 }
 
 impl Error for NaiaServerError {}
-// Safety: NaiaServerError::Wrapped contains Box<dyn Error> which is !Send by default because
-// the error object may not be Send. We assert Send here because naia's internal usage of the
-// Wrapped variant only stores errors produced by transport layers that are themselves Send.
-// Callers who construct Wrapped with a !Send error type violate this invariant.
-unsafe impl Send for NaiaServerError {}
-// Safety: Same reasoning as Send above — the contained error object must also be Sync.
-unsafe impl Sync for NaiaServerError {}
+
+#[allow(dead_code)]
+fn _assert_error_send_sync() {
+    fn require<T: Send + Sync>() {}
+    require::<NaiaServerError>();
+}

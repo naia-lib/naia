@@ -2462,7 +2462,6 @@ impl<'a, E: Copy + Eq + Hash + Send + Sync> OutgoingPriorityHook for SendStatePr
 // SAFETY: PacketSender is a trait object; concrete impls used by naia
 // (UDP and local transports) are Send. The HashMap fields are owned
 // outright. UserPriorityState contains POD numeric state.
-unsafe impl<E: Copy + Eq + Hash + Send + Sync> Send for SendState<E> {}
 
 /// Phase A of MISSION_USER_ONLY_SEES_SIM (2026-05-19) — pure decision
 /// helper for the bounded `ScopeToggled` re-queue counter, factored
@@ -2543,6 +2542,12 @@ where
             }
         }
     }
+}
+
+#[allow(dead_code)]
+fn _assert_send_state_send<E: Copy + Eq + Hash + Send + Sync + 'static>() {
+    fn require_send<T: Send>() {}
+    require_send::<SendState<E>>();
 }
 
 #[cfg(test)]

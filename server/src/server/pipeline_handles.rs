@@ -2,10 +2,10 @@
 //! (step 4-E.2f).
 //!
 //! Each handle owns its substate directly — no `Arc<Mutex<InternalWorldServer>>`
-//! wrapper. `RecvState<E>` and `SendState<E>` are both already `Send`
-//! (their `unsafe impl Send` blocks at `recv_state.rs:96` and
-//! `send_state.rs:48` carry the safety story), so the handles inherit
-//! `Send` without any further unsafe.
+//! wrapper. `RecvState<E>` and `SendState<E>` are both `Send` on their own
+//! merits -- every field is `Send`, which the compiler proves via the
+//! assertions in `recv_state.rs` / `send_state.rs` -- so the handles inherit
+//! `Send` with no unsafe anywhere in the chain.
 //!
 //! `InternalWorldServer::into_pipeline_handles(self)` decomposes the server into
 //! three pieces — `CoordinatorState<E>`, `RecvHandle<E>`, `SendHandle<E>` —

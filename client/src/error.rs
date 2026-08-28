@@ -12,7 +12,7 @@ pub enum NaiaClientError {
     /// A general descriptive error message.
     Message(String),
     /// An error from an underlying layer, boxed for type erasure.
-    Wrapped(Box<dyn Error + Send>),
+    Wrapped(Box<dyn Error + Send + Sync>),
     /// A packet could not be sent to the server.
     SendError,
     /// A packet could not be read from the socket.
@@ -46,10 +46,9 @@ impl fmt::Display for NaiaClientError {
 }
 
 impl Error for NaiaClientError {}
-// Safety: NaiaClientError::Wrapped requires Box<dyn Error + Send>, so the payload is Send.
-// The other variants contain only Copy/Clone primitive types. All variants are safe to send
-// across thread boundaries.
-unsafe impl Send for NaiaClientError {}
-// Safety: Same — all variant payloads are primitives or Send-bounded trait objects; no
-// interior mutability or thread-local state is involved.
-unsafe impl Sync for NaiaClientError {}
+
+#[allow(dead_code)]
+fn _assert_error_send_sync() {
+    fn require<T: Send + Sync>() {}
+    require::<NaiaClientError>();
+}

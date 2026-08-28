@@ -8,8 +8,8 @@
 //!      `(CoordinatorState<E>, RecvHandle<E>, SendHandle<E>)` decomposition.
 //!   2. `RecvHandle<E>` and `SendHandle<E>` are `Send` without any
 //!      `unsafe impl Send` block (they inherit it from their owned
-//!      `RecvState<E>` / `SendState<E>` substates which carry the
-//!      safety story).
+//!      `RecvState<E>` / `SendState<E>` substates, which are themselves
+//!      `Send` on their own merits).
 //!   3. `InternalWorldServer::from_pipeline_states(coord, recv, send)` reassembles
 //!      the three pieces into a working `InternalWorldServer<E>` that retains the
 //!      same configuration as the pre-split server (tick interval,
@@ -50,7 +50,8 @@ use _helpers::client_connect;
 /// Compile-time assertion that the new handles inherit `Send` from
 /// their owned substates — the spec explicitly requires dropping the
 /// `unsafe impl Send` blocks that the previous `Arc<Mutex<InternalWorldServer>>`
-/// design needed.
+/// design needed. Those substates now carry no unsafe impls of their own
+/// either, so this whole chain is compiler-proven.
 #[allow(dead_code)]
 fn _assert_handles_send_safe() {
     fn assert_send<T: Send>() {}

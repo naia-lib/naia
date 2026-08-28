@@ -59,7 +59,11 @@ struct StepEntry<W> {
 //   - Step<W> = fn pointer → Send + Sync
 //   - String    → Send + Sync
 //   - Regex     → Send + Sync
-unsafe impl<W> Sync for StepEntry<W> {}
+#[allow(dead_code)]
+fn _assert_step_entry_sync<W>() {
+    fn require_sync<T: Sync>() {}
+    require_sync::<StepEntry<W>>();
+}
 
 /// Build a dispatch table mapping binding_id → step entry from inventory.
 fn build_dispatch_table<W: WorldInventory>() -> HashMap<String, StepEntry<W>> {
@@ -326,7 +330,7 @@ pub fn run(args: RunArgs) -> Result<()> {
     // Safety: Each scenario gets its own fresh `TestWorld` (no shared mutable
     // state). TestClock uses thread_local storage so parallel threads never
     // interfere with each other's clock. The dispatch table is read-only
-    // after construction. StepEntry<TestWorld>: Sync (see unsafe impl above).
+    // after construction. StepEntry<TestWorld>: Sync (proven by the assertion above).
     let total = plan.scenarios.len();
     let completed = Arc::new(AtomicUsize::new(0));
 

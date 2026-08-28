@@ -334,4 +334,9 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
 // SAFETY: All fields are Send: HashMap of RecvConnection (which is Send
 // because PingManager / TickBufferReceiver / Timer / Arc<ConnectionShared>
 // are all Send) plus owned timer/queue/event state.
-unsafe impl<E: Copy + Eq + std::hash::Hash + Send + Sync> Send for RecvState<E> {}
+
+#[allow(dead_code)]
+fn _assert_recv_state_send<E: Copy + Eq + std::hash::Hash + Send + Sync + 'static>() {
+    fn require_send<T: Send>() {}
+    require_send::<RecvState<E>>();
+}

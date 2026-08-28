@@ -80,7 +80,11 @@ struct StepEntry<W> {
 }
 
 // StepEntry<W> is Sync: Step<W> is a fn pointer (Sync), Regex is Sync
-unsafe impl<W> Sync for StepEntry<W> {}
+#[allow(dead_code)]
+fn _assert_step_entry_sync<W>() {
+    fn require_sync<T: Sync>() {}
+    require_sync::<StepEntry<W>>();
+}
 
 fn build_dispatch_table<W: WorldInventory>() -> std::collections::HashMap<String, StepEntry<W>> {
     let mut table = std::collections::HashMap::new();

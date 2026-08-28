@@ -10,6 +10,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Removed every `unsafe impl Send` / `unsafe impl Sync` in the library**
+  (naia-lib/naia#154). Two of them were genuinely unsound and the rest had
+  stopped being necessary without anyone noticing.
+
+  `NaiaServerError::Wrapped` held a `Box<dyn Error>` and `NaiaClientError::Wrapped`
+  a `Box<dyn Error + Send>`, with `Send` *and* `Sync` asserted over both. `Wrapped`
+  is a public variant, so callers could put a `!Send` payload in it -- the server's
+  own safety comment admitted as much. Both now hold `Box<dyn Error + Send + Sync>`
+  and derive `Send`/`Sync` normally, matching the idiom `NaiaServerSocketError`
+  already used. BREAKING only for a caller who wraps an error that is not
+  `Send + Sync`; every in-tree site wraps `std::io::Error` or a socket error.
+
+  The rest were removable as-is, which the compiler now proves via static
+  assertions left in their place: `RecvState<E>` and `SendState<E>` are `Send`
+  field-by-field (`PacketSender` has had `Send + Sync` supertraits for some time,
+  contrary to the stale comment claiming otherwise), the test and bench
+  `StepEntry<W>` hold only a fn pointer, a `String` and a `Regex`, and the
+  `wasm_bindgen` `PacketSender` needed nothing because `web_sys::MessagePort` and
+  `js_sys::Uint8Array` are themselves `Send + Sync` on single-threaded wasm --
+  an upstream claim that correctly stops applying if the target gains threads,
+  which the hand-rolled version did not.
+
+  Contrary to the issue's expectation, none of this required giving up
+  cross-thread access or moving Bevy resources to `NonSend`.
+
 - **The entity waitlist is bounded, and can no longer panic the process.** A
   message carrying an `EntityProperty` whose entity is not yet in scope is parked
   on the waitlist. The existing `PER_ENTITY_WAITLIST_CAP` bounded only how many
