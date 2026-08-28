@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     messages::channels::receivers::reliable_message_receiver::{
-        ReceiverArranger, ReceiverCaps, ReliableMessageReceiver,
+        ReceiverArranger, ReliableMessageReceiver,
     },
     types::MessageIndex,
     MessageContainer,
@@ -20,14 +20,14 @@ impl OrderedReliableReceiver {
         })
     }
 
-    /// Creates a new `OrderedReliableReceiver` bounded by `caps`.
-    pub fn with_caps(caps: ReceiverCaps) -> Self {
-        Self::with_arranger_and_caps(
+    /// Creates a new `OrderedReliableReceiver` bounded by `max_receive_window`.
+    pub fn with_window(max_receive_window: Option<u16>) -> Self {
+        Self::with_arranger_and_window(
             OrderedArranger {
                 messages_received: 0,
                 buffer: VecDeque::new(),
             },
-            caps,
+            max_receive_window,
         )
     }
 }

@@ -19,7 +19,7 @@ use crate::{
                 sequenced_reliable_receiver::SequencedReliableReceiver,
                 sequenced_unreliable_receiver::SequencedUnreliableReceiver,
                 unordered_reliable_receiver::UnorderedReliableReceiver,
-                unordered_unreliable_receiver::UnorderedUnreliableReceiver, ReceiverCaps,
+                unordered_unreliable_receiver::UnorderedUnreliableReceiver,
             },
             senders::{
                 channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
@@ -44,20 +44,17 @@ type RequestsAndResponsesOut = (
     Vec<(GlobalRequestId, MessageContainer)>,
 );
 
-/// Derives a receiver's capacity limits from a reliable channel's settings.
+/// The receive window a reliable channel's receiver should enforce.
 ///
-/// The receive window is the channel's own `max_queue_depth`: that is exactly the
-/// span of message indices a conforming peer's sender can have outstanding, so it
-/// is the tightest window that never rejects honest traffic. Channels are declared
-/// once in the shared `Protocol`, so both ends agree on the value by construction.
+/// It is the channel's own `max_queue_depth`: that is exactly the span of message
+/// indices a conforming peer's sender can have outstanding, so it is the tightest
+/// window that never rejects honest traffic. Channels are declared once in the
+/// shared `Protocol`, so both ends agree on the value by construction.
 /// `max_queue_depth: None` opts out of the bound on both sides.
-fn receiver_caps(settings: &ReliableSettings) -> ReceiverCaps {
-    ReceiverCaps {
-        max_messages_per_tick: settings.max_messages_per_tick,
-        max_receive_window: settings
-            .max_queue_depth
-            .map(|depth| u16::try_from(depth).unwrap_or(u16::MAX)),
-    }
+fn receive_window(settings: &ReliableSettings) -> Option<u16> {
+    settings
+        .max_queue_depth
+        .map(|depth| u16::try_from(depth).unwrap_or(u16::MAX))
 }
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
@@ -148,7 +145,7 @@ impl MessageManager {
                 ChannelMode::UnorderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(UnorderedReliableReceiver::with_caps(receiver_caps(
+                        Box::new(UnorderedReliableReceiver::with_window(receive_window(
                             settings,
                         ))),
                     );
@@ -156,7 +153,7 @@ impl MessageManager {
                 ChannelMode::SequencedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(SequencedReliableReceiver::with_caps(receiver_caps(
+                        Box::new(SequencedReliableReceiver::with_window(receive_window(
                             settings,
                         ))),
                     );
@@ -164,7 +161,9 @@ impl MessageManager {
                 ChannelMode::OrderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(OrderedReliableReceiver::with_caps(receiver_caps(settings))),
+                        Box::new(OrderedReliableReceiver::with_window(receive_window(
+                            settings,
+                        ))),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {

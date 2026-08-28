@@ -58,13 +58,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   rather than failing the connection, because the packet's ack is recorded before
   its payload is parsed.
 
-- **`ChannelSettings::max_messages_per_tick` is documented as lossy.** It was
-  already implemented as a truncation, and because a packet is acked before its
-  payload is parsed, messages discarded by it are never retransmitted. On a
-  reliable channel that is silent data loss, so the setting now carries an
-  explicit warning; it bounds delivery throughput, not memory. The new receive
-  window is what bounds memory. Internally the two travel together as
-  `ReceiverCaps`, and the `with_cap` constructors became `with_caps`.
+- **Removed `ReliableSettings::max_messages_per_tick`.** BREAKING. It truncated
+  the messages released to the application each tick -- and because a packet's ack
+  is recorded before its payload is parsed, anything it discarded had already been
+  acknowledged to the sender and would never be retransmitted. On a reliable
+  channel that is silent, unrecoverable data loss, with no error and no hole
+  visible to either side; on an ordered channel the surviving suffix was delivered
+  around the gap. There was no safe non-`None` value, and the plausible reason to
+  reach for it -- bounding memory -- was not something it did: the messages are
+  already decoded and buffered by the time it applies. Memory is bounded by
+  `max_queue_depth`, which also sets the receive window, and send-side
+  backpressure is bounded by the same setting in a *recoverable* way, since a
+  refused `send_message` returns `false` to a caller that can retry.
+
+  Remove the field from any `ReliableSettings` you construct literally. Code using
+  `ReliableSettings::default()` is unaffected, as are unreliable channels, where
+  dropping was always the contract. Internally `ReceiverCaps` is gone again with
+  only one knob left to carry, and `with_caps` became `with_window`.
 
   Regression coverage for naia-lib/naia#165 was added alongside: `max_queue_depth`
   is what keeps a channel's index gaps encodable. `collect_messages` emits only

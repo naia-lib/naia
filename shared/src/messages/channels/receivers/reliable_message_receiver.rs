@@ -22,31 +22,6 @@ use crate::{
     LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse,
 };
 
-/// Capacity limits a reliable channel receiver applies to a remote peer.
-///
-/// Grouped rather than passed positionally because the two are easy to confuse:
-/// one bounds *memory* (how far ahead of us a peer may buffer), the other bounds
-/// *delivery* (how much we hand the application per tick).
-#[derive(Clone, Copy, Default)]
-pub struct ReceiverCaps {
-    /// Maximum messages released to the application per tick, or `None` for no cap.
-    ///
-    /// # Warning
-    ///
-    /// Excess messages are **discarded, not deferred**, and they have already been
-    /// acknowledged to the sender by the time this applies -- so on a reliable
-    /// channel a non-`None` value silently breaks the delivery guarantee. It
-    /// bounds throughput, not memory; for memory use `max_receive_window`.
-    pub max_messages_per_tick: Option<u16>,
-    /// How many message indices ahead of the oldest outstanding one a peer may
-    /// buffer, or `None` for no window.
-    ///
-    /// Derived from the channel's `max_queue_depth`, which is the span an honest
-    /// peer's sender is itself bounded by. See
-    /// [`ReliableReceiver::buffer_message`](super::reliable_receiver::ReliableReceiver::buffer_message).
-    pub max_receive_window: Option<u16>,
-}
-
 // Receiver Arranger Trait
 pub trait ReceiverArranger: Send + Sync {
     fn process(
@@ -66,24 +41,27 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     waitlist_store: WaitlistStore<(MessageIndex, MessageIndex, MessageContainer)>,
     incoming_requests: Vec<(LocalResponseId, MessageContainer)>,
     incoming_responses: Vec<(LocalRequestId, MessageContainer)>,
-    max_messages_per_tick: Option<u16>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
     pub fn with_arranger(arranger: A) -> Self {
-        Self::with_arranger_and_caps(arranger, ReceiverCaps::default())
+        Self::with_arranger_and_window(arranger, None)
     }
 
-    pub fn with_arranger_and_caps(arranger: A, caps: ReceiverCaps) -> Self {
+    /// `max_receive_window` is how many message indices ahead of the oldest
+    /// outstanding one a peer may buffer, or `None` for no window. It is derived
+    /// from the channel's `max_queue_depth`, which is the span an honest peer's
+    /// sender is itself bounded by. See
+    /// [`ReliableReceiver::buffer_message`](super::reliable_receiver::ReliableReceiver::buffer_message).
+    pub fn with_arranger_and_window(arranger: A, max_receive_window: Option<u16>) -> Self {
         Self {
-            reliable_receiver: ReliableReceiver::with_window(caps.max_receive_window),
+            reliable_receiver: ReliableReceiver::with_window(max_receive_window),
             incoming_messages: Vec::new(),
             arranger,
             fragment_receiver: FragmentReceiver::new(),
             waitlist_store: WaitlistStore::new(),
             incoming_requests: Vec::new(),
             incoming_responses: Vec::new(),
-            max_messages_per_tick: caps.max_messages_per_tick,
         }
     }
 
@@ -226,16 +204,7 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
             }
         }
 
-        // return buffer, applying per-tick cap if set
-        let mut messages = std::mem::take(&mut self.incoming_messages);
-        if let Some(cap) = self.max_messages_per_tick {
-            let cap = cap as usize;
-            if messages.len() > cap {
-                warn!("Reliable channel: per-tick message cap ({}) exceeded; discarding {} excess messages.", cap, messages.len() - cap);
-                messages.truncate(cap);
-            }
-        }
-        messages
+        std::mem::take(&mut self.incoming_messages)
     }
 }
 
