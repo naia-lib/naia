@@ -273,11 +273,9 @@ Work in `socket/client/src/`:
    Also add `is_empty()` and/or `len()` accessors — the test harness asserts
    on token round-trips (see harness subsection below).
 2. Implement `Serde` (naia's bit-serde) for it, delegating to `Box<[u8]>`'s
-   existing impl (`shared/serde/src/impls/boxed.rs:29-57`). This keeps the wire
-   format identical to the old `String`: both write an
-   `UnsignedVariableInteger<9>` length prefix then raw bytes. Do NOT delegate to
-   `Vec<u8>` — its prefix is a `<5>`, which would break the wire for no reason.
-   A unit test in `identity_token.rs` pins this equivalence. Serialization sites: client simple handshaker (identify request +
+   existing impl (`shared/serde/src/impls/boxed.rs:29-57`). `Box<[u8]>` is the
+   right inner type for a minted, immutable token — `Vec<u8>`'s growth API is
+   meaningless here. Serialization sites: client simple handshaker (identify request +
    `write_disconnect`), client advanced (challenge request), server simple
    `verify_disconnect_request` (`server/src/handshake/simple_handshaker.rs:162`
    has a second `IdentityToken::de()` — don't miss it), server advanced

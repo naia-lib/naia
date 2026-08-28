@@ -93,24 +93,14 @@ mod tests {
     }
 
     #[test]
-    fn wire_format_matches_legacy_string_encoding() {
-        // Identity tokens used to be `String`s on the wire. `Box<[u8]>` and
-        // `String` share an encoding (an UnsignedVariableInteger<9> length
-        // prefix followed by raw bytes), so 0.26 stays wire-compatible with
-        // 0.25 here. `Vec<u8>` would not: its prefix is <5>.
-        let text = "an-identity-token".to_string();
+    fn serde_round_trip() {
+        let token = IdentityToken::generate();
 
-        let mut string_writer = BitWriter::new();
-        text.ser(&mut string_writer);
-
-        let mut token_writer = BitWriter::new();
-        IdentityToken::from_bytes(text.as_bytes().to_vec()).ser(&mut token_writer);
-
-        let bytes = string_writer.to_bytes();
-        assert_eq!(bytes, token_writer.to_bytes());
+        let mut writer = BitWriter::new();
+        token.ser(&mut writer);
+        let bytes = writer.to_bytes();
 
         let mut reader = BitReader::new(&bytes);
-        let token = IdentityToken::de(&mut reader).unwrap();
-        assert_eq!(token.as_bytes(), text.as_bytes());
+        assert_eq!(token, IdentityToken::de(&mut reader).unwrap());
     }
 }

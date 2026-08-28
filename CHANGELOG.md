@@ -31,10 +31,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `IdentityToken::generate()`. Tokens no longer implement `Display`: to put one in the
   signaling payload, use `to_signaling_string()` (base64, URL-safe, no padding) and
   recover it with `from_signaling_string()`.
-- **The wire format is unchanged.** `Box<[u8]>` and `String` share an encoding in
-  naia-serde — an `UnsignedVariableInteger<9>` length prefix followed by raw bytes — so
-  a 0.26 token is byte-identical on the wire to a 0.25 one. (`Vec<u8>` would not have
-  been: its length prefix is a `<5>`.) This is source-breaking, not wire-breaking.
 
 #### Authority
 

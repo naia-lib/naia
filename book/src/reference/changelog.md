@@ -17,8 +17,7 @@ For the newest release history, see
 - `IdentityToken` is an opaque byte newtype instead of a `String` alias.
   `generate_identity_token()` becomes `IdentityToken::generate()`, and tokens
   cross the signaling channel via `to_signaling_string()` /
-  `from_signaling_string()`. The wire format is unchanged: the newtype wraps
-  `Box<[u8]>`, which serializes exactly as the old `String` did.
+  `from_signaling_string()`.
 - A `request_authority` that the server refuses now sends `Denied` back to
   the requesting client, so it emits `EntityAuthDeniedEvent` instead of
   staying stuck in `Requested`.
