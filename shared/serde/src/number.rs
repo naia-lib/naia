@@ -341,6 +341,17 @@ impl SerdeNumberInner {
                         chunk |= 1u32 << i;
                     }
                 }
+                // The continuation bit is wire-controlled, so a peer can keep the
+                // loop going past the width of the accumulator. A legitimate
+                // encoding stops as soon as the value is exhausted, so a chunk
+                // that starts at or beyond bit 128 cannot be part of a value that
+                // ever fit: reject the packet rather than shift past the width
+                // (a panic in debug, silent corruption in release). A chunk that
+                // straddles bit 128 is fine -- the shift drops its high bits,
+                // which is the same truncation the encoder's u128 already applied.
+                if shift >= 128 {
+                    return Err(SerdeErr);
+                }
                 output |= (chunk as u128) << shift;
                 shift += bits as u32;
                 if !proceed {

@@ -133,3 +133,12 @@ impl FragmentedMessage {
         self.bytes
     }
 }
+
+#[cfg(test)]
+impl FragmentIndex {
+    /// Builds an index/total directly, for tests that need to construct the
+    /// values a hostile peer could put on the wire.
+    pub(crate) fn from_u32(inner: u32) -> Self {
+        Self { inner }
+    }
+}

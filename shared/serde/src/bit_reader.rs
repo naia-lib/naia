@@ -28,6 +28,15 @@ impl<'b> BitReader<'b> {
         self.buffer.len()
     }
 
+    /// How many bits are still readable from this reader.
+    ///
+    /// Decoders that read a length prefix off the wire use this as a hard upper
+    /// bound on how many elements could possibly follow, so that a forged length
+    /// cannot make them pre-allocate more than the remaining input could fill.
+    pub fn bits_remaining(&self) -> usize {
+        self.state.scratch_bits as usize + (self.buffer.len() - self.state.buffer_index) * 8
+    }
+
     pub fn to_owned(&self) -> OwnedBitReader {
         OwnedBitReader {
             state: self.state,

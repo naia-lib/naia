@@ -10,6 +10,38 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Length-prefixed decoders no longer size their buffers from the wire.** `Vec`,
+  `VecDeque`, `String`, and `Box<[u8]>` each read a length prefix and passed it
+  straight to `with_capacity`, before decoding a single element. A six-byte packet
+  claiming four billion elements made the process request 17 GB and abort -- an
+  abort, so not even catchable as the `SerdeErr` the packet-drop path expects.
+  The decode loop was always self-limiting (element decode fails once the reader
+  runs dry), so only the pre-allocation was wrong: it is now bounded by what the
+  reader could still contain, which needs no arbitrary cap. `BitReader` gained a
+  `bits_remaining()` accessor for this. The `HashSet`/`HashMap` impls never
+  pre-allocated and were unaffected.
+
+- **Over-long variable-length integers are now rejected.** The continuation bit of
+  a `SerdeInteger` variable encoding is wire-controlled, so a peer could keep the
+  decode loop running past the width of the `u128` accumulator: 52 bytes of input
+  panicked with `attempt to shift left with overflow` in debug, and silently
+  corrupted the decoded value in release. A chunk starting at or beyond bit 128
+  cannot belong to a value that ever fit, and is now a `SerdeErr`. A chunk that
+  straddles bit 128 is still accepted -- the shift drops its high bits, matching
+  the truncation the encoder already applied -- so maximal values round-trip
+  unchanged.
+
+- **Fragment reassembly validates every field it reads off the wire.** A
+  `FragmentedMessage`'s id, index, total, and payload all come from the peer, and
+  `FragmentReceiver` trusted them: an index past the declared total indexed past
+  the end of the reassembly buffer, a declared total of zero left a buffer any
+  index overran, a second fragment claiming index 0 hit an `unwrap` on a slot
+  already filled, and repeating one non-zero index drove the received-count to the
+  total so a sequence "completed" without fragment 0 ever arriving. Each is now a
+  warn-and-drop. Payloads are also held keyed by index rather than in a `Vec`
+  pre-sized to the declared total, so an id opened with a large total costs only
+  what actually arrives.
+
 - **The session listener no longer panics on malformed pre-auth requests.**
   `naia-server-socket`'s WebRTC session endpoint parses the incoming HTTP request
   before any authentication runs, and it did so with `.expect()`: a read error, or a

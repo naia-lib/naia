@@ -16,7 +16,12 @@ impl Serde for String {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int = UnsignedVariableInteger::<9>::de(reader)?;
         let length_usize = length_int.get() as usize;
-        let mut bytes: Vec<u8> = Vec::with_capacity(length_usize);
+        // `length_usize` comes off the wire, so a peer picks it freely; reserving it
+        // directly lets a handful of bytes demand gigabytes. Each element here is a
+        // whole byte, so the bits left in the reader bound how many can actually
+        // follow. The loop below is already self-limiting -- `read_byte` fails once
+        // the reader runs dry -- so only the pre-allocation needed a bound.
+        let mut bytes: Vec<u8> = Vec::with_capacity(length_usize.min(reader.bits_remaining() / 8));
         for _ in 0..length_usize {
             bytes.push(reader.read_byte()?);
         }

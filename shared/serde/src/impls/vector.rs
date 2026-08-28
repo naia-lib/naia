@@ -17,7 +17,14 @@ impl<T: Serde> Serde for Vec<T> {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
-        let mut output: Vec<T> = Vec::with_capacity(length_usize);
+        // `length_usize` comes off the wire, so a peer picks it freely. Reserving it
+        // directly lets a handful of bytes demand gigabytes before a single element
+        // is decoded. Every element costs at least one bit, so what remains in the
+        // reader is a hard ceiling on how many can actually follow; reserve the
+        // smaller of the two and let the loop grow the collection if the peer was
+        // honest. The loop is already self-limiting -- `T::de` fails once the
+        // reader runs dry.
+        let mut output: Vec<T> = Vec::with_capacity(length_usize.min(reader.bits_remaining()));
         for _ in 0..length_usize {
             output.push(T::de(reader)?)
         }
@@ -47,7 +54,15 @@ impl<T: Serde> Serde for VecDeque<T> {
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
         let length_int = UnsignedVariableInteger::<5>::de(reader)?;
         let length_usize = length_int.get() as usize;
-        let mut output: VecDeque<T> = VecDeque::with_capacity(length_usize);
+        // `length_usize` comes off the wire, so a peer picks it freely. Reserving it
+        // directly lets a handful of bytes demand gigabytes before a single element
+        // is decoded. Every element costs at least one bit, so what remains in the
+        // reader is a hard ceiling on how many can actually follow; reserve the
+        // smaller of the two and let the loop grow the collection if the peer was
+        // honest. The loop is already self-limiting -- `T::de` fails once the
+        // reader runs dry.
+        let mut output: VecDeque<T> =
+            VecDeque::with_capacity(length_usize.min(reader.bits_remaining()));
         for _ in 0..length_usize {
             output.push_back(T::de(reader)?)
         }
