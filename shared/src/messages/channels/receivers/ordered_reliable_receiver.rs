@@ -2,7 +2,7 @@ use std::collections::VecDeque;
 
 use crate::{
     messages::channels::receivers::reliable_message_receiver::{
-        ReceiverArranger, ReliableMessageReceiver,
+        ReceiverArranger, ReceiverCaps, ReliableMessageReceiver,
     },
     types::MessageIndex,
     MessageContainer,
@@ -20,14 +20,14 @@ impl OrderedReliableReceiver {
         })
     }
 
-    /// Creates a new `OrderedReliableReceiver` capped at `max_messages_per_tick` deliveries per tick.
-    pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
-        Self::with_arranger_and_cap(
+    /// Creates a new `OrderedReliableReceiver` bounded by `caps`.
+    pub fn with_caps(caps: ReceiverCaps) -> Self {
+        Self::with_arranger_and_caps(
             OrderedArranger {
                 messages_received: 0,
                 buffer: VecDeque::new(),
             },
-            max_messages_per_tick,
+            caps,
         )
     }
 }
@@ -159,5 +159,63 @@ impl ReceiverArranger for OrderedArranger {
                 self.buffer.pop_front();
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::OrderedArranger;
+    use crate::messages::{
+        channels::receivers::ReceiverArranger,
+        fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+    };
+    use crate::MessageContainer;
+
+    fn message() -> MessageContainer {
+        MessageContainer::new(Box::new(FragmentedMessage::new(
+            FragmentId::zero(),
+            FragmentIndex::zero(),
+            Box::new([0u8; 4]),
+        )))
+    }
+
+    /// This arranger buffers a slot per index between the last message it
+    /// released and the one being processed, so its memory is governed by the
+    /// widest index it is ever handed.
+    ///
+    /// It has no window of its own on purpose: it never sees an index directly
+    /// off the wire. `ReliableReceiver::buffer_message` is the single funnel in
+    /// front of it and rejects anything beyond the receive window, so the bound
+    /// below holds by construction. This test pins that dependency -- if the
+    /// funnel's guard is ever removed, the assertion here is what should fail.
+    #[test]
+    fn buffer_is_bounded_by_the_span_of_indices_it_is_fed() {
+        let window = 32u16;
+        let mut arranger = OrderedArranger::new();
+
+        // The worst case the funnel permits: the furthest in-window index first,
+        // so every intervening slot is instantiated and nothing can be released.
+        arranger.process(window, window, message());
+        assert_eq!(
+            arranger.buffer.len(),
+            window as usize + 1,
+            "one slot per index up to the furthest in-window index"
+        );
+
+        // Filling in from the front releases in order and drains the buffer.
+        let mut released = 0;
+        for index in 0..window {
+            released += arranger.process(index, index, message()).len();
+        }
+        assert_eq!(
+            released,
+            window as usize + 1,
+            "all messages released in order"
+        );
+        assert!(
+            arranger.buffer.is_empty(),
+            "buffer drains once the sequence is contiguous, leaving {} slots",
+            arranger.buffer.len()
+        );
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     messages::channels::receivers::reliable_message_receiver::{
-        ReceiverArranger, ReliableMessageReceiver,
+        ReceiverArranger, ReceiverCaps, ReliableMessageReceiver,
     },
     types::MessageIndex,
     MessageContainer,
@@ -15,9 +15,9 @@ impl UnorderedReliableReceiver {
         Self::with_arranger(UnorderedArranger)
     }
 
-    /// Creates a new `UnorderedReliableReceiver` capped at `max_messages_per_tick` deliveries per tick.
-    pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
-        Self::with_arranger_and_cap(UnorderedArranger, max_messages_per_tick)
+    /// Creates a new `UnorderedReliableReceiver` bounded by `caps`.
+    pub fn with_caps(caps: ReceiverCaps) -> Self {
+        Self::with_arranger_and_caps(UnorderedArranger, caps)
     }
 }
 

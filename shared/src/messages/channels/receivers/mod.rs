@@ -10,4 +10,6 @@ pub mod unordered_unreliable_receiver;
 mod reliable_message_receiver;
 #[cfg(test)]
 pub(crate) use reliable_message_receiver::ReceiverArranger;
+/// Capacity limits applied to a reliable channel's receiver.
+pub use reliable_message_receiver::ReceiverCaps;
 pub mod reliable_receiver;

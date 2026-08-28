@@ -1,6 +1,6 @@
 use crate::{
     messages::channels::receivers::reliable_message_receiver::{
-        ReceiverArranger, ReliableMessageReceiver,
+        ReceiverArranger, ReceiverCaps, ReliableMessageReceiver,
     },
     sequence_less_than,
     types::MessageIndex,
@@ -16,12 +16,12 @@ impl SequencedReliableReceiver {
         })
     }
 
-    pub fn with_cap(max_messages_per_tick: Option<u16>) -> Self {
-        Self::with_arranger_and_cap(
+    pub fn with_caps(caps: ReceiverCaps) -> Self {
+        Self::with_arranger_and_caps(
             SequencedArranger {
                 newest_received_message_index: 0,
             },
-            max_messages_per_tick,
+            caps,
         )
     }
 }

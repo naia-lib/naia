@@ -11,6 +11,7 @@ use crate::{
         channels::{
             channel::ChannelMode,
             channel::ChannelSettings,
+            channel::ReliableSettings,
             channel_kinds::{ChannelKind, ChannelKinds},
             receivers::{
                 channel_receiver::MessageChannelReceiver,
@@ -18,7 +19,7 @@ use crate::{
                 sequenced_reliable_receiver::SequencedReliableReceiver,
                 sequenced_unreliable_receiver::SequencedUnreliableReceiver,
                 unordered_reliable_receiver::UnorderedReliableReceiver,
-                unordered_unreliable_receiver::UnorderedUnreliableReceiver,
+                unordered_unreliable_receiver::UnorderedUnreliableReceiver, ReceiverCaps,
             },
             senders::{
                 channel_sender::MessageChannelSender, message_fragmenter::MessageFragmenter,
@@ -42,6 +43,22 @@ type RequestsAndResponsesOut = (
     Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
     Vec<(GlobalRequestId, MessageContainer)>,
 );
+
+/// Derives a receiver's capacity limits from a reliable channel's settings.
+///
+/// The receive window is the channel's own `max_queue_depth`: that is exactly the
+/// span of message indices a conforming peer's sender can have outstanding, so it
+/// is the tightest window that never rejects honest traffic. Channels are declared
+/// once in the shared `Protocol`, so both ends agree on the value by construction.
+/// `max_queue_depth: None` opts out of the bound on both sides.
+fn receiver_caps(settings: &ReliableSettings) -> ReceiverCaps {
+    ReceiverCaps {
+        max_messages_per_tick: settings.max_messages_per_tick,
+        max_receive_window: settings
+            .max_queue_depth
+            .map(|depth| u16::try_from(depth).unwrap_or(u16::MAX)),
+    }
+}
 
 /// Handles incoming/outgoing messages, tracks the delivery status of Messages
 /// so that guaranteed Messages can be re-transmitted to the remote host
@@ -131,25 +148,23 @@ impl MessageManager {
                 ChannelMode::UnorderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(UnorderedReliableReceiver::with_cap(
-                            settings.max_messages_per_tick,
-                        )),
+                        Box::new(UnorderedReliableReceiver::with_caps(receiver_caps(
+                            settings,
+                        ))),
                     );
                 }
                 ChannelMode::SequencedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(SequencedReliableReceiver::with_cap(
-                            settings.max_messages_per_tick,
-                        )),
+                        Box::new(SequencedReliableReceiver::with_caps(receiver_caps(
+                            settings,
+                        ))),
                     );
                 }
                 ChannelMode::OrderedReliable(settings) => {
                     channel_receivers.insert(
                         channel_kind,
-                        Box::new(OrderedReliableReceiver::with_cap(
-                            settings.max_messages_per_tick,
-                        )),
+                        Box::new(OrderedReliableReceiver::with_caps(receiver_caps(settings))),
                     );
                 }
                 ChannelMode::TickBuffered(_) => {

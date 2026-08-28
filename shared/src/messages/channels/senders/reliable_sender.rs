@@ -357,4 +357,95 @@ mod tests {
             "acked index 1 must not retransmit; the rest stay in order"
         );
     }
+
+    /// Regression test for naia-lib/naia#165 ("MessageChannels need hard capacity
+    /// limits"), reported against 0.18/0.21 with this crash:
+    ///
+    /// ```text
+    /// panicked at 'can't encode a negative number with an Unsigned Integer!'
+    ///     naia_serde::integer::SerdeInteger::new
+    ///     IndexedMessageWriter::write_message_index
+    /// ```
+    ///
+    /// The mechanism, confirmed by driving the real sender: consecutive messages
+    /// differ by one index, so a long queue alone is harmless. The crash needs a
+    /// *gap*. `collect_messages` emits only messages that are due, so a block
+    /// that was just written is skipped -- and `write_message_index` encodes the
+    /// gap between two consecutive *written* indices as an unsigned integer. Once
+    /// a channel holds more than `2^15` messages, that gap can exceed half the
+    /// `u16` sequence space, `wrapping_diff` reads it as negative, and the
+    /// unsigned encoder panics. Uncapped, this reproduces at
+    /// `wrapping_diff(0, 33001) == -32535`.
+    ///
+    /// `max_queue_depth` makes it unreachable: the default 1024 is far below the
+    /// 32768 wrap point, so no gap that large can exist. This drives the exact
+    /// scenario that reproduces uncapped, and pins that every diff stays
+    /// encodable.
+    #[test]
+    fn queue_depth_cap_prevents_the_message_index_wrap_crash() {
+        const DEPTH: usize = 1024;
+        let mut sender = ReliableSender::<u16>::new(1.0, Some(DEPTH));
+
+        // Try to queue far past the 2^15 wrap point. Everything beyond the cap
+        // is refused rather than queued, and nothing panics.
+        let mut accepted = 0;
+        for i in 0..40_000u32 {
+            if sender.send_message(i as u16) {
+                accepted += 1;
+            }
+        }
+        assert_eq!(accepted, DEPTH, "the cap is the only thing accepted");
+
+        // Now the uncapped reproduction, step for step: write a leading block so
+        // it is no longer due, then collect again to force a gap.
+        let base = Instant::now();
+        sender.collect_messages(&base, &RTT_MILLIS);
+        let block: Vec<u16> = (1..(DEPTH as u16)).collect();
+        sender.mark_written(&block);
+        sender.take_next_messages();
+
+        sender.collect_messages(&base, &RTT_MILLIS);
+        let collected = indices(&sender.take_next_messages());
+
+        // The gap exists, but is bounded by the cap and so stays encodable.
+        for pair in collected.windows(2) {
+            let diff = crate::wrapping_diff(pair[0], pair[1]);
+            assert!(
+                diff > 0,
+                "IndexedMessageWriter encodes this gap as an unsigned integer: {} -> {} = {}",
+                pair[0],
+                pair[1],
+                diff
+            );
+        }
+    }
+
+    /// The other half of #165: a negative gap really is fatal, so the assertion
+    /// in the test above is worth making. Without a queue cap the sender can
+    /// hand the writer exactly this pair.
+    #[test]
+    #[should_panic(expected = "Message Index diff is negative")]
+    fn a_negative_index_gap_is_fatal_in_the_writer() {
+        use crate::messages::channels::senders::indexed_message_writer::IndexedMessageWriter;
+        use naia_serde::BitWriter;
+
+        let mut writer = BitWriter::new();
+        IndexedMessageWriter::write_message_index(&mut writer, &Some(0), &33_001);
+    }
+
+    /// The cap is per-channel occupancy, not a lifetime budget: acknowledging
+    /// messages frees room for more, so a long-lived channel keeps working.
+    #[test]
+    fn delivering_messages_frees_queue_capacity() {
+        const DEPTH: usize = 8;
+        let mut sender = ReliableSender::<u16>::new(1.0, Some(DEPTH));
+
+        for i in 0..DEPTH {
+            assert!(sender.send_message(i as u16));
+        }
+        assert!(!sender.send_message(99), "full");
+
+        sender.deliver_message(&0);
+        assert!(sender.send_message(100), "space freed by the ack");
+    }
 }

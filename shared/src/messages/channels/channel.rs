@@ -84,6 +84,16 @@ pub struct ReliableSettings {
     /// Multiplier on the current RTT that sets the retransmit timeout.
     pub rtt_resend_factor: f32,
     /// Maximum messages to deliver per tick per connection. `None` = unlimited.
+    ///
+    /// # Warning
+    ///
+    /// Excess messages are **discarded, not deferred**. By the time this cap
+    /// applies the messages have already been acknowledged to the sender, and the
+    /// acknowledgement for a packet is recorded before its payload is even parsed,
+    /// so nothing will retransmit them: a non-`None` value silently breaks the
+    /// delivery guarantee of a reliable channel. It bounds throughput, not memory
+    /// -- memory is bounded by `max_queue_depth`, which also sets the receive
+    /// window. Leave this at `None` unless you can tolerate lost messages.
     pub max_messages_per_tick: Option<u16>,
     /// Maximum number of unacknowledged messages buffered per connection on
     /// this channel. When the queue is full, `Server::send_message` /
@@ -92,6 +102,14 @@ pub struct ReliableSettings {
     /// `Err(NaiaClientError::MessageQueueFull)` and the caller must decide
     /// whether to retry or discard. `None` = unlimited (not recommended for
     /// production servers). Default: `Some(1024)`.
+    ///
+    /// This value does double duty: it is also the **receive window**. A peer may
+    /// not send a message index more than `max_queue_depth` ahead of the oldest
+    /// index we are still waiting for, because its own sender cannot have more
+    /// than that many messages outstanding. Indices beyond the window are dropped
+    /// with a warning, which bounds the per-connection, per-channel memory a
+    /// remote peer can pin. Setting `None` disables the send cap *and* the receive
+    /// window.
     pub max_queue_depth: Option<usize>,
 }
 

@@ -10,6 +10,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Reliable receivers now bound how far ahead of the stream a peer can reach.**
+  `ReliableReceiver::buffer_message` instantiates one buffer slot per index
+  between its oldest outstanding message and the `message_index` it is handed,
+  and that index comes off the wire. A single packet claiming an index 32768
+  ahead therefore grew the receive record to 32768 slots -- roughly 640 KB per
+  channel per connection, from one packet. Receivers now derive a receive window
+  from the channel's own `max_queue_depth`: a conforming peer's sender refuses to
+  hold more than that many messages in flight and cannot retire an index until it
+  is acked, so that depth is exactly the span it can legitimately span, and the
+  tightest window that never rejects honest traffic. Channels are declared once in
+  the shared `Protocol`, so both ends agree by construction; `max_queue_depth:
+  None` opts out on both sides. Out-of-window messages are dropped with a warning
+  rather than failing the connection, because the packet's ack is recorded before
+  its payload is parsed.
+
+- **`ChannelSettings::max_messages_per_tick` is documented as lossy.** It was
+  already implemented as a truncation, and because a packet is acked before its
+  payload is parsed, messages discarded by it are never retransmitted. On a
+  reliable channel that is silent data loss, so the setting now carries an
+  explicit warning; it bounds delivery throughput, not memory. The new receive
+  window is what bounds memory. Internally the two travel together as
+  `ReceiverCaps`, and the `with_cap` constructors became `with_caps`.
+
+  Regression coverage for naia-lib/naia#165 was added alongside: `max_queue_depth`
+  is what keeps a channel's index gaps encodable. `collect_messages` emits only
+  messages that are due, so a large block of not-yet-due messages leaves a gap
+  between consecutive written indices; past 32768 that gap reads as negative and
+  `IndexedMessageWriter::write_message_index` panics encoding it as unsigned. The
+  default depth of 1024 puts that out of reach.
+
 - **Length-prefixed decoders no longer size their buffers from the wire.** `Vec`,
   `VecDeque`, `String`, and `Box<[u8]>` each read a length prefix and passed it
   straight to `with_capacity`, before decoding a single element. A six-byte packet
