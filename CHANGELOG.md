@@ -36,6 +36,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   a 0.26 token is byte-identical on the wire to a 0.25 one. (`Vec<u8>` would not have
   been: its length prefix is a `<5>`.) This is source-breaking, not wire-breaking.
 
+#### Authority
+
+- **A refused `request_authority` now answers the requester.** When a client asked for
+  authority on an entity another client already held, the server recorded the rejection
+  locally but sent nothing back, leaving the refused client in `Requested` forever with
+  no `EntityAuthDeniedEvent`. The server now sends `SetAuthority(Denied)` to the
+  requester, which the client already knew how to turn into a denial event.
+
 #### Handshake
 
 - **The simple and advanced handshakers are merged.** `shared/src/handshake/{simple,advanced}/`,

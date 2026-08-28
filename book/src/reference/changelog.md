@@ -19,6 +19,9 @@ For the newest release history, see
   cross the signaling channel via `to_signaling_string()` /
   `from_signaling_string()`. The wire format is unchanged: the newtype wraps
   `Box<[u8]>`, which serializes exactly as the old `String` did.
+- A `request_authority` that the server refuses now sends `Denied` back to
+  the requesting client, so it emits `EntityAuthDeniedEvent` instead of
+  staying stuck in `Requested`.
 - The simple and advanced handshakers are merged into one handshaker with a
   cfg-gated source-address-validation stage.
 - Feature `advanced_handshake` renamed to `address_validation`.

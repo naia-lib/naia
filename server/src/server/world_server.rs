@@ -2012,6 +2012,29 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         Ok(())
     }
 
+    /// Sends `SetAuthority(Denied)` to a single user, resolving that user's
+    /// pending `Requested` state after a refused authority request.
+    fn notify_user_auth_denied(&mut self, user_key: &UserKey, global_entity: &GlobalEntity) {
+        let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
+            return;
+        };
+        let address = user.address();
+        let Some(send_conn) = self.send.state.send_user_connections.get_mut(&address) else {
+            return;
+        };
+        if !send_conn
+            .base
+            .world_manager
+            .has_global_entity(global_entity)
+        {
+            return;
+        }
+        send_conn
+            .base
+            .world_manager
+            .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
+    }
+
     fn entity_enable_delegation_response(
         &mut self,
         _user_key: &UserKey,
@@ -4100,6 +4123,12 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .entity_handle_client_request_authority(user_key, &world_entity)
                         .is_err()
                     {
+                        // Tell the requester it lost. Without this the client
+                        // that asked stays in `Requested` forever: the grant
+                        // path notifies every user, but the rejection path used
+                        // to be server-local, so a contended request produced no
+                        // EntityAuthDeniedEvent on the client that was refused.
+                        self.notify_user_auth_denied(user_key, &global_entity);
                         self.recv
                             .state
                             .incoming_world_events

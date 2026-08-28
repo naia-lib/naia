@@ -696,13 +696,22 @@ impl BevyTestHarness {
         );
         naia_shared::TestClock::advance(60);
         self.client_apps[pos].1.update(); // fire tick + send packet
-                                          // Flush the request through the server so sequential calls from different
-                                          // clients are processed in order (prevents non-deterministic grant/deny).
-        naia_shared::TestClock::advance(60);
-        self.server_app.update();
-        for (_, app) in &mut self.client_apps {
-            app.update();
-        }
+
+        // Drive the request to a decision before returning. A single
+        // server+client update pair is not enough: delivery takes a tick, so
+        // two requests issued back-to-back could still reach the server in
+        // either order, and the *second* requester could win. Ticking until
+        // this client's status leaves `Requested` makes contended-request
+        // scenarios deterministic in spec order.
+        self.tick_until(
+            |h| {
+                !matches!(
+                    h.client_authority_status(key),
+                    Some(EntityAuthStatus::Requested)
+                )
+            },
+            200,
+        );
     }
 
     pub fn client_request_player_selection_authority(&mut self, key: ClientKey) {
