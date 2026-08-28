@@ -252,7 +252,7 @@ Work in `socket/client/src/`:
 1. `socket/shared/src/identity_token.rs`: replace the alias with
    ```rust
    #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-   pub struct IdentityToken(Vec<u8>);
+   pub struct IdentityToken(Box<[u8]>);
    ```
    with `impl` blocks providing: `generate()` (32 random bytes via the existing
    `Random` util — replaces free fn `generate_identity_token`, keep a
@@ -271,12 +271,12 @@ Work in `socket/client/src/`:
    32 times.
    Also add `is_empty()` and/or `len()` accessors — the test harness asserts
    on token round-trips (see harness subsection below).
-2. Implement `Serde` (naia's bit-serde) for it, delegating to `Vec<u8>`'s
-   existing impl (`shared/serde/src/impls/vector.rs:8-16`). NOTE this is a
-   deliberate wire-format change: String's Serde uses a
-   `UnsignedVariableInteger<9>` length prefix, `Vec<u8>`'s uses `<5>`. That is
-   fine in a breaking release — but say so in the CHANGELOG, don't treat it as
-   a no-op. Serialization sites: client simple handshaker (identify request +
+2. Implement `Serde` (naia's bit-serde) for it, delegating to `Box<[u8]>`'s
+   existing impl (`shared/serde/src/impls/boxed.rs:29-57`). This keeps the wire
+   format identical to the old `String`: both write an
+   `UnsignedVariableInteger<9>` length prefix then raw bytes. Do NOT delegate to
+   `Vec<u8>` — its prefix is a `<5>`, which would break the wire for no reason.
+   A unit test in `identity_token.rs` pins this equivalence. Serialization sites: client simple handshaker (identify request +
    `write_disconnect`), client advanced (challenge request), server simple
    `verify_disconnect_request` (`server/src/handshake/simple_handshaker.rs:162`
    has a second `IdentityToken::de()` — don't miss it), server advanced

@@ -17,8 +17,8 @@ For the newest release history, see
 - `IdentityToken` is an opaque byte newtype instead of a `String` alias.
   `generate_identity_token()` becomes `IdentityToken::generate()`, and tokens
   cross the signaling channel via `to_signaling_string()` /
-  `from_signaling_string()`. This changes the handshake wire format, so 0.26
-  peers cannot talk to 0.25 peers.
+  `from_signaling_string()`. The wire format is unchanged: the newtype wraps
+  `Box<[u8]>`, which serializes exactly as the old `String` did.
 - The simple and advanced handshakers are merged into one handshaker with a
   cfg-gated source-address-validation stage.
 - Feature `advanced_handshake` renamed to `address_validation`.

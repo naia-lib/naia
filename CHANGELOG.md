@@ -26,14 +26,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - **`IdentityToken` is an opaque byte newtype, not a `String` alias.** It was
   `type IdentityToken = String`, so any string was a valid token. It is now
-  `struct IdentityToken(Vec<u8>)` with `generate()`, `from_bytes`, `as_bytes`, `len`,
+  `struct IdentityToken(Box<[u8]>)` with `generate()`, `from_bytes`, `as_bytes`, `len`,
   and `is_empty`. The free function `generate_identity_token()` is replaced by
   `IdentityToken::generate()`. Tokens no longer implement `Display`: to put one in the
   signaling payload, use `to_signaling_string()` (base64, URL-safe, no padding) and
   recover it with `from_signaling_string()`.
-- **Wire format change.** A token now serializes as `Vec<u8>` rather than `String`, which
-  changes the length prefix from an `UnsignedVariableInteger<9>` to a `<5>`. 0.26 peers
-  cannot handshake with 0.25 peers.
+- **The wire format is unchanged.** `Box<[u8]>` and `String` share an encoding in
+  naia-serde — an `UnsignedVariableInteger<9>` length prefix followed by raw bytes — so
+  a 0.26 token is byte-identical on the wire to a 0.25 one. (`Vec<u8>` would not have
+  been: its length prefix is a `<5>`.) This is source-breaking, not wire-breaking.
 
 #### Handshake
 

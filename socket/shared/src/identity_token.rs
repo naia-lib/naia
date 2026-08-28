@@ -18,7 +18,7 @@ const TOKEN_LEN: usize = 32;
 /// [`IdentityToken::from_signaling_string`] provide a base64 (URL-safe, no
 /// padding) text encoding for that hop only.
 #[derive(Clone, PartialEq, Eq, Hash, Debug)]
-pub struct IdentityToken(Vec<u8>);
+pub struct IdentityToken(Box<[u8]>);
 
 impl IdentityToken {
     /// Mints a new random token.
@@ -27,14 +27,14 @@ impl IdentityToken {
         for _ in 0..TOKEN_LEN {
             bytes.push(Random::gen_range_u32(0, 256) as u8);
         }
-        Self(bytes)
+        Self(bytes.into_boxed_slice())
     }
 
     /// Wraps raw bytes as a token. No validation is performed: any byte
     /// sequence is a syntactically valid token, and a token is only ever
     /// meaningful by comparison against one the server minted.
     pub fn from_bytes(bytes: Vec<u8>) -> Self {
-        Self(bytes)
+        Self(bytes.into_boxed_slice())
     }
 
     /// The token's raw bytes.
@@ -61,7 +61,7 @@ impl IdentityToken {
     pub fn from_signaling_string(string: &str) -> Option<Self> {
         base64::decode_config(string, base64::URL_SAFE_NO_PAD)
             .ok()
-            .map(Self)
+            .map(|bytes| Self(bytes.into_boxed_slice()))
     }
 }
 
@@ -71,7 +71,7 @@ impl Serde for IdentityToken {
     }
 
     fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        Ok(Self(Vec::<u8>::de(reader)?))
+        Ok(Self(Box::<[u8]>::de(reader)?))
     }
 
     fn bit_length(&self) -> u32 {
@@ -81,6 +81,8 @@ impl Serde for IdentityToken {
 
 #[cfg(test)]
 mod tests {
+    use naia_serde::{BitReader, BitWriter, Serde};
+
     use super::IdentityToken;
 
     #[test]
@@ -88,5 +90,27 @@ mod tests {
         let token = IdentityToken::generate();
         let encoded = token.to_signaling_string();
         assert_eq!(Some(token), IdentityToken::from_signaling_string(&encoded));
+    }
+
+    #[test]
+    fn wire_format_matches_legacy_string_encoding() {
+        // Identity tokens used to be `String`s on the wire. `Box<[u8]>` and
+        // `String` share an encoding (an UnsignedVariableInteger<9> length
+        // prefix followed by raw bytes), so 0.26 stays wire-compatible with
+        // 0.25 here. `Vec<u8>` would not: its prefix is <5>.
+        let text = "an-identity-token".to_string();
+
+        let mut string_writer = BitWriter::new();
+        text.ser(&mut string_writer);
+
+        let mut token_writer = BitWriter::new();
+        IdentityToken::from_bytes(text.as_bytes().to_vec()).ser(&mut token_writer);
+
+        let bytes = string_writer.to_bytes();
+        assert_eq!(bytes, token_writer.to_bytes());
+
+        let mut reader = BitReader::new(&bytes);
+        let token = IdentityToken::de(&mut reader).unwrap();
+        assert_eq!(token.as_bytes(), text.as_bytes());
     }
 }
