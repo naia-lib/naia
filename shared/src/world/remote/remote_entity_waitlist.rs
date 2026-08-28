@@ -3,16 +3,43 @@ use std::{
     time::Duration,
 };
 
+use log::warn;
 use naia_socket_shared::Instant;
 
 use crate::{world::entity::in_scope_entities::InScopeEntities, KeyGenerator, RemoteEntity};
 
-pub type WaitlistHandle = u16;
+/// Local identifier for one item parked on the entity waitlist.
+///
+/// This handle never goes on the wire -- it only keys this module's own maps --
+/// so its width is a free implementation choice. It is `u32` rather than `u16`
+/// because `KeyGenerator` quarantines a freed handle for 60s before reissuing it
+/// and *panics* rather than wrap when the width is exhausted. That makes the
+/// width a limit on handles issued per quarantine window, not on handles live at
+/// once, and every message carrying an unresolved `EntityProperty` issues one. At
+/// `u16` a peer reached that panic after 65536 such messages in a minute; at
+/// `u32` it would need over 71 million per second.
+pub type WaitlistHandle = u32;
 
+/// Most handles a single waiting entity may hold before the oldest is evicted.
 const PER_ENTITY_WAITLIST_CAP: usize = 128;
 
+/// Most items that may be parked on the waitlist at once, across all entities.
+///
+/// Unlike the reliable receive window, this is a policy bound rather than a
+/// derived one: an item waits for entities to come into scope, which may take
+/// arbitrarily many ticks, so nothing in the protocol implies a natural ceiling.
+/// `PER_ENTITY_WAITLIST_CAP` alone does not supply one either -- it is per
+/// entity, and `RemoteEntity` ids are wire-supplied `u32`s, so naming a fresh
+/// entity each time keeps every per-entity queue at length one while the waitlist
+/// as a whole grows without limit.
+///
+/// The cap is generous enough that legitimate traffic never reaches it, and
+/// eviction is oldest-first: an item that has waited longest is the one least
+/// likely to ever have its dependencies satisfied.
+const TOTAL_WAITLIST_CAP: usize = 4096;
+
 pub struct RemoteEntityWaitlist {
-    handle_store: KeyGenerator<WaitlistHandle>,
+    handle_store: KeyGenerator<WaitlistHandle, u32>,
     handle_to_required_entities: HashMap<WaitlistHandle, HashSet<RemoteEntity>>,
     waiting_entity_to_handles: HashMap<RemoteEntity, VecDeque<WaitlistHandle>>,
     ready_handles: HashSet<WaitlistHandle>,
@@ -66,6 +93,21 @@ impl RemoteEntityWaitlist {
             waitlist_store.queue(new_handle, item);
             self.ready_handles.insert(new_handle);
             return new_handle;
+        }
+
+        // Enforce the global FIFO cap first. `handle_ttls` holds exactly the
+        // handles currently waiting, in insertion order, so its front is the
+        // oldest waiter. Retire through the same path the TTL sweep uses, so an
+        // evicted handle is recycled only when its owning store relinquishes it.
+        while self.handle_ttls.len() >= TOTAL_WAITLIST_CAP {
+            let (_, oldest) = self.handle_ttls.pop_front().unwrap();
+            warn!(
+                "entity waitlist full ({} items); evicting the oldest waiting handle {:?}. \
+                 A peer can reach this by referencing entities that never come into scope.",
+                TOTAL_WAITLIST_CAP, oldest
+            );
+            self.removed_handles.insert(oldest);
+            self.drop_waiting_handle_indexes(&oldest);
         }
 
         // Enforce per-entity FIFO cap: evict oldest handles before inserting.
@@ -171,6 +213,18 @@ impl RemoteEntityWaitlist {
             self.handle_ttls.remove(ttl_index);
         }
 
+        self.drop_waiting_handle_indexes(handle);
+    }
+
+    /// The half of `remove_waiting_handle` that clears the dependency indexes.
+    ///
+    /// Callers that pop the TTL entry themselves use this instead of the full
+    /// version. The TTL lookup there is a linear scan of the whole waiting set,
+    /// and both the TTL sweep and the `TOTAL_WAITLIST_CAP` eviction already hold
+    /// the entry they just popped -- paying for the scan again would make every
+    /// eviction cost O(cap), which a peer sitting at the cap could drive once per
+    /// message it sends.
+    fn drop_waiting_handle_indexes(&mut self, handle: &WaitlistHandle) {
         // remove handle from required entities map
         let entities = self.handle_to_required_entities.remove(handle).unwrap();
 
@@ -196,7 +250,7 @@ impl RemoteEntityWaitlist {
             }
             let (_, handle) = self.handle_ttls.pop_front().unwrap();
             self.removed_handles.insert(handle);
-            self.remove_waiting_handle(&handle);
+            self.drop_waiting_handle_indexes(&handle);
         }
     }
 }
@@ -411,5 +465,116 @@ mod tests {
             waitlist.collect_ready_items(&Instant::now(), &mut expired_store),
             None,
         );
+    }
+
+    struct EmptyScope;
+    impl InScopeEntities<RemoteEntity> for EmptyScope {
+        fn has_entity(&self, _entity: &RemoteEntity) -> bool {
+            false
+        }
+    }
+
+    /// A peer controls both how many messages it sends and, because
+    /// `RemoteEntity` ids are wire-supplied `u32`s, which entity each one waits
+    /// on. Naming a fresh entity every time keeps every per-entity queue at
+    /// length one, so `PER_ENTITY_WAITLIST_CAP` never fires and nothing else
+    /// bounded the waitlist. Before the global cap this grew all four indexes
+    /// linearly and then panicked the process outright at 65536 items, when the
+    /// `u16` handle generator ran out of keys.
+    #[test]
+    fn a_peer_naming_a_fresh_entity_each_time_cannot_grow_the_waitlist() {
+        let mut waitlist = RemoteEntityWaitlist::new();
+        let mut store = WaitlistStore::new();
+        let scope = EmptyScope;
+
+        for i in 0..(TOTAL_WAITLIST_CAP as u32 * 20) {
+            let deps = HashSet::from([RemoteEntity::new(i)]);
+            waitlist.queue(&scope, &deps, &mut store, i);
+        }
+
+        assert_eq!(
+            waitlist.handle_ttls.len(),
+            TOTAL_WAITLIST_CAP,
+            "the waiting set is capped"
+        );
+        assert!(
+            waitlist.waiting_entity_to_handles.len() <= TOTAL_WAITLIST_CAP,
+            "the entity index cannot outgrow the waiting set, was {}",
+            waitlist.waiting_entity_to_handles.len()
+        );
+        assert!(
+            waitlist.handle_to_required_entities.len() <= TOTAL_WAITLIST_CAP,
+            "the dependency index cannot outgrow the waiting set, was {}",
+            waitlist.handle_to_required_entities.len()
+        );
+    }
+
+    /// Eviction is oldest-first, and an evicted item is really gone: it is
+    /// marked removed, so its store relinquishes it and its handle recycles
+    /// rather than leaking.
+    #[test]
+    fn eviction_is_oldest_first_and_retires_the_item() {
+        let mut waitlist = RemoteEntityWaitlist::new();
+        let mut store = WaitlistStore::new();
+        let scope = EmptyScope;
+
+        for i in 0..(TOTAL_WAITLIST_CAP as u32) {
+            waitlist.queue(
+                &scope,
+                &HashSet::from([RemoteEntity::new(i)]),
+                &mut store,
+                i,
+            );
+        }
+        let oldest_entity = RemoteEntity::new(0);
+        assert!(waitlist
+            .waiting_entity_to_handles
+            .contains_key(&oldest_entity));
+
+        // One more item pushes the oldest out.
+        waitlist.queue(
+            &scope,
+            &HashSet::from([RemoteEntity::new(9_999_999)]),
+            &mut store,
+            9_999_999,
+        );
+        assert!(
+            !waitlist
+                .waiting_entity_to_handles
+                .contains_key(&oldest_entity),
+            "the oldest waiter is the one evicted"
+        );
+
+        // The evicted item is dropped by its store on the next poll, and the
+        // store never grows past the cap.
+        assert_eq!(
+            waitlist.collect_ready_items(&Instant::now(), &mut store),
+            None
+        );
+        assert!(
+            store.items.len() <= TOTAL_WAITLIST_CAP,
+            "store was {}",
+            store.items.len()
+        );
+    }
+
+    /// The handle namespace is a *rate* limit, not a capacity limit: freed
+    /// handles are quarantined before reissue, so a bounded waiting set does not
+    /// by itself keep the generator from exhausting. Issuing far more handles
+    /// than a `u16` could hold must not panic.
+    #[test]
+    fn sustained_waitlist_churn_does_not_exhaust_the_handle_namespace() {
+        let mut waitlist = RemoteEntityWaitlist::new();
+        let mut store = WaitlistStore::new();
+        let scope = EmptyScope;
+
+        for i in 0..200_000u32 {
+            waitlist.queue(
+                &scope,
+                &HashSet::from([RemoteEntity::new(i)]),
+                &mut store,
+                i,
+            );
+        }
     }
 }

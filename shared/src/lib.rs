@@ -137,7 +137,7 @@ pub use messages::{
         senders::{
             channel_sender::{ChannelSender, MessageChannelSender},
             reliable_sender::ReliableSender,
-            request_sender::LocalResponseId,
+            request_sender::{LocalRequestId, LocalResponseId},
         },
     },
     message::{Message, MessageBuilder},

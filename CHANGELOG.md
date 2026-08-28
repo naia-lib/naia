@@ -10,6 +10,39 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **The entity waitlist is bounded, and can no longer panic the process.** A
+  message carrying an `EntityProperty` whose entity is not yet in scope is parked
+  on the waitlist. The existing `PER_ENTITY_WAITLIST_CAP` bounded only how many
+  items may wait on *one* entity, and `RemoteEntity` ids are wire-supplied `u32`s
+  -- so naming a fresh entity each time kept every per-entity queue at length one
+  while the waitlist as a whole grew unbounded. It did not merely grow: waitlist
+  handles came from a `KeyGenerator` that quarantines a freed key for 60s and
+  *panics* rather than wrap when its width is exhausted, so 65536 such messages in
+  a minute aborted the process outright. Two changes: a `TOTAL_WAITLIST_CAP` of
+  4096 items with oldest-first eviction, and `WaitlistHandle` widened from `u16`
+  to `u32`. Both are needed -- the handle namespace is a limit on handles issued
+  per quarantine window, not on handles live at once, so capping the waiting set
+  does not by itself prevent exhaustion. The handle is purely local and never
+  serialised, so its width was a free choice. Eviction also no longer rescans the
+  waiting set to find the entry it just popped, which had made each eviction cost
+  O(cap) at exactly the point a peer could drive one per message.
+
+- **Unanswered requests are bounded.** Every request received creates a routing
+  entry in `GlobalResponseManager`, removed only when the application sends a
+  response -- and nothing obliges an application to answer one. A peer could
+  therefore make that map grow for the entire life of a connection. Both the
+  server and client managers now cap outstanding response ids at 4096 and evict
+  oldest-first; on the server the cap is per user, so one hostile connection
+  cannot evict a well-behaved user's pending work. An evicted request degrades
+  into the `Undeliverable` outcome `send_response` already models, rather than
+  mis-routing a reply. Answered requests do not count toward the cap.
+
+  Note the per-tick message cap was deliberately *not* extended to
+  `incoming_requests`/`incoming_responses`. Both are drained every tick by the
+  server and client receive paths, so neither accumulates across ticks, and that
+  cap works by discarding already-acked messages -- adding a second lossy path
+  would not have addressed the store that actually grew.
+
 - **Reliable receivers now bound how far ahead of the stream a peer can reach.**
   `ReliableReceiver::buffer_message` instantiates one buffer slot per index
   between its oldest outstanding message and the `message_index` it is handed,
