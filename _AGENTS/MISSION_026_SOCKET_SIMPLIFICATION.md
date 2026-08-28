@@ -28,20 +28,23 @@ committed on `refactor/026-socket-simplification`.
 - [x] **C5** — full validation gate + docs
 - [x] **D** — version bump 0.25.0 → 0.26.0 + CHANGELOG
 
-Known pre-existing failures, unrelated to this mission and NOT to be "fixed"
-here. Both were reproduced on the branch point (`1fa28774`) in a throwaway
-worktree and fail identically there:
+Two failures were red at the branch point (`1fa28774`) and predated this
+mission. Connor asked for them afterwards, so they are fixed on this branch:
 
-- `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` panics in
+- `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` panicked in
   `shared/src/world/component/property.rs` ("mutable HostOwned Property mutated
-  before its mutator was installed").
-- The namako bevy gate (`--specs-dir test/bevy_specs`) fails one scenario with
-  "assert_then: timed out after 500 ticks" at `test/bevy_npa/src/world.rs:786`.
-  Note this gate is not run by CI; only the `test/specs` gate is.
+  before its mutator was installed"). The test mutated a HostOwned Property that
+  had never been registered with a world; it now `localize()`s first.
+- The namako bevy gate (`--specs-dir test/bevy_specs`) timed out on
+  `bevy-authority-04`. Two real causes: the server recorded a refused
+  `request_authority` locally but never told the requester, so that client sat
+  in `Requested` with no `EntityAuthDeniedEvent`; and the bevy harness flushed a
+  request with one server+client update pair, a tick short of delivery, so two
+  back-to-back requests could reach the server in either order.
 
-Everything else passes: `cargo test --workspace --exclude naia-benches` (131
-suites green) and the CI namako gate
-(`namako gate --specs-dir test/specs --adapter-cmd target/debug/naia_npa`).
+`cargo test --workspace` is now fully green (137 suites, no exclusions), and
+both namako gates pass — the CI one over `test/specs` and the bevy one over
+`test/bevy_specs`.
 
 ---
 
@@ -62,10 +65,8 @@ suites green) and the CI namako gate
   several minutes. Give push commands a long timeout (10 min).
 - Disk is chronically near-full on this machine. If a build fails with
   "no space left on device", tell Connor; don't delete things outside this repo.
-- Known pre-existing test failure (NOT yours to fix, do not be alarmed):
-  `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` panics at
-  `shared/src/world/component/property.rs:427`. It fails on `dev` before your
-  changes. Everything else must pass.
+- `naia-benches` `bench_protocol::tests::halo_unit_facing_wraps` used to fail on
+  `dev`; it is fixed on this branch. Everything must pass now.
 
 ### Validation gate (run after EVERY phase)
 
@@ -81,7 +82,7 @@ cargo check -p naia-client-socket --features wbindgen --target wasm32-unknown-un
 cargo test --workspace
 ```
 
-(Expect only the pre-existing `halo_unit_facing_wraps` failure.)
+(Expect a clean run — no known failures remain.)
 
 ---
 
