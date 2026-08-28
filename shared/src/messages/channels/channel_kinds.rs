@@ -51,7 +51,7 @@ impl ChannelKind {
                 net_id |= 1 << i;
             }
         }
-        Ok(channel_kinds.net_id_to_kind(&net_id))
+        channel_kinds.net_id_to_kind(&net_id)
     }
 }
 
@@ -120,11 +120,13 @@ impl ChannelKinds {
         settings.clone()
     }
 
-    fn net_id_to_kind(&self, net_id: &NetId) -> ChannelKind {
-        *self
-            .net_id_map
-            .get(net_id)
-            .expect("Must properly initialize Channel with Protocol via `add_channel()` function!")
+    /// Resolves a net-ID read from the wire into a registered `ChannelKind`.
+    ///
+    /// The net-ID comes from a remote peer, so an unregistered value is a
+    /// malformed packet rather than a local programming error: return an error
+    /// and let the caller drop the packet.
+    fn net_id_to_kind(&self, net_id: &NetId) -> Result<ChannelKind, SerdeErr> {
+        self.net_id_map.get(net_id).copied().ok_or(SerdeErr)
     }
 
     fn kind_to_net_id(&self, channel_kind: &ChannelKind) -> NetId {
@@ -157,5 +159,75 @@ impl ChannelKinds {
             .iter()
             .map(|(kind, (_, _, name))| (*kind, name.clone()))
             .collect()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use naia_serde::{BitReader, BitWrite, BitWriter};
+
+    use crate::{
+        Channel, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode, ChannelSettings, Named,
+        ReliableSettings,
+    };
+
+    macro_rules! test_channel {
+        ($name:ident) => {
+            struct $name;
+            impl Named for $name {
+                fn name(&self) -> String {
+                    stringify!($name).to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    stringify!($name)
+                }
+            }
+            impl Channel for $name {}
+        };
+    }
+
+    test_channel!(ChannelA);
+    test_channel!(ChannelB);
+    test_channel!(ChannelC);
+
+    fn kinds() -> ChannelKinds {
+        let mut kinds = ChannelKinds::new();
+        let settings = ChannelSettings::new(
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            ChannelDirection::Bidirectional,
+        );
+        kinds.add_channel::<ChannelA>(settings.clone());
+        kinds.add_channel::<ChannelB>(settings.clone());
+        kinds.add_channel::<ChannelC>(settings);
+        kinds
+    }
+
+    fn read_net_id(kinds: &ChannelKinds, net_id: u16) -> Result<ChannelKind, naia_serde::SerdeErr> {
+        let mut writer = BitWriter::new();
+        for i in 0..kinds.kind_bit_width {
+            writer.write_bit((net_id >> i) & 1 != 0);
+        }
+        let bytes = writer.to_bytes();
+        let mut reader = BitReader::new(&bytes);
+        ChannelKind::de(kinds, &mut reader)
+    }
+
+    #[test]
+    fn registered_net_id_decodes() {
+        let kinds = kinds();
+        assert_eq!(
+            read_net_id(&kinds, 1).unwrap(),
+            ChannelKind::of::<ChannelB>()
+        );
+    }
+
+    /// Three channels round up to a 2-bit tag, so net_ids 3 is encodable but
+    /// unregistered. A remote peer can put it on the wire, so decoding it must
+    /// return an error the caller can drop the packet on -- not panic and take
+    /// the whole process down.
+    #[test]
+    fn unregistered_net_id_errors_instead_of_panicking() {
+        let kinds = kinds();
+        assert!(read_net_id(&kinds, 3).is_err());
     }
 }

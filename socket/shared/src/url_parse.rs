@@ -128,17 +128,14 @@ pub fn parse_server_url(server_url_str: &str) -> Url {
 
     if let Some(path_segments) = url.path_segments() {
         if path_segments.count() > 1 {
-            log::error!("server_url_str must not include a path");
-            panic!("");
+            panic!("server_url_str must not include a path (got: {server_url_str:?})");
         }
     }
     if url.query().is_some() {
-        log::error!("server_url_str must not include a query string");
-        panic!("");
+        panic!("server_url_str must not include a query string (got: {server_url_str:?})");
     }
     if url.fragment().is_some() {
-        log::error!("server_url_str must not include a fragment");
-        panic!("");
+        panic!("server_url_str must not include a fragment (got: {server_url_str:?})");
     }
 
     url
@@ -159,14 +156,12 @@ cfg_if! {
             let addrs: Vec<SocketAddr> = format!("{}:{}", host, port)
                 .to_socket_addrs()
                 .unwrap_or_else(|err| {
-                    log::error!("URL -> SocketAddr parse fails with: {:?}", err);
-                    panic!("");
+                    panic!("could not resolve {host}:{port} to a SocketAddr: {err:?}");
                 })
                 .collect();
 
             if addrs.is_empty() {
-                log::error!("could not get SocketAddr from input URL");
-                panic!("");
+                panic!("{host}:{port} resolved to no SocketAddr");
             }
             addrs[0]
         }
@@ -216,5 +211,26 @@ mod tests {
             parse_server_url("https://example.com/base").to_string(),
             "https://example.com/base"
         );
+    }
+
+    /// The rejection panics carry no information without the offending URL, which
+    /// is the whole point of the check -- the caller has to know which of their
+    /// config strings is wrong.
+    #[test]
+    #[should_panic(expected = "http://127.0.0.1:14196/some/path")]
+    fn path_rejection_names_the_url() {
+        parse_server_url("http://127.0.0.1:14196/some/path");
+    }
+
+    #[test]
+    #[should_panic(expected = "http://127.0.0.1:14196/?a=b")]
+    fn query_rejection_names_the_url() {
+        parse_server_url("http://127.0.0.1:14196/?a=b");
+    }
+
+    #[test]
+    #[should_panic(expected = "http://127.0.0.1:14196/#frag")]
+    fn fragment_rejection_names_the_url() {
+        parse_server_url("http://127.0.0.1:14196/#frag");
     }
 }

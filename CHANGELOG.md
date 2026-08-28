@@ -10,6 +10,43 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **The session listener no longer panics on malformed pre-auth requests.**
+  `naia-server-socket`'s WebRTC session endpoint parses the incoming HTTP request
+  before any authentication runs, and it did so with `.expect()`: a read error, or a
+  header line that was not valid UTF-8, panicked the task. That task is spawned per
+  connection on the shared executor, so a single unauthenticated packet from any
+  peer that can reach the session port could take the server process down. Request
+  parsing is now a separate `read_session_request` that returns `None` for anything
+  malformed, and the connection gets a 404.
+
+  The same path also buffered without bound. A peer could stream an unterminated
+  header line, an endless run of well-formed headers, or declare an arbitrary
+  `Content-Length`, and the server would allocate to match. Request lines are now
+  capped at 8 KiB, total headers at 16 KiB, and the declared body at 64 KiB -- all
+  far above any legitimate session request. Reported by @pbalcer (#168).
+
+- **Unregistered wire net-IDs are now an error, not a panic.** `MessageKind::de`,
+  `ChannelKind::de`, and `ComponentKind::de` read a net-ID off the wire and looked it
+  up with `.expect()`. The tag is fixed-width, so any protocol whose registered count
+  is not an exact power of two has encodable net-IDs with nothing behind them, and a
+  remote peer can send one. The three registries' `net_id_to_kind` now returns
+  `Result<_, SerdeErr>`; the decode fails, and the existing handling drops the packet
+  and logs, as it already does for every other malformed-packet case.
+
+  The reverse lookups (`kind_to_net_id`, `kind_to_builder`) keep panicking on purpose:
+  their keys come from local application code, where a miss really is a missing
+  `add_message()`/`add_channel()`/`add_component()` registration. Reported by
+  @davehorner (#213).
+
+- **URL rejection panics now say which URL was rejected.** `parse_server_url` rejected
+  a path, query, or fragment with `panic!("")` after a `log::error!`, so a caller
+  running without a logger got an empty panic message and no way to tell which of
+  their config strings was wrong. These now carry the offending URL, matching the
+  existing style in `naia-server`'s UDP transport, whose own `Url::parse` failure
+  message gained the URL too. Two other empty panics -- in socket-address resolution
+  and in the wasm data-channel setup -- were given messages as well. Reported by
+  @bakcxoj (#185).
+
 - **`CommandHistory` is now bounded.** Its only pruning happened in `replays`,
   which runs on server acknowledgement, so a client that kept predicting while
   acknowledgements stalled -- a hitching server, a stalled receive path, a long

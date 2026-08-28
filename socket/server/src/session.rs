@@ -10,7 +10,7 @@ use futures_core::Stream;
 use http::{header, HeaderValue, Response};
 use log::{info, warn};
 use smol::{
-    io::{AsyncBufRead, AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
+    io::{AsyncBufRead, AsyncBufReadExt, AsyncRead, AsyncReadExt, AsyncWriteExt, BufReader, Lines},
     lock::Mutex,
     stream::StreamExt,
     Async,
@@ -20,6 +20,17 @@ use webrtc_unreliable::SessionEndpoint;
 use naia_socket_shared::{IdentityToken, SocketConfig};
 
 use crate::{executor, server_addrs::ServerAddrs, NaiaServerSocketError};
+
+/// Caps on what an unauthenticated client may make the session listener buffer.
+///
+/// `serve` reads the session request before any authentication happens, so every
+/// byte it accumulates is attacker-controlled. Without these caps a single peer
+/// can hold the connection open and stream an unterminated header line, or
+/// declare an enormous `Content-Length`, until the server exhausts memory.
+/// The values are far above any legitimate SDP session request.
+const MAX_REQUEST_LINE_BYTES: usize = 8 * 1024;
+const MAX_HEADER_BYTES: usize = 16 * 1024;
+const MAX_BODY_BYTES: usize = 64 * 1024;
 
 type ClientAuthSender =
     smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
@@ -234,6 +245,140 @@ async fn serve_auth_mux_out(
     }
 }
 
+/// A session request that was read to completion before authentication.
+struct SessionRequest {
+    is_options: bool,
+    auth_string: Option<String>,
+    body: Vec<u8>,
+}
+
+/// Reads one HTTP session request off `reader`.
+///
+/// This runs entirely pre-authentication, so every byte it sees is chosen by an
+/// unauthenticated remote peer. Anything malformed -- an I/O error, a non-UTF-8
+/// header line, an over-long line, over-long headers, or an over-large declared
+/// `Content-Length` -- yields `None` so the caller can answer 404 and drop the
+/// connection. None of it may panic: `serve` runs one task per incoming
+/// connection, and a panic there takes the whole server process down.
+async fn read_session_request<R: AsyncRead + Unpin>(
+    reader: R,
+    rtc_url_paths: &RtcUrlPaths,
+    remote_addr: &SocketAddr,
+) -> Option<SessionRequest> {
+    let mut bytes = reader.bytes();
+
+    let mut headers_been_read: bool = false;
+    let mut content_length: Option<usize> = None;
+    let mut auth_string: Option<String> = None;
+    let mut rtc_url_matched = false;
+    let mut is_options: bool = false;
+    let mut body: Vec<u8> = Vec::new();
+
+    let mut line: Vec<u8> = Vec::new();
+    let mut header_bytes_read: usize = 0;
+
+    while let Some(byte) = bytes.next().await {
+        let byte = match byte {
+            Ok(byte) => byte,
+            Err(err) => {
+                warn!(
+                    "Error reading WebRTC session request from {}: {}",
+                    remote_addr, err
+                );
+                return None;
+            }
+        };
+
+        if !headers_been_read {
+            header_bytes_read += 1;
+            if header_bytes_read > MAX_HEADER_BYTES {
+                warn!(
+                    "Over-long headers in WebRTC session request from {}",
+                    remote_addr
+                );
+                return None;
+            }
+        }
+
+        if headers_been_read {
+            if let Some(content_length) = content_length {
+                body.push(byte);
+
+                if body.len() >= content_length {
+                    return Some(SessionRequest {
+                        is_options,
+                        auth_string,
+                        body,
+                    });
+                }
+            } else {
+                info!("request was missing Content-Length header");
+                return None;
+            }
+        }
+
+        if byte == b'\r' {
+            continue;
+        } else if byte == b'\n' {
+            // Header lines come straight off the wire pre-auth; non-UTF-8 is a
+            // malformed request, not a server fault.
+            let Ok(mut str) = String::from_utf8(line.clone()) else {
+                warn!(
+                    "Non-UTF-8 header line in WebRTC session request from {}",
+                    remote_addr
+                );
+                return None;
+            };
+            line.clear();
+
+            if rtc_url_matched {
+                if str.to_lowercase().starts_with("content-length: ") {
+                    let (_, last) = str.split_at(16);
+                    str = last.to_string();
+                    content_length = str.parse::<usize>().ok();
+                    if content_length.is_some_and(|len| len > MAX_BODY_BYTES) {
+                        warn!(
+                            "Over-large Content-Length in WebRTC session request from {}",
+                            remote_addr
+                        );
+                        return None;
+                    }
+                } else if str.to_lowercase().starts_with("authorization: ") {
+                    let (_, last) = str.split_at(15);
+                    auth_string = Some(last.to_string());
+                } else if str.is_empty() {
+                    headers_been_read = true;
+
+                    if is_options {
+                        return Some(SessionRequest {
+                            is_options,
+                            auth_string,
+                            body,
+                        });
+                    }
+                }
+            } else if str.starts_with(&rtc_url_paths.post) {
+                rtc_url_matched = true;
+            } else if str.starts_with(&rtc_url_paths.options) {
+                rtc_url_matched = true;
+                is_options = true;
+            }
+        } else {
+            if line.len() >= MAX_REQUEST_LINE_BYTES {
+                warn!(
+                    "Over-long header line in WebRTC session request from {}",
+                    remote_addr
+                );
+                return None;
+            }
+            line.push(byte);
+        }
+    }
+
+    // Stream ended before the request was complete.
+    None
+}
+
 /// Reads a request from the client and sends it a response.
 async fn serve(
     mut session_endpoint: SessionEndpoint,
@@ -244,87 +389,27 @@ async fn serve(
     >,
     rtc_url_paths: RtcUrlPaths,
 ) {
-    let remote_addr = stream
-        .get_ref()
-        .peer_addr()
-        .expect("stream does not have a local address");
+    // A peer that vanishes between accept() and here leaves us without an
+    // address; that is a normal remote event, not a server fault.
+    let Ok(remote_addr) = stream.get_ref().peer_addr() else {
+        warn!("Incoming WebRTC session request has no peer address, dropping");
+        return;
+    };
 
     info!("Incoming WebRTC session request from {}", remote_addr);
 
-    let mut success: bool = false;
-    let mut headers_been_read: bool = false;
-    let mut content_length: Option<usize> = None;
-    let mut auth_string: Option<String> = None;
-    let mut rtc_url_matched = false;
-    let mut is_options: bool = false;
-    let mut body: Vec<u8> = Vec::new();
+    // Parse the request before any authentication has happened: everything this
+    // reads is attacker-controlled, so it must never panic and must never buffer
+    // without bound. `None` means the request was malformed or over-large.
+    let request =
+        read_session_request(BufReader::new(stream.clone()), &rtc_url_paths, &remote_addr).await;
+    let (mut success, is_options, auth_string, body) = match request {
+        Some(request) => (true, request.is_options, request.auth_string, request.body),
+        None => (false, false, None, Vec::new()),
+    };
     let mut identity_token_opt = None;
 
-    let buf_reader = BufReader::new(stream.clone());
-    let mut bytes = buf_reader.bytes();
     {
-        let mut line: Vec<u8> = Vec::new();
-        while let Some(byte) = bytes.next().await {
-            let byte = byte.expect("unable to read a byte from incoming stream");
-
-            if headers_been_read {
-                if let Some(content_length) = content_length {
-                    body.push(byte);
-
-                    if body.len() >= content_length {
-                        // info!("read body finished");
-                        success = true;
-                        break;
-                    }
-                } else {
-                    info!("request was missing Content-Length header");
-                    break;
-                }
-            }
-
-            if byte == b'\r' {
-                continue;
-            } else if byte == b'\n' {
-                let mut str = String::from_utf8(line.clone())
-                    .expect("unable to parse string from UTF-8 bytes");
-                line.clear();
-
-                if rtc_url_matched {
-                    if str.to_lowercase().starts_with("content-length: ") {
-                        let (_, last) = str.split_at(16);
-                        str = last.to_string();
-                        content_length = str.parse::<usize>().ok();
-                        // info!("read content length header: {:?}", content_length);
-                    } else if str.to_lowercase().starts_with("authorization: ") {
-                        let (_, last) = str.split_at(15);
-                        auth_string = Some(last.to_string());
-                        // info!("read authorization header: {:?}", auth_string);
-                    } else if str.is_empty() {
-                        // info!("read headers finished");
-                        headers_been_read = true;
-
-                        if is_options {
-                            success = true;
-                            break;
-                        }
-                    } else {
-                        // info!("read leftover line 1: {}", str);
-                    }
-                } else if str.starts_with(&rtc_url_paths.post) {
-                    // info!("starting to match to RTC URL");
-                    rtc_url_matched = true;
-                } else if str.starts_with(&rtc_url_paths.options) {
-                    // info!("matched OPTIONS request for RTC URL");
-                    rtc_url_matched = true;
-                    is_options = true;
-                } else {
-                    // info!("read leftover line 2: {}", str);
-                }
-            } else {
-                line.push(byte);
-            }
-        }
-
         // handle OPTIONS request
         if success && is_options {
             let mut resp = Response::<String>::new("".to_string());
@@ -350,10 +435,10 @@ async fn serve(
 
             // info!("OPTIONS request from {}", remote_addr);
 
-            stream
-                .write_all(&out)
-                .await
-                .expect("found an error while writing to a stream");
+            if stream.write_all(&out).await.is_err() {
+                warn!("Error writing response to {}", remote_addr);
+                return;
+            }
         }
 
         // handle auth
@@ -451,10 +536,10 @@ async fn serve(
 
                         info!("Successful WebRTC session request from {}", remote_addr);
 
-                        stream
-                            .write_all(&out)
-                            .await
-                            .expect("found an error while writing to a stream");
+                        if stream.write_all(&out).await.is_err() {
+                            warn!("Error writing response to {}", remote_addr);
+                            return;
+                        }
                     }
                     Err(err) => {
                         warn!(
@@ -475,22 +560,30 @@ async fn serve(
 
                 info!("Rejected WebRTC session request from {}", remote_addr);
 
-                stream
-                    .write_all(&out)
-                    .await
-                    .expect("found an error while writing to a stream");
+                if stream.write_all(&out).await.is_err() {
+                    warn!("Error writing response to {}", remote_addr);
+                    return;
+                }
             }
         }
     }
 
     // info!("Closing WebRTC session request from {}", remote_addr);
 
-    if !success {
-        stream.write_all(RESPONSE_BAD).await.expect("found");
+    // From here on the peer may already be gone; a failed write/flush/close is a
+    // remote event, so log it rather than taking the whole server down.
+    if !success && stream.write_all(RESPONSE_BAD).await.is_err() {
+        warn!("Error writing 404 response to {}", remote_addr);
+        return;
     }
 
-    stream.flush().await.expect("unable to flush the stream");
-    stream.close().await.expect("unable to close the stream");
+    if stream.flush().await.is_err() {
+        warn!("Error flushing stream to {}", remote_addr);
+        return;
+    }
+    if stream.close().await.is_err() {
+        warn!("Error closing stream to {}", remote_addr);
+    }
 }
 
 const RESPONSE_BAD: &[u8] = br#"
@@ -581,4 +674,88 @@ fn write_response_header<T>(
 
     w!(b"\r\n");
     Ok(len)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+
+    use super::{read_session_request, RtcUrlPaths, MAX_HEADER_BYTES, MAX_REQUEST_LINE_BYTES};
+
+    fn paths() -> RtcUrlPaths {
+        RtcUrlPaths {
+            post: "POST /rtc_session".to_string(),
+            options: "OPTIONS /rtc_session".to_string(),
+        }
+    }
+
+    fn addr() -> SocketAddr {
+        SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), 4000)
+    }
+
+    fn read(request: &[u8]) -> Option<super::SessionRequest> {
+        smol::block_on(read_session_request(request, &paths(), &addr()))
+    }
+
+    #[test]
+    fn well_formed_post_is_parsed() {
+        let request = read(
+            b"POST /rtc_session HTTP/1.1\r\nAuthorization: token\r\nContent-Length: 5\r\n\r\nhello",
+        )
+        .expect("well-formed request should parse");
+        assert!(!request.is_options);
+        assert_eq!(request.auth_string.as_deref(), Some("token"));
+        assert_eq!(request.body, b"hello");
+    }
+
+    #[test]
+    fn well_formed_options_is_parsed() {
+        let request = read(b"OPTIONS /rtc_session HTTP/1.1\r\n\r\n")
+            .expect("well-formed OPTIONS should parse");
+        assert!(request.is_options);
+    }
+
+    /// The session listener runs pre-authentication, so a peer can send whatever
+    /// it likes. A non-UTF-8 header line used to be `String::from_utf8(..).expect(..)`
+    /// -- one unauthenticated packet was enough to panic the task and take the
+    /// server process down.
+    #[test]
+    fn non_utf8_header_line_is_rejected_not_panicked_on() {
+        let mut request = b"POST /rtc_session HTTP/1.1\r\n".to_vec();
+        request.extend_from_slice(&[0xff, 0xfe, b'\r', b'\n']);
+        request.extend_from_slice(b"\r\n");
+        assert!(read(&request).is_none());
+    }
+
+    /// An unterminated header line must not be buffered without bound.
+    #[test]
+    fn over_long_header_line_is_rejected() {
+        let mut request = b"POST /rtc_session HTTP/1.1\r\n".to_vec();
+        request.extend(std::iter::repeat_n(b'a', MAX_REQUEST_LINE_BYTES + 1));
+        assert!(read(&request).is_none());
+    }
+
+    /// Neither may an endless run of short, well-formed header lines.
+    #[test]
+    fn over_long_headers_are_rejected() {
+        let mut request = b"POST /rtc_session HTTP/1.1\r\n".to_vec();
+        while request.len() <= MAX_HEADER_BYTES {
+            request.extend_from_slice(b"X: y\r\n");
+        }
+        request.extend_from_slice(b"\r\n");
+        assert!(read(&request).is_none());
+    }
+
+    /// `Content-Length` is attacker-declared and sizes a `Vec`, so it needs a cap
+    /// of its own -- the header cap above stops counting once headers end.
+    #[test]
+    fn over_large_content_length_is_rejected() {
+        let request = b"POST /rtc_session HTTP/1.1\r\nContent-Length: 4294967296\r\n\r\n".to_vec();
+        assert!(read(&request).is_none());
+    }
+
+    #[test]
+    fn truncated_request_is_rejected() {
+        assert!(read(b"POST /rtc_session HTTP/1.1\r\nContent-Length: 5\r\n\r\nhi").is_none());
+    }
 }

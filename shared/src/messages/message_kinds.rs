@@ -51,7 +51,7 @@ impl MessageKind {
                 net_id |= 1 << i;
             }
         }
-        Ok(message_kinds.net_id_to_kind(&net_id))
+        message_kinds.net_id_to_kind(&net_id)
     }
 }
 
@@ -138,11 +138,13 @@ impl MessageKinds {
         self.kind_to_builder(&message_kind).read(reader, converter)
     }
 
-    fn net_id_to_kind(&self, net_id: &NetId) -> MessageKind {
-        *self
-            .net_id_map
-            .get(net_id)
-            .expect("Must properly initialize Message with Protocol via `add_message()` function!")
+    /// Resolves a net-ID read from the wire into a registered `MessageKind`.
+    ///
+    /// The net-ID comes from a remote peer, so an unregistered value is a
+    /// malformed packet rather than a local programming error: return an error
+    /// and let the caller drop the packet.
+    fn net_id_to_kind(&self, net_id: &NetId) -> Result<MessageKind, SerdeErr> {
+        self.net_id_map.get(net_id).copied().ok_or(SerdeErr)
     }
 
     fn kind_to_net_id(&self, message_kind: &MessageKind) -> NetId {
@@ -168,5 +170,23 @@ impl MessageKinds {
         }
         output.sort();
         output
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use naia_serde::BitReader;
+
+    use crate::{MessageKind, MessageKinds};
+
+    /// A net_id with no registered `Message` behind it is something a remote peer
+    /// can put on the wire, so decoding it must return an error the caller can
+    /// drop the packet on -- not panic and take the whole process down.
+    #[test]
+    fn unregistered_net_id_errors_instead_of_panicking() {
+        let kinds = MessageKinds::new();
+        let bytes = [0u8; 4];
+        let mut reader = BitReader::new(&bytes);
+        assert!(MessageKind::de(&kinds, &mut reader).is_err());
     }
 }

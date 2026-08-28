@@ -314,8 +314,7 @@ impl DataChannel {
                 port_onmsg_closure.forget();
             }
             Err(err) => {
-                info!("Error creating new RtcPeerConnection. Error: {:?}", err);
-                panic!("");
+                panic!("error creating new RtcPeerConnection: {err:?}");
             }
         }
     }

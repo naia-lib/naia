@@ -358,7 +358,8 @@ impl Default for ServerAddrs {
 use url::Url;
 
 fn url_str_to_addr(url_str: &str) -> SocketAddr {
-    let url = Url::parse(url_str).expect("server_url_str is not a valid URL!");
+    let url = Url::parse(url_str)
+        .unwrap_or_else(|e| panic!("server_url_str is not a valid URL (got: {url_str:?}): {e}"));
     if let Some(path_segments) = url.path_segments() {
         let path_segment_count = path_segments.count();
         if path_segment_count > 1 {
