@@ -232,6 +232,10 @@ mod tests {
     #[test]
     fn halo_unit_facing_wraps() {
         let mut u = HaloUnit::new(0, 0, 255);
+        // A freshly constructed HostOwned component has no mutator until it is
+        // registered with a world; `localize()` is the sanctioned way to mutate
+        // one outside replication.
+        u.localize();
         *u.facing = u.facing.wrapping_add(1);
         assert_eq!(*u.facing, 0u8);
     }
