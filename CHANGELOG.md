@@ -44,6 +44,51 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   adapter's `DisconnectEvent` gained a matching `message` field. Callers
   destructuring the old shape must be updated.
 
+- **`MainServer::disconnect_user` takes a reason and an optional payload**
+  (naia-lib/naia#10). Its signature is now
+  `disconnect_user(&mut self, user_key: &UserKey, reason: DisconnectReason,
+  payload: Option<&[u8]>)`. `MainServer` is publicly re-exported, so this
+  breaks callers that drive it directly rather than going through
+  `UserMut::disconnect()` or `Server::disconnect_user_with`; passing
+  `(&user_key, DisconnectReason::Kicked, None)` reproduces the previous
+  behavior exactly.
+
+- **`naia_bevy_server::Plugin::new` takes a single `ServerPluginConfig`, and
+  `Plugin::world_only` is gone.** BREAKING. The constructor was
+  `Plugin::new(server_config, protocol)`, with a separate `Plugin::world_only`
+  for the proxied case. It is now
+  `Plugin::new(ServerPluginConfig::new(server_config, protocol, topology))`,
+  where `Topology` selects between `Standalone`, `WorldProxied`, and
+  `SimIntegration`, and each carries how naia should drive the engine
+  (`DriveShape::Resident` or `DriveShape::Pipelined`). `ServerPluginConfig`,
+  `Topology`, `DriveShape`, and `SimIntegrationConfig` are exported from the
+  adapter root. `Plugin::new(cfg, proto)` becomes
+  `Plugin::new(ServerPluginConfig::new(cfg, proto, Topology::Standalone(DriveShape::Resident)))`,
+  and the old `Plugin::world_only(cfg, proto)` becomes
+  `Topology::WorldProxied(DriveShape::Resident)`.
+
+- **`ComponentUpdate` is now `PendingComponentUpdate`** in `naia-shared`.
+  BREAKING for anyone naming the type: the root re-export changed name, as did
+  the signatures carrying it -- `ComponentKinds::read_create_update` returns
+  `Result<PendingComponentUpdate, SerdeErr>`, `ComponentKinds::split_update`
+  takes one, and the public `SplitUpdateResult` alias yields one. The name is
+  the only change; the type's role is unchanged.
+
+- **`Server<E>` and its borrow types require `E: 'static`.** BREAKING only for
+  a caller whose entity type borrows. `Server<E>` gained a `'static` bound on
+  its entity parameter, and `UserRef`, `EntityRef`, `EntityMut`, `RoomRef`, and
+  `UserScopeRef` gained the matching bound. Every in-tree entity type -- Bevy's
+  `Entity` included -- already satisfies it.
+
+- **Internal plumbing re-exported from `naia-shared` changed shape.**
+  `naia-shared` re-exports much of its internals at the crate root, so these are
+  technically public, but no application drives them: `LocalWorldManager`'s
+  converter accessors now return concrete `EntityMapReadConverter` /
+  `EntityMapConverterMut` instead of `&dyn LocalEntityAndGlobalEntityConverter`
+  and `EntityConverterMut`, and `DirtyQueue`/`DirtyNotifier` index by
+  `GlobalEntityIndex` rather than `EntityIndex` (with `DirtyNotifier::new`
+  taking an additional `Weak<GlobalDirtyBitset>`). Listed for completeness.
+
 - **Two application-driven panics now name the mistake that caused them**
   (naia-lib/naia#172). Answering the same `AuthEvent` twice --
   `accept_connection` then `accept_connection`, or `accept_connection` then
