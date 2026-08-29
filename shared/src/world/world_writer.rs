@@ -968,8 +968,12 @@ impl WorldWriter {
             // a legitimate ordering, exactly as the despawn race above would have.
             // The update is moot either way: whoever holds authority now owns the
             // authoritative value, and this host will receive it. Drop the entry.
-            // On the server `can_write()` is true for every auth status, so this is
-            // a client-side guard in practice and costs the server one `None` check.
+            // This is a client-side guard in practice. The server does not override
+            // `entity_auth_status`, so it inherits the trait default `None` and
+            // skips the check entirely -- which is also the correct outcome, since
+            // `can_write()` is true for every server auth status anyway. Note the
+            // default is fail-open: an implementor that does not override this gets
+            // no guard.
             if let Some(auth_status) = global_world_manager.entity_auth_status(&global_entity) {
                 if !auth_status.can_write() {
                     update_list[i].3.clear();

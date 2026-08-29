@@ -392,6 +392,18 @@ impl Scenario {
     ///
     /// Panics if called immediately after another `mutate()` call. Tests MUST alternate
     /// between `mutate()` and `expect()` calls.
+    /// Applies `f` and ticks the network once, WITHOUT draining world events.
+    ///
+    /// This distinction matters and has produced false negatives. State that a
+    /// client only applies while draining its world events -- authority
+    /// transitions in particular -- is NOT applied by a `mutate` tick. A client
+    /// told it has lost authority will keep reporting its old status forever if
+    /// the test advances with `mutate(|_| {})`, which makes a broken expectation
+    /// look satisfied and can make a test appear to cover an ordering it never
+    /// reaches.
+    ///
+    /// Use `expect` / `until(..).expect(..)` to advance whenever the thing being
+    /// waited on is delivered to the client as an event.
     pub fn mutate<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
         // if self.last_operation == LastOperation::Mutate {
         //     panic!("Scenario::mutate() called immediately after another mutate() call. Tests MUST alternate between mutate() and expect() calls.");

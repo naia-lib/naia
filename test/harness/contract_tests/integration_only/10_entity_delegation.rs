@@ -1518,3 +1518,149 @@ fn auth_lost_emitted_exactly_once_per_transition_out_of_granted() {
         (status && first_event && no_second).then_some(())
     });
 }
+
+/// Server-initiated authority changes must reach the client that held it, for
+/// both server-owned and client-owned delegated entities.
+///
+/// `take_authority` drives the previous holder to `Denied` (the server now holds
+/// it); `release_authority` drives it to `Available` (nobody holds it). Getting
+/// this wrong in the silent direction is the dangerous case: the server would
+/// believe it had reclaimed authority while the client still believed it held
+/// it, and both would consider themselves free to write.
+///
+/// Note for anyone extending this file: authority transitions are applied to the
+/// client only when its world events are drained. `Scenario::expect` does that;
+/// a bare `Scenario::mutate` tick does not. Advancing with `mutate(|_| {})` will
+/// leave the client on its old authority status indefinitely and make a broken
+/// expectation look satisfied. See the note on `Scenario::mutate`.
+#[test]
+fn server_authority_changes_reach_the_previous_holder() {
+    for client_owned in [false, true] {
+        for use_take in [false, true] {
+            let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+            let test_protocol = protocol();
+            scenario.server_start(ServerConfig::default(), test_protocol.clone());
+            let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+            let client_a_key = client_connect(
+                &mut scenario,
+                &room_key,
+                "Client A",
+                Auth::new("client_a", "pass"),
+                test_client_config(),
+                test_protocol,
+            );
+
+            let entity_e = if client_owned {
+                let e = scenario.mutate(|ctx| {
+                    ctx.client(client_a_key, |client_a| {
+                        client_a.spawn(|mut e| {
+                            e.configure_replication(Publicity::Public)
+                                .insert_component(Position::new(1.0, 2.0));
+                        })
+                    })
+                });
+                scenario.expect(|ctx| ctx.server(|server| server.has_entity(&e).then_some(())));
+                scenario.allow_flexible_next();
+                scenario.mutate(|ctx| {
+                    ctx.server(|server| {
+                        if let Some(mut em) = server.entity_mut(&e) {
+                            em.enter_room(&room_key);
+                        }
+                        server.user_scope_mut(&client_a_key).unwrap().include(&e);
+                    });
+                });
+                e
+            } else {
+                scenario.mutate(|ctx| {
+                    ctx.server(|server| {
+                        let (entity, _) = server.spawn(|mut e| {
+                            e.insert_component(Position::new(1.0, 2.0));
+                            e.enter_room(&room_key);
+                        });
+                        server
+                            .user_scope_mut(&client_a_key)
+                            .unwrap()
+                            .include(&entity);
+                        entity
+                    })
+                })
+            };
+            scenario.expect(|ctx| {
+                ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+                    .then_some(())
+            });
+
+            scenario.mutate(|ctx| {
+                ctx.server(|server| {
+                    if let Some(mut em) = server.entity_mut(&entity_e) {
+                        em.configure_replication(ReplicationConfig::delegated());
+                    }
+                });
+            });
+
+            // A client-owned entity migrates authority to its owner; a
+            // server-owned one has to be granted explicitly.
+            if !client_owned {
+                scenario.expect(|ctx| {
+                    ctx.client(client_a_key, |c| {
+                        c.entity(&entity_e).and_then(|e| e.authority())
+                            == Some(EntityAuthStatus::Available)
+                    })
+                    .then_some(())
+                });
+                scenario.mutate(|ctx| {
+                    ctx.server(|server| {
+                        if let Some(mut em) = server.entity_mut(&entity_e) {
+                            em.give_authority(&client_a_key).unwrap();
+                        }
+                    });
+                });
+            }
+            scenario.expect(|ctx| {
+                ctx.client(client_a_key, |c| {
+                    c.entity(&entity_e).and_then(|e| e.authority())
+                        == Some(EntityAuthStatus::Granted)
+                })
+                .then_some(())
+            });
+
+            scenario.mutate(|ctx| {
+                ctx.server(|server| {
+                    if let Some(mut em) = server.entity_mut(&entity_e) {
+                        if use_take {
+                            em.take_authority().unwrap();
+                        } else {
+                            em.release_authority().unwrap();
+                        }
+                    }
+                });
+            });
+
+            let expected_client = if use_take {
+                EntityAuthStatus::Denied
+            } else {
+                EntityAuthStatus::Available
+            };
+            scenario.expect(|ctx| {
+                ctx.client(client_a_key, |c| {
+                    c.entity(&entity_e).and_then(|e| e.authority()) == Some(expected_client)
+                })
+                .then_some(())
+            });
+
+            // And the server's own view agrees: it holds authority after a take,
+            // and nobody holds it after a release.
+            let expected_server = if use_take {
+                EntityAuthStatus::Granted
+            } else {
+                EntityAuthStatus::Available
+            };
+            scenario.expect(|ctx| {
+                ctx.server(|server| {
+                    server.entity(&entity_e).and_then(|e| e.authority()) == Some(expected_server)
+                })
+                .then_some(())
+            });
+        }
+    }
+}
