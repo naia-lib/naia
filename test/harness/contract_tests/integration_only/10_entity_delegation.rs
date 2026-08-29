@@ -1940,3 +1940,153 @@ fn a_client_that_has_only_requested_authority_cannot_write_yet() {
          `insert_component` authority gate",
     );
 }
+
+/// Pins [`Scenario::tick_holding_client_send`], the client-side freeze lever,
+/// and records what it turned out to prove about the client authority race.
+///
+/// The lever itself works: a component dirtied by a client and then held stays
+/// held -- the server does not see it for as many ticks as the test wants --
+/// and lands intact once ordinary ticking resumes. That is the capability the
+/// server has had all along via `prepare_send_job`/`transmit_and_pump`.
+///
+/// What it does NOT do is manufacture the authority-loss race that
+/// `UpdateDropReason::AuthorityLost` guards. The server revokes authority
+/// inside the frozen window here, and the client nonetheless still reports
+/// `Granted` six held ticks later: holding the client's outbound flush stalls
+/// the authority handshake itself, because that handshake rides the same send
+/// path. The freeze therefore suppresses the very authority loss it was meant
+/// to race against.
+///
+/// This is the same structural fact the send-guard unit tests were written
+/// around -- a client holds host send state for a delegated entity only while
+/// it has authority -- seen from the other direction, and it is why that guard
+/// is covered by deterministic unit tests in `world_writer.rs` rather than
+/// here. Recorded so the next person does not spend the afternoon rediscovering
+/// it.
+#[test]
+fn holding_a_client_send_freezes_its_updates_but_also_stalls_the_handshake() {
+    use naia_shared::EntityAuthStatus;
+
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            entity
+        })
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(ReplicationConfig::delegated());
+            }
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        })
+        .then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .entity_mut(&entity_e)
+                .unwrap()
+                .give_authority(&client_a_key)
+                .unwrap();
+        });
+    });
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)
+        })
+        .then_some(())
+    });
+
+    // FREEZE: dirty while the client holds authority, and revoke that authority
+    // in the same window -- neither is allowed to reach the wire yet.
+    scenario.stage_without_ticking(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a
+                .entity_mut(&entity_e)
+                .unwrap()
+                .insert_component(Position::new(4242.0, 0.0));
+        });
+        ctx.server(|server| {
+            server.entity_mut(&entity_e).unwrap().take_authority();
+        });
+    });
+
+    let read_server_x = |scenario: &mut Scenario| {
+        scenario.stage_without_ticking(|ctx| {
+            ctx.server(|server| {
+                server
+                    .entity(&entity_e)
+                    .and_then(|e| e.component::<Position>().map(|p| *p.x))
+            })
+        })
+    };
+    let read_a_auth = |scenario: &mut Scenario| {
+        scenario.stage_without_ticking(|ctx| {
+            ctx.client(client_a_key, |c| {
+                c.entity(&entity_e).and_then(|e| e.authority())
+            })
+        })
+    };
+
+    for held_tick in 0..6 {
+        scenario.tick_holding_client_send(client_a_key);
+        assert_eq!(
+            read_server_x(&mut scenario),
+            Some(1.0),
+            "held tick {held_tick}: the frozen update must not have reached the \
+             server -- if it has, the lever is not actually holding the send",
+        );
+        assert_eq!(
+            read_a_auth(&mut scenario),
+            Some(EntityAuthStatus::Granted),
+            "held tick {held_tick}: the authority handshake rides the client's \
+             send path, so freezing that path also stalls the revoke. If this \
+             ever changes, the client-side authority race becomes expressible \
+             here and deserves a real test.",
+        );
+    }
+
+    // TRANSMIT: ordinary ticking resumes and the held update lands.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            server
+                .entity(&entity_e)
+                .and_then(|e| e.component::<Position>().map(|p| *p.x))
+        })
+        .filter(|x| (*x - 4242.0).abs() < 0.001)
+        .map(|_| ())
+    });
+}

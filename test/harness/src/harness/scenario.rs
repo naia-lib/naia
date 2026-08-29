@@ -1058,6 +1058,76 @@ impl Scenario {
         }
     }
 
+    /// Applies `f` and does NOT tick -- the freeze half of a freeze->transmit
+    /// window, for either side.
+    ///
+    /// [`Self::mutate`] ticks after the closure, which flushes whatever the
+    /// closure dirtied in the same breath. That makes the window between
+    /// planning an update and transmitting it inexpressible from a test. This
+    /// stages the mutation and leaves it queued; pair it with
+    /// [`Self::tick_holding_client_send`] to open the window and then let it
+    /// close.
+    pub fn stage_without_ticking<R>(&mut self, f: impl FnOnce(&mut MutateCtx) -> R) -> R {
+        let mut ctx = MutateCtx::new(self);
+        f(&mut ctx)
+    }
+
+    /// One tick in which `held` does not send.
+    ///
+    /// This is the client-side analogue of the server's
+    /// `prepare_send_job`/`transmit_and_pump` split, and it exists for the same
+    /// reason: naia's send path plans updates at one moment and serializes them
+    /// at another, and several guards in `WorldWriter::write_updates` exist
+    /// only to cover what can change in between. On the server the harness
+    /// could already open that window; on the client it could not, which is why
+    /// `UpdateDropReason::AuthorityLost` -- a client-side guard in practice --
+    /// had no end-to-end test at all.
+    ///
+    /// Holding the send freezes the client's queued updates in place while the
+    /// rest of the world moves: the server can revoke authority, despawn the
+    /// entity, or remove the component, and the held update is transmitted
+    /// afterwards, on the next ordinary tick.
+    ///
+    /// Everything else runs normally, `held` included -- it still receives and
+    /// processes, so it observes the very change that invalidates what it is
+    /// holding. Only its outbound flush is suppressed.
+    pub fn tick_holding_client_send(&mut self, held: ClientKey) {
+        self.assert_clock_thread();
+        self.global_tick += 1;
+        TestClock::advance(TICK_DURATION_MS);
+        let now = Instant::now();
+        self.hub.process_time_queues();
+
+        let server = self.server.as_mut().expect("server not started");
+        for (client_key, state) in self.clients.iter_mut() {
+            let (client, world) = state.client_and_world_mut();
+            if *client_key == held {
+                let status = client.connection_status();
+                client.receive_all_packets();
+                if status.is_connected() || status.is_disconnecting() {
+                    client.process_all_packets(world.proxy_mut(), &now);
+                }
+                // Drain the held client's world events. Authority transitions
+                // are only APPLIED on the drain (see `Self::mutate`), so
+                // without this the client would still believe it holds
+                // authority when the freeze ends -- and the window this method
+                // exists to open would never actually open.
+                //
+                // The drained events are discarded: a test using this lever
+                // must assert on state, not on the held client's events for
+                // these ticks.
+                let _ = client.take_world_events();
+                // No `send_all_packets`: this is the freeze.
+            } else {
+                Self::update_client_server_at(&now, client, server, world, &mut self.server_world);
+                continue;
+            }
+            server.receive_all_packets();
+            server.process_all_packets(self.server_world.proxy_mut(), &now);
+            server.send_all_packets(self.server_world.proxy());
+        }
+    }
+
     /// Get the current tick count
     pub fn global_tick(&self) -> usize {
         self.global_tick
