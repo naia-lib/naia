@@ -1,6 +1,6 @@
 use tokio::sync::mpsc::{error::SendError, Sender, UnboundedSender};
-use webrtc_unreliable_client::{AddrCell, ServerAddr as RTCServerAddr};
 
+use super::addr_cell::AddrCell;
 use crate::{error::NaiaClientSocketError, server_addr::ServerAddr};
 
 /// Handles sending messages to the Server for a given Client Socket
@@ -37,10 +37,7 @@ impl PacketSender {
 
     /// Get the Server's Socket address
     pub fn server_addr(&self) -> ServerAddr {
-        match self.server_addr.get() {
-            RTCServerAddr::Finding => ServerAddr::Finding,
-            RTCServerAddr::Found(addr) => ServerAddr::Found(addr),
-        }
+        self.server_addr.get()
     }
 
     pub fn connected(&self) -> bool {

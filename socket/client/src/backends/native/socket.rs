@@ -3,7 +3,7 @@ use naia_socket_shared::{parse_server_url, SocketConfig};
 use webrtc_unreliable_client::Socket as RTCSocket;
 
 use super::{
-    identity_receiver::IdentityReceiver, packet_receiver::PlainPacketReceiver,
+    addr_cell::AddrCell, identity_receiver::IdentityReceiver, packet_receiver::PlainPacketReceiver,
     packet_sender::PacketSender,
 };
 use crate::{backends::native::runtime::get_runtime, packet_receiver::PacketReceiver};
@@ -69,6 +69,9 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         let (socket, io) = RTCSocket::new();
+        // The address arrives once, later, over a oneshot; AddrCell is the
+        // polled view of it that the sender and receiver both hold.
+        let addr_cell = AddrCell::new(io.to_client_addr_receiver);
         get_runtime().spawn(async move {
             socket
                 .connect(&server_session_string, auth_bytes_opt, auth_headers_opt)
@@ -77,13 +80,13 @@ impl Socket {
 
         // Setup Packet Sender
         let packet_sender = PacketSender::new(
-            io.addr_cell.clone(),
+            addr_cell.clone(),
             io.to_server_sender,
             io.to_server_disconnect_sender,
         );
 
         // Setup Packet Receiver
-        let inner_receiver = PlainPacketReceiver::new(io.addr_cell, io.to_client_receiver);
+        let inner_receiver = PlainPacketReceiver::new(addr_cell, io.to_client_receiver);
         let packet_receiver = PacketReceiver::new(inner_receiver, &conditioner_config);
 
         // Setup Identity Receiver
