@@ -17,7 +17,7 @@ pub(crate) struct ClientState {
     /// Shared handle to the identity token received from the server
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
     /// Shared handle to the rejection code (if any) returned by the handshake
-    rejection_code: Arc<Mutex<Option<u16>>>,
+    rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
 }
 
 impl ClientState {
@@ -25,7 +25,7 @@ impl ClientState {
         client: Client,
         world: TestWorld,
         identity_token: Arc<Mutex<Option<IdentityToken>>>,
-        rejection_code: Arc<Mutex<Option<u16>>>,
+        rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
     ) -> Self {
         Self {
             client,
@@ -74,7 +74,7 @@ impl ClientState {
     /// Get the last rejection code (if any) returned by the handshake
     /// Returns None if no rejection occurred
     pub(crate) fn rejection_code(&self) -> Option<u16> {
-        *self.rejection_code.lock()
+        self.rejection_code.lock().as_ref().map(|(code, _)| *code)
     }
 
     /// Get a reference to the identity token handle for mutation

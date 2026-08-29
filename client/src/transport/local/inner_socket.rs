@@ -33,7 +33,7 @@ impl LocalClientSocket {
         data_rx: mpsc::Receiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
         identity_token: Arc<Mutex<Option<IdentityToken>>>,
-        rejection_code: Arc<Mutex<Option<u16>>>,
+        rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
     ) -> Self {
         let auth_io = Arc::new(Mutex::new(ClientAuthIo::new(
             auth_responses_rx,

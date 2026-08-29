@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **A rejected connection can now be told why** (naia-lib/naia#133).
+  `Server::reject_connection_with(&user_key, message)` sends the client any
+  registered message -- an `InvalidCredentials` or `UserBanned` of your own
+  defining -- and the client's `RejectEvent` now yields
+  `(SocketAddr, RejectReason, Option<MessageContainer>)` so the application can
+  decide whether retrying makes sense. The message rides base64-encoded in the
+  body of the rejection response, which every transport already had in hand and
+  discarded. `reject_connection` is unchanged and sends no reason.
+
+  Two limits are worth stating plainly. A rejection message must not contain an
+  `EntityProperty`: there is no connection yet, so entity references cannot be
+  resolved. And the native WebRTC transport cannot carry one yet -- the
+  `webrtc-unreliable-client` release naia depends on surfaces only the HTTP
+  status code, not the response body -- so on that transport the message is
+  always `None`. The UDP, local, and WASM WebRTC transports carry it.
+
 ### Changed
 
 - **Two application-driven panics now name the mistake that caused them**

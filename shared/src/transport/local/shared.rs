@@ -13,8 +13,9 @@ pub enum ClientIdentityReceiverResult {
     Waiting,
     /// Successfully received an identity token.
     Success(IdentityToken),
-    /// Received an HTTP error response code.
-    ErrorResponseCode(u16),
+    /// Received an HTTP error response code, and optionally a serialized
+    /// message explaining the rejection (naia-lib/naia#133).
+    ErrorResponseCode(u16, Option<Vec<u8>>),
 }
 
 #[doc(hidden)]

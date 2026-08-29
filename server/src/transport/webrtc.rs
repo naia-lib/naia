@@ -55,8 +55,8 @@ impl TransportAuthSender for AuthSender {
     ) -> Result<(), SendError> {
         AuthSender::accept(self, address, identity_token).map_err(|_| SendError)
     }
-    fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
-        AuthSender::reject(self, address).map_err(|_| SendError)
+    fn reject(&self, address: &SocketAddr, payload: Option<&[u8]>) -> Result<(), SendError> {
+        AuthSender::reject(self, address, payload).map_err(|_| SendError)
     }
 }
 

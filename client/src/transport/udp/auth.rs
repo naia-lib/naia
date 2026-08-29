@@ -46,25 +46,31 @@ impl AuthIo {
             panic!("No stream to receive from (did you forget to call connect?)");
         };
         match pending_req.poll_response() {
-            Ok(Some((response_status, id_token))) => {
+            Ok(Some((response_status, body))) => {
                 if response_status != 200 {
-                    return IdentityReceiverResult::ErrorResponseCode(response_status);
+                    // A rejection may carry a base64-encoded message explaining
+                    // itself (naia-lib/naia#133). A body we cannot decode is a
+                    // malformed rejection, not a reason to hide the rejection.
+                    return IdentityReceiverResult::ErrorResponseCode(
+                        response_status,
+                        crate::transport::decode_reject_payload(&body),
+                    );
                 }
 
                 // read the rest of the bytes as the identity token
-                match IdentityToken::from_signaling_string(&id_token) {
+                match IdentityToken::from_signaling_string(&body) {
                     Some(id_token) => IdentityReceiverResult::Success(id_token),
-                    None => IdentityReceiverResult::ErrorResponseCode(400),
+                    None => IdentityReceiverResult::ErrorResponseCode(400, None),
                 }
             }
             Ok(None) => IdentityReceiverResult::Waiting,
             Err(HttpError::UreqError(e)) => {
                 warn!("Unexpected auth ureq error: {:?}", e);
-                IdentityReceiverResult::ErrorResponseCode(500)
+                IdentityReceiverResult::ErrorResponseCode(500, None)
             }
             Err(e) => {
                 warn!("Unexpected auth read error: {:?}", e);
-                IdentityReceiverResult::ErrorResponseCode(500)
+                IdentityReceiverResult::ErrorResponseCode(500, None)
             }
         }
     }

@@ -4,7 +4,7 @@ use log::{debug, info, warn};
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    AuthorityError, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionStats,
+    AuthorityError, BitReader, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionStats,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent,
     EntityPriorityMut, EntityPriorityRef, FakeEntityConverter, GameInstant, GlobalEntity,
     GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
@@ -1980,7 +1980,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                 IdentityReceiverResult::Waiting => {
                     return;
                 }
-                IdentityReceiverResult::ErrorResponseCode(code) => {
+                IdentityReceiverResult::ErrorResponseCode(code, reject_payload) => {
                     let old_socket_addr_result = self.io.server_addr();
 
                     // reset connection
@@ -1990,11 +1990,37 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     );
 
                     if code == 401 {
+                        // The server may have sent a message explaining the
+                        // rejection (naia-lib/naia#133). A payload we cannot
+                        // decode is a protocol mismatch on the reject message
+                        // itself -- report the rejection anyway, since that is
+                        // the part the application must act on.
+                        let reject_message = reject_payload.and_then(|bytes| {
+                            let mut reader = BitReader::new(&bytes);
+                            match self
+                                .protocol
+                                .message_kinds
+                                .read(&mut reader, &FakeEntityConverter)
+                            {
+                                Ok(container) => Some(container),
+                                Err(_) => {
+                                    warn!(
+                                        "Server sent a rejection message this client's \
+                                         protocol cannot decode. Ignoring the message."
+                                    );
+                                    None
+                                }
+                            }
+                        });
+
                         // push out rejection
                         match old_socket_addr_result {
                             Ok(old_socket_addr) => {
-                                self.incoming_world_events
-                                    .push_rejection(&old_socket_addr, RejectReason::Auth);
+                                self.incoming_world_events.push_rejection(
+                                    &old_socket_addr,
+                                    RejectReason::Auth,
+                                    reject_message,
+                                );
                             }
                             Err(err) => {
                                 self.incoming_world_events.push_error(err);
@@ -2041,8 +2067,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         Some(HandshakeResult::Rejected(reason)) => {
                             info!("Client: Received HandshakeResult::Rejected({:?})", reason);
                             let server_addr = self.server_address_unwrapped();
+                            // The in-band handshake rejection carries no
+                            // message; only the auth (401) path can (#133).
                             self.incoming_world_events
-                                .push_rejection(&server_addr, reason);
+                                .push_rejection(&server_addr, reason, None);
                             self.disconnect_reset_connection();
                             break;
                         }

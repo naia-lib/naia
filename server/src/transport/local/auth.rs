@@ -68,12 +68,18 @@ impl ServerAuthIo {
         Ok(())
     }
 
-    fn reject(&mut self, address: &SocketAddr) -> Result<(), ServerSendError> {
-        // Build HTTP 401 response
-        let response = http::Response::builder()
-            .status(401)
-            .body(Vec::new())
-            .unwrap();
+    fn reject(
+        &mut self,
+        address: &SocketAddr,
+        payload: Option<&[u8]>,
+    ) -> Result<(), ServerSendError> {
+        // Build HTTP 401 response, carrying the optional rejection message
+        // base64-encoded in the body (see AuthSender::reject).
+        let body = match payload {
+            Some(bytes) => base64::encode(bytes).into_bytes(),
+            None => Vec::new(),
+        };
+        let response = http::Response::builder().status(401).body(body).unwrap();
 
         let response_bytes = naia_shared::transport::response_to_bytes(response);
 
@@ -109,8 +115,12 @@ impl LocalServerAuthSender {
     }
 
     #[doc(hidden)]
-    pub fn reject(&self, address: &SocketAddr) -> Result<(), ServerSendError> {
-        self.auth_io.lock().reject(address)
+    pub fn reject(
+        &self,
+        address: &SocketAddr,
+        payload: Option<&[u8]>,
+    ) -> Result<(), ServerSendError> {
+        self.auth_io.lock().reject(address, payload)
     }
 }
 

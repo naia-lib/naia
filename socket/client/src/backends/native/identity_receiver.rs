@@ -32,10 +32,13 @@ impl IdentityReceiver {
                         // across verbatim as an unvalidated String.
                         match IdentityToken::from_signaling_string(&identity_token_string) {
                             Some(identity_token) => IdentityReceiverResult::Success(identity_token),
-                            None => IdentityReceiverResult::ErrorResponseCode(400),
+                            None => IdentityReceiverResult::ErrorResponseCode(400, None),
                         }
                     }
-                    Err(error_code) => IdentityReceiverResult::ErrorResponseCode(error_code),
+                    // webrtc-unreliable-client only hands back the status
+                    // code, so the native WebRTC path cannot yet carry a
+                    // rejection message (naia-lib/naia#133).
+                    Err(error_code) => IdentityReceiverResult::ErrorResponseCode(error_code, None),
                 }
             } else {
                 IdentityReceiverResult::Waiting

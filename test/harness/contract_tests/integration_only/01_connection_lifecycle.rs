@@ -900,6 +900,67 @@ fn server_reject_connection_produces_reject_event() {
     );
 }
 
+/// Server rejection carries an optional message explaining itself
+/// Issue: naia-lib/naia#133
+///
+/// Given a client awaiting an auth answer; when the server calls
+/// reject_connection_with(msg); then the client's reject event carries `msg`
+/// decoded against its own protocol, so the application can tell an
+/// InvalidCredentials apart from a UserBanned.
+#[test]
+fn server_reject_connection_carries_a_reason_message() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let client_key = scenario.client_start(
+        "Rejected Client",
+        Auth::new("nobody", "wrong"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Wait for the auth request to arrive server-side
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            server
+                .read_event::<ServerAuthEvent<Auth>>()
+                .is_some()
+                .then_some(())
+        })
+    });
+
+    // Reject, attaching a reason. 7 is arbitrary -- the point is that a field
+    // value survives the trip, not just the message kind.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.reject_connection_with(&client_key, TestMessage::new(7));
+        });
+    });
+
+    let mut received_value = None;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            if let Some((_reason, message_opt)) = client.read_event::<ClientRejectEvent>() {
+                let container = message_opt.expect("rejection should carry a reason message");
+                let message = container
+                    .to_boxed_any()
+                    .downcast::<TestMessage>()
+                    .expect("reason message should be a TestMessage");
+                received_value = Some(message.value);
+            }
+            received_value.is_some().then_some(())
+        })
+    });
+
+    assert_eq!(
+        received_value,
+        Some(7),
+        "the rejection message should arrive with its field intact"
+    );
+}
+
 /// Client disconnects due to heartbeat/timeout
 /// Contract: [connection-19], [connection-20]
 ///

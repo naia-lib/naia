@@ -8,8 +8,8 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    BigMap, BitReader, FakeEntityConverter, MessageKinds, PacketType, Protocol, ProtocolId, Serde,
-    SocketConfig, StandardHeader,
+    BigMap, BitReader, BitWriter, FakeEntityConverter, Message, MessageContainer, MessageKinds,
+    PacketType, Protocol, ProtocolId, Serde, SocketConfig, StandardHeader,
 };
 
 use crate::{
@@ -181,6 +181,25 @@ impl MainServer {
     /// Rejects an incoming Client User, terminating their attempt to establish
     /// a connection with the Server
     pub fn reject_connection(&mut self, user_key: &UserKey) {
+        self.reject_connection_with_payload(user_key, None);
+    }
+
+    /// Rejects an incoming Client User, handing them a `message` explaining why
+    /// (naia-lib/naia#133).
+    ///
+    /// The message is serialized here, against this server's protocol, and the
+    /// client decodes it against its own. Entity properties cannot be resolved
+    /// before a connection exists, so a rejection message must not contain any.
+    pub fn reject_connection_with<M: Message>(&mut self, user_key: &UserKey, message: M) {
+        let container = MessageContainer::new(Box::new(message));
+        let mut writer = BitWriter::new();
+        container.write(&self.message_kinds, &mut writer, &mut FakeEntityConverter);
+        self.reject_connection_with_payload(user_key, Some(writer.to_bytes().to_vec()));
+    }
+
+    /// Rejects an incoming Client User, optionally handing them an
+    /// already-serialized message explaining why (naia-lib/naia#133).
+    pub fn reject_connection_with_payload(&mut self, user_key: &UserKey, payload: Option<Vec<u8>>) {
         if let Some(user) = self.users.get_mut(user_key) {
             let Some(auth_addr) = user.take_auth_address() else {
                 warn!(
@@ -196,7 +215,7 @@ impl MainServer {
                 .auth_io
                 .as_mut()
                 .expect("Auth should be set up by this point");
-            if auth_sender.reject(&auth_addr).is_err() {
+            if auth_sender.reject(&auth_addr, payload.as_deref()).is_err() {
                 warn!(
                     "Server Error: Cannot send auth reject message to {:?}",
                     &auth_addr
@@ -338,7 +357,7 @@ impl MainServer {
                                 "pending-auth backlog full ({}); rejecting auth request from {}",
                                 self.max_pending_auth_users, auth_addr
                             );
-                            let _ = auth_sender.reject(&auth_addr);
+                            let _ = auth_sender.reject(&auth_addr, None);
                             continue;
                         }
 
@@ -493,7 +512,7 @@ impl MainServer {
                         auth_addr, timeout
                     );
                     if let Some((auth_sender, _)) = self.auth_io.as_mut() {
-                        let _ = auth_sender.reject(&auth_addr);
+                        let _ = auth_sender.reject(&auth_addr, None);
                     }
                 }
                 self.user_delete(&user_key);
@@ -559,7 +578,7 @@ mod pending_auth_capacity_tests {
         fn accept(&self, _address: &SocketAddr, _token: &IdentityToken) -> Result<(), SendError> {
             Ok(())
         }
-        fn reject(&self, _address: &SocketAddr) -> Result<(), SendError> {
+        fn reject(&self, _address: &SocketAddr, _payload: Option<&[u8]>) -> Result<(), SendError> {
             self.rejects.fetch_add(1, Ordering::Relaxed);
             Ok(())
         }

@@ -387,6 +387,22 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         }
     }
 
+    /// Reject a connection, handing the client a message explaining why
+    /// (naia-lib/naia#133).
+    pub fn reject_connection_with<M: naia_shared::Message>(
+        &mut self,
+        client_key: &ClientKey,
+        message: M,
+    ) {
+        let scenario = self.ctx.scenario_mut();
+        if let Some(user_key) = scenario.client_to_user_key(client_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            server.reject_connection_with(&user_key, message);
+        } else {
+            warn!("reject_connection_with failed: ClientKey {:?} has no associated UserKey (may not be authenticated yet)", client_key);
+        }
+    }
+
     /// Disconnect a user from the server
     ///
     /// This requests a server-side disconnect of the user identified by the given ClientKey.

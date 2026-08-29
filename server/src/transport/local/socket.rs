@@ -91,8 +91,8 @@ impl TransportAuthSender for LocalServerTransportAuthSender {
             .map_err(|_| SendError)
     }
 
-    fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
-        self.0.reject(address).map_err(|_| SendError)
+    fn reject(&self, address: &SocketAddr, payload: Option<&[u8]>) -> Result<(), SendError> {
+        self.0.reject(address, payload).map_err(|_| SendError)
     }
 }
 

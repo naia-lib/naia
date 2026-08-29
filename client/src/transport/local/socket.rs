@@ -194,8 +194,8 @@ impl TransportIdentityReceiver for LocalClientTransportIdentityReceiver {
             ClientIdentityReceiverResult::Success(token) => {
                 TransportIdentityReceiverResult::Success(token)
             }
-            ClientIdentityReceiverResult::ErrorResponseCode(code) => {
-                TransportIdentityReceiverResult::ErrorResponseCode(code)
+            ClientIdentityReceiverResult::ErrorResponseCode(code, payload) => {
+                TransportIdentityReceiverResult::ErrorResponseCode(code, payload)
             }
         }
     }

@@ -17,9 +17,9 @@ use smol::{
 };
 use webrtc_unreliable::SessionEndpoint;
 
-use naia_socket_shared::{IdentityToken, SocketConfig};
+use naia_socket_shared::SocketConfig;
 
-use crate::{executor, server_addrs::ServerAddrs, NaiaServerSocketError};
+use crate::{executor, server_addrs::ServerAddrs, AuthResponse, NaiaServerSocketError};
 
 /// Caps on what an unauthenticated client may make the session listener buffer.
 ///
@@ -40,8 +40,8 @@ type AuthMuxMap = Arc<
         HashMap<
             SocketAddr,
             (
-                Option<futures_channel::oneshot::Sender<Option<IdentityToken>>>,
-                Option<Option<IdentityToken>>,
+                Option<futures_channel::oneshot::Sender<AuthResponse>>,
+                Option<AuthResponse>,
             ),
         >,
     >,
@@ -61,9 +61,7 @@ pub fn start_session_server(
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
     from_client_auth_sender: Option<ClientAuthSender>,
-    to_session_all_auth_receiver: Option<
-        smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
-    >,
+    to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
 ) {
     executor::spawn(async move {
         listen(
@@ -84,9 +82,7 @@ async fn listen(
     config: SocketConfig,
     session_endpoint: SessionEndpoint,
     from_client_auth_sender: Option<ClientAuthSender>,
-    to_session_all_auth_receiver: Option<
-        smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
-    >,
+    to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
 ) {
     let rtc_url_paths = RtcUrlPaths {
         post: format!("POST /{}", config.rtc_endpoint_path),
@@ -158,11 +154,8 @@ async fn listen(
 }
 
 async fn setup_auth_mux(
-    to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
-) -> smol::channel::Sender<(
-    SocketAddr,
-    futures_channel::oneshot::Sender<Option<IdentityToken>>,
-)> {
+    to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, AuthResponse)>,
+) -> smol::channel::Sender<(SocketAddr, futures_channel::oneshot::Sender<AuthResponse>)> {
     let (sender_sender, sender_receiver) = smol::channel::unbounded();
 
     let map_1 = Arc::new(Mutex::new(HashMap::new()));
@@ -185,7 +178,7 @@ async fn setup_auth_mux(
 
 async fn serve_auth_mux_in(
     map: AuthMuxMap,
-    to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
+    to_session_all_auth_receiver: smol::channel::Receiver<(SocketAddr, AuthResponse)>,
 ) {
     loop {
         let Ok((addr, answer)) = to_session_all_auth_receiver.recv().await else {
@@ -216,7 +209,7 @@ async fn serve_auth_mux_out(
     map: AuthMuxMap,
     sender_receiver: smol::channel::Receiver<(
         SocketAddr,
-        futures_channel::oneshot::Sender<Option<IdentityToken>>,
+        futures_channel::oneshot::Sender<AuthResponse>,
     )>,
 ) {
     loop {
@@ -384,9 +377,7 @@ async fn serve(
     mut session_endpoint: SessionEndpoint,
     mut stream: Arc<Async<TcpStream>>,
     from_client_auth_sender: Option<ClientAuthSender>,
-    to_session_single_auth_receiver: Option<
-        futures_channel::oneshot::Receiver<Option<IdentityToken>>,
-    >,
+    to_session_single_auth_receiver: Option<futures_channel::oneshot::Receiver<AuthResponse>>,
     rtc_url_paths: RtcUrlPaths,
 ) {
     // A peer that vanishes between accept() and here leaves us without an
@@ -408,6 +399,8 @@ async fn serve(
         None => (false, false, None, Vec::new()),
     };
     let mut identity_token_opt = None;
+    // Optional serialized message explaining a rejection (naia-lib/naia#133).
+    let mut reject_payload_opt: Option<Vec<u8>> = None;
 
     {
         // handle OPTIONS request
@@ -462,16 +455,19 @@ async fn serve(
                                 // info!("Sent auth bytes to server app");
 
                                 // wait for response from app
-                                if let Ok(identity_token_inner_opt) = to_session_auth_receiver.await
-                                {
-                                    if let Some(identity_token) = identity_token_inner_opt {
-                                        // info!("Server app accepted auth with identity token: {}", identity_token);
-                                        identity_token_opt = Some(identity_token);
-                                        success = true;
-                                    } else {
-                                        // warn!("Server app rejected auth");
-                                        identity_token_opt = None;
-                                        success = true;
+                                if let Ok(auth_response) = to_session_auth_receiver.await {
+                                    match auth_response {
+                                        AuthResponse::Accept(identity_token) => {
+                                            // info!("Server app accepted auth with identity token: {}", identity_token);
+                                            identity_token_opt = Some(identity_token);
+                                            success = true;
+                                        }
+                                        AuthResponse::Reject(payload) => {
+                                            // warn!("Server app rejected auth");
+                                            identity_token_opt = None;
+                                            reject_payload_opt = payload;
+                                            success = true;
+                                        }
                                     }
                                 }
                             }
@@ -550,9 +546,15 @@ async fn serve(
                 }
             } else {
                 // Server rejected auth!
+                // The rejection message rides base64-encoded in the body, so
+                // that a text-bodied response can carry arbitrary message bits.
+                let reject_body = match &reject_payload_opt {
+                    Some(bytes) => base64::encode(bytes),
+                    None => String::new(),
+                };
                 let response = Response::builder()
                     .status(401)
-                    .body("".to_string())
+                    .body(reject_body)
                     .expect("could not build 401 response");
 
                 let mut out = response_header_to_vec(&response);

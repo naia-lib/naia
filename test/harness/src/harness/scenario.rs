@@ -1164,7 +1164,7 @@ impl Scenario {
     ) -> (
         ClientSocket,
         Arc<ParkingMutex<Option<naia_shared::IdentityToken>>>,
-        Arc<ParkingMutex<Option<u16>>>,
+        Arc<ParkingMutex<Option<(u16, Option<Vec<u8>>)>>>,
         SocketAddr,
     ) {
         let (client_addr, auth_req_tx, auth_resp_rx, client_data_tx, client_data_rx) =

@@ -35,8 +35,8 @@ use naia_bevy_client::{
 };
 use naia_bevy_server::{
     events::{AuthEvents, ConnectEvent},
-    AppRegisterComponentEvents as ServerAppEvents, Plugin as ServerPlugin, Server,
-    CommandsExt as ServerEntityCommandsExt, ProtocolServerExt, ServerCommandsExt, ServerConfig,
+    AppRegisterComponentEvents as ServerAppEvents, CommandsExt as ServerEntityCommandsExt,
+    Plugin as ServerPlugin, ProtocolServerExt, Server, ServerCommandsExt, ServerConfig,
 };
 use naia_bevy_shared::Protocol as BevyProtocol;
 use naia_client::transport::local::{LocalAddrCell, LocalClientSocket, Socket as ClientSocket};
@@ -188,7 +188,7 @@ impl BevyHarness {
                 let addr_cell = LocalAddrCell::new();
                 addr_cell.set_sync(hub_for_client.server_addr());
                 let identity_token = Arc::new(Mutex::new(None::<naia_shared::IdentityToken>));
-                let rejection_code = Arc::new(Mutex::new(None::<u16>));
+                let rejection_code = Arc::new(Mutex::new(None::<(u16, Option<Vec<u8>>)>));
                 let inner = LocalClientSocket::new_with_tokens(
                     client_addr,
                     hub_for_client.server_addr(),
@@ -584,32 +584,39 @@ fn a_one_shot_resource_write_survives_a_packet_starved_tick() {
     h.server_app.update();
     h.tick_n(60);
 
-    let churn = h.server_app.register_system(
-        |mut q: bevy_ecs::system::Query<&mut Position>| {
+    let churn = h
+        .server_app
+        .register_system(|mut q: bevy_ecs::system::Query<&mut Position>| {
             for mut p in q.iter_mut() {
                 let n = *p.x;
                 *p.x = n + 1.0;
                 *p.y = n + 2.0;
             }
-        },
-    );
-    let one_shot = h
-        .server_app
-        .register_system(|mut score: bevy_ecs::system::ResMut<TestScore>| {
-            *score.away = 777;
         });
+    let one_shot =
+        h.server_app
+            .register_system(|mut score: bevy_ecs::system::ResMut<TestScore>| {
+                *score.away = 777;
+            });
 
     for _ in 0..40 {
         h.server_app.world_mut().run_system(churn).expect("churn");
         h.tick();
     }
-    h.server_app.world_mut().run_system(one_shot).expect("one shot");
+    h.server_app
+        .world_mut()
+        .run_system(one_shot)
+        .expect("one shot");
     for _ in 0..200 {
         h.server_app.world_mut().run_system(churn).expect("churn");
         h.tick();
     }
 
-    let score = h.client_app.world().get_resource::<TestScore>().expect("res");
+    let score = h
+        .client_app
+        .world()
+        .get_resource::<TestScore>()
+        .expect("res");
     assert_eq!(
         *score.away, 777,
         "the one-shot write never reached the client: its diff bit was consumed \

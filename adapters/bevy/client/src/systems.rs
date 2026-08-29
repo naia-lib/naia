@@ -155,8 +155,8 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::RejectEvent<T>>>()
                     .unwrap();
-                for _ in events.read::<naia_events::RejectEvent>() {
-                    event_writer.write(bevy_events::RejectEvent::<T>::new());
+                for (_, _reason, message) in events.read::<naia_events::RejectEvent>() {
+                    event_writer.write(bevy_events::RejectEvent::<T>::new(message));
                 }
             }
 

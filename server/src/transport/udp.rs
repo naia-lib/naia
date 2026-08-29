@@ -348,11 +348,19 @@ impl AuthIo {
     }
 
     /// Sends a rejection packet from the Client Socket
-    fn reject(&mut self, address: &SocketAddr) -> Result<(), SendError> {
+    ///
+    /// `payload` is an optional serialized message explaining the rejection. It
+    /// is base64-encoded into the response body so that every transport can
+    /// carry it the same way, including the ones whose bodies are text.
+    fn reject(&mut self, address: &SocketAddr, payload: Option<&[u8]>) -> Result<(), SendError> {
         if let Some(mut stream) = self.outgoing_streams.remove(address) {
+            let body = match payload {
+                Some(bytes) => base64::encode(bytes).into_bytes(),
+                None => Vec::new(),
+            };
             let response = http::Response::builder()
                 .status(401)
-                .body(Vec::new())
+                .body(body)
                 .map_err(|_| SendError)?;
             let response_bytes = http_utils::response_to_bytes(response);
             stream.write_all(&response_bytes).map_err(|_| SendError)?;
@@ -445,8 +453,8 @@ impl TransportAuthSender for AuthSender {
     }
 
     /// Sends a rejection packet from the Client Socket
-    fn reject(&self, address: &SocketAddr) -> Result<(), SendError> {
-        self.auth_io.lock().reject(address)
+    fn reject(&self, address: &SocketAddr, payload: Option<&[u8]>) -> Result<(), SendError> {
+        self.auth_io.lock().reject(address, payload)
     }
 }
 
@@ -666,6 +674,67 @@ mod auth_io_stream_tests {
 
         assert!(drain_one(&mut auth_io), "the request should reach the app");
         assert_eq!(auth_io.outgoing_streams.len(), 1);
+    }
+
+    /// A rejection may carry a message explaining itself (naia-lib/naia#133).
+    /// It rides base64-encoded in the 401 body so that every transport can
+    /// carry it identically, including the ones whose bodies are text.
+    #[test]
+    fn a_rejection_carries_its_reason_in_the_body() {
+        use std::io::Read;
+
+        let (mut auth_io, port) = auth_io();
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(
+                format!("GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: {encoded}\r\n\r\n")
+                    .as_bytes(),
+            )
+            .unwrap();
+        stream.flush().unwrap();
+        assert!(drain_one(&mut auth_io), "the request should reach the app");
+
+        let addr = *auth_io.outgoing_streams.keys().next().unwrap();
+        let reason = b"you are banned".to_vec();
+        auth_io.reject(&addr, Some(&reason)).unwrap();
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+
+        assert!(response.starts_with("HTTP/1.1 401"), "got: {response}");
+        let body = response.split("\r\n\r\n").nth(1).unwrap();
+        assert_eq!(base64::decode(body.trim()).unwrap(), reason);
+    }
+
+    /// A rejection with no reason leaves the body empty, which the client reads
+    /// back as "no reason given" rather than as a malformed message.
+    #[test]
+    fn a_rejection_without_a_reason_has_an_empty_body() {
+        use std::io::Read;
+
+        let (mut auth_io, port) = auth_io();
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(
+                format!("GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: {encoded}\r\n\r\n")
+                    .as_bytes(),
+            )
+            .unwrap();
+        stream.flush().unwrap();
+        assert!(drain_one(&mut auth_io), "the request should reach the app");
+
+        let addr = *auth_io.outgoing_streams.keys().next().unwrap();
+        auth_io.reject(&addr, None).unwrap();
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+
+        assert!(response.starts_with("HTTP/1.1 401"), "got: {response}");
+        assert_eq!(response.split("\r\n\r\n").nth(1).unwrap(), "");
     }
 
     /// The listener is non-blocking, but the streams it accepts are not, so a

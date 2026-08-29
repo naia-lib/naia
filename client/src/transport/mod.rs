@@ -38,8 +38,10 @@ mod inner {
         Waiting,
         /// The server accepted the connection and returned an identity token.
         Success(IdentityToken),
-        /// The server rejected the connection with an HTTP-style error code.
-        ErrorResponseCode(u16),
+        /// The server rejected the connection with an HTTP-style error code,
+        /// and optionally a serialized message explaining why
+        /// (naia-lib/naia#133).
+        ErrorResponseCode(u16, Option<Vec<u8>>),
     }
 
     use super::ServerAddr;
@@ -150,6 +152,30 @@ mod inner {
     impl Clone for Box<dyn IdentityReceiver> {
         fn clone(&self) -> Box<dyn IdentityReceiver> {
             IdentityReceiverClone::clone_box(self.as_ref())
+        }
+    }
+}
+
+/// Decodes the base64 body of a rejection response into raw message bits.
+///
+/// The server base64-encodes an optional rejection message into the body of its
+/// 401 so that every transport -- including the ones whose response bodies are
+/// text -- can carry it the same way (naia-lib/naia#133).
+///
+/// An empty body means "no reason given". A non-empty body that does not decode
+/// is a malformed rejection: log it and carry on without a reason, since the
+/// rejection itself is still the truth the caller needs.
+#[cfg(any(feature = "transport_udp", feature = "transport_local"))]
+pub(crate) fn decode_reject_payload(body: &str) -> Option<Vec<u8>> {
+    let trimmed = body.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    match base64::decode(trimmed) {
+        Ok(bytes) => Some(bytes),
+        Err(e) => {
+            log::warn!("Rejection response carried an undecodable body: {:?}", e);
+            None
         }
     }
 }

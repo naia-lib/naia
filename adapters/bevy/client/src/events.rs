@@ -60,20 +60,27 @@ impl<T> DisconnectEvent<T> {
 }
 
 // RejectEvent
+/// Fires when the server refused the connection.
+///
+/// `message` carries the reason the server sent with
+/// `reject_connection_with`, if any (naia-lib/naia#133). Downcast it with
+/// `container.to_boxed_any().downcast::<MyRejectReason>()`.
 #[derive(bevy_ecs::message::Message)]
 pub struct RejectEvent<T> {
+    pub message: Option<MessageContainer>,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> Default for RejectEvent<T> {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
 impl<T> RejectEvent<T> {
-    pub fn new() -> Self {
+    pub fn new(message: Option<MessageContainer>) -> Self {
         Self {
+            message,
             phantom_t: PhantomData,
         }
     }

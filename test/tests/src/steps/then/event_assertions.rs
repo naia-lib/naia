@@ -314,7 +314,7 @@ fn then_connection_rejected_protocol_mismatch(ctx: &TestWorldRef) -> AssertOutco
     use naia_test_harness::{ClientRejectEvent, RejectReason};
     let client_key = ctx.last_client();
     ctx.client(client_key, |client| {
-        if let Some(reason) = client.read_event::<ClientRejectEvent>() {
+        if let Some((reason, _message)) = client.read_event::<ClientRejectEvent>() {
             if reason == RejectReason::ProtocolMismatch {
                 return AssertOutcome::Passed(());
             }

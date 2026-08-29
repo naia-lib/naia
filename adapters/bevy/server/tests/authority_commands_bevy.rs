@@ -284,7 +284,7 @@ impl BevyHarness {
                 let addr_cell = LocalAddrCell::new();
                 addr_cell.set_sync(hub_for_client.server_addr());
                 let identity_token = Arc::new(Mutex::new(None::<naia_shared::IdentityToken>));
-                let rejection_code = Arc::new(Mutex::new(None::<u16>));
+                let rejection_code = Arc::new(Mutex::new(None::<(u16, Option<Vec<u8>>)>));
                 let inner = LocalClientSocket::new_with_tokens(
                     client_addr,
                     hub_for_client.server_addr(),

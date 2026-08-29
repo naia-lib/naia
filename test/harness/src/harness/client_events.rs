@@ -18,7 +18,7 @@ type ClientRemovesMap = HashMap<ComponentKind, Vec<(EntityKey, Box<dyn Replicate
 #[derive(Default)]
 pub struct ClientEvents {
     connections: Vec<()>,
-    rejections: Vec<RejectReason>,
+    rejections: Vec<(RejectReason, Option<MessageContainer>)>,
     disconnections: Vec<()>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
@@ -157,9 +157,11 @@ impl ClientEvents {
             .read::<naia_client::ConnectEvent>()
             .map(|_| ())
             .collect();
-        let rejections: Vec<RejectReason> = world_events
+        // The message is the optional reason the server attached with
+        // reject_connection_with (naia-lib/naia#133).
+        let rejections: Vec<(RejectReason, Option<MessageContainer>)> = world_events
             .read::<naia_client::RejectEvent>()
-            .map(|(_, reason)| reason)
+            .map(|(_, reason, message)| (reason, message))
             .collect();
         let disconnections: Vec<()> = world_events
             .read::<naia_client::DisconnectEvent>()
@@ -299,8 +301,8 @@ impl ClientEvent for ClientConnectEvent {
 // RejectEvent
 pub struct ClientRejectEvent;
 impl ClientEvent for ClientRejectEvent {
-    type Iter = std::vec::IntoIter<RejectReason>;
-    type Item = RejectReason;
+    type Iter = std::vec::IntoIter<(RejectReason, Option<MessageContainer>)>;
+    type Item = (RejectReason, Option<MessageContainer>);
 
     fn iter(events: &mut ClientEvents) -> Self::Iter {
         std::mem::take(&mut events.rejections).into_iter()

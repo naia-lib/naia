@@ -15,7 +15,7 @@ type RemovesMap<E> = HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>;
 /// All events produced in one frame: connections, entity lifecycle, component changes, messages, and errors.
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
-    rejections: Vec<(SocketAddr, RejectReason)>,
+    rejections: Vec<(SocketAddr, RejectReason, Option<MessageContainer>)>,
     disconnections: Vec<(SocketAddr, DisconnectReason)>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
@@ -150,8 +150,13 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         self.empty = false;
     }
 
-    pub(crate) fn push_rejection(&mut self, socket_addr: &SocketAddr, reason: RejectReason) {
-        self.rejections.push((*socket_addr, reason));
+    pub(crate) fn push_rejection(
+        &mut self,
+        socket_addr: &SocketAddr,
+        reason: RejectReason,
+        message: Option<MessageContainer>,
+    ) {
+        self.rejections.push((*socket_addr, reason, message));
         self.empty = false;
     }
 
@@ -313,10 +318,18 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
     }
 }
 
-/// Fires when the server explicitly rejects the connection; yields the server address and the [`RejectReason`].
+/// Fires when the server explicitly rejects the connection.
+///
+/// Yields the server address, the [`RejectReason`], and -- when the server used
+/// `reject_connection_with` -- the message it sent explaining why
+/// (naia-lib/naia#133). Downcast it with
+/// `container.to_boxed_any().downcast::<MyRejectReason>()`.
+///
+/// The message is only ever present on an auth rejection, and not yet on the
+/// native WebRTC transport.
 pub struct RejectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
-    type Iter = IntoIter<(SocketAddr, RejectReason)>;
+    type Iter = IntoIter<(SocketAddr, RejectReason, Option<MessageContainer>)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);

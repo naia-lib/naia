@@ -61,7 +61,7 @@ impl App {
                     } else {
                         info!("Server Auth accepted: {}", address);
                     }
-                } else if let Err(error) = self.auth_sender.reject(&address) {
+                } else if let Err(error) = self.auth_sender.reject(&address, None) {
                     info!("Server Reject Auth error {}", error);
                 } else {
                     info!("Server Auth rejected: {}", address);

@@ -64,8 +64,8 @@ impl TransportIdentityReceiver for IdentityReceiver {
         match IdentityReceiver::receive(self) {
             SocketIdentityReceiverResult::Waiting => IdentityReceiverResult::Waiting,
             SocketIdentityReceiverResult::Success(token) => IdentityReceiverResult::Success(token),
-            SocketIdentityReceiverResult::ErrorResponseCode(code) => {
-                IdentityReceiverResult::ErrorResponseCode(code)
+            SocketIdentityReceiverResult::ErrorResponseCode(code, payload) => {
+                IdentityReceiverResult::ErrorResponseCode(code, payload)
             }
         }
     }

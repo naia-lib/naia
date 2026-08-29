@@ -21,8 +21,7 @@ use crate::{
     world::{entity_mut::EntityMut, entity_ref::EntityRef},
     ConnectEvent, ConnectionStats, DisconnectEvent, EntityOwner, Events, MainEvents,
     NaiaServerError, ReceiveOutput, ReplicationConfig, ResponseSendOutcome, RoomKey, RoomMut,
-    RoomRef, ServerConfig,
-    TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
+    RoomRef, ServerConfig, TickEvents, UserKey, UserMut, UserRef, UserScopeMut, UserScopeRef,
 };
 
 /// The naia server — accepts connections, replicates entities, and routes
@@ -284,6 +283,22 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// [`ConnectEvent`]: crate::ConnectEvent
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         self.main_server.reject_connection(user_key);
+    }
+
+    /// Rejects an incoming connection request, telling the client why.
+    ///
+    /// Like [`reject_connection`](Server::reject_connection), but hands the
+    /// client a `message` it can decode to learn the reason -- an
+    /// `InvalidCredentials` or `UserBanned` of your own defining -- so it can
+    /// decide whether retrying makes sense (naia-lib/naia#133).
+    ///
+    /// `M` must be registered in the [`Protocol`], and must not contain an
+    /// `EntityProperty`: there is no connection yet, so entity references
+    /// cannot be resolved.
+    ///
+    /// The client sees the message on its `RejectEvent`.
+    pub fn reject_connection_with<M: Message>(&mut self, user_key: &UserKey, message: M) {
+        self.main_server.reject_connection_with(user_key, message);
     }
 
     // Messaging ─────────────────────────────────────────────────────────────

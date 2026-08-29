@@ -1,8 +1,9 @@
 use std::net::SocketAddr;
 
+use crate::AuthResponse;
 use smol::channel;
 
-use naia_socket_shared::{IdentityToken, SocketConfig};
+use naia_socket_shared::SocketConfig;
 
 use super::{
     async_socket::Socket as AsyncSocket, auth_receiver::AuthReceiver, auth_sender::AuthSender,
@@ -59,9 +60,7 @@ impl Socket {
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         from_client_auth_sender: Option<ClientAuthSender>,
-        to_session_all_auth_receiver: Option<
-            channel::Receiver<(SocketAddr, Option<IdentityToken>)>,
-        >,
+        to_session_all_auth_receiver: Option<channel::Receiver<(SocketAddr, AuthResponse)>>,
     ) -> (ClientMsgReceiver, SenderChannelReceiver) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();

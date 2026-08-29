@@ -50,7 +50,11 @@ impl PendingRequest {
         let status_code = response.status().as_u16();
 
         if status_code != 200 {
-            let result = (status_code, String::new());
+            // A rejection body carries the optional base64-encoded reason
+            // message (naia-lib/naia#133); a body that isn't valid UTF-8 can't
+            // be one, so treat it as no reason given rather than as an error.
+            let body = String::from_utf8(response.body().to_vec()).unwrap_or_default();
+            let result = (status_code, body);
             self.cached_result = Some(Ok(result.clone()));
             return Ok(Some(result));
         }
@@ -97,7 +101,7 @@ pub(crate) struct ClientAuthIo {
     addr_cell: LocalAddrCell,
     pending_req_opt: Option<PendingRequest>,
     identity_token: Arc<Mutex<Option<IdentityToken>>>,
-    rejection_code: Arc<Mutex<Option<u16>>>,
+    rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
 }
 
 impl ClientAuthIo {
@@ -105,7 +109,7 @@ impl ClientAuthIo {
         auth_responses_rx: mpsc::Receiver<Vec<u8>>,
         addr_cell: LocalAddrCell,
         identity_token: Arc<Mutex<Option<IdentityToken>>>,
-        rejection_code: Arc<Mutex<Option<u16>>>,
+        rejection_code: Arc<Mutex<Option<(u16, Option<Vec<u8>>)>>>,
     ) -> Self {
         Self {
             auth_responses_rx: Some(auth_responses_rx),
@@ -143,8 +147,8 @@ impl ClientAuthIo {
         }
 
         // Check if rejection happened
-        if let Some(code) = *self.rejection_code.lock() {
-            return ClientIdentityReceiverResult::ErrorResponseCode(code);
+        if let Some((code, payload)) = self.rejection_code.lock().clone() {
+            return ClientIdentityReceiverResult::ErrorResponseCode(code, payload);
         }
 
         // Check if we have a pending request
@@ -157,8 +161,11 @@ impl ClientAuthIo {
         match pending_req.poll_response() {
             Ok(Some((status_code, id_token))) => {
                 if status_code != 200 {
-                    *self.rejection_code.lock() = Some(status_code);
-                    return ClientIdentityReceiverResult::ErrorResponseCode(status_code);
+                    // A rejection may carry a base64-encoded message explaining
+                    // itself (naia-lib/naia#133).
+                    let payload = crate::transport::decode_reject_payload(&id_token);
+                    *self.rejection_code.lock() = Some((status_code, payload.clone()));
+                    return ClientIdentityReceiverResult::ErrorResponseCode(status_code, payload);
                 }
 
                 // Verify address is available before returning Success
@@ -170,13 +177,13 @@ impl ClientAuthIo {
                 }
 
                 let Some(id_token) = IdentityToken::from_signaling_string(&id_token) else {
-                    return ClientIdentityReceiverResult::ErrorResponseCode(400);
+                    return ClientIdentityReceiverResult::ErrorResponseCode(400, None);
                 };
                 *self.identity_token.lock() = Some(id_token.clone());
                 ClientIdentityReceiverResult::Success(id_token)
             }
             Ok(None) => ClientIdentityReceiverResult::Waiting,
-            Err(_e) => ClientIdentityReceiverResult::ErrorResponseCode(500),
+            Err(_e) => ClientIdentityReceiverResult::ErrorResponseCode(500, None),
         }
     }
 }

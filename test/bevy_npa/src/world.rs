@@ -315,7 +315,7 @@ impl BevyTestHarness {
                 addr_cell.set_sync(hub.server_addr());
                 let identity_token =
                     Arc::new(ParkingMutex::new(None::<naia_shared::IdentityToken>));
-                let rejection_code = Arc::new(ParkingMutex::new(None::<u16>));
+                let rejection_code = Arc::new(ParkingMutex::new(None::<(u16, Option<Vec<u8>>)>));
                 let inner_socket = LocalClientSocket::new_with_tokens(
                     client_addr,
                     hub.server_addr(),

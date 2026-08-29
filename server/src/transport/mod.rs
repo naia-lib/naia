@@ -164,7 +164,12 @@ mod inner {
             identity_token: &IdentityToken,
         ) -> Result<(), SendError>;
         /// Reject a client's auth request, causing the client to disconnect.
-        fn reject(&self, address: &SocketAddr) -> Result<(), SendError>;
+        ///
+        /// `payload`, when present, is an already-serialized message the client
+        /// can decode to learn *why* it was rejected. It rides in the body of
+        /// the rejection response, so it must survive a transport that carries
+        /// text: implementations base64-encode it.
+        fn reject(&self, address: &SocketAddr, payload: Option<&[u8]>) -> Result<(), SendError>;
     }
 
     /// Receives raw auth payloads from connecting clients before they are handed the session.

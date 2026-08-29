@@ -156,7 +156,22 @@ impl DataChannel {
                         let id_sender_4 = id_sender_3.clone();
                         let request_func: Box<dyn FnMut(ProgressEvent)> = Box::new(
                             move |_: ProgressEvent| {
-                                if request_2.status().unwrap() == 200 {
+                                let status = request_2.status().unwrap();
+                                if status != 200 {
+                                    // A rejection may carry a base64-encoded
+                                    // message explaining itself
+                                    // (naia-lib/naia#133). Before this the
+                                    // non-200 branch did nothing at all and the
+                                    // client waited forever.
+                                    let body = request_2
+                                        .response_text()
+                                        .ok()
+                                        .flatten()
+                                        .unwrap_or_default();
+                                    id_sender_4.send_error(status, body);
+                                    return;
+                                }
+                                {
                                     let response_string =
                                         request_2.response_text().unwrap().unwrap();
 
