@@ -10,6 +10,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **The raw-UDP auth listener now reads requests without blocking, and bounds
+  what a half-finished one can cost** (naia-lib/naia#148). `AuthIo::receive`
+  called `stream.read` exactly once on each accepted connection and parsed
+  whatever had arrived. Two problems followed. A stream accepted from a
+  non-blocking `TcpListener` is itself blocking, so a peer that connected and
+  then sent nothing stalled the server's whole tick indefinitely. And a single
+  `read` is not guaranteed to deliver a whole request, so a client whose headers
+  arrived in two TCP segments was silently dropped. Accepted streams are now set
+  non-blocking and read across ticks until the headers are complete, with the
+  same shape of caps the WebRTC session listener already applies: 16 KiB of
+  headers, a 5 second deadline to finish sending, and at most 256 half-read
+  requests outstanding at once. The body is deliberately never read -- naia's
+  auth request carries everything it needs in the `Authorization` header.
+
 - **The raw-UDP auth listener no longer leaks a live socket per unauthenticated
   connection** (naia-lib/naia#45). `AuthIo::receive` inserted the accepted
   `TcpStream` into `outgoing_streams` before checking whether the request was an

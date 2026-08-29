@@ -4,7 +4,10 @@ use std::{
     io::{ErrorKind, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream, UdpSocket},
     sync::Arc,
+    time::{Duration, Instant},
 };
+
+use log::warn;
 
 use naia_shared::{http_utils, IdentityToken, LinkConditionerConfig};
 
@@ -155,11 +158,41 @@ impl PacketReceiver for UdpPacketReceiver {
 }
 
 // AuthIo
+/// Cap on a single inbound auth request, mirroring the ones the WebRTC session
+/// listener applies. A peer can hold a connection open and dribble an
+/// unterminated header line forever, so the header bytes are counted and the
+/// attempt abandoned once it stops looking like a real auth request. The value
+/// is far above any legitimate one.
+const MAX_AUTH_HEADER_BYTES: usize = 16 * 1024;
+
+/// How many half-read auth requests may be outstanding at once. Each holds an
+/// accepted socket and its bytes so far, both of which a peer can create for
+/// free, so the set needs a ceiling of its own. A policy bound, not a derived
+/// one -- nothing in the protocol implies a number here.
+const MAX_PENDING_AUTH_READS: usize = 256;
+
+/// How long a peer has to finish sending its request once connected. Without
+/// this it could sit just under `MAX_AUTH_HEADER_BYTES` indefinitely.
+const PENDING_AUTH_READ_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// An accepted connection whose request has not arrived in full yet.
+struct PendingAuthRead {
+    stream: TcpStream,
+    bytes: Vec<u8>,
+    started_at: Instant,
+}
+
 pub(crate) struct AuthIo {
     public_udp_addr: SocketAddr,
     socket: TcpListener,
     buffer: [u8; 1472],
     outgoing_streams: HashMap<SocketAddr, TcpStream>,
+    /// Connections accepted but not yet read to the end of their headers. A
+    /// single `read` is not guaranteed to deliver a whole request, and a stream
+    /// the listener accepts is blocking even though the listener itself is not,
+    /// so reading one inline let any peer stall the server's tick by connecting
+    /// and then sending nothing.
+    pending_reads: HashMap<SocketAddr, PendingAuthRead>,
 }
 
 impl AuthIo {
@@ -171,47 +204,120 @@ impl AuthIo {
             socket,
             buffer: [0; 1472],
             outgoing_streams: HashMap::new(),
+            pending_reads: HashMap::new(),
         }
     }
 
     fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
-        match self.socket.accept() {
-            Ok((mut stream, addr)) => {
-                let recv_len = stream.read(&mut self.buffer).map_err(|_| RecvError)?;
-                if self.outgoing_streams.contains_key(&addr) {
-                    // already have a stream for this address
-                    // TODO: handle this case?
-                    return Err(RecvError);
-                }
+        self.accept_new_streams();
+        self.drop_timed_out_reads();
 
-                // The stream is retained only once the request turns out to be
-                // an auth request the application will be asked about, because
-                // only `accept`/`reject` ever remove it again. Retaining it any
-                // earlier leaked a live `TcpStream` -- an open socket, not just
-                // memory -- for every connection an unauthenticated peer opened
-                // and let fall through the checks below. Dropping `stream`
-                // instead closes the connection.
-                let auth_bytes = {
-                    let request = http_utils::bytes_to_request(&self.buffer[..recv_len]);
-                    let Some(auth_header) = request.headers().get("Authorization") else {
-                        return Ok(None);
-                    };
-                    let auth_str = auth_header.to_str().map_err(|_| RecvError)?;
-                    base64::decode(auth_str).map_err(|_| RecvError)?
-                };
+        let Some((addr, auth_bytes)) = self.poll_pending_reads() else {
+            return Ok(None);
+        };
 
-                self.outgoing_streams.insert(addr, stream);
-                self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
-                Ok(Some((addr, &self.buffer[..auth_bytes.len()])))
-            }
-            Err(ref e) => {
-                let kind = e.kind();
-                match kind {
-                    ErrorKind::WouldBlock => Ok(None),
-                    _ => Err(RecvError),
-                }
-            }
+        if auth_bytes.len() > self.buffer.len() {
+            warn!("Over-large auth payload in auth request from {}", addr);
+            self.outgoing_streams.remove(&addr);
+            return Ok(None);
         }
+        self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
+        Ok(Some((addr, &self.buffer[..auth_bytes.len()])))
+    }
+
+    /// Drains the listener's accept queue, parking each new connection until
+    /// its request has actually arrived.
+    fn accept_new_streams(&mut self) {
+        loop {
+            let Ok((stream, addr)) = self.socket.accept() else {
+                return;
+            };
+
+            if self.outgoing_streams.contains_key(&addr) || self.pending_reads.contains_key(&addr) {
+                // already have a stream for this address
+                // TODO: handle this case?
+                continue;
+            }
+
+            if self.pending_reads.len() >= MAX_PENDING_AUTH_READS {
+                warn!(
+                    "pending auth read backlog full ({}); dropping connection from {}",
+                    MAX_PENDING_AUTH_READS, addr
+                );
+                continue;
+            }
+
+            // The listener is non-blocking, but a stream it accepts is not, so
+            // this has to be set explicitly -- otherwise the reads below would
+            // block the whole server on a peer that has sent nothing.
+            if stream.set_nonblocking(true).is_err() {
+                continue;
+            }
+
+            self.pending_reads.insert(
+                addr,
+                PendingAuthRead {
+                    stream,
+                    bytes: Vec::new(),
+                    started_at: Instant::now(),
+                },
+            );
+        }
+    }
+
+    fn drop_timed_out_reads(&mut self) {
+        self.pending_reads
+            .retain(|_, pending| pending.started_at.elapsed() < PENDING_AUTH_READ_TIMEOUT);
+    }
+
+    /// Advances every half-read request, returning the auth payload of the
+    /// first one that turns out to be a complete auth request.
+    ///
+    /// A connection whose request completes but is not an auth request -- no
+    /// `Authorization` header, or a header that will not base64-decode -- is
+    /// dropped rather than reported, which closes it. The stream is retained in
+    /// `outgoing_streams` only for a request the application will be asked
+    /// about, because only `accept`/`reject` ever remove it again.
+    fn poll_pending_reads(&mut self) -> Option<(SocketAddr, Vec<u8>)> {
+        let addrs: Vec<SocketAddr> = self.pending_reads.keys().copied().collect();
+
+        for addr in addrs {
+            let Some(pending) = self.pending_reads.get_mut(&addr) else {
+                continue;
+            };
+
+            match read_until_headers_complete(pending) {
+                HeaderReadState::Pending => continue,
+                HeaderReadState::Failed => {
+                    self.pending_reads.remove(&addr);
+                    continue;
+                }
+                HeaderReadState::Complete => {}
+            }
+
+            let pending = self
+                .pending_reads
+                .remove(&addr)
+                .expect("just read from this entry");
+
+            let Some(auth_bytes) = decode_auth_request(&pending.bytes) else {
+                continue;
+            };
+
+            // Put the stream back into blocking mode before handing it over:
+            // `accept`/`reject` write the reply with `write_all`, which would
+            // otherwise be able to fail with `WouldBlock` on a full send
+            // buffer and lose an answer the application already gave.
+            let stream = pending.stream;
+            if stream.set_nonblocking(false).is_err() {
+                continue;
+            }
+
+            self.outgoing_streams.insert(addr, stream);
+            return Some((addr, auth_bytes));
+        }
+
+        None
     }
 
     /// Sends an accept packet from the Client Socket
@@ -256,6 +362,64 @@ impl AuthIo {
         }
         Err(SendError)
     }
+}
+
+enum HeaderReadState {
+    /// The request headers have arrived in full.
+    Complete,
+    /// Nothing more is available yet; try again next tick.
+    Pending,
+    /// The peer hung up, errored, or overran the header cap.
+    Failed,
+}
+
+/// Reads whatever is currently available on `pending`'s stream, stopping at the
+/// blank line that ends the HTTP headers.
+///
+/// The body is deliberately not read: naia's auth request carries everything it
+/// needs in the `Authorization` header, so waiting for a body would only give a
+/// peer one more thing to stall on.
+fn read_until_headers_complete(pending: &mut PendingAuthRead) -> HeaderReadState {
+    let mut chunk = [0u8; 1024];
+
+    loop {
+        if headers_end(&pending.bytes).is_some() {
+            return HeaderReadState::Complete;
+        }
+        if pending.bytes.len() > MAX_AUTH_HEADER_BYTES {
+            warn!(
+                "Over-long headers in auth request from {:?}",
+                pending.stream.peer_addr().ok()
+            );
+            return HeaderReadState::Failed;
+        }
+
+        match pending.stream.read(&mut chunk) {
+            // The peer closed the connection without finishing its request.
+            Ok(0) => return HeaderReadState::Failed,
+            Ok(len) => pending.bytes.extend_from_slice(&chunk[..len]),
+            Err(ref e) if e.kind() == ErrorKind::WouldBlock => return HeaderReadState::Pending,
+            Err(ref e) if e.kind() == ErrorKind::Interrupted => continue,
+            Err(_) => return HeaderReadState::Failed,
+        }
+    }
+}
+
+/// Index just past the blank line terminating the headers, if it has arrived.
+fn headers_end(bytes: &[u8]) -> Option<usize> {
+    bytes
+        .windows(4)
+        .position(|window| window == b"\r\n\r\n")
+        .map(|start| start + 4)
+}
+
+/// Pulls the decoded `Authorization` payload out of a complete request, or
+/// `None` if this was not an auth request after all.
+fn decode_auth_request(bytes: &[u8]) -> Option<Vec<u8>> {
+    let request = http_utils::bytes_to_request(bytes);
+    let auth_header = request.headers().get("Authorization")?;
+    let auth_str = auth_header.to_str().ok()?;
+    base64::decode(auth_str).ok()
 }
 
 // AuthSender
@@ -406,11 +570,12 @@ mod auth_io_stream_tests {
     use std::{
         io::Write,
         net::{TcpListener, TcpStream},
+        sync::mpsc,
         thread,
         time::Duration,
     };
 
-    use super::AuthIo;
+    use super::{AuthIo, MAX_PENDING_AUTH_READS};
 
     fn auth_io() -> (AuthIo, u16) {
         let socket = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -472,6 +637,82 @@ mod auth_io_stream_tests {
         }
 
         assert!(auth_io.outgoing_streams.is_empty());
+    }
+
+    /// A single `read` is not guaranteed to deliver a whole request. A client
+    /// whose headers arrive in two TCP segments must still be understood --
+    /// reading once and parsing whatever happened to show up dropped it.
+    #[test]
+    fn a_request_split_across_two_writes_is_still_understood() {
+        let (mut auth_io, port) = auth_io();
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(b"GET / HTTP/1.1\r\nHost: localhost\r\n")
+            .unwrap();
+        stream.flush().unwrap();
+
+        // Let the server see the first half on its own.
+        for _ in 0..8 {
+            assert!(matches!(auth_io.receive(), Ok(None)));
+            thread::sleep(Duration::from_millis(1));
+        }
+
+        stream
+            .write_all(format!("Authorization: {encoded}\r\n\r\n").as_bytes())
+            .unwrap();
+        stream.flush().unwrap();
+
+        assert!(drain_one(&mut auth_io), "the request should reach the app");
+        assert_eq!(auth_io.outgoing_streams.len(), 1);
+    }
+
+    /// The listener is non-blocking, but the streams it accepts are not, so a
+    /// peer that connects and then says nothing used to block `receive` -- and
+    /// with it the server's whole tick -- indefinitely.
+    #[test]
+    fn a_peer_that_sends_nothing_does_not_stall_the_server() {
+        let (mut auth_io, port) = auth_io();
+
+        let _silent = TcpStream::connect(("127.0.0.1", port)).unwrap();
+
+        let (tx, rx) = mpsc::channel();
+        thread::spawn(move || {
+            for _ in 0..8 {
+                let _ = auth_io.receive();
+            }
+            let _ = tx.send(());
+        });
+
+        assert!(
+            rx.recv_timeout(Duration::from_secs(5)).is_ok(),
+            "receive must not block on a peer that has sent nothing",
+        );
+    }
+
+    /// Half-read requests are themselves free for a peer to create, so the set
+    /// of them needs its own ceiling.
+    #[test]
+    fn the_pending_read_backlog_is_capped() {
+        let (mut auth_io, port) = auth_io();
+
+        // Drained as they are made: the listener's accept backlog is far
+        // smaller than the number of connections opened here, so leaving them
+        // all queued in the kernel would just stall the test's own `connect`.
+        let mut silent = Vec::new();
+        for _ in 0..MAX_PENDING_AUTH_READS + 64 {
+            if let Ok(stream) = TcpStream::connect(("127.0.0.1", port)) {
+                silent.push(stream);
+            }
+            assert!(matches!(auth_io.receive(), Ok(None)));
+        }
+
+        assert_eq!(
+            auth_io.pending_reads.len(),
+            MAX_PENDING_AUTH_READS,
+            "half-read requests must not accumulate past the ceiling",
+        );
     }
 
     /// A real auth request still retains its stream -- `accept`/`reject` need
