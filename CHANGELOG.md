@@ -10,6 +10,45 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **The raw-UDP auth listener no longer leaks a live socket per unauthenticated
+  connection** (naia-lib/naia#45). `AuthIo::receive` inserted the accepted
+  `TcpStream` into `outgoing_streams` before checking whether the request was an
+  auth request at all. Only `accept`/`reject` ever remove an entry, and both are
+  driven by the application answering a request it was told about -- so a request
+  with no `Authorization` header, or with one that fails to base64-decode, left
+  its stream in the map forever. That is an open file descriptor, not just
+  memory, and any peer could open them in a loop. The stream is now retained
+  only once the request is one the application will be asked about.
+
+- **A response answering a request that was never made no longer crashes the
+  process** (naia-lib/naia#45, naia-lib/naia#172). `MessageManager::receive_requests_and_responses`
+  unwrapped the lookup of the `LocalRequestId` a response claims to answer. That
+  id is read off the wire and is a single byte, so any peer could take down
+  whichever side received it with one packet -- by answering a request that was
+  never sent, or by answering the same one twice. Unsolicited responses are now
+  logged and dropped.
+
+- **The pending-authentication backlog is bounded** (naia-lib/naia#45). Every
+  inbound auth request allocated a `MainUser` record keyed by the sender's
+  source address *before* anything about the sender had been verified -- and,
+  because the auth payload is parsed only after the record exists, a payload
+  that fails to parse left behind a user the application was never told about.
+  The only relief was `ServerConfig::pending_auth_timeout` (10s), so memory
+  grew at the attacker's packet rate for the whole window: a test flood of
+  50,000 distinct source addresses produced 50,000 live user records in a
+  single `maintain_socket` call.
+
+  The server now tracks its pending set explicitly and refuses to allocate past
+  `ServerConfig::max_pending_auth_users` (new, default 1,024 -- the same ceiling
+  `HandshakeManager` already applied to pre-auth connection state), rejecting
+  further requests at the door until the backlog drains. Slots are freed when a
+  user completes the handshake, is deleted, or times out. Tracking the pending
+  set also makes the timeout sweep proportional to pending users rather than to
+  every connected user, which it previously rescanned each tick.
+
+  `ServerConfig` gains a field; construct it with `..Default::default()` as the
+  in-tree call sites do.
+
 - **Removed every `unsafe impl Send` / `unsafe impl Sync` in the library**
   (naia-lib/naia#154). Two of them were genuinely unsound and the rest had
   stopped being necessary without anyone noticing.

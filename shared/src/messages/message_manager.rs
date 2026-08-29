@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::error;
+use log::{error, warn};
 use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
 use naia_socket_shared::Instant;
 
@@ -451,9 +451,27 @@ impl MessageManager {
                     );
                 };
                 for (local_request_id, response) in responses {
-                    let global_request_id = channel_sender
-                        .process_incoming_response(&local_request_id)
-                        .unwrap();
+                    // The id this response claims to answer is read off the
+                    // wire. A peer can answer a request that was never made, or
+                    // answer the same one twice, so an id with no outstanding
+                    // request is malformed input rather than a local invariant.
+                    // `LocalRequestId` is a single byte, so the whole space is
+                    // trivially reachable by a hostile peer.
+                    // The id this response claims to answer is read off the
+                    // wire. A peer can answer a request that was never made, or
+                    // answer the same one twice, so an id with no outstanding
+                    // request is malformed input rather than a local invariant.
+                    // `LocalRequestId` is a single byte, so the whole space is
+                    // trivially reachable by a hostile peer.
+                    let Some(global_request_id) =
+                        channel_sender.process_incoming_response(&local_request_id)
+                    else {
+                        warn!(
+                            "dropping a response on channel {:?} that answers no outstanding request",
+                            channel_kind
+                        );
+                        continue;
+                    };
                     response_output.push((global_request_id, response));
                 }
             }
@@ -475,5 +493,119 @@ impl PacketNotifiable for MessageManager {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod unsolicited_response_tests {
+    use naia_serde::{BitReader, SerdeErr};
+    use naia_socket_shared::Instant;
+
+    use crate::{
+        messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+        messages::{
+            channels::receivers::channel_receiver::{
+                ChannelReceiver, MessageChannelReceiver, RequestsAndResponses,
+            },
+            message_container::MessageContainer,
+        },
+        world::{
+            local::local_world_manager::LocalWorldManager,
+            remote::remote_entity_waitlist::RemoteEntityWaitlist,
+        },
+        Channel, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode, ChannelSettings,
+        HostType, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageKinds, Named,
+        ReliableSettings,
+    };
+
+    use super::MessageManager;
+
+    struct RequestChannel;
+    impl Named for RequestChannel {
+        fn name(&self) -> String {
+            "RequestChannel".to_string()
+        }
+        fn protocol_name() -> &'static str {
+            "RequestChannel"
+        }
+    }
+    impl Channel for RequestChannel {}
+
+    /// A receiver that hands the manager one response whose id answers no
+    /// outstanding request, standing in for a peer that made one up. The id is
+    /// a single byte on the wire, so every value is reachable.
+    struct UnsolicitedResponseReceiver {
+        response: Option<(crate::LocalRequestId, MessageContainer)>,
+    }
+
+    impl ChannelReceiver<MessageContainer> for UnsolicitedResponseReceiver {
+        fn receive_messages(
+            &mut self,
+            _message_kinds: &MessageKinds,
+            _now: &Instant,
+            _entity_waitlist: &mut RemoteEntityWaitlist,
+            _converter: &dyn LocalEntityAndGlobalEntityConverter,
+        ) -> Vec<MessageContainer> {
+            Vec::new()
+        }
+    }
+
+    impl MessageChannelReceiver for UnsolicitedResponseReceiver {
+        fn read_messages(
+            &mut self,
+            _message_kinds: &MessageKinds,
+            _local_world_manager: &mut LocalWorldManager,
+            _reader: &mut BitReader,
+        ) -> Result<(), SerdeErr> {
+            Ok(())
+        }
+
+        fn receive_requests_and_responses(&mut self) -> RequestsAndResponses {
+            (Vec::new(), self.response.take().into_iter().collect())
+        }
+    }
+
+    /// Any message body will do -- the id is what is under test.
+    fn filler_message() -> MessageContainer {
+        MessageContainer::new(Box::new(FragmentedMessage::new(
+            FragmentId::zero(),
+            FragmentIndex::from_u32(0),
+            Box::new([0u8; 4]),
+        )))
+    }
+
+    /// Before this was guarded, a response naming a request id the host never
+    /// issued unwrapped a `None` and took the process down -- from one packet,
+    /// on whichever side received it.
+    #[test]
+    fn a_response_to_a_request_that_was_never_made_is_dropped() {
+        let mut channel_kinds = ChannelKinds::new();
+        channel_kinds.add_channel::<RequestChannel>(ChannelSettings::new(
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            ChannelDirection::Bidirectional,
+        ));
+
+        let mut manager = MessageManager::new(HostType::Client, &channel_kinds);
+        let channel_kind = ChannelKind::of::<RequestChannel>();
+        assert!(
+            manager.channel_receivers.contains_key(&channel_kind),
+            "the channel under test must be request-capable",
+        );
+
+        let bogus_id = LocalResponseId::from_raw(0x2a).receive_from_remote();
+        manager.channel_receivers.insert(
+            channel_kind,
+            Box::new(UnsolicitedResponseReceiver {
+                response: Some((bogus_id, filler_message())),
+            }),
+        );
+
+        let (requests, responses) = manager.receive_requests_and_responses();
+
+        assert!(requests.is_empty());
+        assert!(
+            responses.is_empty(),
+            "an unsolicited response must be dropped, not surfaced",
+        );
     }
 }

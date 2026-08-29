@@ -183,22 +183,26 @@ impl AuthIo {
                     // TODO: handle this case?
                     return Err(RecvError);
                 }
-                self.outgoing_streams.insert(addr, stream);
 
-                let request = http_utils::bytes_to_request(&self.buffer[..recv_len]);
-                if request.headers().contains_key("Authorization") {
-                    let auth_str = request
-                        .headers()
-                        .get("Authorization")
-                        .ok_or(RecvError)?
-                        .to_str()
-                        .map_err(|_| RecvError)?;
-                    let auth_bytes = base64::decode(auth_str).map_err(|_| RecvError)?;
-                    self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
-                    return Ok(Some((addr, &self.buffer[..auth_bytes.len()])));
-                } else {
-                    return Ok(None);
-                }
+                // The stream is retained only once the request turns out to be
+                // an auth request the application will be asked about, because
+                // only `accept`/`reject` ever remove it again. Retaining it any
+                // earlier leaked a live `TcpStream` -- an open socket, not just
+                // memory -- for every connection an unauthenticated peer opened
+                // and let fall through the checks below. Dropping `stream`
+                // instead closes the connection.
+                let auth_bytes = {
+                    let request = http_utils::bytes_to_request(&self.buffer[..recv_len]);
+                    let Some(auth_header) = request.headers().get("Authorization") else {
+                        return Ok(None);
+                    };
+                    let auth_str = auth_header.to_str().map_err(|_| RecvError)?;
+                    base64::decode(auth_str).map_err(|_| RecvError)?
+                };
+
+                self.outgoing_streams.insert(addr, stream);
+                self.buffer[0..auth_bytes.len()].copy_from_slice(&auth_bytes);
+                Ok(Some((addr, &self.buffer[..auth_bytes.len()])))
             }
             Err(ref e) => {
                 let kind = e.kind();
@@ -394,5 +398,95 @@ fn url_to_addr(url: &Url) -> SocketAddr {
         Err(err) => {
             panic!("URL -> SocketAddr parse fails for {url}: {err:?}");
         }
+    }
+}
+
+#[cfg(test)]
+mod auth_io_stream_tests {
+    use std::{
+        io::Write,
+        net::{TcpListener, TcpStream},
+        thread,
+        time::Duration,
+    };
+
+    use super::AuthIo;
+
+    fn auth_io() -> (AuthIo, u16) {
+        let socket = TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = socket.local_addr().unwrap().port();
+        socket.set_nonblocking(true).unwrap();
+        (AuthIo::new("udp://127.0.0.1:14191", socket), port)
+    }
+
+    /// Drives `receive` until it stops reporting `WouldBlock`-style emptiness,
+    /// or gives up. Returns whether a request was surfaced to the application.
+    fn drain_one(auth_io: &mut AuthIo) -> bool {
+        for _ in 0..200 {
+            match auth_io.receive() {
+                Ok(Some(_)) => return true,
+                Ok(None) => {}
+                Err(_) => return false,
+            }
+            thread::sleep(Duration::from_millis(1));
+        }
+        false
+    }
+
+    fn send_request(port: u16, request: &str) {
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream.write_all(request.as_bytes()).unwrap();
+        stream.flush().unwrap();
+    }
+
+    /// A request with no `Authorization` header is never handed to the
+    /// application, so nothing ever calls `accept`/`reject` for it -- and only
+    /// those remove a stream from `outgoing_streams`. Retaining it on accept
+    /// leaked one live `TcpStream` per connection, to an unauthenticated peer.
+    #[test]
+    fn a_request_without_an_auth_header_does_not_retain_its_stream() {
+        let (mut auth_io, port) = auth_io();
+
+        for _ in 0..16 {
+            send_request(port, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            drain_one(&mut auth_io);
+        }
+
+        assert!(
+            auth_io.outgoing_streams.is_empty(),
+            "an unauthenticated peer must not be able to accumulate open streams",
+        );
+    }
+
+    /// A malformed `Authorization` value is likewise never answered.
+    #[test]
+    fn an_undecodable_auth_header_does_not_retain_its_stream() {
+        let (mut auth_io, port) = auth_io();
+
+        for _ in 0..16 {
+            send_request(
+                port,
+                "GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: !!!not base64!!!\r\n\r\n",
+            );
+            drain_one(&mut auth_io);
+        }
+
+        assert!(auth_io.outgoing_streams.is_empty());
+    }
+
+    /// A real auth request still retains its stream -- `accept`/`reject` need
+    /// it to answer the client.
+    #[test]
+    fn a_real_auth_request_retains_its_stream_for_the_reply() {
+        let (mut auth_io, port) = auth_io();
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+
+        send_request(
+            port,
+            &format!("GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: {encoded}\r\n\r\n"),
+        );
+
+        assert!(drain_one(&mut auth_io), "the request should reach the app");
+        assert_eq!(auth_io.outgoing_streams.len(), 1);
     }
 }

@@ -185,4 +185,12 @@ impl LocalResponseId {
     pub fn receive_from_remote(&self) -> LocalRequestId {
         LocalRequestId { id: self.id }
     }
+
+    /// Builds a response id with an arbitrary raw byte, standing in for one a
+    /// hostile peer picked. The wire form is a single byte, so every value here
+    /// is reachable from the network.
+    #[cfg(test)]
+    pub(crate) fn from_raw(id: u8) -> Self {
+        Self { id }
+    }
 }

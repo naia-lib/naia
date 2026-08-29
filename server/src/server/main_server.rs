@@ -1,4 +1,9 @@
-use std::{collections::HashMap, net::SocketAddr, panic, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    net::SocketAddr,
+    panic,
+    time::Duration,
+};
 
 use log::{info, warn};
 
@@ -25,6 +30,7 @@ pub struct MainServer {
     // Config
     require_auth: bool,
     pending_auth_timeout: Duration,
+    max_pending_auth_users: usize,
     // cont
     recv_io: RecvIo,
     send_io: SendIo,
@@ -33,6 +39,11 @@ pub struct MainServer {
     // Users
     users: BigMap<UserKey, MainUser>,
     user_connections: HashMap<SocketAddr, UserKey>,
+    /// Users that have sent an auth request but have not yet completed the
+    /// handshake. Tracked explicitly so the capacity check and the
+    /// pending-auth timeout sweep are both proportional to the pending set
+    /// rather than to every connected user.
+    pending_auth_users: HashSet<UserKey>,
     // Events
     incoming_events: MainEvents,
 }
@@ -70,6 +81,7 @@ impl MainServer {
             message_kinds,
             require_auth: server_config.require_auth,
             pending_auth_timeout: server_config.pending_auth_timeout,
+            max_pending_auth_users: server_config.max_pending_auth_users,
             // Connection
             recv_io,
             send_io,
@@ -78,6 +90,7 @@ impl MainServer {
             // Users
             users: BigMap::new(),
             user_connections: HashMap::new(),
+            pending_auth_users: HashSet::new(),
             // Events
             incoming_events: MainEvents::default(),
         }
@@ -189,6 +202,7 @@ impl MainServer {
         user.set_address(user_address);
 
         self.user_connections.insert(user.address(), *user_key);
+        self.pending_auth_users.remove(user_key);
 
         self.incoming_events.push_connection(user_key);
     }
@@ -278,6 +292,7 @@ impl MainServer {
         let Some(user) = self.users.remove(user_key) else {
             panic!("Attempting to delete non-existant user!");
         };
+        self.pending_auth_users.remove(user_key);
 
         if let Some(user_addr) = user.address_opt() {
             info!("deleting authenticated user for {}", user.address());
@@ -299,8 +314,23 @@ impl MainServer {
             loop {
                 match auth_receiver.receive() {
                     Ok(Some((auth_addr, auth_bytes))) => {
+                        // Refuse to allocate a user record once the pending-auth
+                        // backlog is full. Nothing about the sender has been
+                        // verified at this point, so without this ceiling a
+                        // source-address flood grows memory at the attacker's
+                        // packet rate until the timeout sweep catches up.
+                        if self.pending_auth_users.len() >= self.max_pending_auth_users {
+                            warn!(
+                                "pending-auth backlog full ({}); rejecting auth request from {}",
+                                self.max_pending_auth_users, auth_addr
+                            );
+                            let _ = auth_sender.reject(&auth_addr);
+                            continue;
+                        }
+
                         // create new user
                         let user_key = self.users.insert(MainUser::new(auth_addr));
+                        self.pending_auth_users.insert(user_key);
 
                         if self.require_auth {
                             // convert bytes into auth object and fire ServerAuthEvent
@@ -436,8 +466,9 @@ impl MainServer {
             let timeout = self.pending_auth_timeout;
             // Collect (user_key, auth_addr) pairs for timed-out pending users.
             let timed_out: Vec<(UserKey, Option<SocketAddr>)> = self
-                .users
+                .pending_auth_users
                 .iter()
+                .filter_map(|key| self.users.get(key).map(|user| (*key, user)))
                 .filter(|(_, user)| !user.has_address() && user.created_at.elapsed() > timeout)
                 .map(|(key, user)| (key, user.peek_auth_address()))
                 .collect();
@@ -454,5 +485,189 @@ impl MainServer {
                 self.user_delete(&user_key);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod pending_auth_capacity_tests {
+    use std::{
+        net::SocketAddr,
+        sync::{
+            atomic::{AtomicU32, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
+
+    use naia_shared::{IdentityToken, Protocol};
+
+    use crate::{
+        transport::{AuthReceiver, AuthSender, PacketReceiver, PacketSender, RecvError, SendError},
+        ServerConfig, UserKey,
+    };
+
+    use super::MainServer;
+
+    /// Emits `remaining` auth requests, each from a distinct source address,
+    /// then reports the queue as drained. Stands in for a source-address flood.
+    #[derive(Clone)]
+    struct FloodAuthReceiver {
+        remaining: u32,
+        payload: Vec<u8>,
+    }
+
+    impl AuthReceiver for FloodAuthReceiver {
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+            if self.remaining == 0 {
+                return Ok(None);
+            }
+            self.remaining -= 1;
+            let n = self.remaining;
+            let addr: SocketAddr = format!(
+                "{}.{}.{}.{}:1",
+                1 + (n >> 24) % 200,
+                (n >> 16) % 256,
+                (n >> 8) % 256,
+                n % 256
+            )
+            .parse()
+            .unwrap();
+            Ok(Some((addr, &self.payload)))
+        }
+    }
+
+    #[derive(Clone)]
+    struct CountingAuthSender {
+        rejects: Arc<AtomicU32>,
+    }
+
+    impl AuthSender for CountingAuthSender {
+        fn accept(&self, _address: &SocketAddr, _token: &IdentityToken) -> Result<(), SendError> {
+            Ok(())
+        }
+        fn reject(&self, _address: &SocketAddr) -> Result<(), SendError> {
+            self.rejects.fetch_add(1, Ordering::Relaxed);
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct SilentPacketIo;
+
+    impl PacketReceiver for SilentPacketIo {
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+            Ok(None)
+        }
+    }
+
+    impl PacketSender for SilentPacketIo {
+        fn send(&self, _address: &SocketAddr, _payload: &[u8]) -> Result<(), SendError> {
+            Ok(())
+        }
+    }
+
+    /// Builds a server whose auth channel is already saturated with `count`
+    /// queued requests from distinct addresses, carrying an unregistered
+    /// payload — the cheapest thing an attacker can send.
+    fn server_under_flood(config: ServerConfig, count: u32) -> (MainServer, Arc<AtomicU32>) {
+        let protocol = Protocol::builder().build();
+        let rejects = Arc::new(AtomicU32::new(0));
+
+        let mut server = MainServer::new(config, protocol);
+        server.recv_io.load(Box::new(SilentPacketIo));
+        server.send_io.load(Box::new(SilentPacketIo));
+        server.auth_io = Some((
+            Box::new(CountingAuthSender {
+                rejects: rejects.clone(),
+            }),
+            Box::new(FloodAuthReceiver {
+                remaining: count,
+                payload: vec![0xff; 8],
+            }),
+        ));
+        (server, rejects)
+    }
+
+    fn reload_flood(server: &mut MainServer, count: u32) {
+        if let Some((_, receiver)) = server.auth_io.as_mut() {
+            *receiver = Box::new(FloodAuthReceiver {
+                remaining: count,
+                payload: vec![0xff; 8],
+            });
+        }
+    }
+
+    /// Before `max_pending_auth_users` existed, this flood allocated one
+    /// `MainUser` per spoofed source address — 50,000 of them in a single
+    /// tick, none of which the application was ever told about, because the
+    /// unregistered payload fails to parse *after* the record is created.
+    #[test]
+    fn pending_auth_backlog_is_capped() {
+        let config = ServerConfig::default();
+        let cap = config.max_pending_auth_users;
+        let (mut server, rejects) = server_under_flood(config, 50_000);
+
+        server.maintain_socket();
+
+        assert_eq!(
+            server.users.len(),
+            cap,
+            "a source-address flood must not allocate past the pending-auth cap",
+        );
+        assert_eq!(server.pending_auth_users.len(), cap);
+        assert_eq!(
+            rejects.load(Ordering::Relaxed),
+            50_000 - cap as u32,
+            "every request past the cap should be rejected at the door",
+        );
+    }
+
+    /// Capacity is a live-set bound, not a lifetime quota: users that finish
+    /// the handshake stop counting against it.
+    #[test]
+    fn completing_the_handshake_frees_pending_capacity() {
+        let config = ServerConfig::default();
+        let cap = config.max_pending_auth_users;
+        let (mut server, _) = server_under_flood(config, 50_000);
+        server.maintain_socket();
+        assert_eq!(server.pending_auth_users.len(), cap);
+
+        // Graduate ten of them out of the pending set.
+        let graduating: Vec<UserKey> = server.pending_auth_users.iter().copied().take(10).collect();
+        for (i, user_key) in graduating.iter().enumerate() {
+            let addr: SocketAddr = format!("10.0.0.{}:2", i).parse().unwrap();
+            server.finalize_connection(user_key, &addr);
+        }
+        assert_eq!(server.pending_auth_users.len(), cap - 10);
+
+        reload_flood(&mut server, 50);
+        server.maintain_socket();
+
+        assert_eq!(
+            server.pending_auth_users.len(),
+            cap,
+            "freed slots should be reusable by new auth requests",
+        );
+        assert_eq!(server.users.len(), cap + 10);
+    }
+
+    /// The timeout sweep also frees capacity, and reaches users the
+    /// application was never told about.
+    #[test]
+    fn the_pending_auth_timeout_frees_capacity() {
+        let config = ServerConfig {
+            pending_auth_timeout: Duration::ZERO,
+            ..ServerConfig::default()
+        };
+        let (mut server, _) = server_under_flood(config, 50_000);
+
+        server.maintain_socket();
+        // The sweep at the end of that same call already expired them all.
+        assert_eq!(server.users.len(), 0);
+        assert_eq!(server.pending_auth_users.len(), 0);
+
+        reload_flood(&mut server, 50_000);
+        server.maintain_socket();
+        assert_eq!(server.users.len(), 0);
     }
 }
