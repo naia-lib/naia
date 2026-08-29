@@ -72,6 +72,141 @@ pub mod bench_write_counters {
 /// subsequent users serialize from the snapshot, touching ECS zero times.
 pub type SnapshotMap = HashMap<(GlobalEntity, ComponentKind), Box<dyn Replicate>>;
 
+/// Why a planned component update was dropped between the freeze that planned
+/// it and the transmit that would have serialized it.
+///
+/// All three reasons are the same race in different axes. `prepare_send_job`
+/// FREEZES a plan one tick before `transmit_and_pump` writes it, and the
+/// gameplay thread keeps running in that window. Every variant here is
+/// legitimate runtime state, never an error -- the client is about to be told
+/// the truth by some other means in each case.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum UpdateDropReason {
+    /// The entity was despawned in the freeze->transmit window. Its components
+    /// are gone from the World, so serializing them would panic
+    /// (`component_of_kind` -> `expect`), and replaying PATH A's cached bytes
+    /// would be worse: the cache is keyed by `GlobalEntityIndex`, which is
+    /// recyclable, so a stale hit can emit ANOTHER entity's bytes. The update
+    /// is moot -- the client is about to receive the Despawn.
+    EntityDespawned,
+    /// Every planned component kind has since been removed from the entity.
+    ///
+    /// `write_update` below drops stale kinds on its own, correctly, but not
+    /// for free: the UpdateContinue bit + LocalEntity (~20 bits) are already
+    /// committed by then and nothing rolls them back. An entity whose planned
+    /// kinds are ALL stale therefore contributes pure framing and zero payload,
+    /// leaving `has_written` false. Under heavy scope churn enough of those
+    /// accumulate to fill the packet, and `write_commands` then sees a full
+    /// packet with `has_written == false` and takes the "this component is too
+    /// big to ever send" panic path -- which does not describe the state at all.
+    /// Measured (world editor 69o, refined tile scope): 167 entities, 167
+    /// stale, 3437 of 3440 bits spent on headers, 5081 spawns starved behind it.
+    /// Catching it here makes the wasted header not exist.
+    AllKindsStale,
+    /// The host held authority over a delegated entity when the update was
+    /// marked dirty, and lost it -- released, revoked or denied -- before the
+    /// update was transmitted. Serializing would reach
+    /// `DelegatedProperty::write` / `DelegatedRelation::write`, both of which
+    /// panic when the host cannot write, taking the process down over a
+    /// legitimate ordering. The update is moot: whoever holds authority now
+    /// owns the authoritative value, and this host will receive it.
+    ///
+    /// This is a client-side drop in practice -- `can_write()` is true for
+    /// every server auth status -- but both production `GlobalWorldManagerType`
+    /// implementors report a real status, so the check is not skipped anywhere.
+    AuthorityLost,
+}
+
+/// The single decision point for the three freeze->transmit races above.
+///
+/// Folded into one function so the reasons stay enumerable: `UpdateDropReason`
+/// is what [`drop_counters`] keys on, which is what lets a test assert its
+/// scenario actually REACHED the state under test rather than merely passing.
+fn planned_update_drop_reason<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType<E>>(
+    world: &W,
+    world_entity: &E,
+    global_entity: &GlobalEntity,
+    kinds: &UpdateKinds,
+    global_world_manager: &dyn GlobalWorldManagerType,
+) -> Option<UpdateDropReason> {
+    if !world.has_entity(world_entity) {
+        return Some(UpdateDropReason::EntityDespawned);
+    }
+
+    if !kinds
+        .iter()
+        .any(|(kind, _, _)| world.has_component_of_kind(world_entity, kind))
+    {
+        return Some(UpdateDropReason::AllKindsStale);
+    }
+
+    // `None` means the entity has no delegation authority state to consult, so
+    // there is no constraint to violate. Note the trait default is `None`, i.e.
+    // fail-open: an implementor that does not override `entity_auth_status`
+    // gets no guard at all. Both production implementors override it.
+    if let Some(auth_status) = global_world_manager.entity_auth_status(global_entity) {
+        if !auth_status.can_write() {
+            return Some(UpdateDropReason::AuthorityLost);
+        }
+    }
+
+    None
+}
+
+/// Test-only tally of which [`UpdateDropReason`] guards actually fired.
+///
+/// A harness test that never reaches the state it claims to cover passes just
+/// as green as one that does -- a coverage illusion this crate has been bitten
+/// by more than once. These counters turn "the test passed" into "the test
+/// reached the state under test": assert the count, not just the outcome.
+///
+/// Thread-local, because the test binary runs tests in parallel on separate
+/// threads and `write_updates` runs synchronously on the calling thread; a
+/// process-wide counter would cross-talk. Compiled away entirely outside
+/// `cfg(test)`.
+pub(crate) mod drop_counters {
+    use super::UpdateDropReason;
+
+    #[cfg(test)]
+    thread_local! {
+        static COUNTS: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
+    }
+
+    #[cfg(test)]
+    fn slot(reason: UpdateDropReason) -> usize {
+        match reason {
+            UpdateDropReason::EntityDespawned => 0,
+            UpdateDropReason::AllKindsStale => 1,
+            UpdateDropReason::AuthorityLost => 2,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn record(reason: UpdateDropReason) {
+        #[cfg(test)]
+        COUNTS.with(|counts| {
+            let mut current = counts.get();
+            current[slot(reason)] += 1;
+            counts.set(current);
+        });
+        #[cfg(not(test))]
+        let _ = reason;
+    }
+
+    /// How many times `reason` fired on this thread since the last [`reset`].
+    #[cfg(test)]
+    pub(crate) fn count(reason: UpdateDropReason) -> usize {
+        COUNTS.with(|counts| counts.get()[slot(reason)])
+    }
+
+    /// Zeroes this thread's tallies. Call at the top of a test that asserts on
+    /// counts, so an earlier test on a reused thread cannot inflate them.
+    #[cfg(test)]
+    pub(crate) fn reset() {
+        COUNTS.with(|counts| counts.set([0; 3]));
+    }
+}
+
 pub struct WorldWriter;
 
 impl WorldWriter {
@@ -920,66 +1055,17 @@ impl WorldWriter {
                 (*ge, *idx, *we)
             };
 
-            // MISSION_TICK_FLOOR Lever 3 despawn race: the plan was FROZEN by
-            // `prepare_send_job` one tick ago and is transmitted here, possibly
-            // while the gameplay thread runs the next Sim. An entity despawned in
-            // that window still has plan entries, but its components are gone from
-            // the World — serializing them would panic (`component_of_kind` →
-            // `expect`), and replaying PATH A's cached bytes would be worse: the
-            // cache is keyed by `GlobalEntityIndex`, which is recyclable, so a
-            // stale hit can emit ANOTHER entity's bytes. The update is moot either
-            // way — the client is about to receive the Despawn — so drop the whole
-            // entry. Legitimate runtime state, not an error.
-            if !world.has_entity(&world_entity) {
+            if let Some(reason) = planned_update_drop_reason(
+                world,
+                &world_entity,
+                &global_entity,
+                &update_list[i].3,
+                global_world_manager,
+            ) {
+                drop_counters::record(reason);
                 update_list[i].3.clear();
                 i += 1;
                 continue;
-            }
-
-            // Same freeze→transmit race, but caught BEFORE the per-entity header is
-            // committed. Below, `write_update` drops planned components whose kind
-            // no longer exists in the World — correctly, but not for free: the
-            // UpdateContinue bit + LocalEntity (~20 bits) have already been written
-            // by then, and nothing rolls them back. An entity whose planned kinds are
-            // ALL stale therefore contributes pure framing and zero payload, leaving
-            // `has_written` false. Under heavy scope churn enough of those accumulate
-            // to consume the whole packet, and `write_commands` then sees a full
-            // packet with `has_written == false` and takes the "this component is too
-            // big to ever send" panic path — which does not describe the state at all.
-            // Measured (world editor §69o, refined tile scope): 167 entities, 167
-            // stale, 3437 of 3440 bits spent on headers, 5081 spawns starved behind
-            // it. Skipping here makes the wasted header not exist.
-            if !update_list[i]
-                .3
-                .iter()
-                .any(|(kind, _, _)| world.has_component_of_kind(&world_entity, kind))
-            {
-                update_list[i].3.clear();
-                i += 1;
-                continue;
-            }
-
-            // Same freeze->transmit race again, on the authority axis rather than
-            // the existence axis. A delegated component is marked dirty while this
-            // host holds authority; authority can then be released, revoked, or
-            // denied before the queued update is transmitted. Serializing it would
-            // reach `DelegatedProperty::write` / `DelegatedRelation::write`, both of
-            // which panic when the host cannot write -- taking the process down over
-            // a legitimate ordering, exactly as the despawn race above would have.
-            // The update is moot either way: whoever holds authority now owns the
-            // authoritative value, and this host will receive it. Drop the entry.
-            // This is a client-side guard in practice. The server does not override
-            // `entity_auth_status`, so it inherits the trait default `None` and
-            // skips the check entirely -- which is also the correct outcome, since
-            // `can_write()` is true for every server auth status anyway. Note the
-            // default is fail-open: an implementor that does not override this gets
-            // no guard.
-            if let Some(auth_status) = global_world_manager.entity_auth_status(&global_entity) {
-                if !auth_status.can_write() {
-                    update_list[i].3.clear();
-                    i += 1;
-                    continue;
-                }
             }
 
             let local_entity = world_manager
@@ -1408,20 +1494,36 @@ mod delegated_send_guard_tests {
     /// staleness guards (despawned entity / removed component) both pass and the
     /// authority guard is the only thing that can stop the entry -- but panics if
     /// the send path ever actually reaches serialization.
-    struct TripwireWorld;
+    struct TripwireWorld {
+        /// `false` models an entity despawned in the freeze->transmit window.
+        entity_present: bool,
+        /// `false` models every planned component kind having been removed.
+        component_present: bool,
+    }
+
+    impl TripwireWorld {
+        /// The default: entity and component both present, so only the
+        /// authority guard can stop an entry.
+        fn intact() -> Self {
+            Self {
+                entity_present: true,
+                component_present: true,
+            }
+        }
+    }
 
     impl WorldRefType<u64> for TripwireWorld {
         fn has_entity(&self, _: &u64) -> bool {
-            true
+            self.entity_present
         }
         fn entities(&self) -> Vec<u64> {
             vec![1]
         }
         fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
-            true
+            self.component_present
         }
         fn has_component_of_kind(&self, _: &u64, _: &ComponentKind) -> bool {
-            true
+            self.component_present
         }
         fn component<'a, R: ReplicatedComponent>(
             &'a self,
@@ -1438,10 +1540,24 @@ mod delegated_send_guard_tests {
         }
     }
 
-    /// Runs one `write_updates` pass over a single queued update for an entity
-    /// whose delegated authority is `status`, and reports whether the entry was
-    /// dropped (its planned kinds cleared) and whether anything was written.
-    fn run_with_auth(host: HostType, status: EntityAuthStatus) -> (bool, bool) {
+    /// What one `write_updates` pass did to the single queued update.
+    struct DropOutcome {
+        /// The entry's planned kinds were cleared (or the list was drained).
+        dropped: bool,
+        /// Anything at all was serialized into the packet.
+        has_written: bool,
+        /// Which guard fired, if any. This is the field that distinguishes
+        /// "the update was dropped" from "the update was dropped *for the
+        /// reason this test is about*" -- without it a test can be green
+        /// because the entity looked despawned, never reaching the authority
+        /// guard it claims to cover.
+        reason: Option<UpdateDropReason>,
+    }
+
+    /// Runs one `write_updates` pass over a single queued update against
+    /// `world`, for an entity whose delegated authority is `status`.
+    fn run_pass(world: TripwireWorld, host: HostType, status: EntityAuthStatus) -> DropOutcome {
+        drop_counters::reset();
         let mut kinds = ComponentKinds::new();
         kinds.add_component::<Ghost>();
 
@@ -1480,7 +1596,7 @@ mod delegated_send_guard_tests {
             &Instant::now(),
             &mut writer,
             &0,
-            &TripwireWorld,
+            &world,
             &gwm,
             None,
             &mut local_world_manager,
@@ -1496,7 +1612,31 @@ mod delegated_send_guard_tests {
             .first()
             .map(|entry| entry.3.is_empty())
             .unwrap_or(true);
-        (dropped, has_written)
+
+        let fired: Vec<UpdateDropReason> = [
+            UpdateDropReason::EntityDespawned,
+            UpdateDropReason::AllKindsStale,
+            UpdateDropReason::AuthorityLost,
+        ]
+        .into_iter()
+        .filter(|reason| drop_counters::count(*reason) > 0)
+        .collect();
+        assert!(
+            fired.len() <= 1,
+            "one queued update can only be dropped once; guards fired: {fired:?}",
+        );
+
+        DropOutcome {
+            dropped,
+            has_written,
+            reason: fired.first().copied(),
+        }
+    }
+
+    /// The common case: an intact world, so the authority guard is the only one
+    /// that can fire.
+    fn run_with_auth(host: HostType, status: EntityAuthStatus) -> DropOutcome {
+        run_pass(TripwireWorld::intact(), host, status)
     }
 
     /// The guard's reason for existing: a client that has lost authority since
@@ -1510,13 +1650,68 @@ mod delegated_send_guard_tests {
             EntityAuthStatus::Requested,
             EntityAuthStatus::Denied,
         ] {
-            let (dropped, has_written) = run_with_auth(HostType::Client, status);
+            let outcome = run_with_auth(HostType::Client, status);
             assert!(
-                dropped,
+                outcome.dropped,
                 "{status:?} is not writable, so the queued update must be dropped"
             );
-            assert!(!has_written, "{status:?} must not contribute any payload");
+            assert!(
+                !outcome.has_written,
+                "{status:?} must not contribute any payload"
+            );
+            assert_eq!(
+                outcome.reason,
+                Some(UpdateDropReason::AuthorityLost),
+                "{status:?} must be dropped by the authority guard specifically; \
+                 any other reason means this test never reached the state it \
+                 claims to cover",
+            );
         }
+    }
+
+    /// The two staleness guards, pinned the same way. Together with the test
+    /// above this exercises every [`UpdateDropReason`], so the reason a given
+    /// entry was dropped is an asserted fact rather than an assumption.
+    #[test]
+    fn the_staleness_guards_report_their_own_reasons() {
+        let despawned = run_pass(
+            TripwireWorld {
+                entity_present: false,
+                component_present: true,
+            },
+            HostType::Client,
+            EntityAuthStatus::Granted,
+        );
+        assert_eq!(despawned.reason, Some(UpdateDropReason::EntityDespawned));
+        assert!(despawned.dropped && !despawned.has_written);
+
+        let stale = run_pass(
+            TripwireWorld {
+                entity_present: true,
+                component_present: false,
+            },
+            HostType::Client,
+            EntityAuthStatus::Granted,
+        );
+        assert_eq!(stale.reason, Some(UpdateDropReason::AllKindsStale));
+        assert!(stale.dropped && !stale.has_written);
+    }
+
+    /// The guards are ordered, and the order is load-bearing: a despawned
+    /// entity must be reported as despawned even when its authority is also
+    /// gone, because `has_component_of_kind` on a despawned entity is the
+    /// question the despawn guard exists to avoid asking.
+    #[test]
+    fn despawn_is_reported_ahead_of_the_other_reasons() {
+        let outcome = run_pass(
+            TripwireWorld {
+                entity_present: false,
+                component_present: false,
+            },
+            HostType::Client,
+            EntityAuthStatus::Available,
+        );
+        assert_eq!(outcome.reason, Some(UpdateDropReason::EntityDespawned));
     }
 
     /// The guard must not swallow legitimate traffic: a client that still holds a

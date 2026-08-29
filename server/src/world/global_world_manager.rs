@@ -8,7 +8,7 @@ use log::warn;
 use naia_shared::{
     AuthorityError, BigMapKey, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
     GlobalDiffHandler, GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalWorldManagerType,
-    InScopeEntities, MutChannelType, PropertyMutator, Replicate,
+    HostEntityAuthStatus, HostType, InScopeEntities, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -519,6 +519,19 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 
     fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor {
         self.auth_handler.get_accessor(global_entity)
+    }
+
+    /// The trait default is `None`, which is fail-open: it disables the
+    /// `UpdateDropReason::AuthorityLost` guard on the send path entirely. The
+    /// server does not *need* the guard -- `can_write()` is true for every
+    /// server auth status -- but relying on the default to be harmless couples
+    /// the server's correctness to a value chosen for unrelated implementors.
+    /// Report the real status instead, so no production implementor is
+    /// fail-open and the guard is uniform on both sides of the wire.
+    fn entity_auth_status(&self, global_entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+        self.auth_handler
+            .authority_status(global_entity)
+            .map(|status| HostEntityAuthStatus::new(HostType::Server, status))
     }
 
     fn entity_needs_mutator_for_delegation(&self, _global_entity: &GlobalEntity) -> bool {
