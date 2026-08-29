@@ -1826,3 +1826,117 @@ fn a_client_without_authority_cannot_write_to_a_delegated_entity() {
         );
     }
 }
+
+/// `Requested` is the one client authority row with no integration coverage:
+/// the client may mutate its local copy (`can_mutate`) but may not write it to
+/// the wire (`can_write`) and may not accept remote updates (`can_read`).
+///
+/// It is also the only row that is transient by construction -- the server
+/// answers a request within a tick -- so it has to be observed in the same
+/// closure that raises it, before the network runs. `request_authority()` sets
+/// the local status synchronously, which makes that deterministic without any
+/// link conditioning.
+///
+/// The property under test is the `Client::insert_component` gate again, which
+/// admits `Granted` and nothing else: a client that has *asked* for authority
+/// has not got it yet, and must not be able to write ahead of the grant.
+#[test]
+fn a_client_that_has_only_requested_authority_cannot_write_yet() {
+    use naia_shared::EntityAuthStatus;
+
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            server
+                .user_scope_mut(&client_a_key)
+                .unwrap()
+                .include(&entity);
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            .then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(ReplicationConfig::delegated());
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        })
+        .then_some(())
+    });
+
+    // Request and write in one closure, before the network runs: the status is
+    // still `Requested` at the moment of the write.
+    let status_at_write = scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            client_a
+                .entity_mut(&entity_e)
+                .unwrap()
+                .request_authority()
+                .unwrap();
+            let status = client_a.entity(&entity_e).and_then(|e| e.authority());
+            client_a
+                .entity_mut(&entity_e)
+                .unwrap()
+                .insert_component(Position::new(900.0, 1000.0));
+            status
+        })
+    });
+    assert_eq!(
+        status_at_write,
+        Some(EntityAuthStatus::Requested),
+        "this test is only meaningful if the write happened while Requested",
+    );
+
+    // Let the request resolve, then confirm the premature write never landed.
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)
+        })
+        .then_some(())
+    });
+
+    let server_x = scenario
+        .mutate(|ctx| {
+            ctx.server(|server| {
+                server
+                    .entity(&entity_e)
+                    .and_then(|e| e.component::<Position>().map(|p| *p.x))
+            })
+        })
+        .expect("Position must exist on the server");
+    assert!(
+        (server_x - 900.0).abs() > 0.001,
+        "the server carries x = {server_x}, the value client A wrote while only \
+         Requested; that write must have been dropped at the \
+         `insert_component` authority gate",
+    );
+}
