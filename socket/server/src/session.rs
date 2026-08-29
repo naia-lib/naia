@@ -554,11 +554,17 @@ async fn serve(
                 };
                 let response = Response::builder()
                     .status(401)
+                    .header(header::CONTENT_LENGTH, reject_body.len())
                     .body(reject_body)
                     .expect("could not build 401 response");
 
                 let mut out = response_header_to_vec(&response);
                 out.extend_from_slice(response.body().as_bytes());
+
+                // A rejection is a complete answer. Without this the 404
+                // written below is appended to it on the same connection, and
+                // a client reading to EOF sees the two responses run together.
+                success = true;
 
                 info!("Rejected WebRTC session request from {}", remote_addr);
 
