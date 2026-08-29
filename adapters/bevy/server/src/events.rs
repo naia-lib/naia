@@ -312,3 +312,24 @@ impl<R: Replicate> RemoveResourceEvent<R> {
         Self { user_key, resource }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    /// `DisconnectEvent` exposes a `DisconnectReason` in a public field, so the
+    /// type has to be nameable from this crate's root. Without the re-export a
+    /// consumer would have to depend on `naia_server` directly just to match on
+    /// a field of an event this crate handed it.
+    #[test]
+    fn disconnect_reason_is_nameable_from_the_adapter_root() {
+        use crate::{events::DisconnectEvent, BigMapKey, DisconnectReason, UserKey};
+
+        let reason: DisconnectReason = DisconnectReason::Kicked;
+        let event = DisconnectEvent(
+            UserKey::from_u64(0),
+            "127.0.0.1:4433".parse().unwrap(),
+            reason,
+        );
+
+        assert_eq!(event.2, DisconnectReason::Kicked);
+    }
+}

@@ -101,9 +101,10 @@ pub use naia_server::{
         FileBitWriter, GlobalResponseId, ResponseReceiveKey, SerdeErr, SignedInteger,
         SignedVariableInteger, SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
-    transport, ConnectionShared, EntityOwner, ReceiveOutput, RecvHandle, ReplicationConfig,
-    ResponseSendOutcome, RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig, TickBufferMessages, UserKey,
-    WorldServer,
+    transport, ConnectionShared, DisconnectReason, EntityOwner, ReceiveOutput, RecvHandle,
+    ReplicationConfig,
+    ResponseSendOutcome, RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig,
+    TickBufferMessages, UserKey, WorldServer,
 };
 
 #[cfg(feature = "bench_instrumentation")]
