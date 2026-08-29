@@ -1290,4 +1290,87 @@ mod delegated_auth_tests {
             "a mutable host must still mark the property dirty",
         );
     }
+
+    fn panic_message_of(body: impl FnOnce()) -> Option<String> {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
+        std::panic::set_hook(previous);
+        result.err().map(|payload| {
+            payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                .unwrap_or_else(|| "<non-string panic payload>".to_string())
+        })
+    }
+
+    /// Audit of `DelegatedRelation`'s remaining unguarded `mutate()` calls
+    /// (call-site audit, item 2): `set_global_entity`, `set_to_none` and
+    /// `mirror_waiting`.
+    ///
+    /// These are the `EntityProperty` mirror of `DelegatedProperty::mirror`,
+    /// and the audit reaches the same conclusion: every internal caller runs
+    /// through `EntityRelation::mirror`, which is reached only from
+    /// `Replicate::mirror` at the three call sites gated in
+    /// `client/src/client.rs:insert_component` (client, `Granted` only) and on
+    /// the server (mutable in every status). The predicate cannot drift across
+    /// those calls, so the panic is a user-facing contract -- the price of
+    /// calling `EntityProperty::set`/`set_to_none` without authority -- rather
+    /// than root 1's guaranteed self-inflicted crash on the receive path.
+    ///
+    /// This test pins the contract on all three entry points at once, so a
+    /// caller added without a gate fails in naia's own suite.
+    #[test]
+    fn the_relation_mutators_refuse_a_client_that_may_not_mutate() {
+        type Op = (&'static str, fn(&mut DelegatedRelation));
+        let ops: [Op; 3] = [
+            ("set_global_entity", |relation| {
+                relation.set_global_entity(&Some(GlobalEntity::from_u64(7)))
+            }),
+            ("set_to_none", |relation| relation.set_to_none()),
+            ("mirror_waiting", |relation| relation.mirror_waiting()),
+        ];
+        for status in [
+            EntityAuthStatus::Available,
+            EntityAuthStatus::Releasing,
+            EntityAuthStatus::Denied,
+        ] {
+            for (name, op) in ops {
+                let (mut relation, count) = relation_at(status);
+                assert!(!relation.can_mutate());
+                let message = panic_message_of(|| op(&mut relation));
+                assert!(
+                    message
+                        .as_deref()
+                        .is_some_and(|m| m.contains("Must request authority to mutate")),
+                    "{name} at {status:?} must panic with the authority contract \
+                     message, got {message:?}",
+                );
+                assert_eq!(
+                    count.load(Ordering::Relaxed),
+                    0,
+                    "{name} at {status:?} must not have marked the property dirty",
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn the_relation_mutators_still_work_wherever_the_client_may_mutate() {
+        for status in [EntityAuthStatus::Requested, EntityAuthStatus::Granted] {
+            let (mut relation, count) = relation_at(status);
+            assert!(relation.can_mutate());
+            let target = GlobalEntity::from_u64(7);
+            relation.set_global_entity(&Some(target));
+            assert_eq!(relation.global_entity, Some(target));
+            relation.set_to_none();
+            assert_eq!(relation.global_entity, None);
+            assert_eq!(
+                count.load(Ordering::Relaxed),
+                2,
+                "both mutators must mark the property dirty at {status:?}",
+            );
+        }
+    }
 }

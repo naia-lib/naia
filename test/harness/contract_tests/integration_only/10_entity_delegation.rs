@@ -1664,3 +1664,165 @@ fn server_authority_changes_reach_the_previous_holder() {
         }
     }
 }
+
+/// A client without authority over a delegated entity must have its writes
+/// silently ignored -- not applied, and not panicked on.
+///
+/// This is the negative half of `after_migration_writes_follow_delegated_rules`,
+/// which only covers the holder's accepted write. The guard under test lives in
+/// `Client::insert_component`: it resolves the entity's authority status and
+/// returns early unless the client holds `Granted`. That early return is what
+/// keeps `DelegatedProperty::mirror` -- which calls `mutate()` unconditionally
+/// and panics on `!can_mutate()` -- from ever being reached without authority.
+/// Deleting the guard leaves this test as the only thing in naia's own suite
+/// that catches the delegated arm; before this test, only the *non*-delegated
+/// arm was covered (by `server_owned_undelegated_accepts_only_server_writes`).
+///
+/// Both non-holder statuses a client can sit in while the entity is in scope
+/// are exercised: `Available` (nobody holds authority) and `Denied` (someone
+/// else does).
+#[test]
+fn a_client_without_authority_cannot_write_to_a_delegated_entity() {
+    use naia_shared::EntityAuthStatus;
+
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_a_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client A",
+        Auth::new("client_a", "pass"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    let client_b_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client B",
+        Auth::new("client_b", "pass"),
+        test_client_config(),
+        test_protocol,
+    );
+
+    let entity_e = scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            let (entity, _) = server.spawn(|mut e| {
+                e.insert_component(Position::new(1.0, 2.0));
+                e.enter_room(&room_key);
+            });
+            for key in [&client_a_key, &client_b_key] {
+                server.user_scope_mut(key).unwrap().include(&entity);
+            }
+            entity
+        })
+    });
+
+    scenario.expect(|ctx| {
+        (ctx.client(client_a_key, |c| c.has_entity(&entity_e))
+            && ctx.client(client_b_key, |c| c.has_entity(&entity_e)))
+        .then_some(())
+    });
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.configure_replication(ReplicationConfig::delegated());
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Available)
+        })
+        .then_some(())
+    });
+
+    // --- Available: nobody holds authority, so A's write must be ignored. ---
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            if let Some(mut e) = client_a.entity_mut(&entity_e) {
+                e.insert_component(Position::new(500.0, 600.0));
+            }
+        });
+    });
+
+    // Give B authority. If A's write had been applied and replicated, the
+    // server would already be carrying it by the time this lands.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            if let Some(mut e) = server.entity_mut(&entity_e) {
+                e.give_authority(&client_b_key).unwrap();
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        let a_denied = ctx.client(client_a_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Denied)
+        });
+        let b_granted = ctx.client(client_b_key, |c| {
+            c.entity(&entity_e).and_then(|e| e.authority()) == Some(EntityAuthStatus::Granted)
+        });
+        (a_denied && b_granted).then_some(())
+    });
+
+    // --- Denied: B holds authority, so A's write must still be ignored. ---
+    scenario.mutate(|ctx| {
+        ctx.client(client_a_key, |client_a| {
+            if let Some(mut e) = client_a.entity_mut(&entity_e) {
+                e.insert_component(Position::new(700.0, 800.0));
+            }
+        });
+    });
+
+    // B writes a value we can wait for. Its arrival at the server is the
+    // synchronization point: any write A had managed to send would have
+    // travelled the same ordered channel and landed first.
+    scenario.mutate(|ctx| {
+        ctx.client(client_b_key, |client_b| {
+            if let Some(mut e) = client_b.entity_mut(&entity_e) {
+                e.insert_component(Position::new(100.0, 200.0));
+            }
+        });
+    });
+
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            server
+                .entity(&entity_e)
+                .and_then(|e| e.component::<Position>().map(|p| (*p.x, *p.y)))
+        })
+        .filter(|(x, _)| (*x - 100.0).abs() < 0.001)
+        .map(|_| ())
+    });
+
+    // Neither of A's writes may have survived anywhere.
+    let (server_x, a_x, b_x) = scenario.mutate(|ctx| {
+        let server_x = ctx.server(|server| {
+            server
+                .entity(&entity_e)
+                .and_then(|e| e.component::<Position>().map(|p| *p.x))
+        });
+        let mut read = |key| {
+            ctx.client(key, |c| {
+                c.entity(&entity_e)
+                    .and_then(|e| e.component::<Position>().map(|p| *p.x))
+            })
+        };
+        (server_x, read(client_a_key), read(client_b_key))
+    });
+    for (who, x) in [("server", server_x), ("client A", a_x), ("client B", b_x)] {
+        let x = x.expect("Position must exist everywhere");
+        assert!(
+            (x - 500.0).abs() > 0.001 && (x - 700.0).abs() > 0.001,
+            "{who} carries x = {x}, which is one of the writes client A made \
+             without authority; those writes must have been dropped at the \
+             `insert_component` authority gate",
+        );
+    }
+}

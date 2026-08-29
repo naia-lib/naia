@@ -638,4 +638,100 @@ mod delegated_write_auth_tests {
             );
         }
     }
+
+    /// Runs `body`, returning the panic message if it panicked. Silences the
+    /// default hook so an expected panic does not spam the test output.
+    fn panic_message_of(body: impl FnOnce()) -> Option<String> {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
+        std::panic::set_hook(previous);
+        result.err().map(|payload| {
+            payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                .unwrap_or_else(|| "<non-string panic payload>".to_string())
+        })
+    }
+
+    /// Audit of `DelegatedProperty::mirror` (call-site audit, item 2).
+    ///
+    /// `mirror` calls `mutate()` unconditionally -- the same shape as root 1,
+    /// where `read_none`/`read_some` did. It is *not* the same bug, because
+    /// every in-tree caller is pre-gated:
+    ///
+    /// - `server/src/world/entity_mut.rs:170` and
+    ///   `server/src/server/world_server.rs:2754` run on the server, and
+    ///   `can_mutate()` is true for every server auth status.
+    /// - `client/src/client.rs:insert_component` checks
+    ///   `entity_authority_status(..) == Some(Granted)` and returns early
+    ///   otherwise, so the client only reaches `mirror` while it may mutate.
+    ///
+    /// Nothing suspends between those checks and the call, so the predicate
+    /// cannot drift -- unlike root 2's send path, where a whole tick elapses.
+    /// The panic is therefore the *documented contract* for user code that
+    /// mutates without authority, not a latent crash. These two tests pin that
+    /// contract so a future caller added without a gate fails here, in naia's
+    /// own suite, rather than downstream.
+    #[test]
+    fn mirroring_without_the_right_to_mutate_is_a_loud_contract_violation() {
+        for status in [
+            EntityAuthStatus::Available,
+            EntityAuthStatus::Releasing,
+            EntityAuthStatus::Denied,
+        ] {
+            let mut property = property_at(HostType::Client, status);
+            assert!(
+                !property.can_mutate(),
+                "{status:?} must be a non-mutable client status for this test",
+            );
+            let message = panic_message_of(|| property.mirror(&"next".to_string()));
+            assert!(
+                message
+                    .as_deref()
+                    .is_some_and(|m| m.contains("Must request authority to mutate")),
+                "mirror at {status:?} must panic with the authority contract \
+                 message, got {message:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn mirroring_is_allowed_wherever_the_client_may_mutate() {
+        for status in [EntityAuthStatus::Requested, EntityAuthStatus::Granted] {
+            let mut property = property_at(HostType::Client, status);
+            assert!(property.can_mutate());
+            property.mirror(&"next".to_string());
+            assert_eq!(
+                property.inner, "next",
+                "mirror must apply the value at {status:?}",
+            );
+        }
+    }
+
+    /// The client half of the authority table, pinned as a whole. The send
+    /// guard, the `write` panic and the `mutate` panic all read these three
+    /// predicates; if a row moves, every audit conclusion above is void.
+    #[test]
+    fn the_client_authority_table_is_what_the_audit_assumed() {
+        // (status, can_read, can_mutate, can_write)
+        let table = [
+            (EntityAuthStatus::Available, true, false, false),
+            (EntityAuthStatus::Requested, false, true, false),
+            (EntityAuthStatus::Granted, false, true, true),
+            (EntityAuthStatus::Releasing, true, false, true),
+            (EntityAuthStatus::Denied, true, false, false),
+        ];
+        for (status, can_read, can_mutate, can_write) in table {
+            let property = property_at(HostType::Client, status);
+            assert_eq!(property.can_read(), can_read, "can_read at {status:?}");
+            assert_eq!(
+                property.can_mutate(),
+                can_mutate,
+                "can_mutate at {status:?}"
+            );
+            assert_eq!(property.can_write(), can_write, "can_write at {status:?}");
+        }
+    }
 }
