@@ -12,7 +12,13 @@ extern crate cfg_if;
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
         mod wasm_utils;
-    } else {}
+    } else {
+        // Only the wasm backends call this, but its tests are worth running on
+        // the host: `cargo test` never targets wasm32, so a wasm-only module is
+        // a module whose tests never execute.
+        #[cfg(test)]
+        mod wasm_utils;
+    }
 }
 
 mod backends;
