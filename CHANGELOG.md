@@ -19,12 +19,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   body of the rejection response, which every transport already had in hand and
   discarded. `reject_connection` is unchanged and sends no reason.
 
-  Two limits are worth stating plainly. A rejection message must not contain an
-  `EntityProperty`: there is no connection yet, so entity references cannot be
-  resolved. And the native WebRTC transport cannot carry one yet -- the
-  `webrtc-unreliable-client` release naia depends on surfaces only the HTTP
-  status code, not the response body -- so on that transport the message is
-  always `None`. The UDP, local, and WASM WebRTC transports carry it.
+  One limit is worth stating plainly: a rejection message must not contain an
+  `EntityProperty`, because there is no connection yet and entity references
+  cannot be resolved. Every transport -- UDP, local, WASM WebRTC, and native
+  WebRTC -- carries the message.
 
 ### Changed
 
