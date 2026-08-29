@@ -8,8 +8,8 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    BigMap, BitReader, BitWriter, FakeEntityConverter, Message, MessageContainer, MessageKinds,
-    PacketType, Protocol, ProtocolId, Serde, SocketConfig, StandardHeader,
+    BigMap, BitReader, BitWriter, DisconnectReason, FakeEntityConverter, Message, MessageContainer,
+    MessageKinds, PacketType, Protocol, ProtocolId, Serde, SocketConfig, StandardHeader,
 };
 
 use crate::{
@@ -300,14 +300,28 @@ impl MainServer {
         None
     }
 
+    /// The registered message kinds, for serializing a message against this
+    /// server's protocol.
+    pub fn message_kinds(&self) -> &MessageKinds {
+        &self.message_kinds
+    }
+
     /// Sends disconnect packets to the user and removes them from all internal state.
-    pub fn disconnect_user(&mut self, user_key: &UserKey) {
+    ///
+    /// `reason` and `payload` travel with the packet, so a kicked client learns
+    /// why it was dropped instead of guessing (naia-lib/naia#10).
+    pub fn disconnect_user(
+        &mut self,
+        user_key: &UserKey,
+        reason: DisconnectReason,
+        payload: Option<&[u8]>,
+    ) {
         // Send disconnect packets to the client before removing them
         // This mirrors the client-initiated disconnect flow
         if let Some(address) = self.user_address(user_key) {
             // Send multiple times for reliability (like client does)
             for _ in 0..10 {
-                let disconnect_packet = self.handshake_manager.write_disconnect();
+                let disconnect_packet = self.handshake_manager.write_disconnect(reason, payload);
                 if self
                     .send_io
                     .send_packet(&address, disconnect_packet)

@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::{BitReader, IdentityToken, OutgoingPacket, SerdeErr};
+use naia_shared::{BitReader, DisconnectReason, IdentityToken, OutgoingPacket, SerdeErr};
 
 use crate::UserKey;
 
@@ -25,8 +25,11 @@ pub trait Handshaker: Send + Sync {
 
     fn reset(&mut self);
 
-    /// Write a disconnect packet to send to a client
-    fn write_disconnect(&self) -> OutgoingPacket;
+    /// Write a disconnect packet to send to a client.
+    ///
+    /// `payload`, when present, is an already-serialized message saying why in
+    /// the application's own terms (naia-lib/naia#10).
+    fn write_disconnect(&self, reason: DisconnectReason, payload: Option<&[u8]>) -> OutgoingPacket;
 }
 
 pub enum HandshakeAction {

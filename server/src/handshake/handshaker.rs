@@ -6,8 +6,8 @@ use ring::{hmac, rand};
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    BitReader, BitWriter, IdentityToken, OutgoingPacket, PacketType, ProtocolId, Serde, SerdeErr,
-    StandardHeader,
+    BitReader, BitWriter, DisconnectReason, IdentityToken, OutgoingPacket, PacketType, ProtocolId,
+    Serde, SerdeErr, StandardHeader,
 };
 
 #[cfg(feature = "transport_udp")]
@@ -251,10 +251,11 @@ impl Handshaker for HandshakeManager {
         }
     }
 
-    fn write_disconnect(&self) -> OutgoingPacket {
+    fn write_disconnect(&self, reason: DisconnectReason, payload: Option<&[u8]>) -> OutgoingPacket {
         let mut writer = BitWriter::new();
         StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
-        HandshakeHeader::Disconnect.ser(&mut writer);
+        HandshakeHeader::ServerDisconnect(reason).ser(&mut writer);
+        payload.map(|bytes| bytes.to_vec()).ser(&mut writer);
         writer.to_packet()
     }
 }

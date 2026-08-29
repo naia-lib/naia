@@ -1,10 +1,11 @@
-use std::{hash::Hash, net::SocketAddr, panic, time::Duration};
+use std::{collections::HashMap, hash::Hash, net::SocketAddr, panic, time::Duration};
 
 use naia_shared::{
-    AuthorityError, Channel, ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef, GlobalEntity, Instant, Message,
-    Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey,
-    ResponseSendKey, SocketConfig, Tick, WorldMutType, WorldRefType,
+    AuthorityError, BitWriter, Channel, ComponentKind, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, EntityDoesNotExistError, EntityPriorityMut, EntityPriorityRef,
+    FakeEntityConverter, GlobalEntity, Instant, Message, MessageContainer, Protocol, ProtocolId,
+    Replicate, ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey,
+    SocketConfig, Tick, WorldMutType, WorldRefType,
 };
 
 use crate::Historian;
@@ -56,6 +57,10 @@ pub struct Server<E: Copy + Eq + Hash + Send + Sync + 'static> {
     outstanding_main_events: MainEvents,
     world_server: WorldServer<E>,
     to_world_sender_opt: Option<Box<dyn PacketSender>>,
+    /// Serialized reason messages for users kicked via
+    /// [`disconnect_user_with`](Server::disconnect_user_with), consumed when the
+    /// disconnect packet is written (naia-lib/naia#10).
+    pending_disconnect_payloads: HashMap<UserKey, Vec<u8>>,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
@@ -103,6 +108,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
             outstanding_main_events: MainEvents::default(),
             world_server,
             to_world_sender_opt: None,
+            pending_disconnect_payloads: HashMap::new(),
         }
     }
 
@@ -236,7 +242,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         {
             let mut disconnects = Vec::new();
             for (user_key, addr, reason) in world_events.read::<DisconnectEvent>() {
-                self.main_server.disconnect_user(&user_key);
+                let payload = self.pending_disconnect_payloads.remove(&user_key);
+                self.main_server
+                    .disconnect_user(&user_key, reason, payload.as_deref());
                 disconnects.push((user_key, addr, reason));
             }
             // put back into world events
@@ -299,6 +307,38 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     /// The client sees the message on its `RejectEvent`.
     pub fn reject_connection_with<M: Message>(&mut self, user_key: &UserKey, message: M) {
         self.main_server.reject_connection_with(user_key, message);
+    }
+
+    /// Disconnects an established user, telling them why.
+    ///
+    /// The counterpart to [`reject_connection_with`](Server::reject_connection_with)
+    /// for a connection that is already up: the `message` rides on the
+    /// disconnect packet, so a kicked client can say *why* it was dropped
+    /// rather than reporting a bare disconnect (naia-lib/naia#10). This is the
+    /// mechanism an application uses to answer a failed mid-session credential
+    /// refresh, a ban, or an eviction by a newer login.
+    ///
+    /// `M` must be registered in the [`Protocol`], and must not contain an
+    /// `EntityProperty`: the connection is being torn down, so entity
+    /// references cannot be relied upon to resolve.
+    ///
+    /// The client sees the message on its `DisconnectEvent`, with a
+    /// [`DisconnectReason::Kicked`]. `UserMut::disconnect` is unchanged and
+    /// sends no message.
+    ///
+    /// [`DisconnectReason::Kicked`]: naia_shared::DisconnectReason::Kicked
+    pub fn disconnect_user_with<M: Message>(&mut self, user_key: &UserKey, message: M) {
+        let container = MessageContainer::new(Box::new(message));
+        let mut writer = BitWriter::new();
+        container.write(
+            self.main_server.message_kinds(),
+            &mut writer,
+            &mut FakeEntityConverter,
+        );
+        self.pending_disconnect_payloads
+            .insert(*user_key, writer.to_bytes().to_vec());
+        self.world_server
+            .user_queue_disconnect(user_key, naia_shared::DisconnectReason::Kicked);
     }
 
     // Messaging ─────────────────────────────────────────────────────────────

@@ -16,7 +16,7 @@ type RemovesMap<E> = HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>;
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
     rejections: Vec<(SocketAddr, RejectReason, Option<MessageContainer>)>,
-    disconnections: Vec<(SocketAddr, DisconnectReason)>,
+    disconnections: Vec<(SocketAddr, DisconnectReason, Option<MessageContainer>)>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
@@ -44,7 +44,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         Self {
             connections: Vec::new(),
             rejections: Vec::new(),
-            disconnections: Vec::new(), // (SocketAddr, DisconnectReason)
+            disconnections: Vec::new(), // (SocketAddr, DisconnectReason, reason message)
             errors: Vec::new(),
             messages: HashMap::new(),
             requests: HashMap::new(),
@@ -164,8 +164,9 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
         &mut self,
         socket_addr: &SocketAddr,
         reason: DisconnectReason,
+        message: Option<MessageContainer>,
     ) {
-        self.disconnections.push((*socket_addr, reason));
+        self.disconnections.push((*socket_addr, reason, message));
         self.empty = false;
     }
 
@@ -341,10 +342,17 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
     }
 }
 
-/// Fires when the connection to the server is lost; yields the server address and the [`DisconnectReason`].
+/// Fires when the connection to the server is lost; yields the server address,
+/// the [`DisconnectReason`], and any message the server enclosed saying why.
+///
+/// The message is present only when the server called
+/// `Server::disconnect_user_with` (naia-lib/naia#10); downcast it with
+/// `container.to_boxed_any().downcast::<YourMessage>()`. It is `None` for a
+/// timeout, a client-initiated disconnect, or a plain `UserMut::disconnect`,
+/// and also when the message does not decode against this client's protocol.
 pub struct DisconnectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for DisconnectEvent {
-    type Iter = IntoIter<(SocketAddr, DisconnectReason)>;
+    type Iter = IntoIter<(SocketAddr, DisconnectReason, Option<MessageContainer>)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.disconnections);

@@ -63,6 +63,9 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     server_connection: Option<Connection>,
     handshake_manager: Box<dyn Handshaker>,
     manual_disconnect: bool,
+    /// Set when the server's disconnect packet named a reason, with the
+    /// serialized message it carried (naia-lib/naia#10).
+    server_disconnect_details: Option<(naia_shared::DisconnectReason, Option<Vec<u8>>)>,
     server_disconnect: bool,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
@@ -133,6 +136,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             handshake_manager: Box::new(handshake_manager),
             manual_disconnect: false,
             server_disconnect: false,
+            server_disconnect_details: None,
             waitlist_messages: VecDeque::new(),
             // World
             global_world_manager,
@@ -336,12 +340,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         // all other operations
         if self.is_disconnecting() {
-            let reason = if self.manual_disconnect || self.server_disconnect {
-                naia_shared::DisconnectReason::ClientDisconnected
-            } else {
-                naia_shared::DisconnectReason::TimedOut
+            // A server-initiated disconnect now names its own reason; falling
+            // back to `ClientDisconnected` for one would tell the client it hung
+            // up on itself (naia-lib/naia#10).
+            let (reason, payload) = match self.server_disconnect_details.take() {
+                Some((reason, payload)) => (reason, payload),
+                None => {
+                    let reason = if self.manual_disconnect || self.server_disconnect {
+                        naia_shared::DisconnectReason::ClientDisconnected
+                    } else {
+                        naia_shared::DisconnectReason::TimedOut
+                    };
+                    (reason, None)
+                }
             };
-            self.disconnect_with_events(&mut world, reason);
+            let message = payload.and_then(|bytes| self.decode_server_message(&bytes));
+            self.disconnect_with_events(&mut world, reason, message);
             return;
         }
 
@@ -2135,9 +2149,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                                 warn!("unable to parse handshake header from server");
                                 continue;
                             };
-                            if matches!(handshake_header, HandshakeHeader::Disconnect) {
-                                info!("Received disconnect from server");
-                                self.server_disconnect = true;
+                            match handshake_header {
+                                HandshakeHeader::Disconnect => {
+                                    info!("Received disconnect from server");
+                                    self.server_disconnect = true;
+                                }
+                                // The server said why, and may have enclosed a
+                                // message explaining itself (naia-lib/naia#10).
+                                HandshakeHeader::ServerDisconnect(reason) => {
+                                    info!("Received disconnect from server: {:?}", reason);
+                                    self.server_disconnect = true;
+                                    // The packet is sent several times over for
+                                    // reliability; keep the first reading.
+                                    if self.server_disconnect_details.is_none() {
+                                        let payload =
+                                            Option::<Vec<u8>>::de(&mut reader).ok().flatten();
+                                        self.server_disconnect_details = Some((reason, payload));
+                                    }
+                                }
+                                _ => {}
                             }
                             continue;
                         }
@@ -2259,6 +2289,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         &mut self,
         world: &mut W,
         reason: naia_shared::DisconnectReason,
+        message: Option<MessageContainer>,
     ) {
         let server_addr = self.server_address_unwrapped();
 
@@ -2269,7 +2300,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.disconnect_reset_connection();
 
         self.incoming_world_events
-            .push_disconnection(&server_addr, reason);
+            .push_disconnection(&server_addr, reason, message);
+    }
+
+    /// Decodes a message the server enclosed with a disconnect, against this
+    /// client's own protocol (naia-lib/naia#10).
+    fn decode_server_message(&self, bytes: &[u8]) -> Option<MessageContainer> {
+        let mut reader = BitReader::new(bytes);
+        match self
+            .protocol
+            .message_kinds
+            .read(&mut reader, &FakeEntityConverter)
+        {
+            Ok(container) => Some(container),
+            Err(_) => {
+                warn!("Server sent a disconnect message this client's protocol cannot decode. Ignoring the message.");
+                None
+            }
+        }
     }
 
     fn despawn_all_remote_entities<W: WorldMutType<E>>(&mut self, world: &mut W) {

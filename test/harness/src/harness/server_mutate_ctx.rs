@@ -428,6 +428,22 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
         }
     }
 
+    /// Disconnect a user, handing the client a message explaining why
+    /// (naia-lib/naia#10).
+    pub fn disconnect_user_with<M: naia_shared::Message>(
+        &mut self,
+        client_key: &ClientKey,
+        message: M,
+    ) {
+        let scenario = self.ctx.scenario_mut();
+        if let Some(user_key) = scenario.client_to_user_key(client_key) {
+            let (server, _, _, _) = scenario.split_for_server_mut();
+            server.disconnect_user_with(&user_key, message);
+        } else {
+            warn!("disconnect_user_with failed: ClientKey {:?} has no associated UserKey (may not be authenticated yet)", client_key);
+        }
+    }
+
     // Room Operations
 
     /// Create a new room

@@ -38,22 +38,30 @@ impl<T> ConnectEvent<T> {
 }
 
 // DisconnectEvent
+/// Fires when the connection to the server is lost.
+///
+/// `message` carries what the server enclosed via
+/// `Server::disconnect_user_with` (naia-lib/naia#10); it is `None` for a
+/// timeout, a client-initiated disconnect, or a plain kick. Downcast it with
+/// `container.to_boxed_any().downcast::<YourMessage>()`.
 #[derive(bevy_ecs::message::Message)]
 pub struct DisconnectEvent<T> {
     pub reason: DisconnectReason,
+    pub message: Option<MessageContainer>,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> Default for DisconnectEvent<T> {
     fn default() -> Self {
-        Self::new(DisconnectReason::ClientDisconnected)
+        Self::new(DisconnectReason::ClientDisconnected, None)
     }
 }
 
 impl<T> DisconnectEvent<T> {
-    pub fn new(reason: DisconnectReason) -> Self {
+    pub fn new(reason: DisconnectReason, message: Option<MessageContainer>) -> Self {
         Self {
             reason,
+            message,
             phantom_t: PhantomData,
         }
     }

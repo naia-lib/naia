@@ -4,8 +4,8 @@ use log::{debug, warn};
 
 use naia_client::{Events as NaiaClientEvents, NaiaClientError, TickEvents};
 use naia_shared::{
-    handshake::RejectReason, ChannelKind, ComponentKind, GlobalResponseId, LocalEntity,
-    MessageContainer, MessageKind, OwnedLocalEntity, Replicate, Tick, WorldRefType,
+    handshake::RejectReason, ChannelKind, ComponentKind, DisconnectReason, GlobalResponseId,
+    LocalEntity, MessageContainer, MessageKind, OwnedLocalEntity, Replicate, Tick, WorldRefType,
 };
 
 use crate::{
@@ -19,7 +19,7 @@ type ClientRemovesMap = HashMap<ComponentKind, Vec<(EntityKey, Box<dyn Replicate
 pub struct ClientEvents {
     connections: Vec<()>,
     rejections: Vec<(RejectReason, Option<MessageContainer>)>,
-    disconnections: Vec<()>,
+    disconnections: Vec<(DisconnectReason, Option<MessageContainer>)>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
     requests: HashMap<ChannelKind, HashMap<MessageKind, Vec<(GlobalResponseId, MessageContainer)>>>,
@@ -163,9 +163,11 @@ impl ClientEvents {
             .read::<naia_client::RejectEvent>()
             .map(|(_, reason, message)| (reason, message))
             .collect();
-        let disconnections: Vec<()> = world_events
+        // The message is the optional reason the server attached with
+        // disconnect_user_with (naia-lib/naia#10).
+        let disconnections: Vec<(DisconnectReason, Option<MessageContainer>)> = world_events
             .read::<naia_client::DisconnectEvent>()
-            .map(|(_, _reason)| ())
+            .map(|(_, reason, message)| (reason, message))
             .collect();
         let errors: Vec<NaiaClientError> = world_events.read::<naia_client::ErrorEvent>().collect();
         let messages = world_events.take_messages();
@@ -316,8 +318,8 @@ impl ClientEvent for ClientRejectEvent {
 // DisconnectEvent
 pub struct ClientDisconnectEvent;
 impl ClientEvent for ClientDisconnectEvent {
-    type Iter = std::vec::IntoIter<()>;
-    type Item = ();
+    type Iter = std::vec::IntoIter<(DisconnectReason, Option<MessageContainer>)>;
+    type Item = (DisconnectReason, Option<MessageContainer>);
 
     fn iter(events: &mut ClientEvents) -> Self::Iter {
         std::mem::take(&mut events.disconnections).into_iter()

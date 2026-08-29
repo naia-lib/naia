@@ -1,5 +1,8 @@
 /// Why a connection was terminated.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+///
+/// Server-initiated disconnects put this on the wire, so the client learns
+/// *why* it was dropped rather than inferring it (naia-lib/naia#10).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, naia_serde::SerdeInternal)]
 pub enum DisconnectReason {
     /// The client sent a graceful disconnect packet.
     ClientDisconnected,

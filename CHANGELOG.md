@@ -24,7 +24,25 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   cannot be resolved. Every transport -- UDP, local, WASM WebRTC, and native
   WebRTC -- carries the message.
 
+- **A kicked client can now be told why** (naia-lib/naia#10).
+  `Server::disconnect_user_with(&user_key, message)` drops an established
+  client the way `UserMut::disconnect()` does, but attaches any registered
+  message -- an `IdleTimeout`, a `MatchOver`, a `BannedByModerator` of your own
+  defining. The server-initiated disconnect packet now carries both a
+  `DisconnectReason` and that optional payload, so the client learns why it was
+  dropped instead of inferring it. `UserMut::disconnect()` is unchanged and
+  sends no reason.
+
 ### Changed
+
+- **`DisconnectEvent` now reports why the connection ended, and carries the
+  server's reason message** (naia-lib/naia#10). A client kicked by the server
+  was previously reported as `DisconnectReason::ClientDisconnected` -- telling
+  the client it had hung up on itself. It is now `DisconnectReason::Kicked`,
+  and the client-side event yields
+  `(SocketAddr, DisconnectReason, Option<MessageContainer>)`; the Bevy
+  adapter's `DisconnectEvent` gained a matching `message` field. Callers
+  destructuring the old shape must be updated.
 
 - **Two application-driven panics now name the mistake that caused them**
   (naia-lib/naia#172). Answering the same `AuthEvent` twice --

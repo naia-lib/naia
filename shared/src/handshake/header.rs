@@ -1,7 +1,7 @@
 use naia_serde::SerdeInternal;
 
 use crate::handshake::RejectReason;
-use crate::ProtocolId;
+use crate::{DisconnectReason, ProtocolId};
 
 /// Discriminated-union header prepended to every handshake packet.
 ///
@@ -35,4 +35,11 @@ pub enum HandshakeHeader {
     ServerRejectResponse(RejectReason),
     /// Used to request a graceful Client disconnect from the Server.
     Disconnect,
+    /// The Server dropping an established Client, saying why.
+    ///
+    /// Followed on the wire by an `Option<Vec<u8>>`: a serialized message the
+    /// client decodes against its own protocol to learn the reason in the
+    /// application's own terms (naia-lib/naia#10). The plain `Disconnect`
+    /// variant above is the Client's half of the exchange and is unchanged.
+    ServerDisconnect(DisconnectReason),
 }

@@ -11,7 +11,9 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
-use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response, Tick};
+use naia_shared::{
+    AuthorityError, DisconnectReason, EntityAuthStatus, Protocol, Request, Response, Tick,
+};
 
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
@@ -958,6 +960,61 @@ fn server_reject_connection_carries_a_reason_message() {
         received_value,
         Some(7),
         "the rejection message should arrive with its field intact"
+    );
+}
+
+/// Server kick carries an optional message explaining itself
+/// Issue: naia-lib/naia#10
+///
+/// Given an established client; when the server calls disconnect_user_with(msg);
+/// then the client's disconnect event reports Kicked (not ClientDisconnected)
+/// and carries `msg` decoded against its own protocol, so the application can
+/// say *why* the player was dropped mid-session.
+#[test]
+fn server_disconnect_user_carries_a_reason_message() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Kicked Client",
+        Auth::new("client_a", "password"),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Kick, attaching a reason. 7 is arbitrary -- the point is that a field
+    // value survives the trip, not just the message kind.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.disconnect_user_with(&client_key, TestMessage::new(7));
+        });
+    });
+
+    let mut received = None;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            if let Some((reason, message_opt)) = client.read_event::<ClientDisconnectEvent>() {
+                let container = message_opt.expect("kick should carry a reason message");
+                let message = container
+                    .to_boxed_any()
+                    .downcast::<TestMessage>()
+                    .expect("reason message should be a TestMessage");
+                received = Some((reason, message.value));
+            }
+            received.is_some().then_some(())
+        })
+    });
+
+    assert_eq!(
+        received,
+        Some((DisconnectReason::Kicked, 7)),
+        "a server kick should report Kicked and carry its message intact"
     );
 }
 
