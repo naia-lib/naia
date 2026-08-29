@@ -567,3 +567,75 @@ impl<T: Serde> DelegatedProperty<T> {
         self.auth_accessor.auth_status().can_write()
     }
 }
+
+#[cfg(test)]
+mod delegated_write_auth_tests {
+    //! Root 2 of the delegated-authority family found by the Cyberlith NPA
+    //! promotion gate: a dirty update queued while a host held authority can
+    //! reach `send_packets` after that authority is gone, and
+    //! `DelegatedProperty::write` then panics.
+    //!
+    //! The fix is a guard in `WorldWriter::write_updates` that drops such a
+    //! planned update instead of serializing it, in the same spirit as the
+    //! despawn-race guards beside it. That guard's condition is
+    //! `!auth_status.can_write()`, and `write` panics on that same predicate,
+    //! so no test can meaningfully assert the two agree -- they are the same
+    //! call. What these tests pin instead is the authority *table* the guard
+    //! reads: the client state the NPA backtrace reported must stay
+    //! non-writable, and the server must stay writable in every state so the
+    //! guard remains free on the server path.
+
+    use super::*;
+    use crate::{
+        world::delegation::{
+            auth_channel::EntityAuthChannel, entity_auth_status::EntityAuthStatus,
+        },
+        HostType, PropertyMutate, PropertyMutator,
+    };
+
+    #[derive(Clone)]
+    struct NoopMutator;
+
+    impl PropertyMutate for NoopMutator {
+        fn mutate(&mut self, _property_index: u8) -> bool {
+            true
+        }
+    }
+
+    const ALL_STATUSES: [EntityAuthStatus; 5] = [
+        EntityAuthStatus::Available,
+        EntityAuthStatus::Requested,
+        EntityAuthStatus::Granted,
+        EntityAuthStatus::Releasing,
+        EntityAuthStatus::Denied,
+    ];
+
+    fn property_at(host_type: HostType, status: EntityAuthStatus) -> DelegatedProperty<String> {
+        let (auth_mutator, accessor) = EntityAuthChannel::new_channel(host_type);
+        auth_mutator.set_auth_status(status);
+        let prop_mutator = PropertyMutator::new(NoopMutator);
+        DelegatedProperty::new("value".to_string(), &accessor, &prop_mutator, 0)
+    }
+
+    /// The specific state the NPA repro reported: `Client/Available`.
+    #[test]
+    fn a_client_without_authority_cannot_write() {
+        let property = property_at(HostType::Client, EntityAuthStatus::Available);
+        assert!(
+            !property.can_write(),
+            "Client/Available is the state the NPA backtrace reported at \
+             property.rs:541; the send guard must drop its queued updates",
+        );
+    }
+
+    /// The server is never gated, so the guard costs it nothing.
+    #[test]
+    fn the_server_can_always_write() {
+        for status in ALL_STATUSES {
+            assert!(
+                property_at(HostType::Server, status).can_write(),
+                "server must remain writable at {status:?}",
+            );
+        }
+    }
+}

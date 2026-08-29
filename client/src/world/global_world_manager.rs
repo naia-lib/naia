@@ -7,8 +7,8 @@ use log::info;
 
 use naia_shared::{
     AuthorityError, ComponentKind, ComponentKinds, EntityAuthAccessor, EntityAuthStatus,
-    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostType,
-    InScopeEntities, MutChannelType, PropertyMutator, Replicate,
+    GlobalDiffHandler, GlobalEntity, GlobalWorldManagerType, HostAuthHandler, HostEntityAuthStatus,
+    HostType, InScopeEntities, MutChannelType, PropertyMutator, Replicate,
 };
 
 use super::global_entity_record::GlobalEntityRecord;
@@ -458,6 +458,10 @@ impl GlobalWorldManagerType for GlobalWorldManager {
 
     fn get_entity_auth_accessor(&self, global_entity: &GlobalEntity) -> EntityAuthAccessor {
         self.auth_handler.get_accessor(global_entity)
+    }
+
+    fn entity_auth_status(&self, global_entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+        self.auth_handler.auth_status(global_entity)
     }
 
     fn entity_needs_mutator_for_delegation(&self, global_entity: &GlobalEntity) -> bool {

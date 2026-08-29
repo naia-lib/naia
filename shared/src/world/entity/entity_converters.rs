@@ -9,7 +9,7 @@ use crate::world::update::mut_channel::MutChannelType;
 use crate::{
     bigmap::BigMapKey,
     world::{
-        delegation::auth_channel::EntityAuthAccessor,
+        delegation::{auth_channel::EntityAuthAccessor, entity_auth_status::HostEntityAuthStatus},
         entity::{error::EntityDoesNotExistError, global_entity::GlobalEntity},
     },
     ComponentKind, ComponentKinds, GlobalDiffHandler, HostEntityGenerator, InScopeEntities,
@@ -42,6 +42,15 @@ pub trait GlobalWorldManagerType: InScopeEntities<GlobalEntity> {
     fn entity_is_replicating(&self, global_entity: &GlobalEntity) -> bool;
     /// Returns `true` if `global_entity` was spawned as a static entity.
     fn entity_is_static(&self, global_entity: &GlobalEntity) -> bool;
+    /// Authority status for `global_entity`, or `None` when the entity has no
+    /// delegation authority state to consult.
+    ///
+    /// Unlike [`Self::get_entity_auth_accessor`], this never panics on an
+    /// unregistered entity, so the send path can ask about any entity it is
+    /// about to serialize. The default returns `None` ("no constraint").
+    fn entity_auth_status(&self, _global_entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+        None
+    }
     /// Returns the global dirty bitset for mutation tracking, or `None` on the client side.
     fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
         None

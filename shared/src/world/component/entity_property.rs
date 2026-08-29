@@ -1050,7 +1050,15 @@ impl DelegatedRelation {
     pub fn read_none(mut self) -> Self {
         if self.can_read() {
             self.global_entity = None;
-            self.mutate();
+            // Applying a *remote* update is a read-path operation; the mutator
+            // call only re-queues the property for onward replication. Guard it
+            // separately, exactly as `DelegatedProperty::read` already does --
+            // on a client `can_read` and `can_mutate` are complements, so
+            // calling `mutate()` unconditionally here panicked on every remote
+            // update the host was allowed to read.
+            if self.can_mutate() {
+                self.mutate();
+            }
         }
 
         self
@@ -1059,7 +1067,10 @@ impl DelegatedRelation {
     pub fn read_some(mut self, global_entity: GlobalEntity) -> Self {
         if self.can_read() {
             self.global_entity = Some(global_entity);
-            self.mutate();
+            // See `read_none` above.
+            if self.can_mutate() {
+                self.mutate();
+            }
         }
 
         self
@@ -1171,5 +1182,112 @@ impl LocalRelation {
 
     pub fn set_global_entity(&mut self, other_global_entity: &Option<GlobalEntity>) {
         self.global_entity = *other_global_entity;
+    }
+}
+
+#[cfg(test)]
+mod delegated_auth_tests {
+    //! Regression coverage for the delegated-authority invariant family found by
+    //! the Cyberlith NPA promotion gate (two roots, one bug shape: an authority
+    //! predicate checked at one moment being relied on at another).
+    //!
+    //! Root 1, covered here: `DelegatedRelation::read_some`/`read_none` apply a
+    //! *remote* update. They guard on `can_read()` and then call `mutate()`,
+    //! which asserts `can_mutate()`. On a client those two predicates are
+    //! complements, so the guard passing *guarantees* the assert fails.
+
+    use super::*;
+    use crate::{
+        world::delegation::{
+            auth_channel::EntityAuthChannel, entity_auth_status::EntityAuthStatus,
+        },
+        BigMapKey, HostType, PropertyMutate, PropertyMutator,
+    };
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+
+    #[derive(Clone)]
+    struct CountingMutator(Arc<AtomicUsize>);
+
+    impl PropertyMutate for CountingMutator {
+        fn mutate(&mut self, _property_index: u8) -> bool {
+            self.0.fetch_add(1, Ordering::Relaxed);
+            true
+        }
+    }
+
+    fn relation_at(status: EntityAuthStatus) -> (DelegatedRelation, Arc<AtomicUsize>) {
+        let (mutator_handle, accessor) = EntityAuthChannel::new_channel(HostType::Client);
+        mutator_handle.set_auth_status(status);
+        let count = Arc::new(AtomicUsize::new(0));
+        let prop_mutator = PropertyMutator::new(CountingMutator(count.clone()));
+        (
+            DelegatedRelation::new(None, &accessor, &prop_mutator, 0),
+            count,
+        )
+    }
+
+    /// The exact panic the NPA repro hits: a second client receives a remote
+    /// update for a delegated entity it does not own (`Available`).
+    #[test]
+    fn applies_a_remote_update_when_readable_but_not_mutable() {
+        for status in [
+            EntityAuthStatus::Available,
+            EntityAuthStatus::Releasing,
+            EntityAuthStatus::Denied,
+        ] {
+            let (relation, _) = relation_at(status);
+            assert!(
+                relation.can_read() && !relation.can_mutate(),
+                "{status:?} must be the readable-but-not-mutable case this test is about",
+            );
+            let target = GlobalEntity::from_u64(7);
+            let relation = relation.read_some(target);
+            assert_eq!(
+                relation.global_entity,
+                Some(target),
+                "a readable remote update must be applied at {status:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn applies_a_remote_clear_when_readable_but_not_mutable() {
+        for status in [
+            EntityAuthStatus::Available,
+            EntityAuthStatus::Releasing,
+            EntityAuthStatus::Denied,
+        ] {
+            let (mut relation, _) = relation_at(status);
+            relation.global_entity = Some(GlobalEntity::from_u64(7));
+            let relation = relation.read_none();
+            assert_eq!(
+                relation.global_entity, None,
+                "a readable remote clear must be applied at {status:?}",
+            );
+        }
+    }
+
+    /// The mutator call is what re-queues the property for onward replication.
+    /// It must still fire when the host *can* mutate, or a client that owns the
+    /// entity would silently stop propagating remote updates.
+    #[test]
+    fn still_notifies_the_mutator_when_the_host_can_mutate() {
+        let (mutator_handle, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator_handle.set_auth_status(EntityAuthStatus::Granted);
+        let count = Arc::new(AtomicUsize::new(0));
+        let prop_mutator = PropertyMutator::new(CountingMutator(count.clone()));
+        let relation = DelegatedRelation::new(None, &accessor, &prop_mutator, 0);
+        assert!(relation.can_read() && relation.can_mutate());
+
+        let relation = relation.read_some(GlobalEntity::from_u64(7));
+        assert_eq!(relation.global_entity, Some(GlobalEntity::from_u64(7)));
+        assert_eq!(
+            count.load(Ordering::Relaxed),
+            1,
+            "a mutable host must still mark the property dirty",
+        );
     }
 }

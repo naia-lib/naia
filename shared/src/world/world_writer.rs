@@ -959,6 +959,25 @@ impl WorldWriter {
                 continue;
             }
 
+            // Same freeze->transmit race again, on the authority axis rather than
+            // the existence axis. A delegated component is marked dirty while this
+            // host holds authority; authority can then be released, revoked, or
+            // denied before the queued update is transmitted. Serializing it would
+            // reach `DelegatedProperty::write` / `DelegatedRelation::write`, both of
+            // which panic when the host cannot write -- taking the process down over
+            // a legitimate ordering, exactly as the despawn race above would have.
+            // The update is moot either way: whoever holds authority now owns the
+            // authoritative value, and this host will receive it. Drop the entry.
+            // On the server `can_write()` is true for every auth status, so this is
+            // a client-side guard in practice and costs the server one `None` check.
+            if let Some(auth_status) = global_world_manager.entity_auth_status(&global_entity) {
+                if !auth_status.can_write() {
+                    update_list[i].3.clear();
+                    i += 1;
+                    continue;
+                }
+            }
+
             let local_entity = world_manager
                 .entity_converter()
                 .global_entity_to_owned_entity(&global_entity)
