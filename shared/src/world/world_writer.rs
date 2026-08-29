@@ -1274,3 +1274,261 @@ impl WorldWriter {
         )
     }
 }
+
+/// Coverage for the authority-axis freeze->transmit guard in [`WorldWriter::write_updates`].
+///
+/// This lives here as a unit test rather than in the integration harness on
+/// purpose. The ordering the guard defends against -- a dirty update queued
+/// while this host held authority, transmitted after that authority was lost --
+/// cannot be produced through the harness's network levers: an update and the
+/// authority handshake travel the same reliable ordered channel, so every lever
+/// that keeps an update unacked (loss or latency client->server) also stalls the
+/// authority change that is supposed to overtake it. Driving `write_updates`
+/// directly is the only way to place the two events in the order that production
+/// actually produces.
+#[cfg(test)]
+mod delegated_send_guard_tests {
+    use std::{
+        collections::HashMap,
+        net::SocketAddr,
+        sync::{Arc, RwLock},
+    };
+
+    use super::*;
+    use crate::{
+        world::{
+            component::property::Property,
+            delegation::{
+                auth_channel::{EntityAuthAccessor, EntityAuthChannel},
+                entity_auth_status::EntityAuthStatus,
+            },
+            update::{
+                global_dirty_bitset::GlobalDirtyBitset,
+                mut_channel::{MutChannelType, MutReceiver},
+            },
+        },
+        BigMapKey, ComponentKinds, HostEntityAuthStatus, HostType, InScopeEntities,
+        PropertyMutator, ReplicaDynRefWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent,
+    };
+
+    #[derive(Replicate)]
+    struct Ghost {
+        value: Property<u8>,
+    }
+
+    struct TestMutChannel {
+        diff_mask_length: u8,
+        receivers: Vec<MutReceiver>,
+        receiver_index: HashMap<SocketAddr, usize>,
+    }
+
+    impl MutChannelType for TestMutChannel {
+        fn new_receiver(&mut self, address_opt: &Option<SocketAddr>) -> Option<MutReceiver> {
+            let address = (*address_opt)?;
+            if let Some(index) = self.receiver_index.get(&address) {
+                return Some(self.receivers[*index].clone());
+            }
+            let receiver = MutReceiver::new(self.diff_mask_length);
+            self.receiver_index.insert(address, self.receivers.len());
+            self.receivers.push(receiver.clone());
+            Some(receiver)
+        }
+
+        fn send(&self, property_index: u8) {
+            for receiver in &self.receivers {
+                receiver.mutate(property_index);
+            }
+        }
+    }
+
+    /// A `GlobalWorldManagerType` whose only interesting behaviour is the
+    /// authority status it reports for the entity under test.
+    struct AuthGwm {
+        auth: EntityAuthAccessor,
+        global_dirty: Arc<GlobalDirtyBitset>,
+    }
+
+    impl InScopeEntities<GlobalEntity> for AuthGwm {
+        fn has_entity(&self, _: &GlobalEntity) -> bool {
+            true
+        }
+    }
+
+    impl GlobalWorldManagerType for AuthGwm {
+        fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
+            Some(vec![ComponentKind::of::<Ghost>()])
+        }
+        fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
+            true
+        }
+        fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
+            Arc::new(RwLock::new(TestMutChannel {
+                diff_mask_length,
+                receivers: Vec::new(),
+                receiver_index: HashMap::new(),
+            }))
+        }
+        fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>> {
+            Arc::new(RwLock::new(GlobalDiffHandler::new()))
+        }
+        fn register_component(
+            &self,
+            _: &ComponentKinds,
+            _: &GlobalEntity,
+            _: &ComponentKind,
+            _: u8,
+        ) -> PropertyMutator {
+            unreachable!("not exercised by these tests")
+        }
+        fn get_entity_auth_accessor(&self, _: &GlobalEntity) -> EntityAuthAccessor {
+            self.auth.clone()
+        }
+        fn entity_auth_status(&self, _: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+            Some(self.auth.auth_status())
+        }
+        fn entity_needs_mutator_for_delegation(&self, _: &GlobalEntity) -> bool {
+            false
+        }
+        fn entity_is_replicating(&self, _: &GlobalEntity) -> bool {
+            true
+        }
+        fn entity_is_static(&self, _: &GlobalEntity) -> bool {
+            false
+        }
+        fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+            Some(self.global_dirty.clone())
+        }
+    }
+
+    /// Reports the entity and component as present -- so the two existing
+    /// staleness guards (despawned entity / removed component) both pass and the
+    /// authority guard is the only thing that can stop the entry -- but panics if
+    /// the send path ever actually reaches serialization.
+    struct TripwireWorld;
+
+    impl WorldRefType<u64> for TripwireWorld {
+        fn has_entity(&self, _: &u64) -> bool {
+            true
+        }
+        fn entities(&self) -> Vec<u64> {
+            vec![1]
+        }
+        fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
+            true
+        }
+        fn has_component_of_kind(&self, _: &u64, _: &ComponentKind) -> bool {
+            true
+        }
+        fn component<'a, R: ReplicatedComponent>(
+            &'a self,
+            _: &u64,
+        ) -> Option<ReplicaRefWrapper<'a, R>> {
+            panic!("serialization must not be reached: the queued update should have been dropped");
+        }
+        fn component_of_kind<'a>(
+            &'a self,
+            _: &u64,
+            _: &ComponentKind,
+        ) -> Option<ReplicaDynRefWrapper<'a>> {
+            panic!("serialization must not be reached: the queued update should have been dropped");
+        }
+    }
+
+    /// Runs one `write_updates` pass over a single queued update for an entity
+    /// whose delegated authority is `status`, and reports whether the entry was
+    /// dropped (its planned kinds cleared) and whether anything was written.
+    fn run_with_auth(host: HostType, status: EntityAuthStatus) -> (bool, bool) {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(host);
+        mutator.set_auth_status(status);
+
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, host, 0, &gwm);
+
+        let global_entity = GlobalEntity::from_u64(1);
+        // Register the entity with the host engine so the send path can resolve a
+        // LocalEntity for it -- otherwise it would stop at that lookup and never
+        // reach either the guard or serialization.
+        local_world_manager.host_init_entity(
+            &global_entity,
+            vec![ComponentKind::of::<Ghost>()],
+            &kinds,
+            false,
+        );
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = vec![(
+            global_entity,
+            GlobalEntityIndex::from(1u32),
+            1u64,
+            vec![(ComponentKind::of::<Ghost>(), 0, DiffMask::new(1))],
+        )];
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+
+        WorldWriter::write_updates(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &TripwireWorld,
+            &gwm,
+            None,
+            &mut local_world_manager,
+            &mut has_written,
+            &mut update_list,
+            None,
+        );
+
+        // The drop path clears the entry's planned kinds; the surrounding loop may
+        // also drain the list entirely. Either way, "nothing left to serialize" is
+        // the observable outcome.
+        let dropped = update_list
+            .first()
+            .map(|entry| entry.3.is_empty())
+            .unwrap_or(true);
+        (dropped, has_written)
+    }
+
+    /// The guard's reason for existing: a client that has lost authority since
+    /// the update was queued must have that update dropped, not serialized.
+    /// Without the guard, `TripwireWorld` panics inside serialization -- which is
+    /// exactly what production did, in `DelegatedProperty::write`.
+    #[test]
+    fn a_queued_update_is_dropped_when_the_client_can_no_longer_write() {
+        for status in [
+            EntityAuthStatus::Available,
+            EntityAuthStatus::Requested,
+            EntityAuthStatus::Denied,
+        ] {
+            let (dropped, has_written) = run_with_auth(HostType::Client, status);
+            assert!(
+                dropped,
+                "{status:?} is not writable, so the queued update must be dropped"
+            );
+            assert!(!has_written, "{status:?} must not contribute any payload");
+        }
+    }
+
+    /// The guard must not swallow legitimate traffic: a client that still holds a
+    /// writable authority status reaches serialization as before. `TripwireWorld`
+    /// panicking here is the proof that it got there -- the guard did NOT drop it.
+    #[test]
+    #[should_panic(expected = "serialization must not be reached")]
+    fn a_queued_update_still_serializes_while_the_client_can_write() {
+        run_with_auth(HostType::Client, EntityAuthStatus::Granted);
+    }
+
+    /// On the server every auth status is writable, so the guard is a no-op there
+    /// and must never drop a server-side update.
+    #[test]
+    #[should_panic(expected = "serialization must not be reached")]
+    fn the_server_is_never_stopped_by_the_guard() {
+        run_with_auth(HostType::Server, EntityAuthStatus::Available);
+    }
+}
