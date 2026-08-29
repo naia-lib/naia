@@ -89,6 +89,29 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `GlobalEntityIndex` rather than `EntityIndex` (with `DirtyNotifier::new`
   taking an additional `Weak<GlobalDirtyBitset>`). Listed for completeness.
 
+- **Two delegated-authority panics that fired at the wrong moment are gone.**
+  Both were one bug shape: an authority predicate checked at one moment being
+  relied on at another.
+
+  `DelegatedRelation::read_some`/`read_none` apply a *remote* update. They
+  guarded on `can_read()` and then called `mutate()`, which asserts
+  `can_mutate()` -- and on a client those predicates are near-exact
+  complements, so the guard passing guaranteed the assert failed. Every remote
+  update to a delegated `EntityProperty` that the host was allowed to read
+  panicked with "Must request authority to mutate a Delegated EntityProperty".
+  The mutator call only re-queues the property for onward replication, so it is
+  now guarded separately, exactly as `DelegatedProperty::read` already did.
+
+  Separately, a component marked dirty while a host held authority could reach
+  `send_packets` after that authority was released, revoked, or denied, and
+  `DelegatedProperty::write` then panicked. `WorldWriter::write_updates`
+  already drops planned updates for entities despawned or components removed
+  between plan-freeze and transmit; authority loss is the same race on a
+  different axis, and is now dropped the same way. `GlobalWorldManagerType`
+  gains `entity_auth_status()`, defaulted to `None`, so external implementors
+  are unaffected; `can_write()` is true for every server auth status, making
+  this a client-side guard in practice.
+
 - **Two application-driven panics now name the mistake that caused them**
   (naia-lib/naia#172). Answering the same `AuthEvent` twice --
   `accept_connection` then `accept_connection`, or `accept_connection` then
