@@ -10,6 +10,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **Two application-driven panics now name the mistake that caused them**
+  (naia-lib/naia#172). Answering the same `AuthEvent` twice --
+  `accept_connection` then `accept_connection`, or `accept_connection` then
+  `reject_connection` -- unwrapped a `None` auth address and took the server
+  down with a message naming nothing. Only one answer can be sent, so the
+  duplicate is now logged and ignored, matching how the unknown-user case
+  beside it already behaved. Exceeding `ServerConfig::max_replicated_entities`
+  indexed past the end of the server's entity table and panicked with a bare
+  out-of-bounds; it still panics, because the application rather than a peer
+  drives server-side spawns, but the message now names both the limit and the
+  knob that raises it.
+
 - **The raw-UDP auth listener now reads requests without blocking, and bounds
   what a half-finished one can cost** (naia-lib/naia#148). `AuthIo::receive`
   called `stream.read` exactly once on each accepted connection and parsed

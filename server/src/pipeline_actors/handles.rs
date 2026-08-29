@@ -472,7 +472,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
             .write()
             .insert_entity_record(&global_entity, EntityOwner::Server);
         if idx.is_valid() {
-            self.shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
+            self.shared.set_idx_to_world(idx, Some(*world_entity));
         }
     }
 

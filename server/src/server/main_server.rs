@@ -151,7 +151,14 @@ impl MainServer {
             warn!("unknown user is finalizing connection...");
             return;
         };
-        let auth_addr = user.take_auth_address();
+        let Some(auth_addr) = user.take_auth_address() else {
+            warn!(
+                "accept_connection called for a user whose auth request was already \
+                 answered -- accept_connection/reject_connection may each be called \
+                 at most once per AuthEvent. Ignoring."
+            );
+            return;
+        };
 
         // info!("adding authenticated user {}", &auth_addr);
         let identity_token = naia_shared::IdentityToken::generate();
@@ -175,7 +182,14 @@ impl MainServer {
     /// a connection with the Server
     pub fn reject_connection(&mut self, user_key: &UserKey) {
         if let Some(user) = self.users.get_mut(user_key) {
-            let auth_addr = user.take_auth_address();
+            let Some(auth_addr) = user.take_auth_address() else {
+                warn!(
+                    "reject_connection called for a user whose auth request was already \
+                     answered -- accept_connection/reject_connection may each be called \
+                     at most once per AuthEvent. Ignoring."
+                );
+                return;
+            };
 
             // info!("rejecting authenticated user {:?}", &auth_addr);
             let (auth_sender, _) = self
@@ -595,6 +609,57 @@ mod pending_auth_capacity_tests {
                 payload: vec![0xff; 8],
             });
         }
+    }
+
+    /// Answering the same auth request twice is an application mistake, not a
+    /// broken library invariant -- so it is reported and ignored, the way the
+    /// unknown-user case beside it already was. It used to unwrap a `None` auth
+    /// address and take the server down with a panic naming nothing.
+    #[test]
+    fn answering_the_same_auth_request_twice_is_ignored() {
+        let (mut server, rejects) = server_under_flood(ServerConfig::default(), 1);
+        server.maintain_socket();
+
+        let user_key = *server
+            .pending_auth_users
+            .iter()
+            .next()
+            .expect("the flood should have created one pending user");
+
+        server.accept_connection(&user_key);
+        // Second answer: the auth address is already gone.
+        server.accept_connection(&user_key);
+
+        assert_eq!(
+            rejects.load(Ordering::Relaxed),
+            0,
+            "a duplicate answer must not reach the transport",
+        );
+    }
+
+    /// The reachable second half of the same mistake: rejecting a request that
+    /// was already accepted. (Rejecting twice is not a case -- the first
+    /// rejection deletes the user record, so the second call never gets past
+    /// the lookup.)
+    #[test]
+    fn rejecting_a_request_that_was_already_accepted_is_ignored() {
+        let (mut server, rejects) = server_under_flood(ServerConfig::default(), 1);
+        server.maintain_socket();
+
+        let user_key = *server
+            .pending_auth_users
+            .iter()
+            .next()
+            .expect("the flood should have created one pending user");
+
+        server.accept_connection(&user_key);
+        server.reject_connection(&user_key);
+
+        assert_eq!(
+            rejects.load(Ordering::Relaxed),
+            0,
+            "an accepted request must not also be rejected on the transport",
+        );
     }
 
     /// Before `max_pending_auth_users` existed, this flood allocated one

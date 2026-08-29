@@ -34,8 +34,8 @@ use parking_lot::{Mutex, RwLock};
 
 use naia_shared::{
     AtomicBitSet, ChannelKinds, ComponentKinds, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, GlobalDirtyBitset, GlobalEntity, GlobalEntityMap, MessageKinds,
-    OutgoingPacket,
+    EntityDoesNotExistError, GlobalDirtyBitset, GlobalEntity, GlobalEntityIndex, GlobalEntityMap,
+    MessageKinds, OutgoingPacket,
 };
 
 use naia_shared::DisconnectReason;
@@ -222,6 +222,32 @@ impl<E: Copy + Eq + Hash + Send + Sync> ServerShared<E> {
             pending_disconnect_requests: Mutex::new(Vec::new()),
         }
     }
+
+    /// Records (or clears) the world entity behind a `GlobalEntityIndex`.
+    ///
+    /// `idx_to_world` is sized once, at construction, from
+    /// `ServerConfig::max_replicated_entities`, so an index past its end means
+    /// the application has asked for more concurrently-replicated entities than
+    /// it configured room for. Indexing the vec directly panicked with a bare
+    /// out-of-bounds that named neither the limit nor the knob that raises it.
+    ///
+    /// This is a local invariant, not remote input -- a client cannot drive
+    /// server-side spawns unless the app opts in via
+    /// `Protocol::enable_client_authoritative_entities()` -- so it still
+    /// panics. It just says what went wrong now.
+    pub(crate) fn set_idx_to_world(&self, idx: GlobalEntityIndex, world_entity: Option<E>) {
+        let mut idx_to_world = self.idx_to_world.write();
+        let slot = idx.as_usize();
+        if slot >= idx_to_world.len() {
+            panic!(
+                "replicated entity limit exceeded: entity index {} is past \
+                 ServerConfig::max_replicated_entities ({}). Raise \
+                 max_replicated_entities, or despawn entities before spawning more.",
+                slot, self.server_config.max_replicated_entities,
+            );
+        }
+        idx_to_world[slot] = world_entity;
+    }
 }
 
 // MISSION_USER_ONLY_SEES_SIM Phase B.1 (2026-05-19) — see
@@ -247,5 +273,65 @@ impl<E: Copy + Eq + Hash + Send + Sync> EntityAndGlobalEntityConverter<E> for Se
         self.global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
+    }
+}
+
+#[cfg(test)]
+mod entity_limit_tests {
+    use naia_shared::{GlobalDirtyBitset, GlobalEntityIndex, Protocol};
+    use std::{sync::Arc, time::Duration};
+
+    use crate::{server::ServerShared, world::global_world_manager::GlobalWorldManager, ServerConfig};
+
+    /// Builds a `ServerShared` sized the way `InternalWorldServer::new` sizes
+    /// one: `max_replicated_entities` slots plus the slot-0 INVALID sentinel.
+    fn shared_with_entity_limit(max_replicated_entities: u32) -> ServerShared<u64> {
+        let mut protocol = Protocol::builder().build();
+        protocol.lock();
+
+        let capacity = (max_replicated_entities as usize) + 1;
+        let component_count = protocol.component_kinds.kind_count() as usize;
+        let global_dirty = Arc::new(GlobalDirtyBitset::new(capacity, component_count));
+
+        let mut global_world_manager = GlobalWorldManager::new();
+        global_world_manager.set_global_dirty(Arc::clone(&global_dirty));
+        global_world_manager.init_protocol_kind_count(protocol.component_kinds.kind_count());
+
+        ServerShared::new(
+            ServerConfig {
+                max_replicated_entities,
+                ..ServerConfig::default()
+            },
+            protocol.channel_kinds,
+            protocol.message_kinds,
+            protocol.component_kinds,
+            false,
+            global_dirty,
+            global_world_manager,
+            Duration::from_millis(40),
+            capacity,
+        )
+    }
+
+    /// Spawning past the configured ceiling used to panic with a bare
+    /// index-out-of-bounds, naming neither the limit nor the knob that raises
+    /// it. It still panics -- the app, not a peer, drives server-side spawns --
+    /// but it now says which caller mistake caused it.
+    #[test]
+    #[should_panic(expected = "max_replicated_entities")]
+    fn overflowing_the_entity_limit_names_the_limit() {
+        let shared = shared_with_entity_limit(4);
+        // Slot 0 is the sentinel, so index 5 is the first one past the end.
+        shared.set_idx_to_world(GlobalEntityIndex(5), Some(1u64));
+    }
+
+    /// Every index inside the limit is still writable, sentinel included.
+    #[test]
+    fn indices_within_the_limit_are_written() {
+        let shared = shared_with_entity_limit(4);
+        for idx in 0..=4u32 {
+            shared.set_idx_to_world(GlobalEntityIndex(idx), Some(idx as u64));
+        }
+        assert_eq!(shared.idx_to_world.read()[4], Some(4u64));
     }
 }

@@ -47,8 +47,14 @@ impl MainUser {
         self.auth_addr
     }
 
-    pub(crate) fn take_auth_address(&mut self) -> SocketAddr {
-        self.auth_addr.take().unwrap()
+    /// Consumes the auth-channel address, leaving `None` behind.
+    ///
+    /// Returns `None` when it has already been taken -- which is exactly what
+    /// happens when the application answers the same auth request twice. Only
+    /// one answer can be sent, so the caller reports the mistake rather than
+    /// unwrapping into a panic that names nothing.
+    pub(crate) fn take_auth_address(&mut self) -> Option<SocketAddr> {
+        self.auth_addr.take()
     }
 }
 

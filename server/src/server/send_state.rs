@@ -2411,7 +2411,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .unwrap_or(GlobalEntityIndex::INVALID)
         };
         if entity_idx.is_valid() {
-            self.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+            self.shared.set_idx_to_world(entity_idx, None);
         }
         for (_, send_conn) in self.send_user_connections.iter_mut() {
             if !send_conn

@@ -1242,7 +1242,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .write()
             .insert_entity_record(&global_entity, EntityOwner::Server);
         if idx.is_valid() {
-            self.shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
+            self.shared.set_idx_to_world(idx, Some(*world_entity));
         }
     }
 
@@ -1258,7 +1258,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .write()
             .insert_static_entity_record(&global_entity, EntityOwner::Server);
         if idx.is_valid() {
-            self.shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
+            self.shared.set_idx_to_world(idx, Some(*world_entity));
         }
     }
 
@@ -2608,7 +2608,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         // are in each User's scope
         let entity_idx = self.entity_global_idx(global_entity);
         if entity_idx.is_valid() {
-            self.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+            self.shared.set_idx_to_world(entity_idx, None);
         }
         for (_, send_conn) in self.send.state.send_user_connections.iter_mut() {
             if !send_conn
@@ -3876,7 +3876,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .write()
                         .insert_entity_record(&global_entity, EntityOwner::Client(*user_key));
                     if idx.is_valid() {
-                        self.shared.idx_to_world.write()[idx.as_usize()] = Some(world_entity);
+                        self.shared.set_idx_to_world(idx, Some(world_entity));
                     }
                     let user = self.sim_handle.state.user_store.get(user_key).unwrap();
                     let send_conn = self

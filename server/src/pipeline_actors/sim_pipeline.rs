@@ -659,7 +659,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .write()
             .insert_static_entity_record(&global_entity, EntityOwner::Server);
         if idx.is_valid() {
-            self.coord().shared.idx_to_world.write()[idx.as_usize()] = Some(*world_entity);
+            self.coord().shared.set_idx_to_world(idx, Some(*world_entity));
         }
     }
 
@@ -996,7 +996,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .room_store
             .remove_global_entity_from_all_rooms(&global_entity);
         if entity_idx.is_valid() {
-            self.coord().shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+            self.coord().shared.set_idx_to_world(entity_idx, None);
         }
 
         self.coord_mut()
@@ -2228,7 +2228,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .insert_entity_record(&global_entity, EntityOwner::Server)
         };
         if entity_idx.is_valid() {
-            coord.shared.idx_to_world.write()[entity_idx.as_usize()] = Some(*world_entity);
+            coord.shared.set_idx_to_world(entity_idx, Some(*world_entity));
         }
         (global_entity, entity_idx)
     }
@@ -2239,7 +2239,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         entity_idx: GlobalEntityIndex,
     ) {
         if entity_idx.is_valid() {
-            coord.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+            coord.shared.set_idx_to_world(entity_idx, None);
         }
         coord
             .shared
@@ -2369,7 +2369,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .on_entity_despawned(*world_entity);
 
         if entity_idx.is_valid() {
-            coord.shared.idx_to_world.write()[entity_idx.as_usize()] = None;
+            coord.shared.set_idx_to_world(entity_idx, None);
         }
         for send_conn in send.state.send_user_connections.values_mut() {
             if !send_conn
