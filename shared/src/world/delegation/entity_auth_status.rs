@@ -224,4 +224,55 @@ mod tests {
         let s = HostEntityAuthStatus::new(HostType::Server, EntityAuthStatus::Granted);
         let _ = s.can_release();
     }
+
+    /// The five `EntityAuthStatus::is_*` predicates, pinned exhaustively.
+    ///
+    /// Found by a `cargo-mutants` run over this module: every one of them could
+    /// be replaced by a constant `true` AND a constant `false` with the whole
+    /// suite still green. They are public API with no caller anywhere in the
+    /// workspace, so nothing exercised them -- untested public surface that a
+    /// downstream consumer can nonetheless build on. Cheaper to make them
+    /// honest than to churn the API.
+    ///
+    /// Written as a full matrix rather than five one-liners so that adding a
+    /// variant to `EntityAuthStatus` forces a decision here.
+    #[test]
+    fn the_status_predicates_each_match_exactly_their_own_variant() {
+        // (status, is_available, is_requested, is_granted, is_denied, is_releasing)
+        let table = [
+            (
+                EntityAuthStatus::Available,
+                true,
+                false,
+                false,
+                false,
+                false,
+            ),
+            (
+                EntityAuthStatus::Requested,
+                false,
+                true,
+                false,
+                false,
+                false,
+            ),
+            (EntityAuthStatus::Granted, false, false, true, false, false),
+            (EntityAuthStatus::Denied, false, false, false, true, false),
+            (
+                EntityAuthStatus::Releasing,
+                false,
+                false,
+                false,
+                false,
+                true,
+            ),
+        ];
+        for (status, available, requested, granted, denied, releasing) in table {
+            assert_eq!(status.is_available(), available, "is_available({status:?})");
+            assert_eq!(status.is_requested(), requested, "is_requested({status:?})");
+            assert_eq!(status.is_granted(), granted, "is_granted({status:?})");
+            assert_eq!(status.is_denied(), denied, "is_denied({status:?})");
+            assert_eq!(status.is_releasing(), releasing, "is_releasing({status:?})");
+        }
+    }
 }
