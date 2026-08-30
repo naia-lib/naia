@@ -122,7 +122,7 @@ impl RemoteEntityChannel {
             last_epoch_id: None,
 
             component_channels: HashMap::new(),
-            auth_channel: AuthChannel::new(host_type),
+            auth_channel: AuthChannel::new_remote(host_type),
 
             buffered_messages: OrderedIds::new(),
             incoming_messages: Vec::new(),

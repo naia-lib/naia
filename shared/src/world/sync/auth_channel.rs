@@ -22,6 +22,9 @@ pub enum EntityAuthChannelState {
 
 pub(crate) struct AuthChannel {
     host_type: HostType,
+    /// State this channel returns to on `reset()`. Differs between the host
+    /// (send) and remote (receive) channels: see `new` vs `new_remote`.
+    initial_state: EntityAuthChannelState,
     state: EntityAuthChannelState,
     auth_status: Option<EntityAuthStatus>,
     sender: AuthChannelSender,
@@ -29,13 +32,33 @@ pub(crate) struct AuthChannel {
 }
 
 impl AuthChannel {
+    /// Channel for entities this host OWNS and sends commands about.
     pub(crate) fn new(host_type: HostType) -> Self {
         let state = match host_type {
             HostType::Client => EntityAuthChannelState::Unpublished,
             HostType::Server => EntityAuthChannelState::Published,
         };
+        Self::with_initial_state(host_type, state)
+    }
+
+    /// Channel for entities the PEER owns and we only receive messages about.
+    ///
+    /// The initial state is the peer's, so the mapping is the mirror of
+    /// [`Self::new`]: a server's remote channels track client-owned entities,
+    /// which begin `Unpublished`, while a client's remote channels track
+    /// server-owned entities, which are `Published` from the start.
+    pub(crate) fn new_remote(host_type: HostType) -> Self {
+        let state = match host_type {
+            HostType::Client => EntityAuthChannelState::Published,
+            HostType::Server => EntityAuthChannelState::Unpublished,
+        };
+        Self::with_initial_state(host_type, state)
+    }
+
+    fn with_initial_state(host_type: HostType, state: EntityAuthChannelState) -> Self {
         Self {
             host_type,
+            initial_state: state,
             state,
             auth_status: None,
             sender: AuthChannelSender::new(),
@@ -122,42 +145,11 @@ impl AuthChannel {
                     next_status
                 );
 
-                match (from_status, next_status) {
-                    (EntityAuthStatus::Available, EntityAuthStatus::Requested)
-                    | (EntityAuthStatus::Available, EntityAuthStatus::Granted)
-                    | (EntityAuthStatus::Available, EntityAuthStatus::Denied)
-                    | (EntityAuthStatus::Requested, EntityAuthStatus::Granted)
-                    | (EntityAuthStatus::Requested, EntityAuthStatus::Denied)
-                    | (EntityAuthStatus::Requested, EntityAuthStatus::Available)
-                    | (EntityAuthStatus::Denied, EntityAuthStatus::Granted)
-                    | (EntityAuthStatus::Denied, EntityAuthStatus::Available)
-                    | (EntityAuthStatus::Granted, EntityAuthStatus::Available)
-                    | (EntityAuthStatus::Granted, EntityAuthStatus::Denied)
-                    | (EntityAuthStatus::Granted, EntityAuthStatus::Releasing)
-                    | (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
-                    | (EntityAuthStatus::Releasing, EntityAuthStatus::Denied) => {
-                        // valid transition!
-                    }
-                    // Same-state transitions are valid no-ops: duplicate
-                    // delivery is by-design on the migration path, where the
-                    // owning client self-sets Granted while processing
-                    // MigrateResponse and the server's explicit
-                    // SetAuthority(Granted) fan-out arrives afterwards.
-                    // Mirrors the idempotent same→same arm in the client's
-                    // `entity_update_authority`.
-                    (EntityAuthStatus::Available, EntityAuthStatus::Available)
-                    | (EntityAuthStatus::Requested, EntityAuthStatus::Requested)
-                    | (EntityAuthStatus::Granted, EntityAuthStatus::Granted)
-                    | (EntityAuthStatus::Denied, EntityAuthStatus::Denied)
-                    | (EntityAuthStatus::Releasing, EntityAuthStatus::Releasing) => {
-                        // idempotent — no state change
-                    }
-                    (from_status, to_status) => {
-                        panic!(
-                            "Invalid authority transition from {:?} to {:?}",
-                            from_status, to_status
-                        );
-                    }
+                if !Self::auth_status_transition_is_legal(from_status, *next_status) {
+                    panic!(
+                        "Invalid authority transition from {:?} to {:?}",
+                        from_status, next_status
+                    );
                 }
 
                 self.auth_status = Some(*next_status);
@@ -232,14 +224,146 @@ impl AuthChannel {
 
     /// Is invoked by `EntityChannel` when the entity despawns; this wipes all buffered state so a future *re‑spawn* starts clean.
     pub(crate) fn reset(&mut self) {
-        *self = Self::new(self.host_type);
+        *self = Self::with_initial_state(self.host_type, self.initial_state);
     }
 
     pub(crate) fn receiver_drain_messages_into(
         &mut self,
         outgoing_messages: &mut Vec<EntityMessage<()>>,
     ) {
-        self.receiver.drain_messages_into(outgoing_messages);
+        let mut drained = Vec::new();
+        self.receiver.drain_messages_into(&mut drained);
+        for msg in drained {
+            if self.receiver_validate(&msg) {
+                outgoing_messages.push(msg);
+            }
+        }
+    }
+
+    /// Receive-side counterpart to [`Self::validate_command`], advancing this
+    /// channel's state as the peer's auth messages arrive.
+    ///
+    /// Returns `false` for a transition that is illegal from the current state,
+    /// in which case the message is dropped and the state is left untouched.
+    ///
+    /// This DROPS rather than panics, which is the whole reason it is a
+    /// separate function from `validate_command`. On the send path an illegal
+    /// transition is a local programmer error and panicking is right. Here the
+    /// message came off the wire from a peer, so on a server it is attacker-
+    /// controlled -- panicking would hand any client a remote kill switch.
+    /// Dropping keeps a malformed or malicious peer from corrupting our view of
+    /// authority, without taking the host down.
+    fn receiver_validate(&mut self, msg: &EntityMessage<()>) -> bool {
+        use EntityAuthChannelState::{Delegated, Published, Unpublished};
+
+        match msg.get_type() {
+            EntityMessageType::Publish => {
+                if self.state != Unpublished {
+                    return false;
+                }
+                self.state = Published;
+            }
+            EntityMessageType::Unpublish => {
+                if self.state != Published {
+                    return false;
+                }
+                self.state = Unpublished;
+            }
+            EntityMessageType::EnableDelegation => {
+                if self.state != Published {
+                    return false;
+                }
+                self.state = Delegated;
+                self.auth_status = Some(EntityAuthStatus::Available);
+            }
+            EntityMessageType::DisableDelegation => {
+                if self.state != Delegated {
+                    return false;
+                }
+                self.state = Published;
+            }
+            EntityMessageType::ReleaseAuthority => {
+                if self.state != Delegated {
+                    return false;
+                }
+                self.auth_status = Some(EntityAuthStatus::Available);
+            }
+            EntityMessageType::SetAuthority => {
+                if self.state != Delegated {
+                    return false;
+                }
+                let EntityMessage::SetAuthority(_, _, next_status) = msg else {
+                    return false;
+                };
+                // No auth_status yet means we never saw the EnableDelegation
+                // that establishes one; treat as illegal rather than unwrap.
+                let Some(from_status) = self.auth_status else {
+                    return false;
+                };
+                if !Self::auth_status_transition_is_legal(from_status, *next_status) {
+                    return false;
+                }
+                self.auth_status = Some(*next_status);
+            }
+            EntityMessageType::RequestAuthority | EntityMessageType::EnableDelegationResponse => {
+                if self.state != Delegated {
+                    return false;
+                }
+            }
+            // MigrateResponse is the FIRST command on a migrated entity's new
+            // channel (see `HostEntityChannel`'s MigrateResponse-first
+            // invariant), so unlike every other auth message it legitimately
+            // arrives BEFORE the channel is Delegated -- it is what establishes
+            // delegation, mirroring `configure_as_delegated`. Requiring
+            // Delegated here would reject the very message that grants it.
+            //
+            // It only ever travels server -> client, so a client is the only
+            // host that may accept one; a server receiving MigrateResponse is
+            // hearing it from a client that has no business sending it.
+            EntityMessageType::MigrateResponse => {
+                if self.host_type != HostType::Client {
+                    return false;
+                }
+                self.state = Delegated;
+                if self.auth_status.is_none() {
+                    self.auth_status = Some(EntityAuthStatus::Available);
+                }
+            }
+            // Not an auth message; this channel does not gate it.
+            _ => {}
+        }
+        true
+    }
+
+    /// The legal `EntityAuthStatus` edges, shared by the send and receive
+    /// paths so the two cannot drift apart.
+    fn auth_status_transition_is_legal(
+        from_status: EntityAuthStatus,
+        to_status: EntityAuthStatus,
+    ) -> bool {
+        matches!(
+            (from_status, to_status),
+            (EntityAuthStatus::Available, EntityAuthStatus::Requested)
+                | (EntityAuthStatus::Available, EntityAuthStatus::Granted)
+                | (EntityAuthStatus::Available, EntityAuthStatus::Denied)
+                | (EntityAuthStatus::Requested, EntityAuthStatus::Granted)
+                | (EntityAuthStatus::Requested, EntityAuthStatus::Denied)
+                | (EntityAuthStatus::Requested, EntityAuthStatus::Available)
+                | (EntityAuthStatus::Denied, EntityAuthStatus::Granted)
+                | (EntityAuthStatus::Denied, EntityAuthStatus::Available)
+                | (EntityAuthStatus::Granted, EntityAuthStatus::Available)
+                | (EntityAuthStatus::Granted, EntityAuthStatus::Denied)
+                | (EntityAuthStatus::Granted, EntityAuthStatus::Releasing)
+                | (EntityAuthStatus::Releasing, EntityAuthStatus::Available)
+                | (EntityAuthStatus::Releasing, EntityAuthStatus::Denied)
+                // Same-state edges are idempotent no-ops by design; see the
+                // duplicate-delivery note in `validate_command`.
+                | (EntityAuthStatus::Available, EntityAuthStatus::Available)
+                | (EntityAuthStatus::Requested, EntityAuthStatus::Requested)
+                | (EntityAuthStatus::Granted, EntityAuthStatus::Granted)
+                | (EntityAuthStatus::Denied, EntityAuthStatus::Denied)
+                | (EntityAuthStatus::Releasing, EntityAuthStatus::Releasing)
+        )
     }
 
     pub(crate) fn receiver_buffer_pop_front_until_and_including(&mut self, id: MessageIndex) {

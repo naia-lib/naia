@@ -384,156 +384,164 @@ fn component_backlog_on_entity_a_does_not_block_entity_b() {
 }
 
 #[test]
-#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_disable_delegation_dropped() {
-    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
-    let entity = RemoteEntity::new(1);
-
-    // Legal path up to Published …
-    engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
-
-    // missing (3, EnableDelegationEntity) message never arrives
-
-    // `DisableDelegationEntity` while still Published (never Delegated)
-    engine.receive_message(4, EntityMessage::DisableDelegation(1, entity));
-
-    // Follow with an obviously legal message so drain is non‑empty
-    engine.receive_message(5, EntityMessage::Despawn(entity));
-
-    // Expected: illegal message is silently dropped
-    let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
-    asserts.push(EntityMessage::Despawn(entity));
-    asserts.check(&mut engine);
-}
-
-#[test]
-#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
-fn entity_auth_illegal_update_authority_dropped() {
+    // DisableDelegation while merely Published (EnableDelegation never arrived).
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
-
-    // missing (3, EnableDelegationEntity) message never arrives
-
-    // Illegal: UpdateAuthority while still Published (never Delegated)
-    engine.receive_message(
-        4,
-        EntityMessage::SetAuthority(1, entity, EntityAuthStatus::Granted),
-    );
-
-    engine.receive_message(5, EntityMessage::Despawn(entity));
-
-    let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
-    asserts.push(EntityMessage::Despawn(entity));
-    asserts.check(&mut engine);
-}
-
-#[test]
-#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
-fn entity_auth_illegal_unpublish_while_delegated_dropped() {
-    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
-    let entity = RemoteEntity::new(1);
-
-    engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
-    engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
-
-    // Illegal: Unpublish while still Delegated
-    engine.receive_message(5, EntityMessage::Unpublish(1, entity));
-
-    // Legal sequence to close the loop: revoke delegation then unpublish
-    engine.receive_message(4, EntityMessage::DisableDelegation(1, entity));
-    engine.receive_message(6, EntityMessage::Despawn(entity));
-
-    let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
-    asserts.push(EntityMessage::EnableDelegation(1, entity));
-    asserts.push(EntityMessage::DisableDelegation(1, entity));
-    asserts.push(EntityMessage::Unpublish(1, entity));
-    asserts.push(EntityMessage::Despawn(entity));
-    asserts.check(&mut engine);
-}
-
-#[test]
-#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
-fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
-    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
-    let entity = RemoteEntity::new(1);
-
-    // Legal path up to Delegated …
-    engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
-    engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
-
-    // Illegal: second EnableDelegation while already Delegated
-    engine.receive_message(5, EntityMessage::EnableDelegation(1, entity));
-
-    // Close the loop with a legal DisableDelegation and Despawn
-    engine.receive_message(4, EntityMessage::DisableDelegation(1, entity));
-    engine.receive_message(6, EntityMessage::Despawn(entity));
-
-    // Expect: duplicate EnableDelegation is buffered
-    let mut asserts = AssertList::new();
-    asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
-    asserts.push(EntityMessage::EnableDelegation(1, entity));
-    asserts.push(EntityMessage::DisableDelegation(1, entity));
-    asserts.push(EntityMessage::EnableDelegation(1, entity));
-    asserts.push(EntityMessage::Despawn(entity));
-    asserts.check(&mut engine);
-}
-
-#[test]
-#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
-fn entity_auth_illegal_publish_while_already_published_dropped() {
-    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
-    let entity = RemoteEntity::new(1);
-
-    engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
-
-    // Duplicate Publish while still Published
-    engine.receive_message(6, EntityMessage::Publish(1, entity));
-
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::DisableDelegation(1, entity));
     engine.receive_message(4, EntityMessage::Despawn(entity));
 
-    // Expect: second Publish is dropped
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
-#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
-fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
+fn entity_auth_illegal_update_authority_dropped() {
+    // SetAuthority on an entity that was never delegated.
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
-    engine.receive_message(3, EntityMessage::Unpublish(1, entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(
+        3,
+        EntityMessage::SetAuthority(1, entity, EntityAuthStatus::Granted),
+    );
+    engine.receive_message(4, EntityMessage::Despawn(entity));
 
-    // Illegal: DisableDelegation while Unpublished
-    engine.receive_message(6, EntityMessage::DisableDelegation(1, entity));
-
-    engine.receive_message(7, EntityMessage::Despawn(entity));
-
-    // Expect: DisableDelegation is dropped
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn entity_auth_illegal_unpublish_while_delegated_dropped() {
+    // Unpublish is only legal from Published; while Delegated it must be
+    // dropped, and the later DisableDelegation must still be honoured.
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+    let entity = RemoteEntity::new(1);
+
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
+    engine.receive_message(4, EntityMessage::Unpublish(2, entity));
+    engine.receive_message(5, EntityMessage::DisableDelegation(3, entity));
+    engine.receive_message(6, EntityMessage::Despawn(entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(0, entity));
+    asserts.push(EntityMessage::EnableDelegation(1, entity));
+    asserts.push(EntityMessage::DisableDelegation(3, entity));
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
+    // Second EnableDelegation while already Delegated.
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+    let entity = RemoteEntity::new(1);
+
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
+    engine.receive_message(4, EntityMessage::EnableDelegation(2, entity));
+    engine.receive_message(5, EntityMessage::DisableDelegation(3, entity));
+    engine.receive_message(6, EntityMessage::Despawn(entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(0, entity));
+    asserts.push(EntityMessage::EnableDelegation(1, entity));
+    asserts.push(EntityMessage::DisableDelegation(3, entity));
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn entity_auth_illegal_publish_while_already_published_dropped() {
+    // Duplicate Publish carrying a FRESH subcommand id, so the sequencing gate
+    // cannot be what rejects it -- only the legality check can.
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+    let entity = RemoteEntity::new(1);
+
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::Publish(1, entity));
+    engine.receive_message(4, EntityMessage::Despawn(entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(0, entity));
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.check(&mut engine);
+}
+
+#[test]
+fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
+    // DisableDelegation after the entity has gone back to Unpublished.
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+    let entity = RemoteEntity::new(1);
+
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::Unpublish(1, entity));
+    engine.receive_message(4, EntityMessage::DisableDelegation(2, entity));
+    engine.receive_message(5, EntityMessage::Despawn(entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::Unpublish(1, entity));
     asserts.push(EntityMessage::Despawn(entity));
+    asserts.check(&mut engine);
+}
+
+/// Covers `AuthChannel::reset`, which despawn invokes to wipe auth state so a
+/// re-spawn starts clean.
+///
+/// Before receive-side validation existed this was untestable from here:
+/// neutering `reset()` to a no-op left the whole suite green, because nothing
+/// downstream read the auth state. Now the state gates delivery, so a missed
+/// reset is observable -- if the channel stayed `Delegated` across the despawn,
+/// the second life's `Publish` would be rejected as illegal and never emitted.
+///
+/// Both halves of the reset matter here: the auth STATE returning to
+/// `Unpublished`, and the receiver's `next_subcommand_id` returning to 0 so the
+/// second life may legitimately reuse subcommand id 0.
+#[test]
+fn despawn_resets_auth_channel_state_for_next_life() {
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+    let entity = RemoteEntity::new(1);
+
+    // First life: drive the channel all the way to Delegated.
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
+    engine.receive_message(4, EntityMessage::Despawn(entity));
+
+    // Second life: the same opening sequence must be legal all over again.
+    engine.receive_message(5, EntityMessage::Spawn(entity));
+    engine.receive_message(6, EntityMessage::Publish(0, entity));
+    engine.receive_message(7, EntityMessage::EnableDelegation(1, entity));
+
+    let mut asserts = AssertList::new();
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(0, entity));
+    asserts.push(EntityMessage::EnableDelegation(1, entity));
+    asserts.push(EntityMessage::Despawn(entity));
+    asserts.push(EntityMessage::Spawn(entity));
+    asserts.push(EntityMessage::Publish(0, entity));
+    asserts.push(EntityMessage::EnableDelegation(1, entity));
     asserts.check(&mut engine);
 }
 
@@ -806,12 +814,14 @@ fn auth_messages_buffer_until_spawn_epoch() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
-    // Deliver SetAuthority FIRST with MessageIndex=1 (simulate out-of-order arrival)
-    // Note: subcommand_id=0 to match initial next_subcommand_id=0
-    engine.receive_message(
-        1,
-        EntityMessage::SetAuthority(0, entity, EntityAuthStatus::Granted),
-    );
+    // Deliver Publish FIRST with MessageIndex=1 (simulate out-of-order arrival).
+    // subcommand_id=0 to match initial next_subcommand_id=0.
+    //
+    // Publish is used rather than SetAuthority because the barrier being tested
+    // is about ordering, not legality: a SetAuthority here would target an
+    // entity that was never published or delegated, so the auth channel now
+    // rejects it on arrival and the test would pass for the wrong reason.
+    engine.receive_message(1, EntityMessage::Publish(0, entity));
 
     // Assert: no incoming events emitted yet (spawn barrier holds)
     let events = engine.take_incoming_events();
@@ -827,10 +837,6 @@ fn auth_messages_buffer_until_spawn_epoch() {
     // Assert: Spawn event emitted first, then SetAuthority event
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::SetAuthority(
-        0,
-        entity,
-        EntityAuthStatus::Granted,
-    ));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.check(&mut engine);
 }

@@ -6,8 +6,8 @@
 /// The bug was missed because previous tests created channels directly and
 /// bypassed the real command flow. These tests exercise the ACTUAL code path.
 use crate::{
-    world::sync::host_entity_channel::HostEntityChannel, BigMapKey, EntityCommand, GlobalEntity,
-    HostEntity, HostType, RemoteEntity,
+    world::sync::host_entity_channel::HostEntityChannel, BigMapKey, EntityCommand, EntityMessage,
+    GlobalEntity, HostEntity, HostType, RemoteEntity,
 };
 
 /// Test that ALL migration-related commands can be sent through the real channel flow
@@ -298,4 +298,57 @@ fn test_server_delegation_wrong_sequence_panics() {
     ));
 
     // Should never reach here - the above should panic
+}
+
+/// `MigrateResponse` is the one auth message that may legally arrive before the
+/// receiving channel is Delegated -- it is what establishes delegation on a
+/// migrated entity. A client publishes its entity, the server delegates it and
+/// answers with `MigrateResponse`, so the client must accept it while still
+/// merely Published.
+#[test]
+fn migrate_response_from_the_server_is_accepted_by_a_client() {
+    let global_entity = GlobalEntity::from_u64(10005);
+    let host_entity = HostEntity::new(5);
+    let new_remote_entity = RemoteEntity::new(55);
+
+    let mut client_channel = HostEntityChannel::new(HostType::Client);
+    client_channel.send_command(EntityCommand::Publish(Some(0), global_entity));
+
+    client_channel.receive_message(0, EntityMessage::MigrateResponse(0, (), new_remote_entity));
+
+    let mut events = Vec::new();
+    client_channel.drain_incoming_messages_into(host_entity, &mut events);
+    assert_eq!(
+        events.len(),
+        1,
+        "client must accept the server's MigrateResponse: {:?}",
+        events
+    );
+}
+
+/// The same message in the opposite direction is illegitimate: `MigrateResponse`
+/// only ever travels server -> client. A server receiving one is hearing it from
+/// a client that has no business sending it, and honouring it would let any
+/// client flip a channel it does not own into Delegated. It must be dropped
+/// rather than panic -- these bytes are attacker-controlled.
+#[test]
+fn migrate_response_from_a_client_is_rejected_by_the_server() {
+    let global_entity = GlobalEntity::from_u64(10006);
+    let host_entity = HostEntity::new(6);
+    let new_remote_entity = RemoteEntity::new(66);
+
+    // Server-hosted entity is Published from birth, exactly the state in which
+    // the client above legitimately accepted its MigrateResponse.
+    let mut server_channel = HostEntityChannel::new(HostType::Server);
+    let _ = global_entity;
+
+    server_channel.receive_message(0, EntityMessage::MigrateResponse(0, (), new_remote_entity));
+
+    let mut events = Vec::new();
+    server_channel.drain_incoming_messages_into(host_entity, &mut events);
+    assert!(
+        events.is_empty(),
+        "server must drop a client-sent MigrateResponse: {:?}",
+        events
+    );
 }

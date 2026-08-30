@@ -8,6 +8,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Illegal authority transitions received over the wire are now dropped rather
+  than applied.** `AuthChannel` validated authority commands on the *send* side
+  only, where an illegal transition is a local programmer error and a panic is
+  the right answer. Nothing validated the *receive* side, so a peer could drive
+  a channel through any sequence it liked -- publishing an already-published
+  entity, granting authority on an entity that was never delegated. Receive-side
+  validation now mirrors the send-side rules against a single shared transition
+  table, so the two cannot drift apart, and rejects by **dropping the message**:
+  these bytes are attacker-controlled on a server, and panicking on them would
+  be a remote kill switch.
+
+  `MigrateResponse` is the one exception to "must already be delegated" -- it is
+  the message that *establishes* delegation on a migrated entity, and so is
+  gated on direction instead: it travels server -> client only, and a server
+  that receives one drops it.
+
+  Remote channels track the peer's entities, so their initial authority state is
+  the mirror of the host mapping; `AuthChannel::new_remote` supplies it, and
+  `reset` now restores whichever initial state the channel was built with.
+
 ### Added
 
 - **A rejected connection can now be told why** (naia-lib/naia#133).
