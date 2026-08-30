@@ -10,7 +10,7 @@ use crate::{
             RemoteEntityChannel,
         },
     },
-    HostType,
+    EntityAuthStatus, HostType,
 };
 use crate::{BigMapKey, GlobalEntity, HostEntity, LocalEntityMap, OwnedLocalEntity};
 
@@ -467,4 +467,133 @@ fn migrate_host_entity_panics() {
 
     // Force a panic to test the should_panic attribute
     panic!("Test panic for host entity migration");
+}
+
+// ---------------------------------------------------------------------------
+// Migration setup on a RemoteEntityChannel.
+//
+// `configure_as_delegated` hand-places the auth state a migrated entity's new
+// channel must start in, and `update_auth_status` syncs it with the global
+// tracker. Both write state that nothing asserted, so neutering either to a
+// no-op left the whole workspace suite green -- as did making `is_delegated`
+// and `auth_status` return constants.
+// ---------------------------------------------------------------------------
+
+/// A fresh remote channel is not delegated; configuring it makes it so.
+///
+/// The "before" half is what makes this more than a tautology: without it, a
+/// channel that reported `is_delegated() == true` from birth would pass.
+#[test]
+fn configuring_a_channel_as_delegated_actually_delegates_it() {
+    let mut channel = RemoteEntityChannel::new(HostType::Client);
+    assert!(
+        !channel.is_delegated(),
+        "a fresh remote channel must not start out delegated",
+    );
+
+    channel.configure_as_delegated();
+
+    assert!(
+        channel.is_delegated(),
+        "configure_as_delegated left the channel undelegated",
+    );
+    assert_eq!(
+        channel.auth_status(),
+        Some(EntityAuthStatus::Available),
+        "a newly delegated channel starts with authority up for grabs",
+    );
+}
+
+/// `new_delegated` is the one-shot form of the same thing.
+#[test]
+fn new_delegated_matches_configuring_afterwards() {
+    let channel = RemoteEntityChannel::new_delegated(HostType::Client);
+
+    assert!(channel.is_delegated());
+    assert_eq!(channel.auth_status(), Some(EntityAuthStatus::Available));
+}
+
+/// After migration the channel's authority must be re-pointed at whatever the
+/// global tracker says, which may be any status -- not just the `Available` it
+/// was configured with.
+#[test]
+fn updating_auth_status_overrides_the_configured_default() {
+    for status in [
+        EntityAuthStatus::Granted,
+        EntityAuthStatus::Requested,
+        EntityAuthStatus::Denied,
+        EntityAuthStatus::Releasing,
+        EntityAuthStatus::Available,
+    ] {
+        let mut channel = RemoteEntityChannel::new_delegated(HostType::Client);
+        channel.update_auth_status(status);
+
+        assert_eq!(
+            channel.auth_status(),
+            Some(status),
+            "update_auth_status({status:?}) did not take effect",
+        );
+        assert!(
+            channel.is_delegated(),
+            "syncing authority must not disturb the delegated state",
+        );
+    }
+}
+
+/// `configure_as_delegated` also advances the auth receiver's expected
+/// subcommand id to 1, because `MigrateResponse` occupies slot 0 on a migrated
+/// entity's new channel.
+///
+/// Without that advance the channel sits waiting for a subcommand 0 that will
+/// never arrive, and every real auth message after the migration is buffered
+/// forever rather than delivered. This drives the channel through spawn and a
+/// real auth message to show the difference reaches the output.
+#[test]
+fn a_configured_channel_expects_the_subcommand_id_after_migrate_response() {
+    let entity = RemoteEntity::new(1);
+    let mut channel = RemoteEntityChannel::new_delegated(HostType::Client);
+
+    channel.receive_message(1, EntityMessage::Spawn(()));
+    // subcommand_id 1: the slot right after the MigrateResponse that migration
+    // consumed as 0.
+    channel.receive_message(2, EntityMessage::ReleaseAuthority(1, ()));
+
+    let mut events = Vec::new();
+    channel.drain_incoming_messages_into(entity, &mut events);
+
+    assert!(
+        events
+            .iter()
+            .any(|msg| matches!(msg, EntityMessage::ReleaseAuthority(_, _))),
+        "the auth message after the migration was never delivered, so the \
+         receiver was still waiting on subcommand 0: {events:?}",
+    );
+}
+
+/// Auth messages that arrive before the entity's spawn belong to a previous
+/// lifetime of that remote entity, and the spawn must discard them.
+///
+/// The component and entity channels drop their own pre-spawn backlog with
+/// `pop_front_until_and_excluding`; the auth channel gets the *including*
+/// variant. Neutering that call to a no-op resurrects a stale authority
+/// command into the freshly spawned entity's event stream, which is exactly
+/// the sort of ghost that stalls a delegated entity.
+#[test]
+fn spawn_discards_auth_messages_buffered_from_a_previous_lifetime() {
+    let entity = RemoteEntity::new(1);
+    let mut channel = RemoteEntityChannel::new_delegated(HostType::Client);
+
+    // Arrives while the channel is still Despawned, so it is buffered.
+    channel.receive_message(1, EntityMessage::ReleaseAuthority(1, ()));
+    channel.receive_message(5, EntityMessage::Spawn(()));
+
+    let mut events = Vec::new();
+    channel.drain_incoming_messages_into(entity, &mut events);
+
+    assert!(
+        !events
+            .iter()
+            .any(|msg| matches!(msg, EntityMessage::ReleaseAuthority(_, _))),
+        "a pre-spawn authority command survived the spawn barrier: {events:?}",
+    );
 }

@@ -388,12 +388,13 @@ impl AuthChannel {
         self.receiver.set_next_subcommand_id(id);
     }
 
-    /// Force the AuthChannel into Published state (used during migration setup)
-    pub(crate) fn force_publish(&mut self) {
-        self.state = EntityAuthChannelState::Published;
-    }
-
-    /// Force the AuthChannel into Delegated state with Available authority (used during migration setup)
+    /// Force the AuthChannel straight into Delegated state with Available
+    /// authority (used during migration setup).
+    ///
+    /// This subsumes publishing: `Delegated` is downstream of `Published`, so
+    /// there is no separate force-publish step. There used to be one, called
+    /// immediately before this at both call sites, where its only effect was
+    /// overwritten by the line below before anything could observe it.
     pub(crate) fn force_enable_delegation(&mut self) {
         self.state = EntityAuthChannelState::Delegated;
         self.auth_status = Some(EntityAuthStatus::Available);

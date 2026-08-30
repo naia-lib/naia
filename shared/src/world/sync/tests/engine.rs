@@ -975,3 +975,70 @@ fn every_authority_transition_is_accepted_or_dropped_as_the_table_says() {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// Receive-side state guard for ReleaseAuthority.
+//
+// It is legal only on a Delegated channel. (RequestAuthority and
+// EnableDelegationResponse share the guard but arrive on the HOST channel, not
+// here -- they are covered in `command_validation_tests`.) Deleting their match arm
+// entirely drops them through to the catch-all, which accepts everything --
+// so each needs a REJECT case to notice the arm is gone, and an ACCEPT case to
+// notice the guard has been inverted. Both mutants survived the whole suite.
+// ---------------------------------------------------------------------------
+
+/// Walks a fresh server-side channel to Delegated, then delivers `msg` with the
+/// next free subcommand id, and reports whether it was accepted.
+///
+/// The setup assertion matters: if the walk itself were rejected the final
+/// message would be judged against the wrong state, and the test would pass for
+/// the wrong reason.
+fn delivered_on_a_delegated_channel(
+    make_msg: fn(u8, RemoteEntity) -> EntityMessage<RemoteEntity>,
+) -> bool {
+    let entity = RemoteEntity::new(1);
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
+    assert_eq!(
+        engine.take_incoming_events().len(),
+        3,
+        "the walk to Delegated was itself rejected",
+    );
+
+    engine.receive_message(4, make_msg(2, entity));
+    !engine.take_incoming_events().is_empty()
+}
+
+/// Same walk, stopped at Published -- delegation is never enabled.
+fn delivered_on_a_published_channel(
+    make_msg: fn(u8, RemoteEntity) -> EntityMessage<RemoteEntity>,
+) -> bool {
+    let entity = RemoteEntity::new(1);
+    let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+
+    engine.receive_message(1, EntityMessage::Spawn(entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
+    assert_eq!(
+        engine.take_incoming_events().len(),
+        2,
+        "the walk to Published was itself rejected",
+    );
+
+    engine.receive_message(3, make_msg(1, entity));
+    !engine.take_incoming_events().is_empty()
+}
+
+#[test]
+fn release_authority_is_accepted_only_on_a_delegated_channel() {
+    assert!(
+        delivered_on_a_delegated_channel(EntityMessage::ReleaseAuthority),
+        "a delegated channel must accept ReleaseAuthority",
+    );
+    assert!(
+        !delivered_on_a_published_channel(EntityMessage::ReleaseAuthority),
+        "a merely-published channel has no authority to release",
+    );
+}

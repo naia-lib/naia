@@ -352,3 +352,154 @@ fn migrate_response_from_a_client_is_rejected_by_the_server() {
         events
     );
 }
+
+// ---------------------------------------------------------------------------
+// Send-side state guards for Unpublish / DisableDelegation / ReleaseAuthority.
+//
+// `validate_command` panics on an illegal transition, which is correct: a
+// command you originate from the wrong state is your own bug, caught loudly at
+// the source. But panicking guards are invisible to a suite that never sends
+// the command from a LEGAL state -- inverting `!=` to `==` makes the guard fire
+// on the good path and wave the bad path through, and all three of these
+// survived the whole workspace suite. Each command therefore needs both
+// directions pinned: accepted from the one state that allows it, panicking from
+// a state that does not.
+// ---------------------------------------------------------------------------
+
+/// A server-hosted entity is Published from birth, so unpublishing it is legal.
+#[test]
+fn unpublish_is_accepted_from_the_published_state() {
+    let global_entity = GlobalEntity::from_u64(10010);
+    let mut channel = HostEntityChannel::new(HostType::Server);
+
+    channel.send_command(EntityCommand::Unpublish(Some(0), global_entity));
+
+    let commands = channel.extract_outgoing_commands();
+    assert!(
+        commands
+            .iter()
+            .any(|cmd| matches!(cmd, EntityCommand::Unpublish(_, _))),
+        "Unpublish should have been queued: {commands:?}",
+    );
+}
+
+/// A client-hosted entity starts Unpublished, so there is nothing to unpublish.
+#[test]
+#[should_panic(expected = "Cannot unpublish")]
+fn unpublish_from_the_unpublished_state_panics() {
+    let global_entity = GlobalEntity::from_u64(10011);
+    let mut channel = HostEntityChannel::new(HostType::Client);
+
+    channel.send_command(EntityCommand::Unpublish(Some(0), global_entity));
+}
+
+/// Delegation can only be revoked once it has been enabled.
+#[test]
+fn disable_delegation_is_accepted_from_the_delegated_state() {
+    let global_entity = GlobalEntity::from_u64(10012);
+    let mut channel = HostEntityChannel::new(HostType::Server);
+
+    channel.send_command(EntityCommand::EnableDelegation(Some(0), global_entity));
+    channel.send_command(EntityCommand::DisableDelegation(Some(1), global_entity));
+
+    let commands = channel.extract_outgoing_commands();
+    assert!(
+        commands
+            .iter()
+            .any(|cmd| matches!(cmd, EntityCommand::DisableDelegation(_, _))),
+        "DisableDelegation should have been queued: {commands:?}",
+    );
+}
+
+/// Published is not Delegated: there is no delegation to revoke yet.
+#[test]
+#[should_panic(expected = "Cannot disable delegation")]
+fn disable_delegation_without_delegation_panics() {
+    let global_entity = GlobalEntity::from_u64(10013);
+    let mut channel = HostEntityChannel::new(HostType::Server);
+
+    channel.send_command(EntityCommand::DisableDelegation(Some(0), global_entity));
+}
+
+/// Releasing authority is legal as soon as the entity is delegated -- notably
+/// including immediately after `EnableDelegation`, which is how a host declines
+/// the authority it would otherwise be handed.
+#[test]
+fn release_authority_is_accepted_from_the_delegated_state() {
+    let global_entity = GlobalEntity::from_u64(10014);
+    let mut channel = HostEntityChannel::new(HostType::Server);
+
+    channel.send_command(EntityCommand::EnableDelegation(Some(0), global_entity));
+    channel.send_command(EntityCommand::ReleaseAuthority(Some(1), global_entity));
+
+    let commands = channel.extract_outgoing_commands();
+    assert!(
+        commands
+            .iter()
+            .any(|cmd| matches!(cmd, EntityCommand::ReleaseAuthority(_, _))),
+        "ReleaseAuthority should have been queued: {commands:?}",
+    );
+}
+
+/// An entity that was never delegated has no authority to release.
+#[test]
+#[should_panic(expected = "Cannot release authority")]
+fn release_authority_without_delegation_panics() {
+    let global_entity = GlobalEntity::from_u64(10015);
+    let mut channel = HostEntityChannel::new(HostType::Server);
+
+    channel.send_command(EntityCommand::ReleaseAuthority(Some(0), global_entity));
+}
+
+// ---------------------------------------------------------------------------
+// Receive-side state guard for RequestAuthority and EnableDelegationResponse.
+//
+// Both arrive on the HOST channel -- the remote engine's channel panics on
+// them as unexpected -- and both are legal only once delegation is enabled.
+// Deleting their shared match arm drops them through to the catch-all, which
+// accepts everything, so each needs a REJECT case to notice the arm is gone and
+// an ACCEPT case to notice the guard has been inverted.
+// ---------------------------------------------------------------------------
+
+/// Delivers `msg` to a server-side host channel, optionally delegated first via
+/// the real `EnableDelegation` command path rather than a force helper, and
+/// reports whether it survived validation.
+fn delivered_on_host_channel(delegate_first: bool, msg: EntityMessage<()>) -> bool {
+    let global_entity = GlobalEntity::from_u64(10020);
+    let host_entity = HostEntity::new(20);
+    let mut channel = HostEntityChannel::new(HostType::Server);
+
+    if delegate_first {
+        channel.send_command(EntityCommand::EnableDelegation(Some(0), global_entity));
+    }
+
+    channel.receive_message(0, msg);
+
+    let mut events = Vec::new();
+    channel.drain_incoming_messages_into(host_entity, &mut events);
+    !events.is_empty()
+}
+
+#[test]
+fn request_authority_is_accepted_only_on_a_delegated_channel() {
+    assert!(
+        delivered_on_host_channel(true, EntityMessage::RequestAuthority(0, ())),
+        "a delegated channel must accept RequestAuthority",
+    );
+    assert!(
+        !delivered_on_host_channel(false, EntityMessage::RequestAuthority(0, ())),
+        "a merely-published channel has no authority to request",
+    );
+}
+
+#[test]
+fn enable_delegation_response_is_accepted_only_on_a_delegated_channel() {
+    assert!(
+        delivered_on_host_channel(true, EntityMessage::EnableDelegationResponse(0, ())),
+        "a delegated channel must accept EnableDelegationResponse",
+    );
+    assert!(
+        !delivered_on_host_channel(false, EntityMessage::EnableDelegationResponse(0, ())),
+        "there is no delegation to acknowledge on a merely-published channel",
+    );
+}

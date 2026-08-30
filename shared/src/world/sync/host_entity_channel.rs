@@ -251,8 +251,7 @@ impl HostEntityChannel {
     /// This is called when the client originates an EnableDelegation message,
     /// to ensure the local channel is in the correct state to receive MigrateResponse
     pub fn local_enable_delegation(&mut self) {
-        // Must publish first before enabling delegation
-        self.auth_channel.force_publish();
+        // Delegated subsumes Published, so this one call covers both.
         self.auth_channel.force_enable_delegation();
     }
 

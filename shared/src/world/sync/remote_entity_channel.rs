@@ -144,7 +144,6 @@ impl RemoteEntityChannel {
     pub fn configure_as_delegated(&mut self) {
         // Set up the AuthChannel for a delegated entity
         // This simulates the entity having gone through Publish → EnableDelegation
-        self.auth_channel.force_publish();
         self.auth_channel.force_enable_delegation();
         // Sync subcommand_id: MigrateResponse has subcommand_id=0, so next is 1
         self.auth_channel.receiver_set_next_subcommand_id(1);
