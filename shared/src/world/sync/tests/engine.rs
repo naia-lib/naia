@@ -232,49 +232,47 @@ fn empty_drain_safe() {
 }
 
 #[test]
-#[ignore]
 fn entity_auth_basic() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
 
     let entity = RemoteEntity::new(1);
 
     engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
     engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
     engine.receive_message(
         4,
-        EntityMessage::SetAuthority(1, entity, EntityAuthStatus::Granted),
+        EntityMessage::SetAuthority(2, entity, EntityAuthStatus::Granted),
     );
     engine.receive_message(
         5,
-        EntityMessage::SetAuthority(1, entity, EntityAuthStatus::Available),
+        EntityMessage::SetAuthority(3, entity, EntityAuthStatus::Available),
     );
-    engine.receive_message(6, EntityMessage::DisableDelegation(1, entity));
-    engine.receive_message(7, EntityMessage::Unpublish(1, entity));
+    engine.receive_message(6, EntityMessage::DisableDelegation(4, entity));
+    engine.receive_message(7, EntityMessage::Unpublish(5, entity));
     engine.receive_message(8, EntityMessage::Despawn(entity));
 
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::EnableDelegation(1, entity));
     asserts.push(EntityMessage::SetAuthority(
-        1,
+        2,
         entity,
         EntityAuthStatus::Granted,
     ));
     asserts.push(EntityMessage::SetAuthority(
-        1,
+        3,
         entity,
         EntityAuthStatus::Available,
     ));
-    asserts.push(EntityMessage::DisableDelegation(1, entity));
-    asserts.push(EntityMessage::Unpublish(1, entity));
+    asserts.push(EntityMessage::DisableDelegation(4, entity));
+    asserts.push(EntityMessage::Unpublish(5, entity));
     asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
 
 #[test]
-#[ignore]
 fn entity_auth_scrambled() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
 
@@ -286,7 +284,7 @@ fn entity_auth_scrambled() {
         4,
         EntityMessage::SetAuthority(3, entity, EntityAuthStatus::Granted),
     ); // this will never be received
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
     engine.receive_message(1, EntityMessage::Spawn(entity));
     engine.receive_message(3, EntityMessage::EnableDelegation(2, entity)); // this will never be received
     engine.receive_message(
@@ -297,7 +295,7 @@ fn entity_auth_scrambled() {
 
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::Despawn(entity));
     asserts.check(&mut engine);
 }
@@ -386,7 +384,7 @@ fn component_backlog_on_entity_a_does_not_block_entity_b() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_disable_delegation_dropped() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
@@ -412,7 +410,7 @@ fn entity_auth_illegal_disable_delegation_dropped() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_update_authority_dropped() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
@@ -438,7 +436,7 @@ fn entity_auth_illegal_update_authority_dropped() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_unpublish_while_delegated_dropped() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
@@ -465,7 +463,7 @@ fn entity_auth_illegal_unpublish_while_delegated_dropped() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
@@ -494,7 +492,7 @@ fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_publish_while_already_published_dropped() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
@@ -516,7 +514,7 @@ fn entity_auth_illegal_publish_while_already_published_dropped() {
 }
 
 #[test]
-#[ignore]
+#[ignore = "asserts illegal auth transitions are dropped; the remote engine has no legality filter -- AuthChannelReceiver::process_messages replays strictly by subcommand_id and never consults auth state. Unimplemented behavior, not a flaky test."]
 fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
@@ -540,7 +538,6 @@ fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
 }
 
 #[test]
-#[ignore]
 fn entity_auth_publish_unpublish_cycle() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
 
@@ -548,15 +545,15 @@ fn entity_auth_publish_unpublish_cycle() {
 
     // Happy‑path: Spawn → Publish → Unpublish → Publish (again)
     engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
     engine.receive_message(3, EntityMessage::Unpublish(1, entity));
-    engine.receive_message(4, EntityMessage::Publish(1, entity));
+    engine.receive_message(4, EntityMessage::Publish(2, entity));
 
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::Unpublish(1, entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(2, entity));
 
     asserts.check(&mut engine);
 }
@@ -628,7 +625,6 @@ fn max_in_flight_overlap_dropped() {
 }
 
 #[test]
-#[ignore]
 fn component_survives_delegation_cycle() {
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
 
@@ -637,36 +633,39 @@ fn component_survives_delegation_cycle() {
 
     // Authority cycle with a component toggle in the middle
     engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
     engine.receive_message(3, EntityMessage::EnableDelegation(1, entity));
     engine.receive_message(4, EntityMessage::InsertComponent(entity, comp)); // component appears while delegated
-    engine.receive_message(5, EntityMessage::DisableDelegation(1, entity)); // back to Published
+    engine.receive_message(5, EntityMessage::DisableDelegation(2, entity)); // back to Published
     engine.receive_message(6, EntityMessage::RemoveComponent(entity, comp)); // component removed after delegation revoked
-    engine.receive_message(7, EntityMessage::Unpublish(1, entity)); // cleanly unpublished
+    engine.receive_message(7, EntityMessage::Unpublish(3, entity)); // cleanly unpublished
 
     // Expected: every message—including the component events—survives the auth flip‑flop
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity));
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::EnableDelegation(1, entity));
     asserts.push(EntityMessage::InsertComponent(entity, comp));
-    asserts.push(EntityMessage::DisableDelegation(1, entity));
+    asserts.push(EntityMessage::DisableDelegation(2, entity));
     asserts.push(EntityMessage::RemoveComponent(entity, comp));
-    asserts.push(EntityMessage::Unpublish(1, entity));
+    asserts.push(EntityMessage::Unpublish(3, entity));
 
     asserts.check(&mut engine);
 }
 
 #[test]
-#[ignore]
 fn despawn_resets_auth_buffers() {
+    // NOTE: the stale Publish is dropped by the entity channel's spawn barrier
+    // (auth messages only drain while Spawned, and despawn clears the buffer),
+    // NOT by AuthChannel::reset -- neutering that function leaves this test
+    // green. If you are here to change reset(), this test will not catch you.
     // ── Arrange ────────────────────────────────────────────────────────────────
     let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
     let entity = RemoteEntity::new(1);
 
     // 1st life
     engine.receive_message(1, EntityMessage::Spawn(entity));
-    engine.receive_message(2, EntityMessage::Publish(1, entity));
+    engine.receive_message(2, EntityMessage::Publish(0, entity));
     engine.receive_message(3, EntityMessage::Despawn(entity));
 
     // 2nd life
@@ -684,7 +683,7 @@ fn despawn_resets_auth_buffers() {
     // ── Assert ────────────────────────────────────────────────────────────────
     let mut asserts = AssertList::new();
     asserts.push(EntityMessage::Spawn(entity)); // life #1
-    asserts.push(EntityMessage::Publish(1, entity));
+    asserts.push(EntityMessage::Publish(0, entity));
     asserts.push(EntityMessage::Despawn(entity));
     asserts.push(EntityMessage::Spawn(entity)); // life #3
     asserts.check(&mut engine); // The stale Publish (id 5) must be absent
