@@ -1974,6 +1974,248 @@ mod delegated_send_guard_tests {
         );
     }
 
+    /// Assembles a `GlobalDiffHandler` that knows about `Ghost` and `Wraith` for
+    /// one entity, which is what turns on the server's optimized write paths.
+    /// Order matters: the kind count sizes the per-entity flag and wire-cache
+    /// arrays, `alloc_entity` allocates the slot, and only then does
+    /// `register_component` have somewhere to record the user-dependent flag.
+    fn server_diff_handler(
+        component_kinds: &ComponentKinds,
+        gwm: &dyn GlobalWorldManagerType,
+        global_entity: &GlobalEntity,
+    ) -> (GlobalDiffHandler, GlobalEntityIndex) {
+        let mut gdh = GlobalDiffHandler::new();
+        gdh.set_protocol_kind_count(component_kinds.kind_count());
+        let entity_idx = gdh.alloc_entity(*global_entity);
+        for kind in [ComponentKind::of::<Ghost>(), ComponentKind::of::<Wraith>()] {
+            gdh.register_component(component_kinds, gwm, global_entity, &kind, 1);
+        }
+        (gdh, entity_idx)
+    }
+
+    /// What one `write_updates` pass down the SERVER paths did.
+    struct ServerOutcome {
+        has_written: bool,
+        entries_left: usize,
+        /// Whether PATH A left pre-serialized bytes in the wire cache. This is
+        /// the only externally visible difference between PATH A and the
+        /// two-pass fallback -- both emit identical bytes, so asserting on the
+        /// packet alone cannot tell which path ran.
+        ghost_cached: bool,
+    }
+
+    /// Runs one `write_updates` pass with a `GlobalDiffHandler` present, which
+    /// is what selects the server's PATH A instead of the two-pass fallback the
+    /// rest of this module exercises.
+    fn run_server_pass(with_absent_kind: bool) -> ServerOutcome {
+        drop_counters::reset();
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+
+        let global_entity = GlobalEntity::from_u64(1);
+        let (gdh, entity_idx) = server_diff_handler(&kinds, &gwm, &global_entity);
+
+        let ghost_bit = kinds.net_id_of(&ComponentKind::of::<Ghost>()).unwrap();
+        let wraith_bit = kinds.net_id_of(&ComponentKind::of::<Wraith>()).unwrap();
+
+        let mut planned_kinds = vec![(ComponentKind::of::<Ghost>(), ghost_bit, DiffMask::new(1))];
+        if with_absent_kind {
+            planned_kinds.push((ComponentKind::of::<Wraith>(), wraith_bit, DiffMask::new(1)));
+        }
+        local_world_manager.host_init_entity(
+            &global_entity,
+            planned_kinds.iter().map(|(kind, _, _)| *kind).collect(),
+            &kinds,
+            false,
+        );
+
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> =
+            vec![(global_entity, entity_idx, 1u64, planned_kinds)];
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+
+        WorldWriter::write_updates(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &MixedWorld {
+                ghost: Ghost::new_complete(7),
+            },
+            &gwm,
+            Some(&gdh),
+            &mut local_world_manager,
+            &mut has_written,
+            &mut update_list,
+            None,
+        );
+
+        let ghost_cached = DiffMask::new(1)
+            .as_key()
+            .and_then(|key| gdh.get_wire_cache(entity_idx, ghost_bit, key))
+            .is_some();
+
+        ServerOutcome {
+            has_written,
+            entries_left: update_list.len(),
+            ghost_cached,
+        }
+    }
+
+    /// A user-independent component must go down PATH A, which serializes once
+    /// and stores the bytes for every other user on the same tick.
+    ///
+    /// The packet bytes cannot prove this: PATH A and the two-pass fallback emit
+    /// exactly the same bits, which is the whole point of the optimization. The
+    /// wire cache is the only observable difference, and it is what the
+    /// optimization exists for -- if the path selection inverts, every send
+    /// silently reverts to one ECS read and one serialize per user, with no test
+    /// and no error to say so.
+    #[test]
+    fn a_user_independent_component_is_written_through_the_wire_cache() {
+        let outcome = run_server_pass(false);
+
+        assert!(outcome.has_written, "nothing was serialized at all");
+        assert!(
+            outcome.ghost_cached,
+            "PATH A did not populate the wire cache, so the write did not take it",
+        );
+        assert_eq!(
+            outcome.entries_left, 0,
+            "the entry should have been retired"
+        );
+    }
+
+    /// PATH A's own freeze->transmit window: the entity is still alive but this
+    /// component was removed after the update was planned. The cache-miss arm
+    /// has to retire the stale entry rather than leave it queued to be retried
+    /// on every packet forever.
+    #[test]
+    fn path_a_retires_a_component_that_vanished_before_transmit() {
+        let outcome = run_server_pass(true);
+
+        assert!(
+            outcome.has_written,
+            "the surviving Ghost should still have been serialized",
+        );
+        assert_eq!(
+            outcome.entries_left, 0,
+            "the vanished Wraith must be drained along with the live Ghost",
+        );
+    }
+
+    /// The PATH A sibling of `run_overflow_pass`: a `GlobalDiffHandler` is
+    /// present, so the overflow branch under test is the cached-bytes one rather
+    /// than the two-pass one.
+    ///
+    /// Returns the planned kinds still queued, and the bits written, so a caller
+    /// can tell "spilled, still queued" from "consumed" and can prove the entity
+    /// header was cleared before the component overflow branch was reached.
+    fn run_server_overflow_pass(bit_capacity: u32, already_written: bool) -> (usize, u32) {
+        drop_counters::reset();
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+
+        let global_entity = GlobalEntity::from_u64(1);
+        let (gdh, entity_idx) = server_diff_handler(&kinds, &gwm, &global_entity);
+        let ghost_bit = kinds.net_id_of(&ComponentKind::of::<Ghost>()).unwrap();
+
+        local_world_manager.host_init_entity(
+            &global_entity,
+            vec![ComponentKind::of::<Ghost>()],
+            &kinds,
+            false,
+        );
+
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = vec![(
+            global_entity,
+            entity_idx,
+            1u64,
+            vec![(ComponentKind::of::<Ghost>(), ghost_bit, DiffMask::new(1))],
+        )];
+
+        let mut writer = BitWriter::with_capacity(bit_capacity);
+        let mut has_written = already_written;
+
+        WorldWriter::write_updates(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &MixedWorld {
+                ghost: Ghost::new_complete(7),
+            },
+            &gwm,
+            Some(&gdh),
+            &mut local_world_manager,
+            &mut has_written,
+            &mut update_list,
+            None,
+        );
+
+        (
+            update_list.first().map(|entry| entry.3.len()).unwrap_or(0),
+            writer.bits_written(),
+        )
+    }
+
+    /// PATH A must spill exactly like the two-pass path does: a packet that
+    /// already carries data and then runs out of room leaves the update queued
+    /// for the next `build_one_packet` call.
+    ///
+    /// This branch is a separate `if !*has_written` from the two-pass one
+    /// covered below, and `warn_overflow_update` is a `panic!`, not a log line
+    /// -- so inverting it turns the single most common event in the whole send
+    /// loop, a full packet, into a production crash on the server path.
+    #[test]
+    fn an_overflowing_cached_update_spills_when_something_was_written() {
+        const CAPACITY_PAST_HEADER: u32 = 12;
+
+        let (still_queued, bits_written) = run_server_overflow_pass(CAPACITY_PAST_HEADER, true);
+
+        assert!(
+            bits_written > 1,
+            "the entity header itself overflowed, so PATH A's overflow branch was \
+             never reached -- raise CAPACITY_PAST_HEADER (bits_written={bits_written})",
+        );
+        assert_eq!(
+            still_queued, 1,
+            "the cached update did not fit, so it must remain queued for the next packet",
+        );
+    }
+
+    /// The other direction on PATH A: an empty packet that still cannot hold the
+    /// update means it can never be sent, so the writer must say so loudly
+    /// rather than spin on it forever.
+    #[test]
+    #[should_panic(expected = "Blocking overflow detected")]
+    fn a_cached_update_too_big_for_an_empty_packet_is_a_loud_failure() {
+        run_server_overflow_pass(12, false);
+    }
+
     /// Drive `write_updates` with a writer too small to hold the queued update,
     /// so the overflow branch of the two-pass path is the one under test.
     ///
