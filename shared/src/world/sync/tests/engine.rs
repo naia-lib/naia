@@ -840,3 +840,138 @@ fn auth_messages_buffer_until_spawn_epoch() {
     asserts.push(EntityMessage::Publish(0, entity));
     asserts.check(&mut engine);
 }
+
+/// Every `EntityAuthStatus` the walk below can reach, which is all of them.
+const ALL_AUTH_STATUSES: [EntityAuthStatus; 5] = [
+    EntityAuthStatus::Available,
+    EntityAuthStatus::Requested,
+    EntityAuthStatus::Granted,
+    EntityAuthStatus::Denied,
+    EntityAuthStatus::Releasing,
+];
+
+/// The legal `EntityAuthStatus` edges, written out independently of the
+/// implementation's table.
+///
+/// This is deliberately a second, hand-written copy rather than a call into
+/// `AuthChannel::auth_status_transition_is_legal`. Asserting the implementation
+/// against itself is a tautology -- it would stay green no matter which edge was
+/// added or deleted, which is the exact failure this test exists to catch.
+fn edge_is_legal(from: EntityAuthStatus, to: EntityAuthStatus) -> bool {
+    use EntityAuthStatus::{Available, Denied, Granted, Releasing, Requested};
+    // Re-delivery of the status a channel already holds is an idempotent no-op.
+    if from == to {
+        return true;
+    }
+    matches!(
+        (from, to),
+        (Available, Requested)
+            | (Available, Granted)
+            | (Available, Denied)
+            | (Requested, Granted)
+            | (Requested, Denied)
+            | (Requested, Available)
+            | (Denied, Granted)
+            | (Denied, Available)
+            | (Granted, Available)
+            | (Granted, Denied)
+            | (Granted, Releasing)
+            | (Releasing, Available)
+            | (Releasing, Denied)
+    )
+}
+
+/// Drives a fresh remote channel to `Delegated` and then walks its auth status
+/// to `target`, returning the messages to feed and the next free subcommand id.
+///
+/// Every status is reachable from the `Available` a channel lands in after
+/// `EnableDelegation`; `Releasing` is the only one needing two steps, since it
+/// is only ever entered from `Granted`.
+fn walk_to_status(
+    entity: RemoteEntity,
+    target: EntityAuthStatus,
+) -> (Vec<EntityMessage<RemoteEntity>>, u8) {
+    let mut msgs = vec![
+        EntityMessage::Spawn(entity),
+        EntityMessage::Publish(0, entity),
+        EntityMessage::EnableDelegation(1, entity),
+    ];
+    let mut next_sub = 2u8;
+
+    match target {
+        // The state EnableDelegation itself establishes.
+        EntityAuthStatus::Available => {}
+        EntityAuthStatus::Releasing => {
+            msgs.push(EntityMessage::SetAuthority(
+                next_sub,
+                entity,
+                EntityAuthStatus::Granted,
+            ));
+            next_sub += 1;
+            msgs.push(EntityMessage::SetAuthority(
+                next_sub,
+                entity,
+                EntityAuthStatus::Releasing,
+            ));
+            next_sub += 1;
+        }
+        other => {
+            msgs.push(EntityMessage::SetAuthority(next_sub, entity, other));
+            next_sub += 1;
+        }
+    }
+
+    (msgs, next_sub)
+}
+
+/// Exhaustively pins all 25 cells of the authority transition table through the
+/// real receive path.
+///
+/// The hand-picked `illegal_*` tests above cover a handful of edges. A table
+/// with 25 cells needs all 25 checked: adding or deleting a single arm changes
+/// what a peer is allowed to drive a channel through, and until this test
+/// existed most of those changes were invisible to the suite.
+///
+/// Each case walks a fresh channel to `from` using only legal edges, then
+/// delivers `SetAuthority(to)` carrying a fresh ascending subcommand id -- so
+/// the sequencing gate cannot be what rejects it, and only the legality check
+/// can be.
+#[test]
+fn every_authority_transition_is_accepted_or_dropped_as_the_table_says() {
+    for from in ALL_AUTH_STATUSES {
+        for to in ALL_AUTH_STATUSES {
+            let entity = RemoteEntity::new(1);
+            let mut engine: RemoteEngine<RemoteEntity> = RemoteEngine::new(HostType::Server);
+
+            let (setup, next_sub) = walk_to_status(entity, from);
+            let setup_len = setup.len();
+            for (i, msg) in setup.into_iter().enumerate() {
+                engine.receive_message(i as u16 + 1, msg);
+            }
+
+            // Everything in the walk is legal by construction. If that ever
+            // stops being true the `from` state is not what this case claims,
+            // and every assertion below would be measuring the wrong thing.
+            assert_eq!(
+                engine.take_incoming_events().len(),
+                setup_len,
+                "walking to {from:?} was itself rejected, so this case never \
+                 reached the state it claims to test",
+            );
+
+            engine.receive_message(
+                setup_len as u16 + 1,
+                EntityMessage::SetAuthority(next_sub, entity, to),
+            );
+
+            let delivered = engine.take_incoming_events();
+            let expected = edge_is_legal(from, to);
+            assert_eq!(
+                !delivered.is_empty(),
+                expected,
+                "transition {from:?} -> {to:?}: expected accepted={expected}, \
+                 got {delivered:?}",
+            );
+        }
+    }
+}
