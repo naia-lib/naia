@@ -1387,7 +1387,7 @@ mod delegated_send_guard_tests {
     use super::*;
     use crate::{
         world::{
-            component::property::Property,
+            component::{entity_property::EntityProperty, property::Property},
             delegation::{
                 auth_channel::{EntityAuthAccessor, EntityAuthChannel},
                 entity_auth_status::EntityAuthStatus,
@@ -1415,6 +1415,15 @@ mod delegated_send_guard_tests {
     #[derive(Replicate)]
     struct Wraith {
         value: Property<u8>,
+    }
+
+    /// A user-dependent component: the `EntityProperty` resolves to a different
+    /// local entity id for every connection, so its bytes cannot be shared and
+    /// it must take PATH B rather than the wire cache.
+    #[derive(Replicate)]
+    struct Haunt {
+        value: Property<u8>,
+        target: EntityProperty,
     }
 
     struct TestMutChannel {
@@ -1806,7 +1815,8 @@ mod delegated_send_guard_tests {
             unimplemented!("the update path uses has_component_of_kind")
         }
         fn has_component_of_kind(&self, _: &u64, kind: &ComponentKind) -> bool {
-            *kind == ComponentKind::of::<Ghost>()
+            // `Wraith` is the one kind this world has already lost.
+            *kind != ComponentKind::of::<Wraith>()
         }
         fn component<'a, R: ReplicatedComponent>(
             &'a self,
@@ -2214,6 +2224,117 @@ mod delegated_send_guard_tests {
     #[should_panic(expected = "Blocking overflow detected")]
     fn a_cached_update_too_big_for_an_empty_packet_is_a_loud_failure() {
         run_server_overflow_pass(12, false);
+    }
+
+    /// The PATH B sibling of `run_server_overflow_pass`. PATH B is selected by a
+    /// user-dependent component (one with `EntityProperty` fields) *and* a
+    /// present `snapshot_map`: the ECS is read once per component per tick into
+    /// the snapshot, and every user then serializes from there rather than
+    /// touching the world again.
+    fn run_path_b_overflow_pass(bit_capacity: u32, already_written: bool) -> (usize, u32) {
+        drop_counters::reset();
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+        kinds.add_component::<Haunt>();
+        assert!(
+            kinds.is_user_dependent(&ComponentKind::of::<Haunt>()),
+            "Haunt must register as user-dependent or this exercises PATH A",
+        );
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+
+        let global_entity = GlobalEntity::from_u64(1);
+
+        let mut gdh = GlobalDiffHandler::new();
+        gdh.set_protocol_kind_count(kinds.kind_count());
+        let entity_idx = gdh.alloc_entity(global_entity);
+        let haunt_kind = ComponentKind::of::<Haunt>();
+        gdh.register_component(&kinds, &gwm, &global_entity, &haunt_kind, 1);
+        assert_eq!(
+            gdh.is_component_user_dependent(entity_idx, kinds.net_id_of(&haunt_kind).unwrap()),
+            Some(true),
+            "the diff handler must agree Haunt is user-dependent",
+        );
+
+        local_world_manager.host_init_entity(&global_entity, vec![haunt_kind], &kinds, false);
+
+        let mut snapshot_map: SnapshotMap = HashMap::new();
+        snapshot_map.insert(
+            (global_entity, haunt_kind),
+            Box::new(Haunt::new_complete(7)),
+        );
+
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = vec![(
+            global_entity,
+            entity_idx,
+            1u64,
+            vec![(
+                haunt_kind,
+                kinds.net_id_of(&haunt_kind).unwrap(),
+                DiffMask::new(1),
+            )],
+        )];
+
+        let mut writer = BitWriter::with_capacity(bit_capacity);
+        let mut has_written = already_written;
+
+        WorldWriter::write_updates(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &MixedWorld {
+                ghost: Ghost::new_complete(7),
+            },
+            &gwm,
+            Some(&gdh),
+            &mut local_world_manager,
+            &mut has_written,
+            &mut update_list,
+            Some(&snapshot_map),
+        );
+
+        (
+            update_list.first().map(|entry| entry.3.len()).unwrap_or(0),
+            writer.bits_written(),
+        )
+    }
+
+    /// PATH B has its own third copy of the spill-or-panic decision, and it is
+    /// the path every component carrying an `EntityProperty` takes on the
+    /// server. Inverting its guard crashes the server on an ordinary full
+    /// packet, exactly as on PATH A.
+    #[test]
+    fn an_overflowing_snapshot_update_spills_when_something_was_written() {
+        const CAPACITY_PAST_HEADER: u32 = 12;
+
+        let (still_queued, bits_written) = run_path_b_overflow_pass(CAPACITY_PAST_HEADER, true);
+
+        assert!(
+            bits_written > 1,
+            "the entity header itself overflowed, so PATH B's overflow branch was \
+             never reached -- raise CAPACITY_PAST_HEADER (bits_written={bits_written})",
+        );
+        assert_eq!(
+            still_queued, 1,
+            "the snapshot update did not fit, so it must remain queued for the next packet",
+        );
+    }
+
+    /// The other direction on PATH B.
+    #[test]
+    #[should_panic(expected = "Blocking overflow detected")]
+    fn a_snapshot_update_too_big_for_an_empty_packet_is_a_loud_failure() {
+        run_path_b_overflow_pass(12, false);
     }
 
     /// Drive `write_updates` with a writer too small to hold the queued update,
