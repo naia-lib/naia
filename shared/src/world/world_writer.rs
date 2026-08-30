@@ -1397,8 +1397,9 @@ mod delegated_send_guard_tests {
                 mut_channel::{MutChannelType, MutReceiver},
             },
         },
-        BigMapKey, ComponentKinds, HostEntityAuthStatus, HostType, InScopeEntities,
-        PropertyMutator, ReplicaDynRefWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent,
+        BigMapKey, BitReader, ComponentKinds, EntityDoesNotExistError, HostEntityAuthStatus,
+        HostType, InScopeEntities, PropertyMutator, ReplicaDynRefTrait, ReplicaDynRefWrapper,
+        ReplicaRefWrapper, Replicate, ReplicatedComponent,
     };
 
     #[derive(Replicate)]
@@ -1537,6 +1538,52 @@ mod delegated_send_guard_tests {
             _: &ComponentKind,
         ) -> Option<ReplicaDynRefWrapper<'a>> {
             panic!("serialization must not be reached: the queued update should have been dropped");
+        }
+    }
+
+    /// A world that genuinely serves the component, unlike [`TripwireWorld`]
+    /// (whose accessors panic to prove the guard dropped the entry). The
+    /// overflow tests need serialization to actually happen.
+    struct LiveWorld {
+        ghost: Ghost,
+    }
+
+    struct GhostDynRef<'a> {
+        inner: &'a dyn Replicate,
+    }
+    impl<'a> ReplicaDynRefTrait for GhostDynRef<'a> {
+        fn to_dyn_ref(&self) -> &dyn Replicate {
+            self.inner
+        }
+    }
+
+    impl WorldRefType<u64> for LiveWorld {
+        fn has_entity(&self, _: &u64) -> bool {
+            true
+        }
+        fn entities(&self) -> Vec<u64> {
+            vec![1]
+        }
+        fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
+            true
+        }
+        fn has_component_of_kind(&self, _: &u64, _: &ComponentKind) -> bool {
+            true
+        }
+        fn component<'a, R: ReplicatedComponent>(
+            &'a self,
+            _: &u64,
+        ) -> Option<ReplicaRefWrapper<'a, R>> {
+            unimplemented!("the update path uses component_of_kind")
+        }
+        fn component_of_kind<'a>(
+            &'a self,
+            _: &u64,
+            _: &ComponentKind,
+        ) -> Option<ReplicaDynRefWrapper<'a>> {
+            Some(ReplicaDynRefWrapper::new(GhostDynRef {
+                inner: &self.ghost,
+            }))
         }
     }
 
@@ -1729,5 +1776,228 @@ mod delegated_send_guard_tests {
     #[should_panic(expected = "serialization must not be reached")]
     fn the_server_is_never_stopped_by_the_guard() {
         run_with_auth(HostType::Server, EntityAuthStatus::Available);
+    }
+
+    /// Drive `write_updates` with a writer too small to hold the queued update,
+    /// so the overflow branch of the two-pass path is the one under test.
+    ///
+    /// `already_written` seeds the `has_written` flag that the overflow branch
+    /// consults. Returns the writer's remaining planned kinds, so a caller can
+    /// tell "spilled, still queued" from "consumed".
+    fn run_overflow_pass(bit_capacity: u32, already_written: bool) -> (usize, bool, u32) {
+        drop_counters::reset();
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+
+        let global_entity = GlobalEntity::from_u64(1);
+        local_world_manager.host_init_entity(
+            &global_entity,
+            vec![ComponentKind::of::<Ghost>()],
+            &kinds,
+            false,
+        );
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = vec![(
+            global_entity,
+            GlobalEntityIndex::from(1u32),
+            1u64,
+            vec![(ComponentKind::of::<Ghost>(), 0, DiffMask::new(1))],
+        )];
+
+        let mut writer = BitWriter::with_capacity(bit_capacity);
+        let mut has_written = already_written;
+
+        WorldWriter::write_updates(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &LiveWorld {
+                ghost: Ghost::new_complete(7),
+            },
+            &gwm,
+            None,
+            &mut local_world_manager,
+            &mut has_written,
+            &mut update_list,
+            None,
+        );
+
+        (
+            update_list.first().map(|entry| entry.3.len()).unwrap_or(0),
+            has_written,
+            writer.bits_written(),
+        )
+    }
+
+    /// A packet that already carries data and then runs out of room must SPILL,
+    /// not panic: the update stays queued for the next `build_one_packet` call.
+    ///
+    /// This is the benign, extremely common case -- every full packet ends this
+    /// way -- and before this test nothing exercised it. A `cargo-mutants` run
+    /// with the harness integration tests in scope showed that deleting the `!`
+    /// in `if !*has_written` survived the whole suite, which turns this routine
+    /// spill into a production `panic!` (`warn_overflow_update` panics; it is
+    /// not a log line). The empty-packet test below pins the other direction.
+    ///
+    /// `CAPACITY_PAST_HEADER` is load-bearing and deliberately asserted: below
+    /// 12 bits the *entity header* overflows and `write_updates` breaks before
+    /// `write_update` is ever called, which leaves the update queued for a
+    /// completely different reason and tests nothing. The `bits_written` check
+    /// is what keeps this test honest if the header encoding ever grows.
+    #[test]
+    fn an_overflowing_update_spills_to_the_next_packet_when_something_was_written() {
+        const CAPACITY_PAST_HEADER: u32 = 12;
+
+        let (still_queued, _, bits_written) = run_overflow_pass(CAPACITY_PAST_HEADER, true);
+
+        assert!(
+            bits_written > 1,
+            "the entity header itself overflowed, so the component overflow branch \
+             was never reached -- raise CAPACITY_PAST_HEADER (bits_written={bits_written})",
+        );
+        assert_eq!(
+            still_queued, 1,
+            "the update did not fit, so it must remain queued for the next packet",
+        );
+    }
+
+    /// The other direction: nothing has been written yet, the packet is empty,
+    /// and the update *still* does not fit. It can therefore never fit in any
+    /// packet, so the writer panics with a diagnostic naming the component
+    /// rather than silently spinning forever on an update it can never send.
+    #[test]
+    #[should_panic(expected = "Blocking overflow detected")]
+    fn an_update_too_big_for_an_empty_packet_is_a_loud_failure() {
+        run_overflow_pass(12, false);
+    }
+
+    /// Maps the single test entity both ways; `write_command` needs a converter
+    /// separate from the (mutably borrowed) `LocalWorldManager`.
+    struct OneEntityConverter {
+        global_entity: GlobalEntity,
+    }
+
+    impl EntityAndGlobalEntityConverter<u64> for OneEntityConverter {
+        fn global_entity_to_entity(
+            &self,
+            global_entity: &GlobalEntity,
+        ) -> Result<u64, EntityDoesNotExistError> {
+            if *global_entity == self.global_entity {
+                Ok(1)
+            } else {
+                Err(EntityDoesNotExistError)
+            }
+        }
+        fn entity_to_global_entity(
+            &self,
+            entity: &u64,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            if *entity == 1 {
+                Ok(self.global_entity)
+            } else {
+                Err(EntityDoesNotExistError)
+            }
+        }
+    }
+
+    /// Drive `write_command` with a single queued `InsertComponent` and report
+    /// which `EntityMessageType` actually went on the wire.
+    fn run_insert_command<W: WorldRefType<u64>>(world: &W, host_track: bool) -> EntityMessageType {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let global_entity = GlobalEntity::from_u64(1);
+        if host_track {
+            local_world_manager.host_init_entity(
+                &global_entity,
+                vec![ComponentKind::of::<Ghost>()],
+                &kinds,
+                false,
+            );
+        }
+
+        // `record_command_written` scans the sent-packet list, so the packet
+        // must be opened first -- `write_commands` does this before each command.
+        local_world_manager.insert_sent_command_packet(&0, Instant::now());
+
+        let converter = OneEntityConverter { global_entity };
+        let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> = VecDeque::from(vec![(
+            CommandId::from(0u16),
+            EntityCommand::InsertComponent(global_entity, ComponentKind::of::<Ghost>()),
+        )]);
+
+        let mut writer = BitWriter::new();
+        let mut last_written_id: Option<CommandId> = None;
+
+        WorldWriter::write_command(
+            &kinds,
+            world,
+            &converter,
+            &gwm,
+            &mut local_world_manager,
+            &0,
+            &mut writer,
+            &mut last_written_id,
+            true,
+            &mut next_send_commands,
+        );
+
+        let bytes = writer.to_bytes();
+        let mut reader = BitReader::new(&bytes);
+        // write_command writes the CommandId first, then the EntityMessageType.
+        CommandId::de(&mut reader).expect("command id");
+        EntityMessageType::de(&mut reader).expect("entity message type")
+    }
+
+    /// The happy path: the entity is host-tracked and the component really is in
+    /// the world, so a real `InsertComponent` goes on the wire.
+    #[test]
+    fn a_present_component_is_inserted_for_real() {
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(
+            run_insert_command(&world, true),
+            EntityMessageType::InsertComponent,
+        );
+    }
+
+    /// The despawn-race case: the entity is no longer host-tracked, so the
+    /// insert degrades to a quiet terminal `Noop` rather than serializing a
+    /// component for an entity this peer does not know about.
+    ///
+    /// Note the asymmetry this test encodes: the *other* way to reach `Noop` --
+    /// host-tracked but component missing -- is a needed-set under-supply that
+    /// trips a `debug_assert!` on purpose, so it is not a reachable branch in a
+    /// debug build and cannot be asserted on here.
+    ///
+    /// Both directions are needed: `cargo-mutants` showed that flipping
+    /// `if !insert_present` survived the whole suite with the harness
+    /// integration tests in scope, because nothing ever asserted on which of
+    /// these two messages was written.
+    #[test]
+    fn an_insert_for_an_untracked_entity_degrades_to_a_noop() {
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(run_insert_command(&world, false), EntityMessageType::Noop);
     }
 }
