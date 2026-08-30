@@ -1407,6 +1407,16 @@ mod delegated_send_guard_tests {
         value: Property<u8>,
     }
 
+    /// A second component kind, so a single entity's planned update can mix a
+    /// component the world still has with one it no longer has. That mix is the
+    /// only way to reach `write_update`'s per-kind "component vanished" arm:
+    /// `planned_update_drop_reason` uses `any`, so an entity is only dropped
+    /// wholesale when *every* planned kind is stale.
+    #[derive(Replicate)]
+    struct Wraith {
+        value: Property<u8>,
+    }
+
     struct TestMutChannel {
         diff_mask_length: u8,
         receivers: Vec<MutReceiver>,
@@ -1776,6 +1786,192 @@ mod delegated_send_guard_tests {
     #[should_panic(expected = "serialization must not be reached")]
     fn the_server_is_never_stopped_by_the_guard() {
         run_with_auth(HostType::Server, EntityAuthStatus::Available);
+    }
+
+    /// A world that serves `Ghost` but has already lost `Wraith`, modelling the
+    /// freeze->transmit window in which a component is removed after the update
+    /// was planned but before it is written.
+    struct MixedWorld {
+        ghost: Ghost,
+    }
+
+    impl WorldRefType<u64> for MixedWorld {
+        fn has_entity(&self, _: &u64) -> bool {
+            true
+        }
+        fn entities(&self) -> Vec<u64> {
+            vec![1, 2]
+        }
+        fn has_component<R: ReplicatedComponent>(&self, _: &u64) -> bool {
+            unimplemented!("the update path uses has_component_of_kind")
+        }
+        fn has_component_of_kind(&self, _: &u64, kind: &ComponentKind) -> bool {
+            *kind == ComponentKind::of::<Ghost>()
+        }
+        fn component<'a, R: ReplicatedComponent>(
+            &'a self,
+            _: &u64,
+        ) -> Option<ReplicaRefWrapper<'a, R>> {
+            unimplemented!("the update path uses component_of_kind")
+        }
+        fn component_of_kind<'a>(
+            &'a self,
+            _: &u64,
+            kind: &ComponentKind,
+        ) -> Option<ReplicaDynRefWrapper<'a>> {
+            (*kind == ComponentKind::of::<Ghost>())
+                .then(|| ReplicaDynRefWrapper::new(GhostDynRef { inner: &self.ghost }))
+        }
+    }
+
+    /// What one *successful* `write_updates` pass did.
+    struct SuccessOutcome {
+        has_written: bool,
+        /// Planned kinds still queued per surviving entry, in list order.
+        remaining: Vec<usize>,
+        /// Entries left in the update list once fully-written ones are retired.
+        entries_left: usize,
+        /// Any drop guard that fired. A successful write must fire none: a
+        /// spurious `AllKindsStale` is exactly what a broken loop-advance looks
+        /// like from the outside, and without this field it looks like success.
+        reason: Option<UpdateDropReason>,
+    }
+
+    /// Runs one `write_updates` pass that is expected to SUCCEED -- the case no
+    /// other test in this module covers.
+    ///
+    /// Every pre-existing test that reaches serialization is `#[should_panic]`,
+    /// because `TripwireWorld`'s accessors panic on purpose to prove the guard
+    /// did *not* drop the entry. That makes them blind to everything after the
+    /// serialize: the loop advance, the drained-prefix bookkeeping, the retain.
+    /// `cargo-mutants` says so plainly -- `i += 1` and both `written_count += 1`
+    /// sites survived the entire suite.
+    ///
+    /// `entity_count` entities are queued, each with `Ghost`; when
+    /// `with_absent_kind` is set each also plans a `Wraith` the world no longer
+    /// has, so the per-kind vanished arm runs alongside a real write.
+    fn run_success_pass(entity_count: usize, with_absent_kind: bool) -> SuccessOutcome {
+        drop_counters::reset();
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = Vec::new();
+        for n in 0..entity_count {
+            let global_entity = GlobalEntity::from_u64(n as u64 + 1);
+            let mut planned_kinds = vec![ComponentKind::of::<Ghost>()];
+            if with_absent_kind {
+                planned_kinds.push(ComponentKind::of::<Wraith>());
+            }
+            local_world_manager.host_init_entity(
+                &global_entity,
+                planned_kinds.clone(),
+                &kinds,
+                false,
+            );
+            update_list.push((
+                global_entity,
+                GlobalEntityIndex::from(n as u32 + 1),
+                n as u64 + 1,
+                planned_kinds
+                    .into_iter()
+                    .enumerate()
+                    .map(|(bit, kind)| (kind, bit as u16, DiffMask::new(1)))
+                    .collect(),
+            ));
+        }
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+
+        WorldWriter::write_updates(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &MixedWorld {
+                ghost: Ghost::new_complete(7),
+            },
+            &gwm,
+            None,
+            &mut local_world_manager,
+            &mut has_written,
+            &mut update_list,
+            None,
+        );
+
+        let fired: Vec<UpdateDropReason> = [
+            UpdateDropReason::EntityDespawned,
+            UpdateDropReason::AllKindsStale,
+            UpdateDropReason::AuthorityLost,
+        ]
+        .into_iter()
+        .filter(|reason| drop_counters::count(*reason) > 0)
+        .collect();
+
+        SuccessOutcome {
+            has_written,
+            remaining: update_list.iter().map(|entry| entry.3.len()).collect(),
+            entries_left: update_list.len(),
+            reason: fired.first().copied(),
+        }
+    }
+
+    /// Every queued entity must be visited exactly once and retired.
+    ///
+    /// Two entities is the smallest list that can tell "advanced" from "stood
+    /// still": with one entity a broken advance is indistinguishable from a
+    /// correct one, since the single entry ends up drained either way. With two,
+    /// a loop that never advances rewrites the first entity forever and never
+    /// reaches the second -- and the second entry is still sitting in the list
+    /// at the end, which is what this asserts.
+    #[test]
+    fn every_queued_entity_is_written_and_retired() {
+        let outcome = run_success_pass(2, false);
+
+        assert!(outcome.has_written, "nothing was serialized at all");
+        assert_eq!(
+            outcome.reason, None,
+            "a successful pass must not trip any drop guard",
+        );
+        assert_eq!(
+            outcome.entries_left, 0,
+            "both entities were fully written, so neither should remain queued              (remaining kinds per surviving entry: {:?})",
+            outcome.remaining,
+        );
+    }
+
+    /// A component removed inside the freeze->transmit window leaves a stale
+    /// entry in an otherwise-live plan. It must be consumed along with the rest
+    /// of the entry, not left queued to be retried forever on every subsequent
+    /// packet.
+    #[test]
+    fn a_vanished_component_is_retired_alongside_the_live_one() {
+        let outcome = run_success_pass(1, true);
+
+        assert!(
+            outcome.has_written,
+            "the surviving Ghost should still have been serialized",
+        );
+        assert_eq!(
+            outcome.reason, None,
+            "one live kind out of two is not an all-stale entity",
+        );
+        assert_eq!(
+            outcome.entries_left, 0,
+            "both the live and the vanished kind must be drained              (remaining kinds per surviving entry: {:?})",
+            outcome.remaining,
+        );
     }
 
     /// Drive `write_updates` with a writer too small to hold the queued update,
