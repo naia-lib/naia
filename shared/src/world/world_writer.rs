@@ -1912,7 +1912,11 @@ mod delegated_send_guard_tests {
 
     /// Drive `write_command` with a single queued `InsertComponent` and report
     /// which `EntityMessageType` actually went on the wire.
-    fn run_insert_command<W: WorldRefType<u64>>(world: &W, host_track: bool) -> EntityMessageType {
+    fn run_command<W: WorldRefType<u64>>(
+        world: &W,
+        host_track: bool,
+        make_command: impl FnOnce(GlobalEntity) -> EntityCommand,
+    ) -> EntityMessageType {
         let mut kinds = ComponentKinds::new();
         kinds.add_component::<Ghost>();
 
@@ -1939,10 +1943,8 @@ mod delegated_send_guard_tests {
         local_world_manager.insert_sent_command_packet(&0, Instant::now());
 
         let converter = OneEntityConverter { global_entity };
-        let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> = VecDeque::from(vec![(
-            CommandId::from(0u16),
-            EntityCommand::InsertComponent(global_entity, ComponentKind::of::<Ghost>()),
-        )]);
+        let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> =
+            VecDeque::from(vec![(CommandId::from(0u16), make_command(global_entity))]);
 
         let mut writer = BitWriter::new();
         let mut last_written_id: Option<CommandId> = None;
@@ -1975,7 +1977,9 @@ mod delegated_send_guard_tests {
             ghost: Ghost::new_complete(7),
         };
         assert_eq!(
-            run_insert_command(&world, true),
+            run_command(&world, true, |e| {
+                EntityCommand::InsertComponent(e, ComponentKind::of::<Ghost>())
+            }),
             EntityMessageType::InsertComponent,
         );
     }
@@ -1998,6 +2002,128 @@ mod delegated_send_guard_tests {
         let world = LiveWorld {
             ghost: Ghost::new_complete(7),
         };
-        assert_eq!(run_insert_command(&world, false), EntityMessageType::Noop);
+        assert_eq!(
+            run_command(&world, false, |e| {
+                EntityCommand::InsertComponent(e, ComponentKind::of::<Ghost>())
+            }),
+            EntityMessageType::Noop,
+        );
+    }
+
+    /// The RemoveComponent twin of the insert gate: an entity this peer no
+    /// longer tracks must produce a `Noop`, not a remove naming a local entity
+    /// that was never resolved. `cargo-mutants` showed the `!` on this gate
+    /// survived the suite.
+    #[test]
+    fn a_remove_for_an_untracked_entity_degrades_to_a_noop() {
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(
+            run_command(&world, false, |e| {
+                EntityCommand::RemoveComponent(e, ComponentKind::of::<Ghost>())
+            }),
+            EntityMessageType::Noop,
+        );
+    }
+
+    /// ...and the tracked entity really does get a remove.
+    #[test]
+    fn a_remove_for_a_tracked_entity_is_written_for_real() {
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(
+            run_command(&world, true, |e| {
+                EntityCommand::RemoveComponent(e, ComponentKind::of::<Ghost>())
+            }),
+            EntityMessageType::RemoveComponent,
+        );
+    }
+
+    /// Drive `write_commands` (the command-path sibling of `write_updates`)
+    /// with a writer too small for the queued command.
+    fn run_command_overflow(bit_capacity: u32, already_written: bool) -> (usize, bool, u32) {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let global_entity = GlobalEntity::from_u64(1);
+        local_world_manager.host_init_entity(
+            &global_entity,
+            vec![ComponentKind::of::<Ghost>()],
+            &kinds,
+            false,
+        );
+        local_world_manager.insert_sent_command_packet(&0, Instant::now());
+
+        let converter = OneEntityConverter { global_entity };
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> = VecDeque::from(vec![(
+            CommandId::from(0u16),
+            EntityCommand::InsertComponent(global_entity, ComponentKind::of::<Ghost>()),
+        )]);
+
+        let mut writer = BitWriter::with_capacity(bit_capacity);
+        let mut has_written = already_written;
+
+        WorldWriter::write_commands(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &world,
+            &converter,
+            &gwm,
+            &mut local_world_manager,
+            &mut has_written,
+            &mut next_send_commands,
+        );
+
+        (next_send_commands.len(), has_written, writer.bits_written())
+    }
+
+    /// The command-path twin of the update-path spill test. `write_commands`
+    /// has no separate entity header, so the whole command is counted in one
+    /// pass and there is no capacity band to thread: anything below the 40 bits
+    /// this command needs overflows cleanly.
+    ///
+    /// A packet that already carries data must SPILL -- the command stays
+    /// queued for the next packet. `cargo-mutants` showed that deleting the `!`
+    /// in `if !*has_written` here survived the suite, which turns every full
+    /// packet into a `warn_overflow_command` panic.
+    #[test]
+    fn an_overflowing_command_spills_to_the_next_packet_when_something_was_written() {
+        const TOO_SMALL: u32 = 20;
+
+        // Proof the fixture can succeed at all: with room, the command is written
+        // and leaves the queue. Without this, the assertion below would pass just
+        // as well against a setup that could never write anything.
+        let (queued_with_room, _, _) = run_command_overflow(64, true);
+        assert_eq!(queued_with_room, 0, "fixture cannot write even with room");
+
+        let (still_queued, _, _) = run_command_overflow(TOO_SMALL, true);
+        assert_eq!(
+            still_queued, 1,
+            "the command did not fit, so it must remain queued for the next packet",
+        );
+    }
+
+    /// The other direction: an empty packet that still cannot fit the command
+    /// means it can never be sent, so this is a loud failure rather than an
+    /// infinite retry.
+    #[test]
+    #[should_panic(expected = "Blocking overflow detected")]
+    fn a_command_too_big_for_an_empty_packet_is_a_loud_failure() {
+        run_command_overflow(20, false);
     }
 }
