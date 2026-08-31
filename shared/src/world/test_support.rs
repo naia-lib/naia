@@ -62,6 +62,9 @@ pub struct TestGwm {
     /// component's diff mask directly.
     pub diff_handler: Arc<RwLock<GlobalDiffHandler>>,
     global_dirty: Arc<GlobalDirtyBitset>,
+    /// What `component_kinds` reports per entity. Empty by default, so a test
+    /// that does not opt in sees the "entity has no components yet" branch.
+    declared_kinds: RwLock<HashMap<GlobalEntity, Vec<ComponentKind>>>,
 }
 
 impl TestGwm {
@@ -75,6 +78,7 @@ impl TestGwm {
         Self {
             diff_handler,
             global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+            declared_kinds: RwLock::new(HashMap::new()),
         }
     }
 
@@ -92,6 +96,12 @@ impl TestGwm {
         }
         gdh.register_component(kinds, self, entity, kind, 1);
     }
+
+    /// Declares the component kinds `component_kinds` should report for
+    /// `entity`, which is what the authority-grant path iterates over.
+    pub fn declare_kinds(&self, entity: &GlobalEntity, kinds: Vec<ComponentKind>) {
+        self.declared_kinds.write().unwrap().insert(*entity, kinds);
+    }
 }
 
 impl InScopeEntities<GlobalEntity> for TestGwm {
@@ -101,8 +111,8 @@ impl InScopeEntities<GlobalEntity> for TestGwm {
 }
 
 impl GlobalWorldManagerType for TestGwm {
-    fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
-        None
+    fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>> {
+        self.declared_kinds.read().unwrap().get(entity).cloned()
     }
     fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
         true

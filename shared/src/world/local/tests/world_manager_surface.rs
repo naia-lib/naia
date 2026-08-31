@@ -43,6 +43,7 @@ fn global(id: u64) -> GlobalEntity {
 
 struct Fixture {
     kinds: ComponentKinds,
+    gwm: TestGwm,
     manager: LocalWorldManager,
 }
 
@@ -54,7 +55,11 @@ impl Fixture {
         let gwm = TestGwm::new(&kinds);
         let address: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
         let manager = LocalWorldManager::new(&address, host_type, 1, &gwm);
-        Self { kinds, manager }
+        Self {
+            kinds,
+            gwm,
+            manager,
+        }
     }
 
     fn server() -> Self {
@@ -661,5 +666,264 @@ fn patching_the_in_flight_refs_redirects_the_delivery() {
     assert!(
         fx.manager.pending_outbound_entities().any(|e| e == entity),
         "the delivery was redirected away, so the entity stays in flight"
+    );
+}
+
+// -- publish and delegation ----------------------------------------------
+
+/// Command types a drain produced, so the assertions below read as sequences
+/// rather than as nested `matches!` chains.
+fn command_types(commands: &[crate::EntityCommand]) -> Vec<crate::EntityMessageType> {
+    commands.iter().map(|command| command.get_type()).collect()
+}
+
+/// The `ReliableSender` retains unacked commands for retransmit, so every drain
+/// replays the fixture's own spawn. Only what follows it is this test's doing.
+fn types_after_the_spawn(commands: &[crate::EntityCommand]) -> Vec<crate::EntityMessageType> {
+    command_types(commands)
+        .into_iter()
+        .skip_while(|t| {
+            matches!(
+                t,
+                crate::EntityMessageType::Spawn | crate::EntityMessageType::SpawnWithComponents
+            )
+        })
+        .collect()
+}
+
+#[test]
+fn a_client_publishes_its_own_host_entity_through_the_host_engine() {
+    let mut fx = Fixture::new(HostType::Client);
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+
+    fx.manager.send_publish(HostType::Client, &entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![crate::EntityMessageType::Publish],
+        "the publish should reach the sender as a Publish command"
+    );
+
+    fx.manager.send_unpublish(HostType::Client, &entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![
+            crate::EntityMessageType::Publish,
+            crate::EntityMessageType::Unpublish
+        ],
+        "and the unpublish likewise"
+    );
+}
+
+#[test]
+#[should_panic(expected = "published by default")]
+fn a_server_cannot_publish_its_own_entity() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+    fx.manager.send_publish(HostType::Server, &entity);
+}
+
+#[test]
+#[should_panic(expected = "cannot be unpublished")]
+fn a_server_cannot_unpublish_its_own_entity() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+    fx.manager.send_unpublish(HostType::Server, &entity);
+}
+
+/// A server-owned host channel starts in `Published`, so the publish is
+/// skipped and `EnableDelegation` goes out alone. Every mutation of that
+/// `is_published` test -- flipping either `==`, weakening `||` to `&&`, or
+/// dropping the `!` -- adds a redundant `Publish` ahead of it.
+#[test]
+fn enabling_delegation_on_an_already_published_entity_skips_the_publish() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+
+    fx.manager
+        .send_enable_delegation(HostType::Server, false, &entity);
+
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![crate::EntityMessageType::EnableDelegation],
+        "an already-published entity needs no second Publish"
+    );
+}
+
+#[test]
+fn disabling_delegation_queues_one_command() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+
+    fx.manager
+        .send_enable_delegation(HostType::Server, false, &entity);
+    fx.manager.send_disable_delegation(&entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![
+            crate::EntityMessageType::EnableDelegation,
+            crate::EntityMessageType::DisableDelegation
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "must be the owning client")]
+fn a_client_must_own_the_entity_to_enable_delegation() {
+    let mut fx = Fixture::new(HostType::Client);
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+    fx.manager
+        .send_enable_delegation(HostType::Client, false, &entity);
+}
+
+#[test]
+fn releasing_authority_on_a_host_entity_goes_out_through_the_host_engine() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+    fx.manager
+        .send_enable_delegation(HostType::Server, false, &entity);
+    let _ = fx.drain_commands();
+
+    fx.manager.remote_send_release_auth(&entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![
+            crate::EntityMessageType::EnableDelegation,
+            crate::EntityMessageType::ReleaseAuthority
+        ],
+    );
+}
+
+// -- authority registration and the live diff mask ------------------------
+
+/// Registers `entity`/`kind` everywhere the update ledger needs it, then grants
+/// authority -- which marks the component fully dirty. Returns nothing; the
+/// caller asserts on the manager's mask queries.
+impl Fixture {
+    fn arm_and_grant(&mut self, entity: &GlobalEntity, kind: &ComponentKind) {
+        self.gwm.arm_diff_handler(&self.kinds, entity, kind);
+        self.gwm.declare_kinds(entity, vec![*kind]);
+        self.manager.insert_component(entity, kind);
+        let _ = self.drain_commands();
+        self.manager.register_authed_entity(&self.gwm, entity);
+    }
+}
+
+#[test]
+fn granting_authority_dirties_every_declared_component() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+
+    assert!(
+        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "before the grant there is nothing pending"
+    );
+
+    fx.arm_and_grant(&entity, &ghost());
+
+    assert!(
+        !fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "the grant republishes full state, so every bit should be set"
+    );
+}
+
+#[test]
+fn revoking_authority_stops_tracking_the_components() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+
+    fx.manager.deregister_authed_entity(&fx.gwm, &entity);
+
+    assert!(
+        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "a deregistered component has no live mask left to report"
+    );
+}
+
+#[test]
+fn an_entity_with_no_declared_components_is_a_no_op_for_both_directions() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+    // `declare_kinds` is never called, so the manager reports `None` kinds.
+
+    fx.manager.register_authed_entity(&fx.gwm, &entity);
+    assert!(
+        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "with nothing declared the grant has nothing to dirty"
+    );
+    fx.manager.deregister_authed_entity(&fx.gwm, &entity);
+}
+
+#[test]
+fn recording_an_update_clears_the_live_mask() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+
+    let now = Instant::now();
+    fx.manager
+        .record_update(&now, &0, &entity, &ghost(), crate::DiffMask::new(1));
+
+    assert!(
+        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "the client path records the ledger entry AND clears the live mask"
+    );
+}
+
+#[test]
+fn recording_a_sent_update_leaves_the_live_mask_alone() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+
+    let now = Instant::now();
+    fx.manager
+        .record_sent_update(&now, &0, &entity, &ghost(), crate::DiffMask::new(1));
+
+    assert!(
+        !fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "the server path clears up-front in prepare_send_job, never here"
+    );
+}
+
+#[test]
+fn the_dense_clear_reaches_the_same_mask_as_the_keyed_query() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+
+    let (entity_idx, kind_bit) = {
+        let gdh = fx.gwm.diff_handler.read().unwrap();
+        (
+            gdh.entity_to_global_idx(&entity)
+                .expect("the armed entity should have a dense index"),
+            gdh.kind_bit(&ghost())
+                .expect("the armed component should have a kind bit"),
+        )
+    };
+
+    assert!(
+        !fx.manager.diff_mask_is_clear_dense(entity_idx, kind_bit),
+        "the dense query should see the same pending bits as the keyed one"
+    );
+
+    fx.manager.clear_diff_mask_dense(entity_idx, kind_bit);
+
+    assert!(
+        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "and the dense clear should be visible through the keyed query"
     );
 }
