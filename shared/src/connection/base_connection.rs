@@ -506,3 +506,409 @@ impl BaseConnection {
         );
     }
 }
+
+#[cfg(test)]
+mod base_connection_tests {
+    //! The facade's own behaviour: which half each accessor reaches into, and
+    //! the ack fan-out.
+    //!
+    //! Almost every method here delegates, so the bugs available are bugs of
+    //! *wiring*: an outgoing header built from the send half's own index
+    //! instead of what the recv half has seen, a delivery notification that
+    //! reaches the message manager but not the world manager, a `mark_sent`
+    //! that resets the heartbeat but leaves the empty-ack flag standing. The
+    //! sub-managers' own semantics are pinned in their own modules; these
+    //! tests pin the seams between them.
+
+    use std::{collections::VecDeque, net::SocketAddr, time::Duration};
+
+    use naia_serde::{BitReader, BitWriter, Serde};
+
+    use crate::{
+        messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+        world::{
+            test_support::TestGwm,
+            test_world::{TestSpawner, TestWorld},
+        },
+        Channel, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode, ChannelSettings,
+        ComponentKinds, ConnectionConfig, HostType, MessageContainer, MessageKinds, Named,
+        PacketIndex, PacketNotifiable, PacketType, ReliableSettings, StandardHeader,
+    };
+
+    use super::{BaseConnection, BaseSendConnection};
+
+    /// Records every packet index it is told was delivered.
+    #[derive(Default)]
+    struct Spy {
+        delivered: Vec<PacketIndex>,
+    }
+
+    impl PacketNotifiable for Spy {
+        fn notify_packet_delivered(&mut self, packet_index: PacketIndex) {
+            self.delivered.push(packet_index);
+        }
+    }
+
+    fn config(heartbeat: Duration) -> ConnectionConfig {
+        ConnectionConfig::new(Duration::from_secs(30), heartbeat, None)
+    }
+
+    fn connection(config: &ConnectionConfig) -> (TestGwm, BaseConnection) {
+        let component_kinds = ComponentKinds::new();
+        let gwm = TestGwm::new(&component_kinds);
+        let address: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
+        let connection = BaseConnection::new(
+            config,
+            &address,
+            HostType::Client,
+            1,
+            &ChannelKinds::new(),
+            &gwm,
+        );
+        (gwm, connection)
+    }
+
+    /// A header from the peer that acknowledges `acked` and nothing else.
+    fn peer_header(sender_packet_index: PacketIndex, acked: PacketIndex) -> StandardHeader {
+        StandardHeader::new(PacketType::Data, sender_packet_index, acked, 0)
+    }
+
+    #[test]
+    fn an_acked_data_packet_notifies_both_managers_and_the_callers_extras() {
+        // The delivery notification is how a reliable sender learns to stop
+        // retransmitting. It has to reach the two managers the connection owns
+        // *and* whatever the caller passed in -- dropping either half means
+        // something retransmits forever.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let mut writer = BitWriter::new();
+        let sent = connection.write_header(PacketType::Data, &mut writer);
+
+        let mut spy = Spy::default();
+        connection
+            .process_incoming_header(&peer_header(0, sent.sender_packet_index), &mut [&mut spy]);
+
+        assert_eq!(
+            spy.delivered,
+            vec![sent.sender_packet_index],
+            "the caller's notifiable must be told about the acked packet"
+        );
+    }
+
+    #[test]
+    fn an_ack_for_a_packet_that_was_never_sent_notifies_nothing() {
+        // A peer can claim to have received anything. Only indexes this
+        // connection actually put on the wire may fire a notification.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let mut spy = Spy::default();
+        connection.process_incoming_header(&peer_header(0, 40), &mut [&mut spy]);
+
+        assert!(
+            spy.delivered.is_empty(),
+            "an unsolicited ack must not be forwarded as a delivery"
+        );
+    }
+
+    #[test]
+    fn the_outgoing_header_acknowledges_what_the_recv_half_has_seen() {
+        // The ack fields come from the RECV half. Sourcing them from the send
+        // half's own counter would have the connection acknowledge its own
+        // packets, and the peer would resend everything forever.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        connection.process_incoming_header(&peer_header(7, 0), &mut []);
+        assert_eq!(connection.last_received_packet_index(), 7);
+
+        let mut writer = BitWriter::new();
+        let header = connection.write_header(PacketType::Data, &mut writer);
+        assert_eq!(
+            header.sender_ack_index, 7,
+            "the outgoing header must acknowledge the peer's latest packet"
+        );
+    }
+
+    #[test]
+    fn each_written_header_takes_the_next_packet_index() {
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let first = connection.next_packet_index();
+        let mut writer = BitWriter::new();
+        let header = connection.write_header(PacketType::Data, &mut writer);
+        assert_eq!(header.sender_packet_index, first);
+        assert_eq!(
+            connection.next_packet_index(),
+            first.wrapping_add(1),
+            "writing a header must consume the index it stamped"
+        );
+    }
+
+    #[test]
+    fn a_written_header_is_the_header_that_reads_back() {
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let mut writer = BitWriter::new();
+        let header = connection.write_header(PacketType::Data, &mut writer);
+        let bytes = writer.to_bytes();
+
+        let read_back = StandardHeader::de(&mut BitReader::new(&bytes))
+            .expect("the header just written should parse");
+        assert_eq!(read_back, header);
+    }
+
+    #[test]
+    fn sending_anything_clears_both_the_heartbeat_and_the_empty_ack() {
+        // A heartbeat exists only to keep the NAT mapping alive when nothing
+        // else is being sent, and an empty ack only to acknowledge when there
+        // is no payload to ride along with. Real traffic satisfies both, so
+        // mark_sent has to retire both -- otherwise every data packet is
+        // chased by a redundant one.
+        let cfg = config(Duration::ZERO);
+        let (_gwm, mut connection) = connection(&cfg);
+
+        assert!(
+            connection.should_send_heartbeat(),
+            "a zero interval means one is due immediately"
+        );
+        connection.mark_should_send_empty_ack();
+        assert!(connection.should_send_empty_ack());
+
+        connection.mark_sent();
+
+        assert!(
+            !connection.should_send_empty_ack(),
+            "real traffic carries the ack, so the empty one is no longer needed"
+        );
+    }
+
+    #[test]
+    fn taking_the_empty_ack_flag_clears_it() {
+        // The send loop takes the flag rather than reading it, so two passes
+        // over the same connection cannot both send an empty ack.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        assert!(!connection.take_should_send_empty_ack());
+        connection.mark_should_send_empty_ack();
+        assert!(connection.take_should_send_empty_ack());
+        assert!(
+            !connection.take_should_send_empty_ack(),
+            "the flag must not survive being taken"
+        );
+        assert!(!connection.should_send_empty_ack());
+    }
+
+    #[test]
+    fn the_bandwidth_accessors_reach_the_send_halfs_accumulator() {
+        // These are pure delegation; the accumulator's own arithmetic is
+        // pinned in its module. What is pinned here is that the facade and the
+        // send half address the SAME accumulator.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let now = naia_socket_shared::Instant::now();
+        connection.accumulate_bandwidth(&now);
+        let before = connection.bandwidth_remaining();
+        connection.spend_bandwidth(100);
+        assert_eq!(
+            connection.bandwidth_remaining(),
+            before - 100.0,
+            "a spend through the facade must debit the send half's budget"
+        );
+        assert_eq!(
+            connection.send.bandwidth_remaining(),
+            connection.bandwidth_remaining(),
+            "the facade and the send half must not be reading two different budgets"
+        );
+    }
+
+    #[test]
+    fn reading_a_packet_stops_at_the_messages_when_world_events_are_off() {
+        // The client reads world events from data packets; the server does not.
+        // With the flag off, trailing bytes are left for the caller and must
+        // not be parsed as a world event -- a stray byte would otherwise fail
+        // the whole packet.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+        let channel_kinds = ChannelKinds::new();
+        let message_kinds = MessageKinds::new();
+        let component_kinds = ComponentKinds::new();
+
+        // An empty message section (one `false` continue bit) followed by a
+        // sentinel the caller expects to still be there.
+        let mut writer = BitWriter::new();
+        false.ser(&mut writer);
+        0xABCDu16.ser(&mut writer);
+        let bytes = writer.to_bytes();
+
+        let mut reader = BitReader::new(&bytes);
+        connection
+            .read_packet(
+                &channel_kinds,
+                &message_kinds,
+                &component_kinds,
+                &0,
+                false,
+                &mut reader,
+            )
+            .expect("an empty message section should parse");
+        assert_eq!(
+            u16::de(&mut reader).expect("the sentinel should still be unread"),
+            0xABCD,
+            "with world events off, the reader must be left where the messages ended"
+        );
+    }
+
+    #[test]
+    fn a_truncated_world_event_section_is_an_error_not_a_panic() {
+        // Packet bytes are attacker-controlled. A world-event section that
+        // opens an entity and then stops must surface as an error the
+        // connection can drop, not a panic that takes the host down.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let mut writer = BitWriter::new();
+        false.ser(&mut writer); // no messages
+        true.ser(&mut writer); // ...but an entity update section that never arrives
+        let bytes = writer.to_bytes();
+
+        assert!(
+            connection
+                .read_packet(
+                    &ChannelKinds::new(),
+                    &MessageKinds::new(),
+                    &ComponentKinds::new(),
+                    &0,
+                    true,
+                    &mut BitReader::new(&bytes),
+                )
+                .is_err(),
+            "a section that stops mid-entity must be rejected"
+        );
+    }
+
+    struct Wire;
+    impl Named for Wire {
+        fn name(&self) -> String {
+            "Wire".to_string()
+        }
+        fn protocol_name() -> &'static str {
+            "Wire"
+        }
+    }
+    impl Channel for Wire {}
+
+    fn wire_kinds() -> ChannelKinds {
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<Wire>(ChannelSettings::new(
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+            ChannelDirection::Bidirectional,
+        ));
+        kinds
+    }
+
+    fn message_kinds() -> MessageKinds {
+        let mut kinds = MessageKinds::new();
+        kinds.add_message::<FragmentedMessage>();
+        kinds
+    }
+
+    fn payload(tag: u8) -> MessageContainer {
+        MessageContainer::new(Box::new(FragmentedMessage::new(
+            FragmentId::zero(),
+            FragmentIndex::from_u32(0),
+            vec![tag].into_boxed_slice(),
+        )))
+    }
+
+    fn wire_connection(
+        config: &ConnectionConfig,
+        kinds: &ChannelKinds,
+    ) -> (TestGwm, BaseConnection) {
+        let component_kinds = ComponentKinds::new();
+        let gwm = TestGwm::new(&component_kinds);
+        let address: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
+        let connection = BaseConnection::new(config, &address, HostType::Client, 1, kinds, &gwm);
+        (gwm, connection)
+    }
+
+    #[test]
+    fn a_packet_written_by_one_connection_is_read_by_its_peer() {
+        // The whole send path in one line: queue, collect, write, read. With
+        // world events off the packet is messages only, and the peer must
+        // consume exactly what was written -- no world-event section may be
+        // demanded of it, and none may be left behind.
+        let cfg = config(Duration::from_secs(4));
+        let channel_kinds = wire_kinds();
+        let messages = message_kinds();
+        let component_kinds = ComponentKinds::new();
+        let (sender_gwm, mut sender) = wire_connection(&cfg, &channel_kinds);
+        let (_peer_gwm, mut peer) = wire_connection(&cfg, &channel_kinds);
+
+        {
+            let BaseSendConnection {
+                message_manager,
+                world_manager,
+                ..
+            } = &mut sender.send;
+            let mut converter = world_manager.entity_converter_mut(&sender_gwm);
+            message_manager.send_message(
+                &messages,
+                &mut converter,
+                &ChannelKind::of::<Wire>(),
+                payload(9),
+            );
+        }
+        // A reliable sender only offers collected messages to a packet.
+        sender.collect_messages(&naia_socket_shared::Instant::now(), &200.0);
+
+        let world = TestWorld::new();
+        let spawner = TestSpawner::default();
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        let packet_index = sender.next_packet_index();
+        sender.write_packet(
+            &channel_kinds,
+            &messages,
+            &component_kinds,
+            &naia_socket_shared::Instant::now(),
+            &mut writer,
+            packet_index,
+            &world,
+            &spawner,
+            &sender_gwm,
+            &mut has_written,
+            false,
+            &mut VecDeque::new(),
+            &mut Vec::new(),
+            None,
+            None,
+        );
+        assert!(has_written, "a queued message should have been written");
+
+        let bytes = writer.to_bytes();
+        peer.read_packet(
+            &channel_kinds,
+            &messages,
+            &component_kinds,
+            &0,
+            false,
+            &mut BitReader::new(&bytes),
+        )
+        .expect("a packet the peer just wrote should parse");
+    }
+
+    #[test]
+    fn a_connection_that_has_lost_nothing_reports_no_loss() {
+        // packet_loss_pct is read straight into telemetry; a fresh connection
+        // that reported anything but zero would look like a broken link.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, connection) = connection(&cfg);
+        assert_eq!(connection.packet_loss_pct(), 0.0);
+    }
+}
