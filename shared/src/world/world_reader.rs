@@ -350,14 +350,12 @@ impl WorldReader {
         tick: &Tick,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
-        let mut _update_count = 0;
         loop {
             // read update continue bit
             let update_continue = bool::de(reader)?;
             if !update_continue {
                 break;
             }
-            _update_count += 1;
 
             let mut local_entity = OwnedLocalEntity::de(reader)?.to_reversed();
             // apply redirect if entity was migrated
