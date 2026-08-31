@@ -231,6 +231,10 @@ impl RemoteWorldManager {
     }
 
     /// Removes `entity` from the waitlist tracking structures.
+    ///
+    /// This forwards to `RemoteWorldWaitlist::despawn_entity`, which forwards
+    /// to a stub with an empty body, so the whole call is observably a no-op
+    /// and no test can distinguish it from one. Triaged, not missing coverage.
     pub fn despawn_entity(
         &mut self,
         _local_entity_map: &mut LocalEntityMap,
@@ -1385,5 +1389,40 @@ mod remote_world_manager_tests {
         );
         fixture.manager.insert_entity_channel(remote(1), channel);
         assert!(fixture.manager.has_entity_channel(&remote(1)));
+    }
+
+    /// A migration takes a channel over mid-stream, and whatever the spawn
+    /// barrier was holding has to be let out by hand: `force_drain_entity_buffers`
+    /// moves the buffered messages into the channel's incoming list, and
+    /// `flush_entity_channel` lifts them from there into the engine. Neither
+    /// step surfaces anything on its own.
+    #[test]
+    fn force_draining_and_flushing_release_what_the_spawn_barrier_held() {
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.world.spawn_at(1);
+        fixture
+            .map
+            .insert_with_remote_entity(GlobalEntity::from_u64(1), remote(1));
+
+        // A despawn for an entity whose channel never saw a spawn stays in the
+        // channel's buffer rather than being processed.
+        let events = fixture.deliver(vec![EntityMessage::Despawn(remote(1))]);
+        assert!(summarize(&events).is_empty());
+        assert!(fixture.manager.has_entity_channel(&remote(1)));
+
+        fixture.manager.force_drain_entity_buffers(&remote(1));
+        let events = fixture.deliver(Vec::new());
+        assert!(
+            summarize(&events).is_empty(),
+            "draining moves the message off the buffer but no further",
+        );
+
+        fixture.manager.flush_entity_channel(remote(1));
+        let events = fixture.deliver(Vec::new());
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::Despawn), GlobalEntity::from_u64(1))],
+            "flushing is what hands the released message to the manager",
+        );
     }
 }
