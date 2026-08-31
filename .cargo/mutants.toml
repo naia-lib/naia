@@ -10,8 +10,13 @@
 # This is a statement about the test PROFILE, not about the code: if one of
 # these features is ever enabled by default, delete the corresponding line.
 exclude_re = [
-    # `bench_instrumentation` diagnostic counter modules.
+    # `bench_instrumentation` diagnostic counter modules, and the accessors
+    # that read them -- the counters behind these are compiled out by default,
+    # so the getters return a constant and the recorders are no-ops.
     "_counters::",
+    "::record_deferred",
+    "::record_bandwidth_deferred",
+    "_packets_deferred_last_tick",
     # `e2e_debug` diagnostic dumps.
     "::debug_[a-z_]+",
     # `test_utils` accessors that exist only so tests can peek at internals.
