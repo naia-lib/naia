@@ -712,3 +712,390 @@ impl InScopeEntities<RemoteEntity> for RemoteWorldManager {
         self.remote_engine.has_entity(entity)
     }
 }
+
+#[cfg(test)]
+mod remote_world_manager_tests {
+    use super::*;
+
+    use crate::{
+        bigmap::BigMapKey,
+        world::{
+            test_support::TestGwm,
+            test_world::{remote_component, TestSpawner, TestWorld},
+        },
+        EntityMessageType, Property,
+    };
+
+    #[derive(Replicate)]
+    struct Ghost {
+        value: Property<u8>,
+    }
+
+    /// A second kind, so "the channel does not carry this component" can be
+    /// asked without inventing an entity for it.
+    #[derive(Replicate)]
+    struct Wraith {
+        value: Property<u8>,
+    }
+
+    fn kinds() -> ComponentKinds {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds
+    }
+
+    fn ghost() -> ComponentKind {
+        ComponentKind::of::<Ghost>()
+    }
+
+    fn remote(id: u16) -> RemoteEntity {
+        RemoteEntity::new(id as u32)
+    }
+
+    /// Everything `take_incoming_events` needs, plus the message index counter
+    /// the remote engine orders by.
+    struct Fixture {
+        manager: RemoteWorldManager,
+        spawner: TestSpawner,
+        gwm: TestGwm,
+        map: LocalEntityMap,
+        kinds: ComponentKinds,
+        world: TestWorld,
+        next_index: MessageIndex,
+    }
+
+    impl Fixture {
+        fn new(host_type: HostType) -> Self {
+            let kinds = kinds();
+            Self {
+                manager: RemoteWorldManager::new(host_type),
+                spawner: TestSpawner::new(),
+                gwm: TestGwm::new(&kinds),
+                map: LocalEntityMap::new(host_type),
+                kinds,
+                world: TestWorld::new(),
+                next_index: 0,
+            }
+        }
+
+        /// Feeds `messages` through the manager and returns the events raised.
+        fn deliver(&mut self, messages: Vec<EntityMessage<RemoteEntity>>) -> Vec<EntityEvent> {
+            self.deliver_with(messages, &mut HashMap::new())
+        }
+
+        fn deliver_with(
+            &mut self,
+            messages: Vec<EntityMessage<RemoteEntity>>,
+            incoming_components: &mut HashMap<
+                (OwnedLocalEntity, ComponentKind),
+                Box<dyn Replicate>,
+            >,
+        ) -> Vec<EntityEvent> {
+            let indexed = messages
+                .into_iter()
+                .map(|message| {
+                    let index = self.next_index;
+                    self.next_index += 1;
+                    (index, message)
+                })
+                .collect();
+            self.manager.take_incoming_events(
+                &mut self.spawner,
+                &self.gwm,
+                &mut self.map,
+                &self.kinds,
+                &mut self.world,
+                &Instant::now(),
+                incoming_components,
+                Vec::new(),
+                indexed,
+            )
+        }
+
+        /// Spawns `entity` remotely and gives it a Ghost, which is the state
+        /// every later message assumes.
+        fn spawn_with_ghost(&mut self, entity: RemoteEntity) -> GlobalEntity {
+            let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
+                HashMap::new();
+            components.insert(
+                (entity.copy_to_owned(), ghost()),
+                remote_component(&self.kinds, &Ghost::new_complete(1)),
+            );
+            self.deliver_with(
+                vec![
+                    EntityMessage::Spawn(entity),
+                    EntityMessage::InsertComponent(entity, ghost()),
+                ],
+                &mut components,
+            );
+            let global = *self
+                .map
+                .global_entity_from_remote(&entity)
+                .expect("the spawn must have mapped the entity");
+            self.gwm.declare_kinds(&global, vec![ghost()]);
+            global
+        }
+    }
+
+    /// `EntityEvent` carries a boxed component and so is neither `Debug` nor
+    /// `PartialEq`. Its type and subject are what the tests are about.
+    fn summarize(events: &[EntityEvent]) -> Vec<(Option<EntityMessageType>, GlobalEntity)> {
+        events
+            .iter()
+            .map(|event| (event.to_type(), event.entity()))
+            .collect()
+    }
+
+    #[test]
+    fn a_spawn_message_maps_the_entity_and_raises_a_spawn_event() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let events = fixture.deliver(vec![EntityMessage::Spawn(remote(1))]);
+
+        let global = *fixture
+            .map
+            .global_entity_from_remote(&remote(1))
+            .expect("a spawned entity must be mapped");
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::Spawn), global)],
+        );
+    }
+
+    #[test]
+    fn inserting_a_component_puts_it_in_the_world_and_raises_an_event() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let global = fixture.spawn_with_ghost(remote(1));
+
+        assert_eq!(
+            *fixture
+                .world
+                .value_of::<Ghost>(&BigMapKey::to_u64(&global))
+                .expect("the component must have reached the world")
+                .value,
+            1,
+        );
+    }
+
+    #[test]
+    fn a_component_for_an_entity_that_was_never_spawned_is_dropped() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
+            HashMap::new();
+        components.insert(
+            (remote(1).copy_to_owned(), ghost()),
+            remote_component(&kinds(), &Ghost::new_complete(1)),
+        );
+
+        let events = fixture.deliver_with(
+            vec![EntityMessage::InsertComponent(remote(1), ghost())],
+            &mut components,
+        );
+
+        assert!(
+            summarize(&events).is_empty(),
+            "a component for an unknown entity must not raise an insert event",
+        );
+    }
+
+    #[test]
+    fn removing_a_component_raises_an_event_carrying_the_value_it_had() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let global = fixture.spawn_with_ghost(remote(1));
+
+        let events = fixture.deliver(vec![EntityMessage::RemoveComponent(remote(1), ghost())]);
+
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::RemoveComponent), global)],
+        );
+        let EntityEvent::RemoveComponent(_, component) = &events[0] else {
+            panic!("expected a RemoveComponent event");
+        };
+        assert_eq!(component.kind(), ghost());
+        assert!(
+            fixture
+                .world
+                .value_of::<Ghost>(&BigMapKey::to_u64(&global))
+                .is_none(),
+            "the component must be gone from the world, not just reported",
+        );
+    }
+
+    /// The client fires RemoveComponent for each of a despawned entity's
+    /// components; the server does not, because `world_server.rs` has already
+    /// fired them synthetically before the despawn reaches here. The mapping
+    /// removal order is what makes the difference: the client reads the
+    /// mapping first and drops it afterwards, the server drops it up front so
+    /// the converter lookup in `process_remove` fails and the event is
+    /// skipped.
+    #[test]
+    fn a_client_reports_the_components_a_despawn_takes_with_it() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let global = fixture.spawn_with_ghost(remote(1));
+
+        let events = fixture.deliver(vec![EntityMessage::Despawn(remote(1))]);
+
+        assert_eq!(
+            summarize(&events),
+            vec![
+                (Some(EntityMessageType::RemoveComponent), global),
+                (Some(EntityMessageType::Despawn), global),
+            ],
+        );
+        assert!(
+            !fixture.map.contains_remote_entity(&remote(1)),
+            "the mapping must be dropped once the despawn is done with it",
+        );
+    }
+
+    #[test]
+    fn a_server_reports_only_the_despawn_because_the_removals_already_fired() {
+        let mut fixture = Fixture::new(HostType::Server);
+        let global = fixture.spawn_with_ghost(remote(1));
+
+        let events = fixture.deliver(vec![EntityMessage::Despawn(remote(1))]);
+
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::Despawn), global)],
+            "firing removals here would double-remove records world_server \
+             has already cleaned up",
+        );
+        assert!(!fixture.map.contains_remote_entity(&remote(1)));
+    }
+
+    #[test]
+    fn a_noop_message_raises_nothing() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let events = fixture.deliver(vec![EntityMessage::Noop]);
+        assert!(summarize(&events).is_empty());
+    }
+
+    /// Everything the manager does not handle specially is turned into an
+    /// event by `EntityMessage::to_event`, which resolves the entity through
+    /// the map. The message still has to survive the entity channel's auth
+    /// gate to get here, so this uses the two that a spawned, undelegated
+    /// entity accepts.
+    #[test]
+    fn a_message_with_no_special_handling_becomes_its_own_event() {
+        for (message, expected) in [
+            (
+                EntityMessage::EnableDelegation(0, remote(1)),
+                EntityMessageType::EnableDelegation,
+            ),
+            (
+                EntityMessage::Unpublish(0, remote(1)),
+                EntityMessageType::Unpublish,
+            ),
+        ] {
+            let mut fixture = Fixture::new(HostType::Client);
+            let global = fixture.spawn_with_ghost(remote(1));
+
+            let events = fixture.deliver(vec![message]);
+
+            assert_eq!(summarize(&events), vec![(Some(expected), global)]);
+        }
+    }
+
+    // -- what a delegated client may update ---------------------------------
+
+    /// `is_component_updatable` gates whether a client may write to a
+    /// component it does not own. Every one of its five refusals returns the
+    /// same `false`, so each has to be reached on its own.
+    #[test]
+    fn only_an_authed_entitys_own_components_are_updatable() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let global = fixture.spawn_with_ghost(remote(1));
+        let converter_map = {
+            let mut map = LocalEntityMap::new(HostType::Client);
+            map.insert_with_remote_entity(global, remote(1));
+            map
+        };
+
+        assert!(
+            !fixture.manager.is_component_updatable(
+                converter_map.entity_converter(),
+                &global,
+                &ghost(),
+            ),
+            "an entity this peer has no authority over is not updatable",
+        );
+
+        fixture.manager.register_authed_entity(&remote(1));
+        assert!(
+            fixture.manager.is_component_updatable(
+                converter_map.entity_converter(),
+                &global,
+                &ghost(),
+            ),
+            "an authed entity's own component is updatable",
+        );
+        assert!(
+            !fixture.manager.is_component_updatable(
+                converter_map.entity_converter(),
+                &global,
+                &ComponentKind::of::<Wraith>(),
+            ),
+            "a component the channel does not carry is not updatable",
+        );
+
+        let unmapped = LocalEntityMap::new(HostType::Client);
+        assert!(
+            !fixture
+                .manager
+                .is_component_updatable(unmapped.entity_converter(), &global, &ghost()),
+            "an entity with no remote address cannot be checked at all",
+        );
+
+        fixture.manager.deregister_authed_entity(&remote(1));
+        assert!(
+            !fixture.manager.is_component_updatable(
+                converter_map.entity_converter(),
+                &global,
+                &ghost(),
+            ),
+            "authority handed back must close the gate again",
+        );
+    }
+
+    #[test]
+    fn a_server_never_treats_a_component_as_remotely_updatable() {
+        let mut fixture = Fixture::new(HostType::Server);
+        let global = fixture.spawn_with_ghost(remote(1));
+        let mut map = LocalEntityMap::new(HostType::Server);
+        map.insert_with_remote_entity(global, remote(1));
+
+        // The server has no authed set at all, so registering is a no-op
+        // rather than an error.
+        fixture.manager.register_authed_entity(&remote(1));
+
+        assert!(
+            !fixture
+                .manager
+                .is_component_updatable(map.entity_converter(), &global, &ghost()),
+            "only a client holds delegated authority over a remote entity",
+        );
+    }
+
+    // -- commands going back out --------------------------------------------
+
+    #[test]
+    fn a_command_for_an_entity_that_left_scope_is_dropped_rather_than_sent() {
+        let mut fixture = Fixture::new(HostType::Client);
+        let global = fixture.spawn_with_ghost(remote(1));
+        let empty = LocalEntityMap::new(HostType::Client);
+
+        fixture
+            .manager
+            .send_entity_command(empty.entity_converter(), EntityCommand::Despawn(global));
+        fixture.manager.send_auth_command(
+            empty.entity_converter(),
+            EntityCommand::Publish(None, global),
+        );
+
+        assert!(
+            fixture.manager.take_outgoing_commands().is_empty(),
+            "a command naming an entity with no remote address has nowhere to go",
+        );
+    }
+}
