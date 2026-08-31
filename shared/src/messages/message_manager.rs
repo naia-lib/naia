@@ -619,7 +619,10 @@ mod message_manager_tests {
     use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
     use naia_socket_shared::Instant;
 
-    use crate::messages::{message::Message, message_kinds::MessageKind};
+    use crate::messages::{
+        channels::senders::request_sender::LocalRequestId, message::Message,
+        message_kinds::MessageKind,
+    };
     use crate::world::entity::entity_converters::{
         LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
     };
@@ -631,6 +634,7 @@ mod message_manager_tests {
         Channel, ChannelCriticality, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode,
         ChannelSettings, ComponentKinds, FakeEntityConverter, GlobalRequestId, HostType,
         MessageBuilder, MessageContainer, MessageKinds, Named, PacketNotifiable, ReliableSettings,
+        RequestOrResponse,
     };
 
     use super::{receive_window, MessageManager};
@@ -838,6 +842,7 @@ mod message_manager_tests {
         kinds.add_message::<FragmentedMessage>();
         kinds.add_message::<Ping>();
         kinds.add_message::<Exact>();
+        kinds.add_message::<RequestOrResponse>();
         kinds
     }
 
@@ -849,6 +854,42 @@ mod message_manager_tests {
             FragmentIndex::from_u32(0),
             bytes.into_boxed_slice(),
         )))
+    }
+
+    /// Moves everything one manager has queued into the other, the way a
+    /// connection would: collect, write one packet, read it, then drain the
+    /// receivers (which is what routes request/response envelopes into their
+    /// own buffers).
+    fn deliver(
+        from: &mut MessageManager,
+        to: &mut MessageManager,
+        kinds: &ChannelKinds,
+        messages: &MessageKinds,
+    ) {
+        from.collect_outgoing_messages(&Instant::now(), &200.0);
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        from.write_messages(
+            kinds,
+            messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            0,
+            &mut has_written,
+        );
+        assert!(has_written, "the sender should have written a packet");
+        let bytes = writer.to_bytes();
+
+        let (_gwm, mut world) = world_manager();
+        to.read_messages(kinds, messages, &mut world, &mut BitReader::new(&bytes))
+            .expect("a packet the counterpart just wrote should parse");
+        let mut waitlist = RemoteEntityWaitlist::new();
+        to.receive_messages(
+            messages,
+            &Instant::now(),
+            &FakeEntityConverter,
+            &mut waitlist,
+        );
     }
 
     fn world_manager() -> (TestGwm, LocalWorldManager) {
@@ -1516,6 +1557,101 @@ mod message_manager_tests {
                 &mut FakeEntityConverter,
                 &channel,
                 GlobalRequestId::new(1),
+                ping(2),
+            ),
+            "the second must be refused, not silently swallowed"
+        );
+    }
+
+    #[test]
+    fn a_request_and_its_response_cross_the_wire_and_come_back_paired() {
+        // The manager is the only thing that maps a response back onto the
+        // GlobalRequestId the caller is waiting on: the wire carries a local,
+        // per-channel id. If that mapping is dropped -- or the request buffer
+        // reported empty -- the caller waits forever on a request that was
+        // in fact answered.
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<BothWays>(reliable(ChannelDirection::Bidirectional));
+        let messages = message_kinds();
+        let channel = ChannelKind::of::<BothWays>();
+        let mut client = MessageManager::new(HostType::Client, &kinds);
+        let mut server = MessageManager::new(HostType::Server, &kinds);
+
+        assert!(client.send_request(
+            &messages,
+            &mut FakeEntityConverter,
+            &channel,
+            GlobalRequestId::new(7),
+            ping(1),
+        ));
+        deliver(&mut client, &mut server, &kinds, &messages);
+
+        let (requests, responses) = server.receive_requests_and_responses();
+        assert!(responses.is_empty(), "the server answered nothing yet");
+        assert_eq!(requests.len(), 1, "the request must be reported, once");
+        let (request_channel, mut on_channel) = requests.into_iter().next().unwrap();
+        assert_eq!(request_channel, channel);
+        assert_eq!(on_channel.len(), 1);
+        let (response_id, request) = on_channel.remove(0);
+        assert_eq!(
+            request.to_boxed_any().downcast::<Ping>().unwrap().0,
+            1,
+            "and it must carry the payload that was sent"
+        );
+
+        assert!(server.send_response(
+            &messages,
+            &mut FakeEntityConverter,
+            &channel,
+            response_id,
+            ping(2),
+        ));
+        deliver(&mut server, &mut client, &kinds, &messages);
+
+        let (requests, responses) = client.receive_requests_and_responses();
+        assert!(requests.is_empty(), "the client was asked nothing");
+        assert_eq!(responses.len(), 1);
+        let (global_request_id, response) = responses.into_iter().next().unwrap();
+        assert_eq!(
+            global_request_id,
+            GlobalRequestId::new(7),
+            "the response must resolve to the id the caller is waiting on"
+        );
+        assert_eq!(response.to_boxed_any().downcast::<Ping>().unwrap().0, 2);
+    }
+
+    #[test]
+    fn a_response_refused_by_a_full_queue_is_reported_as_dropped() {
+        // Same contract as send_request: the channel's verdict is forwarded, so
+        // a caller can retry rather than leave the peer waiting.
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<BothWays>(ChannelSettings::new(
+            ChannelMode::OrderedReliable(ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(1),
+            }),
+            ChannelDirection::Bidirectional,
+        ));
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        let channel = ChannelKind::of::<BothWays>();
+        let messages = message_kinds();
+
+        assert!(
+            manager.send_response(
+                &messages,
+                &mut FakeEntityConverter,
+                &channel,
+                LocalRequestId::from(0u16).receive_from_remote(),
+                ping(1),
+            ),
+            "the first response fits the one-deep queue"
+        );
+        assert!(
+            !manager.send_response(
+                &messages,
+                &mut FakeEntityConverter,
+                &channel,
+                LocalRequestId::from(1u16).receive_from_remote(),
                 ping(2),
             ),
             "the second must be refused, not silently swallowed"
