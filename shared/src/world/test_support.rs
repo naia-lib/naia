@@ -7,7 +7,7 @@
 //! "the world manager" does while both stayed green.
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     net::SocketAddr,
     sync::{Arc, RwLock},
 };
@@ -70,6 +70,9 @@ pub struct TestGwm {
     /// only in that case, so the client dirty-candidate path is unreachable
     /// without it.
     has_global_dirty: bool,
+    /// Entities `entity_can_relate_to_user` must refuse. Empty by default, so
+    /// the manager stays permissive unless a test opts into the refusal.
+    unrelatable: RwLock<HashSet<GlobalEntity>>,
 }
 
 impl TestGwm {
@@ -85,6 +88,7 @@ impl TestGwm {
             global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
             declared_kinds: RwLock::new(HashMap::new()),
             has_global_dirty: true,
+            unrelatable: RwLock::new(HashSet::new()),
         }
     }
 
@@ -112,6 +116,12 @@ impl TestGwm {
         gdh.register_component(kinds, self, entity, kind, 1);
     }
 
+    /// Makes `entity_can_relate_to_user` refuse `entity`, which is how a user
+    /// that may not see an entity presents itself to the send-side converters.
+    pub fn deny_relation(&self, entity: &GlobalEntity) {
+        self.unrelatable.write().unwrap().insert(*entity);
+    }
+
     /// Declares the component kinds `component_kinds` should report for
     /// `entity`, which is what the authority-grant path iterates over.
     pub fn declare_kinds(&self, entity: &GlobalEntity, kinds: Vec<ComponentKind>) {
@@ -129,8 +139,8 @@ impl GlobalWorldManagerType for TestGwm {
     fn component_kinds(&self, entity: &GlobalEntity) -> Option<Vec<ComponentKind>> {
         self.declared_kinds.read().unwrap().get(entity).cloned()
     }
-    fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
-        true
+    fn entity_can_relate_to_user(&self, entity: &GlobalEntity, _: &u64) -> bool {
+        !self.unrelatable.read().unwrap().contains(entity)
     }
     fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
         Arc::new(RwLock::new(TestMutChannel {
