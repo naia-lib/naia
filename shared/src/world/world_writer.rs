@@ -2478,6 +2478,7 @@ mod delegated_send_guard_tests {
     ) -> EntityMessageType {
         let mut kinds = ComponentKinds::new();
         kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
 
         let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
         mutator.set_auth_status(EntityAuthStatus::Granted);
@@ -2684,5 +2685,168 @@ mod delegated_send_guard_tests {
     #[should_panic(expected = "Blocking overflow detected")]
     fn a_command_too_big_for_an_empty_packet_is_a_loud_failure() {
         run_command_overflow(20, false);
+    }
+
+    // -----------------------------------------------------------------------
+    // SpawnWithComponents gates.
+    //
+    // The coalesced spawn has three ways to degrade to a terminal `Noop`, and
+    // a sweep showed every one of the guards deciding between them could be
+    // inverted without a test noticing: `!has_global` (408), the
+    // `present_count == len` comparison (428), and the `!all_present` gate
+    // (429). A `Noop` here is RECORDED as the command's delivery, so getting
+    // any of these backwards either drops a spawn permanently or serializes a
+    // spawn for an entity the peer cannot resolve.
+    // -----------------------------------------------------------------------
+
+    /// The happy path: host-tracked, every planned kind really in the world.
+    #[test]
+    fn a_coalesced_spawn_with_every_component_present_is_written_for_real() {
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(
+            run_command(&world, true, |e| {
+                EntityCommand::SpawnWithComponents(e, vec![ComponentKind::of::<Ghost>()])
+            }),
+            EntityMessageType::SpawnWithComponents,
+        );
+    }
+
+    /// The despawn race: a Despawn superseded this Spawn in the same window, so
+    /// the entity is no longer host-tracked. Degrade quietly -- the peer never
+    /// sees a corpse it would immediately have to kill.
+    #[test]
+    fn a_coalesced_spawn_for_an_untracked_entity_degrades_to_a_noop() {
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(
+            run_command(&world, false, |e| {
+                EntityCommand::SpawnWithComponents(e, vec![ComponentKind::of::<Ghost>()])
+            }),
+            EntityMessageType::Noop,
+        );
+    }
+
+    /// Host-tracked, but *none* of the planned kinds are in the snapshot world:
+    /// the sim entity was torn down wholesale in this same window. Same
+    /// legitimacy class as the despawn race above -- a quiet `Noop`, and
+    /// specifically NOT the `debug_assert!` that guards the partial case.
+    ///
+    /// That no-panic expectation is what pins `let partial = present_count > 0`
+    /// (455): widening it to `>=` makes `partial` unconditionally true and
+    /// turns this ordinary teardown race into a debug-build crash.
+    #[test]
+    fn a_coalesced_spawn_whose_components_all_vanished_degrades_quietly() {
+        let world = MixedWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        assert_eq!(
+            run_command(&world, true, |e| {
+                EntityCommand::SpawnWithComponents(e, vec![ComponentKind::of::<Wraith>()])
+            }),
+            EntityMessageType::Noop,
+        );
+    }
+
+    /// The other side of that split: SOME kinds present and some missing is a
+    /// genuine needed-set or snapshot-registry under-supply, and the spawn
+    /// would be permanently lost for this peer. It is meant to be loud.
+    ///
+    /// Together with the test above this pins the comparison itself: narrowing
+    /// `>` to `==` or `<` silences this case, and the pair only passes when the
+    /// boundary sits exactly where it does now.
+    #[test]
+    #[should_panic(expected = "component kinds are in the snapshot world")]
+    fn a_partially_supplied_coalesced_spawn_is_a_loud_failure() {
+        let world = MixedWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        run_command(&world, true, |e| {
+            EntityCommand::SpawnWithComponents(
+                e,
+                vec![ComponentKind::of::<Ghost>(), ComponentKind::of::<Wraith>()],
+            )
+        });
+    }
+
+    /// `write_into_packet` is the public entry point, and it is a pure
+    /// delegator: updates first, then commands. A sweep showed the whole body
+    /// could be replaced with `()` unnoticed -- every test reached the two
+    /// halves directly and nothing ever went through the front door.
+    ///
+    /// Both queues are asserted drained rather than just one, so that deleting
+    /// either call individually still fails.
+    #[test]
+    fn write_into_packet_runs_both_halves() {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let global_entity = GlobalEntity::from_u64(1);
+        local_world_manager.host_init_entity(
+            &global_entity,
+            vec![ComponentKind::of::<Ghost>()],
+            &kinds,
+            false,
+        );
+
+        let converter = OneEntityConverter { global_entity };
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+
+        let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = vec![(
+            global_entity,
+            GlobalEntityIndex::from(1u32),
+            1u64,
+            vec![(ComponentKind::of::<Ghost>(), 0u16, DiffMask::new(1))]
+                .into_iter()
+                .collect(),
+        )];
+        let mut world_events: VecDeque<(CommandId, EntityCommand)> = VecDeque::from(vec![(
+            CommandId::from(0u16),
+            EntityCommand::InsertComponent(global_entity, ComponentKind::of::<Ghost>()),
+        )]);
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+
+        WorldWriter::write_into_packet(
+            &kinds,
+            &Instant::now(),
+            &mut writer,
+            &0,
+            &world,
+            &converter,
+            &gwm,
+            None,
+            &mut local_world_manager,
+            &mut has_written,
+            &mut world_events,
+            &mut update_list,
+            None,
+        );
+
+        assert!(has_written, "nothing was serialized at all");
+        assert_eq!(
+            update_list.len(),
+            0,
+            "the update half did not run: the queued update is still pending",
+        );
+        assert_eq!(
+            world_events.len(),
+            0,
+            "the command half did not run: the queued command is still pending",
+        );
     }
 }
