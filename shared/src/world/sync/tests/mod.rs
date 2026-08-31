@@ -3,6 +3,7 @@
 //! described in `REFACTOR_PLAN.md`.
 
 mod bulletproof_migration;
+mod channel_surface;
 mod command_validation_tests;
 mod engine;
 mod integration_migration;

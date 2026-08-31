@@ -163,3 +163,186 @@ impl RemoteComponentChannel {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! The per-component insert/remove FSM had no direct tests. A sweep found
+    //! `buffer_pop_front_until_and_excluding` and `force_drain_buffers` could
+    //! each be replaced with `()` unnoticed -- the first is how a spawn discards
+    //! a previous lifetime's backlog, the second is the migration escape hatch
+    //! that empties the buffer regardless of FSM state.
+    //!
+    //! Assertions read `incoming_messages` directly rather than going through
+    //! `drain_messages_into`, which would need a real `Replicate` type just to
+    //! name a `ComponentKind`.
+
+    use std::any::TypeId;
+
+    use super::*;
+
+    fn kind() -> ComponentKind {
+        ComponentKind::from(TypeId::of::<u8>())
+    }
+
+    fn insert_msg() -> EntityMessage<()> {
+        EntityMessage::InsertComponent((), kind())
+    }
+
+    fn remove_msg() -> EntityMessage<()> {
+        EntityMessage::RemoveComponent((), kind())
+    }
+
+    fn emitted(channel: &RemoteComponentChannel) -> Vec<EntityMessageType> {
+        channel.incoming_messages.iter().copied().collect()
+    }
+
+    #[test]
+    fn an_insert_then_a_remove_toggles_the_component() {
+        let mut channel = RemoteComponentChannel::new();
+
+        channel.accept_message(EntityChannelState::Spawned, 1, insert_msg());
+        assert!(channel.is_inserted());
+
+        channel.accept_message(EntityChannelState::Spawned, 2, remove_msg());
+        assert!(!channel.is_inserted());
+
+        assert_eq!(
+            emitted(&channel),
+            vec![
+                EntityMessageType::InsertComponent,
+                EntityMessageType::RemoveComponent,
+            ],
+        );
+    }
+
+    /// Nothing is applied while the parent entity is unspawned: the component
+    /// stream is gated on the entity's own spawn barrier.
+    #[test]
+    fn messages_are_buffered_until_the_entity_spawns() {
+        let mut channel = RemoteComponentChannel::new();
+
+        channel.accept_message(EntityChannelState::Despawned, 1, insert_msg());
+        assert!(emitted(&channel).is_empty());
+        assert!(!channel.is_inserted());
+
+        channel.process_messages(EntityChannelState::Spawned);
+
+        assert_eq!(emitted(&channel), vec![EntityMessageType::InsertComponent]);
+        assert!(channel.is_inserted());
+    }
+
+    /// An out-of-order Remove arriving before the entity is inserted stalls at
+    /// the front of the buffer rather than being applied or dropped -- and the
+    /// later Insert behind it stays stalled too, since applying it first would
+    /// reverse the pair.
+    #[test]
+    fn an_illegal_transition_stalls_the_buffer_instead_of_applying() {
+        let mut channel = RemoteComponentChannel::new();
+
+        channel.accept_message(EntityChannelState::Spawned, 1, remove_msg());
+
+        assert!(emitted(&channel).is_empty());
+        assert!(!channel.is_inserted());
+    }
+
+    #[test]
+    fn a_replayed_message_is_ignored() {
+        let mut channel = RemoteComponentChannel::new();
+        channel.accept_message(EntityChannelState::Spawned, 5, insert_msg());
+        channel.incoming_messages.clear();
+
+        // Older than the last applied epoch: a duplicate from the network.
+        channel.accept_message(EntityChannelState::Spawned, 3, remove_msg());
+
+        assert!(emitted(&channel).is_empty(), "a stale replay was applied");
+        assert!(channel.is_inserted());
+    }
+
+    /// The spawn barrier discards component messages from a previous lifetime
+    /// of the entity. `_excluding` means the spawn's own id survives.
+    #[test]
+    fn popping_the_buffer_discards_pre_spawn_messages() {
+        let mut channel = RemoteComponentChannel::new();
+        channel.accept_message(EntityChannelState::Despawned, 1, insert_msg());
+
+        channel.buffer_pop_front_until_and_excluding(5);
+        channel.process_messages(EntityChannelState::Spawned);
+
+        assert!(
+            emitted(&channel).is_empty(),
+            "a message from before the spawn survived and was applied",
+        );
+        assert!(!channel.is_inserted());
+    }
+
+    /// The other direction, so the test above cannot pass against a channel
+    /// that simply never applies anything: below the boundary the message is
+    /// kept and applied as normal.
+    #[test]
+    fn popping_the_buffer_keeps_messages_at_or_past_the_boundary() {
+        let mut channel = RemoteComponentChannel::new();
+        channel.accept_message(EntityChannelState::Despawned, 5, insert_msg());
+
+        channel.buffer_pop_front_until_and_excluding(5);
+        channel.process_messages(EntityChannelState::Spawned);
+
+        assert_eq!(emitted(&channel), vec![EntityMessageType::InsertComponent]);
+    }
+
+    /// `force_drain_buffers` is the migration escape hatch: it empties the
+    /// buffer regardless of what the FSM would allow. The stalled Remove from
+    /// `an_illegal_transition_stalls_the_buffer_instead_of_applying` is exactly
+    /// what it has to get out.
+    #[test]
+    fn force_draining_emits_operations_the_fsm_would_have_stalled() {
+        let mut channel = RemoteComponentChannel::new();
+        channel.accept_message(EntityChannelState::Spawned, 1, remove_msg());
+        assert!(
+            emitted(&channel).is_empty(),
+            "fixture: the remove should stall"
+        );
+
+        channel.force_drain_buffers(EntityChannelState::Spawned);
+
+        assert_eq!(
+            emitted(&channel),
+            vec![EntityMessageType::RemoveComponent],
+            "the stalled operation was not force-drained",
+        );
+    }
+
+    /// After a force drain the channel's presence flag must reflect the LAST
+    /// operation drained, not the first -- otherwise the channel disagrees with
+    /// the ECS about whether the component is there.
+    #[test]
+    fn force_draining_leaves_the_state_of_the_final_operation() {
+        let mut channel = RemoteComponentChannel::new();
+        channel.accept_message(EntityChannelState::Despawned, 1, insert_msg());
+        channel.accept_message(EntityChannelState::Despawned, 2, remove_msg());
+        channel.accept_message(EntityChannelState::Despawned, 3, insert_msg());
+
+        channel.force_drain_buffers(EntityChannelState::Despawned);
+
+        assert_eq!(
+            emitted(&channel),
+            vec![
+                EntityMessageType::InsertComponent,
+                EntityMessageType::RemoveComponent,
+                EntityMessageType::InsertComponent,
+            ],
+        );
+        assert!(
+            channel.is_inserted(),
+            "the final drained operation was an insert, so the component is present",
+        );
+    }
+
+    #[test]
+    fn force_draining_an_empty_buffer_emits_nothing() {
+        let mut channel = RemoteComponentChannel::new();
+
+        channel.force_drain_buffers(EntityChannelState::Spawned);
+
+        assert!(emitted(&channel).is_empty());
+    }
+}
