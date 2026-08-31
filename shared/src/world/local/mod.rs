@@ -9,3 +9,6 @@ cfg_if! {
         pub use interior_visibility::LocalEntity;
     }
 }
+
+#[cfg(test)]
+mod tests;

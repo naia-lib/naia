@@ -17,3 +17,9 @@ pub mod publicity;
 pub mod snapshot_world;
 pub mod world_reader;
 pub mod world_writer;
+
+#[cfg(test)]
+pub mod test_support;
+
+#[cfg(test)]
+pub mod test_world;

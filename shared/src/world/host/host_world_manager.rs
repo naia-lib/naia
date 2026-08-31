@@ -598,26 +598,14 @@ mod tests {
     //! single test noticing. The integration suites drive this type only
     //! end-to-end, where a neutered accessor is masked by the layer above.
 
-    use std::{
-        collections::HashMap,
-        net::SocketAddr,
-        sync::{Arc, RwLock},
-    };
+    use std::net::SocketAddr;
 
     use super::*;
     use crate::{
         bigmap::BigMapKey,
-        world::{
-            component::property::Property,
-            delegation::auth_channel::EntityAuthAccessor,
-            update::{
-                global_diff_handler::GlobalDiffHandler,
-                global_dirty_bitset::GlobalDirtyBitset,
-                mut_channel::{MutChannelType, MutReceiver},
-            },
-        },
-        ComponentFieldUpdate, EntityAndGlobalEntityConverter, GlobalEntityMap, InScopeEntities,
-        PendingComponentUpdate, PropertyMutator, RemoteEntity, ReplicaDynMutWrapper,
+        world::{component::property::Property, test_support::TestGwm},
+        ComponentFieldUpdate, EntityAndGlobalEntityConverter, GlobalEntityMap,
+        PendingComponentUpdate, RemoteEntity, ReplicaDynMutWrapper,
         ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent,
         SerdeErr, WorldRefType,
     };
@@ -636,86 +624,6 @@ mod tests {
     }
 
     // -- test doubles ------------------------------------------------------
-
-    struct TestMutChannel {
-        diff_mask_length: u8,
-        receivers: Vec<MutReceiver>,
-        receiver_index: HashMap<SocketAddr, usize>,
-    }
-
-    impl MutChannelType for TestMutChannel {
-        fn new_receiver(&mut self, address_opt: &Option<SocketAddr>) -> Option<MutReceiver> {
-            let address = address_opt.expect("test channel requires an address");
-            if let Some(&idx) = self.receiver_index.get(&address) {
-                return Some(self.receivers[idx].clone());
-            }
-            let receiver = MutReceiver::new(self.diff_mask_length);
-            let idx = self.receivers.len();
-            self.receivers.push(receiver.clone());
-            self.receiver_index.insert(address, idx);
-            Some(receiver)
-        }
-
-        fn send(&self, property_index: u8) {
-            for receiver in &self.receivers {
-                receiver.mutate(property_index);
-            }
-        }
-    }
-
-    struct TestGwm {
-        diff_handler: Arc<RwLock<GlobalDiffHandler>>,
-        global_dirty: Arc<GlobalDirtyBitset>,
-    }
-
-    impl InScopeEntities<GlobalEntity> for TestGwm {
-        fn has_entity(&self, _: &GlobalEntity) -> bool {
-            true
-        }
-    }
-
-    impl GlobalWorldManagerType for TestGwm {
-        fn component_kinds(&self, _: &GlobalEntity) -> Option<Vec<ComponentKind>> {
-            None
-        }
-        fn entity_can_relate_to_user(&self, _: &GlobalEntity, _: &u64) -> bool {
-            true
-        }
-        fn new_mut_channel(&self, diff_mask_length: u8) -> Arc<RwLock<dyn MutChannelType>> {
-            Arc::new(RwLock::new(TestMutChannel {
-                diff_mask_length,
-                receivers: Vec::new(),
-                receiver_index: HashMap::new(),
-            }))
-        }
-        fn diff_handler(&self) -> Arc<RwLock<GlobalDiffHandler>> {
-            self.diff_handler.clone()
-        }
-        fn register_component(
-            &self,
-            _: &ComponentKinds,
-            _: &GlobalEntity,
-            _: &ComponentKind,
-            _: u8,
-        ) -> PropertyMutator {
-            unreachable!("not exercised by these tests")
-        }
-        fn get_entity_auth_accessor(&self, _: &GlobalEntity) -> EntityAuthAccessor {
-            unreachable!("not exercised by these tests")
-        }
-        fn entity_needs_mutator_for_delegation(&self, _: &GlobalEntity) -> bool {
-            false
-        }
-        fn entity_is_replicating(&self, _: &GlobalEntity) -> bool {
-            true
-        }
-        fn entity_is_static(&self, _: &GlobalEntity) -> bool {
-            false
-        }
-        fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
-            Some(self.global_dirty.clone())
-        }
-    }
 
     // -- fixture -----------------------------------------------------------
 
@@ -748,16 +656,7 @@ mod tests {
             kinds.add_component::<Ghost>();
             kinds.add_component::<Stone>();
 
-            let diff_handler = Arc::new(RwLock::new(GlobalDiffHandler::new()));
-            diff_handler
-                .write()
-                .unwrap()
-                .set_protocol_kind_count(kinds.kind_count());
-            let global_dirty = Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize));
-            let gwm = TestGwm {
-                diff_handler,
-                global_dirty,
-            };
+            let gwm = TestGwm::new(&kinds);
             let addr: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
             let updater = EntityUpdateManager::new(&addr, &gwm);
 
@@ -772,11 +671,7 @@ mod tests {
         /// Gives the global diff handler a live receiver for `(entity, kind)`,
         /// so a later `register_component` on the ledger has something to find.
         fn arm_diff_handler(&self, entity: &GlobalEntity, kind: &ComponentKind) {
-            let mut gdh = self.gwm.diff_handler.write().unwrap();
-            if gdh.kind_bit(kind).is_none() {
-                gdh.alloc_entity(*entity);
-            }
-            gdh.register_component(&self.kinds, &self.gwm, entity, kind, 1);
+            self.gwm.arm_diff_handler(&self.kinds, entity, kind);
         }
     }
 
