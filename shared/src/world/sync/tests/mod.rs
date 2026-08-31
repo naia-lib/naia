@@ -6,6 +6,7 @@ mod bulletproof_migration;
 mod channel_surface;
 mod command_validation_tests;
 mod engine;
+mod engine_surface;
 mod integration_migration;
 mod migration;
 mod perfect_migration_tests;
