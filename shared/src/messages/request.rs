@@ -152,7 +152,10 @@ impl GlobalResponseId {
 
 #[cfg(test)]
 mod request_tests {
-    use std::collections::HashSet;
+    use std::{
+        collections::{hash_map::DefaultHasher, HashSet},
+        hash::{Hash, Hasher},
+    };
 
     use crate::{Message, Request, Response};
 
@@ -201,6 +204,64 @@ mod request_tests {
         let set: HashSet<ResponseSendKey<Answer>> =
             [first, second, same_as_first].into_iter().collect();
         assert_eq!(set.len(), 2);
+    }
+
+    fn hash_of<T: Hash>(value: &T) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        value.hash(&mut hasher);
+        hasher.finish()
+    }
+
+    #[test]
+    fn receive_keys_are_distinct_and_hash_apart_too() {
+        let first: ResponseReceiveKey<Answer> = ResponseReceiveKey::new(GlobalRequestId::new(1));
+        let second: ResponseReceiveKey<Answer> = ResponseReceiveKey::new(GlobalRequestId::new(2));
+        let same_as_first: ResponseReceiveKey<Answer> =
+            ResponseReceiveKey::new(GlobalRequestId::new(1));
+
+        assert_eq!(first, same_as_first);
+        assert_ne!(first, second);
+
+        let set: HashSet<ResponseReceiveKey<Answer>> =
+            [first, second, same_as_first].into_iter().collect();
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn a_key_hashes_by_its_id_rather_than_landing_every_request_in_one_bucket() {
+        let send_one: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(1));
+        let send_two: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(2));
+        let receive_one: ResponseReceiveKey<Answer> =
+            ResponseReceiveKey::new(GlobalRequestId::new(1));
+        let receive_two: ResponseReceiveKey<Answer> =
+            ResponseReceiveKey::new(GlobalRequestId::new(2));
+
+        assert_eq!(
+            hash_of(&send_one),
+            hash_of(&ResponseSendKey::<Answer>::new(GlobalResponseId::new(1)))
+        );
+        assert_ne!(hash_of(&send_one), hash_of(&send_two));
+        assert_ne!(hash_of(&receive_one), hash_of(&receive_two));
+
+        // The id is what is hashed -- not some constant that would pile every
+        // pending request into a single bucket.
+        assert_eq!(hash_of(&send_one), hash_of(&GlobalResponseId::new(1)));
+        assert_eq!(hash_of(&receive_one), hash_of(&GlobalRequestId::new(1)));
+    }
+
+    #[test]
+    fn a_key_debug_prints_the_id_it_carries() {
+        let send: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(5));
+        let receive: ResponseReceiveKey<Answer> = ResponseReceiveKey::new(GlobalRequestId::new(6));
+
+        assert_eq!(
+            format!("{:?}", send),
+            "ResponseSendKey(GlobalResponseId { id: 5 })".to_string()
+        );
+        assert_eq!(
+            format!("{:?}", receive),
+            "ResponseReceiveKey(GlobalRequestId { id: 6 })".to_string()
+        );
     }
 
     #[test]
