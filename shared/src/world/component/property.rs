@@ -751,6 +751,8 @@ mod property_state_machine_tests {
     //! the state the operation leaves the Property in, or the message it must
     //! refuse with.
 
+    use std::sync::{Arc, Mutex};
+
     use super::*;
     use crate::{
         world::delegation::{
@@ -1156,6 +1158,135 @@ mod property_state_machine_tests {
         assert_eq!(
             String::de(&mut BitReader::new(&destination_bytes)).expect("copied value"),
             "buffered",
+        );
+    }
+
+    // -- what the legal operations actually do ------------------------------
+    //
+    // The table above says which operations a state permits and where they
+    // leave it. That is deliberately blind to their *effect*: a `write` that
+    // emits nothing, a `read` that discards the value it decoded, or a `mirror`
+    // that returns without assigning all pass every row. These close that.
+
+    /// A mutator that records which property indices it was told were dirty.
+    #[derive(Clone)]
+    struct RecordingMutator {
+        mutated: Arc<Mutex<Vec<u8>>>,
+    }
+
+    impl PropertyMutate for RecordingMutator {
+        fn mutate(&mut self, property_index: u8) -> bool {
+            self.mutated.lock().unwrap().push(property_index);
+            true
+        }
+    }
+
+    fn recording_mutator() -> (PropertyMutator, Arc<Mutex<Vec<u8>>>) {
+        let mutated = Arc::new(Mutex::new(Vec::new()));
+        let mutator = PropertyMutator::new(RecordingMutator {
+            mutated: mutated.clone(),
+        });
+        (mutator, mutated)
+    }
+
+    fn written_value(property: &Property<String>) -> String {
+        let mut writer = BitWriter::new();
+        property.write(&mut writer);
+        let bytes = writer.to_bytes();
+        String::de(&mut BitReader::new(&bytes)).expect("written value")
+    }
+
+    fn read_into(property: &mut Property<String>, value: &str) {
+        let bytes = a_reader_holding(value);
+        property
+            .read(&mut BitReader::new(&bytes))
+            .expect("well-formed value");
+    }
+
+    #[test]
+    fn every_state_that_may_write_emits_the_value_it_holds() {
+        assert_eq!(written_value(&host_owned()), "value");
+        assert_eq!(written_value(&remote_public()), "value");
+        assert_eq!(written_value(&delegated()), "value");
+    }
+
+    #[test]
+    fn every_state_that_may_read_takes_the_value_on() {
+        for (name, mut property) in [
+            ("RemoteOwned", remote_owned()),
+            ("RemotePublic", remote_public()),
+            ("Delegated", delegated()),
+        ] {
+            read_into(&mut property, "arrived");
+            assert_eq!(*property, "arrived", "{name} must apply what it read");
+        }
+    }
+
+    #[test]
+    fn every_state_that_may_mirror_takes_the_other_propertys_value_on() {
+        for (name, mut property) in [
+            ("Local", local()),
+            ("HostOwned", host_owned()),
+            ("Delegated", delegated()),
+        ] {
+            property.mirror(&Property::new_local("mirrored".to_string()));
+            assert_eq!(*property, "mirrored", "{name} must take the value on");
+        }
+    }
+
+    /// The two states whose value can change *without* the host asking — a
+    /// remote update arriving — must mark themselves dirty, or the change
+    /// never propagates onward to this peer's own observers.
+    #[test]
+    fn a_published_property_marks_itself_dirty_when_a_remote_update_arrives() {
+        let (mutator, mutated) = recording_mutator();
+        let mut property = remote_owned();
+        property.remote_publish(5, &mutator);
+        assert_eq!(
+            *mutated.lock().unwrap(),
+            Vec::<u8>::new(),
+            "publishing alone is not a change",
+        );
+
+        read_into(&mut property, "arrived");
+        assert_eq!(
+            *mutated.lock().unwrap(),
+            vec![5],
+            "the update must be forwarded under this property's own index",
+        );
+    }
+
+    #[test]
+    fn a_delegated_property_marks_itself_dirty_when_it_is_mutated() {
+        let (mutator, mutated) = recording_mutator();
+        let mut property = Property::host_owned("value".to_string(), 6);
+        property.set_mutator(&mutator);
+        property.enable_delegation(&permissive_accessor(), None);
+        mutated.lock().unwrap().clear();
+
+        {
+            use std::ops::DerefMut;
+            property.deref_mut().push('!');
+        }
+        assert_eq!(*mutated.lock().unwrap(), vec![6]);
+    }
+
+    #[test]
+    fn a_host_owned_property_marks_itself_dirty_when_it_is_mutated_or_mirrored() {
+        let (mutator, mutated) = recording_mutator();
+        let mut property = Property::host_owned("value".to_string(), 4);
+        property.set_mutator(&mutator);
+
+        {
+            use std::ops::DerefMut;
+            property.deref_mut().push('!');
+        }
+        property.mirror(&Property::new_local("mirrored".to_string()));
+
+        assert_eq!(
+            *mutated.lock().unwrap(),
+            vec![4, 4],
+            "both a direct mutation and a mirror are changes to replicate",
         );
     }
 }
