@@ -616,7 +616,7 @@ mod message_manager_tests {
 
     use std::{any::Any, collections::HashSet, net::SocketAddr};
 
-    use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+    use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
     use naia_socket_shared::Instant;
 
     use crate::messages::{message::Message, message_kinds::MessageKind};
@@ -629,8 +629,8 @@ mod message_manager_tests {
         messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
         world::{local::local_world_manager::LocalWorldManager, test_support::TestGwm},
         Channel, ChannelCriticality, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode,
-        ChannelSettings, ComponentKinds, FakeEntityConverter, HostType, MessageBuilder,
-        MessageContainer, MessageKinds, Named, PacketNotifiable, ReliableSettings,
+        ChannelSettings, ComponentKinds, FakeEntityConverter, GlobalRequestId, HostType,
+        MessageBuilder, MessageContainer, MessageKinds, Named, PacketNotifiable, ReliableSettings,
     };
 
     use super::{receive_window, MessageManager};
@@ -749,6 +749,86 @@ mod message_manager_tests {
         fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) {}
     }
 
+    /// A message whose encoded length is exactly the number of bits it is built
+    /// with. `FragmentedMessage` is byte-granular, so the largest payload that
+    /// fits lands *under* the fragmentation limit rather than on it -- which
+    /// leaves the `>` / `>=` boundary itself untested. This one lands on it.
+    #[derive(Clone)]
+    struct Exact(u32);
+
+    impl Named for Exact {
+        fn name(&self) -> String {
+            "Exact".into()
+        }
+        fn protocol_name() -> &'static str {
+            "Exact"
+        }
+    }
+
+    struct ExactBuilder;
+
+    impl MessageBuilder for ExactBuilder {
+        fn read(
+            &self,
+            _: &mut BitReader,
+            _: &dyn LocalEntityAndGlobalEntityConverter,
+        ) -> Result<MessageContainer, SerdeErr> {
+            // Padding bits carry no self-describing length. `Exact` exists to be
+            // measured and queued, never to come back off the wire.
+            unreachable!("Exact is never read back")
+        }
+        fn box_clone(&self) -> Box<dyn MessageBuilder> {
+            Box::new(ExactBuilder)
+        }
+    }
+
+    impl Message for Exact {
+        fn kind(&self) -> MessageKind {
+            MessageKind::of::<Self>()
+        }
+        fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn create_builder() -> Box<dyn MessageBuilder> {
+            Box::new(ExactBuilder)
+        }
+        fn bit_length(
+            &self,
+            _: &MessageKinds,
+            _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) -> u32 {
+            self.0
+        }
+        fn is_fragment(&self) -> bool {
+            false
+        }
+        fn is_request(&self) -> bool {
+            false
+        }
+        fn write(
+            &self,
+            message_kinds: &MessageKinds,
+            writer: &mut dyn BitWrite,
+            _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) {
+            let mut counter = BitCounter::new(0, 0, u32::MAX);
+            self.kind().ser(message_kinds, &mut counter);
+            let kind_bits = counter.bits_needed();
+            self.kind().ser(message_kinds, writer);
+            for _ in kind_bits..self.0 {
+                writer.write_bit(false);
+            }
+        }
+        fn relations_waiting(&self) -> Option<HashSet<crate::RemoteEntity>> {
+            None
+        }
+        fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) {}
+    }
+
+    fn exact(bits: u32) -> MessageContainer {
+        MessageContainer::new(Box::new(Exact(bits)))
+    }
+
     fn ping(tag: u8) -> MessageContainer {
         MessageContainer::new(Box::new(Ping(tag)))
     }
@@ -757,6 +837,7 @@ mod message_manager_tests {
         let mut kinds = MessageKinds::new();
         kinds.add_message::<FragmentedMessage>();
         kinds.add_message::<Ping>();
+        kinds.add_message::<Exact>();
         kinds
     }
 
@@ -1364,5 +1445,80 @@ mod message_manager_tests {
         let (requests, responses) = manager.receive_requests_and_responses();
         assert!(requests.is_empty());
         assert!(responses.is_empty());
+    }
+
+    #[test]
+    fn the_fragmentation_gate_opens_one_bit_past_the_limit() {
+        // Exactly at the limit is a single fragment's worth, so fragmenting it
+        // would only add header overhead -- and an unreliable channel, which
+        // refuses anything that would need fragmenting, must still carry it.
+        // One bit more must be refused.
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<Unreliable>(unreliable(ChannelDirection::Bidirectional));
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        let channel = ChannelKind::of::<Unreliable>();
+
+        assert_eq!(
+            exact(FRAGMENTATION_LIMIT_BITS).bit_length(&message_kinds(), &mut FakeEntityConverter),
+            FRAGMENTATION_LIMIT_BITS,
+            "the fixture must land ON the boundary for this test to mean anything"
+        );
+
+        assert!(
+            manager.send_message(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &channel,
+                exact(FRAGMENTATION_LIMIT_BITS)
+            ),
+            "a message of exactly the limit is not fragmented"
+        );
+        assert!(
+            !manager.send_message(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &channel,
+                exact(FRAGMENTATION_LIMIT_BITS + 1)
+            ),
+            "one bit past the limit needs fragmenting, which unreliable refuses"
+        );
+    }
+
+    #[test]
+    fn a_request_refused_by_a_full_queue_is_reported_as_dropped() {
+        // send_request forwards the channel's own verdict. A caller that treats
+        // it as infallible would silently lose the request and then wait
+        // forever for a response that was never sent.
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<BothWays>(ChannelSettings::new(
+            ChannelMode::OrderedReliable(ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(1),
+            }),
+            ChannelDirection::Bidirectional,
+        ));
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        let channel = ChannelKind::of::<BothWays>();
+
+        assert!(
+            manager.send_request(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &channel,
+                GlobalRequestId::new(0),
+                ping(1),
+            ),
+            "the first request fits the one-deep queue"
+        );
+        assert!(
+            !manager.send_request(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &channel,
+                GlobalRequestId::new(1),
+                ping(2),
+            ),
+            "the second must be refused, not silently swallowed"
+        );
     }
 }
