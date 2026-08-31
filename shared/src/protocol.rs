@@ -267,3 +267,373 @@ impl Protocol {
         ProtocolId::new(u64::from_le_bytes(bytes))
     }
 }
+
+#[cfg(test)]
+mod protocol_tests {
+    use std::time::Duration;
+
+    use naia_socket_shared::LinkConditionerConfig;
+
+    use crate::{
+        connection::compression_config::CompressionConfig, ComponentKind, Message, Property,
+        Replicate, Request, Response,
+    };
+
+    use super::{ChannelDirection, ChannelMode, ChannelSettings, Protocol, ProtocolPlugin};
+
+    macro_rules! test_channel {
+        ($name:ident) => {
+            struct $name;
+            impl crate::Named for $name {
+                fn name(&self) -> String {
+                    stringify!($name).to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    stringify!($name)
+                }
+            }
+            impl crate::Channel for $name {}
+        };
+    }
+
+    test_channel!(Gossip);
+    test_channel!(Rumor);
+
+    #[derive(Message)]
+    struct Whisper {
+        value: u8,
+    }
+
+    #[derive(Message)]
+    struct Shout {
+        value: u8,
+    }
+
+    #[derive(Message)]
+    struct Question {
+        value: u8,
+    }
+
+    #[derive(Message)]
+    struct Answer {
+        value: u8,
+    }
+
+    impl Request for Question {
+        type Response = Answer;
+    }
+    impl Response for Answer {}
+
+    #[derive(Replicate)]
+    struct Ghost {
+        value: Property<u8>,
+    }
+
+    #[derive(Replicate)]
+    struct Wraith {
+        value: Property<u8>,
+    }
+
+    fn settings() -> ChannelSettings {
+        ChannelSettings::new(
+            ChannelMode::UnorderedUnreliable,
+            ChannelDirection::Bidirectional,
+        )
+    }
+
+    #[test]
+    fn a_fresh_protocol_carries_the_two_built_in_messages_and_nothing_else() {
+        let protocol = Protocol::builder();
+
+        assert_eq!(protocol.message_kinds.all_names().len(), 2);
+        assert!(protocol.channel_kinds.all_names().is_empty());
+        assert!(protocol.component_kinds.all_names().is_empty());
+        assert!(protocol.resource_kinds.is_empty());
+        assert_eq!(protocol.tick_interval, Duration::from_millis(50));
+        assert!(protocol.compression.is_none());
+        assert!(!protocol.client_authoritative_entities);
+    }
+
+    #[test]
+    fn every_setter_records_its_value_and_hands_the_builder_back() {
+        let mut protocol = Protocol::builder();
+        protocol
+            .link_condition(LinkConditionerConfig::good_condition())
+            .rtc_endpoint("/rtc".to_string())
+            .tick_interval(Duration::from_millis(20))
+            .compression(CompressionConfig::new(None, None))
+            .enable_client_authoritative_entities();
+
+        assert!(protocol.socket.link_condition.is_some());
+        assert_eq!(protocol.get_rtc_endpoint(), "/rtc".to_string());
+        assert_eq!(protocol.tick_interval, Duration::from_millis(20));
+        assert!(protocol.compression.is_some());
+        assert!(protocol.client_authoritative_entities);
+    }
+
+    #[test]
+    fn each_registry_takes_what_its_own_method_registers() {
+        let mut protocol = Protocol::builder();
+        protocol
+            .add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            )
+            .add_channel_settings::<Rumor>(settings())
+            .add_message::<Whisper>()
+            .add_component::<Ghost>();
+
+        assert_eq!(
+            protocol.channel_kinds.all_names(),
+            vec!["Gossip".to_string(), "Rumor".to_string()]
+        );
+        assert!(protocol
+            .message_kinds
+            .all_names()
+            .contains(&"Whisper".to_string()));
+        assert_eq!(
+            protocol.component_kinds.all_names(),
+            vec!["Ghost".to_string()]
+        );
+    }
+
+    #[test]
+    fn the_six_default_channels_arrive_together() {
+        let mut protocol = Protocol::builder();
+        protocol.add_default_channels();
+
+        assert_eq!(protocol.channel_kinds.all_names().len(), 6);
+    }
+
+    #[test]
+    fn a_request_registers_both_halves_of_the_exchange() {
+        let mut protocol = Protocol::builder();
+        protocol.add_request::<Question>();
+
+        let names = protocol.message_kinds.all_names();
+        assert!(names.contains(&"Question".to_string()));
+        assert!(names.contains(&"Answer".to_string()));
+    }
+
+    #[test]
+    fn a_resource_is_a_component_that_is_also_marked() {
+        let mut protocol = Protocol::builder();
+        protocol.add_resource::<Ghost>();
+
+        let kind = ComponentKind::of::<Ghost>();
+        assert_eq!(
+            protocol.component_kinds.all_names(),
+            vec!["Ghost".to_string()]
+        );
+        assert!(protocol.resource_kinds.is_resource(&kind));
+        assert_eq!(protocol.resource_kinds.kind_for::<Ghost>(), Some(kind));
+    }
+
+    #[test]
+    fn registering_the_same_resource_twice_changes_nothing() {
+        let mut protocol = Protocol::builder();
+        protocol.add_resource::<Ghost>().add_resource::<Ghost>();
+
+        assert_eq!(protocol.component_kinds.all_names().len(), 1);
+        assert_eq!(protocol.resource_kinds.len(), 1);
+    }
+
+    struct Furnishings;
+
+    impl ProtocolPlugin for Furnishings {
+        fn build(&self, protocol: &mut Protocol) {
+            protocol.add_message::<Whisper>().add_component::<Ghost>();
+        }
+    }
+
+    #[test]
+    fn a_plugin_registers_through_the_protocol_it_is_handed() {
+        let mut protocol = Protocol::builder();
+        protocol.add_plugin(Furnishings);
+
+        assert!(protocol
+            .message_kinds
+            .all_names()
+            .contains(&"Whisper".to_string()));
+        assert_eq!(
+            protocol.component_kinds.all_names(),
+            vec!["Ghost".to_string()]
+        );
+    }
+
+    #[test]
+    fn building_moves_the_registrations_out_and_leaves_a_default_behind() {
+        let mut builder = Protocol::builder();
+        builder.add_message::<Whisper>();
+        let built = builder.build();
+
+        assert!(built
+            .message_kinds
+            .all_names()
+            .contains(&"Whisper".to_string()));
+        assert!(!builder
+            .message_kinds
+            .all_names()
+            .contains(&"Whisper".to_string()));
+        assert_eq!(builder.message_kinds.all_names().len(), 2);
+    }
+
+    fn locked(configure: impl FnOnce(&mut Protocol)) -> Protocol {
+        let mut protocol = Protocol::builder();
+        configure(&mut protocol);
+        protocol.lock();
+        protocol
+    }
+
+    #[test]
+    fn the_protocol_id_is_unavailable_until_the_protocol_is_locked() {
+        let protocol = Protocol::builder();
+        let panicked =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| protocol.protocol_id()));
+        assert!(panicked.is_err());
+    }
+
+    #[test]
+    fn locking_caches_an_id_that_stays_the_same_on_every_read() {
+        let protocol = locked(|p| {
+            p.add_message::<Whisper>();
+        });
+
+        assert_eq!(protocol.protocol_id(), protocol.protocol_id());
+    }
+
+    #[test]
+    fn two_protocols_registering_the_same_names_agree_on_an_id() {
+        let build = || {
+            locked(|p| {
+                p.add_channel::<Gossip>(
+                    ChannelDirection::Bidirectional,
+                    ChannelMode::UnorderedUnreliable,
+                );
+                p.add_message::<Whisper>();
+                p.add_component::<Ghost>();
+            })
+        };
+
+        assert_eq!(build().protocol_id(), build().protocol_id());
+    }
+
+    #[test]
+    fn a_difference_in_any_registry_is_a_difference_in_the_id() {
+        let base = locked(|p| {
+            p.add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+            p.add_message::<Whisper>();
+            p.add_component::<Ghost>();
+        });
+
+        let other_channel = locked(|p| {
+            p.add_channel::<Rumor>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+            p.add_message::<Whisper>();
+            p.add_component::<Ghost>();
+        });
+        let other_message = locked(|p| {
+            p.add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+            p.add_message::<Shout>();
+            p.add_component::<Ghost>();
+        });
+        let other_component = locked(|p| {
+            p.add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+            p.add_message::<Whisper>();
+            p.add_component::<Wraith>();
+        });
+
+        assert_ne!(base.protocol_id(), other_channel.protocol_id());
+        assert_ne!(base.protocol_id(), other_message.protocol_id());
+        assert_ne!(base.protocol_id(), other_component.protocol_id());
+    }
+
+    #[test]
+    fn the_same_type_hashes_differently_as_a_resource_than_as_a_component() {
+        let as_component = locked(|p| {
+            p.add_component::<Ghost>();
+        });
+        let as_resource = locked(|p| {
+            p.add_resource::<Ghost>();
+        });
+
+        assert_ne!(as_component.protocol_id(), as_resource.protocol_id());
+    }
+
+    #[test]
+    fn every_builder_method_refuses_to_run_once_the_protocol_is_locked() {
+        macro_rules! assert_refused {
+            ($body:expr) => {{
+                let mut protocol = Protocol::builder();
+                protocol.lock();
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let protocol = &mut protocol;
+                    $body(protocol);
+                }));
+                assert!(result.is_err());
+            }};
+        }
+
+        let quiet = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+
+        assert_refused!(|p: &mut Protocol| {
+            p.add_plugin(Furnishings);
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.link_condition(LinkConditionerConfig::good_condition());
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.rtc_endpoint("/rtc".to_string());
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.tick_interval(Duration::from_millis(1));
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.compression(CompressionConfig::new(None, None));
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.enable_client_authoritative_entities();
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_default_channels();
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_channel_settings::<Gossip>(settings());
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_message::<Whisper>();
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_request::<Question>();
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_component::<Ghost>();
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.add_resource::<Ghost>();
+        });
+        assert_refused!(|p: &mut Protocol| {
+            p.lock();
+        });
+
+        std::panic::set_hook(quiet);
+    }
+}
