@@ -117,6 +117,13 @@ impl RemoteWorldWaitlist {
         self.entity_waitlist.spawn_entity(in_scope_entities, entity);
     }
 
+    /// Forwards a despawn to the entity waitlist.
+    ///
+    /// `RemoteEntityWaitlist::despawn_entity` is currently a stub, so this
+    /// whole call is observably a no-op and no test can distinguish it from
+    /// one. Triaged, not missing coverage. Readiness is decided by the
+    /// `InScopeEntities` set consulted at queue and release time, which a
+    /// despawn updates independently.
     pub fn despawn_entity(&mut self, entity: &RemoteEntity) {
         self.entity_waitlist.despawn_entity(entity);
     }
@@ -165,6 +172,10 @@ impl RemoteWorldWaitlist {
                 continue;
             };
 
+            // These four arms are diagnostics: the first three only choose a
+            // `warn!` string and are equivalent under any mutation of their
+            // conditions. Only the fourth has behaviour, and it is a panic on a
+            // state the splitter cannot produce.
             if waiting_updates_opt.is_some() && ready_update_opt.is_some() {
                 warn!("Incoming Update split into BOTH waiting and ready parts");
             }
@@ -792,5 +803,165 @@ mod remote_world_waitlist_tests {
                 &Instant::now(),
             )
             .is_empty());
+    }
+
+    // -- updates waiting on a RELATED entity --------------------------------
+
+    use crate::EntityProperty;
+
+    /// A component that points at another entity. Its update cannot be applied
+    /// until the entity it points at exists locally, which is the case the
+    /// middle waitlist exists for.
+    #[derive(Replicate)]
+    struct Haunt {
+        value: Property<u8>,
+        target: EntityProperty,
+    }
+
+    /// Encodes every entity as remote id `referenced`, so an update written
+    /// through it names an entity the receiving side may not have yet.
+    struct PointsAt {
+        referenced: RemoteEntity,
+    }
+
+    impl LocalEntityAndGlobalEntityConverter for PointsAt {
+        fn global_entity_to_host_entity(
+            &self,
+            _: &GlobalEntity,
+        ) -> Result<HostEntity, EntityDoesNotExistError> {
+            Err(EntityDoesNotExistError)
+        }
+        fn global_entity_to_remote_entity(
+            &self,
+            _: &GlobalEntity,
+        ) -> Result<RemoteEntity, EntityDoesNotExistError> {
+            Ok(self.referenced)
+        }
+        fn global_entity_to_owned_entity(
+            &self,
+            _: &GlobalEntity,
+        ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+            Ok(self.referenced.to_host().copy_to_owned())
+        }
+        fn host_entity_to_global_entity(
+            &self,
+            _: &HostEntity,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Err(EntityDoesNotExistError)
+        }
+        fn static_host_entity_to_global_entity(
+            &self,
+            _: &HostEntity,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Err(EntityDoesNotExistError)
+        }
+        fn remote_entity_to_global_entity(
+            &self,
+            _: &RemoteEntity,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Ok(GlobalEntity::from_u64(99))
+        }
+        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+            *entity
+        }
+    }
+
+    impl crate::LocalEntityAndGlobalEntityConverterMut for PointsAt {
+        fn get_or_reserve_entity(
+            &mut self,
+            _: &GlobalEntity,
+        ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+            Ok(self.referenced.to_host().copy_to_owned())
+        }
+    }
+
+    /// A full update for a `Haunt` whose `target` points at `referenced`.
+    fn a_haunt_update_pointing_at(
+        component_kinds: &ComponentKinds,
+        value: u8,
+        referenced: RemoteEntity,
+    ) -> PendingComponentUpdate {
+        use naia_serde::{BitReader, BitWriter};
+
+        let mut component = Haunt::new_complete(value);
+        component.target.set(&IdentityConverter, &99);
+
+        let mut writer = BitWriter::new();
+        ComponentKind::of::<Haunt>().ser(component_kinds, &mut writer);
+        let mut diff_mask = crate::DiffMask::new(component.diff_mask_size());
+        for index in 0..(diff_mask.byte_number() * 8) {
+            diff_mask.set_bit(index, true);
+        }
+        component.write_update(&diff_mask, &mut writer, &mut PointsAt { referenced });
+
+        let bytes = writer.to_bytes();
+        let mut reader = BitReader::new(&bytes);
+        component_kinds
+            .read_create_update(&mut reader)
+            .expect("a freshly written update should read back")
+    }
+
+    /// The middle waitlist: an update that arrives while the entity it *points
+    /// at* is still unknown. The field it depends on is held; when that entity
+    /// spawns, `process_waitlist_updates` applies it.
+    #[test]
+    fn an_update_pointing_at_an_unknown_entity_waits_for_that_entity() {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Haunt>();
+
+        let mut waitlist = RemoteWorldWaitlist::new();
+        let mut scope = Scope::default();
+        let subject = remote(1);
+        let referenced = remote(2);
+        let map = Map::with(&[subject]);
+
+        let mut world = TestWorld::new();
+        world.spawn_at(1);
+        world.insert_boxed_component(
+            &1,
+            crate::world::test_world::remote_component(&kinds, &Haunt::new_complete(0)),
+        );
+
+        let applied = waitlist.process_ready_updates(
+            &scope,
+            &map,
+            &IdentityConverter,
+            &kinds,
+            &mut world,
+            vec![(
+                0,
+                subject.copy_to_owned(),
+                a_haunt_update_pointing_at(&kinds, 7, referenced),
+            )],
+        );
+        assert_eq!(
+            applied,
+            vec![(0, subject.copy_to_owned(), ComponentKind::of::<Haunt>())],
+            "the fields that do not name an entity apply straight away",
+        );
+        assert_eq!(
+            *world
+                .value_of::<Haunt>(&1)
+                .expect("the world must still hold the haunt")
+                .value,
+            7,
+            "the ready half is the value field",
+        );
+
+        scope.0.insert(referenced);
+        waitlist.spawn_entity(&scope, &referenced);
+
+        let flushed = waitlist.process_waitlist_updates(
+            &Map::with(&[subject, referenced]),
+            &IdentityConverter,
+            &mut world,
+            &Instant::now(),
+        );
+        assert_eq!(
+            flushed,
+            vec![(0, subject, ComponentKind::of::<Haunt>())],
+            "the referenced entity spawning must release the held field",
+        );
     }
 }
