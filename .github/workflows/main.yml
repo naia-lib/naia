@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Format
         uses: actions-rs/cargo@v1
@@ -41,7 +41,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -71,7 +71,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -105,7 +105,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -142,7 +142,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -174,7 +174,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -215,7 +215,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Install X11 and OpenGL dependencies
         if: matrix.package == 'naia-macroquad-client-demo' || matrix.package == 'naia-basic-client-demo-mq' || matrix.package == 'naia-socket-client-demo-mq'
@@ -241,7 +241,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone naia
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Clone namako
         run: git clone https://github.com/connorcarpenter/namako.git ${{ github.workspace }}/../namako
@@ -268,7 +268,7 @@ jobs:
       RUSTDOCFLAGS: "-D warnings"
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2
@@ -294,7 +294,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v7
 
       - name: Cache crates
         uses: Swatinem/rust-cache@v2

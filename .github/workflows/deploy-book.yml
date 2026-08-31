@@ -15,7 +15,7 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: peaceiris/actions-mdbook@v2
         with:
           mdbook-version: 'latest'
