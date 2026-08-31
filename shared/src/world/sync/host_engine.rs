@@ -140,9 +140,8 @@ impl HostEngine {
                 self.outgoing_commands.push(command);
                 return;
             }
-            EntityMessageType::Noop => {
-                return;
-            }
+            // No `Noop` arm: `EntityCommand` has no `Noop` variant, so
+            // `get_type()` can never produce one here.
             _ => {}
         }
 
