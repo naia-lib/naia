@@ -719,6 +719,7 @@ mod remote_world_manager_tests {
 
     use crate::{
         bigmap::BigMapKey,
+        world::entity::error::EntityDoesNotExistError,
         world::{
             test_support::TestGwm,
             test_world::{remote_component, TestSpawner, TestWorld},
@@ -809,6 +810,24 @@ mod remote_world_manager_tests {
                 incoming_components,
                 Vec::new(),
                 indexed,
+            )
+        }
+
+        /// Feeds `updates` through the manager with no messages.
+        fn deliver_updates(
+            &mut self,
+            updates: Vec<(Tick, OwnedLocalEntity, PendingComponentUpdate)>,
+        ) -> Vec<EntityEvent> {
+            self.manager.take_incoming_events(
+                &mut self.spawner,
+                &self.gwm,
+                &mut self.map,
+                &self.kinds,
+                &mut self.world,
+                &Instant::now(),
+                &mut HashMap::new(),
+                updates,
+                Vec::new(),
             )
         }
 
@@ -1097,5 +1116,274 @@ mod remote_world_manager_tests {
             fixture.manager.take_outgoing_commands().is_empty(),
             "a command naming an entity with no remote address has nowhere to go",
         );
+    }
+
+    // -- things that arrive before what they depend on ----------------------
+
+    use crate::EntityProperty;
+
+    /// A component that points at another entity.
+    #[derive(Replicate)]
+    struct Haunt {
+        value: Property<u8>,
+        target: EntityProperty,
+    }
+
+    /// Addresses every entity as `referenced`'s HOST half, which reverses on
+    /// the way out so the component lands on the wire naming a remote entity
+    /// the receiver may not have yet.
+    struct PointsAt {
+        referenced: RemoteEntity,
+    }
+
+    impl LocalEntityAndGlobalEntityConverter for PointsAt {
+        fn global_entity_to_host_entity(
+            &self,
+            _: &GlobalEntity,
+        ) -> Result<crate::HostEntity, EntityDoesNotExistError> {
+            Err(EntityDoesNotExistError)
+        }
+        fn global_entity_to_remote_entity(
+            &self,
+            _: &GlobalEntity,
+        ) -> Result<RemoteEntity, EntityDoesNotExistError> {
+            Ok(self.referenced)
+        }
+        fn global_entity_to_owned_entity(
+            &self,
+            _: &GlobalEntity,
+        ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+            Ok(self.referenced.to_host().copy_to_owned())
+        }
+        fn host_entity_to_global_entity(
+            &self,
+            _: &crate::HostEntity,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Err(EntityDoesNotExistError)
+        }
+        fn static_host_entity_to_global_entity(
+            &self,
+            _: &crate::HostEntity,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Err(EntityDoesNotExistError)
+        }
+        fn remote_entity_to_global_entity(
+            &self,
+            _: &RemoteEntity,
+        ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+            Ok(GlobalEntity::from_u64(99))
+        }
+        fn apply_entity_redirect(&self, entity: &OwnedLocalEntity) -> OwnedLocalEntity {
+            *entity
+        }
+    }
+
+    impl crate::LocalEntityAndGlobalEntityConverterMut for PointsAt {
+        fn get_or_reserve_entity(
+            &mut self,
+            _: &GlobalEntity,
+        ) -> Result<OwnedLocalEntity, EntityDoesNotExistError> {
+            Ok(self.referenced.to_host().copy_to_owned())
+        }
+    }
+
+    /// A `Haunt` pointing at *something*. Which entity it names on the wire is
+    /// decided by the converter it is written through, not here.
+    fn a_haunt(value: u8) -> Haunt {
+        let mut component = Haunt::new_complete(value);
+        component
+            .target
+            .set(&crate::world::test_world::IdentityConverter, &99);
+        component
+    }
+
+    /// Serializes a `Haunt` naming `referenced` and reads it back through
+    /// `converter`, so a component that names an entity the converter cannot
+    /// resolve comes back still waiting on it.
+    fn a_haunt_component_pointing_at(
+        component_kinds: &ComponentKinds,
+        value: u8,
+        referenced: RemoteEntity,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> Box<dyn Replicate> {
+        use naia_serde::{BitReader, BitWriter};
+
+        let mut writer = BitWriter::new();
+        a_haunt(value).write(component_kinds, &mut writer, &mut PointsAt { referenced });
+        let bytes = writer.to_bytes();
+        let mut reader = BitReader::new(&bytes);
+        component_kinds
+            .read(&mut reader, converter)
+            .expect("a freshly written component should read back")
+    }
+
+    /// The same, as a wire update rather than a whole component.
+    fn a_haunt_update_pointing_at(
+        component_kinds: &ComponentKinds,
+        value: u8,
+        referenced: RemoteEntity,
+    ) -> PendingComponentUpdate {
+        use naia_serde::{BitReader, BitWriter};
+
+        let component = a_haunt(value);
+        let mut writer = BitWriter::new();
+        ComponentKind::of::<Haunt>().ser(component_kinds, &mut writer);
+        let mut diff_mask = crate::DiffMask::new(component.diff_mask_size());
+        for index in 0..(diff_mask.byte_number() * 8) {
+            diff_mask.set_bit(index, true);
+        }
+        component.write_update(&diff_mask, &mut writer, &mut PointsAt { referenced });
+
+        let bytes = writer.to_bytes();
+        let mut reader = BitReader::new(&bytes);
+        component_kinds
+            .read_create_update(&mut reader)
+            .expect("a freshly written update should read back")
+    }
+
+    /// An insert whose component names an entity that has not arrived yet is
+    /// held rather than applied, and lands when that entity spawns.
+    #[test]
+    fn a_component_naming_an_unknown_entity_waits_for_it() {
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.kinds.add_component::<Haunt>();
+        let global = fixture.spawn_with_ghost(remote(1));
+
+        let waiting = a_haunt_component_pointing_at(
+            &fixture.kinds,
+            5,
+            remote(2),
+            fixture.map.entity_converter(),
+        );
+        let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
+            HashMap::new();
+        components.insert(
+            (remote(1).copy_to_owned(), ComponentKind::of::<Haunt>()),
+            waiting,
+        );
+
+        let events = fixture.deliver_with(
+            vec![EntityMessage::InsertComponent(
+                remote(1),
+                ComponentKind::of::<Haunt>(),
+            )],
+            &mut components,
+        );
+        assert!(
+            summarize(&events).is_empty(),
+            "the component names an entity this peer has not seen",
+        );
+
+        let events = fixture.deliver(vec![EntityMessage::Spawn(remote(2))]);
+        let spawned = *fixture.map.global_entity_from_remote(&remote(2)).unwrap();
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::Spawn), spawned)]
+        );
+
+        // The connection tells the manager about the spawn separately: the
+        // Spawn arm maps the entity, `spawn_entity` is what releases whatever
+        // was waiting on it.
+        fixture.manager.spawn_entity(&remote(2));
+        let events = fixture.deliver(Vec::new());
+        assert_eq!(
+            summarize(&events),
+            vec![(Some(EntityMessageType::InsertComponent), global)],
+            "the entity arriving must release the insert that was waiting on it",
+        );
+    }
+
+    /// An update whose field names an entity that has not arrived yet is held
+    /// the same way, and raises its UpdateComponent event on release.
+    #[test]
+    fn an_update_naming_an_unknown_entity_waits_for_it() {
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.kinds.add_component::<Haunt>();
+        let global = fixture.spawn_with_ghost(remote(1));
+
+        let present = a_haunt_component_pointing_at(
+            &fixture.kinds,
+            1,
+            remote(1),
+            fixture.map.entity_converter(),
+        );
+        let mut components: HashMap<(OwnedLocalEntity, ComponentKind), Box<dyn Replicate>> =
+            HashMap::new();
+        components.insert(
+            (remote(1).copy_to_owned(), ComponentKind::of::<Haunt>()),
+            present,
+        );
+        fixture.deliver_with(
+            vec![EntityMessage::InsertComponent(
+                remote(1),
+                ComponentKind::of::<Haunt>(),
+            )],
+            &mut components,
+        );
+
+        let update = a_haunt_update_pointing_at(&fixture.kinds, 5, remote(2));
+        let events = fixture.deliver_updates(vec![(0, remote(1).copy_to_owned(), update)]);
+        assert_eq!(
+            summarize(&events),
+            vec![(None, global)],
+            "the half of the update that names nothing applies straight away",
+        );
+
+        fixture.deliver(vec![EntityMessage::Spawn(remote(2))]);
+        fixture.manager.spawn_entity(&remote(2));
+        let events = fixture.deliver(Vec::new());
+        assert_eq!(
+            summarize(&events),
+            vec![(None, global)],
+            "the entity arriving must release the field that was waiting on it",
+        );
+    }
+
+    /// An update that outruns its own entity's spawn is held until the spawn
+    /// catches up — a separate queue from the one above.
+    #[test]
+    fn an_update_that_outruns_its_own_entitys_spawn_is_held() {
+        let mut fixture = Fixture::new(HostType::Client);
+
+        let update = crate::world::test_world::full_update(&kinds(), &Ghost::new_complete(9));
+        let events = fixture.deliver_updates(vec![(0, remote(1).copy_to_owned(), update)]);
+        assert!(
+            summarize(&events).is_empty(),
+            "there is no entity to apply the update to yet",
+        );
+
+        let global = fixture.spawn_with_ghost(remote(1));
+        fixture.manager.spawn_entity(&remote(1));
+        let events = fixture.deliver_updates(Vec::new());
+        assert_eq!(
+            summarize(&events),
+            vec![(None, global)],
+            "the spawn must release the update that was waiting for it",
+        );
+    }
+
+    // -- the entity channels the connection reaches for ---------------------
+
+    #[test]
+    fn a_channel_exists_only_for_an_entity_the_peer_has_sent() {
+        let mut fixture = Fixture::new(HostType::Client);
+        fixture.spawn_with_ghost(remote(1));
+
+        assert!(fixture.manager.has_entity_channel(&remote(1)));
+        assert!(!fixture.manager.has_entity_channel(&remote(2)));
+        assert!(fixture.manager.get_entity_channel_mut(&remote(1)).is_some());
+        assert!(fixture.manager.get_entity_channel_mut(&remote(2)).is_none());
+        assert_eq!(
+            fixture.manager.extract_component_kinds(&remote(1)),
+            HashSet::from([ghost()]),
+        );
+
+        let channel = fixture.manager.remove_entity_channel(&remote(1));
+        assert!(
+            !fixture.manager.has_entity_channel(&remote(1)),
+            "a channel lifted out for migration must not still be findable",
+        );
+        fixture.manager.insert_entity_channel(remote(1), channel);
+        assert!(fixture.manager.has_entity_channel(&remote(1)));
     }
 }
