@@ -911,4 +911,122 @@ mod base_connection_tests {
         let (_gwm, connection) = connection(&cfg);
         assert_eq!(connection.packet_loss_pct(), 0.0);
     }
+
+    fn advance(t: &naia_socket_shared::Instant, ms: u32) -> naia_socket_shared::Instant {
+        let mut out = t.clone();
+        out.add_millis(ms);
+        out
+    }
+
+    #[test]
+    fn the_bandwidth_budget_accumulates_over_time_and_gates_a_send() {
+        // The budget gate is the only thing standing between a busy tick and a
+        // connection saturating its link. A gate stuck open (or shut) is
+        // invisible until production.
+        let mut cfg = config(Duration::from_secs(4));
+        cfg.bandwidth.target_bytes_per_sec = 1_000;
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let t0 = naia_socket_shared::Instant::now();
+        connection.accumulate_bandwidth(&t0);
+        assert_eq!(
+            connection.bandwidth_remaining(),
+            0.0,
+            "the first tick establishes the baseline, it does not grant budget"
+        );
+
+        let t1 = advance(&t0, 1_000);
+        connection.accumulate_bandwidth(&t1);
+        assert!(
+            connection.bandwidth_remaining() > 0.0,
+            "a second of elapsed time at 1000 B/s must grant budget"
+        );
+        assert!(
+            connection.can_spend_bandwidth(500),
+            "a packet well inside the budget is permitted"
+        );
+
+        connection.spend_bandwidth(2_000);
+        assert!(
+            connection.bandwidth_remaining() < 0.0,
+            "the overshoot allowance lets one packet run the budget negative"
+        );
+        assert!(
+            !connection.can_spend_bandwidth(500),
+            "and the next packet in the same tick is refused"
+        );
+    }
+
+    #[test]
+    fn bytes_sent_are_reported_for_the_completed_tick() {
+        let mut cfg = config(Duration::from_secs(4));
+        cfg.bandwidth.target_bytes_per_sec = 1_000;
+        let (_gwm, mut connection) = connection(&cfg);
+
+        let t0 = naia_socket_shared::Instant::now();
+        connection.accumulate_bandwidth(&t0);
+        let t1 = advance(&t0, 1_000);
+        connection.accumulate_bandwidth(&t1);
+        connection.spend_bandwidth(250);
+
+        // The figure is per completed tick, so it appears once the next tick
+        // rolls over -- reporting the in-progress tick would double-count.
+        let t2 = advance(&t1, 1_000);
+        connection.accumulate_bandwidth(&t2);
+        assert_eq!(connection.bandwidth_bytes_sent_last_tick(), 250);
+    }
+
+    #[test]
+    fn deferred_packets_are_only_counted_under_bench_instrumentation() {
+        // record_bandwidth_deferred is called from the send loop on every
+        // refused packet, so it must stay callable; the counter behind it is
+        // compiled out unless `bench_instrumentation` is on. (A mutant that
+        // hardcodes the getter to 0 is equivalent under default features --
+        // triaged here rather than once per sweep.)
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        connection.record_bandwidth_deferred();
+        let deferred = connection.bandwidth_packets_deferred_last_tick();
+        #[cfg(not(feature = "bench_instrumentation"))]
+        assert_eq!(deferred, 0);
+        #[cfg(feature = "bench_instrumentation")]
+        assert_eq!(deferred, 0, "the count is per completed tick");
+    }
+
+    #[test]
+    fn a_fresh_connection_owes_no_heartbeat() {
+        // The interval is what keeps the NAT mapping alive; a connection that
+        // claimed a heartbeat was due the instant it opened would send one per
+        // tick forever.
+        let cfg = config(Duration::from_secs(30));
+        let (_gwm, connection) = connection(&cfg);
+        assert!(!connection.should_send_heartbeat());
+    }
+
+    #[test]
+    fn packets_that_fall_out_of_the_ack_window_are_counted_as_lost() {
+        // Loss feeds the resend timing. A monitor that always reported zero
+        // would make a lossy link look healthy and stall every reliable
+        // channel on it.
+        let cfg = config(Duration::from_secs(4));
+        let (_gwm, mut connection) = connection(&cfg);
+
+        // Put 34 data packets on the wire, then have the peer acknowledge only
+        // the last. The 32-packet ack window cannot reach back to the first
+        // ones, so they are declared lost.
+        let mut last = 0;
+        for _ in 0..34 {
+            let mut writer = BitWriter::new();
+            last = connection
+                .write_header(PacketType::Data, &mut writer)
+                .sender_packet_index;
+        }
+        connection.process_incoming_header(&peer_header(0, last), &mut []);
+
+        assert!(
+            connection.packet_loss_pct() > 0.0,
+            "packets the peer never acknowledged must register as loss"
+        );
+    }
 }
