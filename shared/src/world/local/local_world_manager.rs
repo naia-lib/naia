@@ -1389,6 +1389,10 @@ impl LocalWorldManager {
             let is_published = if let Some(channel) = self.get_host_entity_channel(&host_entity) {
                 use crate::world::sync::auth_channel::EntityAuthChannelState;
                 let state = channel.auth_channel_state();
+                // The Delegated arm is defensive only: `AuthChannel` panics on
+                // an EnableDelegation for a channel that is not exactly
+                // Published, so a Delegated channel can never reach the
+                // emission below anyway. No test can distinguish it.
                 state == EntityAuthChannelState::Published
                     || state == EntityAuthChannelState::Delegated
             } else {
@@ -1509,6 +1513,9 @@ impl LocalWorldManager {
 
     fn handle_dropped_command_packets(&mut self, now: &Instant) {
         while let Some((_, (time_sent, _))) = self.sent_command_packets.front() {
+            // `>` vs `>=` differ only at an elapsed time of exactly
+            // COMMAND_RECORD_TTL, which no test can pin down; the boundary is
+            // an arbitrary retention cutoff, not a contract.
             if time_sent.elapsed(now) > COMMAND_RECORD_TTL {
                 self.sent_command_packets.pop_front();
             } else {
