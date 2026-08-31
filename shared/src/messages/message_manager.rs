@@ -457,12 +457,6 @@ impl MessageManager {
                     // request is malformed input rather than a local invariant.
                     // `LocalRequestId` is a single byte, so the whole space is
                     // trivially reachable by a hostile peer.
-                    // The id this response claims to answer is read off the
-                    // wire. A peer can answer a request that was never made, or
-                    // answer the same one twice, so an id with no outstanding
-                    // request is malformed input rather than a local invariant.
-                    // `LocalRequestId` is a single byte, so the whole space is
-                    // trivially reachable by a hostile peer.
                     let Some(global_request_id) =
                         channel_sender.process_incoming_response(&local_request_id)
                     else {
@@ -607,5 +601,768 @@ mod unsolicited_response_tests {
             responses.is_empty(),
             "an unsolicited response must be dropped, not surfaced",
         );
+    }
+}
+
+#[cfg(test)]
+mod message_manager_tests {
+    //! Channel wiring, packing order and packet framing for [`MessageManager`].
+    //!
+    //! The manager owns three things nothing else does: which channels get a
+    //! sender and which get a receiver (a direction-dependent asymmetry that is
+    //! easy to invert), the order channels are offered packet space in, and the
+    //! nested continue-bit framing that wraps every channel's own message
+    //! stream. Those are what the tests below pin.
+
+    use std::{any::Any, collections::HashSet, net::SocketAddr};
+
+    use naia_serde::{BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+    use naia_socket_shared::Instant;
+
+    use crate::messages::{message::Message, message_kinds::MessageKind};
+    use crate::world::entity::entity_converters::{
+        LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
+    };
+    use crate::world::remote::remote_entity_waitlist::RemoteEntityWaitlist;
+    use crate::{
+        constants::FRAGMENTATION_LIMIT_BITS,
+        messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+        world::{local::local_world_manager::LocalWorldManager, test_support::TestGwm},
+        Channel, ChannelCriticality, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode,
+        ChannelSettings, ComponentKinds, FakeEntityConverter, HostType, MessageBuilder,
+        MessageContainer, MessageKinds, Named, PacketNotifiable, ReliableSettings,
+    };
+
+    use super::{receive_window, MessageManager};
+
+    // -- channel zoo --------------------------------------------------------
+
+    macro_rules! test_channel {
+        ($name:ident) => {
+            struct $name;
+            impl Named for $name {
+                fn name(&self) -> String {
+                    stringify!($name).to_string()
+                }
+                fn protocol_name() -> &'static str {
+                    stringify!($name)
+                }
+            }
+            impl Channel for $name {}
+        };
+    }
+
+    test_channel!(ToClient);
+    test_channel!(ToServer);
+    test_channel!(BothWays);
+    test_channel!(LowPriority);
+    test_channel!(HighPriority);
+    test_channel!(Unreliable);
+
+    fn reliable(direction: ChannelDirection) -> ChannelSettings {
+        ChannelSettings::new(
+            ChannelMode::OrderedReliable(ReliableSettings::default()),
+            direction,
+        )
+    }
+
+    fn unreliable(direction: ChannelDirection) -> ChannelSettings {
+        ChannelSettings::new(ChannelMode::UnorderedUnreliable, direction)
+    }
+
+    /// One channel of each direction, so the sender/receiver split in `new()`
+    /// is observable from either host type.
+    fn directional_kinds() -> ChannelKinds {
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<ToClient>(reliable(ChannelDirection::ServerToClient));
+        kinds.add_channel::<ToServer>(reliable(ChannelDirection::ClientToServer));
+        kinds.add_channel::<BothWays>(reliable(ChannelDirection::Bidirectional));
+        kinds
+    }
+
+    /// A minimal, fully round-trippable message. `FragmentedMessage` is
+    /// unsuitable for the round-trip test because receivers treat fragments
+    /// specially and try to reassemble them; this one is an ordinary message
+    /// carrying a single tag byte.
+    #[derive(Clone)]
+    struct Ping(u8);
+
+    impl Named for Ping {
+        fn name(&self) -> String {
+            "Ping".into()
+        }
+        fn protocol_name() -> &'static str {
+            "Ping"
+        }
+    }
+
+    struct PingBuilder;
+
+    impl MessageBuilder for PingBuilder {
+        fn read(
+            &self,
+            reader: &mut BitReader,
+            _: &dyn LocalEntityAndGlobalEntityConverter,
+        ) -> Result<MessageContainer, SerdeErr> {
+            Ok(MessageContainer::new(Box::new(Ping(u8::de(reader)?))))
+        }
+        fn box_clone(&self) -> Box<dyn MessageBuilder> {
+            Box::new(PingBuilder)
+        }
+    }
+
+    impl Message for Ping {
+        fn kind(&self) -> MessageKind {
+            MessageKind::of::<Self>()
+        }
+        fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+            self
+        }
+        fn create_builder() -> Box<dyn MessageBuilder> {
+            Box::new(PingBuilder)
+        }
+        fn bit_length(
+            &self,
+            _: &MessageKinds,
+            _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) -> u32 {
+            8
+        }
+        fn is_fragment(&self) -> bool {
+            false
+        }
+        fn is_request(&self) -> bool {
+            false
+        }
+        fn write(
+            &self,
+            message_kinds: &MessageKinds,
+            writer: &mut dyn BitWrite,
+            _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+        ) {
+            self.kind().ser(message_kinds, writer);
+            self.0.ser(writer);
+        }
+        fn relations_waiting(&self) -> Option<HashSet<crate::RemoteEntity>> {
+            None
+        }
+        fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) {}
+    }
+
+    fn ping(tag: u8) -> MessageContainer {
+        MessageContainer::new(Box::new(Ping(tag)))
+    }
+
+    fn message_kinds() -> MessageKinds {
+        let mut kinds = MessageKinds::new();
+        kinds.add_message::<FragmentedMessage>();
+        kinds.add_message::<Ping>();
+        kinds
+    }
+
+    fn tagged(tag: u8, len: usize) -> MessageContainer {
+        let mut bytes = vec![0u8; len];
+        bytes[0] = tag;
+        MessageContainer::new(Box::new(FragmentedMessage::new(
+            FragmentId::zero(),
+            FragmentIndex::from_u32(0),
+            bytes.into_boxed_slice(),
+        )))
+    }
+
+    fn world_manager() -> (TestGwm, LocalWorldManager) {
+        let component_kinds = ComponentKinds::new();
+        let gwm = TestGwm::new(&component_kinds);
+        let address: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
+        let manager = LocalWorldManager::new(&address, HostType::Client, 1, &gwm);
+        (gwm, manager)
+    }
+
+    // -- receive_window -----------------------------------------------------
+
+    #[test]
+    fn the_receive_window_is_the_channels_own_queue_depth() {
+        assert_eq!(
+            receive_window(&ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(64),
+            }),
+            Some(64),
+            "the window should be exactly the send cap, which is the tightest \
+             bound that never rejects honest traffic"
+        );
+    }
+
+    #[test]
+    fn an_unbounded_queue_opts_out_of_the_receive_window() {
+        assert_eq!(
+            receive_window(&ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: None,
+            }),
+            None,
+            "None disables the send cap and the receive window together"
+        );
+    }
+
+    #[test]
+    fn a_queue_depth_beyond_u16_saturates_rather_than_wrapping() {
+        // MessageIndex is a u16, so a depth of 100_000 cannot be represented as
+        // a window. Truncating instead of saturating would produce a window of
+        // 34_464 -- far TIGHTER than configured -- and silently drop honest
+        // traffic from a conforming peer.
+        assert_eq!(
+            receive_window(&ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(100_000),
+            }),
+            Some(u16::MAX)
+        );
+        assert_eq!(
+            receive_window(&ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(u16::MAX as usize),
+            }),
+            Some(u16::MAX),
+            "the largest representable depth is not itself saturated away"
+        );
+    }
+
+    // -- who gets a sender and who gets a receiver --------------------------
+
+    #[test]
+    fn a_server_sends_only_on_channels_that_reach_the_client() {
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Server, &kinds);
+        let messages = message_kinds();
+
+        assert!(manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToClient>(),
+            tagged(1, 4)
+        ));
+        assert!(manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<BothWays>(),
+            tagged(1, 4)
+        ));
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel not configured correctly")]
+    fn a_server_has_no_sender_for_a_client_to_server_channel() {
+        // The direction filter in `new()` is the only thing standing between a
+        // protocol author and a server that writes on a channel the client never
+        // reads. Panicking names the mistake at the send site.
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Server, &kinds);
+        manager.send_message(
+            &message_kinds(),
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            tagged(1, 4),
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "Channel not configured correctly")]
+    fn a_client_has_no_sender_for_a_server_to_client_channel() {
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.send_message(
+            &message_kinds(),
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToClient>(),
+            tagged(1, 4),
+        );
+    }
+
+    #[test]
+    fn a_client_sends_only_on_channels_that_reach_the_server() {
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        let messages = message_kinds();
+
+        assert!(manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            tagged(1, 4)
+        ));
+        assert!(manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<BothWays>(),
+            tagged(1, 4)
+        ));
+    }
+
+    #[test]
+    fn a_receiver_only_exists_for_channels_the_peer_can_send_on() {
+        // The receiver side is the mirror of the sender side: a server reads
+        // client-to-server channels. Reading a packet that names a channel we
+        // have no receiver for is a corrupt packet, not a panic.
+        let kinds = directional_kinds();
+        let mut server = MessageManager::new(HostType::Server, &kinds);
+        let (_gwm, mut world) = world_manager();
+
+        // Frame a packet naming the ServerToClient channel, which no server
+        // receiver exists for.
+        let mut writer = BitWriter::new();
+        true.ser(&mut writer);
+        ChannelKind::of::<ToClient>().ser(&kinds, &mut writer);
+        let bytes = writer.to_bytes();
+
+        let result = server.read_messages(
+            &kinds,
+            &message_kinds(),
+            &mut world,
+            &mut BitReader::new(&bytes),
+        );
+        assert!(
+            result.is_err(),
+            "a packet naming a channel this host does not receive on is malformed \
+             input and must be rejected, not routed"
+        );
+    }
+
+    // -- fragmentation gate -------------------------------------------------
+
+    /// Bit length of a `FragmentedMessage` carrying `len` payload bytes, as the
+    /// manager measures it.
+    fn bit_length_of(len: usize) -> u32 {
+        tagged(0, len).bit_length(&message_kinds(), &mut FakeEntityConverter)
+    }
+
+    /// The largest payload whose encoded message still fits under the
+    /// fragmentation limit.
+    fn payload_at_limit() -> usize {
+        let mut len = 1;
+        while bit_length_of(len + 1) <= FRAGMENTATION_LIMIT_BITS {
+            len += 1;
+        }
+        len
+    }
+
+    #[test]
+    fn a_message_at_exactly_the_fragmentation_limit_is_sent_whole() {
+        // The gate is `>`, not `>=`: a body of exactly the limit fits in one
+        // fragment, so fragmenting it would only add header overhead. This also
+        // means an UNRELIABLE channel can still carry it.
+        let len = payload_at_limit();
+        assert!(bit_length_of(len) <= FRAGMENTATION_LIMIT_BITS);
+        assert!(bit_length_of(len + 1) > FRAGMENTATION_LIMIT_BITS);
+
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<Unreliable>(unreliable(ChannelDirection::Bidirectional));
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+
+        assert!(
+            manager.send_message(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &ChannelKind::of::<Unreliable>(),
+                tagged(1, len)
+            ),
+            "a message that fits under the limit is accepted on an unreliable channel"
+        );
+    }
+
+    #[test]
+    fn an_oversized_message_is_refused_by_an_unreliable_channel() {
+        // One byte past the limit. There is no fragment reassembly on an
+        // unreliable channel, so the manager refuses rather than sending
+        // fragments that can never be put back together.
+        let len = payload_at_limit() + 1;
+
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<Unreliable>(unreliable(ChannelDirection::Bidirectional));
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+
+        assert!(
+            !manager.send_message(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &ChannelKind::of::<Unreliable>(),
+                tagged(1, len)
+            ),
+            "an oversized message on an unreliable channel must be rejected"
+        );
+        assert!(
+            !manager.has_outgoing_messages(),
+            "and nothing may be left queued behind it"
+        );
+    }
+
+    #[test]
+    fn an_oversized_message_is_fragmented_onto_a_reliable_channel() {
+        let len = payload_at_limit() * 3;
+
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<BothWays>(reliable(ChannelDirection::Bidirectional));
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+
+        assert!(
+            manager.send_message(
+                &message_kinds(),
+                &mut FakeEntityConverter,
+                &ChannelKind::of::<BothWays>(),
+                tagged(1, len)
+            ),
+            "a reliable channel accepts an oversized message by fragmenting it"
+        );
+        assert!(
+            !manager.has_outgoing_messages(),
+            "a reliable sender holds a newly queued message back until it is \
+             collected: `send_message` enqueues, `collect_outgoing_messages` is \
+             what makes it eligible for a packet"
+        );
+        manager.collect_outgoing_messages(&Instant::now(), &200.0);
+        assert!(
+            manager.has_outgoing_messages(),
+            "once collected, the fragments are ready to write"
+        );
+    }
+
+    // -- packing order ------------------------------------------------------
+
+    /// Reads back the channel kinds, in order, from a packet the manager wrote.
+    fn channels_in_packet(bytes: &[u8], kinds: &ChannelKinds) -> Vec<ChannelKind> {
+        let mut reader = BitReader::new(bytes);
+        let mut out = Vec::new();
+        while bool::de(&mut reader).expect("a channel continue bit should be readable") {
+            let channel_kind =
+                ChannelKind::de(kinds, &mut reader).expect("the channel kind should read back");
+            out.push(channel_kind);
+            // Skip this channel's message stream.
+            while bool::de(&mut reader).expect("a message continue bit should be readable") {
+                message_kinds()
+                    .read(&mut reader, &FakeEntityConverter)
+                    .expect("a message the manager just wrote should read back");
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn channels_are_offered_packet_space_in_descending_criticality() {
+        // Under a tight packet budget the High channel must get its bytes first.
+        // The map iteration order is arbitrary, so without the sort this test
+        // would be flaky rather than merely wrong -- which is exactly why the
+        // ordering deserves a test rather than a comment.
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<LowPriority>(
+            unreliable(ChannelDirection::Bidirectional).with_criticality(ChannelCriticality::Low),
+        );
+        kinds.add_channel::<HighPriority>(
+            unreliable(ChannelDirection::Bidirectional).with_criticality(ChannelCriticality::High),
+        );
+
+        let messages = message_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<LowPriority>(),
+            tagged(1, 4),
+        );
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<HighPriority>(),
+            tagged(2, 4),
+        );
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            0,
+            &mut has_written,
+        );
+        let bytes = writer.to_bytes();
+
+        assert_eq!(
+            channels_in_packet(&bytes, &kinds),
+            vec![
+                ChannelKind::of::<HighPriority>(),
+                ChannelKind::of::<LowPriority>()
+            ],
+            "the High channel must be offered space before the Low one"
+        );
+    }
+
+    #[test]
+    fn a_channel_with_nothing_queued_is_skipped_entirely() {
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<LowPriority>(unreliable(ChannelDirection::Bidirectional));
+        kinds.add_channel::<HighPriority>(unreliable(ChannelDirection::Bidirectional));
+
+        let messages = message_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<HighPriority>(),
+            tagged(2, 4),
+        );
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            0,
+            &mut has_written,
+        );
+        let bytes = writer.to_bytes();
+
+        assert_eq!(
+            channels_in_packet(&bytes, &kinds),
+            vec![ChannelKind::of::<HighPriority>()],
+            "an empty channel should not even cost a channel header"
+        );
+    }
+
+    #[test]
+    fn writing_an_empty_manager_produces_only_the_terminating_bit() {
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &message_kinds(),
+            &mut FakeEntityConverter,
+            &mut writer,
+            0,
+            &mut has_written,
+        );
+        let bytes = writer.to_bytes();
+
+        assert!(
+            channels_in_packet(&bytes, &kinds).is_empty(),
+            "nothing queued means no channels in the packet"
+        );
+        assert!(
+            !has_written,
+            "and `has_written` must stay false so the caller knows the packet is \
+             still empty"
+        );
+    }
+
+    // -- round trip ---------------------------------------------------------
+
+    #[test]
+    fn a_packet_written_by_one_manager_is_read_by_its_counterpart() {
+        // The client writes, the server reads, and the messages come back out of
+        // the channel they went in on. This is what the nested continue-bit
+        // framing exists for.
+        let kinds = directional_kinds();
+        let messages = message_kinds();
+        let mut client = MessageManager::new(HostType::Client, &kinds);
+        let mut server = MessageManager::new(HostType::Server, &kinds);
+
+        client.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            ping(1),
+        );
+        client.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            ping(2),
+        );
+        // A reliable sender only offers collected messages to a packet.
+        client.collect_outgoing_messages(&Instant::now(), &200.0);
+
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        client.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            0,
+            &mut has_written,
+        );
+        assert!(has_written, "the client should have written something");
+        let bytes = writer.to_bytes();
+
+        let (_gwm, mut world) = world_manager();
+        server
+            .read_messages(&kinds, &messages, &mut world, &mut BitReader::new(&bytes))
+            .expect("a packet the counterpart just wrote should parse");
+
+        let mut waitlist = RemoteEntityWaitlist::new();
+        let received = server.receive_messages(
+            &messages,
+            &Instant::now(),
+            &FakeEntityConverter,
+            &mut waitlist,
+        );
+        let on_channel: Vec<_> = received
+            .into_iter()
+            .filter(|(channel_kind, _)| *channel_kind == ChannelKind::of::<ToServer>())
+            .flat_map(|(_, messages)| messages)
+            .collect();
+        let tags: Vec<u8> = on_channel
+            .into_iter()
+            .map(|message| {
+                message
+                    .to_boxed_any()
+                    .downcast::<Ping>()
+                    .expect("the round trip should yield the message that went in")
+                    .0
+            })
+            .collect();
+        assert_eq!(
+            tags,
+            vec![1, 2],
+            "both messages should arrive on the channel they were sent on, in order"
+        );
+    }
+
+    #[test]
+    fn an_empty_packet_reads_as_success() {
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Server, &kinds);
+        let (_gwm, mut world) = world_manager();
+
+        let mut writer = BitWriter::new();
+        false.ser(&mut writer);
+        let bytes = writer.to_bytes();
+
+        assert!(
+            manager
+                .read_messages(
+                    &kinds,
+                    &message_kinds(),
+                    &mut world,
+                    &mut BitReader::new(&bytes)
+                )
+                .is_ok(),
+            "a packet with no channels is well-formed"
+        );
+    }
+
+    // -- delivery notification ----------------------------------------------
+
+    #[test]
+    fn notifying_an_unknown_packet_is_harmless() {
+        // Acks can arrive for packets that carried no reliable messages, so an
+        // index with no recorded channel list is normal traffic, not an error.
+        let kinds = directional_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.notify_packet_delivered(99);
+    }
+
+    #[test]
+    fn a_reliable_message_stops_being_resent_once_its_packet_is_acked() {
+        // Before the ack, `collect_outgoing_messages` re-queues the message for
+        // retransmission; after it, there is nothing left to resend. That
+        // transition is the whole purpose of `packet_to_message_map`.
+        let kinds = directional_kinds();
+        let messages = message_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            tagged(1, 4),
+        );
+
+        let now = Instant::now();
+        manager.collect_outgoing_messages(&now, &200.0);
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            7,
+            &mut has_written,
+        );
+        assert!(has_written, "the message should have been written");
+
+        manager.notify_packet_delivered(7);
+
+        // Advance well past any resend timeout.
+        let mut later = Instant::now();
+        later.add_millis(10_000);
+        manager.collect_outgoing_messages(&later, &200.0);
+        assert!(
+            !manager.has_outgoing_messages(),
+            "an acked reliable message must not be re-queued for retransmission"
+        );
+    }
+
+    #[test]
+    fn an_unacked_reliable_message_is_requeued_for_retransmission() {
+        // The counterpart to the test above: without the ack, the same elapsed
+        // time DOES bring the message back. Without this, that test would pass
+        // just as well if `collect_outgoing_messages` did nothing at all.
+        let kinds = directional_kinds();
+        let messages = message_kinds();
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        manager.send_message(
+            &messages,
+            &mut FakeEntityConverter,
+            &ChannelKind::of::<ToServer>(),
+            tagged(1, 4),
+        );
+
+        let now = Instant::now();
+        manager.collect_outgoing_messages(&now, &200.0);
+        let mut writer = BitWriter::new();
+        let mut has_written = false;
+        manager.write_messages(
+            &kinds,
+            &messages,
+            &mut FakeEntityConverter,
+            &mut writer,
+            7,
+            &mut has_written,
+        );
+        assert!(
+            !manager.has_outgoing_messages(),
+            "the queue drains on write"
+        );
+
+        let mut later = Instant::now();
+        later.add_millis(10_000);
+        manager.collect_outgoing_messages(&later, &200.0);
+        assert!(
+            manager.has_outgoing_messages(),
+            "an unacked reliable message must come back for another attempt"
+        );
+    }
+
+    // -- requests and responses ---------------------------------------------
+
+    #[test]
+    fn only_bidirectional_reliable_channels_carry_requests() {
+        // `can_request_and_respond` is reliable AND both directions. A manager
+        // built from channels that satisfy neither must report nothing rather
+        // than reaching into a sender that would panic on the attempt.
+        let mut kinds = ChannelKinds::new();
+        kinds.add_channel::<Unreliable>(unreliable(ChannelDirection::Bidirectional));
+        kinds.add_channel::<ToServer>(reliable(ChannelDirection::ClientToServer));
+
+        let mut manager = MessageManager::new(HostType::Client, &kinds);
+        let (requests, responses) = manager.receive_requests_and_responses();
+        assert!(requests.is_empty());
+        assert!(responses.is_empty());
     }
 }
