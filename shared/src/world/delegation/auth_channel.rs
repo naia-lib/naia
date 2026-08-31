@@ -101,3 +101,116 @@ impl EntityAuthMutator {
         self.channel.set_auth_status(auth_status);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    //! The shared-state plumbing behind `HostAuthHandler`: one
+    //! `EntityAuthChannel` per entity, handed out as a write-only
+    //! `EntityAuthMutator` and any number of cloneable read-only
+    //! `EntityAuthAccessor`s.
+    //!
+    //! Two things here are easy to get wrong invisibly. The first is aliasing:
+    //! if `EntityAuthAccessor::new` ever took a snapshot instead of cloning the
+    //! `Arc`, reads would silently freeze at the value from registration time.
+    //! The second is the `host_type` carried through into
+    //! `HostEntityAuthStatus` -- it is never read back directly, only through
+    //! predicates like `can_mutate`, so it is asserted through one of them.
+
+    use super::*;
+
+    #[test]
+    fn a_new_channel_starts_at_the_default_for_its_host_type() {
+        for (host_type, expected) in [
+            (HostType::Server, EntityAuthStatus::Available),
+            (HostType::Client, EntityAuthStatus::Requested),
+        ] {
+            let (_mutator, accessor) = EntityAuthChannel::new_channel(host_type);
+
+            assert_eq!(
+                accessor.auth_status().status(),
+                expected,
+                "wrong initial status for {host_type:?}",
+            );
+        }
+    }
+
+    /// The server owns entities by default and may always mutate them; a client
+    /// at `Available` may not. That asymmetry is the only observable proof that
+    /// the channel's `host_type` survives into the status it reports.
+    #[test]
+    fn the_channels_host_type_reaches_the_reported_status() {
+        let (_m, server) = EntityAuthChannel::new_channel(HostType::Server);
+        assert!(server.auth_status().can_mutate());
+
+        let (mutator, client) = EntityAuthChannel::new_channel(HostType::Client);
+        mutator.set_auth_status(EntityAuthStatus::Available);
+        assert!(
+            !client.auth_status().can_mutate(),
+            "a client with no authority must not be allowed to mutate; the \
+             status came back tagged as a server",
+        );
+    }
+
+    #[test]
+    fn a_write_through_the_mutator_is_seen_by_the_accessor() {
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+
+        for status in [
+            EntityAuthStatus::Requested,
+            EntityAuthStatus::Granted,
+            EntityAuthStatus::Releasing,
+            EntityAuthStatus::Denied,
+            EntityAuthStatus::Available,
+        ] {
+            mutator.set_auth_status(status);
+            assert_eq!(accessor.auth_status().status(), status, "status {status:?}");
+        }
+    }
+
+    #[test]
+    fn cloned_accessors_share_one_channel() {
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        let clone = accessor.clone();
+
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+
+        assert_eq!(accessor.auth_status().status(), EntityAuthStatus::Granted);
+        assert_eq!(
+            clone.auth_status().status(),
+            EntityAuthStatus::Granted,
+            "a clone taken before the write must observe it too",
+        );
+    }
+
+    #[test]
+    fn separate_channels_do_not_share_state() {
+        let (mutator_a, accessor_a) = EntityAuthChannel::new_channel(HostType::Server);
+        let (_mutator_b, accessor_b) = EntityAuthChannel::new_channel(HostType::Server);
+
+        mutator_a.set_auth_status(EntityAuthStatus::Granted);
+
+        assert_eq!(accessor_a.auth_status().status(), EntityAuthStatus::Granted);
+        assert_eq!(
+            accessor_b.auth_status().status(),
+            EntityAuthStatus::Available,
+            "each entity gets its own channel",
+        );
+    }
+
+    /// Reads take a read lock and writes take a write lock; a read held across
+    /// a write would deadlock the caller rather than fail a test, so this pins
+    /// that reads release before the next write is taken.
+    #[test]
+    fn interleaved_reads_and_writes_do_not_deadlock() {
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+
+        for _ in 0..3 {
+            let _ = accessor.auth_status();
+            mutator.set_auth_status(EntityAuthStatus::Granted);
+            let _ = accessor.auth_status();
+            mutator.set_auth_status(EntityAuthStatus::Available);
+        }
+
+        assert_eq!(accessor.auth_status().status(), EntityAuthStatus::Available);
+    }
+}
