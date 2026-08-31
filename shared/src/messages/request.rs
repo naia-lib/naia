@@ -1,4 +1,8 @@
-use std::marker::PhantomData;
+use std::{
+    fmt::{self, Debug, Formatter},
+    hash::{Hash, Hasher},
+    marker::PhantomData,
+};
 
 use crate::Message;
 
@@ -12,7 +16,11 @@ pub trait Request: Message {
 pub trait Response: Message {}
 
 /// Typed token held by the sender to identify a pending request when its response arrives.
-#[derive(Clone, Eq, PartialEq, Hash)]
+///
+/// The identity impls below are written by hand rather than derived: a derived
+/// `PartialEq`/`Hash` would bound `S`, and no `Response` is `Eq + Hash`, so the
+/// keys could never be compared or used as a map key -- which is what they are
+/// for. Only the id participates; `S` is a phantom.
 pub struct ResponseSendKey<S: Response> {
     response_id: GlobalResponseId,
     phantom_s: PhantomData<S>,
@@ -33,8 +41,39 @@ impl<S: Response> ResponseSendKey<S> {
     }
 }
 
+impl<S: Response> Clone for ResponseSendKey<S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S: Response> Copy for ResponseSendKey<S> {}
+
+impl<S: Response> PartialEq for ResponseSendKey<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.response_id == other.response_id
+    }
+}
+
+impl<S: Response> Eq for ResponseSendKey<S> {}
+
+impl<S: Response> Hash for ResponseSendKey<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.response_id.hash(state);
+    }
+}
+
+impl<S: Response> Debug for ResponseSendKey<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ResponseSendKey")
+            .field(&self.response_id)
+            .finish()
+    }
+}
+
 /// Typed token held by the receiver to identify which request a response answers.
-#[derive(Clone, Eq, PartialEq, Hash, Copy)]
+///
+/// Identity impls are hand-written for the same reason as [`ResponseSendKey`].
 pub struct ResponseReceiveKey<S: Response> {
     request_id: GlobalRequestId,
     phantom_s: PhantomData<S>,
@@ -55,6 +94,36 @@ impl<S: Response> ResponseReceiveKey<S> {
     }
 }
 
+impl<S: Response> Clone for ResponseReceiveKey<S> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<S: Response> Copy for ResponseReceiveKey<S> {}
+
+impl<S: Response> PartialEq for ResponseReceiveKey<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.request_id == other.request_id
+    }
+}
+
+impl<S: Response> Eq for ResponseReceiveKey<S> {}
+
+impl<S: Response> Hash for ResponseReceiveKey<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.request_id.hash(state);
+    }
+}
+
+impl<S: Response> Debug for ResponseReceiveKey<S> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("ResponseReceiveKey")
+            .field(&self.request_id)
+            .finish()
+    }
+}
+
 /// Globally-unique identifier for an outgoing request, spanning all connections.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct GlobalRequestId {
@@ -69,7 +138,7 @@ impl GlobalRequestId {
 }
 
 /// Globally-unique identifier for a response to a specific request.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct GlobalResponseId {
     id: u64,
 }
@@ -78,5 +147,85 @@ impl GlobalResponseId {
     /// Creates a `GlobalResponseId` from a raw u64.
     pub fn new(id: u64) -> Self {
         Self { id }
+    }
+}
+
+#[cfg(test)]
+mod request_tests {
+    use std::collections::HashSet;
+
+    use crate::{Message, Request, Response};
+
+    use super::{GlobalRequestId, GlobalResponseId, ResponseReceiveKey, ResponseSendKey};
+
+    #[derive(Message)]
+    struct Question {
+        value: u8,
+    }
+
+    #[derive(Message)]
+    struct Answer {
+        value: u8,
+    }
+
+    impl Request for Question {
+        type Response = Answer;
+    }
+    impl Response for Answer {}
+
+    #[test]
+    fn a_send_key_hands_back_the_response_id_it_was_given() {
+        let key: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(7));
+
+        assert_eq!(key.response_id(), GlobalResponseId::new(7));
+    }
+
+    #[test]
+    fn a_receive_key_hands_back_the_request_id_it_was_given() {
+        let key: ResponseReceiveKey<Answer> = ResponseReceiveKey::new(GlobalRequestId::new(7));
+
+        assert_eq!(key.request_id(), GlobalRequestId::new(7));
+    }
+
+    #[test]
+    fn keys_for_different_exchanges_are_distinct_and_hash_apart() {
+        let first: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(1));
+        let second: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(2));
+        let same_as_first: ResponseSendKey<Answer> = ResponseSendKey::new(GlobalResponseId::new(1));
+
+        assert_eq!(first, same_as_first);
+        assert_ne!(first, second);
+
+        // The keys index the pending-request tables, so equal keys must
+        // collapse to one entry and unequal keys must not.
+        let set: HashSet<ResponseSendKey<Answer>> =
+            [first, second, same_as_first].into_iter().collect();
+        assert_eq!(set.len(), 2);
+    }
+
+    #[test]
+    fn a_receive_key_survives_being_copied_around() {
+        let key: ResponseReceiveKey<Answer> = ResponseReceiveKey::new(GlobalRequestId::new(3));
+        let copied = key;
+
+        assert_eq!(copied.request_id(), key.request_id());
+        assert_eq!(copied, key);
+    }
+
+    #[test]
+    fn the_two_id_types_carry_their_raw_values() {
+        assert_eq!(GlobalRequestId::new(1), GlobalRequestId::new(1));
+        assert_ne!(GlobalRequestId::new(1), GlobalRequestId::new(2));
+        assert_eq!(GlobalResponseId::new(1), GlobalResponseId::new(1));
+        assert_ne!(GlobalResponseId::new(1), GlobalResponseId::new(2));
+    }
+
+    #[test]
+    fn a_request_names_its_own_response_type() {
+        fn response_name<Q: Request>() -> String {
+            <Q::Response as crate::Named>::protocol_name().to_string()
+        }
+
+        assert_eq!(response_name::<Question>(), "Answer".to_string());
     }
 }

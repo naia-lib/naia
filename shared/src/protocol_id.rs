@@ -25,3 +25,51 @@ impl std::fmt::Display for ProtocolId {
         write!(f, "ProtocolId({:016x})", self.0)
     }
 }
+
+#[cfg(test)]
+mod protocol_id_tests {
+    use naia_serde::{BitReader, BitWriter, SerdeInternal};
+
+    use super::ProtocolId;
+
+    #[test]
+    fn the_raw_value_survives_the_round_trip_through_the_wrapper() {
+        assert_eq!(ProtocolId::new(0).value(), 0);
+        assert_eq!(ProtocolId::new(u64::MAX).value(), u64::MAX);
+        assert_eq!(ProtocolId::new(0xdead_beef).value(), 0xdead_beef);
+    }
+
+    #[test]
+    fn two_ids_are_equal_exactly_when_their_values_are() {
+        assert_eq!(ProtocolId::new(7), ProtocolId::new(7));
+        assert_ne!(ProtocolId::new(7), ProtocolId::new(8));
+        assert_eq!(ProtocolId::default().value(), 0);
+    }
+
+    #[test]
+    fn the_display_form_is_a_zero_padded_sixteen_digit_hex() {
+        assert_eq!(
+            format!("{}", ProtocolId::new(0xdead_beef)),
+            "ProtocolId(00000000deadbeef)"
+        );
+        assert_eq!(
+            format!("{}", ProtocolId::new(u64::MAX)),
+            "ProtocolId(ffffffffffffffff)"
+        );
+    }
+
+    #[test]
+    fn an_id_survives_the_handshake_wire_round_trip() {
+        // The handshake compares this value across the connection, so what
+        // is read back must be exactly what was written.
+        for value in [0u64, 1, 0xdead_beef, u64::MAX] {
+            let id = ProtocolId::new(value);
+            let mut writer = BitWriter::new();
+            id.ser(&mut writer);
+            let bytes = writer.to_bytes();
+            let mut reader = BitReader::new(&bytes);
+
+            assert_eq!(ProtocolId::de(&mut reader).unwrap(), id);
+        }
+    }
+}

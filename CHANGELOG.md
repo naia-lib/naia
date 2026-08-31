@@ -10,6 +10,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- **`ResponseSendKey` and `ResponseReceiveKey` can now be compared and used as
+  map keys.** Both derived `Clone, Eq, PartialEq, Hash`, which bounded the
+  phantom response type `S` -- and no `Response` is `Eq + Hash`, so the impls
+  could never be instantiated. Holding a pending request in a `HashMap` keyed
+  by its key, the obvious use for these tokens, did not compile. The impls are
+  now hand-written over the id alone, and both types gained `Copy` and `Debug`
+  (`GlobalResponseId` gained `Debug` to match `GlobalRequestId`).
+
 - **Illegal authority transitions received over the wire are now dropped rather
   than applied.** `AuthChannel` validated authority commands on the *send* side
   only, where an illegal transition is a local programmer error and a panic is

@@ -47,3 +47,23 @@ impl Publicity {
         matches!(self, Publicity::Delegated)
     }
 }
+
+#[cfg(test)]
+mod publicity_tests {
+    use super::Publicity;
+
+    #[test]
+    fn only_the_delegated_variant_reports_itself_delegated() {
+        assert!(Publicity::Delegated.is_delegated());
+        assert!(!Publicity::Private.is_delegated());
+        assert!(!Publicity::Public.is_delegated());
+    }
+
+    #[test]
+    fn the_three_variants_are_distinct_from_one_another() {
+        assert_ne!(Publicity::Private, Publicity::Public);
+        assert_ne!(Publicity::Public, Publicity::Delegated);
+        assert_ne!(Publicity::Private, Publicity::Delegated);
+        assert_eq!(Publicity::Public, Publicity::Public);
+    }
+}
