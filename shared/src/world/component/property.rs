@@ -735,3 +735,427 @@ mod delegated_write_auth_tests {
         }
     }
 }
+
+#[cfg(test)]
+mod property_state_machine_tests {
+    //! `Property` is a five-state machine — Local, HostOwned, RemoteOwned,
+    //! RemotePublic, Delegated — and almost every method is a `match` over
+    //! those five in which one or two arms do the work and the rest `panic!`.
+    //! Those panic arms *are* the specification: they say which operations are
+    //! legal in which state, and which transitions exist. Nothing else records
+    //! it, so a mis-sorted arm — an operation quietly permitted in a state that
+    //! should refuse it, or a transition landing in the wrong state — is
+    //! invisible until it corrupts replication downstream.
+    //!
+    //! The table below is that specification, written once. Each cell is either
+    //! the state the operation leaves the Property in, or the message it must
+    //! refuse with.
+
+    use super::*;
+    use crate::{
+        world::delegation::{
+            auth_channel::EntityAuthChannel, entity_auth_status::EntityAuthStatus,
+        },
+        HostType, PropertyMutate, PropertyMutator,
+    };
+
+    #[derive(Clone)]
+    struct NoopMutator;
+
+    impl PropertyMutate for NoopMutator {
+        fn mutate(&mut self, _property_index: u8) -> bool {
+            true
+        }
+    }
+
+    fn mutator() -> PropertyMutator {
+        PropertyMutator::new(NoopMutator)
+    }
+
+    /// An accessor that permits everything, so the table exercises the state
+    /// machine rather than the authority gate (which
+    /// `delegated_write_auth_tests` above already covers in full).
+    fn permissive_accessor() -> EntityAuthAccessor {
+        let (auth_mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        auth_mutator.set_auth_status(EntityAuthStatus::Granted);
+        accessor
+    }
+
+    fn a_reader_holding(value: &str) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        value.to_string().ser(&mut writer);
+        writer.to_bytes().into_vec()
+    }
+
+    // -- the five states -----------------------------------------------------
+
+    fn local() -> Property<String> {
+        Property::new_local("value".to_string())
+    }
+
+    /// HostOwned *with its mutator installed* — the steady state. The
+    /// mutator-less window is a separate case, pinned below.
+    fn host_owned() -> Property<String> {
+        let mut property = Property::host_owned("value".to_string(), 0);
+        property.set_mutator(&mutator());
+        property
+    }
+
+    fn remote_owned() -> Property<String> {
+        let bytes = a_reader_holding("value");
+        Property::new_read(&mut BitReader::new(&bytes)).expect("remote owned")
+    }
+
+    fn remote_public() -> Property<String> {
+        let mut property = remote_owned();
+        property.remote_publish(0, &mutator());
+        property
+    }
+
+    fn delegated() -> Property<String> {
+        let mut property = host_owned();
+        property.enable_delegation(&permissive_accessor(), None);
+        property
+    }
+
+    // -- the eleven operations ----------------------------------------------
+
+    fn apply(op: &str, property: &mut Property<String>) {
+        match op {
+            "set_mutator" => property.set_mutator(&mutator()),
+            "write" => property.write(&mut BitWriter::new()),
+            "read" => {
+                let bytes = a_reader_holding("next");
+                property
+                    .read(&mut BitReader::new(&bytes))
+                    .expect("read must not fail on a well-formed value");
+            }
+            "mirror" => property.mirror(&Property::new_local("next".to_string())),
+            "remote_publish" => property.remote_publish(0, &mutator()),
+            "remote_unpublish" => property.remote_unpublish(),
+            "enable_delegation(None)" => property.enable_delegation(&permissive_accessor(), None),
+            "enable_delegation(Some)" => {
+                let mutator = mutator();
+                property.enable_delegation(&permissive_accessor(), Some((0, &mutator)));
+            }
+            "disable_delegation" => property.disable_delegation(),
+            "localize" => property.localize(),
+            "deref_mut" => {
+                use std::ops::DerefMut;
+                property.deref_mut().push('!');
+            }
+            other => panic!("unknown operation {other}"),
+        }
+    }
+
+    const OPS: [&str; 11] = [
+        "set_mutator",
+        "write",
+        "read",
+        "mirror",
+        "remote_publish",
+        "remote_unpublish",
+        "enable_delegation(None)",
+        "enable_delegation(Some)",
+        "disable_delegation",
+        "localize",
+        "deref_mut",
+    ];
+
+    /// `Ok(state the Property is left in)` or `Err(substring it must refuse with)`.
+    type Outcome = Result<&'static str, &'static str>;
+
+    fn runs_and_leaves_it(state: &'static str) -> Outcome {
+        Ok(state)
+    }
+
+    fn refuses_with(message: &'static str) -> Outcome {
+        Err(message)
+    }
+
+    /// Returns the panic message if `body` panicked, silencing the default hook
+    /// so an expected panic does not spam the test output.
+    fn panic_message_of(body: impl FnOnce()) -> Option<String> {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(body));
+        std::panic::set_hook(previous);
+        result.err().map(|payload| {
+            payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| payload.downcast_ref::<&str>().map(|s| (*s).to_string()))
+                .unwrap_or_else(|| "<non-string panic payload>".to_string())
+        })
+    }
+
+    fn check_row(
+        state_name: &str,
+        construct: impl Fn() -> Property<String>,
+        expectations: [Outcome; 11],
+    ) {
+        assert_eq!(
+            construct().inner.name(),
+            state_name,
+            "the fixture for {state_name} does not build that state",
+        );
+
+        for (op, expected) in OPS.iter().zip(expectations) {
+            let mut property = construct();
+            let message = panic_message_of(|| apply(op, &mut property));
+
+            match expected {
+                Ok(resulting_state) => {
+                    assert!(
+                        message.is_none(),
+                        "{state_name}.{op} must be legal, but it panicked: {message:?}",
+                    );
+                    assert_eq!(
+                        property.inner.name(),
+                        resulting_state,
+                        "{state_name}.{op} must leave the Property {resulting_state}",
+                    );
+                }
+                Err(expected_message) => {
+                    let Some(message) = message else {
+                        panic!(
+                            "{state_name}.{op} must be refused with {expected_message:?}, \
+                             but it succeeded and left the Property {}",
+                            property.inner.name(),
+                        );
+                    };
+                    assert!(
+                        message.contains(expected_message),
+                        "{state_name}.{op} must be refused with {expected_message:?}, \
+                         got {message:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn a_local_property_only_accepts_the_operations_that_never_leave_the_host() {
+        check_row(
+            "Local",
+            local,
+            [
+                refuses_with("Local Property should never have a mutator"),
+                refuses_with("Local Property should never be written"),
+                refuses_with("Local Property should never read"),
+                runs_and_leaves_it("Local"),
+                refuses_with("Local Property should never be made public"),
+                refuses_with("Local Property should never be unpublished"),
+                refuses_with("should never enable delegation this way"),
+                refuses_with("should never enable delegation this way"),
+                refuses_with("Local Property should never disable delegation"),
+                refuses_with("Local Property should never be made local twice"),
+                runs_and_leaves_it("Local"),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_host_owned_property_writes_delegates_and_localizes_but_never_reads() {
+        check_row(
+            "HostOwned",
+            host_owned,
+            [
+                runs_and_leaves_it("HostOwned"),
+                runs_and_leaves_it("HostOwned"),
+                refuses_with("Host Property should never read"),
+                runs_and_leaves_it("HostOwned"),
+                refuses_with("Host Property should never be made public"),
+                refuses_with("Host Property should never be unpublished"),
+                runs_and_leaves_it("Delegated"),
+                refuses_with("should never enable delegation this way"),
+                refuses_with("Host Property should never disable delegation"),
+                runs_and_leaves_it("Local"),
+                runs_and_leaves_it("HostOwned"),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_privately_owned_remote_property_only_reads_and_publishes() {
+        check_row(
+            "RemoteOwned",
+            remote_owned,
+            [
+                refuses_with("Remote Property should never call set_mutator"),
+                refuses_with("Remote Private Property should never be written"),
+                runs_and_leaves_it("RemoteOwned"),
+                refuses_with("Remote Property should never be set manually"),
+                runs_and_leaves_it("RemotePublic"),
+                refuses_with("Private Remote Property should never be unpublished"),
+                refuses_with("should never enable delegation this way"),
+                // The one state that may delegate *while supplying* a mutator:
+                // it has none of its own to hand over.
+                runs_and_leaves_it("Delegated"),
+                refuses_with("Private Remote Property should never disable delegation"),
+                refuses_with("Remote Property should never be made local"),
+                runs_and_leaves_it("RemoteOwned"),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_published_remote_property_writes_and_can_go_back_to_private() {
+        check_row(
+            "RemotePublic",
+            remote_public,
+            [
+                refuses_with("Remote Property should never call set_mutator"),
+                runs_and_leaves_it("RemotePublic"),
+                runs_and_leaves_it("RemotePublic"),
+                refuses_with("Remote Property should never be set manually"),
+                refuses_with("Remote Property should never be made public twice"),
+                runs_and_leaves_it("RemoteOwned"),
+                runs_and_leaves_it("Delegated"),
+                refuses_with("should never enable delegation this way"),
+                refuses_with("Public Remote Property should never disable delegation"),
+                refuses_with("Remote Property should never be made local"),
+                runs_and_leaves_it("RemotePublic"),
+            ],
+        );
+    }
+
+    #[test]
+    fn a_delegated_property_leaves_delegation_only_by_becoming_host_owned() {
+        check_row(
+            "Delegated",
+            delegated,
+            [
+                refuses_with("Delegated Property should never call set_mutator"),
+                runs_and_leaves_it("Delegated"),
+                runs_and_leaves_it("Delegated"),
+                runs_and_leaves_it("Delegated"),
+                refuses_with("Delegated Property should never be made public"),
+                refuses_with("Delegated Property should never be unpublished"),
+                refuses_with("should never enable delegation this way"),
+                refuses_with("should never enable delegation this way"),
+                runs_and_leaves_it("HostOwned"),
+                refuses_with("Delegated Property should never be made local"),
+                runs_and_leaves_it("Delegated"),
+            ],
+        );
+    }
+
+    // -- the value carried across each transition ---------------------------
+
+    /// Every migration clones the value forward. A transition that dropped it —
+    /// rebuilding from `Default`, or reading the wrong arm's `inner` — would
+    /// still leave the Property in the right *state*, so the table above cannot
+    /// see it.
+    #[test]
+    fn every_migration_carries_the_value_across() {
+        let mut property = Property::host_owned("carried".to_string(), 3);
+        property.set_mutator(&mutator());
+
+        property.enable_delegation(&permissive_accessor(), None);
+        assert_eq!(*property, "carried", "host owned -> delegated");
+
+        property.disable_delegation();
+        assert_eq!(*property, "carried", "delegated -> host owned");
+
+        property.localize();
+        assert_eq!(*property, "carried", "host owned -> local");
+
+        let mut remote = remote_owned();
+        remote.remote_publish(0, &mutator());
+        assert_eq!(*remote, "value", "remote owned -> remote public");
+
+        remote.remote_unpublish();
+        assert_eq!(*remote, "value", "remote public -> remote owned");
+    }
+
+    /// `disable_delegation` must carry the *mutator index* across too, not just
+    /// the value: the index is what identifies this field in every subsequent
+    /// diff, so a reset one silently redirects the property's updates.
+    #[test]
+    fn leaving_delegation_keeps_the_mutator_index_that_names_the_field() {
+        let mut property = Property::host_owned("value".to_string(), 7);
+        property.set_mutator(&mutator());
+        property.enable_delegation(&permissive_accessor(), None);
+        property.disable_delegation();
+
+        let PropertyImpl::HostOwned(inner) = &property.inner else {
+            panic!("disable_delegation must produce a HostOwned Property");
+        };
+        assert_eq!(inner.index, 7, "the field's identity in the diff");
+        assert!(
+            inner.mutator.is_some(),
+            "and it must come back already registered, since a HostOwned \
+             Property that is mutated without a mutator panics",
+        );
+    }
+
+    // -- the mutator-less HostOwned window ----------------------------------
+
+    #[test]
+    fn a_mutable_host_property_mutated_before_registration_is_a_loud_failure() {
+        let mut property = Property::host_owned("value".to_string(), 0);
+        let message = panic_message_of(|| {
+            use std::ops::DerefMut;
+            property.deref_mut().push('!');
+        });
+        assert!(
+            message
+                .as_deref()
+                .is_some_and(|m| m.contains("mutated before its mutator was installed")),
+            "got {message:?}",
+        );
+    }
+
+    /// Immutable (seed-only) components are deliberately never diff-tracked, so
+    /// for them the missing mutator is by design and mutation is a no-op.
+    #[test]
+    fn an_immutable_host_property_may_be_mutated_without_a_mutator_forever() {
+        let mut property = Property::immutable_host_owned("value".to_string(), 0);
+        for _ in 0..3 {
+            use std::ops::DerefMut;
+            property.deref_mut().push('!');
+        }
+        assert_eq!(*property, "value!!!");
+    }
+
+    // -- comparison and the buffering path ----------------------------------
+
+    #[test]
+    fn properties_compare_by_value_regardless_of_which_state_holds_it() {
+        assert!(
+            local().equals(&remote_owned()),
+            "both hold \"value\", in different states",
+        );
+        assert!(!local().equals(&Property::new_local("other".to_string())));
+    }
+
+    /// `read_write` buffers an update by copying it from one stream to another
+    /// without owning a Property at all. It must move exactly the value: a
+    /// short copy would silently desynchronise the buffered update from the
+    /// packet it was cut from.
+    #[test]
+    fn buffering_an_update_copies_the_value_and_nothing_else() {
+        const MAGIC: u32 = 0xFEED_BEEF;
+
+        let mut source = BitWriter::new();
+        "buffered".to_string().ser(&mut source);
+        MAGIC.ser(&mut source);
+        let source_bytes = source.to_bytes();
+        let mut reader = BitReader::new(&source_bytes);
+
+        let mut destination = BitWriter::new();
+        Property::<String>::read_write(&mut reader, &mut destination).expect("buffered copy");
+
+        assert_eq!(
+            u32::de(&mut reader).expect("sentinel"),
+            MAGIC,
+            "read_write must consume exactly the value it copied",
+        );
+        let destination_bytes = destination.to_bytes();
+        assert_eq!(
+            String::de(&mut BitReader::new(&destination_bytes)).expect("copied value"),
+            "buffered",
+        );
+    }
+}
