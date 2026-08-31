@@ -17,6 +17,12 @@ exclude_re = [
     "::record_deferred",
     "::record_bandwidth_deferred",
     "_packets_deferred_last_tick",
+    # `record_command_written`'s only branching is a `bench_instrumentation`
+    # counter match; the rest of the body is a single unconditional push.
+    "::record_command_written",
+    # `test_utils`-only introspection accessors, compiled out by default.
+    "::dirty_update_count",
+    "::diff_handler_receiver_count",
     # `e2e_debug` diagnostic dumps.
     "::debug_[a-z_]+",
     # `test_utils` accessors that exist only so tests can peek at internals.
