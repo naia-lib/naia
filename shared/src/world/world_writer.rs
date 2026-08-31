@@ -1379,7 +1379,7 @@ impl WorldWriter {
 #[cfg(test)]
 mod delegated_send_guard_tests {
     use std::{
-        collections::HashMap,
+        collections::{HashMap, HashSet},
         net::SocketAddr,
         sync::{Arc, RwLock},
     };
@@ -1396,6 +1396,10 @@ mod delegated_send_guard_tests {
                 global_dirty_bitset::GlobalDirtyBitset,
                 mut_channel::{MutChannelType, MutReceiver},
             },
+        },
+        world::{
+            host::host_world_manager::SubCommandId,
+            local::local_entity::{HostEntity, OwnedLocalEntity, RemoteEntity},
         },
         BigMapKey, BitReader, ComponentKinds, EntityDoesNotExistError, HostEntityAuthStatus,
         HostType, InScopeEntities, PropertyMutator, ReplicaDynRefTrait, ReplicaDynRefWrapper,
@@ -2848,5 +2852,309 @@ mod delegated_send_guard_tests {
             0,
             "the command half did not run: the queued command is still pending",
         );
+    }
+
+    // ---- per-variant wire shape -------------------------------------------
+
+    /// A sentinel written immediately after the command. Reading it back from
+    /// the same cursor proves the variant consumed exactly its own payload:
+    /// a branch that writes one field too few or too many shifts the sentinel
+    /// and fails here even when the fields it did write look right.
+    const MAGIC: u32 = 0xFEED_BEEF;
+
+    /// Like `run_command`, but hands back the whole packet so a test can
+    /// decode the variant's payload for itself.
+    fn run_command_wire(
+        host_track: bool,
+        make_command: impl FnOnce(GlobalEntity) -> EntityCommand,
+    ) -> Vec<u8> {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds.add_component::<Wraith>();
+
+        let (mutator, accessor) = EntityAuthChannel::new_channel(HostType::Server);
+        mutator.set_auth_status(EntityAuthStatus::Granted);
+        let gwm = AuthGwm {
+            auth: accessor,
+            global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
+        };
+
+        let mut local_world_manager = LocalWorldManager::new(&None, HostType::Server, 0, &gwm);
+        let global_entity = GlobalEntity::from_u64(1);
+        if host_track {
+            local_world_manager.host_init_entity(
+                &global_entity,
+                vec![ComponentKind::of::<Ghost>()],
+                &kinds,
+                false,
+            );
+        } else {
+            // The client-side commands address the entity as a *remote* one,
+            // so they need the opposite half of the entity map populated.
+            local_world_manager.insert_remote_entity(
+                &global_entity,
+                the_remote_entity(),
+                HashSet::from([ComponentKind::of::<Ghost>()]),
+            );
+        }
+        local_world_manager.insert_sent_command_packet(&0, Instant::now());
+
+        let converter = OneEntityConverter { global_entity };
+        let world = LiveWorld {
+            ghost: Ghost::new_complete(7),
+        };
+        let mut next_send_commands: VecDeque<(CommandId, EntityCommand)> =
+            VecDeque::from(vec![(CommandId::from(0u16), make_command(global_entity))]);
+
+        let mut writer = BitWriter::new();
+        let mut last_written_id: Option<CommandId> = None;
+
+        WorldWriter::write_command(
+            &kinds,
+            &world,
+            &converter,
+            &gwm,
+            &mut local_world_manager,
+            &0,
+            &mut writer,
+            &mut last_written_id,
+            true,
+            &mut next_send_commands,
+        );
+        MAGIC.ser(&mut writer);
+        writer.to_bytes().into_vec()
+    }
+
+    /// The one host entity `run_command_wire` registers.
+    fn the_host_entity() -> HostEntity {
+        HostEntity::new(0)
+    }
+
+    /// ...and the remote entity it registers instead when `host_track` is off.
+    fn the_remote_entity() -> RemoteEntity {
+        RemoteEntity::new(9)
+    }
+
+    type PayloadReader = Box<dyn Fn(&mut BitReader)>;
+    type VariantCase = (
+        &'static str,
+        bool,
+        EntityMessageType,
+        Box<dyn Fn(GlobalEntity) -> EntityCommand>,
+        PayloadReader,
+    );
+
+    /// Every command variant writes its own message type followed by its own
+    /// payload and nothing else.
+    ///
+    /// This is the send-side mirror of the parse-shape table in `world_reader`.
+    /// It matters most for the variants whose payload differs only in how the
+    /// entity is addressed -- host, remote, or the reversible owned form. Those
+    /// are indistinguishable by eye and identical in length, so a variant
+    /// writing the wrong one still produces a packet the peer parses happily
+    /// and then applies to the wrong entity.
+    #[test]
+    fn every_command_variant_writes_exactly_its_own_payload() {
+        let sub_id: SubCommandId = 3;
+
+        let cases: Vec<VariantCase> = vec![
+            (
+                "Spawn",
+                true,
+                EntityMessageType::Spawn,
+                Box::new(EntityCommand::Spawn),
+                Box::new(|reader| {
+                    assert_eq!(
+                        HostEntity::de(reader).expect("spawn host entity"),
+                        the_host_entity(),
+                        "Spawn addresses the entity as a HostEntity"
+                    );
+                }),
+            ),
+            (
+                "Despawn",
+                true,
+                EntityMessageType::Despawn,
+                Box::new(EntityCommand::Despawn),
+                Box::new(|reader| {
+                    assert_eq!(
+                        OwnedLocalEntity::de(reader).expect("despawn owned entity"),
+                        the_host_entity().copy_to_owned(),
+                        "Despawn addresses the entity in the reversible owned form"
+                    );
+                }),
+            ),
+            (
+                "RemoveComponent",
+                true,
+                EntityMessageType::RemoveComponent,
+                Box::new(|e| EntityCommand::RemoveComponent(e, ComponentKind::of::<Ghost>())),
+                Box::new(|reader| {
+                    OwnedLocalEntity::de(reader).expect("remove owned entity");
+                    let mut kinds = ComponentKinds::new();
+                    kinds.add_component::<Ghost>();
+                    kinds.add_component::<Wraith>();
+                    assert_eq!(
+                        ComponentKind::de(&kinds, reader).expect("remove component kind"),
+                        ComponentKind::of::<Ghost>(),
+                        "RemoveComponent names the kind it was asked to remove"
+                    );
+                }),
+            ),
+            (
+                "Publish",
+                true,
+                EntityMessageType::Publish,
+                Box::new(move |e| EntityCommand::Publish(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("publish sub id"), sub_id);
+                    OwnedLocalEntity::de(reader).expect("publish owned entity");
+                }),
+            ),
+            (
+                "Unpublish",
+                true,
+                EntityMessageType::Unpublish,
+                Box::new(move |e| EntityCommand::Unpublish(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("unpublish sub id"), sub_id);
+                    OwnedLocalEntity::de(reader).expect("unpublish owned entity");
+                }),
+            ),
+            (
+                "EnableDelegation",
+                true,
+                EntityMessageType::EnableDelegation,
+                Box::new(move |e| EntityCommand::EnableDelegation(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("enable sub id"), sub_id);
+                    OwnedLocalEntity::de(reader).expect("enable owned entity");
+                }),
+            ),
+            (
+                "DisableDelegation",
+                true,
+                EntityMessageType::DisableDelegation,
+                Box::new(move |e| EntityCommand::DisableDelegation(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("disable sub id"), sub_id);
+                    assert_eq!(
+                        HostEntity::de(reader).expect("disable host entity"),
+                        the_host_entity(),
+                        "DisableDelegation writes a bare HostEntity, not the owned form"
+                    );
+                }),
+            ),
+            (
+                "RequestAuthority",
+                false,
+                EntityMessageType::RequestAuthority,
+                Box::new(move |e| EntityCommand::RequestAuthority(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("request sub id"), sub_id);
+                    assert_eq!(
+                        RemoteEntity::de(reader).expect("request remote entity"),
+                        the_remote_entity(),
+                        "a client requesting authority names the entity as it received it"
+                    );
+                }),
+            ),
+            (
+                "ReleaseAuthority",
+                true,
+                EntityMessageType::ReleaseAuthority,
+                Box::new(move |e| EntityCommand::ReleaseAuthority(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("release sub id"), sub_id);
+                    OwnedLocalEntity::de(reader).expect("release owned entity");
+                }),
+            ),
+            (
+                "EnableDelegationResponse",
+                false,
+                EntityMessageType::EnableDelegationResponse,
+                Box::new(move |e| EntityCommand::EnableDelegationResponse(Some(sub_id), e)),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("response sub id"), sub_id);
+                    assert_eq!(
+                        RemoteEntity::de(reader).expect("response remote entity"),
+                        the_remote_entity(),
+                        "the acknowledging client names the entity as it received it"
+                    );
+                }),
+            ),
+            (
+                "SetAuthority",
+                true,
+                EntityMessageType::SetAuthority,
+                Box::new(move |e| {
+                    EntityCommand::SetAuthority(Some(sub_id), e, EntityAuthStatus::Granted)
+                }),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("auth sub id"), sub_id);
+                    assert_eq!(
+                        RemoteEntity::de(reader).expect("auth remote entity"),
+                        the_host_entity().to_remote(),
+                        "the peer always reads SetAuthority's subject as a RemoteEntity"
+                    );
+                    assert_eq!(
+                        EntityAuthStatus::de(reader).expect("auth status"),
+                        EntityAuthStatus::Granted
+                    );
+                }),
+            ),
+            (
+                "MigrateResponse",
+                true,
+                EntityMessageType::MigrateResponse,
+                Box::new(move |e| {
+                    EntityCommand::MigrateResponse(
+                        Some(sub_id),
+                        e,
+                        RemoteEntity::new(5),
+                        HostEntity::new(6),
+                    )
+                }),
+                Box::new(move |reader| {
+                    assert_eq!(SubCommandId::de(reader).expect("migrate sub id"), sub_id);
+                    assert_eq!(
+                        HostEntity::de(reader).expect("migrate old entity"),
+                        RemoteEntity::new(5).to_host(),
+                        "the server's remote entity is the client's host entity"
+                    );
+                    assert_eq!(
+                        RemoteEntity::de(reader).expect("migrate new entity"),
+                        HostEntity::new(6).to_remote(),
+                        "and the value the client will spawn is written as its remote"
+                    );
+                }),
+            ),
+        ];
+
+        assert_eq!(
+            cases.len(),
+            12,
+            "add a case here when a command variant is added; the two component-\
+             carrying variants (SpawnWithComponents, InsertComponent) are covered \
+             by the payload tests above"
+        );
+
+        for (name, host_track, expected_type, make_command, read_payload) in cases {
+            let bytes = run_command_wire(host_track, make_command);
+            let mut reader = BitReader::new(&bytes);
+            CommandId::de(&mut reader).unwrap_or_else(|_| panic!("{name}: command id"));
+            assert_eq!(
+                EntityMessageType::de(&mut reader)
+                    .unwrap_or_else(|_| panic!("{name}: message type")),
+                expected_type,
+                "{name} wrote the wrong message type"
+            );
+            read_payload(&mut reader);
+            assert_eq!(
+                u32::de(&mut reader).unwrap_or_else(|_| panic!("{name}: sentinel")),
+                MAGIC,
+                "{name} did not consume exactly its own payload"
+            );
+        }
     }
 }
