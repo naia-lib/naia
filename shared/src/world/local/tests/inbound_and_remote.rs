@@ -10,7 +10,7 @@ use crate::{
         component::property::Property,
         local::local_world_manager::LocalWorldManager,
         test_support::TestGwm,
-        test_world::{full_update, remote_component, IdentityConverter, TestWorld},
+        test_world::{full_update, remote_component, IdentityConverter, TestSpawner, TestWorld},
     },
     BigMapKey, ComponentKind, ComponentKinds, GlobalEntity, HostType,
     LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, RemoteEntity, Replicate, WorldMutType,
@@ -32,6 +32,7 @@ fn global(id: u64) -> GlobalEntity {
 
 struct Fixture {
     kinds: ComponentKinds,
+    gwm: TestGwm,
     manager: LocalWorldManager,
 }
 
@@ -43,7 +44,11 @@ impl Fixture {
         let gwm = TestGwm::new(&kinds);
         let address: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
         let manager = LocalWorldManager::new(&address, HostType::Client, 1, &gwm);
-        Self { kinds, manager }
+        Self {
+            kinds,
+            gwm,
+            manager,
+        }
     }
 
     /// Registers `id` as a remote entity holding `Ghost`, and spawns the same
@@ -57,6 +62,28 @@ impl Fixture {
         world.spawn_at(id);
         world.insert_boxed_component(&id, remote_component(&self.kinds, &Ghost::new_complete(0)));
         remote_entity.copy_to_owned()
+    }
+
+    /// The command types currently sitting in the sender. Note the sender
+    /// retains unacked commands, so successive drains are cumulative.
+    fn drain_command_types(&mut self) -> Vec<crate::EntityMessageType> {
+        let now = crate::Instant::now();
+        self.manager
+            .take_outgoing_commands(&now, &200.0)
+            .into_iter()
+            .map(|(_, command)| command.get_type())
+            .collect()
+    }
+
+    fn take_events(&mut self, world: &mut TestWorld) -> Vec<crate::EntityEvent> {
+        let mut spawner = TestSpawner::new();
+        let now = crate::Instant::now();
+        let kinds = std::mem::replace(&mut self.kinds, ComponentKinds::new());
+        let events =
+            self.manager
+                .take_incoming_events(&mut spawner, &self.gwm, &kinds, world, &now);
+        self.kinds = kinds;
+        events
     }
 }
 
@@ -283,5 +310,111 @@ fn an_installed_redirect_retargets_lookups() {
         fx.manager.apply_entity_redirect(new),
         new,
         "and must not redirect the target onto itself again"
+    );
+}
+
+// -- the remote-side auth senders ----------------------------------------
+
+#[test]
+fn the_remote_auth_senders_each_queue_their_own_command() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let _ = fx.adopt_remote(&mut world, 7);
+    let entity = global(7);
+
+    fx.manager.remote_send_request_auth(&entity);
+    assert_eq!(
+        fx.drain_command_types(),
+        vec![crate::EntityMessageType::RequestAuthority],
+    );
+
+    fx.manager.send_enable_delegation_response(&entity);
+    assert_eq!(
+        fx.drain_command_types(),
+        vec![
+            crate::EntityMessageType::RequestAuthority,
+            crate::EntityMessageType::EnableDelegationResponse
+        ],
+        "the sender retains unacked commands, so the first one replays"
+    );
+}
+
+#[test]
+fn receiving_a_set_authority_updates_the_channels_auth_status() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let _ = fx.adopt_remote(&mut world, 7);
+    let entity = global(7);
+
+    fx.manager
+        .remote_receive_set_auth(&entity, crate::EntityAuthStatus::Granted);
+    assert_eq!(
+        fx.manager.get_remote_entity_auth_status(&entity),
+        Some(crate::EntityAuthStatus::Granted),
+        "the channel should report the status it was just handed"
+    );
+}
+
+#[test]
+fn the_remote_entity_list_names_the_adopted_entity() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let _ = fx.adopt_remote(&mut world, 7);
+
+    assert_eq!(
+        fx.manager.remote_entities(),
+        vec![global(7)],
+        "the entity map should list the one remote entity it holds"
+    );
+}
+
+// -- the inbound message path --------------------------------------------
+
+#[test]
+fn a_buffered_despawn_surfaces_as_one_event_and_noops_are_skipped() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let owned = fx.adopt_remote(&mut world, 7);
+
+    fx.manager
+        .receiver_buffer_message(0, crate::EntityMessage::Noop);
+    fx.manager
+        .receiver_buffer_message(1, crate::EntityMessage::Despawn(owned));
+
+    let events = fx.take_events(&mut world);
+    assert_eq!(
+        events.len(),
+        1,
+        "the noop should be dropped and the despawn kept"
+    );
+    assert!(
+        matches!(&events[0], crate::EntityEvent::Despawn(e) if *e == global(7)),
+        "the surviving event should be the despawn"
+    );
+}
+
+#[test]
+fn nothing_buffered_means_no_events() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let _ = fx.adopt_remote(&mut world, 7);
+
+    assert!(
+        fx.take_events(&mut world).is_empty(),
+        "an idle manager should surface nothing"
+    );
+}
+
+#[test]
+fn a_buffered_noop_alone_surfaces_nothing() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let _ = fx.adopt_remote(&mut world, 7);
+
+    fx.manager
+        .receiver_buffer_message(0, crate::EntityMessage::Noop);
+    assert!(
+        fx.take_events(&mut world).is_empty(),
+        "a noop carries no entity, so skipping it must come before the entity lookup"
     );
 }

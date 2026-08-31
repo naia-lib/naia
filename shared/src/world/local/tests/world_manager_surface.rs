@@ -927,3 +927,129 @@ fn the_dense_clear_reaches_the_same_mask_as_the_keyed_query() {
         "and the dense clear should be visible through the keyed query"
     );
 }
+
+// -- the host-side auth senders ------------------------------------------
+
+#[test]
+fn the_host_enable_delegation_sender_queues_one_command() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+
+    fx.manager.host_send_enable_delegation(&entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![crate::EntityMessageType::EnableDelegation],
+    );
+}
+
+/// The local variant moves the channel into `Delegated` without a wire
+/// message. `send_disable_delegation` panics unless the channel is delegated,
+/// so its success here is the proof that the local transition happened.
+#[test]
+fn enabling_delegation_locally_sends_nothing_but_still_delegates() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+
+    fx.manager.host_local_enable_delegation(&host_entity);
+    assert!(
+        types_after_the_spawn(&fx.drain_commands()).is_empty(),
+        "the local transition must not put anything on the wire"
+    );
+
+    fx.manager.send_disable_delegation(&entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![crate::EntityMessageType::DisableDelegation],
+        "the channel was delegated, so the disable is legal"
+    );
+}
+
+#[test]
+#[should_panic(expected = "non-existent HostEntity")]
+fn enabling_delegation_locally_on_an_unknown_host_entity_panics() {
+    let mut fx = Fixture::server();
+    fx.manager
+        .host_local_enable_delegation(&HostEntity::new(200));
+}
+
+#[test]
+fn the_migrate_response_is_reserved_as_the_first_command() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    // MigrateResponse is only legal on a delegated channel, and it must be the
+    // FIRST command the channel emits -- so the channel has to be delegated
+    // locally, which flips the state without queueing an EnableDelegation.
+    fx.manager.host_local_enable_delegation(&host_entity);
+
+    fx.manager
+        .host_send_migrate_response(&entity, &crate::RemoteEntity::new(5), &host_entity);
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![crate::EntityMessageType::MigrateResponse],
+    );
+}
+
+#[test]
+fn setting_authority_on_a_host_entity_queues_one_command() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+    // SetAuthority is only legal on a delegated channel.
+    fx.manager
+        .send_enable_delegation(HostType::Server, false, &entity);
+    let _ = fx.drain_commands();
+
+    fx.manager
+        .host_send_set_auth(&entity, crate::EntityAuthStatus::Granted);
+    // The unacked EnableDelegation is retransmitted alongside the new command.
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![
+            crate::EntityMessageType::EnableDelegation,
+            crate::EntityMessageType::SetAuthority
+        ],
+    );
+}
+
+#[test]
+#[should_panic(expected = "does not exist in local entity map")]
+fn setting_authority_on_an_unmapped_entity_panics() {
+    let mut fx = Fixture::server();
+    fx.manager
+        .host_send_set_auth(&global(9), crate::EntityAuthStatus::Granted);
+}
+
+// -- migration -----------------------------------------------------------
+
+#[test]
+fn a_host_owned_entity_cannot_be_migrated_and_keeps_its_mapping() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+
+    let result = fx.manager.migrate_entity_remote_to_host(&entity);
+    assert!(
+        result.is_err(),
+        "only remote-owned entities migrate, got {result:?}"
+    );
+    assert_eq!(
+        fx.manager
+            .entity_converter()
+            .global_entity_to_host_entity(&entity)
+            .expect("the record should have been restored"),
+        host_entity,
+        "a rejected migration must put the entity record back"
+    );
+}
+
+#[test]
+fn migrating_an_unmapped_entity_reports_the_missing_entity() {
+    let mut fx = Fixture::server();
+    assert!(fx
+        .manager
+        .migrate_entity_remote_to_host(&global(9))
+        .is_err());
+}

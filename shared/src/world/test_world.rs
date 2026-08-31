@@ -451,3 +451,68 @@ pub fn remote_component<R: ReplicatedComponent>(
         .read(&mut reader, &FakeEntityConverter)
         .expect("a freshly written component should read back")
 }
+
+/// A [`GlobalEntitySpawner`] with identity semantics: the `GlobalEntity`'s raw
+/// u64 IS the `TestEntity`. That matches [`IdentityConverter`], so a test can
+/// mint `GlobalEntity`s directly and still have the remote world manager
+/// resolve them without a prior `spawn` call.
+pub struct TestSpawner {
+    reserved: HashMap<crate::RemoteEntity, GlobalEntity>,
+}
+
+impl TestSpawner {
+    pub fn new() -> Self {
+        Self {
+            reserved: HashMap::new(),
+        }
+    }
+}
+
+impl Default for TestSpawner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl EntityAndGlobalEntityConverter<TestEntity> for TestSpawner {
+    fn global_entity_to_entity(
+        &self,
+        global_entity: &GlobalEntity,
+    ) -> Result<TestEntity, EntityDoesNotExistError> {
+        Ok(global_entity.to_u64())
+    }
+
+    fn entity_to_global_entity(
+        &self,
+        entity: &TestEntity,
+    ) -> Result<GlobalEntity, EntityDoesNotExistError> {
+        Ok(GlobalEntity::from_u64(*entity))
+    }
+}
+
+impl crate::GlobalEntitySpawner<TestEntity> for TestSpawner {
+    fn spawn(
+        &mut self,
+        world_entity: TestEntity,
+        remote_entity_opt: Option<crate::RemoteEntity>,
+    ) -> GlobalEntity {
+        if let Some(remote_entity) = remote_entity_opt {
+            self.reserved.remove(&remote_entity);
+        }
+        GlobalEntity::from_u64(world_entity)
+    }
+
+    fn reserve_global_entity(&mut self, remote_entity: crate::RemoteEntity) -> GlobalEntity {
+        let global_entity = GlobalEntity::from_u64(remote_entity.value() as u64);
+        self.reserved.insert(remote_entity, global_entity);
+        global_entity
+    }
+
+    fn despawn_by_global(&mut self, _global_entity: &GlobalEntity) {}
+
+    fn despawn_by_world(&mut self, _world_entity: &TestEntity) {}
+
+    fn to_converter(&self) -> &dyn EntityAndGlobalEntityConverter<TestEntity> {
+        self
+    }
+}

@@ -33,3 +33,4 @@ test/specs/target/
 test/specs/.tesaki/*
 **/namako_artifacts/
 .tesaki/skip_hash_check
+mutants.out*/

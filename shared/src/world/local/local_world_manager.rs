@@ -424,9 +424,17 @@ impl LocalWorldManager {
         };
 
         if !local_entity_record.is_remote_owned() {
-            // Restore the entity record since we removed it
-            self.em_write()
-                .insert_with_remote_entity(*global_entity, local_entity_record.remote_entity());
+            // Restore the entity record since we removed it. It is host-owned
+            // by definition of this branch, so it must go back as a host
+            // record -- `remote_entity()` would panic on it.
+            let host_entity = local_entity_record.host_entity();
+            if local_entity_record.is_static() {
+                self.em_write()
+                    .insert_with_static_host_entity(*global_entity, host_entity);
+            } else {
+                self.em_write()
+                    .insert_with_host_entity(*global_entity, host_entity);
+            }
             return Err(format!("Entity is not remote-owned: {:?}", global_entity));
         }
         let old_remote_entity = local_entity_record.remote_entity();
