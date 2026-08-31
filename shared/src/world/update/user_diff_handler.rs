@@ -144,6 +144,8 @@ impl UserDiffHandler {
     // Grows `receivers_dense` so that all slots for `entity_idx` exist.
     fn ensure_dense_capacity(&mut self, entity_idx: GlobalEntityIndex) {
         let needed = (entity_idx.as_usize() + 1) * self.kind_count;
+        // `>` vs `>=` is an equivalent mutation: `resize_with` to the length the
+        // Vec already has is a no-op, so the two agree on every input.
         if needed > self.receivers_dense.len() {
             self.receivers_dense.resize_with(needed, || None);
         }
@@ -205,6 +207,12 @@ impl UserDiffHandler {
         // (shouldn't happen post-protocol-lock, but tolerate it), the
         // Vec needs to grow.
         let bit_idx = kind_bit as usize;
+        // Defensive only, and unreachable in practice: `kinds_by_bit` is sized
+        // to the protocol's `kind_count` at construction and the protocol is
+        // locked before any connection exists, so `bit_idx < len` always holds
+        // and this branch never runs. The `bit_idx + 1` inside it is therefore
+        // untestable by any honest test -- kept because tolerating a late
+        // registration is cheaper than the panic that would otherwise follow.
         if bit_idx >= self.kinds_by_bit.len() {
             self.kinds_by_bit.resize(bit_idx + 1, None);
         }
@@ -241,6 +249,10 @@ impl UserDiffHandler {
             return;
         };
         let slot = self.slot(entity_idx, kind_bit);
+        // Defensive bound. `ensure_dense_capacity` grew the array to
+        // `(entity_idx + 1) * kind_count` at registration, and
+        // `slot <= (entity_idx + 1) * kind_count - 1`, so a registered pair is
+        // always strictly in bounds; `<` and `<=` cannot be distinguished.
         if slot < self.receivers_dense.len() {
             // Clear the mask BEFORE dropping the receiver. `GlobalDirtyBitset` is a
             // refcount matrix whose invariant is `ref_count > 0 ↔ dirty bit set`, and
@@ -492,6 +504,11 @@ impl UserDiffHandler {
                 let mut remaining = word;
                 while remaining != 0 {
                     let bit = remaining.trailing_zeros() as usize;
+                    // `word_idx * 64` is only distinguishable from a mutated
+                    // `word_idx / 64` once `word_idx >= 1`, which needs a
+                    // protocol with more than 64 component kinds. Reaching it
+                    // would mean standing up 65 `Replicate` types purely to move
+                    // a mutation score, so it is left uncovered deliberately.
                     let absolute_bit = word_idx * 64 + bit;
                     if let Some(Some(kind)) = self.kinds_by_bit.get(absolute_bit) {
                         set.insert(*kind);
@@ -604,9 +621,18 @@ mod dense_receiver_tests {
 }
 
 #[cfg(test)]
-mod global_dirty_refcount_tests {
-    //! Pins the `GlobalDirtyBitset` refcount invariant across component
-    //! deregistration (world editor §69p, 2026-08-10).
+mod user_diff_handler_tests {
+    //! Two concerns, one fixture (a real `UserDiffHandler` over a real
+    //! `GlobalDiffHandler` / `GlobalDirtyBitset`, with two component kinds so
+    //! the dense stride is greater than one):
+    //!
+    //! 1. The `GlobalDirtyBitset` refcount invariant across deregistration,
+    //!    documented below.
+    //! 2. The dense slot arithmetic — `slot()` and the four `_fast` methods
+    //!    that inline their own copy of it — and the client-side dirty
+    //!    candidate bit decode.
+    //!
+    //! ## The refcount invariant (world editor §69p, 2026-08-10)
     //!
     //! `GlobalDirtyBitset` is a refcount matrix: `ref_count > 0 ↔ dirty bit set`.
     //! Its ONLY decrement path is `MutReceiver::clear_mask` → `notify_clean` →
@@ -636,6 +662,16 @@ mod global_dirty_refcount_tests {
 
     #[derive(Replicate)]
     struct Ghost {
+        value: Property<u8>,
+    }
+
+    /// A second kind, so `kind_count` is 2 and the slot formula
+    /// `entity_idx * kind_count + kind_bit` is actually distinguishable from
+    /// the arithmetic variations a mutation of it would produce. With a single
+    /// kind the stride is 1 and every wrong formula still collides onto the
+    /// right slot.
+    #[derive(Replicate)]
+    struct Phantom {
         value: Property<u8>,
     }
 
@@ -670,6 +706,11 @@ mod global_dirty_refcount_tests {
     struct TestGwm {
         diff_handler: Arc<RwLock<GlobalDiffHandler>>,
         global_dirty: Arc<GlobalDirtyBitset>,
+        /// When false the manager presents itself as a client: no global dirty
+        /// bitset, which is the condition under which `UserDiffHandler`
+        /// allocates its per-user `DirtySet` and `dirty_receiver_candidates`
+        /// reports anything at all.
+        has_global_dirty: bool,
     }
 
     impl InScopeEntities<GlobalEntity> for TestGwm {
@@ -717,6 +758,9 @@ mod global_dirty_refcount_tests {
             false
         }
         fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+            if !self.has_global_dirty {
+                return None;
+            }
             Some(self.global_dirty.clone())
         }
     }
@@ -726,11 +770,24 @@ mod global_dirty_refcount_tests {
         kinds: ComponentKinds,
         addr: Option<SocketAddr>,
         kind: ComponentKind,
+        kind2: ComponentKind,
     }
 
     fn fixture() -> Fixture {
+        build_fixture(true)
+    }
+
+    /// A fixture whose world manager reports no global dirty bitset, so the
+    /// `UserDiffHandler` under test takes the client path and populates a
+    /// per-user `DirtySet`.
+    fn client_fixture() -> Fixture {
+        build_fixture(false)
+    }
+
+    fn build_fixture(has_global_dirty: bool) -> Fixture {
         let mut kinds = ComponentKinds::new();
         kinds.add_component::<Ghost>();
+        kinds.add_component::<Phantom>();
 
         let diff_handler = Arc::new(RwLock::new(GlobalDiffHandler::new()));
         diff_handler
@@ -743,11 +800,46 @@ mod global_dirty_refcount_tests {
             gwm: TestGwm {
                 diff_handler,
                 global_dirty,
+                has_global_dirty,
             },
             kinds,
             addr: Some("127.0.0.1:4000".parse().unwrap()),
             kind: ComponentKind::of::<Ghost>(),
+            kind2: ComponentKind::of::<Phantom>(),
         }
+    }
+
+    /// Allocates `entity` and registers `kind` on it with both handlers,
+    /// without dirtying it. Returns the dense coordinates the pair landed on.
+    fn register(
+        fx: &Fixture,
+        udh: &mut UserDiffHandler,
+        entity: GlobalEntity,
+        kind: &ComponentKind,
+    ) -> (GlobalEntityIndex, u16) {
+        let (idx, kind_bit) = {
+            let mut gdh = fx.gwm.diff_handler.write().unwrap();
+            let idx = gdh
+                .entity_to_global_idx(&entity)
+                .unwrap_or_else(|| gdh.alloc_entity(entity));
+            gdh.register_component(&fx.kinds, &fx.gwm, &entity, kind, 1);
+            let kind_bit = gdh.kind_bit(kind).expect("kind_bit must resolve");
+            (idx, kind_bit)
+        };
+        udh.register_component(&fx.addr, &entity, kind);
+        (idx, kind_bit)
+    }
+
+    /// Dirties an already-registered `(entity, kind)` pair through the real
+    /// mutation fan-out.
+    fn dirty(fx: &Fixture, entity: GlobalEntity, kind: &ComponentKind) {
+        fx.gwm
+            .diff_handler
+            .read()
+            .unwrap()
+            .receiver(&fx.addr, &entity, kind)
+            .expect("receiver must exist after registration")
+            .mutate(0);
     }
 
     /// Allocates `entity`, registers `Ghost` on it with both handlers, dirties it,
@@ -830,6 +922,282 @@ mod global_dirty_refcount_tests {
             !fx.gwm.global_dirty.is_component_dirty(idx_b, kind_bit),
             "a recycled index inherited the despawned component's dirty bit — the next \
              update plan built from this index would name a kind the new entity never held"
+        );
+    }
+
+    // -- dense slot arithmetic --------------------------------------------
+    //
+    // `slot()` is `entity_idx * kind_count + kind_bit`, and the four `_fast`
+    // methods each inline their own copy of it. Every one of these tests needs
+    // at least two kinds AND at least two entity indices: at `kind_count == 1`
+    // the stride collapses and a wrong formula still lands on the right slot.
+
+    /// Registers `Ghost` and `Phantom` on three entities and returns the dense
+    /// coordinates of each pair, asserting they are all distinct.
+    fn register_grid(
+        fx: &Fixture,
+        udh: &mut UserDiffHandler,
+    ) -> Vec<(GlobalEntity, ComponentKind, GlobalEntityIndex, u16)> {
+        let mut grid = Vec::new();
+        for raw in 1u64..=3 {
+            let entity = GlobalEntity::from_u64(raw);
+            for kind in [fx.kind, fx.kind2] {
+                let (idx, kind_bit) = register(fx, udh, entity, &kind);
+                grid.push((entity, kind, idx, kind_bit));
+            }
+        }
+        let mut coords: Vec<_> = grid.iter().map(|(_, _, i, b)| (*i, *b)).collect();
+        coords.sort_by_key(|(i, b)| (i.as_usize(), *b));
+        coords.dedup();
+        assert_eq!(
+            coords.len(),
+            grid.len(),
+            "the fixture handed out a duplicate (entity_idx, kind_bit) pair, so \
+             nothing below can distinguish a slot collision"
+        );
+        assert!(
+            coords.iter().any(|(i, _)| i.as_usize() >= 2),
+            "at least one entity must land at index 2 or higher, or the dense \
+             array never has to grow past its first block"
+        );
+        assert!(
+            coords.iter().any(|(_, b)| *b != 0),
+            "at least one kind must land at a nonzero kind_bit"
+        );
+        grid
+    }
+
+    #[test]
+    fn a_dirty_component_does_not_make_its_neighbours_look_dirty() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let grid = register_grid(&fx, &mut udh);
+
+        // Pick the pair furthest from the origin, so a collapsed slot formula
+        // has somewhere wrong to land.
+        let (target_entity, target_kind, target_idx, target_bit) = *grid
+            .iter()
+            .max_by_key(|(_, _, idx, bit)| (idx.as_usize(), *bit))
+            .unwrap();
+
+        for (entity, kind, _, _) in &grid {
+            udh.mark_receiver_delivered(entity, kind);
+        }
+        dirty(&fx, target_entity, &target_kind);
+
+        for (entity, kind, idx, bit) in &grid {
+            let is_target = *idx == target_idx && *bit == target_bit;
+            assert_eq!(
+                udh.is_receiver_dirty_and_delivered_fast(*idx, *bit),
+                is_target,
+                "dirty+delivered at ({idx:?}, {bit}) must be {is_target}: only \
+                 the mutated pair may report dirty",
+            );
+            assert_eq!(
+                udh.diff_mask_is_clear_fast(*idx, *bit),
+                !is_target,
+                "mask-clear at ({idx:?}, {bit}) must be {}",
+                !is_target,
+            );
+            assert_eq!(
+                udh.is_receiver_dirty_and_delivered(entity, kind),
+                is_target,
+                "the cold path must agree with the fast path at ({idx:?}, {bit})",
+            );
+            assert_eq!(
+                udh.diff_mask_is_clear(entity, kind),
+                !is_target,
+                "the cold path must agree with the fast path at ({idx:?}, {bit})",
+            );
+        }
+    }
+
+    #[test]
+    fn the_fast_snapshot_returns_the_same_mask_as_the_cold_one() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let grid = register_grid(&fx, &mut udh);
+
+        // Dirty every pair, so each receiver has a mask worth comparing.
+        for (entity, kind, _, _) in &grid {
+            dirty(&fx, *entity, kind);
+        }
+        for (entity, kind, idx, bit) in &grid {
+            assert_eq!(
+                udh.diff_mask_snapshot_fast(*idx, *bit),
+                Some(udh.diff_mask_snapshot(entity, kind)),
+                "fast and cold snapshots must resolve to the same receiver at \
+                 ({idx:?}, {bit})",
+            );
+        }
+    }
+
+    #[test]
+    fn the_fast_snapshot_reports_nothing_for_an_unregistered_slot() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let grid = register_grid(&fx, &mut udh);
+        let beyond = GlobalEntityIndex(
+            grid.iter().map(|(_, _, i, _)| i.as_usize()).max().unwrap() as u32 + 4,
+        );
+        assert_eq!(udh.diff_mask_snapshot_fast(beyond, 0), None);
+        assert!(udh.diff_mask_is_clear_fast(beyond, 0));
+        assert!(!udh.is_receiver_dirty_and_delivered_fast(beyond, 0));
+    }
+
+    #[test]
+    fn clearing_one_mask_leaves_the_other_components_dirty() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let grid = register_grid(&fx, &mut udh);
+
+        for (entity, kind, _, _) in &grid {
+            dirty(&fx, *entity, kind);
+        }
+        let (_, _, target_idx, target_bit) = *grid
+            .iter()
+            .max_by_key(|(_, _, idx, bit)| (idx.as_usize(), *bit))
+            .unwrap();
+        udh.clear_diff_mask_fast(target_idx, target_bit);
+
+        for (_, _, idx, bit) in &grid {
+            let is_target = *idx == target_idx && *bit == target_bit;
+            assert_eq!(
+                udh.diff_mask_is_clear_fast(*idx, *bit),
+                is_target,
+                "clearing ({target_idx:?}, {target_bit}) must not reach \
+                 ({idx:?}, {bit})",
+            );
+        }
+    }
+
+    #[test]
+    fn registration_is_tracked_and_reversed_per_component() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let grid = register_grid(&fx, &mut udh);
+
+        for (entity, kind, _, _) in &grid {
+            assert!(udh.has_component(entity, kind));
+        }
+        let (entity, kind, _, _) = grid[0];
+        udh.deregister_component(&entity, &kind);
+        assert!(!udh.has_component(&entity, &kind));
+        for (other_entity, other_kind, _, _) in &grid[1..] {
+            assert!(
+                udh.has_component(other_entity, other_kind),
+                "deregistering one pair must not disturb the others",
+            );
+        }
+        // Deregistering again is a no-op rather than a panic.
+        udh.deregister_component(&entity, &kind);
+    }
+
+    #[test]
+    fn an_unregistered_component_reads_as_clean_and_ignores_writes() {
+        let fx = fixture();
+        let udh = UserDiffHandler::new(&fx.gwm);
+        let entity = GlobalEntity::from_u64(9);
+        assert!(!udh.has_component(&entity, &fx.kind));
+        assert!(udh.diff_mask_is_clear(&entity, &fx.kind));
+        assert!(!udh.is_receiver_dirty_and_delivered(&entity, &fx.kind));
+        // Neither of these has a receiver to reach; both must simply return.
+        udh.mark_receiver_fully_dirty(&entity, &fx.kind);
+        udh.mark_receiver_delivered(&entity, &fx.kind);
+    }
+
+    #[test]
+    fn marking_a_receiver_fully_dirty_dirties_only_that_component() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let grid = register_grid(&fx, &mut udh);
+        let (target_entity, target_kind, target_idx, target_bit) = *grid
+            .iter()
+            .max_by_key(|(_, _, idx, bit)| (idx.as_usize(), *bit))
+            .unwrap();
+
+        udh.mark_receiver_fully_dirty(&target_entity, &target_kind);
+
+        for (_, _, idx, bit) in &grid {
+            let is_target = *idx == target_idx && *bit == target_bit;
+            assert_eq!(
+                udh.diff_mask_is_clear_fast(*idx, *bit),
+                !is_target,
+                "only ({target_idx:?}, {target_bit}) should have been dirtied",
+            );
+        }
+    }
+
+    // -- client path: dirty candidate decoding -----------------------------
+
+    #[test]
+    fn dirty_candidates_name_exactly_the_mutated_components() {
+        let fx = client_fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let entity = GlobalEntity::from_u64(1);
+        let (_, ghost_bit) = register(&fx, &mut udh, entity, &fx.kind);
+        let (_, phantom_bit) = register(&fx, &mut udh, entity, &fx.kind2);
+
+        // Anti-vacuity: the bit-decode loop below is only interesting if the
+        // two kinds sit at different bit positions, one of them nonzero.
+        assert_ne!(ghost_bit, phantom_bit);
+        assert!(ghost_bit != 0 || phantom_bit != 0);
+
+        assert!(
+            udh.dirty_receiver_candidates().is_empty(),
+            "nothing has been mutated yet",
+        );
+
+        dirty(&fx, entity, &fx.kind2);
+
+        let candidates = udh.dirty_receiver_candidates();
+        let kinds = candidates
+            .get(&entity)
+            .expect("the mutated entity must appear as a candidate");
+        assert!(
+            kinds.contains(&fx.kind2),
+            "the mutated kind must be decoded back out of its dirty bit",
+        );
+        assert!(
+            !kinds.contains(&fx.kind),
+            "an untouched kind must not be reported dirty -- a wrong bit-to-kind \
+             decode shows up exactly here",
+        );
+        assert_eq!(candidates.len(), 1);
+    }
+
+    #[test]
+    fn dirty_candidates_decode_every_mutated_kind_on_an_entity() {
+        let fx = client_fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let entity = GlobalEntity::from_u64(1);
+        register(&fx, &mut udh, entity, &fx.kind);
+        register(&fx, &mut udh, entity, &fx.kind2);
+
+        dirty(&fx, entity, &fx.kind);
+        dirty(&fx, entity, &fx.kind2);
+
+        let candidates = udh.dirty_receiver_candidates();
+        let kinds = candidates.get(&entity).expect("entity must be a candidate");
+        assert_eq!(
+            kinds.len(),
+            2,
+            "both mutated kinds must be decoded out of the same dirty word",
+        );
+        assert!(kinds.contains(&fx.kind) && kinds.contains(&fx.kind2));
+    }
+
+    #[test]
+    fn the_server_path_reports_no_dirty_candidates() {
+        let fx = fixture();
+        let mut udh = UserDiffHandler::new(&fx.gwm);
+        let entity = GlobalEntity::from_u64(1);
+        register(&fx, &mut udh, entity, &fx.kind);
+        dirty(&fx, entity, &fx.kind);
+        assert!(
+            udh.dirty_receiver_candidates().is_empty(),
+            "the server drives candidate selection from GlobalDirtyBitset, so this \
+             path must stay a no-op even with a genuinely dirty component",
         );
     }
 }

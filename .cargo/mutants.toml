@@ -1,0 +1,27 @@
+# cargo-mutants configuration.
+#
+# `exclude_re` drops mutants that NO test run under the default profile can
+# ever kill, because the code they mutate is not compiled into that profile at
+# all. Every entry below is a body behind `#[cfg(feature = "...")]` for a
+# feature that is off by default (`bench_instrumentation`, `e2e_debug`,
+# `observability`, `test_utils`). Their mutants survive unconditionally and are
+# pure noise -- they were being re-triaged by hand on every single file sweep.
+#
+# This is a statement about the test PROFILE, not about the code: if one of
+# these features is ever enabled by default, delete the corresponding line.
+exclude_re = [
+    # `bench_instrumentation` diagnostic counter modules.
+    "_counters::",
+    # `e2e_debug` diagnostic dumps.
+    "::debug_[a-z_]+",
+    # `test_utils` accessors that exist only so tests can peek at internals.
+    "::receiver_count",
+    "::diff_handler_receiver_count",
+    "::dirty_candidates_count",
+    "::dirty_candidates_len",
+    "_for_test",
+]
+
+# The default 20s cap turns a genuine infinite loop into a TIMEOUT rather than
+# a MISSED, which is the signal we want -- keep it, but allow slow builds room.
+minimum_test_timeout = 30
