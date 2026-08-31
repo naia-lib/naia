@@ -418,3 +418,153 @@ fn a_buffered_noop_alone_surfaces_nothing() {
         "a noop carries no entity, so skipping it must come before the entity lookup"
     );
 }
+
+// -- the waitlist forwarders ----------------------------------------------
+
+/// `entity_waitlist_queue` parks a message until every remote entity it names
+/// is in scope; `remote_spawn_entity` is what later releases it. Both are pure
+/// forwarders, so the only way to see them work is to queue, spawn, and then
+/// collect the item back out of the store.
+#[test]
+fn a_queued_message_is_released_once_its_remote_entity_spawns() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    // Deliberately NOT adopted yet: the message has to wait for it.
+    let remote_entity = RemoteEntity::new(3);
+
+    let mut store: crate::world::remote::remote_entity_waitlist::WaitlistStore<u32> =
+        crate::world::remote::remote_entity_waitlist::WaitlistStore::new();
+    let mut required = HashSet::new();
+    required.insert(remote_entity);
+    fx.manager.entity_waitlist_queue(&required, &mut store, 42);
+
+    let now = crate::Instant::now();
+    assert!(
+        fx.manager
+            .entity_waitlist_mut()
+            .collect_ready_items(&now, &mut store)
+            .is_none(),
+        "nothing is in scope yet, so nothing should be collectable"
+    );
+
+    fx.adopt_remote(&mut world, 3);
+    fx.manager.remote_spawn_entity(&global(3));
+
+    let items = fx
+        .manager
+        .entity_waitlist_mut()
+        .collect_ready_items(&now, &mut store)
+        .expect("the spawn should have released the queued message");
+    assert_eq!(items, vec![42]);
+}
+
+/// `remote_spawn_entity` swallows the lookup failure on purpose: a despawn
+/// earlier in the same batch can have removed the mapping already. It must not
+/// panic, and it must release nothing.
+#[test]
+fn spawning_a_remote_entity_the_map_no_longer_knows_is_a_no_op() {
+    let mut fx = Fixture::client();
+
+    fx.manager.remote_spawn_entity(&global(404));
+
+    let now = crate::Instant::now();
+    let mut store: crate::world::remote::remote_entity_waitlist::WaitlistStore<u32> =
+        crate::world::remote::remote_entity_waitlist::WaitlistStore::new();
+    assert!(
+        fx.manager
+            .entity_waitlist_mut()
+            .collect_ready_items(&now, &mut store)
+            .is_none(),
+        "an unmapped entity releases nothing"
+    );
+}
+
+// -- the remote despawn / replay forwarders -------------------------------
+
+/// An authority-holding client owes the server an explicit `Despawn`; the
+/// `== Granted` comparison in `despawn_entity_and_notify_server` is the whole
+/// decision, so both sides of it need a case.
+#[test]
+fn an_authority_holding_client_tells_the_server_about_its_despawn() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    fx.adopt_remote(&mut world, 3);
+    fx.manager
+        .remote_receive_set_auth(&global(3), crate::EntityAuthStatus::Granted);
+    let _ = fx.drain_command_types();
+
+    fx.manager.despawn_entity_and_notify_server(&global(3));
+
+    assert!(
+        fx.drain_command_types()
+            .contains(&crate::EntityMessageType::Despawn),
+        "a granted client has to tell the server it is going away"
+    );
+}
+
+/// `remote_despawn_entity` notifies the waitlist and resolves the global id to
+/// a remote one on the way. It does NOT clear the entity map -- despite the
+/// doc comment on `RemoteWorldManager::despawn_entity`, that function binds
+/// `_local_entity_map` and ignores it. What is observable is the resolution
+/// step: an unmapped global id unwraps to a panic.
+#[test]
+#[should_panic(expected = "EntityDoesNotExistError")]
+fn despawning_a_remote_entity_the_map_never_knew_panics() {
+    let mut fx = Fixture::client();
+
+    fx.manager.remote_despawn_entity(&global(404));
+}
+
+/// `replay_entity_command` re-submits a command through the remote engine
+/// after a migration. A `Despawn` retires the engine's channel, so a second
+/// replay of the same command has nothing left to address -- which is how a
+/// gutted body shows itself: it would leave the channel standing.
+#[test]
+#[should_panic(expected = "does not exist in the engine")]
+fn replaying_a_despawn_retires_the_remote_channel() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    fx.adopt_remote(&mut world, 3);
+
+    fx.manager
+        .replay_entity_command(&global(3), crate::EntityCommand::Despawn(global(3)));
+    fx.manager
+        .replay_entity_command(&global(3), crate::EntityCommand::Despawn(global(3)));
+}
+
+/// A component that arrives in a scope-entry bundle is buffered in
+/// `incoming_components` and applied on the next `take_incoming_events`. The
+/// buffer is the only thing `insert_received_component` does, so an emptied
+/// body loses the component silently.
+#[test]
+fn a_received_component_is_buffered_and_then_applied_to_the_world() {
+    let mut fx = Fixture::client();
+    let mut world = TestWorld::new();
+    let local_entity = fx.adopt_remote(&mut world, 3);
+
+    fx.manager.insert_received_component(
+        &local_entity,
+        &ComponentKind::of::<Wraith>(),
+        remote_component(&fx.kinds, &Wraith::new_complete(9)),
+    );
+    // The buffer is only drained when the matching InsertComponent message is
+    // processed, so the message has to arrive too.
+    fx.manager.receiver_buffer_message(
+        1,
+        crate::EntityMessage::InsertComponent(local_entity, ComponentKind::of::<Wraith>()),
+    );
+    let events = fx.take_events(&mut world);
+
+    assert!(
+        events
+            .iter()
+            .any(|e| matches!(e, crate::EntityEvent::InsertComponent(_, kind)
+                if *kind == ComponentKind::of::<Wraith>())),
+        "the buffered component should surface as an insert event"
+    );
+    assert_eq!(
+        world.value_of::<Wraith>(&3).map(|w| *w.value),
+        Some(9),
+        "and it should have landed in the world"
+    );
+}

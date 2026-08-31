@@ -65,6 +65,11 @@ pub struct TestGwm {
     /// What `component_kinds` reports per entity. Empty by default, so a test
     /// that does not opt in sees the "entity has no components yet" branch.
     declared_kinds: RwLock<HashMap<GlobalEntity, Vec<ComponentKind>>>,
+    /// When false, `global_dirty_bitset` reports `None`, which is how a client
+    /// presents itself. `UserDiffHandler` allocates its per-user `DirtySet`
+    /// only in that case, so the client dirty-candidate path is unreachable
+    /// without it.
+    has_global_dirty: bool,
 }
 
 impl TestGwm {
@@ -79,7 +84,17 @@ impl TestGwm {
             diff_handler,
             global_dirty: Arc::new(GlobalDirtyBitset::new(64, kinds.kind_count() as usize)),
             declared_kinds: RwLock::new(HashMap::new()),
+            has_global_dirty: true,
         }
+    }
+
+    /// A manager that presents itself as a client: no global dirty bitset, so
+    /// the per-user `DirtySet` is allocated and `dirty_receiver_candidates`
+    /// actually reports something.
+    pub fn new_client(kinds: &ComponentKinds) -> Self {
+        let mut this = Self::new(kinds);
+        this.has_global_dirty = false;
+        this
     }
 
     /// Gives the global diff handler a live receiver for `(entity, kind)`, so a
@@ -149,6 +164,9 @@ impl GlobalWorldManagerType for TestGwm {
         false
     }
     fn global_dirty_bitset(&self) -> Option<Arc<GlobalDirtyBitset>> {
+        if !self.has_global_dirty {
+            return None;
+        }
         Some(self.global_dirty.clone())
     }
 }

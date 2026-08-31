@@ -16,7 +16,7 @@ use crate::{
     },
     BigMapKey, ComponentKind, ComponentKinds, GlobalEntity, GlobalEntityIndex, HostEntity,
     HostType, Instant, LocalEntityAndGlobalEntityConverter, OwnedLocalEntity, PacketNotifiable,
-    Replicate,
+    Replicate, WorldMutType,
 };
 
 #[derive(Replicate)]
@@ -49,10 +49,21 @@ struct Fixture {
 
 impl Fixture {
     fn new(host_type: HostType) -> Self {
+        Self::with_gwm(host_type, TestGwm::new)
+    }
+
+    /// A client fixture whose `TestGwm` reports no global dirty bitset, which
+    /// is what makes the per-user `DirtySet` (and so the dirty-candidate path)
+    /// exist at all.
+    fn client_with_dirty_set() -> Self {
+        Self::with_gwm(HostType::Client, TestGwm::new_client)
+    }
+
+    fn with_gwm(host_type: HostType, build_gwm: fn(&ComponentKinds) -> TestGwm) -> Self {
         let mut kinds = ComponentKinds::new();
         kinds.add_component::<Ghost>();
         kinds.add_component::<Wraith>();
-        let gwm = TestGwm::new(&kinds);
+        let gwm = build_gwm(&kinds);
         let address: Option<SocketAddr> = Some("127.0.0.1:4000".parse().unwrap());
         let manager = LocalWorldManager::new(&address, host_type, 1, &gwm);
         Self {
@@ -1052,4 +1063,232 @@ fn migrating_an_unmapped_entity_reports_the_missing_entity() {
         .manager
         .migrate_entity_remote_to_host(&global(9))
         .is_err());
+}
+
+// -- the updater-facing predicates ----------------------------------------
+
+impl Fixture {
+    /// Resolves the dense (entity index, kind bit) pair the hot-path
+    /// predicates take, for a component already armed on the diff handler.
+    fn dense(&self, entity: &GlobalEntity, kind: &ComponentKind) -> (GlobalEntityIndex, u16) {
+        let gdh = self.gwm.diff_handler.read().unwrap();
+        (
+            gdh.entity_to_global_idx(entity)
+                .expect("fixture: the armed entity should have a dense index"),
+            gdh.kind_bit(kind)
+                .expect("fixture: the armed kind should have a bit"),
+        )
+    }
+
+    /// Drives a full write→ack→apply cycle over whatever is currently queued,
+    /// which is what flips a component's `delivered` flag.
+    fn deliver_everything_queued(&mut self) {
+        let now = Instant::now();
+        let outgoing = self.manager.take_outgoing_commands(&now, &200.0);
+        let packet_index: crate::PacketIndex = 0;
+        self.manager.insert_sent_command_packet(&packet_index, now);
+        self.record_written(&packet_index, outgoing);
+        PacketNotifiable::notify_packet_delivered(&mut self.manager, packet_index);
+        self.manager.process_delivered_commands();
+    }
+}
+
+/// `record_sent_update` deliberately does NOT clear the live mask, so the only
+/// observable consequence of its ledger write is the NACK replay: once the
+/// packet times out, `collect_messages` has to fold the recorded mask back
+/// onto the live one. A gutted body leaves nothing to replay.
+#[test]
+fn a_sent_update_is_replayed_onto_the_live_mask_when_the_packet_times_out() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+    let (entity_idx, kind_bit) = fx.dense(&entity, &ghost());
+
+    let now = Instant::now();
+    let mut diff_mask = crate::DiffMask::new(1);
+    diff_mask.set_bit(0, true);
+    fx.manager
+        .record_sent_update(&now, &0, &entity, &ghost(), diff_mask);
+
+    // Simulate the send path clearing up-front, so the mask can only come back
+    // from the ledger.
+    fx.manager.clear_diff_mask_dense(entity_idx, kind_bit);
+    assert!(
+        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "fixture: the mask should start clear so the replay is the only source"
+    );
+
+    let mut much_later = Instant::now();
+    much_later.add_millis(5_000);
+    fx.manager.collect_messages(&much_later, &1.0);
+
+    assert!(
+        !fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        "the timed-out packet's recorded mask should be OR'd back on"
+    );
+}
+
+/// Both halves of the `host || remote` disjunction matter: a host-owned
+/// component is updatable through the host engine alone, so a mutant that
+/// turns the `||` into `&&` -- or that hardcodes `false` -- must fail here.
+#[test]
+fn a_host_owned_component_is_updatable_and_an_unknown_one_is_not() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+    // Updatability requires the insert to have been acked into the delivered world.
+    fx.deliver_everything_queued();
+
+    assert!(
+        fx.manager
+            .is_component_updatable_for_entity(&entity, &ghost()),
+        "the host engine owns this component, so the host half alone says yes"
+    );
+    assert!(
+        !fx.manager
+            .is_component_updatable_for_entity(&global(99), &ghost()),
+        "an entity the manager never saw is updatable through neither engine"
+    );
+}
+
+/// The dirty-and-delivered fast path answers `true` only once the insert has
+/// been acknowledged. Both the resolved and the dense form must agree, and
+/// `get_diff_mask_dense` must hand back the live mask rather than `None`.
+#[test]
+fn the_dirty_and_delivered_fast_path_answers_after_the_insert_is_acked() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+    let (entity_idx, kind_bit) = fx.dense(&entity, &ghost());
+
+    assert!(
+        !fx.manager
+            .is_component_dirty_and_delivered_for_entity(&entity, &ghost()),
+        "before the ack the delivered flag is unset, so the fast path abstains"
+    );
+
+    fx.deliver_everything_queued();
+
+    assert!(
+        fx.manager
+            .is_component_dirty_and_delivered_for_entity(&entity, &ghost()),
+        "the grant left the mask dirty and the ack marked it delivered"
+    );
+    assert!(
+        fx.manager
+            .is_component_dirty_and_delivered_dense(entity_idx, kind_bit),
+        "the dense form has to agree with the resolved form"
+    );
+    assert!(
+        fx.manager
+            .get_diff_mask_dense(entity_idx, kind_bit)
+            .is_some(),
+        "an armed component has a live mask to hand back"
+    );
+    assert!(
+        fx.manager
+            .get_diff_mask_dense(entity_idx, kind_bit + 1)
+            .is_none(),
+        "an unarmed kind bit has no receiver and so no mask"
+    );
+}
+
+/// `take_update_events` filters the dirty candidates down to those that are
+/// actually updatable. The disjunction is the same `host || remote` shape as
+/// `is_component_updatable_for_entity`, and a host-owned entity exercises the
+/// left half on its own.
+///
+/// This is a CLIENT-side path: `dirty_receiver_candidates` returns empty on a
+/// server, where the Iris three-phase loop drives candidate selection from the
+/// global dirty bitset instead.
+#[test]
+fn taking_update_events_reports_the_dirty_updatable_components() {
+    let mut fx = Fixture::client_with_dirty_set();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![]);
+    fx.arm_and_grant(&entity, &ghost());
+    fx.deliver_everything_queued();
+    // The ack cycle clears the mask; re-grant so there is something dirty left.
+    fx.manager.register_authed_entity(&fx.gwm, &entity);
+
+    // The updater reads the component out of the world to build the event, so
+    // the world has to actually hold it.
+    let mut world = crate::world::test_world::TestWorld::new();
+    world.spawn_at(1);
+    world.insert_component(&1, Ghost::new_complete(0));
+    let converter = crate::world::test_world::IdentityConverter;
+    let events = fx
+        .manager
+        .take_update_events::<u64, _>(&world, &converter, &fx.gwm);
+
+    assert!(
+        events.contains_key(&entity),
+        "the granted entity's component is dirty and host-updatable"
+    );
+}
+
+/// `take_outgoing_events` is the top-level drain: it has to move the engines'
+/// queued commands through the sender and hand them back. `Default::default()`
+/// is an empty drain, which the queued spawn contradicts.
+#[test]
+fn taking_outgoing_events_returns_the_queued_spawn() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.manager
+        .host_init_entity(&entity, vec![ghost()], &fx.kinds, false);
+
+    let world = crate::world::test_world::TestWorld::new();
+    let converter = crate::world::test_world::IdentityConverter;
+    let now = Instant::now();
+    let events = fx
+        .manager
+        .take_outgoing_events::<u64, _>(&now, &200.0, &world, &converter, &fx.gwm);
+
+    assert!(
+        !events.0.is_empty(),
+        "the spawn queued by host_init_entity should come out here"
+    );
+}
+
+/// A remote-owned entity whose authority the client holds owes the server an
+/// explicit despawn; one whose authority it does not hold owes nothing. The
+/// `== Granted` comparison is the whole decision.
+#[test]
+fn only_an_authority_holding_client_notifies_the_server_of_a_despawn() {
+    let mut fx = Fixture::new(HostType::Client);
+    let entity = global(1);
+    let remote_entity = crate::RemoteEntity::new(7);
+    let mut kinds = std::collections::HashSet::new();
+    kinds.insert(ghost());
+    fx.manager
+        .insert_remote_entity(&entity, remote_entity, kinds);
+
+    fx.manager.despawn_entity_and_notify_server(&entity);
+
+    assert!(
+        types_after_the_spawn(&fx.drain_commands()).is_empty(),
+        "without a granted authority there is nothing to tell the server"
+    );
+}
+
+/// `send_enable_delegation` must skip the `Publish` prelude when the channel is
+/// already Published or Delegated. A server-owned channel starts Published, so
+/// a single `EnableDelegation` is the whole emission.
+#[test]
+fn enabling_delegation_on_an_already_published_channel_skips_the_publish() {
+    let mut fx = Fixture::server();
+    let entity = global(1);
+    fx.spawn_host(&entity, vec![ghost()]);
+
+    fx.manager
+        .send_enable_delegation(HostType::Server, false, &entity);
+
+    assert_eq!(
+        types_after_the_spawn(&fx.drain_commands()),
+        vec![crate::EntityMessageType::EnableDelegation],
+        "a Published channel needs no Publish command ahead of the delegation"
+    );
 }
