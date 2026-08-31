@@ -81,191 +81,140 @@ impl<R: Replicate> CachedReplicate for R {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod cached_replicate_tests {
+    use naia_serde::BitWriter;
 
-    // Verify Send + Sync for Box<dyn CachedReplicate>.
+    use crate::{
+        world::{
+            component::component_kinds::ComponentKinds,
+            entity::entity_converters::FakeEntityConverter, update::diff_mask::DiffMask,
+        },
+        CachedReplicate, ComponentKind, Property, Replicate,
+    };
+
+    #[derive(Replicate)]
+    struct Ghost {
+        pale: Property<u8>,
+        cold: Property<u8>,
+    }
+
+    #[derive(Replicate)]
+    struct Wraith {
+        value: Property<u8>,
+    }
+
+    fn kinds() -> ComponentKinds {
+        let mut kinds = ComponentKinds::new();
+        kinds.add_component::<Ghost>();
+        kinds
+    }
+
+    fn a_ghost() -> Ghost {
+        Ghost::new_complete(7, 9)
+    }
+
     fn assert_send_sync<T: Send + Sync>() {}
 
     #[test]
-    fn box_dyn_cached_replicate_is_send_sync() {
+    fn the_boxed_trait_object_can_cross_a_thread_boundary() {
+        // SnapshotWorld ships these between the sim and send stages.
         assert_send_sync::<Box<dyn CachedReplicate>>();
     }
 
     #[test]
-    fn blanket_impl_dispatches_to_replicate() {
-        // We use an existing Replicate-implementing type from the
-        // workspace's bench protocol or a stub in shared's test utils.
-        // Since `shared` is the host crate of the trait + blanket impl,
-        // we synthesise a trivial Replicate impl here just to verify
-        // the blanket impl compiles and the trait object is callable.
-        //
-        // The full byte-identity confirmation is exercised in
-        // `server/tests/snapshot_world_wire_identity.rs` (Commit 5),
-        // which builds end-to-end packets with real Replicate types.
+    fn a_full_write_through_the_cached_surface_is_byte_identical_to_replicate() {
+        let ghost = a_ghost();
+        let kinds = kinds();
 
-        // Compile-only assertion: a generic function taking a
-        // Replicate impl and using it via CachedReplicate's dyn surface
-        // must coerce without explicit casts.
-        fn _coerce<R: Replicate>(value: R) -> Box<dyn CachedReplicate> {
-            Box::new(value)
-        }
+        let mut direct = BitWriter::new();
+        Replicate::write(&ghost, &kinds, &mut direct, &mut FakeEntityConverter);
 
-        // No-op runtime check that the function pointer is exported.
-        // (The unit test that actually exercises a write call lives in
-        // Commit 2's snapshot_world tests, which use real Replicate types
-        // from the bench protocol or the bevy_specs test scaffolding.)
-        let _ = _coerce::<DummyImmutable>;
-    }
+        let cached: Box<dyn CachedReplicate> = Box::new(a_ghost());
+        let mut through_trait = BitWriter::new();
+        cached.cached_write(&kinds, &mut through_trait, &mut FakeEntityConverter);
 
-    // A minimal Replicate stub used to verify the blanket impl
-    // type-checks. We intentionally do NOT exercise write/write_update
-    // here because doing so would require a ComponentKinds registry
-    // populated with this type's NetId — that ergonomic burden belongs
-    // to the integration tests, not the trait-existence unit test.
-    struct DummyImmutable;
-
-    use crate::named::Named;
-    use crate::world::component::component_kinds::ComponentKind;
-    use crate::world::component::property_mutate::PropertyMutator;
-    use crate::world::component::replica_ref::{ReplicaDynMut, ReplicaDynRef};
-    use crate::world::component::replicate::ReplicateBuilder;
-    use crate::world::delegation::auth_channel::EntityAuthAccessor;
-    use crate::world::entity::entity_converters::LocalEntityAndGlobalEntityConverter;
-    use crate::world::update::component_update::{ComponentFieldUpdate, PendingComponentUpdate};
-    use crate::RemoteEntity;
-    use naia_serde::{BitReader, SerdeErr};
-    use std::collections::HashSet;
-
-    impl Named for DummyImmutable {
-        fn protocol_name() -> &'static str {
-            "DummyImmutable"
-        }
-        fn name(&self) -> String {
-            "DummyImmutable".to_string()
-        }
-    }
-
-    struct DummyBuilder;
-    impl Named for DummyBuilder {
-        fn protocol_name() -> &'static str {
-            "DummyImmutable"
-        }
-        fn name(&self) -> String {
-            "DummyImmutable".to_string()
-        }
-    }
-    impl ReplicateBuilder for DummyBuilder {
-        fn read(
-            &self,
-            _reader: &mut BitReader,
-            _converter: &dyn LocalEntityAndGlobalEntityConverter,
-        ) -> Result<Box<dyn Replicate>, SerdeErr> {
-            Ok(Box::new(DummyImmutable))
-        }
-        fn read_create_update(
-            &self,
-            _reader: &mut BitReader,
-        ) -> Result<PendingComponentUpdate, SerdeErr> {
-            unreachable!("DummyImmutable does not exercise updates")
-        }
-        fn split_update(
-            &self,
-            _converter: &dyn LocalEntityAndGlobalEntityConverter,
-            _update: PendingComponentUpdate,
-        ) -> crate::world::component::replicate::SplitUpdateResult {
-            unreachable!("DummyImmutable does not exercise updates")
-        }
-        fn box_clone(&self) -> Box<dyn ReplicateBuilder> {
-            Box::new(DummyBuilder)
-        }
-    }
-
-    impl Replicate for DummyImmutable {
-        fn kind(&self) -> ComponentKind {
-            ComponentKind::of::<DummyImmutable>()
-        }
-        fn to_any(&self) -> &dyn Any {
-            self
-        }
-        fn to_any_mut(&mut self) -> &mut dyn Any {
-            self
-        }
-        fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
-            self
-        }
-        fn copy_to_box(&self) -> Box<dyn Replicate> {
-            Box::new(DummyImmutable)
-        }
-        fn create_builder() -> Box<dyn ReplicateBuilder>
-        where
-            Self: Sized,
-        {
-            Box::new(DummyBuilder)
-        }
-        fn diff_mask_size(&self) -> u8 {
-            0
-        }
-        fn dyn_ref(&self) -> ReplicaDynRef<'_> {
-            ReplicaDynRef::new(self)
-        }
-        fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
-            ReplicaDynMut::new(self)
-        }
-        fn mirror(&mut self, _other: &dyn Replicate) {}
-        fn mirror_single_field(&mut self, _field_index: u8, _other: &dyn Replicate) {}
-        fn set_mutator(&mut self, _mutator: &PropertyMutator) {}
-        fn write(
-            &self,
-            _component_kinds: &ComponentKinds,
-            _writer: &mut dyn BitWrite,
-            _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        ) {
-        }
-        fn write_update(
-            &self,
-            _diff_mask: &DiffMask,
-            _writer: &mut dyn BitWrite,
-            _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
-        ) {
-        }
-        fn read_apply_update(
-            &mut self,
-            _converter: &dyn LocalEntityAndGlobalEntityConverter,
-            _update: PendingComponentUpdate,
-        ) -> Result<(), SerdeErr> {
-            Ok(())
-        }
-        fn read_apply_field_update(
-            &mut self,
-            _converter: &dyn LocalEntityAndGlobalEntityConverter,
-            _update: ComponentFieldUpdate,
-        ) -> Result<(), SerdeErr> {
-            Ok(())
-        }
-        fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
-            None
-        }
-        fn relations_complete(&mut self, _converter: &dyn LocalEntityAndGlobalEntityConverter) {}
-        fn publish(&mut self, _mutator: &PropertyMutator) {}
-        fn unpublish(&mut self) {}
-        fn enable_delegation(
-            &mut self,
-            _accessor: &EntityAuthAccessor,
-            _mutator_opt: Option<&PropertyMutator>,
-        ) {
-        }
-        fn disable_delegation(&mut self) {}
-        fn localize(&mut self) {}
+        let direct = direct.to_bytes();
+        assert_eq!(direct, through_trait.to_bytes());
+        assert!(!direct.is_empty());
     }
 
     #[test]
-    fn dyn_any_downcast_recovers_concrete_type() {
-        let boxed: Box<dyn CachedReplicate> = Box::new(DummyImmutable);
-        let any: &dyn Any = boxed.as_ref().cached_as_any();
-        assert!(
-            any.is::<DummyImmutable>(),
-            "downcast must recover concrete type"
-        );
+    fn an_update_write_through_the_cached_surface_is_byte_identical_to_replicate() {
+        let ghost = a_ghost();
+        let mut diff_mask = DiffMask::new(ghost.diff_mask_size());
+        diff_mask.set_bit(1, true);
+
+        let mut direct = BitWriter::new();
+        Replicate::write_update(&ghost, &diff_mask, &mut direct, &mut FakeEntityConverter);
+
+        let cached: Box<dyn CachedReplicate> = Box::new(a_ghost());
+        let mut through_trait = BitWriter::new();
+        cached.cached_write_update(&diff_mask, &mut through_trait, &mut FakeEntityConverter);
+
+        assert_eq!(direct.to_bytes(), through_trait.to_bytes());
+    }
+
+    #[test]
+    fn an_update_write_carries_only_the_fields_the_diff_mask_names() {
+        let ghost = a_ghost();
+        let cached: Box<dyn CachedReplicate> = Box::new(a_ghost());
+
+        let write_with = |set: &[u8]| {
+            let mut mask = DiffMask::new(ghost.diff_mask_size());
+            for bit in set {
+                mask.set_bit(*bit, true);
+            }
+            let mut writer = BitWriter::new();
+            cached.cached_write_update(&mask, &mut writer, &mut FakeEntityConverter);
+            writer.to_bytes()
+        };
+
+        let nothing = write_with(&[]);
+        let pale_only = write_with(&[0]);
+        let cold_only = write_with(&[1]);
+        let both = write_with(&[0, 1]);
+
+        // Each named field adds its own payload, and the two fields hold
+        // different values, so naming one is not the same as naming the other.
+        assert!(pale_only.len() > nothing.len());
+        assert!(both.len() > pale_only.len());
+        assert_ne!(pale_only, cold_only);
+        assert_eq!(pale_only.len(), cold_only.len());
+    }
+
+    #[test]
+    fn the_component_kind_written_is_the_one_the_registry_holds() {
+        let kinds = kinds();
+        let cached: Box<dyn CachedReplicate> = Box::new(a_ghost());
+
+        let mut writer = BitWriter::new();
+        cached.cached_write(&kinds, &mut writer, &mut FakeEntityConverter);
+        let bytes = writer.to_bytes();
+
+        let mut expected = BitWriter::new();
+        ComponentKind::of::<Ghost>().ser(&kinds, &mut expected);
+        let prefix = expected.to_bytes();
+
+        assert_eq!(&bytes[..prefix.len()], &prefix[..]);
+    }
+
+    #[test]
+    fn the_any_surface_recovers_the_concrete_type() {
+        let cached: Box<dyn CachedReplicate> = Box::new(a_ghost());
+
+        let recovered = cached
+            .cached_as_any()
+            .downcast_ref::<Ghost>()
+            .expect("downcast must recover the concrete type");
+
+        assert_eq!(*recovered.pale, 7);
+        assert_eq!(*recovered.cold, 9);
+    }
+
+    #[test]
+    fn the_any_surface_refuses_a_type_that_is_not_there() {
+        let cached: Box<dyn CachedReplicate> = Box::new(a_ghost());
+
+        assert!(cached.cached_as_any().downcast_ref::<Wraith>().is_none());
     }
 }
