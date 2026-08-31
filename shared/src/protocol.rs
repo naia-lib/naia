@@ -81,6 +81,10 @@ impl Default for Protocol {
 
 impl Protocol {
     /// Returns a default `Protocol` ready for builder-style configuration.
+    ///
+    /// Mutation triage: replacing this body with `Default::default()` is an
+    /// equivalent mutant -- that is exactly what it does. Named for readability
+    /// at the call site, not for behavior.
     pub fn builder() -> Self {
         Self::default()
     }
