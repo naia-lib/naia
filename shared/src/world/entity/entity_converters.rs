@@ -807,4 +807,48 @@ mod entity_converter_tests {
             "reserving twice must not rename the entity mid-flight",
         );
     }
+
+    /// `EntityMapConverterMut` carries its own copy of the reserve logic
+    /// rather than delegating, so the gate has to be pinned on both.
+    #[test]
+    fn the_guard_owning_converter_reserves_under_the_same_rules() {
+        let kinds = ComponentKinds::new();
+        let gwm = TestGwm::new(&kinds);
+        gwm.deny_relation(&global(5));
+
+        let shared = Arc::new(RwLock::new(LocalEntityMap::new(HostType::Server)));
+        let mut generator = HostEntityGenerator::new(1);
+
+        {
+            let mut converter =
+                EntityMapConverterMut::new(&gwm, shared.write().unwrap(), &mut generator);
+            assert_eq!(
+                converter.get_or_reserve_entity(&global(5)),
+                Err(EntityDoesNotExistError),
+            );
+        }
+        assert!(
+            !shared.read().unwrap().contains_global_entity(&global(5)),
+            "a refused entity must not be left holding a reservation",
+        );
+
+        let reserved = {
+            let mut converter =
+                EntityMapConverterMut::new(&gwm, shared.write().unwrap(), &mut generator);
+            converter
+                .get_or_reserve_entity(&global(6))
+                .expect("an entity the user may see is reserved, not refused")
+        };
+        let OwnedLocalEntity::Host { id, .. } = reserved else {
+            panic!("a reservation must be a host address, got {reserved:?}");
+        };
+        assert_eq!(
+            shared
+                .read()
+                .unwrap()
+                .global_entity_from_host(&HostEntity::new(id)),
+            Some(&global(6)),
+            "the reservation must be recorded in the shared map",
+        );
+    }
 }
