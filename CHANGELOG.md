@@ -8,6 +8,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **Room-join spawn order is now hash-independent on both engines.** When a
+  user entered a room that already held entities, the server walked the room's
+  entity set in `HashMap`/`HashSet` iteration order, so two fresh servers in the
+  same process issued host entity ids (and therefore client-side spawn order)
+  in different orders. Both `UserEnteredRoom` arms now sort by `GlobalEntity`
+  before issuing spawns. Covered by contract `entity-scopes-14` on the Resident
+  and fused Pipelined engines plus a split-engine unit falsifier.
+
 ### Added
 
 - **`UserScopeMut::despawn_on_next_exit` -- a one-shot, per-`(user, entity)`

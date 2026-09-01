@@ -1150,3 +1150,140 @@ fn pipelined_room_churn_cannot_grow_the_removal_queue() {
         );
     }
 }
+
+/// Feature-free in-process socket for the split-engine falsifier: packets go
+/// into an unbounded `PacketChannel` nobody drains, auth is a no-op.
+struct SinkSocket;
+
+impl From<SinkSocket> for Box<dyn crate::transport::Socket> {
+    fn from(s: SinkSocket) -> Self {
+        Box::new(s)
+    }
+}
+
+impl crate::transport::Socket for SinkSocket {
+    fn listen(self: Box<Self>) -> crate::transport::ListenResult {
+        let (ps, pr) = crate::transport::PacketChannel::unbounded();
+        (Box::new(SinkAuth), Box::new(SinkAuth), ps, pr)
+    }
+}
+
+#[derive(Clone)]
+struct SinkAuth;
+
+impl crate::transport::AuthSender for SinkAuth {
+    fn accept(
+        &self,
+        _address: &SocketAddr,
+        _identity_token: &naia_shared::IdentityToken,
+    ) -> Result<(), crate::transport::SendError> {
+        Ok(())
+    }
+    fn reject(
+        &self,
+        _address: &SocketAddr,
+        _payload: Option<&[u8]>,
+    ) -> Result<(), crate::transport::SendError> {
+        Ok(())
+    }
+}
+
+impl crate::transport::AuthReceiver for SinkAuth {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, crate::transport::RecvError> {
+        Ok(None)
+    }
+}
+
+/// Split-engine twin of `[entity-scopes-14]`: a user joining a room that
+/// already holds several entities gets them spawned in the same order on
+/// every fresh `PipelinedWorldServer` in one process. Host entity ids are
+/// issued in spawn-command order, so they are the observable.
+fn split_room_join_spawn_order() -> Vec<u64> {
+    use naia_shared::{EntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverter};
+
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let mut server = crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    server.listen(SinkSocket);
+
+    let user_key = UserKey::from_u64(1);
+    let user_addr: SocketAddr = "127.0.0.1:9021".parse().unwrap();
+    server.receive_user(user_key, user_addr);
+    {
+        let slot = server.send_slot();
+        let mut guard = slot.lock();
+        let send = guard
+            .as_mut()
+            .expect("send handle is in its slot between ticks");
+        let gwm = send.state.shared.global_world_manager.read();
+        let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+            &send.state.shared.server_config.connection,
+            &send.state.shared.server_config.ping,
+            &user_addr,
+            &user_key,
+            &send.state.shared.channel_kinds,
+            &gwm,
+            send.state.shared.server_config.max_replicated_entities as usize,
+        );
+        drop(gwm);
+        send.state
+            .send_user_connections
+            .insert(user_addr, send_conn);
+    }
+
+    let room = server.create_room();
+    let entities: Vec<u64> = (100..108).collect();
+    let mut world = naia_shared::SnapshotWorld::<u64>::new();
+    for entity in &entities {
+        server.enable_entity_replication(entity);
+        server.room_add_entity(&room, entity);
+        world.mark_live(*entity);
+    }
+    // Settle the entity entries on their own tick so the join below is the
+    // only thing that puts them in the user's scope.
+    server.send(&world);
+    server.room_add_user(&room, &user_key);
+    server.send(&world);
+
+    let global_entities: Vec<_> = {
+        let map = server.coord().shared.global_entity_map.read();
+        entities
+            .iter()
+            .map(|e| map.entity_to_global_entity(e).expect("spawned above"))
+            .collect()
+    };
+    let slot = server.send_slot();
+    let guard = slot.lock();
+    let send = guard
+        .as_ref()
+        .expect("send handle is in its slot between ticks");
+    let send_conn = send
+        .state
+        .send_user_connections
+        .get(&user_addr)
+        .expect("send connection registered above");
+    let converter = send_conn.base.world_manager.entity_converter();
+    let mut by_host_id: Vec<(u32, u64)> = entities
+        .iter()
+        .zip(global_entities.iter())
+        .map(|(entity, global_entity)| {
+            let host = converter
+                .global_entity_to_host_entity(global_entity)
+                .expect("room join must spawn every room entity for the user");
+            (host.value(), *entity)
+        })
+        .collect();
+    by_host_id.sort();
+    by_host_id.into_iter().map(|(_, entity)| entity).collect()
+}
+
+#[test]
+fn pipelined_room_join_spawns_entities_in_the_same_order_on_every_fresh_server() {
+    let first = split_room_join_spawn_order();
+    let second = split_room_join_spawn_order();
+    assert_eq!(
+        first, second,
+        "entity-scopes-14 (split engine): room-join spawn order must not depend on hash state"
+    );
+}

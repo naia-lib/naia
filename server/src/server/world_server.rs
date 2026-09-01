@@ -11,14 +11,15 @@ use std::{
 use log::{info, warn};
 
 use naia_shared::{
-    AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats, DisconnectReason,
-    EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, EntityEvent,
-    EntityPriorityMut, EntityPriorityRef, FrozenGlobalDirty, GlobalDirtyBitset, GlobalEntity,
-    GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId, GlobalResponseId,
-    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter, Message,
-    MessageContainer, Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists,
-    ResourceRegistry, Response, ResponseReceiveKey, ResponseSendKey, SendPlan,
-    SharedGlobalWorldManager, Tick, WorldMutType, WorldRefType,
+    AuthorityError, BigMapKey, Channel, ChannelKind, ComponentKind, ConnectionStats,
+    DisconnectReason, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
+    EntityEvent, EntityPriorityMut, EntityPriorityRef, FrozenGlobalDirty, GlobalDirtyBitset,
+    GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
+    GlobalResponseId, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, Message, MessageContainer, Protocol, Replicate,
+    ReplicatedComponent, Request, ResourceAlreadyExists, ResourceRegistry, Response,
+    ResponseReceiveKey, ResponseSendKey, SendPlan, SharedGlobalWorldManager, Tick, WorldMutType,
+    WorldRefType,
 };
 
 use crate::{
@@ -4399,13 +4400,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         for change in changes {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
-                    let entity_list: Vec<GlobalEntity> = self
+                    let mut entity_list: Vec<GlobalEntity> = self
                         .sim_handle
                         .state
                         .room_store
                         .get(&room_key)
                         .map(|r| r.entities().copied().collect())
                         .unwrap_or_default();
+                    // Hash-independent spawn order; see the fused-engine arm in
+                    // send_state.rs for the rationale.
+                    entity_list.sort_by_key(BigMapKey::to_u64);
                     for global_entity in &entity_list {
                         self.apply_scope_for_user(world, &user_key, global_entity);
                     }

@@ -238,6 +238,7 @@ If the server receives (or internally attempts) a scope operation referencing an
 - **entity-scopes-11**: Prove same-tick flip-flops collapse to final state; no intermediate spawn/despawn.
 - **entity-scopes-12**: Prove re-entry after ≥1 tick out-of-scope produces fresh spawn snapshot lifetime.
 - **entity-scopes-13**: Prove disconnect implies OutOfScope for that user and replication ceases.
+- **entity-scopes-14**: Prove a user joining a room that already holds several entities spawns them in the same order on every fresh server in one process (room membership is walked in a hash-independent order, on both engines).
 
 ---
 

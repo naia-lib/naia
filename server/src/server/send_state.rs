@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 use log::warn;
 
 use naia_shared::{
-    BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
+    BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
     EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner,
     GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
     LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
@@ -1771,11 +1771,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         for change in drained {
             match change {
                 ScopeChange::UserEnteredRoom(user_key, room_key) => {
-                    let entity_list: Vec<(GlobalEntity, E)> = self
+                    let mut entity_list: Vec<(GlobalEntity, E)> = self
                         .room_entities_map
                         .get(&room_key)
                         .map(|m| m.iter().map(|(ge, we)| (*ge, *we)).collect())
                         .unwrap_or_default();
+                    // Hash-independent spawn order: the client allocates its
+                    // entities in receive order, so a hash-ordered walk here
+                    // made connect-time entity ids differ between fresh servers.
+                    entity_list.sort_by_key(|(ge, _)| BigMapKey::to_u64(ge));
                     for (global_entity, world_entity) in &entity_list {
                         self.apply_scope_for_user(
                             world,

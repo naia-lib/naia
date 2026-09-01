@@ -16,8 +16,8 @@ use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response,
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    EntityKey, ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent,
-    ServerDisconnectEvent, ToTicks,
+    ClientSpawnEntityEvent, EntityKey, ExpectCtx, Position, Scenario, ServerAuthEvent,
+    ServerConnectEvent, ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
@@ -1788,4 +1788,99 @@ fn resident_an_armed_override_fires_on_the_entity_room_route() {
 #[test]
 fn resident_an_armed_override_fires_on_the_user_room_route() {
     an_armed_override_fires_on_the_user_room_route(naia_server::ServerMode::Resident);
+}
+
+// ============================================================================
+// [entity-scopes-14] Room-join spawn order is hash-independent
+// ============================================================================
+
+/// Connects a client into an empty room, fills a second room with `N`
+/// entities, moves the client into it, and returns the order the client
+/// spawned them in.
+fn room_join_spawn_order(mode: naia_server::ServerMode) -> Vec<EntityKey> {
+    const N: usize = 8;
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let lobby = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let arena = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client = client_connect(
+        &mut scenario,
+        &lobby,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let spawned: Vec<EntityKey> = (0..N)
+        .map(|i| {
+            scenario.mutate(|ctx| {
+                ctx.server(|server| {
+                    server
+                        .spawn(|mut e| {
+                            e.insert_component(Position::new(i as f32, 0.0));
+                            e.enter_room(&arena);
+                        })
+                        .0
+                })
+            })
+        })
+        .collect();
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&arena).unwrap().add_user(&client);
+        });
+    });
+
+    let mut order: Vec<EntityKey> = Vec::new();
+    scenario.expect(|ctx| {
+        order.extend(ctx.client(client, |c| c.read_events::<ClientSpawnEntityEvent>()));
+        (order.len() >= N).then_some(())
+    });
+    assert_eq!(
+        order.len(),
+        N,
+        "entity-scopes-14: every room entity spawns exactly once"
+    );
+    let seen: std::collections::HashSet<EntityKey> = order.iter().copied().collect();
+    let expected: std::collections::HashSet<EntityKey> = spawned.iter().copied().collect();
+    assert_eq!(
+        seen, expected,
+        "entity-scopes-14: the spawned set is the room's entity set"
+    );
+    order
+}
+
+/// Two fresh servers in one process spawn a joined room's entities in the
+/// same order. Contract: [entity-scopes-14]
+///
+/// Every `HashMap`/`HashSet` instance draws its own `RandomState`, so walking
+/// the room's entity set in hash order gave each fresh server its own spawn
+/// order; the client allocates local entities in receive order, so downstream
+/// ids and pairings differed run to run.
+fn a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server(
+    mode: naia_server::ServerMode,
+) {
+    let first = room_join_spawn_order(mode);
+    let second = room_join_spawn_order(mode);
+    assert_eq!(
+        first, second,
+        "entity-scopes-14: room-join spawn order must not depend on hash state"
+    );
+}
+
+#[test]
+fn resident_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server() {
+    a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server(
+        naia_server::ServerMode::Resident,
+    );
+}
+
+#[test]
+fn pipelined_a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server() {
+    a_room_join_spawns_entities_in_the_same_order_on_every_fresh_server(
+        naia_server::ServerMode::Pipelined,
+    );
 }

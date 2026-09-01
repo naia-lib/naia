@@ -37,6 +37,15 @@ impl<'a> ClientExpectCtx<'a> {
         self.events.read::<V>().next()
     }
 
+    /// Read every pending event of one kind, in arrival order. Reading takes
+    /// the events, so a second read in the same tick returns nothing.
+    pub fn read_events<V: ClientEvent>(&mut self) -> Vec<V::Item>
+    where
+        V::Iter: Iterator<Item = V::Item>,
+    {
+        self.events.read::<V>().collect()
+    }
+
     pub fn has_entity(&self, entity: &EntityKey) -> bool {
         self.scenario
             .client_entity_ref(&self.client_key, entity)
