@@ -1563,11 +1563,229 @@ fn resident_an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
     );
 }
 
-// A note on the other exit route. `ScopeExit` is also consulted on the
-// room-membership drain (`drain_scope_change_queue`), and the override is wired
-// there for symmetry -- but that path cannot be covered behaviourally, because
-// `ScopeExit::Persist` is not honoured there in the first place: removing
-// either the entity or the user from the room despawns on the client no matter
-// what the entity's policy says. That is pre-existing and independent of this
-// override (with nothing armed the behaviour is bit-for-bit what it was), and
-// it is reported rather than fixed inside this request.
+// ---------------------------------------------------------------------------
+// [scope-exit-09]: the room-membership exit routes honour the same policy as
+// the explicit route. These are the falsifiers for the Loop 1 fix in
+// `InternalWorldServer::update_entity_scopes`; before it, both room routes
+// despawned a `Persist` entity on the Resident engine.
+// ---------------------------------------------------------------------------
+
+fn a_persist_entity_removed_from_its_room_is_kept_on_the_client(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    // Room membership only: no explicit include, so the room is the sole path.
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().remove_entity(&entity);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "scope-exit-09.t1: a Persist entity removed from its room stays on the client",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().add_entity(&entity);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "scope-exit-09.t1: re-adding the entity resumes without a respawn blip",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+fn a_persist_user_removed_from_its_room_keeps_the_entity(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().remove_user(&client_u);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "scope-exit-09.t2: a Persist entity stays when its user leaves the room",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().add_user(&client_u);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "scope-exit-09.t2: the user re-entering the room resumes without a respawn blip",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+fn an_armed_override_fires_on_the_entity_room_route(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity);
+            server.room_mut(&room_key).unwrap().remove_entity(&entity);
+        });
+    });
+    scenario.spec_expect(
+        "scope-exit-09.t3: an armed override despawns on the entity room route",
+        move |ctx| (!ctx.client(client_u, |c| c.has_entity(&entity))).then_some(()),
+    );
+
+    // The override was consumed: the next room exit follows Persist again.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().add_entity(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, true);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().remove_entity(&entity);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "scope-exit-09.t3: the override is one-shot on the entity room route",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+fn an_armed_override_fires_on_the_user_room_route(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity);
+            server.room_mut(&room_key).unwrap().remove_user(&client_u);
+        });
+    });
+    scenario.spec_expect(
+        "scope-exit-09.t3: an armed override despawns on the user room route",
+        move |ctx| (!ctx.client(client_u, |c| c.has_entity(&entity))).then_some(()),
+    );
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().add_user(&client_u);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, true);
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.room_mut(&room_key).unwrap().remove_user(&client_u);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "scope-exit-09.t3: the override is one-shot on the user room route",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+#[test]
+fn resident_a_persist_entity_removed_from_its_room_is_kept_on_the_client() {
+    a_persist_entity_removed_from_its_room_is_kept_on_the_client(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn pipelined_a_persist_entity_removed_from_its_room_is_kept_on_the_client() {
+    a_persist_entity_removed_from_its_room_is_kept_on_the_client(
+        naia_server::ServerMode::Pipelined,
+    );
+}
+
+#[test]
+fn resident_a_persist_user_removed_from_its_room_keeps_the_entity() {
+    a_persist_user_removed_from_its_room_keeps_the_entity(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn pipelined_a_persist_user_removed_from_its_room_keeps_the_entity() {
+    a_persist_user_removed_from_its_room_keeps_the_entity(naia_server::ServerMode::Pipelined);
+}
+
+// The override arms through the scope ledger, which the harness's Pipelined
+// driving never drains (see the L6 suite above), so these two are Resident-only.
+#[test]
+fn resident_an_armed_override_fires_on_the_entity_room_route() {
+    an_armed_override_fires_on_the_entity_room_route(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_an_armed_override_fires_on_the_user_room_route() {
+    an_armed_override_fires_on_the_user_room_route(naia_server::ServerMode::Resident);
+}

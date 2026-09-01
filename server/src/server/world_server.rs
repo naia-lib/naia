@@ -4318,12 +4318,44 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .unwrap_or(GlobalEntityIndex::INVALID)
                 };
 
-                // remove entity from user connection
-                send_conn
-                    .base
-                    .world_manager
-                    .despawn_entity(&removed_global_entity);
-                send_conn.clear_entity_visible(entity_idx);
+                // Same exit policy as every other route ([scope-exit-09]):
+                // the entity's own `ScopeExit`, unless a one-shot
+                // per-(user, entity) override is armed, which fires here
+                // exactly as it does on the explicit and UserLeftRoom routes.
+                let scope_exit = self
+                    .shared
+                    .global_world_manager
+                    .read()
+                    .entity_replication_config(&removed_global_entity)
+                    .map(|c| c.scope_exit)
+                    .unwrap_or(ScopeExit::Despawn);
+                let scope_exit = if self
+                    .send
+                    .state
+                    .entity_scope_map
+                    .take_despawn_on_next_exit(&removed_user, &removed_global_entity)
+                {
+                    ScopeExit::Despawn
+                } else {
+                    scope_exit
+                };
+                match scope_exit {
+                    ScopeExit::Persist => {
+                        send_conn
+                            .base
+                            .world_manager
+                            .pause_entity(&removed_global_entity);
+                        send_conn.clear_entity_visible(entity_idx);
+                    }
+                    ScopeExit::Despawn => {
+                        // remove entity from user connection
+                        send_conn
+                            .base
+                            .world_manager
+                            .despawn_entity(&removed_global_entity);
+                        send_conn.clear_entity_visible(entity_idx);
+                    }
+                }
                 #[cfg(feature = "e2e_debug")]
                 {
                     SERVER_SCOPE_DIFF_ENQUEUED.fetch_add(1, Ordering::Relaxed);

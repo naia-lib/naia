@@ -108,11 +108,34 @@ in contracts 06–14 may regress due to this phase.
 
 ---
 
-## 7) State Transition Table: ScopeExit::Persist
+## 7) Persist — Room-Membership Exit Route
+
+Scope can be lost on more than one route: an explicit `UserScopeMut::exclude`,
+the user leaving a room they shared with the entity, or the entity leaving a
+room it shared with the user. The policy is a property of the `(user, entity)`
+pair, not of the route that resolved `OutOfScope(U,E)`.
+
+### [scope-exit-09] — Room-membership exits honour the same policy as explicit exits
+
+**Obligations:**
+- **t1**: When `ScopeExit::Persist` is configured and `OutOfScope(U,E)` is resolved because
+  `E` was removed from the only room it shared with `U`, the server MUST NOT emit a Despawn
+  for `E` to `U`; `Paused(U,E)` holds and `client.has_entity(E)` stays `true`. Re-adding `E`
+  to the room MUST resume `(U,E)` without a respawn.
+- **t2**: The same holds when `OutOfScope(U,E)` is resolved because `U` was removed from the
+  only room it shared with `E`.
+- **t3**: A one-shot `UserScopeMut::despawn_on_next_exit` override armed for `(U,E)` MUST
+  fire on either room-membership route exactly as it does on the explicit route: `E` is
+  despawned for `U` and the override is consumed.
+- **t4**: Both engine shapes (`Resident`, `Pipelined`) MUST resolve t1 and t2 identically.
+
+---
+
+## 8) State Transition Table: ScopeExit::Persist
 
 | Current State         | Trigger                              | Next State            | Client Effect                         |
 |-----------------------|--------------------------------------|-----------------------|---------------------------------------|
-| `InScope(U,E)`        | scope exit, `ScopeExit::Persist`     | `Paused(U,E)`         | no Despawn; replication frozen        |
+| `InScope(U,E)`        | scope exit (any route), `ScopeExit::Persist` | `Paused(U,E)` | no Despawn; replication frozen        |
 | `InScope(U,E)`        | scope exit, `ScopeExit::Despawn`     | `OutOfScope(U,E)`     | Despawn emitted (existing behavior)   |
 | `Paused(U,E)`         | scope re-entry                       | `InScope(U,E)`        | accumulated deltas forwarded          |
 | `Paused(U,E)`         | global server despawn of `E`         | `(removed)`           | Despawn emitted to U's client         |
