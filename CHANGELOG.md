@@ -59,6 +59,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the mirror of the host mapping; `AuthChannel::new_remote` supplies it, and
   `reset` now restores whichever initial state the channel was built with.
 
+### Fixed
+
+- **`ScopeExit::Persist` is now honoured on the room-membership exit routes.**
+  Removing a `Persist` entity from the only room it shared with a user, or
+  removing that user from the room, despawned the entity on the client on the
+  `Resident` engine, where only the explicit `exclude` route paused it. Both
+  room routes now resolve the same policy as the explicit route, including a
+  one-shot `despawn_on_next_exit` override. Contract `[scope-exit-09]`.
+- **The split engine no longer accumulates room-removal bookkeeping.** Every
+  room removal queued one entry per member for a drain only the fused engine
+  runs; `PipelinedWorldServer::send` now drops those entries each tick.
+
 ### Added
 
 - **A rejected connection can now be told why** (naia-lib/naia#133).
