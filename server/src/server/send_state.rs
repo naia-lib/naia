@@ -1839,6 +1839,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                             .entity_replication_config(global_entity)
                             .map(|c| c.scope_exit)
                             .unwrap_or(ScopeExit::Despawn);
+                        // One-shot per-(user, entity) override: firing
+                        // consumes it, so the next exit follows the entity's
+                        // own policy again.
+                        let scope_exit = if self
+                            .entity_scope_map
+                            .take_despawn_on_next_exit(&user_key, global_entity)
+                        {
+                            ScopeExit::Despawn
+                        } else {
+                            scope_exit
+                        };
                         match scope_exit {
                             ScopeExit::Persist => {
                                 send_conn.base.world_manager.pause_entity(global_entity);
@@ -2099,6 +2110,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             if currently_visible {
                 return;
             }
+            // Re-entry closes this pair's exit→re-entry cycle: disarm any
+            // one-shot despawn override so a later legitimate scope churn
+            // cannot replay a stale revocation (TrueSight N6).
+            self.entity_scope_map
+                .clear_despawn_on_next_exit(user_key, global_entity);
             if currently_paused {
                 send_conn.base.world_manager.resume_entity(global_entity);
                 send_conn.set_entity_visible(entity_idx);
@@ -2173,6 +2189,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 .entity_replication_config(global_entity)
                 .map(|c| c.scope_exit)
                 .unwrap_or(ScopeExit::Despawn);
+            // One-shot per-(user, entity) override: firing consumes it, so
+            // the next exit follows the entity's own policy again.
+            let scope_exit = if self
+                .entity_scope_map
+                .take_despawn_on_next_exit(user_key, global_entity)
+            {
+                ScopeExit::Despawn
+            } else {
+                scope_exit
+            };
             match scope_exit {
                 ScopeExit::Persist => {
                     send_conn.base.world_manager.pause_entity(global_entity);

@@ -541,6 +541,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendHandle<E> {
         );
     }
 
+    /// Arm the one-shot per-`(user, entity)` scope-exit override, keyed by
+    /// `GlobalEntity`.
+    ///
+    /// Send-side raw writer, mirroring [`user_scope_set_global_entity`]: it
+    /// writes `entity_scope_map` directly and queues no `ScopeChange` (arming
+    /// is not itself a scope transition — the override is read by whatever
+    /// scope evaluation next takes this pair out of scope).
+    ///
+    /// See [`crate::UserScopeMut::despawn_on_next_exit`] for the semantics and
+    /// the one-cycle lifetime rule.
+    ///
+    /// [`user_scope_set_global_entity`]: Self::user_scope_set_global_entity
+    pub fn user_scope_despawn_on_next_exit_global(
+        &mut self,
+        user_key: &UserKey,
+        global_entity: naia_shared::GlobalEntity,
+    ) {
+        self.state
+            .entity_scope_map
+            .set_despawn_on_next_exit(user_key, &global_entity);
+    }
+
     /// Set a per-user explicit scope bit for `world_entity`.
     ///
     /// Convenience wrapper over [`user_scope_set_global_entity`]: looks up

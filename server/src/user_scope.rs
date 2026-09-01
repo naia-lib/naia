@@ -130,6 +130,53 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
         self
     }
 
+    /// Arms a one-shot override: the **next** time this entity leaves this
+    /// user's scope, it is despawned on that client even if the entity's
+    /// [`ReplicationConfig`](crate::ReplicationConfig) says
+    /// [`ScopeExit::Persist`](crate::ScopeExit::Persist).
+    ///
+    /// Server-side only — the despawn travels over the existing despawn wire
+    /// operation, so there is no protocol change and no client-side opt-in.
+    ///
+    /// The override affects **only this (user, entity) pair**: other users of
+    /// the same entity, and this user's view of other entities, keep the
+    /// entity's default policy.
+    ///
+    /// # Lifetime
+    ///
+    /// Exactly one exit → re-entry cycle. The override is cleared when it
+    /// fires, and also cleared automatically the moment the entity is next
+    /// included back into this user's scope — so a revocation armed now can
+    /// never replay against a later legitimate re-seed or unrelated scope
+    /// churn. Arming is idempotent: a policy that re-arms every tick stacks
+    /// nothing.
+    ///
+    /// Arming does not itself remove the entity from scope. Pair it with
+    /// [`exclude`](Self::exclude), or leave it armed for whatever scope
+    /// policy next evaluates the pair.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # fn example(server: &mut naia_server::Server<u32>, user_key: &naia_server::UserKey, entity: &u32) {
+    /// // Revoke a persisted entity for one user without touching anyone else.
+    /// server.user_scope_mut(user_key)
+    ///     .despawn_on_next_exit(entity)
+    ///     .exclude(entity);
+    /// # }
+    /// ```
+    pub fn despawn_on_next_exit(&mut self, world_entity: &E) -> &mut Self {
+        match &mut self.server {
+            UserScopeMutTarget::Resident(ws) => {
+                ws.user_scope_despawn_on_next_exit(&self.key, world_entity)
+            }
+            UserScopeMutTarget::Pipelined(ps) => {
+                ps.user_scope_despawn_on_next_exit(&self.key, world_entity)
+            }
+        }
+        self
+    }
+
     /// Removes all entities from this user's explicit scope.
     ///
     /// Equivalent to calling `exclude` on every entity currently included.

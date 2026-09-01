@@ -969,3 +969,105 @@ fn pipelined_priority_publish_global_and_per_user() {
         );
     }
 }
+
+/// TrueSight L6 (§15.5) — the pipelined half of the one-shot scope-exit
+/// override.
+///
+/// The behavioural suite runs against the Resident engine
+/// (`test/harness/contract_tests/integration_only/06_entity_scopes.rs`); both
+/// engines consult the same `EntityScopeMap` at the same exit sites, so what
+/// the pipelined shape has to prove is its own wiring: the send-side writer
+/// reaches the ledger, and the `&mut` API stages a D7 op rather than dropping
+/// the arming on the floor.
+#[test]
+fn pipelined_arming_reaches_the_send_side_scope_ledger() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let (sim_handle, _recv, mut send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+
+    let world_entity: u64 = 42;
+    let global_entity = sim_handle
+        .shared
+        .global_entity_map
+        .write()
+        .spawn(world_entity, None);
+    let user_key = UserKey::from_u64(2);
+    let other_user = UserKey::from_u64(3);
+
+    // Send-side writer: arms exactly the pair it names.
+    send.user_scope_despawn_on_next_exit_global(&user_key, global_entity);
+    assert!(
+        send.state
+            .entity_scope_map
+            .has_despawn_on_next_exit(&user_key, &global_entity),
+        "the send-side writer should arm the named pair"
+    );
+    assert!(
+        !send
+            .state
+            .entity_scope_map
+            .has_despawn_on_next_exit(&other_user, &global_entity),
+        "arming one user must not arm another"
+    );
+
+    // Arming is idempotent, and firing consumes it exactly once.
+    send.user_scope_despawn_on_next_exit_global(&user_key, global_entity);
+    assert!(
+        send.state
+            .entity_scope_map
+            .take_despawn_on_next_exit(&user_key, &global_entity),
+        "the first exit after arming should fire"
+    );
+    assert!(
+        !send
+            .state
+            .entity_scope_map
+            .take_despawn_on_next_exit(&user_key, &global_entity),
+        "a second exit must not fire again"
+    );
+
+    // Re-entry disarms without firing.
+    send.user_scope_despawn_on_next_exit_global(&user_key, global_entity);
+    send.state
+        .entity_scope_map
+        .clear_despawn_on_next_exit(&user_key, &global_entity);
+    assert!(
+        !send
+            .state
+            .entity_scope_map
+            .take_despawn_on_next_exit(&user_key, &global_entity),
+        "re-entry should have disarmed the override"
+    );
+}
+
+/// TrueSight L6 (§15.5) — the `&mut` API stages a D7 scope-ledger op.
+#[test]
+fn pipelined_despawn_on_next_exit_stages_a_scope_ledger_op() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+
+    let world_entity: u64 = 42;
+    let user_key = UserKey::from_u64(2);
+
+    assert!(server.coord().state.pending_scope_ledger_ops.is_empty());
+    server.user_scope_despawn_on_next_exit(&user_key, &world_entity);
+
+    let staged = &server.coord().state.pending_scope_ledger_ops;
+    assert_eq!(staged.len(), 1, "arming should stage exactly one ledger op");
+    match &staged[0] {
+        crate::server::coord_state::PendingScopeLedgerOp::DespawnOnNextExit {
+            user_key: staged_user,
+            world_entity: staged_entity,
+        } => {
+            assert_eq!(staged_user, &user_key);
+            assert_eq!(staged_entity, &world_entity);
+        }
+        _ => panic!("arming staged the wrong scope-ledger op"),
+    }
+}

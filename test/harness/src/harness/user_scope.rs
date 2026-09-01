@@ -68,6 +68,14 @@ impl<'a> UserScopeMut<'a> {
         self
     }
 
+    /// Arms the one-shot per-`(user, entity)` scope-exit override
+    pub fn despawn_on_next_exit(&mut self, entity_key: &EntityKey) -> &mut Self {
+        if let Some(entity) = self.registry.server_entity(entity_key) {
+            self.scope.despawn_on_next_exit(&entity);
+        }
+        self
+    }
+
     /// Removes all Entities from the User's scope
     pub fn clear(&mut self) -> &mut Self {
         self.scope.clear();

@@ -659,7 +659,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .write()
             .insert_static_entity_record(&global_entity, EntityOwner::Server);
         if idx.is_valid() {
-            self.coord().shared.set_idx_to_world(idx, Some(*world_entity));
+            self.coord()
+                .shared
+                .set_idx_to_world(idx, Some(*world_entity));
         }
     }
 
@@ -1693,6 +1695,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             });
     }
 
+    /// Arm the one-shot scope-exit override for `(user_key, world_entity)`.
+    /// Send-resident; staged on coord and drained in D7 alongside the other
+    /// scope-ledger ops, so it lands before the tick's scope evaluation.
+    pub fn user_scope_despawn_on_next_exit(&mut self, user_key: &UserKey, world_entity: &E) {
+        self.coord_mut().state.pending_scope_ledger_ops.push(
+            PendingScopeLedgerOp::DespawnOnNextExit {
+                user_key: *user_key,
+                world_entity: *world_entity,
+            },
+        );
+    }
+
     /// Remove all entities from `user_key`'s explicit scope. Send-resident;
     /// staged on coord and drained in D7 before send-prep.
     pub fn user_scope_remove_user(&mut self, user_key: &UserKey) {
@@ -2228,7 +2242,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 .insert_entity_record(&global_entity, EntityOwner::Server)
         };
         if entity_idx.is_valid() {
-            coord.shared.set_idx_to_world(entity_idx, Some(*world_entity));
+            coord
+                .shared
+                .set_idx_to_world(entity_idx, Some(*world_entity));
         }
         (global_entity, entity_idx)
     }
@@ -2780,6 +2796,22 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 }
                 PendingScopeLedgerOp::RemoveUser { user_key } => {
                     send.state.entity_scope_map.remove_user(&user_key);
+                }
+                PendingScopeLedgerOp::DespawnOnNextExit {
+                    user_key,
+                    world_entity,
+                } => {
+                    let global_entity_opt = coord
+                        .shared
+                        .global_entity_map
+                        .read()
+                        .entity_to_global_entity(&world_entity)
+                        .ok();
+                    if let Some(global_entity) = global_entity_opt {
+                        send.state
+                            .entity_scope_map
+                            .set_despawn_on_next_exit(&user_key, &global_entity);
+                    }
                 }
             }
         }

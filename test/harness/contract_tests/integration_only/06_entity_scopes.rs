@@ -16,8 +16,8 @@ use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response,
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientDisconnectEvent, ClientEntityAuthDeniedEvent,
     ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent, ClientKey, ClientRejectEvent,
-    ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent, ServerDisconnectEvent,
-    ToTicks,
+    EntityKey, ExpectCtx, Position, Scenario, ServerAuthEvent, ServerConnectEvent,
+    ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
@@ -1100,4 +1100,465 @@ fn entering_scope_mid_lifetime_yields_consistent_snapshot() {
             None
         }
     });
+}
+
+// ============================================================================
+// Per-(entity, user) scope-exit override
+// ============================================================================
+// TrueSight L6 / spec §15.5 + §12 gate 14 (cyberlith_gdd bb1bfda). The override
+// lets a server revoke a `ScopeExit::Persist` entity for ONE user, using the
+// existing despawn wire operation — no protocol change. Its lifetime is exactly
+// one exit → re-entry cycle.
+// ============================================================================
+
+/// Spawns a `Persist` entity in `room`, included in every listed user's scope.
+fn spawn_persisting_entity(
+    scenario: &mut Scenario,
+    room_key: &RoomKey,
+    users: &[ClientKey],
+) -> EntityKey {
+    let users = users.to_vec();
+    scenario.mutate(move |ctx| {
+        ctx.server(|server| {
+            let entity = server
+                .spawn(|mut e| {
+                    e.insert_component(Position::new(1.0, 2.0));
+                    e.configure_replication(ReplicationConfig::public().persist_on_scope_exit());
+                    e.enter_room(room_key);
+                })
+                .0;
+            for user in &users {
+                server.user_scope_mut(user).unwrap().include(&entity);
+            }
+            entity
+        })
+    })
+}
+
+fn assert_sees(scenario: &mut Scenario, client: ClientKey, entity: EntityKey, expected: bool) {
+    scenario.expect(move |ctx| {
+        (ctx.client(client, |c| c.has_entity(&entity)) == expected).then_some(())
+    });
+}
+
+/// Ticks `count` times, asserting `pred` holds on every one of them.
+///
+/// A one-shot `expect` cannot prove an absence: it returns the instant the
+/// predicate is true, so "no despawn ever arrived" needs the condition
+/// re-checked tick after tick.
+fn holds_for(
+    scenario: &mut Scenario,
+    count: usize,
+    label: &str,
+    pred: impl Fn(&mut ExpectCtx<'_>) -> bool + Copy,
+) {
+    for _ in 0..count {
+        scenario.mutate(|_| {});
+        scenario.spec_expect(label, move |ctx| pred(ctx).then_some(()));
+    }
+}
+
+/// A persisted entity is despawned for one user when the override is armed
+/// Contract: [entity-scopes-01] + TrueSight §15.5
+///
+/// Given a `ScopeExit::Persist` entity visible to U; when the override is armed
+/// and the entity is excluded; then U's client despawns it rather than keeping
+/// it paused in the networked entity pool.
+fn armed_override_despawns_a_persisted_entity_on_scope_exit(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity)
+                .exclude(&entity);
+        });
+    });
+
+    scenario.spec_expect(
+        "truesight-15.5.t1: an armed override despawns a Persist entity for that user",
+        move |ctx| (!ctx.client(client_u, |c| c.has_entity(&entity))).then_some(()),
+    );
+}
+
+/// Without the override, a persisted entity survives scope exit
+/// Contract: [scope-exit-02] + TrueSight §15.5
+///
+/// Given the same entity and the same exclusion but no override; then the
+/// default `Persist` policy still holds — the ordinary path is untouched.
+fn an_unarmed_user_keeps_the_default_persist_policy(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().exclude(&entity);
+        });
+    });
+
+    // Give the despawn every chance to arrive before concluding it did not.
+    holds_for(
+        &mut scenario,
+        10,
+        "truesight-15.5.t2: an unarmed pair keeps the entity's own Persist policy",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+/// The override touches only the pair it was armed for
+/// Contract: TrueSight §15.5
+///
+/// Given two users both seeing the same persisted entity; when only U is armed;
+/// then U despawns and V stays paused-and-present.
+fn the_override_is_scoped_to_one_user_not_the_entity(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+    let client_v = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client V",
+        Auth::new("client_v", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u, client_v]);
+    assert_sees(&mut scenario, client_u, entity, true);
+    assert_sees(&mut scenario, client_v, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity)
+                .exclude(&entity);
+            server.user_scope_mut(&client_v).unwrap().exclude(&entity);
+        });
+    });
+
+    holds_for(
+        &mut scenario,
+        10,
+        "truesight-15.5.t3: arming U leaves V on the entity's own policy",
+        move |ctx| {
+            let u_gone = !ctx.client(client_u, |c| c.has_entity(&entity));
+            let v_kept = ctx.client(client_v, |c| c.has_entity(&entity));
+            u_gone && v_kept
+        },
+    );
+}
+
+/// Re-entry disarms the override; the following exit is Persist again
+/// Contract: TrueSight §15.5 / N6
+///
+/// Given an override that has fired; when the entity re-enters scope and later
+/// exits again; then that second exit follows the entity's own `Persist` policy
+/// — a stale revocation cannot replay.
+fn re_entry_clears_the_override_so_the_next_exit_persists_again(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // Arm, exit: despawned.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity)
+                .exclude(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, false);
+
+    // Re-enter: re-seeded from scratch, and the override is disarmed.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().include(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // Exit again with nothing armed: Persist holds.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().exclude(&entity);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "truesight-15.5.t4: re-entry disarms the override (N6 one-cycle lifetime)",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+/// Repeated scope churn after a fired override never revokes again
+/// Contract: TrueSight §15.5 / N6
+fn repeated_churn_after_a_fired_override_never_despawns_again(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity)
+                .exclude(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, false);
+
+    // Five unrelated exit/re-entry cycles. Every exit after the first must
+    // leave the entity resident on the client.
+    for _ in 0..5 {
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.user_scope_mut(&client_u).unwrap().include(&entity);
+            });
+        });
+        assert_sees(&mut scenario, client_u, entity, true);
+
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.user_scope_mut(&client_u).unwrap().exclude(&entity);
+            });
+        });
+        holds_for(
+            &mut scenario,
+            5,
+            "truesight-15.5.t5: churn after the override fired never re-revokes",
+            move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+        );
+    }
+}
+
+/// A→B→A entitlement round trip re-seeds cleanly with no second despawn
+/// Contract: §12 gate 14
+///
+/// Models the team switch: entity revoked on the A→B switch, re-seeded on the
+/// B→A switch, and the re-seed must not thrash (no spurious despawn afterwards).
+fn the_a_to_b_to_a_round_trip_re_seeds_without_thrash(mode: naia_server::ServerMode) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    // Entity entitled to team A only.
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // A → B: not in B's entitlement set, so revoke.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity)
+                .exclude(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, false);
+
+    // B → A: back in the entitlement set, re-seed.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().include(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // The re-seed must be stable: no spurious despawn trailing behind it, and
+    // the entity's component state must have come back with it.
+    holds_for(
+        &mut scenario,
+        20,
+        "gate-14: A→B→A round trip re-seeds with no spurious despawn or thrash",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+/// An override armed out-of-scope is disarmed by the re-entry, not carried over
+/// Contract: TrueSight §15.5 / N6
+///
+/// The stale-revocation path. An arm can outlive the exit it was meant for —
+/// the entity may already be out of the user's scope when the policy runs, or
+/// may have left by a route that does not consult `ScopeExit` at all. Re-entry
+/// is what closes the cycle: the *next* exit after an inclusion must follow the
+/// entity's own policy, never the stranded override.
+fn an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
+    mode: naia_server::ServerMode,
+) {
+    let mut scenario = Scenario::new(mode);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+    let client_u = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client U",
+        Auth::new("client_u", "password"),
+        ClientConfig::default(),
+        test_protocol.clone(),
+    );
+
+    let entity = spawn_persisting_entity(&mut scenario, &room_key, &[client_u]);
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // Ordinary exit first: Persist holds, the entity stays on the client.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().exclude(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // Now arm — but the pair is already out of scope, so nothing consumes it.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server
+                .user_scope_mut(&client_u)
+                .unwrap()
+                .despawn_on_next_exit(&entity);
+        });
+    });
+
+    // Re-entry closes the cycle and must disarm the stranded override.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().include(&entity);
+        });
+    });
+    assert_sees(&mut scenario, client_u, entity, true);
+
+    // The next exit is a legitimate one, and must not replay the revocation.
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.user_scope_mut(&client_u).unwrap().exclude(&entity);
+        });
+    });
+    holds_for(
+        &mut scenario,
+        10,
+        "truesight-15.5.t6: a stranded override is disarmed by re-entry, not replayed",
+        move |ctx| ctx.client(client_u, |c| c.has_entity(&entity)),
+    );
+}
+
+// Driven against the Resident engine. The Pipelined engine shares the same
+// `EntityScopeMap` and the same exit sites; it is covered at the handle level in
+// `server/src/pipeline_actors/tests.rs`, because explicit user-scope mutations
+// do not currently take effect at all under the harness's Pipelined driving
+// (a plain `exclude` is equally inert there — pre-existing, unrelated to this
+// override).
+
+#[test]
+fn resident_armed_override_despawns_a_persisted_entity_on_scope_exit() {
+    armed_override_despawns_a_persisted_entity_on_scope_exit(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_an_unarmed_user_keeps_the_default_persist_policy() {
+    an_unarmed_user_keeps_the_default_persist_policy(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_the_override_is_scoped_to_one_user_not_the_entity() {
+    the_override_is_scoped_to_one_user_not_the_entity(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_re_entry_clears_the_override_so_the_next_exit_persists_again() {
+    re_entry_clears_the_override_so_the_next_exit_persists_again(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_repeated_churn_after_a_fired_override_never_despawns_again() {
+    repeated_churn_after_a_fired_override_never_despawns_again(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_the_a_to_b_to_a_round_trip_re_seeds_without_thrash() {
+    the_a_to_b_to_a_round_trip_re_seeds_without_thrash(naia_server::ServerMode::Resident);
+}
+
+#[test]
+fn resident_an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion() {
+    an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
+        naia_server::ServerMode::Resident,
+    );
 }

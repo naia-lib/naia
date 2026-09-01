@@ -93,6 +93,11 @@ pub(crate) enum PendingScopeLedgerOp<E> {
     RemoveUser {
         user_key: UserKey,
     },
+    /// Arm the one-shot per-`(user, entity)` scope-exit override.
+    DespawnOnNextExit {
+        user_key: UserKey,
+        world_entity: E,
+    },
 }
 
 /// Phase C / D2 — concrete resource mutations staged on coord.

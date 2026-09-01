@@ -8,6 +8,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## [Unreleased]
 
+### Added
+
+- **`UserScopeMut::despawn_on_next_exit` -- a one-shot, per-`(user, entity)`
+  scope-exit override.** An entity configured `ScopeExit::Persist` stays in a
+  client's entity pool when it leaves that client's scope, which is what you
+  want for ordinary scope churn and exactly what you do not want when the
+  server needs to *revoke* an entity from one particular user. Arming the
+  override makes the next exit of that pair despawn on that client instead,
+  leaving every other user of the same entity, and every other entity of the
+  same user, on the entity's own policy.
+
+  The despawn travels over the existing despawn operation: no new message, no
+  new component, no encoding change, and therefore no change to the protocol
+  id. The override lives entirely in the server's scope ledger.
+
+  Its lifetime is exactly one exit -> re-entry cycle. It is consumed when it
+  fires, and disarmed automatically the moment the entity is next included back
+  into that user's scope -- so a revocation armed for one cycle can never
+  replay against a later legitimate re-seed. Arming is idempotent: a policy
+  that re-arms every tick stacks nothing.
+
 ### Changed
 
 - **`ResponseSendKey` and `ResponseReceiveKey` can now be compared and used as
