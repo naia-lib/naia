@@ -1071,3 +1071,82 @@ fn pipelined_despawn_on_next_exit_stages_a_scope_ledger_op() {
         _ => panic!("arming staged the wrong scope-ledger op"),
     }
 }
+
+/// Split-engine room-removal queue lifecycle. `Room::remove_entity` and
+/// `Room::unsubscribe_user` queue one `(user, entity)` per member for the
+/// fused Loop 1 drain, which the split engine never runs. Prove the queue
+/// does fill under coord-side churn (the control), and that one `send`
+/// tick empties it.
+#[test]
+fn pipelined_room_churn_cannot_grow_the_removal_queue() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let mut server = crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+
+    let entity: u64 = 42;
+    {
+        let coord = server.coord_mut();
+        let mut entity_map = coord.shared.global_entity_map.write();
+        entity_map.spawn(entity, None);
+    }
+    let user_key = UserKey::from_u64(1);
+    let user_addr: SocketAddr = "127.0.0.1:9013".parse().unwrap();
+    server
+        .coord_mut()
+        .state
+        .user_store
+        .insert(user_key, WorldUser::new(user_addr));
+
+    let rk = server.coord_mut().create_room();
+    server.coord_mut().room_add_user(&rk, &user_key);
+
+    // Control: entity churn queues one entry per removal ...
+    for _ in 0..50 {
+        server.coord_mut().room_add_entity(&rk, &entity);
+        server.coord_mut().room_remove_entity(&rk, &entity);
+    }
+    // ... and user churn queues one entry per entity in the room per leave.
+    server.coord_mut().room_add_entity(&rk, &entity);
+    for _ in 0..50 {
+        server.coord_mut().room_remove_user(&rk, &user_key);
+        server.coord_mut().room_add_user(&rk, &user_key);
+    }
+    assert_eq!(
+        server
+            .coord()
+            .state
+            .room_store
+            .entity_removal_queue_len(&rk),
+        100,
+        "control: coord-side room churn must queue Loop 1 removals"
+    );
+
+    // One split-engine tick drops them all.
+    let world = naia_shared::SnapshotWorld::<u64>::new();
+    server.send(&world);
+    assert_eq!(
+        server
+            .coord()
+            .state
+            .room_store
+            .entity_removal_queue_len(&rk),
+        0,
+        "drain_and_send must discard the removal queue"
+    );
+
+    // Steady state: churn between ticks never accumulates across ticks.
+    for _ in 0..3 {
+        server.coord_mut().room_remove_entity(&rk, &entity);
+        server.coord_mut().room_add_entity(&rk, &entity);
+        server.send(&world);
+        assert_eq!(
+            server
+                .coord()
+                .state
+                .room_store
+                .entity_removal_queue_len(&rk),
+            0
+        );
+    }
+}

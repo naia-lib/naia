@@ -103,6 +103,21 @@ impl Room {
         self.entity_removal_queue.pop_front()
     }
 
+    /// Number of `(user, entity)` removals queued for the fused Loop 1 drain.
+    #[cfg(test)]
+    pub(crate) fn entity_removal_queue_len(&self) -> usize {
+        self.entity_removal_queue.len()
+    }
+
+    /// Drop every queued removal without acting on it. Returns how many were
+    /// dropped. Used by the split engine, whose send half resolves room exits
+    /// through the scope-change queue instead and never pops this one.
+    pub(crate) fn clear_entity_removal_queue(&mut self) -> usize {
+        let n = self.entity_removal_queue.len();
+        self.entity_removal_queue.clear();
+        n
+    }
+
     pub(crate) fn entities_count(&self) -> usize {
         self.entities.len()
     }

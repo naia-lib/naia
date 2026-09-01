@@ -2114,6 +2114,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         Self::drain_pending_outbound_message_ops(coord, send);
         // D7 scope-ledger writes (ScopeToggled enqueue) — before send-prep.
         Self::drain_pending_scope_ledger_ops(coord, send);
+        // D7b room-removal queue lifecycle. `Room::remove_entity` /
+        // `Room::unsubscribe_user` feed a per-room queue that only the fused
+        // engine's Loop 1 pops; here the same exits resolve in D8 from the
+        // `UserLeftRoom` / `EntityEnteredRoom` changes queued alongside, so
+        // the entries are dead weight and are dropped every tick.
+        coord.discard_entity_removal_queues();
 
         // D8 send-prep — STRICT sub-order (`server_access.rs:1691-1706`):
         //    ack-drain (consume the cross-half ACK channel: trim acked

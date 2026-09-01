@@ -96,6 +96,28 @@ impl RoomStore {
             .unwrap_or(false)
     }
 
+    /// Queued Loop 1 removals for `room_key` (0 if the room does not exist).
+    #[cfg(test)]
+    pub(crate) fn entity_removal_queue_len(&self, room_key: &RoomKey) -> usize {
+        self.rooms
+            .get(room_key)
+            .map(|r| r.entity_removal_queue_len())
+            .unwrap_or(0)
+    }
+
+    /// Drop every room's queued Loop 1 removals. Returns the total dropped.
+    ///
+    /// Only the fused `InternalWorldServer::update_entity_scopes` pops these
+    /// queues; the split engine resolves the same exits from the
+    /// `UserLeftRoom` / `EntityEnteredRoom` scope changes pushed alongside, so
+    /// on that engine the queues would otherwise grow with every room churn.
+    pub(crate) fn discard_entity_removal_queues(&mut self) -> usize {
+        self.rooms
+            .iter_mut()
+            .map(|(_, r)| r.clear_entity_removal_queue())
+            .sum()
+    }
+
     pub(crate) fn remove_global_entity_from_all_rooms(&mut self, entity: &GlobalEntity) {
         for (_, room) in self.rooms.iter_mut() {
             if room.has_entity(entity) {

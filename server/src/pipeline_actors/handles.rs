@@ -324,6 +324,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> CoordHandle<E> {
         existed
     }
 
+    /// Drop the per-room Loop 1 removal queues (see
+    /// `RoomStore::discard_entity_removal_queues`). The split engine never
+    /// pops them: its send half resolves room exits from the scope-change
+    /// queue. Called once per `drain_and_send` so room churn cannot grow
+    /// them without bound. Returns the number dropped.
+    pub(crate) fn discard_entity_removal_queues(&mut self) -> usize {
+        self.state.room_store.discard_entity_removal_queues()
+    }
+
     /// Add a user to a room. Push-only; Send drains on next tick.
     pub fn room_add_user(&mut self, room_key: &RoomKey, user_key: &UserKey) {
         let (legacy_change, room_change) = {
