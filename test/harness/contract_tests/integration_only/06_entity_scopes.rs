@@ -1562,3 +1562,12 @@ fn resident_an_override_stranded_across_a_re_entry_is_disarmed_by_the_inclusion(
         naia_server::ServerMode::Resident,
     );
 }
+
+// A note on the other exit route. `ScopeExit` is also consulted on the
+// room-membership drain (`drain_scope_change_queue`), and the override is wired
+// there for symmetry -- but that path cannot be covered behaviourally, because
+// `ScopeExit::Persist` is not honoured there in the first place: removing
+// either the entity or the user from the room despawns on the client no matter
+// what the entity's policy says. That is pre-existing and independent of this
+// override (with nothing armed the behaviour is bit-for-bit what it was), and
+// it is reported rather than fixed inside this request.
