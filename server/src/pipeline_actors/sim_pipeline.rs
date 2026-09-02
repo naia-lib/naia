@@ -2830,12 +2830,22 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         world_entity: &E,
         is_contained: bool,
     ) {
-        let global_entity = coord
+        // A deferred `Set` stores the raw world entity and drains a window after
+        // it was queued, so the entity may have terminally despawned in between
+        // (its mapping removed by `despawn_by_global`/`despawn_by_world`). There
+        // is then nothing to include or exclude — the client-side removal already
+        // travels on the entity-despawn op — so drop the op without touching any
+        // user's scope ledger. This matches the immediate
+        // `SendHandle::user_scope_set_entity` and the deferred
+        // `DespawnOnNextExit` arm, which both already tolerate a stale entity.
+        let Ok(global_entity) = coord
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+        else {
+            return;
+        };
 
         let is_authority_holder = coord
             .shared
@@ -2925,6 +2935,18 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     pub(crate) fn publish_priority_for_test(&mut self) {
         let (mut coord, recv, mut send) = self.take_handles();
         Self::publish_priority(&mut coord, &mut send);
+        self.restore_handles(coord, recv, send);
+    }
+
+    /// Test-only driver for [`Self::drain_pending_scope_ledger_ops`] (D7): runs
+    /// the REAL drain against the parked handles (no world needed), so a unit
+    /// test can stage `PendingScopeLedgerOp`s on the coord and inspect the
+    /// resulting `send` ledger via [`Self::send_slot`]. Workers must be parked /
+    /// not spawned.
+    #[cfg(test)]
+    pub(crate) fn drain_pending_scope_ledger_ops_for_test(&mut self) {
+        let (mut coord, recv, mut send) = self.take_handles();
+        Self::drain_pending_scope_ledger_ops(&mut coord, &mut send);
         self.restore_handles(coord, recv, send);
     }
 }

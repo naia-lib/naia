@@ -1072,6 +1072,177 @@ fn pipelined_despawn_on_next_exit_stages_a_scope_ledger_op() {
     }
 }
 
+/// Read every tracked `(user, global entity)` scope entry out of the parked
+/// send handle, in a fixed order, so two snapshots compare entry-for-entry.
+fn scope_ledger_snapshot(
+    server: &crate::PipelinedWorldServer<u64>,
+    pairs: &[(UserKey, naia_shared::GlobalEntity)],
+) -> Vec<Option<bool>> {
+    let slot = server.send_slot();
+    let lock = slot.lock();
+    let send = lock.as_ref().expect("send handle must be parked");
+    pairs
+        .iter()
+        .map(|(user_key, global_entity)| {
+            send.state
+                .entity_scope_map
+                .get(user_key, global_entity)
+                .copied()
+        })
+        .collect()
+}
+
+/// Deferred-scope stale-entity contract.
+///
+/// A deferred `PendingScopeLedgerOp::Set` stores the RAW world entity and is
+/// drained a window after it was queued, so the entity may have terminally
+/// despawned in between — its `GlobalEntityMap` association removed by
+/// `despawn_by_world` / `despawn_by_global`. There is then nothing to include
+/// or exclude (the client-side removal already travels on the entity-despawn
+/// op), so resolving it must be a no-op that touches no user's scope ledger —
+/// exactly as the immediate `SendHandle::user_scope_set_entity` and the
+/// deferred `DespawnOnNextExit` arm already behave. Before this fix the `Set`
+/// arm `.unwrap()`ed the lookup and aborted the process.
+///
+/// Mutant guard: restoring the `.unwrap()` panics in the stale phase below, so
+/// the smallest mutant dies. The live-mapping control keeps that non-vacuous by
+/// proving both `is_contained` values still mutate the intended pair.
+#[test]
+fn deferred_scope_set_tolerates_a_stale_entity_without_touching_any_ledger() {
+    use crate::server::coord_state::PendingScopeLedgerOp;
+    use naia_shared::EntityAndGlobalEntityConverter;
+
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = crate::PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+
+    let live_entity: u64 = 7;
+    let stale_entity: u64 = 42;
+    let bystander_entity: u64 = 9;
+
+    let victim = UserKey::from_u64(2);
+    let other = UserKey::from_u64(3);
+
+    let (live_ge, stale_ge, bystander_ge) = {
+        let mut map = server.coord().shared.global_entity_map.write();
+        (
+            map.spawn(live_entity, None),
+            map.spawn(stale_entity, None),
+            map.spawn(bystander_entity, None),
+        )
+    };
+
+    // Every pair the assertions below track, in a fixed order.
+    let tracked = [
+        (victim, live_ge),
+        (victim, stale_ge),
+        (victim, bystander_ge),
+        (other, live_ge),
+        (other, stale_ge),
+        (other, bystander_ge),
+    ];
+
+    // ── Live-mapping control: both `is_contained` values mutate the named pair
+    //    and nothing else. This is what makes the stale-phase assertions
+    //    non-vacuous — it proves the drain really does write when it can.
+    for is_contained in [true, false] {
+        server
+            .coord_mut()
+            .state
+            .pending_scope_ledger_ops
+            .push(PendingScopeLedgerOp::Set {
+                user_key: victim,
+                world_entity: live_entity,
+                is_contained,
+            });
+        server.drain_pending_scope_ledger_ops_for_test();
+        let snap = scope_ledger_snapshot(&server, &tracked);
+        assert_eq!(
+            snap[0],
+            Some(is_contained),
+            "a live-mapping Set({is_contained}) must write the named pair",
+        );
+        assert_eq!(
+            &snap[1..],
+            &[None, None, None, None, None][..],
+            "a live-mapping Set must not touch any other user or entity",
+        );
+    }
+
+    // ── The mapping exists right up until the entity terminally despawns.
+    assert!(
+        server
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(&stale_entity)
+            .is_ok(),
+        "precondition: the entity is mapped before it despawns",
+    );
+
+    let before = scope_ledger_snapshot(&server, &tracked);
+    let scope_changes_before = server.coord().shared.scope_change_queue.lock().len();
+
+    // ── Stage both `is_contained` values, THEN terminally despawn the entity —
+    //    the exact queue-then-retire ordering the projectile race produces.
+    for is_contained in [false, true] {
+        server
+            .coord_mut()
+            .state
+            .pending_scope_ledger_ops
+            .push(PendingScopeLedgerOp::Set {
+                user_key: victim,
+                world_entity: stale_entity,
+                is_contained,
+            });
+    }
+    {
+        server
+            .coord()
+            .shared
+            .global_entity_map
+            .write()
+            .despawn_by_world(&stale_entity);
+    }
+    assert!(
+        server
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(&stale_entity)
+            .is_err(),
+        "precondition: the mapping is absent once the entity has despawned",
+    );
+
+    // Must not panic.
+    server.drain_pending_scope_ledger_ops_for_test();
+
+    // ── Every tracked entry is identical to before the stale drain, including
+    //    the victim's own entry for the stale entity (which stays absent).
+    let after = scope_ledger_snapshot(&server, &tracked);
+    assert_eq!(
+        after, before,
+        "a stale Set must leave every user's scope ledger entry-identical",
+    );
+    assert_eq!(
+        after[1], None,
+        "a stale Set must not create an entry for the despawned entity",
+    );
+    assert_eq!(
+        server.coord().shared.scope_change_queue.lock().len(),
+        scope_changes_before,
+        "a stale Set must not enqueue a ScopeToggled change",
+    );
+    assert!(
+        server.coord().state.pending_scope_ledger_ops.is_empty(),
+        "the drain consumes the staged ops regardless of staleness",
+    );
+}
+
 /// Split-engine room-removal queue lifecycle. `Room::remove_entity` and
 /// `Room::unsubscribe_user` queue one `(user, entity)` per member for the
 /// fused Loop 1 drain, which the split engine never runs. Prove the queue
