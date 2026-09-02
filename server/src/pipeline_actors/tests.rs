@@ -1104,9 +1104,16 @@ fn scope_ledger_snapshot(
 /// deferred `DespawnOnNextExit` arm already behave. Before this fix the `Set`
 /// arm `.unwrap()`ed the lookup and aborted the process.
 ///
+/// Three controls keep the no-delta assertions from holding vacuously:
+/// a live-mapping control proving both `is_contained` values still mutate the
+/// intended pair; a seeded `other`-user sentinel, so "no other-user delta" is
+/// asserted against a present entry rather than an absent one; and a valid live
+/// `Set` queued BEHIND the stale ops, so skipping a stale op is distinguished
+/// from abandoning the rest of the batch (the op vector is `mem::take`n before
+/// the loop, so a queue-empty assertion alone cannot tell those apart).
+///
 /// Mutant guard: restoring the `.unwrap()` panics in the stale phase below, so
-/// the smallest mutant dies. The live-mapping control keeps that non-vacuous by
-/// proving both `is_contained` values still mutate the intended pair.
+/// the smallest mutant dies.
 #[test]
 fn deferred_scope_set_tolerates_a_stale_entity_without_touching_any_ledger() {
     use crate::server::coord_state::PendingScopeLedgerOp;
@@ -1171,6 +1178,26 @@ fn deferred_scope_set_tolerates_a_stale_entity_without_touching_any_ledger() {
         );
     }
 
+    // ── Seed a real `other`-user sentinel through the same drain. Without it
+    //    every `other` pair is absent, so "no other-user delta" would hold
+    //    vacuously — an implementation that wiped the other user's entries
+    //    outright would still pass.
+    server
+        .coord_mut()
+        .state
+        .pending_scope_ledger_ops
+        .push(PendingScopeLedgerOp::Set {
+            user_key: other,
+            world_entity: bystander_entity,
+            is_contained: true,
+        });
+    server.drain_pending_scope_ledger_ops_for_test();
+    assert_eq!(
+        scope_ledger_snapshot(&server, &tracked)[5],
+        Some(true),
+        "precondition: the other-user sentinel is present before the stale drain",
+    );
+
     // ── The mapping exists right up until the entity terminally despawns.
     assert!(
         server
@@ -1184,10 +1211,20 @@ fn deferred_scope_set_tolerates_a_stale_entity_without_touching_any_ledger() {
     );
 
     let before = scope_ledger_snapshot(&server, &tracked);
+    assert_eq!(
+        before[0],
+        Some(false),
+        "precondition: the live control left the victim pair at false",
+    );
     let scope_changes_before = server.coord().shared.scope_change_queue.lock().len();
 
-    // ── Stage both `is_contained` values, THEN terminally despawn the entity —
+    // ── Stage both `is_contained` values for the doomed entity, then a VALID
+    //    live `Set` behind them, then terminally despawn the doomed entity —
     //    the exact queue-then-retire ordering the projectile race produces.
+    //    The trailing live op is the continue-drain control: skipping a stale
+    //    op must skip only that op, not abandon the rest of the batch. A
+    //    queue-empty assertion alone cannot see the difference, because the
+    //    op vector is already `mem::take`n before the loop runs.
     for is_contained in [false, true] {
         server
             .coord_mut()
@@ -1199,6 +1236,15 @@ fn deferred_scope_set_tolerates_a_stale_entity_without_touching_any_ledger() {
                 is_contained,
             });
     }
+    server
+        .coord_mut()
+        .state
+        .pending_scope_ledger_ops
+        .push(PendingScopeLedgerOp::Set {
+            user_key: victim,
+            world_entity: live_entity,
+            is_contained: true,
+        });
     {
         server
             .coord()
@@ -1221,22 +1267,56 @@ fn deferred_scope_set_tolerates_a_stale_entity_without_touching_any_ledger() {
     // Must not panic.
     server.drain_pending_scope_ledger_ops_for_test();
 
-    // ── Every tracked entry is identical to before the stale drain, including
-    //    the victim's own entry for the stale entity (which stays absent).
+    // ── Exactly one tracked entry moved: the trailing live op's own pair. The
+    //    stale entity gains no entry, and the other user's sentinel survives
+    //    byte-for-byte.
+    let mut expected = before.clone();
+    expected[0] = Some(true);
     let after = scope_ledger_snapshot(&server, &tracked);
     assert_eq!(
-        after, before,
-        "a stale Set must leave every user's scope ledger entry-identical",
+        after, expected,
+        "the stale ops must move nothing; only the trailing live op may write",
+    );
+    assert_eq!(
+        after[0],
+        Some(true),
+        "a live Set queued behind a stale one must still land (continue-drain)",
     );
     assert_eq!(
         after[1], None,
         "a stale Set must not create an entry for the despawned entity",
     );
     assert_eq!(
-        server.coord().shared.scope_change_queue.lock().len(),
-        scope_changes_before,
-        "a stale Set must not enqueue a ScopeToggled change",
+        after[5],
+        Some(true),
+        "the other-user sentinel must survive the stale drain exactly",
     );
+
+    // ── The queue grew by exactly one entry, and it is the trailing live op's.
+    //    So neither stale op enqueued a `ScopeToggled`.
+    {
+        let queue = server.coord().shared.scope_change_queue.lock();
+        assert_eq!(
+            queue.len(),
+            scope_changes_before + 1,
+            "only the trailing live op may enqueue a ScopeToggled",
+        );
+        match queue.back() {
+            Some(crate::server::scope_change::ScopeChange::ScopeToggled(
+                queued_user,
+                queued_entity,
+                queued_contained,
+            )) => {
+                assert_eq!(queued_user, &victim);
+                assert_eq!(queued_entity, &live_ge);
+                assert!(queued_contained, "the queued toggle is the live Set(true)");
+            }
+            // `ScopeChange` is not `Debug` and deriving it would be a
+            // production change, so name the expectation instead of the value.
+            _ => panic!("the trailing scope change is not the expected ScopeToggled"),
+        }
+    }
+
     assert!(
         server.coord().state.pending_scope_ledger_ops.is_empty(),
         "the drain consumes the staged ops regardless of staleness",
