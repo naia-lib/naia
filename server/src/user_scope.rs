@@ -152,8 +152,13 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserScopeMut<'s, E> {
     /// nothing.
     ///
     /// Arming does not itself remove the entity from scope. Pair it with
-    /// [`exclude`](Self::exclude), or leave it armed for whatever scope
-    /// policy next evaluates the pair.
+    /// [`exclude`](Self::exclude): the override is consumed by the next exit
+    /// or cleared by the next include, whichever comes first, so parking an
+    /// arm for a later scope decision is safe only where no include can
+    /// intervene. Note that the intervening include need not be the caller's
+    /// own — a third party adding this user, or the entity, to another shared
+    /// room re-evaluates the pair and will disarm it if that resolves
+    /// in-scope.
     ///
     /// # Example
     ///

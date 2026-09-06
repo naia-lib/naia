@@ -2,9 +2,9 @@
   "header": {
     "npap_version": 1,
     "hash_contract_version": "namako-v1-json+blake3-256",
-    "feature_fingerprint_hash": "071347a4028c2e9085c83ed50e3eed5911b6c262e69930b5607b9b9f2b5523c7",
+    "feature_fingerprint_hash": "ef7071ba53445e21ae911454044e354d4d1ad6150c331b67c731dd8f1d3ed244",
     "step_registry_hash": "5671e0fa7dab0cec7268d1dd138576b556df824c1fe2fef7e2375b99caf71d6d",
-    "resolved_plan_hash": "8cfc3ddc8c0b6996b8b18a20bfdd1b130555f4539b22b5241b56d7b92660661b"
+    "resolved_plan_hash": "bffbfcf7a30e2ee3585fa9791b6f184e2a181a337d1bd7d41245356aa6b34ef4"
   },
   "scenarios": [
     {
@@ -18903,7 +18903,7 @@
     {
       "scenario_key": "visibility:Rule(08):Scenario(04)",
       "feature_path": "features/04_visibility.feature",
-      "scenario_name": "scope-exit-09 — Include on an already-visible entity disarms despawn-on-next-exit",
+      "scenario_name": "truesight-15.5.t7 — Include on an already-visible entity disarms despawn-on-next-exit",
       "steps": [
         {
           "effective_kind": "Given",

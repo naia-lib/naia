@@ -277,7 +277,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # [scope-exit-03.t1]: no updates forwarded while Paused
   # [scope-exit-04.t1]: accumulated deltas delivered on re-entry
   # [scope-exit-04.t2]: no-mutation re-entry — entity present, no new spawn
-  # [scope-exit-09.t1]: include on an already-visible pair disarms despawn-on-next-exit
+  # [truesight-15.5.t7]: include on an already-visible pair disarms despawn-on-next-exit
   # --------------------------------------------------------------------------
   @Rule(08)
   Rule: Persist keeps entity on client when scope is lost
@@ -319,7 +319,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       Then the client still has the entity
 
     @Scenario(04)
-    Scenario: scope-exit-09 — Include on an already-visible entity disarms despawn-on-next-exit
+    Scenario: truesight-15.5.t7 — Include on an already-visible entity disarms despawn-on-next-exit
       Given a server is running
       And a client connects
       And a server-owned entity exists with ScopeExit::Persist configured
