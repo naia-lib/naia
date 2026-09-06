@@ -277,6 +277,7 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
   # [scope-exit-03.t1]: no updates forwarded while Paused
   # [scope-exit-04.t1]: accumulated deltas delivered on re-entry
   # [scope-exit-04.t2]: no-mutation re-entry — entity present, no new spawn
+  # [scope-exit-09.t1]: include on an already-visible pair disarms despawn-on-next-exit
   # --------------------------------------------------------------------------
   @Rule(08)
   Rule: Persist keeps entity on client when scope is lost
@@ -315,6 +316,19 @@ Feature: Entity Scopes, Scope-Exit Policy, Scope Propagation, Update Candidate S
       When the server excludes the entity for the client
       And the server advances 5 ticks
       When the server includes the entity for the client
+      Then the client still has the entity
+
+    @Scenario(04)
+    Scenario: scope-exit-09 — Include on an already-visible entity disarms despawn-on-next-exit
+      Given a server is running
+      And a client connects
+      And a server-owned entity exists with ScopeExit::Persist configured
+      And the client and entity share a room
+      And the entity is in-scope for the client
+      When the server arms despawn-on-next-exit for the entity
+      And the server includes the entity for the client
+      And the server excludes the entity for the client
+      And the scope change settles over 60 ticks
       Then the client still has the entity
 
   # --------------------------------------------------------------------------

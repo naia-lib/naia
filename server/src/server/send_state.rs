@@ -2111,14 +2111,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             None => is_resource || in_common_room,
         };
         if should_be_in_scope {
+            // Any include closes this pair's exit→re-entry cycle, whether or not
+            // it is a transition into visibility: disarm the one-shot despawn
+            // override so a later legitimate scope churn cannot replay a stale
+            // revocation (TrueSight N6). This must run above the already-visible
+            // early return, otherwise a same-batch revoke-then-include leaves the
+            // pair resident with the tombstone still armed.
+            self.entity_scope_map
+                .clear_despawn_on_next_exit(user_key, global_entity);
             if currently_visible {
                 return;
             }
-            // Re-entry closes this pair's exit→re-entry cycle: disarm any
-            // one-shot despawn override so a later legitimate scope churn
-            // cannot replay a stale revocation (TrueSight N6).
-            self.entity_scope_map
-                .clear_despawn_on_next_exit(user_key, global_entity);
             if currently_paused {
                 send_conn.base.world_manager.resume_entity(global_entity);
                 send_conn.set_entity_visible(entity_idx);

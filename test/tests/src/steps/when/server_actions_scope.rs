@@ -207,6 +207,48 @@ fn when_server_disables_delegation_for_entity(ctx: &mut TestWorldMut) {
     });
 }
 
+/// When the scope change settles over {n} ticks.
+///
+/// Unlike `the server advances {int} ticks`, which only calls `mutate` and so
+/// ticks the network **without draining events**, this drives the same
+/// tick-and-drain loop the Then-steps use. A scope exit needs several drained
+/// ticks before the client applies the resulting despawn, so a retention
+/// assertion placed immediately after an exclude would otherwise observe the
+/// pre-drain world and pass vacuously.
+#[when("the scope change settles over {int} ticks")]
+fn when_scope_change_settles_over_ticks(ctx: &mut TestWorldMut, n: u32) {
+    use naia_test_harness::ToTicks;
+    let scenario = ctx.scenario_mut();
+    let mut elapsed: u32 = 0;
+    scenario
+        .until(((n as usize) + 1).ticks())
+        .expect_msg("scope change settle", |_ectx| {
+            elapsed += 1;
+            (elapsed >= n).then_some(())
+        });
+}
+
+/// When the server arms the one-shot despawn-on-next-exit override for the entity.
+///
+/// Arming does not itself change scope membership; it only makes the pair's next
+/// scope exit despawn rather than honor the entity's configured `ScopeExit`.
+#[when("the server arms despawn-on-next-exit for the entity")]
+fn when_server_arms_despawn_on_next_exit_for_entity(ctx: &mut TestWorldMut) {
+    let scenario = ctx.scenario_mut();
+    let client_key = scenario.last_client();
+    let entity_key: EntityKey = scenario
+        .bdd_get(LAST_ENTITY_KEY)
+        .expect("No entity has been created");
+    scenario.mutate(|mctx| {
+        mctx.server(|server| {
+            if let Some(mut scope) = server.user_scope_mut(&client_key) {
+                scope.despawn_on_next_exit(&entity_key);
+            }
+        });
+    });
+    scenario.mutate(|_| {});
+}
+
 /// When the server includes the entity for the client.
 #[when("the server includes the entity for the client")]
 fn when_server_includes_entity_for_client(ctx: &mut TestWorldMut) {

@@ -4672,17 +4672,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         #[cfg(feature = "f3_diag")]
         eprintln!("[F3-DIAG naia/apply_scope_for_user] DECIDE user={:?} ge={:?} should_be_in_scope={} currently_visible={} currently_paused={} in_common_room={} explicit={:?} is_resource={}", user_key, global_entity, should_be_in_scope, currently_visible, currently_paused, in_common_room, explicit, is_resource);
         if should_be_in_scope {
-            if currently_visible {
-                // Entity already active — no change needed.
-                return;
-            }
-            // Re-entry closes this pair's exit→re-entry cycle: disarm any
-            // one-shot despawn override so a later legitimate scope churn
-            // cannot replay a stale revocation (TrueSight N6).
+            // Any include closes this pair's exit→re-entry cycle, whether or not
+            // it is a transition into visibility: disarm the one-shot despawn
+            // override so a later legitimate scope churn cannot replay a stale
+            // revocation (TrueSight N6). This must run above the already-visible
+            // early return, otherwise a same-batch revoke-then-include leaves the
+            // pair resident with the tombstone still armed.
             self.send
                 .state
                 .entity_scope_map
                 .clear_despawn_on_next_exit(user_key, global_entity);
+            if currently_visible {
+                // Entity already active — no change needed.
+                return;
+            }
             if currently_paused {
                 // Re-entering scope on a paused (ScopeExit::Persist) entity.
                 send_conn.base.world_manager.resume_entity(global_entity);
