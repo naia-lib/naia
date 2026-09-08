@@ -25,7 +25,11 @@ pub struct FindAddrFuncInner(pub Box<dyn FnMut(SocketAddr)>);
 pub struct DataChannel {
     server_session_url: String,
     auth_bytes_opt: Option<Vec<u8>>,
-    auth_headers_opt: Option<Vec<(String, String)>>,
+    /// Every header this request will carry, already stamped with naia's
+    /// protocol-fingerprint header by
+    /// [`stamp_protocol_id_header`](naia_socket_shared::stamp_protocol_id_header).
+    /// Not an `Option`: there is no session request that omits the fingerprint.
+    auth_headers: Vec<(String, String)>,
     message_channel: MessageChannel,
     addr_cell: AddrCell,
     id_cell: IdentityReceiver,
@@ -37,14 +41,14 @@ impl DataChannel {
         config: &SocketConfig,
         server_session_url: &str,
         auth_bytes_opt: Option<Vec<u8>>,
-        auth_headers_opt: Option<Vec<(String, String)>>,
+        auth_headers: Vec<(String, String)>,
     ) -> Self {
         let server_url = parse_server_url(server_session_url);
 
         Self {
             server_session_url: format!("{}{}", server_url, config.rtc_endpoint_path.clone()),
             auth_bytes_opt,
-            auth_headers_opt,
+            auth_headers,
             message_channel: MessageChannel::new().expect("can't create message channel"),
             addr_cell: AddrCell::new(),
             id_cell: IdentityReceiver::new(),
@@ -116,7 +120,7 @@ impl DataChannel {
                 let id_sender_2 = self.id_cell.clone();
                 let server_url_msg = self.server_session_url.clone();
                 let auth_bytes_opt_2 = self.auth_bytes_opt.clone();
-                let auth_headers_opt_2 = self.auth_headers_opt.clone();
+                let auth_headers_2 = self.auth_headers.clone();
                 let peer_offer_func: Box<dyn FnMut(JsValue)> = Box::new(move |e: JsValue| {
                     let session_description = e.into();
                     let peer_3 = peer_2.clone();
@@ -125,7 +129,7 @@ impl DataChannel {
                     let id_sender_3 = id_sender_2.clone();
                     let server_url_msg_2 = server_url_msg.clone();
                     let auth_bytes_opt_3 = auth_bytes_opt_2.clone();
-                    let auth_headers_opt_3 = auth_headers_opt_2.clone();
+                    let auth_headers_3 = auth_headers_2.clone();
                     let peer_desc_func: Box<dyn FnMut(JsValue)> = Box::new(move |_: JsValue| {
                         let request =
                             XmlHttpRequest::new().expect("can't create new XmlHttpRequest");
@@ -141,12 +145,12 @@ impl DataChannel {
                                 .set_request_header("Authorization", &base64_encoded)
                                 .expect("Failed to set request header");
                         }
-                        if let Some(auth_headers) = &auth_headers_opt_3 {
-                            for (key, value) in auth_headers {
-                                request
-                                    .set_request_header(key, value)
-                                    .expect("Failed to set request header");
-                            }
+                        // Consumer headers first, then naia's fingerprint header,
+                        // which `stamp_protocol_id_header` already placed last.
+                        for (key, value) in &auth_headers_3 {
+                            request
+                                .set_request_header(key, value)
+                                .expect("Failed to set request header");
                         }
 
                         let request_2 = request.clone();

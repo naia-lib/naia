@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::LinkConditionerConfig;
+use naia_shared::{LinkConditionerConfig, ProtocolId};
 
 use crate::transport::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
@@ -36,10 +36,11 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>) -> ListenResult {
+    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
         let Socket { inner, config } = *self;
         let local = inner.expect("server socket already taken");
-        let (auth_sender, auth_receiver, sender, receiver) = local.listen_with_auth();
+        let (auth_sender, auth_receiver, sender, receiver) =
+            local.listen_with_auth(expected_protocol_id);
 
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalServerTransportReceiver(receiver);

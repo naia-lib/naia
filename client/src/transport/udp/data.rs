@@ -5,7 +5,7 @@ use std::{
     sync::Arc,
 };
 
-use naia_shared::LinkConditionerConfig;
+use naia_shared::{LinkConditionerConfig, ProtocolId};
 
 use crate::transport::{
     udp::{
@@ -65,6 +65,7 @@ impl Socket {
 
     fn connect_inner(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
     ) -> (
@@ -74,7 +75,7 @@ impl Socket {
     ) {
         self.auth_io
             .lock()
-            .connect(auth_bytes_opt, auth_headers_opt);
+            .connect(protocol_id, auth_bytes_opt, auth_headers_opt);
         let id_receiver = AuthReceiver::new(self.auth_io.clone());
 
         let packet_sender = Box::new(PacketSender::new(
@@ -108,38 +109,42 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 impl TransportSocket for Socket {
     fn connect(
         self: Box<Self>,
+        protocol_id: ProtocolId,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
     ) {
-        self.connect_inner(None, None)
+        self.connect_inner(protocol_id, None, None)
     }
 
     fn connect_with_auth(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
     ) {
-        self.connect_inner(Some(auth_bytes), None)
+        self.connect_inner(protocol_id, Some(auth_bytes), None)
     }
 
     fn connect_with_auth_headers(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn IdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
     ) {
-        self.connect_inner(None, Some(auth_headers))
+        self.connect_inner(protocol_id, None, Some(auth_headers))
     }
 
     fn connect_with_auth_and_headers(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
     ) -> (
@@ -147,7 +152,7 @@ impl TransportSocket for Socket {
         Box<dyn TransportSender>,
         Box<dyn PacketReceiver>,
     ) {
-        self.connect_inner(Some(auth_bytes), Some(auth_headers))
+        self.connect_inner(protocol_id, Some(auth_bytes), Some(auth_headers))
     }
 }
 

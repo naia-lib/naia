@@ -17,7 +17,7 @@ use smol::{
 };
 use webrtc_unreliable::SessionEndpoint;
 
-use naia_socket_shared::SocketConfig;
+use naia_socket_shared::{SocketConfig, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN};
 
 use crate::{executor, server_addrs::ServerAddrs, AuthResponse, NaiaServerSocketError};
 
@@ -31,6 +31,17 @@ use crate::{executor, server_addrs::ServerAddrs, AuthResponse, NaiaServerSocketE
 const MAX_REQUEST_LINE_BYTES: usize = 8 * 1024;
 const MAX_HEADER_BYTES: usize = 16 * 1024;
 const MAX_BODY_BYTES: usize = 64 * 1024;
+
+/// Value of the CORS `Access-Control-Allow-Headers` response header.
+///
+/// A browser will not send the POST at all unless the preflight response names
+/// every custom header the request carries, so the protocol-fingerprint header
+/// has to appear here or the wasm backends cannot connect. It is a literal
+/// because `HeaderValue::from_static` requires one; a test in this module
+/// asserts it still contains [`PROTOCOL_ID_HEADER`], so renaming the header
+/// without updating this string fails the build's tests rather than breaking
+/// browsers at runtime.
+const CORS_ALLOW_HEADERS: &str = "Authorization, Content-Length, X-Naia-Protocol-Id";
 
 type ClientAuthSender =
     smol::channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
@@ -62,6 +73,7 @@ pub fn start_session_server(
     session_endpoint: SessionEndpoint,
     from_client_auth_sender: Option<ClientAuthSender>,
     to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
+    expected_protocol_id: String,
 ) {
     executor::spawn(async move {
         listen(
@@ -70,6 +82,7 @@ pub fn start_session_server(
             session_endpoint.clone(),
             from_client_auth_sender,
             to_session_all_auth_receiver,
+            expected_protocol_id,
         )
         .await;
     })
@@ -83,6 +96,7 @@ async fn listen(
     session_endpoint: SessionEndpoint,
     from_client_auth_sender: Option<ClientAuthSender>,
     to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
+    expected_protocol_id: String,
 ) {
     let rtc_url_paths = RtcUrlPaths {
         post: format!("POST /{}", config.rtc_endpoint_path),
@@ -138,6 +152,7 @@ async fn listen(
 
         let from_client_auth_sender = from_client_auth_sender.clone();
         let rtc_url_paths = rtc_url_paths.clone();
+        let expected_protocol_id = expected_protocol_id.clone();
         // Spawn a background task serving this connection.
         executor::spawn(async move {
             serve(
@@ -146,6 +161,7 @@ async fn listen(
                 from_client_auth_sender,
                 to_session_single_auth_receiver,
                 rtc_url_paths,
+                expected_protocol_id,
             )
             .await;
         })
@@ -242,6 +258,14 @@ async fn serve_auth_mux_out(
 struct SessionRequest {
     is_options: bool,
     auth_string: Option<String>,
+    /// The peer's protocol fingerprint, lowercased, and only if it was exactly
+    /// [`PROTOCOL_ID_HEADER_VALUE_LEN`] characters long.
+    ///
+    /// A header that was absent, and one whose value was the wrong width, both
+    /// land here as `None`. That is deliberate: the gate in `serve` must not
+    /// be able to tell those cases apart, and collapsing them at the parser
+    /// means no later code can accidentally reintroduce the distinction.
+    protocol_id: Option<String>,
     body: Vec<u8>,
 }
 
@@ -263,6 +287,8 @@ async fn read_session_request<R: AsyncRead + Unpin>(
     let mut headers_been_read: bool = false;
     let mut content_length: Option<usize> = None;
     let mut auth_string: Option<String> = None;
+    let mut protocol_id: Option<String> = None;
+    let protocol_id_prefix = format!("{}: ", PROTOCOL_ID_HEADER);
     let mut rtc_url_matched = false;
     let mut is_options: bool = false;
     let mut body: Vec<u8> = Vec::new();
@@ -301,6 +327,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
                     return Some(SessionRequest {
                         is_options,
                         auth_string,
+                        protocol_id,
                         body,
                     });
                 }
@@ -339,6 +366,18 @@ async fn read_session_request<R: AsyncRead + Unpin>(
                 } else if str.to_lowercase().starts_with("authorization: ") {
                     let (_, last) = str.split_at(15);
                     auth_string = Some(last.to_string());
+                } else if let Some(value) = str.to_lowercase().strip_prefix(&protocol_id_prefix) {
+                    // Shape is checked here, not at the gate, so that a
+                    // truncated, padded or non-hex value becomes
+                    // indistinguishable from an absent one before anything
+                    // downstream can see it. The line has already been
+                    // lowercased, so a fingerprint that arrived in upper case
+                    // is accepted and normalised rather than refused.
+                    let well_formed = value.len() == PROTOCOL_ID_HEADER_VALUE_LEN
+                        && value.bytes().all(|byte| byte.is_ascii_hexdigit());
+                    if well_formed {
+                        protocol_id = Some(value.to_string());
+                    }
                 } else if str.is_empty() {
                     headers_been_read = true;
 
@@ -346,6 +385,7 @@ async fn read_session_request<R: AsyncRead + Unpin>(
                         return Some(SessionRequest {
                             is_options,
                             auth_string,
+                            protocol_id,
                             body,
                         });
                     }
@@ -372,6 +412,24 @@ async fn read_session_request<R: AsyncRead + Unpin>(
     None
 }
 
+/// The fingerprint decision, alone.
+///
+/// Lifted out of [`serve`] because that function is an async handler wrapped
+/// around a live TCP stream: the branch cannot be exercised there without
+/// standing up the whole listener, and a gate asserted only through its
+/// surroundings is a gate that can be quietly widened. Here it is a pure
+/// function of the three inputs it depends on, so "an absent header passes" is
+/// directly falsifiable.
+///
+/// `is_options` is the one exemption: a CORS preflight carries no custom
+/// headers by construction, and the POST that follows it is gated.
+fn fingerprint_is_acceptable(protocol_id: Option<&str>, expected: &str, is_options: bool) -> bool {
+    if is_options {
+        return true;
+    }
+    protocol_id == Some(expected)
+}
+
 /// Reads a request from the client and sends it a response.
 async fn serve(
     mut session_endpoint: SessionEndpoint,
@@ -379,6 +437,7 @@ async fn serve(
     from_client_auth_sender: Option<ClientAuthSender>,
     to_session_single_auth_receiver: Option<futures_channel::oneshot::Receiver<AuthResponse>>,
     rtc_url_paths: RtcUrlPaths,
+    expected_protocol_id: String,
 ) {
     // A peer that vanishes between accept() and here leaves us without an
     // address; that is a normal remote event, not a server fault.
@@ -394,10 +453,41 @@ async fn serve(
     // without bound. `None` means the request was malformed or over-large.
     let request =
         read_session_request(BufReader::new(stream.clone()), &rtc_url_paths, &remote_addr).await;
-    let (mut success, is_options, auth_string, body) = match request {
-        Some(request) => (true, request.is_options, request.auth_string, request.body),
-        None => (false, false, None, Vec::new()),
+    let (mut success, is_options, auth_string, protocol_id, body) = match request {
+        Some(request) => (
+            true,
+            request.is_options,
+            request.auth_string,
+            request.protocol_id,
+            request.body,
+        ),
+        None => (false, false, None, None, Vec::new()),
     };
+
+    // Protocol-fingerprint gate.
+    //
+    // This is the first thing checked about a real session request, and it is
+    // checked *before* the credential is base64-decoded, before it is handed to
+    // the app, and before any per-peer state is created. A peer running a
+    // different protocol is refused here without ever reaching the auth path.
+    //
+    // Absent, wrong-width and wrong-value all arrive as one condition and take
+    // one branch, and the response is the same 404 a malformed request gets.
+    // The expected value is never echoed: it is public compatibility metadata,
+    // not a secret, but echoing it would turn this into an oracle that hands
+    // any peer the value it failed to supply.
+    //
+    // OPTIONS is exempt because a CORS preflight carries no custom headers by
+    // construction; the POST that follows it is gated.
+    if success
+        && !fingerprint_is_acceptable(protocol_id.as_deref(), &expected_protocol_id, is_options)
+    {
+        warn!(
+            "Refusing WebRTC session request from {}: protocol fingerprint mismatch",
+            remote_addr
+        );
+        success = false;
+    }
     let mut identity_token_opt = None;
     // Optional serialized message explaining a rejection (naia-lib/naia#133).
     let mut reject_payload_opt: Option<Vec<u8>> = None;
@@ -414,9 +504,10 @@ async fn serve(
                 header::ACCESS_CONTROL_ALLOW_METHODS,
                 HeaderValue::from_static("POST"),
             );
+            // The fingerprint header is a custom request header, so a browser
             resp.headers_mut().insert(
                 header::ACCESS_CONTROL_ALLOW_HEADERS,
-                HeaderValue::from_static("Authorization, Content-Length"),
+                HeaderValue::from_static(CORS_ALLOW_HEADERS),
             );
             resp.headers_mut().insert(
                 header::ACCESS_CONTROL_ALLOW_CREDENTIALS,
@@ -688,7 +779,16 @@ fn write_response_header<T>(
 mod tests {
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 
-    use super::{read_session_request, RtcUrlPaths, MAX_HEADER_BYTES, MAX_REQUEST_LINE_BYTES};
+    use naia_socket_shared::{PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN};
+
+    use super::{
+        read_session_request, RtcUrlPaths, CORS_ALLOW_HEADERS, MAX_HEADER_BYTES,
+        MAX_REQUEST_LINE_BYTES,
+    };
+
+    /// A syntactically valid fingerprint: the right width, all hex.
+    const GOOD_ID: &str = "0123456789abcdef0123456789abcdef";
+    const BAD_ID: &str = "fedcba9876543210fedcba9876543210";
 
     fn paths() -> RtcUrlPaths {
         RtcUrlPaths {
@@ -765,5 +865,131 @@ mod tests {
     #[test]
     fn truncated_request_is_rejected() {
         assert!(read(b"POST /rtc_session HTTP/1.1\r\nContent-Length: 5\r\n\r\nhi").is_none());
+    }
+
+    // ---- protocol fingerprint ----------------------------------------------
+
+    /// Builds a POST carrying `raw` verbatim as the fingerprint header value.
+    fn read_with_fingerprint(raw: &str) -> Option<super::SessionRequest> {
+        read(
+            format!(
+                "POST /rtc_session HTTP/1.1\r\nAuthorization: token\r\n{}: {}\r\nContent-Length: 5\r\n\r\nhello",
+                PROTOCOL_ID_HEADER, raw
+            )
+            .as_bytes(),
+        )
+    }
+
+    /// F13a: a well-formed fingerprint reaches the gate intact.
+    #[test]
+    fn a_well_formed_fingerprint_is_carried_through_the_parser() {
+        let request = read_with_fingerprint(GOOD_ID).expect("should parse");
+        assert_eq!(request.protocol_id.as_deref(), Some(GOOD_ID));
+        // ...and it did not disturb the credential beside it.
+        assert_eq!(request.auth_string.as_deref(), Some("token"));
+    }
+
+    /// F13b: absent, too short, too long and non-value-shaped all collapse to
+    /// the same `None` *here*, in the parser, so that the gate downstream is
+    /// physically unable to tell them apart -- there is no branch left for it
+    /// to take. This is the property that keeps the refusal indistinguishable
+    /// from outside; a parser that preserved "present but malformed" would
+    /// hand the gate a distinction it could accidentally leak.
+    #[test]
+    fn absent_and_malformed_and_wrong_width_are_one_indistinguishable_case() {
+        let absent = read(
+            b"POST /rtc_session HTTP/1.1\r\nAuthorization: token\r\nContent-Length: 5\r\n\r\nhello",
+        )
+        .expect("should parse")
+        .protocol_id;
+        assert_eq!(absent, None);
+
+        for malformed in [
+            "",
+            &GOOD_ID[..PROTOCOL_ID_HEADER_VALUE_LEN - 1],
+            &format!("{}0", GOOD_ID),
+            &format!("0x{}", &GOOD_ID[2..]),
+            &" ".repeat(PROTOCOL_ID_HEADER_VALUE_LEN + 4),
+        ] {
+            assert_eq!(
+                read_with_fingerprint(malformed)
+                    .expect("the request itself is still well-formed")
+                    .protocol_id,
+                absent,
+                "{:?} must be indistinguishable from an absent fingerprint",
+                malformed
+            );
+        }
+    }
+
+    /// The header name is matched case-insensitively, as HTTP requires: a
+    /// client that title-cases it must not be treated as having omitted it.
+    #[test]
+    fn the_fingerprint_header_name_is_matched_case_insensitively() {
+        let request = read(
+            format!(
+                "POST /rtc_session HTTP/1.1\r\nX-Naia-Protocol-Id: {}\r\nContent-Length: 5\r\n\r\nhello",
+                GOOD_ID
+            )
+            .as_bytes(),
+        )
+        .expect("should parse");
+        assert_eq!(request.protocol_id.as_deref(), Some(GOOD_ID));
+    }
+
+    /// F12: the CORS preflight must advertise the fingerprint header, or a
+    /// browser refuses to send the POST that carries it and every wasm client
+    /// fails to connect -- with a CORS error, not a protocol mismatch, which
+    /// is a considerably worse thing to debug.
+    #[test]
+    fn the_cors_preflight_advertises_the_fingerprint_header() {
+        assert!(
+            CORS_ALLOW_HEADERS
+                .to_lowercase()
+                .contains(PROTOCOL_ID_HEADER),
+            "{:?} must name {:?}",
+            CORS_ALLOW_HEADERS,
+            PROTOCOL_ID_HEADER
+        );
+        // The pre-existing entries must survive alongside it.
+        assert!(CORS_ALLOW_HEADERS.to_lowercase().contains("authorization"));
+        assert!(CORS_ALLOW_HEADERS.to_lowercase().contains("content-length"));
+    }
+
+    /// The gate itself, on the extracted decision.
+    ///
+    /// The parser tests above prove that absent, truncated, padded and non-hex
+    /// values all collapse to `None` before the gate sees them. This proves the
+    /// other half: that `None` is refused rather than waved through. Both halves
+    /// are needed -- a parser that normalises everything to `None` is worth
+    /// nothing if `None` then passes.
+    #[test]
+    fn a_post_without_an_acceptable_fingerprint_is_refused() {
+        // Positive control: the gate is not refusing everything.
+        assert!(super::fingerprint_is_acceptable(
+            Some(GOOD_ID),
+            GOOD_ID,
+            false
+        ));
+
+        for (label, value) in [
+            ("absent", None),
+            ("wrong value", Some(BAD_ID)),
+            ("empty", Some("")),
+        ] {
+            assert!(
+                !super::fingerprint_is_acceptable(value, GOOD_ID, false),
+                "a POST with a {label} fingerprint must be refused",
+            );
+        }
+    }
+
+    /// The OPTIONS exemption is exactly that -- an exemption for the preflight,
+    /// which by construction carries no custom headers. It must not leak into
+    /// the POST that follows, which the test above pins.
+    #[test]
+    fn the_cors_preflight_is_exempt_but_only_the_preflight() {
+        assert!(super::fingerprint_is_acceptable(None, GOOD_ID, true));
+        assert!(!super::fingerprint_is_acceptable(None, GOOD_ID, false));
     }
 }

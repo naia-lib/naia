@@ -1,4 +1,4 @@
-use naia_socket_shared::SocketConfig;
+use naia_socket_shared::{stamp_protocol_id_header, SocketConfig};
 
 use super::{
     addr_cell::AddrCell, data_channel::DataChannel, data_port::DataPort,
@@ -13,11 +13,16 @@ pub struct Socket;
 
 impl Socket {
     /// Connects to the given server address
+    /// `protocol_id` is this client's protocol fingerprint as 32 lowercase hex
+    /// digits. Naia sends it as its own header on the session request; see
+    /// [`stamp_protocol_id_header`](naia_socket_shared::stamp_protocol_id_header)
+    /// for why it is stamped rather than left to the caller.
     pub fn connect(
         server_session_url: &str,
         config: &SocketConfig,
+        protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(server_session_url, config, None, None);
+        return Self::connect_inner(server_session_url, config, None, None, protocol_id);
     }
 
     /// Connects to the given server address with authentication
@@ -25,8 +30,15 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
+        protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(server_session_url, config, Some(auth_bytes), None);
+        return Self::connect_inner(
+            server_session_url,
+            config,
+            Some(auth_bytes),
+            None,
+            protocol_id,
+        );
     }
 
     /// Connects to the given server address with authentication
@@ -34,8 +46,15 @@ impl Socket {
         server_session_url: &str,
         config: &SocketConfig,
         auth_headers: Vec<(String, String)>,
+        protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(server_session_url, config, None, Some(auth_headers));
+        return Self::connect_inner(
+            server_session_url,
+            config,
+            None,
+            Some(auth_headers),
+            protocol_id,
+        );
     }
 
     /// Connects to the given server address with authentication
@@ -44,12 +63,14 @@ impl Socket {
         config: &SocketConfig,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
+        protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
         return Self::connect_inner(
             server_session_url,
             config,
             Some(auth_bytes),
             Some(auth_headers),
+            protocol_id,
         );
     }
 
@@ -59,9 +80,13 @@ impl Socket {
         config: &SocketConfig,
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
+        protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
+        // Naia's own header, stamped after everything the caller supplied.
+        let auth_headers = stamp_protocol_id_header(auth_headers_opt, protocol_id);
+
         let data_channel =
-            DataChannel::new(config, server_session_url, auth_bytes_opt, auth_headers_opt);
+            DataChannel::new(config, server_session_url, auth_bytes_opt, auth_headers);
 
         let data_port = data_channel.data_port();
         let addr_cell = data_channel.addr_cell();

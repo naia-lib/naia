@@ -27,6 +27,11 @@ pub struct MainServer {
     // Protocol
     socket_config: SocketConfig,
     message_kinds: MessageKinds,
+    /// This server's protocol fingerprint. Handed to the transport at
+    /// `listen()` so it can refuse a mismatching peer before the peer's
+    /// credential is decoded, and held by the handshake manager for the
+    /// data-socket first-packet comparison.
+    protocol_id: ProtocolId,
     // Config
     require_auth: bool,
     pending_auth_timeout: Duration,
@@ -79,6 +84,7 @@ impl MainServer {
             // Config
             socket_config: socket,
             message_kinds,
+            protocol_id,
             require_auth: server_config.require_auth,
             pending_auth_timeout: server_config.pending_auth_timeout,
             max_pending_auth_users: server_config.max_pending_auth_users,
@@ -97,9 +103,14 @@ impl MainServer {
     }
 
     /// Listen at the given addresses
+    ///
+    /// The transport is handed this server's protocol fingerprint here, and is
+    /// responsible for refusing an auth envelope that does not carry a
+    /// matching one. See [`AuthReceiver`] for the guarantee that buys.
     pub fn listen<S: Into<Box<dyn Socket>>>(&mut self, socket: S) {
         let boxed_socket: Box<dyn Socket> = socket.into();
-        let (auth_sender, auth_receiver, packet_sender, packet_receiver) = boxed_socket.listen();
+        let (auth_sender, auth_receiver, packet_sender, packet_receiver) =
+            boxed_socket.listen(self.protocol_id);
 
         self.recv_io.load(packet_receiver);
         self.send_io.load(packet_sender);
@@ -357,6 +368,16 @@ impl MainServer {
     /// Maintain connection with a client and read all incoming packet data
     fn maintain_socket(&mut self) {
         // receive auth events
+        //
+        // Every request that arrives here has already had its protocol
+        // fingerprint compared against ours inside the transport (see
+        // `Socket::listen` and the `AuthReceiver` guarantee). That comparison
+        // has to stay upstream of this loop: it is what keeps a mismatching
+        // peer from allocating a `MainUser`, reaching `message_kinds.read`,
+        // producing an `AuthEvent`, or -- on a `require_auth == false` server
+        // -- being handed an identity token outright. Do not move it down here
+        // "for symmetry"; by this point the credential has already been
+        // base64-decoded.
         if let Some((auth_sender, auth_receiver)) = self.auth_io.as_mut() {
             loop {
                 match auth_receiver.receive() {

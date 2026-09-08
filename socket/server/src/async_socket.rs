@@ -29,6 +29,7 @@ impl Socket {
         config: SocketConfig,
         from_client_auth_sender: Option<ClientAuthSender>,
         to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
+        expected_protocol_id: String,
     ) -> Self {
         let (to_client_sender, to_client_receiver) = smol::channel::unbounded();
 
@@ -50,6 +51,7 @@ impl Socket {
             socket.rtc_server.session_endpoint(),
             from_client_auth_sender,
             to_session_all_auth_receiver,
+            expected_protocol_id,
         );
 
         socket

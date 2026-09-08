@@ -12,7 +12,7 @@ use naia_client_socket::{IdentityReceiver, PacketReceiver, PacketSender, ServerA
 
 use naia_shared::Timer;
 
-use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
+use naia_socket_demo_shared::{shared_config, DEMO_PROTOCOL_ID, PING_MSG, PONG_MSG};
 
 pub struct App {
     // IdentityReceiver must not be de-allocated, even if we don't use it in this demo
@@ -40,6 +40,10 @@ impl App {
             "http://127.0.0.1:14191",
             &shared_config(),
             "12345".as_bytes().to_vec(),
+            // Naia stamps this onto the session request as its own header,
+            // after any headers the caller supplied. The server compares it
+            // before touching the credential above.
+            DEMO_PROTOCOL_ID,
         );
 
         Self {

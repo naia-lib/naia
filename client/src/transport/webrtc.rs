@@ -1,4 +1,4 @@
-use naia_shared::SocketConfig;
+use naia_shared::{ProtocolId, SocketConfig};
 
 use naia_client_socket::{
     IdentityReceiver, IdentityReceiverResult as SocketIdentityReceiverResult, PacketReceiver,
@@ -80,13 +80,17 @@ impl From<Socket> for Box<dyn TransportSocket> {
 impl TransportSocket for Socket {
     fn connect(
         self: Box<Self>,
+        protocol_id: ProtocolId,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        let (id_receiver, inner_sender, inner_receiver) =
-            ClientSocket::connect(&self.server_session_url, &self.config);
+        let (id_receiver, inner_sender, inner_receiver) = ClientSocket::connect(
+            &self.server_session_url,
+            &self.config,
+            &protocol_id.to_hex(),
+        );
         (
             Box::new(id_receiver),
             Box::new(inner_sender),
@@ -95,14 +99,19 @@ impl TransportSocket for Socket {
     }
     fn connect_with_auth(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
         Box<dyn TransportSender>,
         Box<dyn TransportReceiver>,
     ) {
-        let (id_receiver, inner_sender, inner_receiver) =
-            ClientSocket::connect_with_auth(&self.server_session_url, &self.config, auth_bytes);
+        let (id_receiver, inner_sender, inner_receiver) = ClientSocket::connect_with_auth(
+            &self.server_session_url,
+            &self.config,
+            auth_bytes,
+            &protocol_id.to_hex(),
+        );
         (
             Box::new(id_receiver),
             Box::new(inner_sender),
@@ -111,6 +120,7 @@ impl TransportSocket for Socket {
     }
     fn connect_with_auth_headers(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
@@ -121,6 +131,7 @@ impl TransportSocket for Socket {
             &self.server_session_url,
             &self.config,
             auth_headers,
+            &protocol_id.to_hex(),
         );
         (
             Box::new(id_receiver),
@@ -130,6 +141,7 @@ impl TransportSocket for Socket {
     }
     fn connect_with_auth_and_headers(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
     ) -> (
@@ -143,6 +155,7 @@ impl TransportSocket for Socket {
                 &self.config,
                 auth_bytes,
                 auth_headers,
+                &protocol_id.to_hex(),
             );
         (
             Box::new(id_receiver),

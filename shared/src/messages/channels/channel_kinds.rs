@@ -138,6 +138,39 @@ impl ChannelKinds {
             .0
     }
 
+    /// Returns every registered channel in **wire net-ID order**, as
+    /// `(net_id, protocol_name, settings_bytes)`, where `settings_bytes` is
+    /// [`ChannelSettings::schema_bytes`] — the mode *with its full payload*,
+    /// the direction and the criticality.
+    ///
+    /// This is the accessor the protocol fingerprint is built from, and the
+    /// ordering is the whole point of it: net-IDs are registration ordinals
+    /// and travel on the wire, so a fingerprint that hashed names in sorted
+    /// order — as [`all_names`](Self::all_names) yields them — would be blind
+    /// to a reordering that renumbers every channel. Iterating the net-ID
+    /// space rather than the `HashMap` also removes hash iteration order from
+    /// the result, which is what makes the fingerprint reproducible across
+    /// processes.
+    ///
+    /// Net-IDs are dense by construction (`add_channel` hands out
+    /// `0..current_net_id` with no gaps), so a missing entry is a broken
+    /// invariant rather than a recoverable condition.
+    pub fn schema_entries(&self) -> Vec<(NetId, String, Vec<u8>)> {
+        let mut output = Vec::with_capacity(self.current_net_id as usize);
+        for net_id in 0..self.current_net_id {
+            let kind = self
+                .net_id_map
+                .get(&net_id)
+                .expect("ChannelKinds net-ID space must be dense");
+            let (_, settings, name) = self
+                .kind_map
+                .get(kind)
+                .expect("every registered ChannelKind must have settings");
+            output.push((net_id, name.clone(), settings.schema_bytes()));
+        }
+        output
+    }
+
     /// Returns a sorted list of all registered channel protocol names.
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();

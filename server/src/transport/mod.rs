@@ -31,7 +31,7 @@ mod inner {
 
     use std::net::SocketAddr;
 
-    use naia_shared::IdentityToken;
+    use naia_shared::{IdentityToken, ProtocolId};
 
     /// Tuple returned by [`Socket::listen`]: auth sender, auth receiver, packet sender, packet receiver.
     pub type ListenResult = (
@@ -55,7 +55,16 @@ mod inner {
     /// Entry point for a server transport: converts the socket into its four I/O handles.
     pub trait Socket {
         /// Binds / starts listening and returns the four I/O channel handles.
-        fn listen(self: Box<Self>) -> ListenResult;
+        ///
+        /// `expected_protocol_id` is this server's protocol fingerprint. Every
+        /// transport that accepts auth envelopes must compare the fingerprint
+        /// the peer sent against it and drop the request if they differ,
+        /// *before* the credential is base64-decoded and before anything is
+        /// handed back through [`AuthReceiver`]. Taking it here rather than
+        /// through a setter is what makes that impossible to forget: a
+        /// transport cannot be listening without having been told what to
+        /// compare against.
+        fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult;
     }
 
     // Packet
@@ -173,6 +182,16 @@ mod inner {
     }
 
     /// Receives raw auth payloads from connecting clients before they are handed the session.
+    ///
+    /// # Protocol-fingerprint guarantee
+    ///
+    /// Nothing reaches this trait until the peer's protocol fingerprint has
+    /// been compared against the one passed to [`Socket::listen`] and found
+    /// equal. A request whose fingerprint is absent, malformed, the wrong
+    /// width, or simply different is dropped inside the transport, on one
+    /// branch, before its credential is decoded. Callers may therefore treat
+    /// every payload they get here as coming from a peer that agrees on the
+    /// protocol — but must still treat the payload itself as untrusted.
     pub trait AuthReceiver: AuthReceiverClone + Send + Sync {
         /// Poll for the next pending auth payload, returning `Ok(None)` when none are queued.
         fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError>;

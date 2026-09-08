@@ -2,7 +2,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use parking_lot::Mutex;
 
-use naia_shared::IdentityToken;
+use naia_shared::{stamp_protocol_id_header, IdentityToken, ProtocolId, PROTOCOL_ID_HEADER};
 use std::sync::mpsc;
 
 // use crate::shared::LocalTransportQueues;
@@ -68,14 +68,17 @@ impl LocalClientSocket {
     #[doc(hidden)]
     pub fn connect_with_auth(
         self,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
     ) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
-        // Build HTTP POST request with Authorization header
+        // Build HTTP POST request with Authorization header, plus naia's
+        // fingerprint header -- outside the credential, always present.
         let base64_encoded = base64::encode(&auth_bytes);
         let request = http::Request::builder()
             .method("POST")
             .uri("/")
             .header("Authorization", base64_encoded)
+            .header(PROTOCOL_ID_HEADER, protocol_id.to_hex())
             .body(Vec::new())
             .unwrap();
 
@@ -96,12 +99,15 @@ impl LocalClientSocket {
     #[doc(hidden)]
     pub fn connect_with_auth_headers(
         self,
+        protocol_id: ProtocolId,
         auth_headers: Vec<(String, String)>,
     ) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
-        // Build HTTP POST request with custom headers
+        // Build HTTP POST request with custom headers. `stamp_protocol_id_header`
+        // drops any fingerprint header the caller supplied and appends naia's,
+        // so a caller can neither omit nor override it.
         let mut builder = http::Request::builder().method("POST").uri("/");
 
-        for (key, value) in auth_headers {
+        for (key, value) in stamp_protocol_id_header(Some(auth_headers), &protocol_id.to_hex()) {
             builder = builder.header(key, value);
         }
 
@@ -123,17 +129,19 @@ impl LocalClientSocket {
     #[doc(hidden)]
     pub fn connect_with_auth_and_headers(
         self,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
     ) -> (LocalClientIdentity, LocalClientSender, LocalClientReceiver) {
-        // Build HTTP POST request with both auth and headers
+        // Build HTTP POST request with both auth and headers. The fingerprint
+        // is stamped last, after everything the caller asked for.
         let base64_encoded = base64::encode(&auth_bytes);
         let mut builder = http::Request::builder()
             .method("POST")
             .uri("/")
             .header("Authorization", base64_encoded);
 
-        for (key, value) in auth_headers {
+        for (key, value) in stamp_protocol_id_header(Some(auth_headers), &protocol_id.to_hex()) {
             builder = builder.header(key, value);
         }
 

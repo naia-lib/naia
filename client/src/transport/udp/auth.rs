@@ -9,7 +9,7 @@ use std::{
 
 use log::warn;
 
-use naia_shared::IdentityToken;
+use naia_shared::{stamp_protocol_id_header, IdentityToken, ProtocolId};
 
 use crate::transport::{udp::addr_cell::AddrCell, IdentityReceiver, IdentityReceiverResult};
 
@@ -30,13 +30,17 @@ impl AuthIo {
 
     pub(crate) fn connect(
         &mut self,
+        protocol_id: ProtocolId,
         auth_bytes_opt: Option<Vec<u8>>,
         auth_headers_opt: Option<Vec<(String, String)>>,
     ) {
         self.pending_req_opt = Some(PendingRequest::new(
             self.auth_url.clone(),
             auth_bytes_opt,
-            auth_headers_opt,
+            // Naia's fingerprint header, stamped over anything the caller sent
+            // under that name and appended after the rest. The auth listener
+            // compares it before it base64-decodes the credential.
+            stamp_protocol_id_header(auth_headers_opt, &protocol_id.to_hex()),
             self.data_addr_cell.clone(),
         ));
     }
@@ -111,7 +115,7 @@ impl PendingRequest {
     fn new(
         url: String,
         auth_bytes_opt: Option<Vec<u8>>,
-        auth_headers_opt: Option<Vec<(String, String)>>,
+        auth_headers: Vec<(String, String)>,
         addr_cell: AddrCell,
     ) -> Self {
         let (tx, rx) = mpsc::channel::<Result<(u16, String), String>>();
@@ -123,10 +127,8 @@ impl PendingRequest {
                 let base64_encoded = base64::encode(&auth_bytes);
                 request = request.set("Authorization", &base64_encoded);
             }
-            if let Some(auth_headers) = auth_headers_opt {
-                for (key, value) in auth_headers {
-                    request = request.set(&key, &value);
-                }
+            for (key, value) in auth_headers {
+                request = request.set(&key, &value);
             }
 
             let response_result = match request.call() {

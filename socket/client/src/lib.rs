@@ -49,3 +49,202 @@ cfg_if! {
         compile_error!("Naia Client Socket on Wasm requires either the 'wbindgen' or 'mquad' feature to be enabled, you must pick one.");
     }
 }
+
+/// Host-executable oracle for the miniquad JavaScript bridge contract (F12).
+///
+/// The miniquad backend compiles only under
+/// `cfg(all(target_arch = "wasm32", feature = "mquad"))`. There are contract
+/// tests inside that module too, and they are the right tests -- but `cargo
+/// test` never targets wasm32, so a test written there is a test that never
+/// runs. The assertions below are the same contract, hoisted to the crate root
+/// where the host toolchain does execute them. They supplement the wasm-gated
+/// tests; they do not replace or weaken them.
+///
+/// Everything here reads the *shipped* artifacts through one crate-local path
+/// each -- `include_str!` of the real `naia_socket.js` and the real
+/// `shared.rs`. Nothing is transcribed, so there is no second copy to drift.
+/// The header name is not spelled out either: it comes from
+/// `naia_socket_shared`, the single authority, so renaming the constant without
+/// editing the JavaScript reds this module rather than silently shipping two
+/// header names.
+#[cfg(test)]
+mod miniquad_js_bridge_host_oracle {
+    use naia_socket_shared::PROTOCOL_ID_HEADER;
+
+    /// The JavaScript half of the bridge, exactly as it ships.
+    const NAIA_SOCKET_JS: &str = include_str!("backends/miniquad/naia_socket.js");
+
+    /// The Rust half. `extern "C"` declarations are checked by nobody: a
+    /// mismatch between this and the JS import object is a runtime failure in a
+    /// browser, not a compile error here, which is precisely why it is worth an
+    /// oracle.
+    const MINIQUAD_SHARED_RS: &str = include_str!("backends/miniquad/shared.rs");
+
+    /// Returns the parameter names of the first parameter list following
+    /// `after`. Works on both halves: JavaScript parameters are bare names and
+    /// Rust parameters are `name: Type`, so taking the text before the first
+    /// colon yields the name either way.
+    fn parameter_names(source: &str, after: &str) -> Vec<String> {
+        let start = source
+            .find(after)
+            .unwrap_or_else(|| panic!("could not find `{after}`"));
+        let open = source[start..]
+            .find('(')
+            .unwrap_or_else(|| panic!("`{after}` has no parameter list"))
+            + start;
+        let close = source[open..]
+            .find(')')
+            .unwrap_or_else(|| panic!("`{after}` has an unterminated parameter list"))
+            + open;
+
+        source[open + 1..close]
+            .split(',')
+            .map(str::trim)
+            .filter(|parameter| !parameter.is_empty())
+            .map(|parameter| {
+                parameter
+                    .split(':')
+                    .next()
+                    .unwrap_or_default()
+                    .trim()
+                    .to_string()
+            })
+            .collect()
+    }
+
+    /// The exact byte sequence the shipped JavaScript must contain to set the
+    /// fingerprint header. Built from the shared constant, never typed out.
+    fn fingerprint_header_write() -> String {
+        format!(r#"request.setRequestHeader("{PROTOCOL_ID_HEADER}""#)
+    }
+
+    /// The fingerprint must reach the request under the one canonical header
+    /// name this workspace declares -- not a second spelling that happens to
+    /// work today.
+    #[test]
+    fn the_js_bridge_uses_the_header_name_the_shared_crate_declares() {
+        assert!(
+            NAIA_SOCKET_JS.contains(&fingerprint_header_write()),
+            "the miniquad JS bridge must set the `{PROTOCOL_ID_HEADER}` header",
+        );
+        assert_eq!(
+            NAIA_SOCKET_JS.matches(PROTOCOL_ID_HEADER).count(),
+            1,
+            "the header name must appear exactly once in the JS bridge",
+        );
+    }
+
+    /// Arity and order, across the FFI boundary in both directions.
+    ///
+    /// `extern "C" fn naia_connect` in `shared.rs`, the import-object binding,
+    /// the JS `connect` definition and the call the binding forwards to must all
+    /// name the same four parameters in the same order. Removing the fourth
+    /// argument or moving it reds here, at the Rust/JS contract itself -- not
+    /// later as an unrelated link failure or a silently misaligned argument in a
+    /// browser.
+    #[test]
+    fn the_rust_declaration_and_the_js_bridge_agree_on_arity_and_order() {
+        let rust_declaration = parameter_names(MINIQUAD_SHARED_RS, "pub fn naia_connect");
+        let js_binding =
+            parameter_names(NAIA_SOCKET_JS, "importObject.env.naia_connect = function");
+        let js_forwarded_call = parameter_names(NAIA_SOCKET_JS, "naia_socket.connect(");
+        let js_definition = parameter_names(NAIA_SOCKET_JS, "    connect: function (");
+
+        let expected = [
+            "server_socket_address",
+            "rtc_path",
+            "auth_str",
+            "protocol_id",
+        ];
+
+        assert_eq!(
+            rust_declaration, expected,
+            "the Rust FFI declaration must take the fingerprint as its fourth argument",
+        );
+        assert_eq!(
+            js_definition, expected,
+            "the JS `connect` definition must match the Rust declaration",
+        );
+        // The binding and the forwarded call use the same names as each other
+        // and have the same arity as the declaration; they are the wiring
+        // between the two halves, so a reordering there is a real defect.
+        assert_eq!(
+            js_binding, js_forwarded_call,
+            "the import-object binding must forward its arguments in order",
+        );
+        assert_eq!(
+            js_binding.len(),
+            expected.len(),
+            "the import-object binding must take the same number of arguments as the Rust declaration",
+        );
+        assert_eq!(
+            js_binding.last().map(String::as_str),
+            Some("protocol_id"),
+            "the fingerprint must be the fourth argument, not an optional trailing extra",
+        );
+    }
+
+    /// The fourth argument must actually be *used*. A bridge that accepts the
+    /// fingerprint and drops it would satisfy every arity check above while
+    /// shipping an unfingerprinted request.
+    #[test]
+    fn the_js_bridge_threads_the_fourth_argument_into_the_request() {
+        assert!(
+            NAIA_SOCKET_JS.contains("naia_socket.get_js_object(protocol_id)"),
+            "the fingerprint must be unwrapped through the same JsObject bridge as every other argument",
+        );
+
+        let unwrapped = NAIA_SOCKET_JS
+            .find("naia_socket.get_js_object(protocol_id)")
+            .expect("the fingerprint must be unwrapped");
+        let written = NAIA_SOCKET_JS
+            .find(&fingerprint_header_write())
+            .expect("the fingerprint must be written to the request");
+        assert!(
+            unwrapped < written,
+            "the fingerprint must be unwrapped before it is written to the request",
+        );
+    }
+
+    /// Framework-last, and unconditional.
+    ///
+    /// The caller's `Authorization` header goes on first and only if there is
+    /// one; naia's fingerprint goes on afterwards and always. Last-wins on
+    /// duplicate header names is what makes "the caller cannot replace it"
+    /// structural rather than advisory, and being outside the credential's
+    /// `if` block is what makes "the caller cannot omit it" true even for a
+    /// connection that carries no credential at all.
+    #[test]
+    fn the_fingerprint_is_written_after_the_credential_and_unconditionally() {
+        let credential_branch = NAIA_SOCKET_JS
+            .find("if (auth_string.length > 0)")
+            .expect("the credential must still be conditional");
+        let credential_write = NAIA_SOCKET_JS
+            .find(r#"request.setRequestHeader("Authorization""#)
+            .expect("the caller-supplied credential header must still be written");
+        let fingerprint_write = NAIA_SOCKET_JS
+            .find(&fingerprint_header_write())
+            .expect("the fingerprint header must be written");
+
+        assert!(
+            credential_branch < credential_write,
+            "the credential write must sit inside its own conditional",
+        );
+        assert!(
+            credential_write < fingerprint_write,
+            "naia must stamp the fingerprint after the caller's headers, so a caller cannot replace it",
+        );
+
+        // The credential's `if` block must be closed before the fingerprint is
+        // written, or the fingerprint would ride along with the credential and
+        // a credential-less connection would go out unstamped.
+        let branch_close = NAIA_SOCKET_JS[credential_write..]
+            .find('}')
+            .expect("the credential's conditional must be closed")
+            + credential_write;
+        assert!(
+            branch_close < fingerprint_write,
+            "the fingerprint must be written outside the credential's conditional",
+        );
+    }
+}

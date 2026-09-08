@@ -300,6 +300,33 @@ impl ComponentKinds {
             .unwrap_or(false)
     }
 
+    /// Returns every registered component in **wire net-ID order**, as
+    /// `(net_id, protocol_name)`.
+    ///
+    /// The protocol fingerprint is built from this rather than from
+    /// [`all_names`](Self::all_names): net-IDs are registration ordinals that
+    /// travel on the wire, so hashing sorted names would leave a reordering
+    /// that renumbers every component undetectable. Walking the net-ID space
+    /// also keeps `HashMap` iteration order out of the result, which is what
+    /// makes the fingerprint reproducible across processes.
+    ///
+    /// Net-IDs are dense by construction, so a gap is a broken invariant.
+    pub fn schema_entries(&self) -> Vec<(NetId, String)> {
+        let mut output = Vec::with_capacity(self.current_net_id as usize);
+        for net_id in 0..self.current_net_id {
+            let kind = self
+                .net_id_map
+                .get(&net_id)
+                .expect("ComponentKinds net-ID space must be dense");
+            let (_, _, name) = self
+                .kind_map
+                .get(kind)
+                .expect("every registered ComponentKind must have a name");
+            output.push((net_id, name.clone()));
+        }
+        output
+    }
+
     /// Returns a sorted list of all registered component protocol names.
     pub fn all_names(&self) -> Vec<String> {
         let mut output = Vec::new();

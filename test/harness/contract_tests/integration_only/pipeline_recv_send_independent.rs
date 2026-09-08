@@ -282,7 +282,16 @@ fn pipeline_recv_send_threads_overlap() {
     let inner = LocalServerSocket::new(hub);
     let socket = Socket::new(inner, None);
     let (_auth_sender, _auth_receiver, packet_sender, packet_receiver) =
-        naia_server::transport::Socket::listen(Box::new(socket));
+        naia_server::transport::Socket::listen(
+            Box::new(socket),
+            // The exact fingerprint of the protocol this server was built
+            // with. `listen` has no default and no un-fingerprinted
+            // overload, so there is nothing else to pass here.
+            {
+                let mut protocol = protocol();
+                protocol.locked_protocol_id()
+            },
+        );
     ws.io_load(packet_sender, packet_receiver);
 
     let (_coord, mut recv_handle, mut send_handle) = ws.into_pipeline_handles();

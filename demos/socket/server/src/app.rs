@@ -5,7 +5,7 @@ use naia_server_socket::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, ServerAddrs, Socket,
 };
 
-use naia_socket_demo_shared::{shared_config, PING_MSG, PONG_MSG};
+use naia_socket_demo_shared::{shared_config, DEMO_PROTOCOL_ID, PING_MSG, PONG_MSG};
 
 pub struct App {
     auth_sender: AuthSender,
@@ -32,7 +32,13 @@ impl App {
         let shared_config = shared_config();
 
         let (auth_sender, auth_receiver, packet_sender, packet_receiver) =
-            Socket::listen_with_auth(&server_address, &shared_config);
+            // Third argument: the protocol fingerprint this server will accept.
+            // A session request that does not carry exactly this value is
+            // refused before its credential is even decoded. An application
+            // built on `naia-server` gets this value computed from its
+            // `Protocol`; see `DEMO_PROTOCOL_ID` for why the demos pass a
+            // constant instead.
+            Socket::listen_with_auth(&server_address, &shared_config, DEMO_PROTOCOL_ID);
 
         Self {
             auth_sender,

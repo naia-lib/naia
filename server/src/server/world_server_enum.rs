@@ -25,8 +25,9 @@ use std::{hash::Hash, net::SocketAddr, time::Duration};
 use naia_shared::{
     AuthorityError, Channel, ComponentKind, ConnectionStats, DisconnectReason,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError, GlobalEntity,
-    Instant, Message, Protocol, Replicate, ReplicatedComponent, Request, ResourceAlreadyExists,
-    Response, ResponseReceiveKey, ResponseSendKey, SendPlan, Tick, WorldMutType, WorldRefType,
+    Instant, Message, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
+    ResourceAlreadyExists, Response, ResponseReceiveKey, ResponseSendKey, SendPlan, Tick,
+    WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -53,6 +54,26 @@ pub enum ServerMode {
 /// The unified server handle. See the module docs.
 pub struct WorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     inner: WorldServerImpl<E>,
+    /// This server's protocol fingerprint, handed to the transport at
+    /// [`Self::listen`] so it can refuse an auth envelope from a peer running a
+    /// different protocol before that peer's credential is decoded.
+    ///
+    /// # One source, not two
+    ///
+    /// This is not a second, independently computed fingerprint. It is read
+    /// through `Protocol::locked_protocol_id`, which returns the value cached
+    /// when the protocol was *frozen*; if the protocol arrived here already
+    /// locked — as it does from [`crate::Server::new`], which locks once and
+    /// clones — the cached value is returned unchanged rather than recomputed.
+    /// It also cannot go stale: every builder method panics once the protocol
+    /// is locked, so there is no post-freeze mutation for it to miss.
+    ///
+    /// This field is only *used* on the world-only path, where [`Self::listen`]
+    /// binds a socket directly. Inside [`crate::Server`] the world side is fed
+    /// through `io_load` from `MainServer`'s packet channel and never binds a
+    /// socket of its own, so exactly one fingerprint reaches the transport on
+    /// any given listen path.
+    protocol_id: ProtocolId,
 }
 
 /// Internal variant carrier. Kept private so the only way to act on a
@@ -69,16 +90,21 @@ enum WorldServerImpl<E: Copy + Eq + Hash + Send + Sync + 'static> {
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// Construct a **resident** server: the fused engine, driven synchronously.
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
+        let protocol_id = protocol.locked_protocol_id();
         Self {
             inner: WorldServerImpl::Resident(InternalWorldServer::new(server_config, protocol)),
+            protocol_id,
         }
     }
 
     /// Construct a **pipelined** server: the engine's handles split across the
     /// worker-thread park-window runtime.
     pub fn new_pipelined<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+        let pipeline = PipelinedWorldServer::new(server_config, protocol);
         Self {
-            inner: WorldServerImpl::Pipelined(PipelinedWorldServer::new(server_config, protocol)),
+            protocol_id: pipeline.protocol_id(),
+            inner: WorldServerImpl::Pipelined(pipeline),
         }
     }
 
@@ -86,6 +112,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// `spawn_server_handles` with extra wiring) as a pipelined [`WorldServer`].
     pub fn from_pipelined(pipeline: PipelinedWorldServer<E>) -> Self {
         Self {
+            protocol_id: pipeline.protocol_id(),
             inner: WorldServerImpl::Pipelined(pipeline),
         }
     }
@@ -276,7 +303,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => {
-                let (_auth_tx, _auth_rx, ps, pr) = crate::transport::Socket::listen(socket.into());
+                let (_auth_tx, _auth_rx, ps, pr) =
+                    crate::transport::Socket::listen(socket.into(), self.protocol_id);
                 ws.io_load(ps, pr);
             }
             WorldServerImpl::Pipelined(ps) => ps.listen(socket),

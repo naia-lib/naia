@@ -1,7 +1,7 @@
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-use naia_shared::transport::local::LocalTransportHub;
+use naia_shared::{transport::local::LocalTransportHub, ProtocolId};
 
 use super::auth::{LocalServerAuthReceiver, LocalServerAuthSender, ServerAuthIo};
 use super::data::{LocalServerReceiver, LocalServerSender};
@@ -20,6 +20,7 @@ impl LocalServerSocket {
     #[doc(hidden)]
     pub fn listen_with_auth(
         self,
+        expected_protocol_id: ProtocolId,
     ) -> (
         LocalServerAuthSender,
         LocalServerAuthReceiver,
@@ -28,7 +29,10 @@ impl LocalServerSocket {
     ) {
         let hub = self.hub;
 
-        let auth_io = Arc::new(Mutex::new(ServerAuthIo::new(hub.clone())));
+        let auth_io = Arc::new(Mutex::new(ServerAuthIo::new(
+            hub.clone(),
+            expected_protocol_id,
+        )));
         let auth_sender = LocalServerAuthSender::new(auth_io.clone());
         let auth_receiver = LocalServerAuthReceiver::new(auth_io);
 

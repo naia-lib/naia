@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use naia_shared::{IdentityToken, SocketConfig};
+use naia_shared::{IdentityToken, ProtocolId, SocketConfig};
 
 use naia_server_socket::{
     AuthReceiver, AuthSender, PacketReceiver, PacketSender, Socket as ServerSocket,
@@ -79,9 +79,18 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>) -> ListenResult {
+    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
+        // The session server compares the fingerprint against this hex form
+        // while it is still scanning request headers, before the credential is
+        // base64-decoded. `naia-server-socket` sits below `naia-shared` in the
+        // dependency graph and cannot name `ProtocolId`, so the value crosses
+        // that boundary as its fixed-width hex text.
         let (inner_auth_sender, inner_auth_receiver, inner_packet_sender, inner_packet_receiver) =
-            ServerSocket::listen_with_auth(&self.server_addrs, &self.config);
+            ServerSocket::listen_with_auth(
+                &self.server_addrs,
+                &self.config,
+                &expected_protocol_id.to_hex(),
+            );
         (
             Box::new(inner_auth_sender),
             Box::new(inner_auth_receiver),

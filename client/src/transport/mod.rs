@@ -31,7 +31,7 @@ pub use inner::{
 
 mod inner {
 
-    use naia_shared::IdentityToken;
+    use naia_shared::{IdentityToken, ProtocolId};
     /// Result of polling the identity handshake for an authentication token from the server.
     pub enum IdentityReceiverResult {
         /// The server has not yet replied; poll again next frame.
@@ -56,10 +56,21 @@ mod inner {
     pub struct RecvError;
 
     /// Transport-layer socket factory; consumed on connect to produce sender and receiver halves.
+    ///
+    /// # Protocol fingerprint
+    ///
+    /// Every method here takes `protocol_id`, this client's protocol
+    /// fingerprint, and every implementation must put it on the session request
+    /// as its own header -- stamped by naia, *after* any consumer-supplied auth
+    /// headers, so a caller can neither omit nor replace it. The server refuses
+    /// a request whose fingerprint is missing, malformed or different before it
+    /// decodes the credential, so there is no connect path that skips it; that
+    /// is why it is a required parameter and not an option.
     pub trait Socket {
         /// Connects without authentication, returning identity, sender, and receiver handles.
         fn connect(
             self: Box<Self>,
+            protocol_id: ProtocolId,
         ) -> (
             Box<dyn IdentityReceiver>,
             Box<dyn PacketSender>,
@@ -68,6 +79,7 @@ mod inner {
         /// Connects with raw auth bytes embedded in the handshake.
         fn connect_with_auth(
             self: Box<Self>,
+            protocol_id: ProtocolId,
             auth_bytes: Vec<u8>,
         ) -> (
             Box<dyn IdentityReceiver>,
@@ -77,6 +89,7 @@ mod inner {
         /// Connects with HTTP-style auth headers added to the upgrade request.
         fn connect_with_auth_headers(
             self: Box<Self>,
+            protocol_id: ProtocolId,
             auth_headers: Vec<(String, String)>,
         ) -> (
             Box<dyn IdentityReceiver>,
@@ -86,6 +99,7 @@ mod inner {
         /// Connects with both raw auth bytes and HTTP-style auth headers.
         fn connect_with_auth_and_headers(
             self: Box<Self>,
+            protocol_id: ProtocolId,
             auth_bytes: Vec<u8>,
             auth_headers: Vec<(String, String)>,
         ) -> (

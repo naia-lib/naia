@@ -21,17 +21,33 @@ pub struct Socket;
 
 impl Socket {
     /// Listens on the Socket for incoming communication from Clients
+    ///
+    /// `expected_protocol_id` is the server's protocol fingerprint as 32
+    /// lowercase hex digits. The session listener refuses any session request
+    /// whose fingerprint header does not match it exactly; see
+    /// [`PROTOCOL_ID_HEADER`](naia_socket_shared::PROTOCOL_ID_HEADER). It is
+    /// required rather than optional because there is no state in which this
+    /// socket should serve a peer it has not compared against.
     pub fn listen(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
+        expected_protocol_id: &str,
     ) -> (PacketSender, PacketReceiver) {
         let (from_client_receiver, sender_receiver) =
-            Self::setup_receiver_loop(server_addrs, config, None, None);
+            Self::setup_receiver_loop(server_addrs, config, None, None, expected_protocol_id);
 
         Self::setup_sender_loop(config, from_client_receiver, sender_receiver)
     }
     /// Listens on the Socket for incoming communication from Clients
-    pub fn listen_with_auth(server_addrs: &ServerAddrs, config: &SocketConfig) -> AuthListenResult {
+    ///
+    /// See [`listen`](Self::listen) for `expected_protocol_id`. Here the
+    /// fingerprint comparison happens strictly before the credential is
+    /// base64-decoded or handed to the application.
+    pub fn listen_with_auth(
+        server_addrs: &ServerAddrs,
+        config: &SocketConfig,
+        expected_protocol_id: &str,
+    ) -> AuthListenResult {
         let (from_client_auth_sender, from_client_auth_receiver) = channel::unbounded();
         let (to_session_all_auth_sender, to_session_all_auth_receiver) = channel::unbounded();
         let from_client_auth_sender = Some(from_client_auth_sender);
@@ -42,6 +58,7 @@ impl Socket {
             config,
             from_client_auth_sender,
             to_session_all_auth_receiver,
+            expected_protocol_id,
         );
 
         let (packet_sender, packet_receiver) =
@@ -61,6 +78,7 @@ impl Socket {
         config: &SocketConfig,
         from_client_auth_sender: Option<ClientAuthSender>,
         to_session_all_auth_receiver: Option<channel::Receiver<(SocketAddr, AuthResponse)>>,
+        expected_protocol_id: &str,
     ) -> (ClientMsgReceiver, SenderChannelReceiver) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();
@@ -68,6 +86,7 @@ impl Socket {
 
         let server_addrs_clone = server_addrs.clone();
         let config_clone = config.clone();
+        let expected_protocol_id = expected_protocol_id.to_string();
 
         executor::spawn(async move {
             // Create async socket
@@ -76,6 +95,7 @@ impl Socket {
                 config_clone,
                 from_client_auth_sender,
                 to_session_all_auth_receiver,
+                expected_protocol_id,
             )
             .await;
 

@@ -199,7 +199,9 @@ pub use messages::channels::senders::request_sender::{
     LocalRequestOrResponseId, RequestOrResponse,
 };
 pub use protocol::{Protocol, ProtocolPlugin};
-pub use protocol_id::ProtocolId;
+pub use protocol_id::{
+    stamp_protocol_id_header, ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
+};
 pub use types::{DisconnectReason, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;
 pub use world::entity_event::EntityEvent;

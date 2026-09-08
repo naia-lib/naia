@@ -76,6 +76,21 @@ impl ChannelSettings {
     pub fn can_request_and_respond(&self) -> bool {
         self.reliable() && self.can_send_to_server() && self.can_send_to_client()
     }
+
+    /// Canonical byte encoding of every wire-relevant value in these settings,
+    /// for the protocol fingerprint preimage.
+    ///
+    /// Layout: the mode encoding from [`ChannelMode::schema_bytes`], then the
+    /// direction discriminant, then the criticality discriminant. Fixed order,
+    /// fixed widths, no separators — the mode encoding is self-delimiting
+    /// because each discriminant determines its own payload length, so the two
+    /// trailing bytes can never be mistaken for part of it.
+    pub fn schema_bytes(&self) -> Vec<u8> {
+        let mut out = self.mode.schema_bytes();
+        out.push(self.direction.schema_discriminant());
+        out.push(self.criticality.schema_discriminant());
+        out
+    }
 }
 
 /// Tuning parameters for reliable channel delivery and backpressure.
@@ -150,6 +165,88 @@ impl ChannelMode {
     pub fn tick_buffered(&self) -> bool {
         matches!(self, ChannelMode::TickBuffered(_))
     }
+
+    /// Stable identifier for this mode inside the protocol fingerprint preimage.
+    ///
+    /// Hand-pinned rather than derived from variant position: the fingerprint
+    /// is a claim about the wire, so a value here must never move because
+    /// somebody reordered the enum for readability. Adding a mode takes the
+    /// next free number; an existing number is never reused for a different
+    /// mode.
+    ///
+    /// This identifies the *variant only*. It is never hashed on its own —
+    /// see [`schema_bytes`](Self::schema_bytes), which also carries the
+    /// variant's payload. A fingerprint built from the discriminant alone
+    /// would call two protocols equal when one of them has, say, a different
+    /// reliable receive window, which is a value both peers must agree on.
+    pub const fn schema_discriminant(&self) -> u8 {
+        match self {
+            ChannelMode::UnorderedUnreliable => 0,
+            ChannelMode::SequencedUnreliable => 1,
+            ChannelMode::UnorderedReliable(_) => 2,
+            ChannelMode::SequencedReliable(_) => 3,
+            ChannelMode::OrderedReliable(_) => 4,
+            ChannelMode::TickBuffered(_) => 5,
+        }
+    }
+
+    /// Canonical byte encoding of this mode *and its full payload*, for the
+    /// protocol fingerprint preimage.
+    ///
+    /// Layout, in order:
+    ///
+    /// - the [`schema_discriminant`](Self::schema_discriminant) byte;
+    /// - for the three reliable modes, `ReliableSettings`:
+    ///   `rtt_resend_factor` as its four canonical IEEE-754 bits
+    ///   little-endian, then `max_queue_depth` as `0x00` for `None` or `0x01`
+    ///   followed by the value as a little-endian `u64`;
+    /// - for `TickBuffered`, `message_capacity` as a little-endian `u64`;
+    /// - for the two unreliable modes, nothing.
+    ///
+    /// Every payload is fixed-width for a given discriminant, so the encoding
+    /// is self-delimiting and needs no length prefix.
+    ///
+    /// `usize` is widened to `u64` deliberately: a 32-bit and a 64-bit peer
+    /// with identical settings must produce identical bytes, so the native
+    /// width must not reach the preimage.
+    pub fn schema_bytes(&self) -> Vec<u8> {
+        let mut out = vec![self.schema_discriminant()];
+        match self {
+            ChannelMode::UnorderedUnreliable | ChannelMode::SequencedUnreliable => {}
+            ChannelMode::UnorderedReliable(settings)
+            | ChannelMode::SequencedReliable(settings)
+            | ChannelMode::OrderedReliable(settings) => {
+                out.extend_from_slice(&canonical_f32_bits(settings.rtt_resend_factor));
+                match settings.max_queue_depth {
+                    None => out.push(0),
+                    Some(depth) => {
+                        out.push(1);
+                        out.extend_from_slice(&(depth as u64).to_le_bytes());
+                    }
+                }
+            }
+            ChannelMode::TickBuffered(settings) => {
+                out.extend_from_slice(&(settings.message_capacity as u64).to_le_bytes());
+            }
+        }
+        out
+    }
+}
+
+/// The IEEE-754 bits of `value`, little-endian, with every NaN collapsed onto
+/// one pattern.
+///
+/// A protocol whose `rtt_resend_factor` is NaN is already misconfigured, but
+/// the fingerprint must still be a function of the configuration rather than
+/// of which NaN bit pattern a particular compiler happened to produce —
+/// otherwise two peers built from the same source could disagree. `-0.0` is
+/// left distinct from `0.0`; they are different configured values.
+fn canonical_f32_bits(value: f32) -> [u8; 4] {
+    if value.is_nan() {
+        f32::NAN.to_bits().to_le_bytes()
+    } else {
+        value.to_bits().to_le_bytes()
+    }
 }
 
 /// Permitted send direction(s) for a channel.
@@ -161,6 +258,19 @@ pub enum ChannelDirection {
     ServerToClient,
     /// Both endpoints may send on this channel.
     Bidirectional,
+}
+
+impl ChannelDirection {
+    /// Stable identifier for this direction inside the protocol fingerprint
+    /// preimage. Hand-pinned for the same reason as
+    /// [`ChannelMode::schema_discriminant`].
+    pub const fn schema_discriminant(&self) -> u8 {
+        match self {
+            ChannelDirection::ClientToServer => 0,
+            ChannelDirection::ServerToClient => 1,
+            ChannelDirection::Bidirectional => 2,
+        }
+    }
 }
 
 /// Priority tier for a channel in the unified priority-sort send loop.
@@ -188,6 +298,17 @@ impl ChannelCriticality {
         match mode {
             ChannelMode::TickBuffered(_) => ChannelCriticality::High,
             _ => ChannelCriticality::Normal,
+        }
+    }
+
+    /// Stable identifier for this tier inside the protocol fingerprint
+    /// preimage. Hand-pinned for the same reason as
+    /// [`ChannelMode::schema_discriminant`].
+    pub const fn schema_discriminant(&self) -> u8 {
+        match self {
+            ChannelCriticality::Low => 0,
+            ChannelCriticality::Normal => 1,
+            ChannelCriticality::High => 2,
         }
     }
 

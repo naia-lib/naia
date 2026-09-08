@@ -46,7 +46,16 @@ fn handles_listening(
 
     let hub = LocalTransportHub::new(addr.parse().unwrap());
     let socket = Socket::new(LocalServerSocket::new(hub), None);
-    let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(Box::new(socket));
+    let (_a, _b, ps, pr) = naia_server::transport::Socket::listen(
+        Box::new(socket),
+        // The exact fingerprint of the protocol this server was built
+        // with. `listen` has no default and no un-fingerprinted
+        // overload, so there is nothing else to pass here.
+        {
+            let mut protocol = protocol();
+            protocol.locked_protocol_id()
+        },
+    );
 
     let (sim_handle, recv, send, ()) = run_with_world_server(sim_handle, recv, send, |ws| {
         ws.io_load(ps, pr);

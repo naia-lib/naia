@@ -1,6 +1,6 @@
 use naia_shared::{
     transport::local::{ClientIdentityReceiverResult, ClientServerAddr},
-    LinkConditionerConfig,
+    LinkConditionerConfig, ProtocolId,
 };
 
 use crate::transport::{
@@ -38,8 +38,13 @@ impl From<Socket> for Box<dyn TransportSocket> {
 }
 
 impl TransportSocket for Socket {
+    /// The no-auth local connect sends no auth envelope at all -- there is no
+    /// HTTP request here to hang a header on. The fingerprint is still checked
+    /// for this path, by the data socket's first-packet comparison, which is
+    /// unchanged.
     fn connect(
         self: Box<Self>,
+        _protocol_id: ProtocolId,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
         Box<dyn TransportSender>,
@@ -67,6 +72,7 @@ impl TransportSocket for Socket {
 
     fn connect_with_auth(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
@@ -75,7 +81,7 @@ impl TransportSocket for Socket {
     ) {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
-        let (identity, sender, receiver) = local_socket.connect_with_auth(auth_bytes);
+        let (identity, sender, receiver) = local_socket.connect_with_auth(protocol_id, auth_bytes);
 
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);
@@ -95,6 +101,7 @@ impl TransportSocket for Socket {
 
     fn connect_with_auth_headers(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_headers: Vec<(String, String)>,
     ) -> (
         Box<dyn TransportIdentityReceiver>,
@@ -103,7 +110,8 @@ impl TransportSocket for Socket {
     ) {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
-        let (identity, sender, receiver) = local_socket.connect_with_auth_headers(auth_headers);
+        let (identity, sender, receiver) =
+            local_socket.connect_with_auth_headers(protocol_id, auth_headers);
 
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);
@@ -123,6 +131,7 @@ impl TransportSocket for Socket {
 
     fn connect_with_auth_and_headers(
         self: Box<Self>,
+        protocol_id: ProtocolId,
         auth_bytes: Vec<u8>,
         auth_headers: Vec<(String, String)>,
     ) -> (
@@ -133,7 +142,7 @@ impl TransportSocket for Socket {
         let Socket { inner, config } = *self;
         let local_socket = inner.expect("local socket already taken");
         let (identity, sender, receiver) =
-            local_socket.connect_with_auth_and_headers(auth_bytes, auth_headers);
+            local_socket.connect_with_auth_and_headers(protocol_id, auth_bytes, auth_headers);
 
         let receiver: Box<dyn TransportReceiver> = {
             let wrapped = LocalClientTransportReceiver(receiver);

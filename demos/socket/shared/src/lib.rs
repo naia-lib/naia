@@ -1,2 +1,2 @@
 mod shared;
-pub use shared::{shared_config, PING_MSG, PONG_MSG};
+pub use shared::{shared_config, DEMO_PROTOCOL_ID, PING_MSG, PONG_MSG};

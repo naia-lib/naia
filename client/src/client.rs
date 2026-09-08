@@ -208,30 +208,39 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
 
+        // The fingerprint goes on every one of these branches, including the
+        // no-auth one: `require_auth = false` still means the two ends have to
+        // agree on the protocol before either decodes the other's packets.
+        let protocol_id = self.protocol_id;
+
         if let Some(auth_bytes) = &self.auth_message {
             if let Some(auth_headers) = &self.auth_headers {
                 // connect with auth & headers
                 let boxed_socket: Box<dyn Socket> = socket.into();
                 let (id_receiver, packet_sender, packet_receiver) = boxed_socket
-                    .connect_with_auth_and_headers(auth_bytes.clone(), auth_headers.clone());
+                    .connect_with_auth_and_headers(
+                        protocol_id,
+                        auth_bytes.clone(),
+                        auth_headers.clone(),
+                    );
                 self.io.load(id_receiver, packet_sender, packet_receiver);
             } else {
                 // connect with auth
                 let boxed_socket: Box<dyn Socket> = socket.into();
                 let (id_receiver, packet_sender, packet_receiver) =
-                    boxed_socket.connect_with_auth(auth_bytes.clone());
+                    boxed_socket.connect_with_auth(protocol_id, auth_bytes.clone());
                 self.io.load(id_receiver, packet_sender, packet_receiver);
             }
         } else if let Some(auth_headers) = &self.auth_headers {
             // connect with auth headers
             let boxed_socket: Box<dyn Socket> = socket.into();
             let (id_receiver, packet_sender, packet_receiver) =
-                boxed_socket.connect_with_auth_headers(auth_headers.clone());
+                boxed_socket.connect_with_auth_headers(protocol_id, auth_headers.clone());
             self.io.load(id_receiver, packet_sender, packet_receiver);
         } else {
             // connect without auth
             let boxed_socket: Box<dyn Socket> = socket.into();
-            let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect();
+            let (id_receiver, packet_sender, packet_receiver) = boxed_socket.connect(protocol_id);
             self.io.load(id_receiver, packet_sender, packet_receiver);
         }
     }

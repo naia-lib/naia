@@ -7,7 +7,7 @@ const naia_socket = {
 
     plugin: function (importObject) {
         importObject.env.naia_is_connected = function () { return naia_socket.is_connected(); };
-        importObject.env.naia_connect = function (address, rtc_path, auth_str) { naia_socket.connect(address, rtc_path, auth_str); };
+        importObject.env.naia_connect = function (address, rtc_path, auth_str, protocol_id) { naia_socket.connect(address, rtc_path, auth_str, protocol_id); };
         importObject.env.naia_disconnect = function () { naia_socket.disconnect(); };
         importObject.env.naia_send = function (message) { return naia_socket.send(message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
@@ -29,10 +29,11 @@ const naia_socket = {
         }
     },
 
-    connect: function (server_socket_address, rtc_path, auth_str) {
+    connect: function (server_socket_address, rtc_path, auth_str, protocol_id) {
         let server_socket_address_string = naia_socket.get_js_object(server_socket_address);
         let rtc_path_string = naia_socket.get_js_object(rtc_path);
         let auth_string = naia_socket.get_js_object(auth_str);
+        let protocol_id_string = naia_socket.get_js_object(protocol_id);
         let SESSION_ADDRESS = server_socket_address_string + rtc_path_string;
 
         let peer = new RTCPeerConnection({
@@ -75,6 +76,10 @@ const naia_socket = {
             if (auth_string.length > 0) {
                 request.setRequestHeader("Authorization", auth_string);
             }
+            // Set last and unconditionally: naia owns this header. The server
+            // refuses the request outright if it is missing or does not match,
+            // so there is no "connect without it" path here either.
+            request.setRequestHeader("x-naia-protocol-id", protocol_id_string);
             request.onload = function() {
                 if (request.status === 200) {
                     let response = JSON.parse(request.responseText);

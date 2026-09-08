@@ -3,7 +3,7 @@ use std::time::Duration;
 use naia_socket_shared::{LinkConditionerConfig, SocketConfig};
 
 use crate::{
-    connection::compression_config::CompressionConfig,
+    connection::compression_config::{CompressionConfig, CompressionMode},
     messages::{
         channels::{
             channel::{Channel, ChannelDirection, ChannelMode, ChannelSettings},
@@ -219,6 +219,22 @@ impl Protocol {
         self.locked = true;
     }
 
+    /// Locks the protocol if it is not already locked, then returns its
+    /// fingerprint.
+    ///
+    /// Constructors that need the fingerprint cannot just call
+    /// [`lock`](Self::lock): the `Protocol` handed to them may already be
+    /// locked — `Server::new` locks once and then clones the locked protocol
+    /// into both the main server and the world server — and `lock` panics on a
+    /// second call. This is the form to use anywhere the lock state is not
+    /// known statically.
+    pub fn locked_protocol_id(&mut self) -> ProtocolId {
+        if !self.locked {
+            self.lock();
+        }
+        self.protocol_id()
+    }
+
     /// Panics if the protocol has already been locked.
     pub fn check_lock(&self) {
         if self.locked {
@@ -237,39 +253,254 @@ impl Protocol {
             .expect("Protocol must be locked before calling protocol_id()")
     }
 
-    /// Compute the protocol ID from current state.
+    /// The resource section's input: every registered resource resolved to its
+    /// component name, sorted.
+    ///
+    /// `ResourceKinds` is a `HashSet`, so its iteration order is not even
+    /// stable within one process — the sort is what makes the section a
+    /// function of the *membership* rather than of the traversal. It is a named
+    /// method rather than an inline block so the sort can be asserted directly:
+    /// two protocols with the same members hash the same whether it is there or
+    /// not, so equality alone cannot catch its removal.
+    fn resource_schema_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self
+            .resource_kinds
+            .iter()
+            .map(|kind| self.component_kinds.kind_to_name(kind))
+            .collect();
+        names.sort();
+        names
+    }
+
+    /// Compute the protocol fingerprint from current state.
+    ///
+    /// See [`PROTOCOL_FINGERPRINT_FORMAT`] for the preimage grammar and the
+    /// rules that keep it honest.
     fn compute_protocol_id(&self) -> ProtocolId {
         let mut hasher = blake3::Hasher::new();
 
-        // Channels
-        for name in self.channel_kinds.all_names() {
-            hasher.update(name.as_bytes());
+        // Format tag. Separates this grammar from any future one, so an
+        // encoding change and a schema change can never be confused.
+        hasher.update(PROTOCOL_FINGERPRINT_FORMAT);
+
+        // Channels, in wire net-ID order, each with the complete settings
+        // encoding — mode *with its payload*, direction, criticality.
+        let channels = self.channel_kinds.schema_entries();
+        hasher.update(SECTION_CHANNELS);
+        update_count(&mut hasher, channels.len());
+        for (net_id, name, settings) in &channels {
+            hasher.update(&net_id.to_le_bytes());
+            update_bytes(&mut hasher, name.as_bytes());
+            update_bytes(&mut hasher, settings);
         }
-        // Messages
-        for name in self.message_kinds.all_names() {
-            hasher.update(name.as_bytes());
+
+        // Messages, in wire net-ID order.
+        let messages = self.message_kinds.schema_entries();
+        hasher.update(SECTION_MESSAGES);
+        update_count(&mut hasher, messages.len());
+        for (net_id, name) in &messages {
+            hasher.update(&net_id.to_le_bytes());
+            update_bytes(&mut hasher, name.as_bytes());
         }
-        // Components
-        for name in self.component_kinds.all_names() {
-            hasher.update(name.as_bytes());
+
+        // Components, in wire net-ID order.
+        let components = self.component_kinds.schema_entries();
+        hasher.update(SECTION_COMPONENTS);
+        update_count(&mut hasher, components.len());
+        for (net_id, name) in &components {
+            hasher.update(&net_id.to_le_bytes());
+            update_bytes(&mut hasher, name.as_bytes());
         }
-        // Resources — fold in a side-channel marker per resource kind so
-        // that two protocols differing only in which kinds are tagged
-        // resource hash differently. Without this, downgrading a resource
-        // to a plain component (or vice-versa) would collide on the wire
-        // mismatch detector.
-        hasher.update(b"naia:resources:");
-        let mut resource_count = 0u32;
-        for _ in self.resource_kinds.iter() {
-            resource_count += 1;
+
+        // Resources are a *set*: membership carries no wire ordinal of its
+        // own, so the members are resolved to their component names and
+        // sorted. The previous encoding folded in only a count, which meant
+        // that swapping which of two kinds was the resource — the common
+        // case, and one that changes how the receiver populates its
+        // ResourceRegistry — produced an identical id.
+        let resources = self.resource_schema_names();
+        hasher.update(SECTION_RESOURCES);
+        update_count(&mut hasher, resources.len());
+        for name in &resources {
+            update_bytes(&mut hasher, name.as_bytes());
         }
-        hasher.update(&resource_count.to_le_bytes());
+
+        // Compression. Whether a direction is compressed, and with exactly
+        // which parameters, decides whether the far end can read a packet at
+        // all — a peer that decompresses with a different dictionary gets
+        // garbage, not a clean refusal. Both directions are always written, in
+        // a fixed order, so "compressed one way" and "compressed the other
+        // way" cannot collide.
+        hasher.update(SECTION_COMPRESSION);
+        match &self.compression {
+            None => {
+                hasher.update(&[0u8]);
+            }
+            Some(config) => {
+                hasher.update(&[1u8]);
+                update_compression_mode(&mut hasher, config.server_to_client.as_ref());
+                update_compression_mode(&mut hasher, config.client_to_server.as_ref());
+            }
+        }
+
+        // Runtime modes that change what a peer is allowed to put on the wire.
+        hasher.update(SECTION_RUNTIME);
+        hasher.update(&[u8::from(self.client_authoritative_entities)]);
+
+        // Codec grammar. Bumped when naia's own encoding of frames, headers or
+        // net-ID fields changes — never per message and never by an
+        // application.
+        hasher.update(SECTION_CODEC);
+        hasher.update(&CODEC_GRAMMAR_VERSION.to_le_bytes());
 
         let hash = hasher.finalize();
-        let mut bytes = [0u8; 8];
-        bytes.copy_from_slice(&hash.as_bytes()[..8]);
-        ProtocolId::new(u64::from_le_bytes(bytes))
+        let mut bytes = [0u8; ProtocolId::BYTE_LEN];
+        bytes.copy_from_slice(&hash.as_bytes()[..ProtocolId::BYTE_LEN]);
+        ProtocolId::from_bytes(bytes)
     }
+}
+
+/// Domain-separation tag for the protocol fingerprint preimage.
+///
+/// Bump the trailing version whenever the *grammar below* changes — the order
+/// of sections, the framing of an item, the set of facts folded in. Bumping it
+/// changes every protocol's fingerprint, which is correct: peers built against
+/// two different grammars have not actually agreed on anything and must not
+/// connect on a coincidence.
+///
+/// # Grammar
+///
+/// ```text
+/// "naia:pf:v1"
+/// "\x01chan"  count:u32  then per channel IN NET-ID ORDER:
+///               net_id:u16 LE, len:u32 LE + name bytes,
+///               len:u32 LE + ChannelSettings::schema_bytes:
+///                 mode:u8
+///                 + UnorderedReliable|SequencedReliable|OrderedReliable:
+///                     rtt_resend_factor:f32 bits LE,
+///                     max_queue_depth: 0x00 | 0x01 + u64 LE
+///                 + TickBuffered: message_capacity:u64 LE
+///                 + unreliable modes: nothing
+///                 direction:u8, criticality:u8
+/// "\x02msg"   count:u32  then per message IN NET-ID ORDER:
+///               net_id:u16 LE, len:u32 LE + name bytes
+/// "\x03comp"  count:u32  then per component IN NET-ID ORDER:
+///               net_id:u16 LE, len:u32 LE + name bytes
+/// "\x04res"   count:u32  then resource component-names SORTED:
+///               len:u32 LE + name bytes
+/// "\x06comp2" 0x00 (no compression) | 0x01 then, server->client first
+///             and client->server second, per direction:
+///               0x00 (uncompressed) | 0x01 + mode:u8:
+///                 0 Default:    level:i32 LE
+///                 1 Dictionary: level:i32 LE, len:u32 LE + blake3(dict)
+///                 2 Training:   samples:u64 LE
+/// "\x07rt"    client_authoritative_entities:u8
+/// "\x05codec" codec_grammar_version:u32 LE
+/// ```
+///
+/// Sections are written in the order shown by the code, which is the order of
+/// the block above; the tag bytes are unique identifiers, not a sort key, so
+/// `\x06`/`\x07` preceding `\x05` here is deliberate — appending new sections
+/// before the codec tag keeps the codec version last, where it reads as the
+/// closing statement about naia's own encoding.
+///
+/// Deployment-only facts are excluded on purpose: socket addresses, the RTC
+/// endpoint path, link-conditioning simulation and tick interval do not change
+/// how a byte on the wire is decoded, and folding them in would refuse
+/// perfectly compatible peers.
+///
+/// Three properties are load-bearing, and each exists because its absence was
+/// a real hole in the previous encoding:
+///
+/// - **Net-ID order, with the id written out.** Net-IDs are registration
+///   ordinals and travel on the wire. The previous encoding hashed *sorted
+///   names*, so reordering two registrations renumbered every kind on the wire
+///   and left the id bit-identical.
+/// - **Length prefixes on every name and settings blob.** Raw concatenation
+///   made `["AB", "C"]` and `["A", "BC"]` hash the same.
+/// - **Section tags with counts.** Without them the three name groups ran
+///   together, so a name moving from the message group to the component group
+///   was invisible.
+///
+/// # What is deliberately absent
+///
+/// Field order, wire types and widths inside a struct, enum variant order and
+/// discriminants, component property schema, and request→response pairing are
+/// **not** covered. None of them survives macro expansion into any runtime
+/// value, so covering them requires the derives to emit schema descriptors —
+/// separate work. Do not read a matching fingerprint as agreement on field
+/// layout.
+pub const PROTOCOL_FINGERPRINT_FORMAT: &[u8] = b"naia:pf:v1";
+
+const SECTION_CHANNELS: &[u8] = b"\x01chan";
+const SECTION_MESSAGES: &[u8] = b"\x02msg";
+const SECTION_COMPONENTS: &[u8] = b"\x03comp";
+const SECTION_RESOURCES: &[u8] = b"\x04res";
+const SECTION_CODEC: &[u8] = b"\x05codec";
+const SECTION_COMPRESSION: &[u8] = b"\x06comp2";
+const SECTION_RUNTIME: &[u8] = b"\x07rt";
+
+/// Fold one direction's compression setting into the preimage.
+///
+/// `0x00` for "this direction is not compressed"; otherwise `0x01`, the mode
+/// discriminant, and the mode's full parameters. The discriminants are
+/// hand-pinned here for the same reason as the channel ones: a variant reorder
+/// in `CompressionMode` must not silently move them.
+///
+/// A custom dictionary is folded in as a BLAKE3 digest of its bytes rather
+/// than the bytes themselves. The digest is what the fingerprint needs — two
+/// peers must have the *same* dictionary, and a digest settles that — and it
+/// keeps a multi-megabyte dictionary from being rehashed on every
+/// `protocol_id()` call. It is length-prefixed like every other byte string,
+/// so a digest can never run together with what follows.
+fn update_compression_mode(hasher: &mut blake3::Hasher, mode: Option<&CompressionMode>) {
+    let Some(mode) = mode else {
+        hasher.update(&[0u8]);
+        return;
+    };
+    hasher.update(&[1u8]);
+    match mode {
+        CompressionMode::Default(level) => {
+            hasher.update(&[0u8]);
+            hasher.update(&level.to_le_bytes());
+        }
+        CompressionMode::Dictionary(level, dictionary) => {
+            hasher.update(&[1u8]);
+            hasher.update(&level.to_le_bytes());
+            update_bytes(hasher, blake3::hash(dictionary).as_bytes());
+        }
+        CompressionMode::Training(samples) => {
+            hasher.update(&[2u8]);
+            hasher.update(&(*samples as u64).to_le_bytes());
+        }
+    }
+}
+
+/// Version of naia's own codec grammar: frame and header layout, and the
+/// `ceil(log2(count))` net-ID bit-field encoding.
+///
+/// This is a property of the naia implementation, not of any application
+/// protocol. Bump it when the encoding changes; never expose it to consumers
+/// as a per-message or per-application version.
+pub const CODEC_GRAMMAR_VERSION: u32 = 1;
+
+/// Fold a length-prefixed byte string into the preimage.
+///
+/// The prefix is what stops two different name lists from producing the same
+/// concatenation.
+fn update_bytes(hasher: &mut blake3::Hasher, bytes: &[u8]) {
+    hasher.update(&(bytes.len() as u32).to_le_bytes());
+    hasher.update(bytes);
+}
+
+/// Fold a section item count into the preimage.
+///
+/// Counts are their own fact, not just a redundant check: the registries
+/// derive `kind_bit_width` as `ceil(log2(count))` and read it on the hot path,
+/// so crossing a power-of-two boundary reframes every net-ID field on the
+/// wire.
+fn update_count(hasher: &mut blake3::Hasher, count: usize) {
+    hasher.update(&(count as u32).to_le_bytes());
 }
 
 #[cfg(test)]
@@ -279,8 +510,9 @@ mod protocol_tests {
     use naia_socket_shared::LinkConditionerConfig;
 
     use crate::{
-        connection::compression_config::CompressionConfig, ComponentKind, Message, Property,
-        Replicate, Request, Response,
+        connection::compression_config::{CompressionConfig, CompressionMode},
+        ChannelCriticality, ComponentKind, Message, Property, ReliableSettings, Replicate, Request,
+        Response, TickBufferSettings,
     };
 
     use super::{ChannelDirection, ChannelMode, ChannelSettings, Protocol, ProtocolPlugin};
@@ -639,5 +871,586 @@ mod protocol_tests {
         });
 
         std::panic::set_hook(quiet);
+    }
+
+    // ---- protocol fingerprint oracles --------------------------------------
+    //
+    // Each of these pins one property that the fingerprint has to have for the
+    // handshake comparison to mean anything. They are grouped here rather than
+    // scattered so that a change to `compute_protocol_id` reds a legible set.
+
+    /// F1 -- **Registration order is part of the protocol.**
+    ///
+    /// Channels, messages and components are addressed on the wire by net-ID,
+    /// and net-IDs are assigned in registration order. Two peers that register
+    /// the same set in a different order will therefore disagree about what
+    /// every ID *means* while agreeing about which types exist. This is the
+    /// single most common way a protocol silently diverges (someone reorders
+    /// two lines in a shared registration function), and the old order-blind
+    /// id could not see it at all.
+    #[test]
+    fn the_same_registrations_in_the_opposite_order_are_a_different_protocol() {
+        let one_way = locked(|p| {
+            p.add_message::<Whisper>();
+            p.add_message::<Shout>();
+        });
+        let other_way = locked(|p| {
+            p.add_message::<Shout>();
+            p.add_message::<Whisper>();
+        });
+        assert_ne!(one_way.protocol_id(), other_way.protocol_id());
+
+        let one_way = locked(|p| {
+            p.add_component::<Ghost>();
+            p.add_component::<Wraith>();
+        });
+        let other_way = locked(|p| {
+            p.add_component::<Wraith>();
+            p.add_component::<Ghost>();
+        });
+        assert_ne!(one_way.protocol_id(), other_way.protocol_id());
+
+        let one_way = locked(|p| {
+            p.add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+            p.add_channel::<Rumor>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+        });
+        let other_way = locked(|p| {
+            p.add_channel::<Rumor>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+            p.add_channel::<Gossip>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedUnreliable,
+            );
+        });
+        assert_ne!(one_way.protocol_id(), other_way.protocol_id());
+    }
+
+    /// F2a -- **Names cannot run together.**
+    ///
+    /// Without a length prefix, the two-name list `["AB", "C"]` and the
+    /// two-name list `["A", "BC"]` hash identically: the preimage is the same
+    /// four bytes either way. The prefix is what makes the encoding injective,
+    /// so it is asserted directly rather than inferred from a pair of
+    /// protocols that happen not to collide.
+    #[test]
+    fn length_prefixing_makes_adjacent_names_unambiguous() {
+        fn digest(names: &[&str]) -> [u8; 32] {
+            let mut hasher = blake3::Hasher::new();
+            for name in names {
+                super::update_bytes(&mut hasher, name.as_bytes());
+            }
+            *hasher.finalize().as_bytes()
+        }
+
+        assert_ne!(digest(&["AB", "C"]), digest(&["A", "BC"]));
+        assert_ne!(digest(&["", "AB"]), digest(&["AB", ""]));
+        // Sanity: identical input still agrees, so the assertions above are
+        // about ambiguity and not about the helper being nondeterministic.
+        assert_eq!(digest(&["AB", "C"]), digest(&["AB", "C"]));
+    }
+
+    /// F2b -- **Sections cannot borrow each other's entries.**
+    ///
+    /// Each section writes its own tag and its own count before its items. Two
+    /// protocols that move one registration across a section boundary — the
+    /// same name, a different kind of thing — must not collide.
+    #[test]
+    fn section_tags_and_counts_keep_the_registries_apart() {
+        let as_message = locked(|p| {
+            p.add_message::<Whisper>();
+        });
+        let as_component = locked(|p| {
+            p.add_component::<Ghost>();
+        });
+        let neither = locked(|_| {});
+
+        assert_ne!(as_message.protocol_id(), as_component.protocol_id());
+        assert_ne!(as_message.protocol_id(), neither.protocol_id());
+        assert_ne!(as_component.protocol_id(), neither.protocol_id());
+    }
+
+    /// F3 -- **Which types are resources is part of the protocol.**
+    ///
+    /// A resource is replicated as a singleton and lands in the receiver's
+    /// `ResourceRegistry`; a plain component does not. The pre-repair encoding
+    /// folded in only the resource *count*, so swapping which of two
+    /// registered kinds was the resource — same count, different meaning —
+    /// produced an identical id.
+    #[test]
+    fn swapping_which_registered_kind_is_the_resource_changes_the_id() {
+        let ghost_is_the_resource = locked(|p| {
+            p.add_resource::<Ghost>();
+            p.add_component::<Wraith>();
+        });
+        let wraith_is_the_resource = locked(|p| {
+            p.add_component::<Ghost>();
+            p.add_resource::<Wraith>();
+        });
+
+        assert_ne!(
+            ghost_is_the_resource.protocol_id(),
+            wraith_is_the_resource.protocol_id(),
+            "a count-only resource encoding would call these equal"
+        );
+    }
+
+    /// F3b -- **Resource membership is a set, so its own order is not.**
+    ///
+    /// Resources carry no wire ordinal of their own, so the encoding sorts
+    /// them. Two protocols that marked the same members in the other order must
+    /// therefore agree — otherwise the fingerprint would refuse peers that are
+    /// in fact compatible.
+    ///
+    /// The marking is done straight on `resource_kinds` rather than through
+    /// `add_resource`, for two reasons. `add_resource` also allocates a
+    /// *component* net-ID, and component order is order-sensitive by design
+    /// (F1), so going through it would vary two sections at once and prove
+    /// nothing about either. And re-registering an already-registered component
+    /// does not dedupe — `ComponentKinds::add_component` appends a second
+    /// net-ID for the same kind — so the obvious "register the components
+    /// first, then mark them" shape does not hold the component section fixed
+    /// either. That is a pre-existing defect, reported and deliberately not
+    /// repaired here; it is not this fingerprint's to fix.
+    ///
+    /// Equality alone cannot catch a dropped sort — `resource_kinds` is a
+    /// `HashSet`, and two sets with the same members happen to traverse the
+    /// same way — so the sort is asserted directly on the section's input as
+    /// well.
+    #[test]
+    fn resource_membership_does_not_depend_on_the_order_it_was_marked_in() {
+        let with_resources_marked = |mark: fn(&mut Protocol)| {
+            locked(|p| {
+                p.add_component::<Ghost>();
+                p.add_component::<Wraith>();
+                mark(p);
+            })
+        };
+        let one_way = with_resources_marked(|p| {
+            p.resource_kinds
+                .register::<Ghost>(ComponentKind::of::<Ghost>());
+            p.resource_kinds
+                .register::<Wraith>(ComponentKind::of::<Wraith>());
+        });
+        let other_way = with_resources_marked(|p| {
+            p.resource_kinds
+                .register::<Wraith>(ComponentKind::of::<Wraith>());
+            p.resource_kinds
+                .register::<Ghost>(ComponentKind::of::<Ghost>());
+        });
+
+        assert_eq!(one_way.protocol_id(), other_way.protocol_id());
+
+        // The sort itself, on the vector the section is built from.
+        assert_eq!(other_way.resource_schema_names(), ["Ghost", "Wraith"]);
+    }
+
+    /// Helper: two protocols identical but for one channel's settings.
+    fn with_channel_settings(settings: ChannelSettings) -> Protocol {
+        locked(|p| {
+            p.add_channel_settings::<Gossip>(settings);
+        })
+    }
+
+    fn reliable(rtt_resend_factor: f32, max_queue_depth: Option<usize>) -> ReliableSettings {
+        ReliableSettings {
+            rtt_resend_factor,
+            max_queue_depth,
+        }
+    }
+
+    /// F4 -- **Every wire-relevant channel setting is in the fingerprint.**
+    ///
+    /// Not just the mode's outer variant: its payload too. A peer whose
+    /// reliable channel has a different receive window (`max_queue_depth`
+    /// doubles as the window) will drop indices its partner considers in
+    /// range; a peer whose tick buffer holds a different number of messages
+    /// prunes at a different point. Both are silent divergence, and a
+    /// fingerprint that hashed only the discriminant would call them equal.
+    ///
+    /// Deployment-only knobs — socket addresses, link-conditioning simulation
+    /// — are deliberately *not* here; see the companion test below.
+    #[test]
+    fn a_change_to_any_wire_relevant_channel_setting_changes_the_id() {
+        let base = with_channel_settings(ChannelSettings::new(
+            ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+            ChannelDirection::Bidirectional,
+        ));
+
+        // --- mode payload: reliable settings ---
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::OrderedReliable(reliable(2.0, Some(1024))),
+                ChannelDirection::Bidirectional,
+            ))
+            .protocol_id(),
+            "rtt_resend_factor must be covered"
+        );
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::OrderedReliable(reliable(1.5, Some(2048))),
+                ChannelDirection::Bidirectional,
+            ))
+            .protocol_id(),
+            "max_queue_depth value must be covered"
+        );
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::OrderedReliable(reliable(1.5, None)),
+                ChannelDirection::Bidirectional,
+            ))
+            .protocol_id(),
+            "max_queue_depth None vs Some must be covered"
+        );
+
+        // --- mode discriminant, holding the payload constant ---
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::UnorderedReliable(reliable(1.5, Some(1024))),
+                ChannelDirection::Bidirectional,
+            ))
+            .protocol_id(),
+            "the mode variant itself must be covered"
+        );
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::SequencedReliable(reliable(1.5, Some(1024))),
+                ChannelDirection::Bidirectional,
+            ))
+            .protocol_id(),
+        );
+
+        // --- direction ---
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                ChannelDirection::ClientToServer,
+            ))
+            .protocol_id(),
+            "direction must be covered"
+        );
+        assert_ne!(
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                ChannelDirection::ClientToServer,
+            ))
+            .protocol_id(),
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                ChannelDirection::ServerToClient,
+            ))
+            .protocol_id(),
+        );
+
+        // --- criticality ---
+        assert_ne!(
+            base.protocol_id(),
+            with_channel_settings(
+                ChannelSettings::new(
+                    ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                    ChannelDirection::Bidirectional,
+                )
+                .with_criticality(ChannelCriticality::High),
+            )
+            .protocol_id(),
+            "criticality must be covered"
+        );
+        assert_ne!(
+            with_channel_settings(
+                ChannelSettings::new(
+                    ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                    ChannelDirection::Bidirectional,
+                )
+                .with_criticality(ChannelCriticality::Low),
+            )
+            .protocol_id(),
+            with_channel_settings(
+                ChannelSettings::new(
+                    ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                    ChannelDirection::Bidirectional,
+                )
+                .with_criticality(ChannelCriticality::High),
+            )
+            .protocol_id(),
+        );
+
+        // --- tick buffer capacity (its own mode payload) ---
+        let tick = |capacity: usize| {
+            with_channel_settings(ChannelSettings::new(
+                ChannelMode::TickBuffered(TickBufferSettings {
+                    message_capacity: capacity,
+                }),
+                ChannelDirection::ClientToServer,
+            ))
+        };
+        assert_ne!(
+            tick(64).protocol_id(),
+            tick(128).protocol_id(),
+            "tick buffer message_capacity must be covered"
+        );
+    }
+
+    /// F4b -- **Deployment-only settings are excluded.**
+    ///
+    /// Two peers must be free to differ on where they bind, what RTC path they
+    /// serve, and whether a debug build is simulating packet loss. Folding
+    /// those in would make the fingerprint refuse compatible peers, which is
+    /// a worse failure than the one it exists to prevent.
+    #[test]
+    fn deployment_only_settings_are_not_part_of_the_fingerprint() {
+        let plain = locked(|p| {
+            p.add_message::<Whisper>();
+        });
+        let conditioned = locked(|p| {
+            p.add_message::<Whisper>();
+            p.link_condition(LinkConditionerConfig::good_condition());
+        });
+        let rehomed = locked(|p| {
+            p.add_message::<Whisper>();
+            p.rtc_endpoint("/somewhere_else".to_string());
+        });
+
+        assert_eq!(plain.protocol_id(), conditioned.protocol_id());
+        assert_eq!(plain.protocol_id(), rehomed.protocol_id());
+    }
+
+    /// F4c -- **Compression is per-direction and carries its parameters.**
+    ///
+    /// A peer that decompresses with a different dictionary does not get a
+    /// clean refusal, it gets garbage, so every part of the setting has to be
+    /// in the fingerprint: whether each direction is compressed at all, which
+    /// direction it is, the mode, and the mode's payload including the
+    /// dictionary bytes themselves.
+    #[test]
+    fn a_change_to_any_compression_setting_changes_the_id() {
+        let with = |config: Option<CompressionConfig>| {
+            locked(|p| {
+                p.add_message::<Whisper>();
+                if let Some(config) = config {
+                    p.compression(config);
+                }
+            })
+        };
+
+        let none = with(None);
+        let both_off = with(Some(CompressionConfig::new(None, None)));
+        // "no compression config at all" and "a config that compresses
+        // nothing" are the same thing on the wire, but they must still be
+        // distinguishable in the preimage only if they differ in behaviour --
+        // they do not, so the presence byte is what separates them and this
+        // asserts the current, deliberate encoding.
+        assert_ne!(
+            none.protocol_id(),
+            both_off.protocol_id(),
+            "the presence of a compression config is itself encoded"
+        );
+
+        let s2c = with(Some(CompressionConfig::new(
+            Some(CompressionMode::Default(3)),
+            None,
+        )));
+        let c2s = with(Some(CompressionConfig::new(
+            None,
+            Some(CompressionMode::Default(3)),
+        )));
+        assert_ne!(
+            s2c.protocol_id(),
+            c2s.protocol_id(),
+            "compressing one direction must differ from compressing the other"
+        );
+        assert_ne!(s2c.protocol_id(), both_off.protocol_id());
+
+        // Level is a payload, not just a variant.
+        assert_ne!(
+            s2c.protocol_id(),
+            with(Some(CompressionConfig::new(
+                Some(CompressionMode::Default(9)),
+                None,
+            )))
+            .protocol_id(),
+            "compression level must be covered"
+        );
+
+        // Mode variant, holding the level constant.
+        assert_ne!(
+            s2c.protocol_id(),
+            with(Some(CompressionConfig::new(
+                Some(CompressionMode::Dictionary(3, b"dictionary".to_vec())),
+                None,
+            )))
+            .protocol_id(),
+            "the compression mode variant must be covered"
+        );
+
+        // Dictionary identity: same mode, same level, different bytes.
+        assert_ne!(
+            with(Some(CompressionConfig::new(
+                Some(CompressionMode::Dictionary(3, b"dictionary".to_vec())),
+                None,
+            )))
+            .protocol_id(),
+            with(Some(CompressionConfig::new(
+                Some(CompressionMode::Dictionary(3, b"dictionaru".to_vec())),
+                None,
+            )))
+            .protocol_id(),
+            "the dictionary contents must be covered -- a peer with a different \
+             dictionary decompresses to garbage"
+        );
+
+        // Training sample count.
+        assert_ne!(
+            with(Some(CompressionConfig::new(
+                Some(CompressionMode::Training(100)),
+                None,
+            )))
+            .protocol_id(),
+            with(Some(CompressionConfig::new(
+                Some(CompressionMode::Training(200)),
+                None,
+            )))
+            .protocol_id(),
+            "the training sample count must be covered"
+        );
+    }
+
+    /// F4d -- **Client-authoritative entities is part of the protocol.**
+    ///
+    /// It decides whether the server accepts entity mutations the client
+    /// originates, i.e. whether a whole class of message is legal on the wire.
+    #[test]
+    fn the_client_authoritative_entities_mode_changes_the_id() {
+        let off = locked(|p| {
+            p.add_component::<Ghost>();
+        });
+        let on = locked(|p| {
+            p.add_component::<Ghost>();
+            p.enable_client_authoritative_entities();
+        });
+
+        assert_ne!(off.protocol_id(), on.protocol_id());
+    }
+
+    /// F5 -- **The fingerprint is a pure function of the registrations.**
+    ///
+    /// Two peers are separate processes with separate allocators, separate
+    /// `TypeId` layouts across builds, and separate hash-map iteration orders.
+    /// Nothing about *this* process may leak into the value, or the two ends
+    /// will disagree at runtime while every in-process test passes. The
+    /// registries are `HashMap`-backed, so iteration order is the live hazard
+    /// here; this builds the same protocol many times and requires one answer.
+    #[test]
+    fn the_id_does_not_depend_on_anything_local_to_this_process() {
+        let build = || {
+            locked(|p| {
+                p.add_default_channels();
+                p.add_channel_settings::<Gossip>(ChannelSettings::new(
+                    ChannelMode::OrderedReliable(reliable(1.5, Some(1024))),
+                    ChannelDirection::Bidirectional,
+                ));
+                p.add_message::<Whisper>();
+                p.add_message::<Shout>();
+                p.add_request::<Question>();
+                p.add_component::<Ghost>();
+                p.add_resource::<Wraith>();
+                p.compression(CompressionConfig::new(
+                    Some(CompressionMode::Dictionary(3, b"dictionary".to_vec())),
+                    Some(CompressionMode::Training(50)),
+                ));
+            })
+        };
+
+        let first = build().protocol_id();
+        for _ in 0..32 {
+            assert_eq!(build().protocol_id(), first);
+        }
+    }
+
+    /// The preimage begins with a domain-separation tag, so a digest computed
+    /// under this grammar can never be confused with one computed under
+    /// another. Pinned as a literal: changing it is a protocol-wide break and
+    /// should have to be done on purpose, in a diff that says so.
+    #[test]
+    fn the_preimage_is_domain_separated_by_a_pinned_tag() {
+        assert_eq!(super::PROTOCOL_FINGERPRINT_FORMAT, b"naia:pf:v1");
+    }
+
+    /// The codec grammar constant tracks naia's own framing, not the
+    /// application's schema. It is one value for the whole protocol; there is
+    /// no per-message version and no application-settable epoch.
+    #[test]
+    fn the_codec_grammar_constant_is_protocol_wide_and_not_application_settable() {
+        assert_eq!(super::CODEC_GRAMMAR_VERSION, 1);
+
+        // Nothing a builder can call changes it: two protocols with identical
+        // registrations agree regardless of how they were configured.
+        let a = locked(|p| {
+            p.add_message::<Whisper>();
+            p.tick_interval(Duration::from_millis(20));
+        });
+        let b = locked(|p| {
+            p.add_message::<Whisper>();
+            p.tick_interval(Duration::from_millis(80));
+        });
+        assert_eq!(a.protocol_id(), b.protocol_id());
+    }
+
+    /// `locked_protocol_id` exists because `Server::new` locks a protocol and
+    /// then hands clones of it to two constructors, either of which may need
+    /// the fingerprint. An unconditional `lock()` there panics with "Protocol
+    /// already locked!"; this must not, and must return the same value the
+    /// first lock cached.
+    #[test]
+    fn asking_a_locked_protocol_for_its_id_again_does_not_panic() {
+        let mut protocol = Protocol::builder();
+        protocol.add_message::<Whisper>();
+
+        let first = protocol.locked_protocol_id();
+        let second = protocol.locked_protocol_id();
+        let third = protocol.clone().locked_protocol_id();
+
+        assert_eq!(first, second);
+        assert_eq!(first, third);
+        assert_eq!(first, protocol.protocol_id());
+    }
+
+    /// The fingerprint is exactly 128 bits, and its hex form is exactly the
+    /// width the socket layer validates against. The two constants live in
+    /// different crates -- `naia-shared` cannot be seen from
+    /// `naia-socket-shared` -- so their agreement is asserted rather than
+    /// assumed. (A compile-time assertion in `protocol_id.rs` covers the same
+    /// ground; this one states it where a reader of the fingerprint code will
+    /// look.)
+    #[test]
+    fn the_fingerprint_is_128_bits_and_matches_the_header_width() {
+        use crate::{ProtocolId, PROTOCOL_ID_HEADER_VALUE_LEN};
+
+        let id = locked(|p| {
+            p.add_message::<Whisper>();
+        })
+        .protocol_id();
+
+        assert_eq!(ProtocolId::BYTE_LEN, 16);
+        assert_eq!(id.bytes().len(), 16);
+        assert_eq!(id.to_hex().len(), PROTOCOL_ID_HEADER_VALUE_LEN);
+        assert!(id.to_hex().chars().all(|c| c.is_ascii_hexdigit()));
+        assert_eq!(ProtocolId::from_hex(&id.to_hex()), Some(id));
+
+        // A real protocol's fingerprint is not the all-zero default -- that
+        // would mean the preimage never reached the hasher.
+        assert_ne!(id, ProtocolId::default());
     }
 }

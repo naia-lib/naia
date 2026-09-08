@@ -1413,7 +1413,10 @@ impl From<SinkSocket> for Box<dyn crate::transport::Socket> {
 }
 
 impl crate::transport::Socket for SinkSocket {
-    fn listen(self: Box<Self>) -> crate::transport::ListenResult {
+    fn listen(
+        self: Box<Self>,
+        _expected_protocol_id: naia_shared::ProtocolId,
+    ) -> crate::transport::ListenResult {
         let (ps, pr) = crate::transport::PacketChannel::unbounded();
         (Box::new(SinkAuth), Box::new(SinkAuth), ps, pr)
     }

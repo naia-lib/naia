@@ -36,7 +36,7 @@ use naia_shared::{
     AuthorityError, Channel, ChannelKind, ComponentKind, ConnectionStats,
     EntityAndGlobalEntityConverter, EntityAuthStatus, EntityPriorityMut, EntityPriorityRef,
     GlobalEntity, GlobalEntityIndex, GlobalEntitySpawner, GlobalWorldManagerType, HostType,
-    Message, MessageContainer, Protocol, Replicate, ReplicatedComponent, Request,
+    Message, MessageContainer, Protocol, ProtocolId, Replicate, ReplicatedComponent, Request,
     ResourceAlreadyExists, Response, ResponseReceiveKey, ResponseSendKey, Tick, WorldMutType,
     WorldRefType,
 };
@@ -120,6 +120,13 @@ pub struct PipelinedWorldServer<E: Copy + Eq + Hash + Send + Sync + 'static> {
     /// [`Self::send`] unparks them at the bottom, so the whole park-window bracket
     /// is self-contained in naia core. The runtime's `Drop` joins the workers.
     runtime: Option<PipelineRuntime<E>>,
+
+    /// This server's protocol fingerprint, kept so [`Self::listen`] can hand it
+    /// to the transport. The pipeline never reads auth itself, but the socket
+    /// it binds does accept auth envelopes, and a transport that was never told
+    /// what to compare against would be a hole shaped exactly like the one this
+    /// work exists to close.
+    protocol_id: ProtocolId,
 }
 
 impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
@@ -131,6 +138,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     /// resource), then call [`Self::listen`] to bind a socket and drive ticks
     /// with [`Self::tick`].
     pub fn new<P: Into<Protocol>>(server_config: ServerConfig, protocol: P) -> Self {
+        let mut protocol: Protocol = protocol.into();
+        let protocol_id = protocol.locked_protocol_id();
         let ws = InternalWorldServer::<E>::new(server_config, protocol);
         let (coord_state, recv, send) = ws.into_pipeline_handles();
         let shared: Arc<ServerShared<E>> = Arc::clone(&recv.state.shared);
@@ -138,13 +147,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             state: coord_state,
             shared,
         };
-        Self::from_handles(coord, recv, send)
+        Self::from_handles(coord, recv, send, protocol_id)
     }
 
     pub(super) fn from_handles(
         coord: CoordHandle<E>,
         recv: RecvHandle<E>,
         send: SendHandle<E>,
+        protocol_id: ProtocolId,
     ) -> Self {
         Self {
             coord: Some(coord),
@@ -153,7 +163,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             send_publisher: None,
             recv_subscriber: None,
             runtime: None,
+            protocol_id,
         }
+    }
+
+    /// This server's protocol fingerprint, as computed when its `Protocol` was
+    /// locked.
+    pub fn protocol_id(&self) -> ProtocolId {
+        self.protocol_id
     }
 
     /// MISSION_PIPELINE_API_BOUNDARY G8 (§2l Decision 1) — switch [`Self::send`]
@@ -342,14 +359,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
     ///
     /// This is the G2 startup-window entry point. Equivalent to:
     /// ```ignore
-    /// let (_auth_tx, _auth_rx, ps, pr) = socket.into().listen();
+    /// let (_auth_tx, _auth_rx, ps, pr) = socket.into().listen(protocol_id);
     /// server.with_monolithic_world_server(|ws| ws.io_load(ps, pr));
     /// ```
     ///
     /// Must be called while workers are not yet spawned (or parked). After
     /// this call the pipeline is ready for `tick()`.
     pub fn listen<S: Into<Box<dyn crate::transport::Socket>>>(&mut self, socket: S) {
-        let (_auth_tx, _auth_rx, ps, pr) = crate::transport::Socket::listen(socket.into());
+        let (_auth_tx, _auth_rx, ps, pr) =
+            crate::transport::Socket::listen(socket.into(), self.protocol_id);
         self.with_monolithic_world_server(|ws| ws.io_load(ps, pr));
     }
 

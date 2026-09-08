@@ -9,7 +9,9 @@ use std::{
 
 use log::warn;
 
-use naia_shared::{http_utils, IdentityToken, LinkConditionerConfig};
+use naia_shared::{
+    http_utils, IdentityToken, LinkConditionerConfig, ProtocolId, PROTOCOL_ID_HEADER,
+};
 
 use super::{
     AuthReceiver as TransportAuthReceiver, AuthSender as TransportAuthSender,
@@ -27,7 +29,14 @@ use super::{
 /// Credentials sent via `AuthEvent` are visible on the wire.
 pub struct Socket {
     data_socket: Arc<Mutex<UdpSocket>>,
-    auth_io: Arc<Mutex<AuthIo>>,
+    /// Bound at construction so an address conflict surfaces there rather than
+    /// at `listen()`, but not yet wrapped in an [`AuthIo`]: the `AuthIo` cannot
+    /// exist until it knows the fingerprint it must compare against, which
+    /// only arrives with `listen()`. Keeping the two apart is what makes a
+    /// fingerprint-less auth path unrepresentable rather than merely
+    /// discouraged.
+    auth_socket: TcpListener,
+    public_udp_url: String,
     config: Option<LinkConditionerConfig>,
 }
 
@@ -41,10 +50,6 @@ impl Socket {
         auth_socket
             .set_nonblocking(true)
             .expect("can't set socket to non-blocking!");
-        let auth_io = Arc::new(Mutex::new(AuthIo::new(
-            &server_addrs.public_udp_url,
-            auth_socket,
-        )));
 
         let data_socket = Arc::new(Mutex::new(
             UdpSocket::bind(server_addrs.udp_listen_addr).unwrap(),
@@ -57,7 +62,8 @@ impl Socket {
 
         Self {
             data_socket,
-            auth_io,
+            auth_socket,
+            public_udp_url: server_addrs.public_udp_url.clone(),
             config,
         }
     }
@@ -70,9 +76,14 @@ impl Into<Box<dyn TransportSocket>> for Socket {
 }
 
 impl TransportSocket for Socket {
-    fn listen(self: Box<Self>) -> ListenResult {
-        let auth_sender = AuthSender::new(self.auth_io.clone());
-        let auth_receiver = AuthReceiver::new(self.auth_io.clone());
+    fn listen(self: Box<Self>, expected_protocol_id: ProtocolId) -> ListenResult {
+        let auth_io = Arc::new(Mutex::new(AuthIo::new(
+            &self.public_udp_url,
+            self.auth_socket,
+            expected_protocol_id,
+        )));
+        let auth_sender = AuthSender::new(auth_io.clone());
+        let auth_receiver = AuthReceiver::new(auth_io);
         let packet_sender = UdpPacketSender::new(self.data_socket.clone());
         let packet_receiver = UdpPacketReceiver::new(self.data_socket.clone());
 
@@ -193,10 +204,18 @@ pub(crate) struct AuthIo {
     /// so reading one inline let any peer stall the server's tick by connecting
     /// and then sending nothing.
     pending_reads: HashMap<SocketAddr, PendingAuthRead>,
+    /// The fingerprint every incoming auth request must carry. Not an
+    /// `Option`: there is no state in which this transport accepts auth
+    /// without something to compare against.
+    expected_protocol_id: ProtocolId,
 }
 
 impl AuthIo {
-    pub fn new(public_udp_url: &str, socket: TcpListener) -> Self {
+    pub fn new(
+        public_udp_url: &str,
+        socket: TcpListener,
+        expected_protocol_id: ProtocolId,
+    ) -> Self {
         let public_udp_addr = url_str_to_addr(public_udp_url);
 
         Self {
@@ -205,6 +224,7 @@ impl AuthIo {
             buffer: [0; 1472],
             outgoing_streams: HashMap::new(),
             pending_reads: HashMap::new(),
+            expected_protocol_id,
         }
     }
 
@@ -300,7 +320,8 @@ impl AuthIo {
                 .remove(&addr)
                 .expect("just read from this entry");
 
-            let Some(auth_bytes) = decode_auth_request(&pending.bytes) else {
+            let Some(auth_bytes) = decode_auth_request(&pending.bytes, &self.expected_protocol_id)
+            else {
                 continue;
             };
 
@@ -422,9 +443,36 @@ fn headers_end(bytes: &[u8]) -> Option<usize> {
 }
 
 /// Pulls the decoded `Authorization` payload out of a complete request, or
-/// `None` if this was not an auth request after all.
-fn decode_auth_request(bytes: &[u8]) -> Option<Vec<u8>> {
+/// `None` if the request must not be answered.
+///
+/// # Fingerprint gate
+///
+/// The protocol fingerprint is checked **first**, before the credential is
+/// even looked at, and every way of failing it — header absent, not valid
+/// UTF-8, not 32 hex digits, or 32 hex digits naming a different protocol —
+/// leaves through the same `None`. That indistinguishability is the point: a
+/// peer learns only "refused", never which of those it was, and never the
+/// expected value. The fingerprint is public compatibility metadata that
+/// anybody with a released client can compute, so it is not a secret worth
+/// protecting — but echoing it would turn a refusal into an oracle that hands
+/// out the one value needed to get past this check, and nothing is gained by
+/// that.
+///
+/// Failing here means the caller drops the connection without the request ever
+/// reaching the server application: no user record, no auth event, no token,
+/// and the credential is never base64-decoded, so it cannot be consumed.
+fn decode_auth_request(bytes: &[u8], expected_protocol_id: &ProtocolId) -> Option<Vec<u8>> {
     let request = http_utils::bytes_to_request(bytes);
+
+    let protocol_id = request
+        .headers()
+        .get(PROTOCOL_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(ProtocolId::from_hex);
+    if protocol_id.as_ref() != Some(expected_protocol_id) {
+        return None;
+    }
+
     let auth_header = request.headers().get("Authorization")?;
     let auth_str = auth_header.to_str().ok()?;
     base64::decode(auth_str).ok()
@@ -583,13 +631,29 @@ mod auth_io_stream_tests {
         time::Duration,
     };
 
-    use super::{AuthIo, MAX_PENDING_AUTH_READS};
+    use naia_shared::{ProtocolId, PROTOCOL_ID_HEADER};
+
+    use super::{decode_auth_request, AuthIo, MAX_PENDING_AUTH_READS};
+
+    /// The fingerprint the test server expects. Arbitrary, but fixed: what
+    /// matters is that a peer presenting anything else is refused.
+    fn expected_id() -> ProtocolId {
+        ProtocolId::new(0xdead_beef)
+    }
+
+    /// The header line a well-behaved client sends, terminator included.
+    fn fingerprint_line() -> String {
+        format!("{}: {}\r\n", PROTOCOL_ID_HEADER, expected_id().to_hex())
+    }
 
     fn auth_io() -> (AuthIo, u16) {
         let socket = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = socket.local_addr().unwrap().port();
         socket.set_nonblocking(true).unwrap();
-        (AuthIo::new("udp://127.0.0.1:14191", socket), port)
+        (
+            AuthIo::new("udp://127.0.0.1:14191", socket, expected_id()),
+            port,
+        )
     }
 
     /// Drives `receive` until it stops reporting `WouldBlock`-style emptiness,
@@ -621,7 +685,13 @@ mod auth_io_stream_tests {
         let (mut auth_io, port) = auth_io();
 
         for _ in 0..16 {
-            send_request(port, "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n");
+            send_request(
+                port,
+                &format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{}\r\n",
+                    fingerprint_line()
+                ),
+            );
             drain_one(&mut auth_io);
         }
 
@@ -639,7 +709,10 @@ mod auth_io_stream_tests {
         for _ in 0..16 {
             send_request(
                 port,
-                "GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: !!!not base64!!!\r\n\r\n",
+                &format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{}Authorization: !!!not base64!!!\r\n\r\n",
+                    fingerprint_line()
+                ),
             );
             drain_one(&mut auth_io);
         }
@@ -668,7 +741,7 @@ mod auth_io_stream_tests {
         }
 
         stream
-            .write_all(format!("Authorization: {encoded}\r\n\r\n").as_bytes())
+            .write_all(format!("{}Authorization: {encoded}\r\n\r\n", fingerprint_line()).as_bytes())
             .unwrap();
         stream.flush().unwrap();
 
@@ -689,8 +762,11 @@ mod auth_io_stream_tests {
         let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
         stream
             .write_all(
-                format!("GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: {encoded}\r\n\r\n")
-                    .as_bytes(),
+                format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{}Authorization: {encoded}\r\n\r\n",
+                    fingerprint_line()
+                )
+                .as_bytes(),
             )
             .unwrap();
         stream.flush().unwrap();
@@ -720,8 +796,11 @@ mod auth_io_stream_tests {
         let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
         stream
             .write_all(
-                format!("GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: {encoded}\r\n\r\n")
-                    .as_bytes(),
+                format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{}Authorization: {encoded}\r\n\r\n",
+                    fingerprint_line()
+                )
+                .as_bytes(),
             )
             .unwrap();
         stream.flush().unwrap();
@@ -793,10 +872,196 @@ mod auth_io_stream_tests {
 
         send_request(
             port,
-            &format!("GET / HTTP/1.1\r\nHost: localhost\r\nAuthorization: {encoded}\r\n\r\n"),
+            &format!(
+                "GET / HTTP/1.1\r\nHost: localhost\r\n{}Authorization: {encoded}\r\n\r\n",
+                fingerprint_line()
+            ),
         );
 
         assert!(drain_one(&mut auth_io), "the request should reach the app");
         assert_eq!(auth_io.outgoing_streams.len(), 1);
+    }
+
+    // ---- protocol fingerprint gate -----------------------------------------
+
+    /// Every way of failing the fingerprint check, as a peer can produce them.
+    fn refused_fingerprints() -> Vec<(&'static str, String)> {
+        let good = expected_id().to_hex();
+        vec![
+            ("absent", String::new()),
+            (
+                "wrong value",
+                format!(
+                    "{}: {}\r\n",
+                    PROTOCOL_ID_HEADER,
+                    ProtocolId::new(1).to_hex()
+                ),
+            ),
+            (
+                "too short",
+                format!("{}: {}\r\n", PROTOCOL_ID_HEADER, &good[..good.len() - 1]),
+            ),
+            ("too long", format!("{}: {}0\r\n", PROTOCOL_ID_HEADER, good)),
+            (
+                "not hex",
+                format!("{}: {}zz\r\n", PROTOCOL_ID_HEADER, &good[..good.len() - 2]),
+            ),
+            ("empty value", format!("{}: \r\n", PROTOCOL_ID_HEADER)),
+        ]
+    }
+
+    /// F9/F10/F13 -- **A peer running a different protocol gets nothing.**
+    ///
+    /// The request below carries a perfectly good `Authorization` header. It
+    /// still must not reach the application: no auth event, no user record, no
+    /// identity token, and -- because the gate runs above the base64 decode --
+    /// the credential itself is never even decoded, so a single-use token
+    /// presented by a mismatching peer is not consumed and remains usable by
+    /// the peer it was issued to.
+    ///
+    /// All six failure shapes are asserted together, and asserted to produce
+    /// the *same* outcome, because a difference between them is exactly the
+    /// distinction a probing peer would use to learn what the server expects.
+    #[test]
+    fn an_auth_request_failing_the_fingerprint_check_never_reaches_the_application() {
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+
+        for (label, line) in refused_fingerprints() {
+            let (mut auth_io, port) = auth_io();
+
+            send_request(
+                port,
+                &format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{line}Authorization: {encoded}\r\n\r\n"
+                ),
+            );
+
+            assert!(
+                !drain_one(&mut auth_io),
+                "a request with a {label} fingerprint must not reach the application",
+            );
+            assert!(
+                auth_io.outgoing_streams.is_empty(),
+                "a request with a {label} fingerprint must not retain a stream",
+            );
+        }
+    }
+
+    /// The gate is above the credential, not beside it: `decode_auth_request`
+    /// returns `None` for a mismatching peer *whatever* its `Authorization`
+    /// header says, including when there is none at all. Asserted at this level
+    /// as well as through the socket because it is the property the rest of the
+    /// auth path depends on -- if this function ever decoded first, the
+    /// consume-the-token failure would be invisible from outside.
+    #[test]
+    fn the_fingerprint_is_compared_before_the_credential_is_decoded() {
+        let expected = expected_id();
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+        let good = fingerprint_line();
+
+        // Baseline: with the right fingerprint, the credential comes back.
+        let accepted =
+            format!("GET / HTTP/1.1\r\nHost: localhost\r\n{good}Authorization: {encoded}\r\n\r\n");
+        assert_eq!(
+            decode_auth_request(accepted.as_bytes(), &expected),
+            Some(vec![1u8, 2, 3, 4]),
+        );
+
+        // Every refusal shape yields `None`, and so does the same refusal with
+        // no credential at all -- one outcome, no observable difference.
+        for (label, line) in refused_fingerprints() {
+            for credential in [format!("Authorization: {encoded}\r\n"), String::new()] {
+                let request =
+                    format!("GET / HTTP/1.1\r\nHost: localhost\r\n{line}{credential}\r\n");
+                assert_eq!(
+                    decode_auth_request(request.as_bytes(), &expected),
+                    None,
+                    "{label} must be refused regardless of the credential beside it",
+                );
+            }
+        }
+    }
+
+    /// The *ordering* itself, asserted on the source.
+    ///
+    /// The test above pins the outcome, and the outcome is the same whichever
+    /// order the two checks run in: a mismatching peer gets `None` either way.
+    /// That is the fail-closed guarantee working, and it is precisely why
+    /// behaviour cannot falsify a reordering here. The contract nevertheless
+    /// requires the comparison to happen *before* the credential is read and
+    /// base64-decoded -- an attacker who fails the gate must not have caused any
+    /// decoding work -- so the ordering is asserted where it is visible: in the
+    /// text of the function.
+    ///
+    /// The function body is sliced out first so the assertion cannot be
+    /// satisfied by this test's own source, or by any other function in the
+    /// file.
+    #[test]
+    fn the_gate_precedes_the_credential_in_the_source_not_just_in_the_outcome() {
+        const THIS_FILE: &str = include_str!("udp.rs");
+
+        let signature = "fn decode_auth_request(";
+        let start = THIS_FILE
+            .find(signature)
+            .expect("decode_auth_request must exist");
+        let body = &THIS_FILE[start..];
+        let end = body
+            .find("\n}\n")
+            .expect("decode_auth_request must be closed");
+        let body = &body[..end];
+
+        let gate = body
+            .find(PROTOCOL_ID_HEADER_CONST)
+            .expect("decode_auth_request must consult the fingerprint header");
+        let credential = body
+            .find(r#"get("Authorization")"#)
+            .expect("decode_auth_request must read the credential header");
+
+        assert!(
+            gate < credential,
+            "the fingerprint must be compared before the credential is read and decoded",
+        );
+    }
+
+    /// The identifier the test above looks for, kept out of the assertion so
+    /// the literal appears once.
+    const PROTOCOL_ID_HEADER_CONST: &str = "PROTOCOL_ID_HEADER";
+
+    /// A refusal must not tell the peer what the server expects. The gate has
+    /// no response path of its own -- it drops the connection -- so this
+    /// asserts the absence of the one thing that could leak: the expected
+    /// value never appears in anything written back.
+    #[test]
+    fn a_refusal_does_not_echo_the_expected_fingerprint() {
+        use std::io::Read;
+
+        let (mut auth_io, port) = auth_io();
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(
+                format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{}: {}\r\nAuthorization: {encoded}\r\n\r\n",
+                    PROTOCOL_ID_HEADER,
+                    ProtocolId::new(1).to_hex(),
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        stream.flush().unwrap();
+
+        assert!(!drain_one(&mut auth_io));
+
+        stream
+            .set_read_timeout(Some(Duration::from_millis(200)))
+            .unwrap();
+        let mut response = String::new();
+        let _ = stream.read_to_string(&mut response);
+
+        assert!(
+            !response.contains(&expected_id().to_hex()),
+            "the expected fingerprint must never be echoed; got: {response}",
+        );
     }
 }
