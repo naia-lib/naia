@@ -461,6 +461,40 @@ mod tests {
                 }
                 fn disable_delegation(&mut self) {}
                 fn localize(&mut self) {}
+                // Structural-registry schema: test doubles are never
+                // registered, so there is no descriptor; the remaining
+                // facts are vacuously empty, matching `diff_mask_size() == 0`
+                // above.
+                fn wire_schema() -> Vec<u8>
+                where
+                    Self: Sized,
+                {
+                    unreachable!("test doubles are never registered")
+                }
+                fn replicated_property_labels() -> Vec<&'static str>
+                where
+                    Self: Sized,
+                {
+                    Vec::new()
+                }
+                fn property_mask_indices() -> Vec<u8>
+                where
+                    Self: Sized,
+                {
+                    Vec::new()
+                }
+                fn mask_size_bytes() -> u8
+                where
+                    Self: Sized,
+                {
+                    0
+                }
+                fn entity_property_labels() -> Vec<&'static str>
+                where
+                    Self: Sized,
+                {
+                    Vec::new()
+                }
             }
         };
     }

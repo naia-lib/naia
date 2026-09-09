@@ -1,4 +1,12 @@
-use crate::{bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde};
+use crate::{
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
+    error::SerdeErr,
+    serde::{
+        wire_schema_count, wire_schema_field, Serde, WireSchema, WireSchemaContext,
+        SCHEMA_TAG_TUPLE,
+    },
+};
 macro_rules! impl_reflect_tuple {
     {$($index:tt : $name:tt),*} => {
         impl<$($name : Serde,)*> Serde for ($($name,)*) {
@@ -12,6 +20,15 @@ macro_rules! impl_reflect_tuple {
                 let mut output = 0;
                 $(output += self.$index.bit_length();)*
                 output
+            }
+        }
+        // Schema descriptor: tuples are ordered and unlabeled, so arity
+        // plus the element descriptors in order is the whole fact.
+        impl<$($name : WireSchema,)*> WireSchema for ($($name,)*) {
+            fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+                out.push(SCHEMA_TAG_TUPLE);
+                wire_schema_count(out, [$(stringify!($name),)*].len() as u32);
+                $(wire_schema_field::<$name>(ctx, out);)*
             }
         }
     }
@@ -67,5 +84,41 @@ mod tests {
         assert_eq!(in_2, out_2);
         assert_eq!(in_3, out_3);
         assert_eq!(in_4, out_4);
+    }
+}
+
+// Schema descriptors //
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_TAG_BOOL, SCHEMA_TAG_TUPLE};
+
+    /// Arity and order are facts: same elements in a different order, or a
+    /// different count, must differ.
+    #[test]
+    fn tuple_arity_and_order_matter() {
+        assert_eq!(
+            &<(bool, bool)>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[
+                SCHEMA_TAG_TUPLE,
+                2,
+                0,
+                0,
+                0,
+                SCHEMA_TAG_BOOL,
+                SCHEMA_TAG_BOOL
+            ],
+        );
+        assert_ne!(
+            <(bool, bool)>::wire_schema_bytes(),
+            <(bool, bool, bool)>::wire_schema_bytes(),
+            "arity must differ",
+        );
+        assert_ne!(
+            <(bool, u8)>::wire_schema_bytes(),
+            <(u8, bool)>::wire_schema_bytes(),
+            "order must differ",
+        );
     }
 }

@@ -65,6 +65,7 @@ pub fn message_impl(
         get_builder_read_method(&struct_name, &fields, &struct_type, &turbofish);
     let is_fragment_method = get_is_fragment_method(is_fragment);
     let is_request_method = get_is_request_method(is_request);
+    let wire_schema_method = get_wire_schema_method(&fields, &struct_type, is_fragment, is_request);
 
     let gen = quote! {
         mod #module_name {
@@ -73,6 +74,8 @@ pub fn message_impl(
             pub use #shared_crate_name::{
                 Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
                 EntityProperty, MessageKind, MessageKinds, Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer, RemoteEntity,
+                WireSchemaContext, wire_schema_field, wire_schema_count, wire_schema_label,
+                WIRE_SCHEMA_DOMAIN, SCHEMA_TAG_ENUM, SCHEMA_TAG_STRUCT, SCHEMA_TAG_TUPLE,
             };
             use super::*;
 
@@ -92,6 +95,7 @@ pub fn message_impl(
                 }
                 #is_fragment_method
                 #is_request_method
+                #wire_schema_method
                 #bit_length_method
                 #builder_create_method
                 #relations_waiting_method
@@ -141,6 +145,177 @@ fn get_is_request_method(is_request: bool) -> TokenStream {
     quote! {
         fn is_request(&self) -> bool {
             #value
+        }
+    }
+}
+
+/// Builds the `Message::wire_schema` override for enum messages: the domain
+/// tag, an ENUM node with the real discriminant width, per-variant ordinals,
+/// labels, and payload descriptors (named payloads as labeled structs,
+/// tuple payloads as ordered tuples), then the two envelope fact bytes.
+/// Same no-`Self`-bound contract as the struct shape.
+fn get_enum_wire_schema_method(
+    variants: &[EnumVariant],
+    bits_needed: u8,
+    is_fragment: bool,
+    is_request: bool,
+) -> TokenStream {
+    let fragment_byte = if is_fragment { 1u8 } else { 0u8 };
+    let request_byte = if is_request { 1u8 } else { 0u8 };
+
+    let mut variant_count = 0u32;
+    let mut variant_tokens = quote! {};
+    for variant in variants {
+        let variant_ordinal = variant.index as u32;
+        let variant_label = variant.name.to_string();
+        let payload = match variant.style {
+            VariantStyle::Unit => quote! {
+                out.push(0u8);
+            },
+            VariantStyle::Named => {
+                let mut payload_count = 0u32;
+                let mut payload_tokens = quote! {};
+                for field in &variant.fields {
+                    let field_label = field.name.to_string();
+                    let field_ty = match &field.kind {
+                        FieldKind::Normal(ty) => ty.as_ref().clone(),
+                        FieldKind::EntityProperty => Type::Path(syn::TypePath {
+                            qself: None,
+                            path: Ident::new("EntityProperty", Span::call_site()).into(),
+                        }),
+                    };
+                    payload_count += 1;
+                    payload_tokens = quote! {
+                        #payload_tokens
+                        wire_schema_label(&mut out, #field_label);
+                        wire_schema_field::<#field_ty>(ctx, &mut out);
+                    };
+                }
+                quote! {
+                    out.push(1u8);
+                    out.push(SCHEMA_TAG_STRUCT);
+                    wire_schema_count(&mut out, #payload_count);
+                    #payload_tokens
+                }
+            }
+            VariantStyle::Unnamed => {
+                let mut payload_count = 0u32;
+                let mut payload_tokens = quote! {};
+                for field in &variant.fields {
+                    let field_ty = match &field.kind {
+                        FieldKind::Normal(ty) => ty.as_ref().clone(),
+                        FieldKind::EntityProperty => Type::Path(syn::TypePath {
+                            qself: None,
+                            path: Ident::new("EntityProperty", Span::call_site()).into(),
+                        }),
+                    };
+                    payload_count += 1;
+                    payload_tokens = quote! {
+                        #payload_tokens
+                        wire_schema_field::<#field_ty>(ctx, &mut out);
+                    };
+                }
+                quote! {
+                    out.push(1u8);
+                    out.push(SCHEMA_TAG_TUPLE);
+                    wire_schema_count(&mut out, #payload_count);
+                    #payload_tokens
+                }
+            }
+        };
+        variant_count += 1;
+        variant_tokens = quote! {
+            #variant_tokens
+            wire_schema_count(&mut out, #variant_ordinal);
+            wire_schema_label(&mut out, #variant_label);
+            #payload
+        };
+    }
+
+    quote! {
+        fn wire_schema() -> Vec<u8>
+        where
+            Self: Sized,
+        {
+            let mut out = Vec::new();
+            out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+            out.push(SCHEMA_TAG_ENUM);
+            out.push(#bits_needed);
+            wire_schema_count(&mut out, #variant_count);
+            let ctx = &mut WireSchemaContext::new();
+            #variant_tokens
+            out.push(#fragment_byte);
+            out.push(#request_byte);
+            out
+        }
+    }
+}
+
+/// Builds the `Message::wire_schema` override: a self-contained domain
+/// descriptor built inline from the same fields serialization walks — the
+/// domain tag, a STRUCT node (labels in declaration order) or a TUPLE node
+/// for tuple structs, then the baked fragment fact byte and the baked
+/// request-envelope fact byte.
+///
+/// The base is deliberately NOT `<Self as WireSchema>::wire_schema_bytes()`:
+/// message types are not required to derive `Serde`, so no `Self: WireSchema`
+/// bound may appear here (fewer bounds than the trait method is legal — the
+/// override only needs each *field* type describable, which the field
+/// expansions resolve on their own). No `impl WireSchema` is emitted, so a
+/// type that also derives `Serde` never sees a duplicate impl.
+fn get_wire_schema_method(
+    fields: &[Field],
+    struct_type: &StructType,
+    is_fragment: bool,
+    is_request: bool,
+) -> TokenStream {
+    let fragment_byte = if is_fragment { 1u8 } else { 0u8 };
+    let request_byte = if is_request { 1u8 } else { 0u8 };
+
+    // Tuple structs are unlabeled (TUPLE node); named and unit structs use
+    // the STRUCT node with declaration-order labels.
+    let labeled = !matches!(struct_type, StructType::TupleStruct);
+    let tag = match struct_type {
+        StructType::TupleStruct => quote! { SCHEMA_TAG_TUPLE },
+        _ => quote! { SCHEMA_TAG_STRUCT },
+    };
+
+    let mut field_count = 0u32;
+    let mut field_tokens = quote! {};
+    for field in fields {
+        let (label, ty) = match field {
+            Field::Normal(normal) => (normal.variable_name.to_string(), normal.field_type.clone()),
+            Field::EntityProperty(property) => (
+                property.variable_name.to_string(),
+                Type::Path(syn::TypePath {
+                    qself: None,
+                    path: Ident::new("EntityProperty", Span::call_site()).into(),
+                }),
+            ),
+        };
+        field_count += 1;
+        let label_tokens = labeled.then(|| quote! { wire_schema_label(&mut out, #label); });
+        field_tokens = quote! {
+            #field_tokens
+            #label_tokens
+            wire_schema_field::<#ty>(ctx, &mut out);
+        };
+    }
+
+    quote! {
+        fn wire_schema() -> Vec<u8>
+        where
+            Self: Sized,
+        {
+            let mut out = Vec::new();
+            out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+            out.push(#tag);
+            wire_schema_count(&mut out, #field_count);
+            let ctx = &mut WireSchemaContext::new();
+            #field_tokens
+            out.push(#fragment_byte);
+            out.push(#request_byte);
+            out
         }
     }
 }
@@ -662,6 +837,7 @@ enum FieldKind {
     EntityProperty,
 }
 
+#[derive(Clone, Copy)]
 enum VariantStyle {
     Unit,
     Named,
@@ -782,6 +958,8 @@ fn enum_message_impl(
     let builder_box_clone_method = get_builder_box_clone_method(&input.generics);
     let is_fragment_method = get_is_fragment_method(is_fragment);
     let is_request_method = get_is_request_method(is_request);
+    let wire_schema_method =
+        get_enum_wire_schema_method(&variants, bits_needed, is_fragment, is_request);
 
     let gen = quote! {
         mod #module_name {
@@ -791,7 +969,9 @@ fn enum_message_impl(
                 Named, GlobalEntity, Message, BitWrite, LocalEntityAndGlobalEntityConverter,
                 LocalEntityAndGlobalEntityConverterMut, EntityProperty, MessageKind, MessageKinds,
                 Serde, MessageBuilder, BitReader, SerdeErr, ConstBitLength, MessageContainer,
-                RemoteEntity, UnsignedInteger,
+                RemoteEntity, UnsignedInteger, WireSchemaContext, wire_schema_field,
+                wire_schema_count, wire_schema_label, WIRE_SCHEMA_DOMAIN, SCHEMA_TAG_ENUM,
+                SCHEMA_TAG_STRUCT, SCHEMA_TAG_TUPLE,
             };
             use super::*;
 
@@ -811,6 +991,7 @@ fn enum_message_impl(
                 }
                 #is_fragment_method
                 #is_request_method
+                #wire_schema_method
                 #bit_length_method
                 #builder_create_method
                 #relations_waiting_method

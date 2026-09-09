@@ -1,5 +1,8 @@
 use naia_derive::MessageFragment;
-use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
+use naia_serde::{
+    wire_schema_field, BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger,
+    WireSchema, WireSchemaContext,
+};
 
 const FRAGMENT_ID_BITS: u8 = 10;
 const FRAGMENT_ID_LIMIT: u16 = 2_u16.pow(FRAGMENT_ID_BITS as u32);
@@ -48,6 +51,17 @@ impl ConstBitLength for FragmentId {
     }
 }
 
+// Schema descriptors //
+
+// Transparent wrappers: each serializes exactly as its fixed-width
+// unsigned integer, so each describes exactly as that integer (the bit
+// width travels with it — re-bitting either type changes its descriptor).
+impl WireSchema for FragmentId {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        wire_schema_field::<UnsignedInteger<FRAGMENT_ID_BITS>>(ctx, out);
+    }
+}
+
 // FragmentIndex
 #[derive(Copy, Clone, PartialEq)]
 pub struct FragmentIndex {
@@ -91,6 +105,38 @@ impl Serde for FragmentIndex {
 impl ConstBitLength for FragmentIndex {
     fn const_bit_length() -> u32 {
         FRAGMENT_INDEX_BITS as u32
+    }
+}
+
+impl WireSchema for FragmentIndex {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        wire_schema_field::<UnsignedInteger<FRAGMENT_INDEX_BITS>>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use naia_serde::{WireSchema, SCHEMA_TAG_INTEGER, WIRE_SCHEMA_DOMAIN};
+
+    use super::{FragmentId, FragmentIndex};
+
+    /// Transparency is byte-identity with the underlying fixed-width
+    /// integer; the two widths stay distinguishable.
+    #[test]
+    fn fragment_wrappers_describe_as_their_integers() {
+        assert_eq!(
+            &FragmentId::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_INTEGER, 0, 0, 10],
+        );
+        assert_eq!(
+            &FragmentIndex::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_INTEGER, 0, 0, 20],
+        );
+        assert_ne!(
+            FragmentId::wire_schema_bytes(),
+            FragmentIndex::wire_schema_bytes(),
+            "re-bitting either wrapper must differ",
+        );
     }
 }
 

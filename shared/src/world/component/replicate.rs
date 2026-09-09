@@ -87,6 +87,67 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     }
     /// Gets the ComponentKind of this type
     fn kind(&self) -> ComponentKind;
+    /// Returns this component's canonical domain descriptor: the domain tag
+    /// plus a STRUCT node with one labeled entry per wired property in
+    /// declaration order (component facts — immutability, property labels,
+    /// mask, entity class, authority — live in the structural registry
+    /// entry, not in the descriptor).
+    ///
+    /// This method is REQUIRED with no default, and deliberately takes no
+    /// `Self: WireSchema` bound: component types are not required to derive
+    /// `Serde`, and the derive emits this override inline. A descriptor that
+    /// silently defaulted would let a registered component travel under a
+    /// fingerprint that describes nothing about it, so hand-written
+    /// `Replicate` impls must write their own (see the derive's
+    /// `get_wire_schema_method` for the exact grammar). This method is never
+    /// part of the codec; it only feeds the structural registry and
+    /// fingerprint v2.
+    ///
+    /// The `where Self: Sized` keeps `dyn Replicate` object-safe.
+    fn wire_schema() -> Vec<u8>
+    where
+        Self: Sized;
+    /// Ordered labels of this component's *wired* (replicated) properties, in
+    /// diff-mask index order. Non-replicated fields never reach the wire and
+    /// are excluded — exactly the properties the descriptor's STRUCT node
+    /// lists, in the same order.
+    ///
+    /// REQUIRED with no default: an empty default would desynchronize the
+    /// registry entry from the descriptor for hand-written impls. The derive
+    /// emits the real list. This method is never part of the codec; it only
+    /// feeds the structural registry and fingerprint v2.
+    fn replicated_property_labels() -> Vec<&'static str>
+    where
+        Self: Sized;
+    /// Real diff-mask bit index per wired property, parallel to
+    /// [`replicated_property_labels`](Self::replicated_property_labels).
+    /// These are the sparse declaration-order discriminants (the property
+    /// enum's explicit `= index` values), NOT a dense 0..N renumbering:
+    /// interleaved non-replicated fields consume positions. REQUIRED with no
+    /// default, for the same reason as the labels. Never part of the codec.
+    fn property_mask_indices() -> Vec<u8>
+    where
+        Self: Sized;
+    /// Diff-mask size in bytes: `((field_count - 1) / 8) + 1` over ALL
+    /// declared fields (replicated or not), `0` for a fieldless component.
+    /// This is the static twin of the instance
+    /// [`diff_mask_size`](Self::diff_mask_size); it cannot be derived from
+    /// the mask indices alone, because trailing non-replicated fields widen
+    /// the mask past the highest wired bit. REQUIRED with no default. Never
+    /// part of the codec.
+    fn mask_size_bytes() -> u8
+    where
+        Self: Sized;
+    /// Labels of this component's `EntityProperty` fields, in declaration
+    /// order: the component's entity-relation profile. Entity-typed fields
+    /// encode per-connection (the receiver resolves them through its entity
+    /// converter), so which labeled properties are entity relations — not
+    /// just the [`has_entity_properties`](Self::has_entity_properties) flag
+    /// — is a wire-compatibility fact. REQUIRED with no default. Never part
+    /// of the codec.
+    fn entity_property_labels() -> Vec<&'static str>
+    where
+        Self: Sized;
     /// Returns a shared `Any` reference for downcasting.
     fn to_any(&self) -> &dyn Any;
     /// Returns a mutable `Any` reference for downcasting.

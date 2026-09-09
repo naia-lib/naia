@@ -1,5 +1,11 @@
 use crate::{
-    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
+    error::SerdeErr,
+    serde::{
+        wire_schema_field, Serde, WireSchema, WireSchemaContext, SCHEMA_TAG_HASH_MAP,
+        SCHEMA_TAG_HASH_SET, SCHEMA_UNORDERED,
+    },
     UnsignedVariableInteger,
 };
 use std::{
@@ -139,5 +145,55 @@ mod tests {
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
+    }
+}
+
+// Schema descriptors //
+
+// Unordered collections: the unordered class plus key/value (or element)
+// descriptors plus the exact `UnsignedVariableInteger<5>` length codec. The
+// class byte is what keeps an ordered `Vec<u8>` and an unordered
+// `HashSet<u8>` from ever describing alike.
+impl<K: WireSchema + Eq + std::hash::Hash> WireSchema for HashSet<K> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_HASH_SET);
+        out.push(SCHEMA_UNORDERED);
+        wire_schema_field::<K>(ctx, out);
+        wire_schema_field::<UnsignedVariableInteger<5>>(ctx, out);
+    }
+}
+
+impl<K: WireSchema + Eq + std::hash::Hash, V: WireSchema> WireSchema for HashMap<K, V> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_HASH_MAP);
+        out.push(SCHEMA_UNORDERED);
+        wire_schema_field::<K>(ctx, out);
+        wire_schema_field::<V>(ctx, out);
+        wire_schema_field::<UnsignedVariableInteger<5>>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_TAG_HASH_SET, SCHEMA_TAG_INTEGER, SCHEMA_UNORDERED};
+    use std::collections::HashSet;
+
+    /// The unordered class separates hash collections from ordered vectors
+    /// with identical elements and codecs.
+    #[test]
+    fn unordered_class_separates_hash_collections() {
+        let bytes = HashSet::<u8>::wire_schema_bytes();
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_HASH_SET);
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len() + 1], SCHEMA_UNORDERED);
+        assert_eq!(
+            &bytes[WIRE_SCHEMA_DOMAIN.len() + 2..],
+            &[SCHEMA_TAG_INTEGER, 0, 0, 8, SCHEMA_TAG_INTEGER, 0, 1, 5][..],
+        );
+        assert_ne!(
+            bytes,
+            Vec::<u8>::wire_schema_bytes(),
+            "unordered set must differ from ordered vector",
+        );
     }
 }

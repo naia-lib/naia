@@ -630,11 +630,12 @@ mod message_manager_tests {
     use crate::{
         constants::FRAGMENTATION_LIMIT_BITS,
         messages::fragment::{FragmentId, FragmentIndex, FragmentedMessage},
+        wire_schema_count, wire_schema_field,
         world::{local::local_world_manager::LocalWorldManager, test_support::TestGwm},
         Channel, ChannelCriticality, ChannelDirection, ChannelKind, ChannelKinds, ChannelMode,
         ChannelSettings, ComponentKinds, FakeEntityConverter, GlobalRequestId, HostType,
         MessageBuilder, MessageContainer, MessageKinds, Named, PacketNotifiable, ReliableSettings,
-        RequestOrResponse,
+        RequestOrResponse, WireSchemaContext, SCHEMA_TAG_TUPLE, WIRE_SCHEMA_DOMAIN,
     };
 
     use super::{receive_window, MessageManager};
@@ -738,6 +739,23 @@ mod message_manager_tests {
         fn is_request(&self) -> bool {
             false
         }
+        fn wire_schema() -> Vec<u8>
+        where
+            Self: Sized,
+        {
+            // Hand-written mirror of the derive's TUPLE output for a
+            // single-`u8` tuple struct: domain tag, node, field, then the
+            // fragment and request-envelope fact bytes (both zero here).
+            let mut out = Vec::new();
+            out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+            out.push(SCHEMA_TAG_TUPLE);
+            wire_schema_count(&mut out, 1);
+            let ctx = &mut WireSchemaContext::new();
+            wire_schema_field::<u8>(ctx, &mut out);
+            out.push(0);
+            out.push(0);
+            out
+        }
         fn write(
             &self,
             message_kinds: &MessageKinds,
@@ -808,6 +826,25 @@ mod message_manager_tests {
         }
         fn is_request(&self) -> bool {
             false
+        }
+        fn wire_schema() -> Vec<u8>
+        where
+            Self: Sized,
+        {
+            // Hand-written mirror of the derive's TUPLE output for a
+            // single-`u32` tuple struct. (The value inside is a bit *count*,
+            // not a serialized `u32`, but the descriptor describes the
+            // field's type grammar — which is what a peer needs to agree
+            // on — not this test double's packing trick.)
+            let mut out = Vec::new();
+            out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+            out.push(SCHEMA_TAG_TUPLE);
+            wire_schema_count(&mut out, 1);
+            let ctx = &mut WireSchemaContext::new();
+            wire_schema_field::<u32>(ctx, &mut out);
+            out.push(0);
+            out.push(0);
+            out
         }
         fn write(
             &self,

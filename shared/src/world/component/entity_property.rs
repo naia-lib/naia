@@ -1,7 +1,10 @@
 use std::hash::Hash;
 
 use log::{info, warn};
-use naia_serde::{BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr};
+use naia_serde::{
+    wire_schema_field, BitCounter, BitReader, BitWrite, BitWriter, Serde, SerdeErr,
+    UnsignedVariableInteger, WireSchema, WireSchemaContext, SCHEMA_TAG_ENTITY_PROPERTY,
+};
 
 use crate::world::local::local_entity::OwnedLocalEntity;
 use crate::{
@@ -2686,5 +2689,39 @@ mod relation_state_machine_tests {
     fn a_waiting_or_invalid_property_holds_no_global_entity() {
         assert_eq!(waiting(9).get_inner(), None);
         assert_eq!(invalid().get_inner(), None);
+    }
+}
+
+// Schema descriptors //
+
+// The wire grammar is fixed: an optional-present bit, then the reversed
+// `OwnedLocalEntity` (host/remote bit, static bit, `UnsignedVariableInteger<7>`
+// id). The descriptor is therefore the tag plus the id codec's descriptor —
+// identical for every property regardless of relation state.
+impl WireSchema for EntityProperty {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_ENTITY_PROPERTY);
+        wire_schema_field::<UnsignedVariableInteger<7>>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use naia_serde::{
+        WireSchema, SCHEMA_TAG_ENTITY_PROPERTY, SCHEMA_TAG_INTEGER, WIRE_SCHEMA_DOMAIN,
+    };
+
+    /// The property descriptor is state-independent and pins the exact id
+    /// codec: any re-coding of the entity id changes it.
+    #[test]
+    fn entity_property_descriptor_pins_the_id_codec() {
+        let bytes = super::EntityProperty::wire_schema_bytes();
+        assert_eq!(&bytes[..WIRE_SCHEMA_DOMAIN.len()], WIRE_SCHEMA_DOMAIN);
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_ENTITY_PROPERTY);
+        assert_eq!(
+            &bytes[WIRE_SCHEMA_DOMAIN.len() + 1..],
+            &[SCHEMA_TAG_INTEGER, 0, 1, 7],
+            "the id codec must be UnsignedVariableInteger<7>, verbatim",
+        );
     }
 }

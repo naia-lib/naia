@@ -180,6 +180,8 @@ pub fn replicate_impl(
     };
     let relations_waiting_method = get_relations_waiting_method(&properties, &struct_type);
     let relations_complete_method = get_relations_complete_method(&properties, &struct_type);
+    let wire_schema_method = get_wire_schema_method(&properties);
+    let component_facts_method = get_component_facts_method(&properties, diff_mask_size);
     let split_update_method =
         get_split_update_method(&replica_name, &properties, &untyped_generics);
 
@@ -195,7 +197,8 @@ pub fn replicate_impl(
                 ReplicaDynRef, ReplicaDynMut, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut, ComponentKind, Named,
                 BitReader, BitWrite, BitWriter, OwnedBitReader, SerdeErr, Serde, EntityAuthAccessor, RemoteEntity,
                 EntityProperty, GlobalEntity, Replicate, Property, ComponentKinds, ReplicateBuilder, ComponentFieldUpdate,
-                MaxBits, MaxBitsFallback, UNBOUNDED_BIT_LENGTH,
+                MaxBits, MaxBitsFallback, UNBOUNDED_BIT_LENGTH, WireSchemaContext, wire_schema_field,
+                wire_schema_count, wire_schema_label, WIRE_SCHEMA_DOMAIN, SCHEMA_TAG_STRUCT,
             };
             use super::*;
 
@@ -234,6 +237,8 @@ pub fn replicate_impl(
                 #is_immutable_method
                 #has_entity_properties_method
                 #max_bit_length_method
+                #wire_schema_method
+                #component_facts_method
                 fn kind(&self) -> ComponentKind {
                     ComponentKind::of::<#replica_name #untyped_generics>()
                 }
@@ -479,6 +484,118 @@ fn get_property_enum_definition(enum_name: &Ident, properties: &[Property]) -> T
         #hashtag[repr(u8)]
         enum #enum_name {
             #variant_list
+        }
+    }
+}
+
+/// Builds the `Replicate::wire_schema` override: a self-contained domain
+/// descriptor describing exactly what `write` serializes — a STRUCT node
+/// with one labeled entry per *wired* property in declaration order.
+///
+/// A `Normal` property wires its inner type (`Property<T>` is a transparent
+/// tracking wrapper); an `Entity` property wires the fixed `EntityProperty`
+/// grammar; `NonReplicated` properties never reach the wire and are
+/// excluded, exactly as `get_write_method` skips them. No `Self: WireSchema`
+/// bound may appear here (component types are not required to derive
+/// `Serde`; fewer bounds than the trait method is legal), and no
+/// `impl WireSchema` is emitted, so a type that also derives `Serde` never
+/// sees a duplicate impl.
+pub fn get_wire_schema_method(properties: &[Property]) -> TokenStream {
+    let mut field_count = 0u32;
+    let mut field_tokens = quote! {};
+    for property in properties {
+        let (label, ty) = match property {
+            Property::Normal(normal) => {
+                (normal.variable_name.to_string(), normal.inner_type.clone())
+            }
+            Property::Entity(entity) => (
+                entity.variable_name.to_string(),
+                Type::Path(syn::TypePath {
+                    qself: None,
+                    path: Ident::new("EntityProperty", Span::call_site()).into(),
+                }),
+            ),
+            Property::NonReplicated(_) => continue,
+        };
+        field_count += 1;
+        field_tokens = quote! {
+            #field_tokens
+            wire_schema_label(&mut out, #label);
+            wire_schema_field::<#ty>(ctx, &mut out);
+        };
+    }
+
+    quote! {
+        fn wire_schema() -> Vec<u8>
+        where
+            Self: Sized,
+        {
+            let mut out = Vec::new();
+            out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+            out.push(SCHEMA_TAG_STRUCT);
+            wire_schema_count(&mut out, #field_count);
+            let ctx = &mut WireSchemaContext::new();
+            #field_tokens
+            out
+        }
+    }
+}
+
+/// Builds the structural-registry fact overrides for `Replicate`:
+/// `replicated_property_labels`, `property_mask_indices`,
+/// `entity_property_labels`, and `mask_size_bytes`.
+///
+/// The three label/index lists walk the same `properties` in the same order
+/// as `get_wire_schema_method` and skip `NonReplicated` identically, so the
+/// registry facts can never drift from the descriptor's STRUCT entries.
+/// Labels are the field `Ident`s (`unnamed_field_N` for tuple structs —
+/// the same strings the descriptor writes); indices are the sparse
+/// declaration-order discriminants (`property.index()`, matching the
+/// property enum's explicit `= index` values); the mask size reuses the
+/// `diff_mask_size` const emitted for `diff_mask_size(&self)`.
+pub fn get_component_facts_method(properties: &[Property], diff_mask_size: u8) -> TokenStream {
+    let mut labels: Vec<String> = Vec::new();
+    let mut indices: Vec<u8> = Vec::new();
+    let mut entity_labels: Vec<String> = Vec::new();
+    for property in properties {
+        match property {
+            Property::Normal(normal) => {
+                labels.push(normal.variable_name.to_string());
+                indices.push(normal.index as u8);
+            }
+            Property::Entity(entity) => {
+                labels.push(entity.variable_name.to_string());
+                indices.push(entity.index as u8);
+                entity_labels.push(entity.variable_name.to_string());
+            }
+            Property::NonReplicated(_) => continue,
+        }
+    }
+
+    quote! {
+        fn replicated_property_labels() -> Vec<&'static str>
+        where
+            Self: Sized,
+        {
+            vec![#(#labels),*]
+        }
+        fn property_mask_indices() -> Vec<u8>
+        where
+            Self: Sized,
+        {
+            vec![#(#indices),*]
+        }
+        fn entity_property_labels() -> Vec<&'static str>
+        where
+            Self: Sized,
+        {
+            vec![#(#entity_labels),*]
+        }
+        fn mask_size_bytes() -> u8
+        where
+            Self: Sized,
+        {
+            #diff_mask_size
         }
     }
 }

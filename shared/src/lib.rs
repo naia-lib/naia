@@ -36,13 +36,19 @@ pub use naia_derive::{Channel, Message, Replicate};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_serde::bench_serde_counters;
 pub use naia_serde::{
-    BitCounter, BitReader, BitWrite, BitWriter, CachedComponentUpdate, ConstBitLength,
-    FileBitWriter, MaxBits, MaxBitsFallback, OutgoingPacket, OwnedBitReader, Serde,
-    SerdeBevyClient, SerdeBevyServer, SerdeBevyShared, SerdeErr, SerdeFloatConversion,
-    SerdeIntegerConversion, SerdeInternal, SignedFloat, SignedInteger, SignedVariableFloat,
-    SignedVariableInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
-    UnsignedVariableInteger, CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES, MTU_SIZE_BITS,
-    MTU_SIZE_BYTES, UNBOUNDED_BIT_LENGTH,
+    wire_schema_count, wire_schema_field, wire_schema_label, BitCounter, BitReader, BitWrite,
+    BitWriter, CachedComponentUpdate, ConstBitLength, FileBitWriter, MaxBits, MaxBitsFallback,
+    OutgoingPacket, OwnedBitReader, Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared,
+    SerdeErr, SerdeFloatConversion, SerdeIntegerConversion, SerdeInternal, SignedFloat,
+    SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat, UnsignedInteger,
+    UnsignedVariableFloat, UnsignedVariableInteger, WireSchema, WireSchemaContext,
+    CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES, MTU_SIZE_BITS, MTU_SIZE_BYTES, SCHEMA_NATIVE_ENDIAN,
+    SCHEMA_ORDERED, SCHEMA_TAG_ARRAY, SCHEMA_TAG_BACKREF, SCHEMA_TAG_BOOL, SCHEMA_TAG_BYTES,
+    SCHEMA_TAG_CHAR, SCHEMA_TAG_CUSTOM_LEAF, SCHEMA_TAG_ENTITY_PROPERTY, SCHEMA_TAG_ENUM,
+    SCHEMA_TAG_FLOAT, SCHEMA_TAG_HASH_MAP, SCHEMA_TAG_HASH_SET, SCHEMA_TAG_INTEGER,
+    SCHEMA_TAG_NATIVE, SCHEMA_TAG_OPTION, SCHEMA_TAG_PHANTOM, SCHEMA_TAG_STRING, SCHEMA_TAG_STRUCT,
+    SCHEMA_TAG_TUPLE, SCHEMA_TAG_UNIT, SCHEMA_TAG_VECTOR, SCHEMA_UNORDERED, UNBOUNDED_BIT_LENGTH,
+    WIRE_SCHEMA_DOMAIN,
 };
 pub use naia_socket_shared::{
     link_condition_logic, IdentityToken, Instant, LinkConditionerConfig, Random, SocketConfig,
@@ -152,7 +158,7 @@ pub use named::Named;
 pub use world::{
     component::{
         cached_replicate::CachedReplicate,
-        component_kinds::{ComponentKind, ComponentKinds},
+        component_kinds::{ComponentFacts, ComponentKind, ComponentKinds},
         entity_property::EntityProperty,
         property::Property,
         property_mutate::{PropertyMutate, PropertyMutator},

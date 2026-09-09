@@ -86,13 +86,19 @@
 // directly. `SnapshotWorld` / `IdentityToken` originate in `naia-shared` but are
 // surfaced here via `naia-bevy-shared` (the bevy shared layer re-exports them).
 pub use naia_bevy_shared::{
-    ComponentKind, EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents,
-    HandleWorldEvents, HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken,
-    Instant, ProcessPackets, Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper,
-    Replicate, ReplicateBundle, ReplicatedComponent, ReplicatedResource, Response, ResponseSendKey,
-    SendPackets, SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WorldMutType,
-    WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef, WorldRefType, WorldToHostSync,
-    WorldUpdate,
+    wire_schema_count, wire_schema_field, wire_schema_label, ComponentKind,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, HandleTickEvents, HandleWorldEvents,
+    HostOwned, HostSyncEvent, HostSyncOwnedAddedTracking, IdentityToken, Instant, ProcessPackets,
+    Random, ReceivePackets, ReplicaDynRefWrapper, ReplicaRefWrapper, Replicate, ReplicateBundle,
+    ReplicatedComponent, ReplicatedResource, Response, ResponseSendKey, SendPackets,
+    SnapshotReaderRegistry, SnapshotWorld, Tick, TranslateWorldEvents, WireSchema,
+    WireSchemaContext, WorldMutType, WorldOpCommand, WorldProxy, WorldProxyMut, WorldRef,
+    WorldRefType, WorldToHostSync, WorldUpdate, SCHEMA_NATIVE_ENDIAN, SCHEMA_ORDERED,
+    SCHEMA_TAG_ARRAY, SCHEMA_TAG_BACKREF, SCHEMA_TAG_BOOL, SCHEMA_TAG_BYTES, SCHEMA_TAG_CHAR,
+    SCHEMA_TAG_CUSTOM_LEAF, SCHEMA_TAG_ENTITY_PROPERTY, SCHEMA_TAG_ENUM, SCHEMA_TAG_FLOAT,
+    SCHEMA_TAG_HASH_MAP, SCHEMA_TAG_HASH_SET, SCHEMA_TAG_INTEGER, SCHEMA_TAG_NATIVE,
+    SCHEMA_TAG_OPTION, SCHEMA_TAG_PHANTOM, SCHEMA_TAG_STRING, SCHEMA_TAG_STRUCT, SCHEMA_TAG_TUPLE,
+    SCHEMA_TAG_UNIT, SCHEMA_TAG_VECTOR, SCHEMA_UNORDERED, WIRE_SCHEMA_DOMAIN,
 };
 pub use naia_server::{
     pipeline_actors,

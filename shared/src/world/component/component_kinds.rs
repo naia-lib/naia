@@ -93,6 +93,44 @@ impl ComponentKind {
     }
 }
 
+/// Structural wire-compatibility facts for one registered component type.
+///
+/// The canonical domain descriptor ([`descriptor`](Self::descriptor)) covers
+/// field layout; everything else that decides whether two peers agree on
+/// what a component's bytes mean lives here as discrete facts, stored at
+/// registration so the fingerprint compares values, never types.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ComponentFacts {
+    /// `C::protocol_name()`.
+    pub name: String,
+    /// `C::wire_schema()` bytes verbatim.
+    pub descriptor: Vec<u8>,
+    /// From the registered builder's `is_immutable()`: the component is
+    /// written once on spawn and never diff-tracked.
+    pub immutable: bool,
+    /// Ordered labels of the wired (replicated) properties, in diff-mask
+    /// index order — the same list and order as the descriptor's STRUCT
+    /// entries.
+    pub property_labels: Vec<String>,
+    /// Real diff-mask bit index per wired property, parallel to
+    /// `property_labels`. Sparse declaration-order discriminants, not a
+    /// dense renumbering.
+    pub mask_indices: Vec<u8>,
+    /// Diff-mask size in bytes over ALL declared fields.
+    pub mask_size_bytes: u8,
+    /// `C::has_entity_properties()`: serialized bytes differ per connection.
+    pub has_entity_properties: bool,
+    /// Labels of the `EntityProperty` fields, in declaration order: which
+    /// labeled properties are entity relations.
+    pub entity_property_labels: Vec<String>,
+    /// Whether this component type can participate in delegated authority:
+    /// it has at least one wired property AND is not immutable (an
+    /// immutable component never sends updates, so there is nothing to
+    /// delegate). The delegation mechanism itself is uniform across types;
+    /// this flag is the per-type capacity fact.
+    pub authority_delegable: bool,
+}
+
 /// A map to hold all component types
 pub struct ComponentKinds {
     current_net_id: NetId,
@@ -105,6 +143,10 @@ pub struct ComponentKinds {
     /// Components where `has_entity_properties() == true` — their serialized bytes
     /// differ per connection and cannot use the shared CachedComponentUpdate cache.
     user_dependent: HashSet<ComponentKind>,
+    /// Structural facts per registered component, keyed by kind. Stored at
+    /// registration from the type's static schema methods so the fingerprint
+    /// can compare field layout without re-walking the types.
+    facts: HashMap<ComponentKind, ComponentFacts>,
 }
 
 impl Clone for ComponentKinds {
@@ -125,6 +167,7 @@ impl Clone for ComponentKinds {
             kind_map,
             net_id_map,
             user_dependent,
+            facts: self.facts.clone(),
         }
     }
 }
@@ -144,6 +187,7 @@ impl ComponentKinds {
             kind_map: HashMap::new(),
             net_id_map: HashMap::new(),
             user_dependent: HashSet::new(),
+            facts: HashMap::new(),
         }
     }
 
@@ -184,15 +228,85 @@ impl ComponentKinds {
             self.user_dependent.insert(component_kind);
         }
 
+        let builder = C::create_builder();
+        let immutable = builder.is_immutable();
+        let property_labels: Vec<String> = C::replicated_property_labels()
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        let mask_indices = C::property_mask_indices();
+        let entity_property_labels: Vec<String> = C::entity_property_labels()
+            .into_iter()
+            .map(str::to_string)
+            .collect();
+        // Labels and mask indices are parallel lists from the same derive
+        // walk; every entity label must name a wired property.
+        debug_assert_eq!(
+            property_labels.len(),
+            mask_indices.len(),
+            "Component {} has {} property labels but {} mask indices",
+            std::any::type_name::<C>(),
+            property_labels.len(),
+            mask_indices.len(),
+        );
+        debug_assert!(
+            entity_property_labels
+                .iter()
+                .all(|label| property_labels.contains(label)),
+            "Component {} has entity labels outside its wired properties",
+            std::any::type_name::<C>(),
+        );
+        self.facts.insert(
+            component_kind,
+            ComponentFacts {
+                name: C::protocol_name().to_string(),
+                descriptor: C::wire_schema(),
+                immutable,
+                property_labels: property_labels.clone(),
+                mask_indices,
+                mask_size_bytes: C::mask_size_bytes(),
+                has_entity_properties: C::has_entity_properties(),
+                entity_property_labels,
+                authority_delegable: !immutable && !property_labels.is_empty(),
+            },
+        );
+
         self.kind_map.insert(
             component_kind,
-            (net_id, C::create_builder(), C::protocol_name().to_string()),
+            (net_id, builder, C::protocol_name().to_string()),
         );
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
     }
 
+    /// Returns every registered component's structural facts in **wire
+    /// net-ID order**, as `(net_id, facts)`.
+    ///
+    /// Same traversal contract as the message registry's descriptor entries:
+    /// net-IDs are dense registration ordinals, so the walk covers the whole
+    /// net-ID space and `HashMap` iteration order never leaks into the
+    /// result.
+    pub fn schema_fact_entries(&self) -> Vec<(NetId, ComponentFacts)> {
+        let mut output = Vec::with_capacity(self.current_net_id as usize);
+        for net_id in 0..self.current_net_id {
+            let kind = self
+                .net_id_map
+                .get(&net_id)
+                .expect("ComponentKinds net-ID space must be dense");
+            let facts = self
+                .facts
+                .get(kind)
+                .expect("every registered ComponentKind must have facts");
+            output.push((net_id, facts.clone()));
+        }
+        output
+    }
+
+    /// Resolves a registered `ComponentKind` to its wire net-ID, or `None`
+    /// if the kind was never registered here. Used to resolve resource
+    /// membership (which is kind-keyed) to the net-IDs the fingerprint
+    /// walks.
     /// Returns `true` if this component kind has `EntityProperty` fields —
     /// its serialized bytes differ per connection and cannot use the shared cache.
     pub fn is_user_dependent(&self, kind: &ComponentKind) -> bool {

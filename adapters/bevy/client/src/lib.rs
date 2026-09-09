@@ -71,9 +71,16 @@
 // Re-exported so consumers (e.g. cyberlith `game_network`) depend only on this
 // adapter crate and never reach past it into `naia-bevy-shared` directly.
 pub use naia_bevy_shared::{
-    sequence_greater_than, sequence_less_than, wrapping_diff, EntityAuthStatus, GameInstant,
-    HandleTickEvents, HandleWorldEvents, Protocol, Random, Replicate, ReplicateBundle,
-    ReplicatedResource, ResponseSendKey, Tick, Timer, WorldToHostSync, WorldUpdate,
+    sequence_greater_than, sequence_less_than, wire_schema_count, wire_schema_field,
+    wire_schema_label, wrapping_diff, EntityAuthStatus, GameInstant, HandleTickEvents,
+    HandleWorldEvents, Protocol, Random, Replicate, ReplicateBundle, ReplicatedResource,
+    ResponseSendKey, Tick, Timer, WireSchema, WireSchemaContext, WorldToHostSync, WorldUpdate,
+    SCHEMA_NATIVE_ENDIAN, SCHEMA_ORDERED, SCHEMA_TAG_ARRAY, SCHEMA_TAG_BACKREF, SCHEMA_TAG_BOOL,
+    SCHEMA_TAG_BYTES, SCHEMA_TAG_CHAR, SCHEMA_TAG_CUSTOM_LEAF, SCHEMA_TAG_ENTITY_PROPERTY,
+    SCHEMA_TAG_ENUM, SCHEMA_TAG_FLOAT, SCHEMA_TAG_HASH_MAP, SCHEMA_TAG_HASH_SET,
+    SCHEMA_TAG_INTEGER, SCHEMA_TAG_NATIVE, SCHEMA_TAG_OPTION, SCHEMA_TAG_PHANTOM,
+    SCHEMA_TAG_STRING, SCHEMA_TAG_STRUCT, SCHEMA_TAG_TUPLE, SCHEMA_TAG_UNIT, SCHEMA_TAG_VECTOR,
+    SCHEMA_UNORDERED, WIRE_SCHEMA_DOMAIN,
 };
 pub use naia_client::{
     shared::{default_channels, Instant, Message, ResponseReceiveKey},

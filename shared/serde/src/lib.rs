@@ -29,6 +29,15 @@ pub use number::{
 };
 pub use outgoing_packet::OutgoingPacket;
 pub use serde::{
+    wire_schema_count, wire_schema_custom_leaf, wire_schema_field, wire_schema_label, WireSchema,
+    WireSchemaContext, SCHEMA_NATIVE_ENDIAN, SCHEMA_ORDERED, SCHEMA_TAG_ARRAY, SCHEMA_TAG_BACKREF,
+    SCHEMA_TAG_BOOL, SCHEMA_TAG_BYTES, SCHEMA_TAG_CHAR, SCHEMA_TAG_CUSTOM_LEAF,
+    SCHEMA_TAG_ENTITY_PROPERTY, SCHEMA_TAG_ENUM, SCHEMA_TAG_FLOAT, SCHEMA_TAG_HASH_MAP,
+    SCHEMA_TAG_HASH_SET, SCHEMA_TAG_INTEGER, SCHEMA_TAG_NATIVE, SCHEMA_TAG_OPTION,
+    SCHEMA_TAG_PHANTOM, SCHEMA_TAG_STRING, SCHEMA_TAG_STRUCT, SCHEMA_TAG_TUPLE, SCHEMA_TAG_UNIT,
+    SCHEMA_TAG_VECTOR, SCHEMA_UNORDERED, WIRE_SCHEMA_DOMAIN,
+};
+pub use serde::{
     ConstBitLength, MaxBits, MaxBitsFallback, Serde, Serde as SerdeBevyClient,
     Serde as SerdeBevyServer, Serde as SerdeBevyShared, Serde as SerdeInternal,
     UNBOUNDED_BIT_LENGTH,

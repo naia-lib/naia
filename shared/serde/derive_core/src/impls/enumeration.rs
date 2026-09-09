@@ -1,6 +1,8 @@
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{format_ident, quote};
-use syn::{DataEnum, Fields};
+use syn::{DataEnum, Fields, Generics};
+
+use super::structure::{reject_lifetimes, reject_unsupported_field_type, wire_schema_generics};
 
 /// Number of bits needed to encode any of `variant_count` distinct
 /// indices `0..variant_count`. Equivalent to `ceil(log2(variant_count))`,
@@ -18,10 +20,114 @@ fn bits_needed_for(variant_count: usize) -> u8 {
     bits as u8
 }
 
+/// Derives `WireSchema` for an enum: the real `bits_needed_for` width plus,
+/// per variant in declaration order, its ordinal, label, and payload
+/// descriptor. Named-variant payloads describe as labeled structs (labels
+/// matter, exactly as in serialization order); tuple-variant payloads
+/// describe as ordered tuples; unit variants carry no payload.
+pub fn derive_wire_schema_enum(
+    enum_: &DataEnum,
+    enum_name: &Ident,
+    generics: &Generics,
+    schema_crate: &TokenStream,
+) -> TokenStream {
+    if let Some(rejection) = reject_lifetimes(generics) {
+        return rejection;
+    }
+    let variant_number = enum_.variants.len();
+    let bits_needed = bits_needed_for(variant_number);
+
+    let mut variant_count = 0u32;
+    let mut variant_tokens = quote! {};
+    for (index, variant) in enum_.variants.iter().enumerate() {
+        let variant_ordinal = index as u32;
+        let variant_label = variant.ident.to_string();
+        let payload = match &variant.fields {
+            Fields::Unit => quote! {
+                out.push(0u8);
+            },
+            Fields::Named(fields) => {
+                let mut payload_count = 0u32;
+                let mut payload_tokens = quote! {};
+                for field in &fields.named {
+                    let Some(field_name) = field.ident.as_ref() else {
+                        continue;
+                    };
+                    if let Some(rejection) = reject_unsupported_field_type(&field.ty) {
+                        return rejection;
+                    }
+                    let field_label = field_name.to_string();
+                    let field_ty = &field.ty;
+                    payload_count += 1;
+                    payload_tokens = quote! {
+                        #payload_tokens
+                        #schema_crate::wire_schema_label(out, #field_label);
+                        #schema_crate::wire_schema_field::<#field_ty>(ctx, out);
+                    };
+                }
+                quote! {
+                    out.push(1u8);
+                    out.push(#schema_crate::SCHEMA_TAG_STRUCT);
+                    #schema_crate::wire_schema_count(out, #payload_count);
+                    #payload_tokens
+                }
+            }
+            Fields::Unnamed(fields) => {
+                let mut payload_count = 0u32;
+                let mut payload_tokens = quote! {};
+                for field in &fields.unnamed {
+                    if let Some(rejection) = reject_unsupported_field_type(&field.ty) {
+                        return rejection;
+                    }
+                    let field_ty = &field.ty;
+                    payload_count += 1;
+                    payload_tokens = quote! {
+                        #payload_tokens
+                        #schema_crate::wire_schema_field::<#field_ty>(ctx, out);
+                    };
+                }
+                quote! {
+                    out.push(1u8);
+                    out.push(#schema_crate::SCHEMA_TAG_TUPLE);
+                    #schema_crate::wire_schema_count(out, #payload_count);
+                    #payload_tokens
+                }
+            }
+        };
+        variant_count += 1;
+        variant_tokens = quote! {
+            #variant_tokens
+            #schema_crate::wire_schema_count(out, #variant_ordinal);
+            #schema_crate::wire_schema_label(out, #variant_label);
+            #payload
+        };
+    }
+
+    let (impl_generics, ty_generics, where_clause) = wire_schema_generics(generics, schema_crate);
+
+    // Flat emission with absolute paths (see the struct shape).
+    quote! {
+        impl #impl_generics #schema_crate::WireSchema for #enum_name #ty_generics #where_clause {
+            fn wire_schema(
+                ctx: &mut #schema_crate::WireSchemaContext,
+                out: &mut Vec<u8>,
+            ) {
+                out.push(#schema_crate::SCHEMA_TAG_ENUM);
+                out.push(#bits_needed);
+                #schema_crate::wire_schema_count(out, #variant_count);
+                #variant_tokens
+            }
+        }
+    }
+}
+
+/// Shared entry: emits `impl Serde` (historical) plus `impl WireSchema` from
+/// the same shape, so the two can never drift.
 #[allow(clippy::format_push_string)]
 pub fn derive_serde_enum(
     enum_: &DataEnum,
     enum_name: &Ident,
+    generics: &Generics,
     serde_crate_name: TokenStream,
 ) -> TokenStream {
     let variant_number = enum_.variants.len();
@@ -41,6 +147,8 @@ pub fn derive_serde_enum(
         quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr, ConstBitLength, };
     let imports = quote! { use #serde_crate_name::{#import_types}; };
 
+    let schema_impl = derive_wire_schema_enum(enum_, enum_name, generics, &serde_crate_name);
+
     quote! {
         mod #module_name {
             #imports
@@ -52,6 +160,7 @@ pub fn derive_serde_enum(
                 #bit_length_method
             }
         }
+        #schema_impl
     }
 }
 

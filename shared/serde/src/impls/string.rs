@@ -1,5 +1,8 @@
 use crate::{
-    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
+    error::SerdeErr,
+    serde::{wire_schema_field, Serde, WireSchema, WireSchemaContext, SCHEMA_TAG_STRING},
     UnsignedVariableInteger,
 };
 
@@ -66,5 +69,42 @@ mod tests {
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
+    }
+}
+
+// Schema descriptors //
+
+// A string is a `UnsignedVariableInteger<9>` length followed by raw bytes,
+// so the descriptor is the codec's own descriptor nested under the tag.
+impl WireSchema for String {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_STRING);
+        wire_schema_field::<UnsignedVariableInteger<9>>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::{
+        serde::{WireSchema, SCHEMA_TAG_INTEGER, SCHEMA_TAG_STRING},
+        UnsignedVariableInteger,
+    };
+
+    /// The string descriptor carries its exact length codec: re-coding the
+    /// length with a different width must change it.
+    #[test]
+    fn string_descriptor_carries_its_length_codec() {
+        let bytes = String::wire_schema_bytes();
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_STRING);
+        assert_eq!(
+            &bytes[WIRE_SCHEMA_DOMAIN.len() + 1..],
+            &UnsignedVariableInteger::<9>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            "the codec descriptor must be nested verbatim",
+        );
+        assert_eq!(
+            &bytes[WIRE_SCHEMA_DOMAIN.len() + 1..],
+            &[SCHEMA_TAG_INTEGER, 0, 1, 9]
+        );
     }
 }

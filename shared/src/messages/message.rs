@@ -42,6 +42,29 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     fn is_fragment(&self) -> bool;
     /// Returns `true` if this message envelope carries a request or response payload.
     fn is_request(&self) -> bool;
+    /// Returns this message's canonical domain descriptor: the domain tag, a
+    /// STRUCT/TUPLE/ENUM node built from the same fields serialization
+    /// walks, then the fragment fact byte and the request-envelope fact byte.
+    ///
+    /// This method is REQUIRED with no default, and deliberately takes no
+    /// `Self: WireSchema` bound: message types are not required to derive
+    /// `Serde`, and the derive emits this override inline (fewer bounds than
+    /// the old declaration is legal). A descriptor that silently defaulted —
+    /// empty or otherwise — would let a registered type travel under a
+    /// fingerprint that describes nothing about it, so hand-written `Message`
+    /// impls must write their own (domain tag + node + the two fact bytes;
+    /// see the derive's `get_wire_schema_method` for the exact grammar). The
+    /// internal envelopes get theirs from their dedicated derives
+    /// (`MessageFragment` bakes fragment=1, `MessageRequest` bakes
+    /// request=1). This method is never part of the codec; it only feeds the
+    /// structural registry and fingerprint v2.
+    ///
+    /// The `where Self: Sized` keeps `dyn Message` object-safe (there is no
+    /// `dyn Message` today, but the bound costs nothing and mirrors
+    /// `create_builder`).
+    fn wire_schema() -> Vec<u8>
+    where
+        Self: Sized;
     /// Writes data into an outgoing byte stream
     fn write(
         &self,

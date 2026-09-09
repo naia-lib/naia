@@ -1,5 +1,9 @@
 use crate::{
-    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde, ConstBitLength,
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
+    error::SerdeErr,
+    serde::{Serde, WireSchema, WireSchemaContext, SCHEMA_TAG_FLOAT, SCHEMA_TAG_INTEGER},
+    ConstBitLength,
 };
 
 // Integers
@@ -430,6 +434,92 @@ impl SerdeNumberInner {
             output += self.bits as u32;
         }
         output
+    }
+}
+
+// Schema descriptors: the const-generic facts ARE the wire facts. Signed,
+// variable-width, bit-width, and (for floats) fraction digits travel as
+// fixed single bytes, so flipping any of them changes the descriptor.
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8> WireSchema
+    for SerdeInteger<SIGNED, VARIABLE, BITS>
+{
+    fn wire_schema(_ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_INTEGER);
+        out.push(SIGNED as u8);
+        out.push(VARIABLE as u8);
+        out.push(BITS);
+    }
+}
+
+impl<const SIGNED: bool, const VARIABLE: bool, const BITS: u8, const FRACTION_DIGITS: u8> WireSchema
+    for SerdeFloat<SIGNED, VARIABLE, BITS, FRACTION_DIGITS>
+{
+    fn wire_schema(_ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_FLOAT);
+        out.push(SIGNED as u8);
+        out.push(VARIABLE as u8);
+        out.push(BITS);
+        out.push(FRACTION_DIGITS);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::{
+        number::{
+            SignedFloat, SignedInteger, UnsignedFloat, UnsignedInteger, UnsignedVariableFloat,
+            UnsignedVariableInteger,
+        },
+        serde::{WireSchema, SCHEMA_TAG_FLOAT, SCHEMA_TAG_INTEGER},
+    };
+
+    /// Every numeric fact is load-bearing: signed, variable, bits, and
+    /// fraction digits each flip the descriptor on their own.
+    #[test]
+    fn every_numeric_fact_flips_the_descriptor() {
+        let u8ish = UnsignedInteger::<8>::wire_schema_bytes();
+        assert_eq!(&u8ish[..WIRE_SCHEMA_DOMAIN.len()], b"naia:wire-schema:v1");
+        assert_eq!(u8ish[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_INTEGER);
+        assert_eq!(&u8ish[WIRE_SCHEMA_DOMAIN.len() + 1..], &[0, 0, 8]);
+
+        assert_ne!(
+            u8ish,
+            SignedInteger::<8>::wire_schema_bytes(),
+            "signed must differ",
+        );
+        assert_ne!(
+            u8ish,
+            UnsignedVariableInteger::<8>::wire_schema_bytes(),
+            "variable must differ",
+        );
+        assert_ne!(
+            u8ish,
+            UnsignedInteger::<9>::wire_schema_bytes(),
+            "bits must differ",
+        );
+
+        let f = UnsignedFloat::<8, 2>::wire_schema_bytes();
+        assert_eq!(f[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_FLOAT);
+        assert_eq!(&f[WIRE_SCHEMA_DOMAIN.len() + 1..], &[0, 0, 8, 2]);
+        assert_ne!(
+            f,
+            SignedFloat::<8, 2>::wire_schema_bytes(),
+            "float signed must differ",
+        );
+        assert_ne!(
+            f,
+            UnsignedVariableFloat::<8, 2>::wire_schema_bytes(),
+            "float variable must differ",
+        );
+        assert_ne!(
+            f,
+            UnsignedFloat::<8, 3>::wire_schema_bytes(),
+            "fraction digits must differ",
+        );
+
+        // Determinism: same types, same bytes, every call.
+        assert_eq!(u8ish, UnsignedInteger::<8>::wire_schema_bytes());
     }
 }
 

@@ -2,7 +2,10 @@ use crate::{
     bit_reader::BitReader,
     bit_writer::BitWrite,
     error::SerdeErr,
-    serde::{ConstBitLength, Serde},
+    serde::{
+        wire_schema_count, wire_schema_field, ConstBitLength, Serde, WireSchema, WireSchemaContext,
+        SCHEMA_TAG_ARRAY,
+    },
 };
 
 impl<T: Serde> Serde for &[T] {
@@ -85,5 +88,42 @@ mod tests {
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
+    }
+}
+
+// Schema descriptors //
+
+// Fixed arrays carry no length on the wire, so the length is a descriptor
+// fact: same element type with a different N must differ.
+impl<T: WireSchema, const N: usize> WireSchema for [T; N] {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_ARRAY);
+        wire_schema_count(out, N as u32);
+        wire_schema_field::<T>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_TAG_ARRAY, SCHEMA_TAG_BOOL};
+
+    /// Array length is a fact; the element descriptor nests verbatim.
+    #[test]
+    fn array_length_and_element_type_both_matter() {
+        assert_eq!(
+            &<[bool; 3]>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_ARRAY, 3, 0, 0, 0, SCHEMA_TAG_BOOL],
+        );
+        assert_ne!(
+            <[bool; 3]>::wire_schema_bytes(),
+            <[bool; 4]>::wire_schema_bytes(),
+            "length must differ",
+        );
+        assert_ne!(
+            <[bool; 3]>::wire_schema_bytes(),
+            <[u8; 3]>::wire_schema_bytes(),
+            "element type must differ",
+        );
     }
 }

@@ -12,8 +12,10 @@ use crate::{
         message_kinds::{MessageKind, MessageKinds},
     },
     named::Named,
+    wire_schema_count, wire_schema_field,
     world::entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
     LocalEntityAndGlobalEntityConverter, MessageBuilder, MessageContainer, RemoteEntity,
+    WireSchemaContext, SCHEMA_TAG_TUPLE, WIRE_SCHEMA_DOMAIN,
 };
 
 // --- StubMessage -----------------------------------------------------------
@@ -55,6 +57,22 @@ impl Message for StubMessage {
     }
     fn is_request(&self) -> bool {
         false
+    }
+    fn wire_schema() -> Vec<u8>
+    where
+        Self: Sized,
+    {
+        // Hand-written mirror of the derive's TUPLE output for a
+        // single-`u32` tuple struct, plus the two zero fact bytes.
+        let mut out = Vec::new();
+        out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+        out.push(SCHEMA_TAG_TUPLE);
+        wire_schema_count(&mut out, 1);
+        let ctx = &mut WireSchemaContext::new();
+        wire_schema_field::<u32>(ctx, &mut out);
+        out.push(0);
+        out.push(0);
+        out
     }
     fn write(
         &self,

@@ -6,7 +6,10 @@
 //! dependency on a quaternion math library — the bench measures wire size,
 //! not rotation correctness.
 
-use naia_shared::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, SignedInteger};
+use naia_shared::{
+    wire_schema_count, wire_schema_field, wire_schema_label, BitReader, BitWrite, ConstBitLength,
+    Serde, SerdeErr, SignedInteger, WireSchema, WireSchemaContext, SCHEMA_TAG_STRUCT,
+};
 
 #[derive(Clone, Copy, PartialEq)]
 pub struct BenchQuat {
@@ -127,6 +130,48 @@ impl ConstBitLength for BenchQuat {
         SkipComponent::const_bit_length()
             + bool::const_bit_length()
             + <[SignedInteger<{ Self::BITS }>; 3]>::const_bit_length()
+    }
+}
+
+// Schema descriptors //
+
+// Structural, not a custom leaf: the packing decomposes exactly into a
+// `SkipComponent` discriminant, a sign bit, and three fixed-width signed
+// integers, and the descriptor names those pieces with the same constants
+// (`Self::BITS`) the codec uses — so re-bitting the packing changes the
+// descriptor automatically instead of silently. A bespoke grammar with no
+// standard-node decomposition would take a curated leaf identifier;
+// this one has a decomposition, so it uses it.
+impl WireSchema for BenchQuat {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_STRUCT);
+        wire_schema_count(&mut *out, 3);
+        wire_schema_label(&mut *out, "skip_component");
+        wire_schema_field::<SkipComponent>(ctx, &mut *out);
+        wire_schema_label(&mut *out, "skipped_is_negative");
+        wire_schema_field::<bool>(ctx, &mut *out);
+        wire_schema_label(&mut *out, "components");
+        wire_schema_field::<[SignedInteger<{ Self::BITS }>; 3]>(ctx, &mut *out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use naia_shared::{WireSchema, SCHEMA_TAG_STRUCT, WIRE_SCHEMA_DOMAIN};
+
+    use super::BenchQuat;
+
+    /// The packing facts travel: discriminant width, sign bit, and the
+    /// exact integer width all discriminate.
+    #[test]
+    fn bench_quat_descriptor_names_its_packing() {
+        let bytes = BenchQuat::wire_schema_bytes();
+        assert_eq!(&bytes[..WIRE_SCHEMA_DOMAIN.len()], WIRE_SCHEMA_DOMAIN);
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_STRUCT);
+        let body = &bytes[WIRE_SCHEMA_DOMAIN.len() + 5..];
+        assert!(body.windows(16).any(|w| w == b"skip_component"));
+        assert!(body.windows(19).any(|w| w == b"skipped_is_negative"));
+        assert!(body.windows(10).any(|w| w == b"components"));
     }
 }
 

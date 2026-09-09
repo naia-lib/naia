@@ -1,6 +1,6 @@
 use std::{any::TypeId, collections::HashSet};
 
-use crate::ComponentKind;
+use crate::{ComponentKind, ComponentKinds};
 
 /// Protocol-wide table marking which `ComponentKind`s are Replicated
 /// Resources (vs ordinary components).
@@ -80,6 +80,31 @@ impl ResourceKinds {
     /// Iterate over all registered resource kinds.
     pub fn iter(&self) -> impl Iterator<Item = &ComponentKind> {
         self.kinds.iter()
+    }
+
+    /// Resolve resource membership to component wire net-IDs, in ascending
+    /// numeric order.
+    ///
+    /// Resources are components on a hidden singleton entity: they have no
+    /// wire ordinal of their own, so the fingerprint names them by their
+    /// component net-IDs. The order is numeric on the IDs themselves — never
+    /// a name sort — so it cannot drift with hashing or locale. Every member
+    /// must have been registered with the component table (via
+    /// `Protocol::add_resource`, which calls `add_component` first); a kind
+    /// missing there is a broken registration invariant, not a remote input,
+    /// and panics.
+    pub fn member_net_ids(&self, components: &ComponentKinds) -> Vec<u16> {
+        let mut ids: Vec<u16> = self
+            .kinds
+            .iter()
+            .map(|kind| {
+                components
+                    .net_id_of(kind)
+                    .expect("every Replicated Resource must be registered as a component first")
+            })
+            .collect();
+        ids.sort_unstable();
+        ids
     }
 }
 

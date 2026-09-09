@@ -1,7 +1,10 @@
 // An enum representing the different types of packets that can be
 // sent/received
 
-use naia_serde::{BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger};
+use naia_serde::{
+    wire_schema_custom_leaf, BitReader, BitWrite, ConstBitLength, Serde, SerdeErr, UnsignedInteger,
+    WireSchema, WireSchemaContext,
+};
 
 /// Wire-level packet classification encoded in every packet header.
 #[derive(Copy, Debug, Clone, Eq, PartialEq)]
@@ -68,5 +71,38 @@ impl Serde for PacketType {
         output += <UnsignedInteger<4> as ConstBitLength>::const_bit_length();
 
         output
+    }
+}
+
+// Schema descriptors //
+
+// Custom leaf: the biased-bit grammar above is bespoke (a `Data` fast-path
+// bit plus a 2-bit index for the rest), so the descriptor pins it by its
+// curated identifier rather than pretending it is a standard enum. Any
+// change to `ser`/`de` must change the identifier.
+impl WireSchema for PacketType {
+    fn wire_schema(_ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        wire_schema_custom_leaf(out, "PacketType");
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use naia_serde::{WireSchema, SCHEMA_TAG_CUSTOM_LEAF, WIRE_SCHEMA_DOMAIN};
+
+    use super::PacketType;
+
+    /// The leaf identifier is curated and stable: it names the bespoke
+    /// grammar, and it must not collide with any structural tag.
+    #[test]
+    fn packet_type_describes_as_a_named_custom_leaf() {
+        let bytes = PacketType::wire_schema_bytes();
+        assert_eq!(&bytes[..WIRE_SCHEMA_DOMAIN.len()], WIRE_SCHEMA_DOMAIN);
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_CUSTOM_LEAF);
+        assert_eq!(
+            &bytes[WIRE_SCHEMA_DOMAIN.len() + 5..],
+            b"PacketType",
+            "id-len u32 LE (10) then the curated identifier",
+        );
     }
 }

@@ -2,7 +2,9 @@ use crate::{
     bit_reader::BitReader,
     bit_writer::BitWrite,
     error::SerdeErr,
-    serde::{ConstBitLength, Serde},
+    serde::{
+        wire_schema_field, ConstBitLength, Serde, WireSchema, WireSchemaContext, SCHEMA_TAG_BYTES,
+    },
     UnsignedVariableInteger,
 };
 
@@ -88,5 +90,49 @@ mod tests {
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
+    }
+}
+
+// Schema descriptors //
+
+// `Box<T>` is transparent: it emits `T`'s descriptor unchanged, delegating
+// directly (the caller already tracked `Box<T>` itself for recursion).
+// `Box<[u8]>` is length-prefixed bytes on the wire, like `String`.
+impl<T: WireSchema> WireSchema for Box<T> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        T::wire_schema(ctx, out);
+    }
+}
+
+impl WireSchema for Box<[u8]> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_BYTES);
+        wire_schema_field::<UnsignedVariableInteger<9>>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_TAG_BYTES, SCHEMA_TAG_INTEGER};
+
+    /// Transparency means byte-identity with the inner type; byte boxes
+    /// carry their length codec.
+    #[test]
+    fn box_is_transparent_and_byte_boxes_carry_their_codec() {
+        assert_eq!(
+            Box::<u8>::wire_schema_bytes(),
+            u8::wire_schema_bytes(),
+            "Box<T> must describe exactly as T",
+        );
+        assert_eq!(
+            Box::<Box<u8>>::wire_schema_bytes(),
+            u8::wire_schema_bytes(),
+            "nesting transparent boxes changes nothing",
+        );
+        assert_eq!(
+            &Box::<[u8]>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_BYTES, SCHEMA_TAG_INTEGER, 0, 1, 9],
+        );
     }
 }

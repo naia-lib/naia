@@ -4,7 +4,7 @@ use crate::{
     bit_reader::BitReader,
     bit_writer::BitWrite,
     error::SerdeErr,
-    serde::{ConstBitLength, Serde},
+    serde::{ConstBitLength, Serde, WireSchema, WireSchemaContext, SCHEMA_TAG_PHANTOM},
 };
 
 // Unit //
@@ -51,5 +51,38 @@ mod phantom_tests {
         let out_phantom = Serde::de(&mut reader).unwrap();
 
         assert_eq!(in_phantom, out_phantom);
+    }
+}
+
+// Schema descriptors //
+
+// `PhantomData<T>` is zero-wire: it emits its tag and does not recurse
+// into `T`, so a phantom parameter can never smuggle a dependency (or a
+// loop) into the descriptor.
+impl<T: 'static> WireSchema for PhantomData<T> {
+    fn wire_schema(_ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_PHANTOM);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_TAG_PHANTOM};
+    use std::marker::PhantomData;
+
+    /// Phantom parameters are invisible: any `T` describes identically, and
+    /// a recursive `T` still terminates.
+    #[test]
+    fn phantom_is_zero_wire_and_never_recurses() {
+        assert_eq!(
+            &PhantomData::<u8>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_PHANTOM],
+        );
+        assert_eq!(
+            PhantomData::<u8>::wire_schema_bytes(),
+            PhantomData::<Vec<String>>::wire_schema_bytes(),
+            "the phantom parameter must not leak in",
+        );
     }
 }

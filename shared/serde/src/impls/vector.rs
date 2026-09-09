@@ -1,7 +1,12 @@
 use std::collections::VecDeque;
 
 use crate::{
-    bit_reader::BitReader, bit_writer::BitWrite, error::SerdeErr, serde::Serde,
+    bit_reader::BitReader,
+    bit_writer::BitWrite,
+    error::SerdeErr,
+    serde::{
+        wire_schema_field, Serde, WireSchema, WireSchemaContext, SCHEMA_ORDERED, SCHEMA_TAG_VECTOR,
+    },
     UnsignedVariableInteger,
 };
 
@@ -144,5 +149,57 @@ mod tests {
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
+    }
+}
+
+// Schema descriptors //
+
+// Ordered collections: the order class, the element descriptor, and the
+// exact length codec (`UnsignedVariableInteger<5>`) are all facts.
+impl<T: WireSchema> WireSchema for Vec<T> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_VECTOR);
+        out.push(SCHEMA_ORDERED);
+        wire_schema_field::<T>(ctx, out);
+        wire_schema_field::<UnsignedVariableInteger<5>>(ctx, out);
+    }
+}
+
+impl<T: WireSchema> WireSchema for VecDeque<T> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_VECTOR);
+        out.push(SCHEMA_ORDERED);
+        wire_schema_field::<T>(ctx, out);
+        wire_schema_field::<UnsignedVariableInteger<5>>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_ORDERED, SCHEMA_TAG_INTEGER, SCHEMA_TAG_VECTOR};
+
+    /// Element type and length codec are facts; Vec and VecDeque share the
+    /// ordered wire grammar, so they share the descriptor shape.
+    #[test]
+    fn ordered_collections_carry_element_and_codec() {
+        let bytes = Vec::<u8>::wire_schema_bytes();
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_VECTOR);
+        assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len() + 1], SCHEMA_ORDERED);
+        assert_eq!(
+            &bytes[WIRE_SCHEMA_DOMAIN.len() + 2..],
+            &[SCHEMA_TAG_INTEGER, 0, 0, 8, SCHEMA_TAG_INTEGER, 0, 1, 5][..],
+            "elem then UVI<5> codec, both verbatim",
+        );
+        assert_eq!(
+            Vec::<u8>::wire_schema_bytes(),
+            std::collections::VecDeque::<u8>::wire_schema_bytes(),
+            "same grammar must describe identically",
+        );
+        assert_ne!(
+            Vec::<u8>::wire_schema_bytes(),
+            Vec::<u16>::wire_schema_bytes(),
+            "element swap must differ",
+        );
     }
 }

@@ -2,7 +2,9 @@ use crate::{
     bit_reader::BitReader,
     bit_writer::BitWrite,
     error::SerdeErr,
-    serde::{ConstBitLength, Serde},
+    serde::{
+        wire_schema_field, ConstBitLength, Serde, WireSchema, WireSchemaContext, SCHEMA_TAG_OPTION,
+    },
 };
 
 impl<T: Serde> Serde for Option<T> {
@@ -65,5 +67,48 @@ mod tests {
 
         assert_eq!(in_1, out_1);
         assert_eq!(in_2, out_2);
+    }
+}
+
+// Schema descriptors //
+
+// The present bit is fixed grammar; the descriptor is the tag plus the
+// payload descriptor, so swapping the payload type changes it.
+impl<T: WireSchema> WireSchema for Option<T> {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_OPTION);
+        wire_schema_field::<T>(ctx, out);
+    }
+}
+
+#[cfg(test)]
+mod schema_tests {
+    use crate::serde::WIRE_SCHEMA_DOMAIN;
+    use crate::serde::{WireSchema, SCHEMA_TAG_BOOL, SCHEMA_TAG_INTEGER, SCHEMA_TAG_OPTION};
+
+    /// The present bit is fixed grammar, so the descriptor is the tag plus
+    /// the payload descriptor verbatim: payload swaps and nesting depth
+    /// stay distinguishable.
+    #[test]
+    fn option_wraps_its_payload_descriptor() {
+        assert_eq!(
+            &Option::<u8>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_OPTION, SCHEMA_TAG_INTEGER, 0, 0, 8],
+            "option must nest its payload verbatim",
+        );
+        assert_eq!(
+            &Option::<bool>::wire_schema_bytes()[WIRE_SCHEMA_DOMAIN.len()..],
+            &[SCHEMA_TAG_OPTION, SCHEMA_TAG_BOOL],
+        );
+        assert_ne!(
+            Option::<u8>::wire_schema_bytes(),
+            Option::<u16>::wire_schema_bytes(),
+            "payload swap must differ",
+        );
+        assert_ne!(
+            Option::<u8>::wire_schema_bytes(),
+            Option::<Option<u8>>::wire_schema_bytes(),
+            "nesting depth must differ",
+        );
     }
 }

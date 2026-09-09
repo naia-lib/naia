@@ -2,7 +2,9 @@ use std::{any::TypeId, collections::HashMap};
 
 use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
 
-use crate::{LocalEntityAndGlobalEntityConverter, Message, MessageBuilder, MessageContainer};
+use crate::{
+    LocalEntityAndGlobalEntityConverter, Message, MessageBuilder, MessageContainer, Request,
+};
 
 type NetId = u16;
 
@@ -64,6 +66,16 @@ pub struct MessageKinds {
     kind_bit_width: u8,
     kind_map: HashMap<MessageKind, (NetId, Box<dyn MessageBuilder>, String)>,
     net_id_map: HashMap<NetId, MessageKind>,
+    /// Canonical domain descriptor per registered message, keyed by kind.
+    /// Stored at registration from `M::wire_schema()` so the fingerprint can
+    /// compare field layout without re-walking the types.
+    descriptors: HashMap<MessageKind, Vec<u8>>,
+    /// Request→response pairs in registration order, as wire net-ID pairs.
+    /// Recorded only by [`add_request`](Self::add_request): the two internal
+    /// envelope registrations in `Protocol::default` are plain messages, not
+    /// pairs. A response net-ID that never appears here is a message that
+    /// only ever travels standalone.
+    request_pairs: Vec<(NetId, NetId)>,
 }
 
 impl Clone for MessageKinds {
@@ -82,6 +94,8 @@ impl Clone for MessageKinds {
             kind_bit_width,
             kind_map,
             net_id_map,
+            descriptors: self.descriptors.clone(),
+            request_pairs: self.request_pairs.clone(),
         }
     }
 }
@@ -100,6 +114,8 @@ impl MessageKinds {
             kind_bit_width: 0,
             kind_map: HashMap::new(),
             net_id_map: HashMap::new(),
+            descriptors: HashMap::new(),
+            request_pairs: Vec::new(),
         }
     }
 
@@ -113,6 +129,7 @@ impl MessageKinds {
             (net_id, M::create_builder(), M::protocol_name().to_string()),
         );
         self.net_id_map.insert(net_id, message_kind);
+        self.descriptors.insert(message_kind, M::wire_schema());
         debug_assert!(
             self.current_net_id < NetId::MAX,
             "MessageKinds NetId overflow — too many message types registered (max {})",
@@ -120,6 +137,50 @@ impl MessageKinds {
         );
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
+    }
+
+    /// Registers request type `Q` and its associated response type, recording
+    /// the request→response pairing as wire net-IDs.
+    ///
+    /// Net-ID assignment is identical to two sequential `add_message` calls
+    /// (`Q` first, then `Q::Response`), so routing `Protocol::add_request`
+    /// through here changes nothing on the wire — it only preserves the
+    /// pairing that two bare calls would discard.
+    pub fn add_request<Q: Request>(&mut self) {
+        self.add_message::<Q>();
+        self.add_message::<Q::Response>();
+        let request_net_id = self.kind_to_net_id(&MessageKind::of::<Q>());
+        let response_net_id = self.kind_to_net_id(&MessageKind::of::<Q::Response>());
+        self.request_pairs.push((request_net_id, response_net_id));
+    }
+
+    /// Request→response pairs in registration order, as
+    /// `(request_net_id, response_net_id)` wire net-ID pairs.
+    pub fn request_response_pairs(&self) -> &[(NetId, NetId)] {
+        &self.request_pairs
+    }
+
+    /// Returns every registered message's canonical domain descriptor in
+    /// **wire net-ID order**, as `(net_id, descriptor_bytes)`.
+    ///
+    /// Same traversal contract as [`schema_entries`](Self::schema_entries):
+    /// net-IDs are dense registration ordinals, so the walk covers the whole
+    /// net-ID space and `HashMap` iteration order never leaks into the
+    /// result.
+    pub fn schema_descriptor_entries(&self) -> Vec<(NetId, Vec<u8>)> {
+        let mut output = Vec::with_capacity(self.current_net_id as usize);
+        for net_id in 0..self.current_net_id {
+            let kind = self
+                .net_id_map
+                .get(&net_id)
+                .expect("MessageKinds net-ID space must be dense");
+            let descriptor = self
+                .descriptors
+                .get(kind)
+                .expect("every registered MessageKind must have a descriptor");
+            output.push((net_id, descriptor.clone()));
+        }
+        output
     }
 
     /// Bit width of every encoded `MessageKind` in this registry. Used by
