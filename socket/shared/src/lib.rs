@@ -29,6 +29,7 @@ pub use identity_token::*;
 pub use link_conditioner_config::LinkConditionerConfig;
 pub use protocol_id_header::{
     stamp_protocol_id_header, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
+    PROTOCOL_MISMATCH_STATUS,
 };
 pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;

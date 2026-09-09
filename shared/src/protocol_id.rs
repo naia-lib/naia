@@ -14,6 +14,7 @@ use naia_serde::SerdeInternal;
 /// name can change.
 pub use naia_socket_shared::{
     stamp_protocol_id_header, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
+    PROTOCOL_MISMATCH_STATUS,
 };
 
 /// The socket layer validates the header value's width without being able to

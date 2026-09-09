@@ -201,6 +201,7 @@ pub use messages::channels::senders::request_sender::{
 pub use protocol::{Protocol, ProtocolPlugin};
 pub use protocol_id::{
     stamp_protocol_id_header, ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN,
+    PROTOCOL_MISMATCH_STATUS,
 };
 pub use types::{DisconnectReason, HostType, MessageIndex, PacketIndex, ShortMessageIndex, Tick};
 pub use world::entity_command::EntityCommand;

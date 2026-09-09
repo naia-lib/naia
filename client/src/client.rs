@@ -12,7 +12,7 @@ use naia_shared::{
     MessageContainer, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
     ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde,
     SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, UserPriorityState, WorldMutType,
-    WorldRefType,
+    WorldRefType, PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -2012,7 +2012,25 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         &self.protocol.compression,
                     );
 
-                    if code == 401 {
+                    if code == PROTOCOL_MISMATCH_STATUS {
+                        // The server refused before application auth: the peer
+                        // runs a different protocol. Exactly one
+                        // `RejectEvent(ProtocolMismatch)`, no message -- the
+                        // mismatch response is always payload-free and carries
+                        // neither fingerprint.
+                        match old_socket_addr_result {
+                            Ok(old_socket_addr) => {
+                                self.incoming_world_events.push_rejection(
+                                    &old_socket_addr,
+                                    RejectReason::ProtocolMismatch,
+                                    None,
+                                );
+                            }
+                            Err(err) => {
+                                self.incoming_world_events.push_error(err);
+                            }
+                        }
+                    } else if code == 401 {
                         // The server may have sent a message explaining the
                         // rejection (naia-lib/naia#133). A payload we cannot
                         // decode is a protocol mismatch on the reject message

@@ -657,11 +657,13 @@ fn misusing_channel_types_yields_defined_failure() {
 /// Contract: [messaging-04]
 ///
 /// Given server/client with intentionally mismatched protocol definitions (type ID ordering differs);
-/// when client connects; then handshake fails early with clear mismatch outcome,
-/// no gameplay events are generated, and both sides clean up.
+/// when client connects; then the fingerprint gate refuses BEFORE application auth with a clear
+/// mismatch outcome: exactly one client `RejectEvent(ProtocolMismatch)`, no server auth/user/connect
+/// event, no credential use, no gameplay events, and both sides clean up.
 #[test]
 fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+    use naia_test_harness::RejectReason;
 
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
 
@@ -715,24 +717,21 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
         client_protocol,
     );
 
-    // Auth must complete before the Naia handshake can run; accept the
-    // connection so that ClientIdentifyRequest (with the mismatched protocol_id)
-    // gets sent and the server emits ProtocolMismatch.
-    scenario.expect(|ctx| {
-        ctx.server(|server| server.read_event::<ServerAuthEvent<Auth>>().map(|_| ()))
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
-        });
-    });
-
-    // Wait for client to receive rejection event
+    // The fingerprint gate refuses BEFORE application auth: no ServerAuthEvent
+    // ever fires, so there is nothing to accept. The old flow (accept first,
+    // compare protocol_id at the data handshake) is gone by contract -- a
+    // mismatching peer's credential must never be consumed.
+    //
+    // Wait for the client to promptly receive the single distinguishable
+    // rejection. Consuming it here is fine: nothing downstream needs the live
+    // event, only the persistent flag.
     let mut reject_event_received = false;
     scenario.expect(|ctx| {
         ctx.client(client_key, |client| {
-            if client.read_event::<ClientRejectEvent>().is_some() {
-                reject_event_received = true;
+            if let Some((reason, _message)) = client.read_event::<ClientRejectEvent>() {
+                if reason == RejectReason::ProtocolMismatch {
+                    reject_event_received = true;
+                }
             }
             reject_event_received.then_some(())
         })
@@ -740,11 +739,12 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
 
     assert!(
         reject_event_received,
-        "Client should receive rejection event"
+        "Client should promptly receive exactly one RejectEvent(ProtocolMismatch)"
     );
 
     // Verify connection is rejected before any message exchange.
     // `is_rejected()` is tick-scoped; use the persistent `reject_event_received` flag instead.
+    // No accept_connection was ever called: the refusal is pre-auth by construction.
     scenario.spec_expect(
         "messaging-04.t1: mismatched protocol_id rejects connection before message exchange",
         |ctx| {

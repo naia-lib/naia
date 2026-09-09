@@ -29,6 +29,20 @@ pub const PROTOCOL_ID_HEADER: &str = "x-naia-protocol-id";
 /// the same and are indistinguishable from outside.
 pub const PROTOCOL_ID_HEADER_VALUE_LEN: usize = 32;
 
+/// HTTP status a server sends when the protocol fingerprint does not match.
+///
+/// One reserved, payload-free response shared by the local, UDP-auth, and
+/// WebRTC-session transports: absent, malformed, wrong-width, and wrong-value
+/// fingerprints all take one indistinguishable branch and get these same
+/// bytes. It is deliberately distinct from 401 (the application refused the
+/// credential) and from 404/400/500 (malformed framing and generic transport
+/// errors), so the client can map it to exactly one
+/// `RejectEvent(ProtocolMismatch)`.
+///
+/// The body is always empty: no expected or received fingerprint is echoed,
+/// and no application rejection payload rides along.
+pub const PROTOCOL_MISMATCH_STATUS: u16 = 409;
+
 /// Appends the protocol-fingerprint header to a caller-supplied auth header
 /// list, and returns the list the socket should actually send.
 ///

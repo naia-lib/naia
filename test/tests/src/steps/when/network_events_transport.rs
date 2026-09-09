@@ -271,26 +271,58 @@ fn when_entity_despawns_on_client(ctx: &mut TestWorldMut) {
 /// Drives the auth event + accept-connection step but stops short of
 /// the full connect handshake — used by protocol-mismatch tests
 /// where the connect-event never fires.
+///
+/// A fingerprint mismatch is refused before application auth, so no
+/// `ServerAuthEvent` ever arrives for it. The probe below ticks with
+/// `mutate` (which never drains world events) until the server shows a user
+/// for this client, or a bound expires: a live server user means the auth
+/// path, an empty user set after the bound means the pre-auth rejection
+/// path. Probing live server state instead of `expect`ing an event matters
+/// because `expect` drains client events every tick, which would eat the
+/// single `RejectEvent(ProtocolMismatch)` the Then step must observe. The
+/// Gherkin contract is unchanged.
 #[when("the client attempts to connect")]
 fn when_client_attempts_to_connect(ctx: &mut TestWorldMut) {
     use naia_test_harness::{Auth, ServerAuthEvent};
     let scenario = ctx.scenario_mut();
     let client_key = scenario.last_client();
-    scenario.expect(|ctx| {
-        ctx.server(|server| {
-            if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
-                if incoming_key == client_key {
-                    return Some(());
+
+    // Non-draining probe: the handshake round trip settles in a couple of
+    // ticks on the in-process transport; the bound is pure margin. Events on
+    // both sides accumulate undrained while probing.
+    const PROBE_TICKS: usize = 100;
+    let mut authed = false;
+    for _ in 0..PROBE_TICKS {
+        if scenario.mutate(|ctx| ctx.server(|server| server.users_count() > 0)) {
+            authed = true;
+            break;
+        }
+    }
+
+    if authed {
+        // Existing path: drain the AuthEvent (establishes the user mapping),
+        // then accept.
+        scenario.expect(|ctx| {
+            ctx.server(|server| {
+                if let Some((incoming_key, _auth)) = server.read_event::<ServerAuthEvent<Auth>>() {
+                    if incoming_key == client_key {
+                        return Some(());
+                    }
                 }
-            }
-            None
-        })
-    });
-    scenario.mutate(|ctx| {
-        ctx.server(|server| {
-            server.accept_connection(&client_key);
+                None
+            })
         });
-    });
+        scenario.mutate(|ctx| {
+            ctx.server(|server| {
+                server.accept_connection(&client_key);
+            });
+        });
+    } else {
+        // Pre-auth path: the mismatch was refused before any AuthEvent could
+        // exist, and the client's `RejectEvent(ProtocolMismatch)` is already
+        // queued undrained for the Then step. Track and record, no accept.
+        scenario.track_client_event(client_key, naia_test_harness::TrackedClientEvent::Reject);
+    }
     scenario.record_ok();
 }
 

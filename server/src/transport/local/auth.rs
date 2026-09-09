@@ -1,7 +1,7 @@
 use parking_lot::Mutex;
 use std::{net::SocketAddr, sync::Arc};
 
-use naia_shared::{IdentityToken, ProtocolId, PROTOCOL_ID_HEADER};
+use naia_shared::{IdentityToken, ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS};
 
 use naia_shared::transport::local::{LocalTransportHub, ServerRecvError, ServerSendError};
 
@@ -39,12 +39,24 @@ impl ServerAuthIo {
         // malformed, wrong-width and wrong-value all leave through this one
         // branch, and none of them reaches the base64 decode below, so a
         // mismatching peer's credential is never consumed.
+        //
+        // Unlike a malformed credential (dropped silently), a fingerprint
+        // mismatch gets a prompt, payload-free, reserved-status answer so the
+        // client can fail fast with exactly one `RejectEvent(ProtocolMismatch)`
+        // instead of waiting indefinitely. The bytes are identical for every
+        // way of failing the check and carry neither fingerprint.
         let protocol_id = request
             .headers()
             .get(PROTOCOL_ID_HEADER)
             .and_then(|value| value.to_str().ok())
             .and_then(ProtocolId::from_hex);
         if protocol_id.as_ref() != Some(&self.expected_protocol_id) {
+            let response = http::Response::builder()
+                .status(PROTOCOL_MISMATCH_STATUS)
+                .body(Vec::new())
+                .unwrap();
+            let response_bytes = naia_shared::transport::response_to_bytes(response);
+            let _ = self.hub.send_auth_response(&client_addr, response_bytes);
             return Ok(None);
         }
 
@@ -121,7 +133,7 @@ impl ServerAuthIo {
 #[cfg(test)]
 mod local_auth_fingerprint_tests {
     use naia_shared::transport::{local::LocalTransportHub, request_to_bytes};
-    use naia_shared::{ProtocolId, PROTOCOL_ID_HEADER};
+    use naia_shared::{ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS};
 
     use super::ServerAuthIo;
 
@@ -215,6 +227,78 @@ mod local_auth_fingerprint_tests {
         auth_req_tx.send(request_to_bytes(request)).unwrap();
 
         assert!(matches!(auth_io.receive(), Ok(None)));
+    }
+
+    /// A mismatch is refused with a prompt, payload-free, reserved-status
+    /// answer -- not a silent drop -- so the client fails fast with exactly
+    /// one `RejectEvent(ProtocolMismatch)`. Every way of failing the check
+    /// gets byte-identical responses carrying neither fingerprint, and none of
+    /// them reaches the application.
+    #[test]
+    fn a_mismatch_gets_a_prompt_payload_free_reserved_answer() {
+        use naia_shared::transport::bytes_to_response;
+
+        let good = expected_id().to_hex();
+        let variants: Vec<(String, Option<String>)> = vec![
+            ("absent".to_string(), None),
+            ("wrong value".to_string(), Some(ProtocolId::new(1).to_hex())),
+            (
+                "too short".to_string(),
+                Some(good[..good.len() - 1].to_string()),
+            ),
+            ("too long".to_string(), Some(format!("{}0", good))),
+            (
+                "not hex".to_string(),
+                Some(format!("{}zz", &good[..good.len() - 2])),
+            ),
+            ("empty".to_string(), Some(String::new())),
+        ];
+
+        let mut first_bytes: Option<Vec<u8>> = None;
+        for (label, value) in &variants {
+            let hub = LocalTransportHub::new("127.0.0.1:14191".parse().unwrap());
+            let (_client_addr, auth_req_tx, auth_resp_rx, _data_tx, _data_rx) =
+                hub.register_client();
+            let mut auth_io = ServerAuthIo::new(hub, expected_id());
+
+            let mut builder = http::Request::builder()
+                .method("POST")
+                .uri("/")
+                .header("Authorization", base64::encode([1u8, 2, 3, 4]));
+            if let Some(fingerprint) = value {
+                builder = builder.header(PROTOCOL_ID_HEADER, fingerprint);
+            }
+            let request = builder.body(Vec::new()).unwrap();
+            auth_req_tx.send(request_to_bytes(request)).unwrap();
+
+            assert!(
+                matches!(auth_io.receive(), Ok(None)),
+                "a {label} fingerprint must not reach the application",
+            );
+
+            let response_bytes = auth_resp_rx
+                .try_recv()
+                .expect("a mismatching peer must get a prompt answer, not a silent drop");
+            let response = bytes_to_response(&response_bytes);
+            assert_eq!(
+                response.status().as_u16(),
+                PROTOCOL_MISMATCH_STATUS,
+                "a {label} fingerprint must get the reserved mismatch status",
+            );
+            assert_ne!(response.status().as_u16(), 401);
+            assert!(
+                response.body().is_empty(),
+                "the mismatch answer must be payload-free",
+            );
+
+            match &first_bytes {
+                None => first_bytes = Some(response_bytes),
+                Some(first) => assert_eq!(
+                    first, &response_bytes,
+                    "a {label} fingerprint must be indistinguishable on the wire",
+                ),
+            }
+        }
     }
 
     /// The ordering itself, asserted on the source.

@@ -17,7 +17,9 @@ use smol::{
 };
 use webrtc_unreliable::SessionEndpoint;
 
-use naia_socket_shared::{SocketConfig, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN};
+use naia_socket_shared::{
+    SocketConfig, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN, PROTOCOL_MISMATCH_STATUS,
+};
 
 use crate::{executor, server_addrs::ServerAddrs, AuthResponse, NaiaServerSocketError};
 
@@ -472,13 +474,16 @@ async fn serve(
     // different protocol is refused here without ever reaching the auth path.
     //
     // Absent, wrong-width and wrong-value all arrive as one condition and take
-    // one branch, and the response is the same 404 a malformed request gets.
+    // one branch, and the answer is the shared reserved mismatch status with
+    // an empty body -- never the 404 a malformed request gets, never the 401
+    // an application rejection gets, and never carrying either fingerprint.
     // The expected value is never echoed: it is public compatibility metadata,
     // not a secret, but echoing it would turn this into an oracle that hands
     // any peer the value it failed to supply.
     //
     // OPTIONS is exempt because a CORS preflight carries no custom headers by
     // construction; the POST that follows it is gated.
+    let mut fingerprint_mismatch = false;
     if success
         && !fingerprint_is_acceptable(protocol_id.as_deref(), &expected_protocol_id, is_options)
     {
@@ -487,6 +492,7 @@ async fn serve(
             remote_addr
         );
         success = false;
+        fingerprint_mismatch = true;
     }
     let mut identity_token_opt = None;
     // Optional serialized message explaining a rejection (naia-lib/naia#133).
@@ -671,9 +677,29 @@ async fn serve(
 
     // From here on the peer may already be gone; a failed write/flush/close is a
     // remote event, so log it rather than taking the whole server down.
-    if !success && stream.write_all(RESPONSE_BAD).await.is_err() {
-        warn!("Error writing 404 response to {}", remote_addr);
-        return;
+    // A fingerprint mismatch gets the shared reserved mismatch status with an
+    // empty body (built from the constant, so the three transports cannot
+    // drift); malformed framing still gets the generic 404.
+    if !success {
+        if fingerprint_mismatch {
+            let mismatch = Response::builder()
+                .status(PROTOCOL_MISMATCH_STATUS)
+                .header(header::CONTENT_LENGTH, 0)
+                .header(
+                    header::ACCESS_CONTROL_ALLOW_ORIGIN,
+                    HeaderValue::from_static("*"),
+                )
+                .body(Vec::<u8>::new())
+                .expect("could not build protocol-mismatch response");
+            let out = response_header_to_vec(&mismatch);
+            if stream.write_all(&out).await.is_err() {
+                warn!("Error writing mismatch response to {}", remote_addr);
+                return;
+            }
+        } else if stream.write_all(RESPONSE_BAD).await.is_err() {
+            warn!("Error writing 404 response to {}", remote_addr);
+            return;
+        }
     }
 
     if stream.flush().await.is_err() {
@@ -991,5 +1017,56 @@ mod tests {
     fn the_cors_preflight_is_exempt_but_only_the_preflight() {
         assert!(super::fingerprint_is_acceptable(None, GOOD_ID, true));
         assert!(!super::fingerprint_is_acceptable(None, GOOD_ID, false));
+    }
+
+    /// The mismatch branch is wired to the shared constant in the source, not
+    /// just in the outcome: a serve that routed a fingerprint failure back to
+    /// the generic 404 would still refuse, and behaviour alone could not tell
+    /// the regression from the contract. Sliced to the `serve` body so no
+    /// other function or this test itself can satisfy it.
+    #[test]
+    fn the_mismatch_branch_is_coupled_to_the_shared_constant_in_source() {
+        const THIS_FILE: &str = include_str!("session.rs");
+
+        let start = THIS_FILE.find("async fn serve(").expect("serve must exist");
+        let body = &THIS_FILE[start..];
+        let end = body
+            .find("\nfn response_header_to_vec")
+            .expect("serve must be closed");
+        let body = &body[..end];
+
+        assert!(
+            body.contains("PROTOCOL_MISMATCH_STATUS"),
+            "serve must answer a fingerprint mismatch from the shared constant",
+        );
+        assert!(
+            body.contains("fingerprint_mismatch"),
+            "serve must track the mismatch apart from malformed framing",
+        );
+        assert!(
+            body.contains("RESPONSE_BAD"),
+            "malformed framing must still get the generic answer",
+        );
+    }
+
+    /// The mismatch answer is the shared reserved status with an empty body:
+    /// distinct from the 401 an application rejection gets and from the 404
+    /// malformed framing gets, carrying neither fingerprint.
+    #[test]
+    fn the_mismatch_answer_is_reserved_payload_free_and_distinct() {
+        use naia_socket_shared::PROTOCOL_MISMATCH_STATUS;
+
+        assert_ne!(PROTOCOL_MISMATCH_STATUS, 401);
+        assert_ne!(PROTOCOL_MISMATCH_STATUS, 404);
+        assert_ne!(PROTOCOL_MISMATCH_STATUS, 400);
+        assert_ne!(PROTOCOL_MISMATCH_STATUS, 500);
+
+        let response = http::Response::builder()
+            .status(PROTOCOL_MISMATCH_STATUS)
+            .header(http::header::CONTENT_LENGTH, 0)
+            .body(Vec::<u8>::new())
+            .expect("mismatch response must build");
+        assert_eq!(response.status().as_u16(), PROTOCOL_MISMATCH_STATUS);
+        assert!(response.body().is_empty());
     }
 }

@@ -11,6 +11,7 @@ use log::warn;
 
 use naia_shared::{
     http_utils, IdentityToken, LinkConditionerConfig, ProtocolId, PROTOCOL_ID_HEADER,
+    PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -322,6 +323,25 @@ impl AuthIo {
 
             let Some(auth_bytes) = decode_auth_request(&pending.bytes, &self.expected_protocol_id)
             else {
+                // A fingerprint mismatch gets a prompt, payload-free,
+                // reserved-status answer so the client fails fast with exactly
+                // one `RejectEvent(ProtocolMismatch)` instead of hanging on a
+                // dropped connection. Malformed framing is still dropped
+                // silently and stays a generic transport error. Either way the
+                // request never reaches the application: no user record, no
+                // auth event, no token, and the credential is never decoded.
+                if fingerprint_mismatch(&pending.bytes, &self.expected_protocol_id) {
+                    let mut stream = pending.stream;
+                    let _ = stream.set_nonblocking(false);
+                    if let Ok(response) = http::Response::builder()
+                        .status(PROTOCOL_MISMATCH_STATUS)
+                        .body(Vec::new())
+                    {
+                        let response_bytes = http_utils::response_to_bytes(response);
+                        let _ = stream.write_all(&response_bytes);
+                        let _ = stream.flush();
+                    }
+                }
                 continue;
             };
 
@@ -478,6 +498,23 @@ fn decode_auth_request(bytes: &[u8], expected_protocol_id: &ProtocolId) -> Optio
     base64::decode(auth_str).ok()
 }
 
+/// Reports whether a complete request fails the fingerprint check alone.
+///
+/// Used to tell a protocol mismatch (prompt reserved-status answer) apart
+/// from malformed framing (silent drop, generic transport error) without
+/// decoding the credential: absent, non-UTF-8, wrong-width, and wrong-value
+/// fingerprints all report `true` through this one condition, and the caller
+/// answers them with identical bytes carrying neither fingerprint.
+fn fingerprint_mismatch(bytes: &[u8], expected_protocol_id: &ProtocolId) -> bool {
+    let request = http_utils::bytes_to_request(bytes);
+    let protocol_id = request
+        .headers()
+        .get(PROTOCOL_ID_HEADER)
+        .and_then(|value| value.to_str().ok())
+        .and_then(ProtocolId::from_hex);
+    protocol_id.as_ref() != Some(expected_protocol_id)
+}
+
 // AuthSender
 #[derive(Clone)]
 pub(crate) struct AuthSender {
@@ -631,9 +668,9 @@ mod auth_io_stream_tests {
         time::Duration,
     };
 
-    use naia_shared::{ProtocolId, PROTOCOL_ID_HEADER};
+    use naia_shared::{ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS};
 
-    use super::{decode_auth_request, AuthIo, MAX_PENDING_AUTH_READS};
+    use super::{decode_auth_request, fingerprint_mismatch, AuthIo, MAX_PENDING_AUTH_READS};
 
     /// The fingerprint the test server expects. Arbitrary, but fixed: what
     /// matters is that a peer presenting anything else is refused.
@@ -814,6 +851,106 @@ mod auth_io_stream_tests {
 
         assert!(response.starts_with("HTTP/1.1 401"), "got: {response}");
         assert_eq!(response.split("\r\n\r\n").nth(1).unwrap(), "");
+    }
+
+    /// A fingerprint mismatch gets a prompt, payload-free, reserved-status
+    /// answer -- not a silent drop -- so the client fails fast with exactly
+    /// one `RejectEvent(ProtocolMismatch)`. Absent and wrong-value take one
+    /// indistinguishable branch carrying neither fingerprint, and neither
+    /// reaches the application.
+    #[test]
+    fn a_fingerprint_mismatch_gets_a_prompt_reserved_answer() {
+        use std::io::Read;
+
+        let encoded = base64::encode([1u8, 2, 3, 4]);
+        let wrong = ProtocolId::new(1).to_hex();
+        let mut first: Option<String> = None;
+
+        for (label, fingerprint_opt) in [("absent", None), ("wrong value", Some(wrong.clone()))] {
+            let (mut auth_io, port) = auth_io();
+
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            let fingerprint_headers = fingerprint_opt
+                .as_ref()
+                .map(|f| format!("{}: {}\r\n", PROTOCOL_ID_HEADER, f))
+                .unwrap_or_default();
+            stream
+                .write_all(
+                    format!(
+                        "GET / HTTP/1.1\r\nHost: localhost\r\n{}Authorization: {encoded}\r\n\r\n",
+                        fingerprint_headers
+                    )
+                    .as_bytes(),
+                )
+                .unwrap();
+            stream.flush().unwrap();
+
+            assert!(
+                !drain_one(&mut auth_io),
+                "a {label} fingerprint must not reach the application",
+            );
+            assert!(
+                auth_io.outgoing_streams.is_empty(),
+                "a {label} fingerprint must not retain a stream for the app",
+            );
+
+            let mut response = String::new();
+            stream.read_to_string(&mut response).unwrap();
+
+            assert!(
+                response.starts_with(&format!("HTTP/1.1 {}", PROTOCOL_MISMATCH_STATUS)),
+                "a {label} fingerprint must get the reserved mismatch status, got: {response}",
+            );
+            assert!(
+                !response.starts_with("HTTP/1.1 401"),
+                "a mismatch must not look like an application rejection",
+            );
+            let body = response.split("\r\n\r\n").nth(1).unwrap();
+            assert_eq!(body, "", "the mismatch answer must be payload-free");
+            assert!(
+                !response.contains(&expected_id().to_hex()),
+                "the mismatch answer must never echo the expected fingerprint",
+            );
+            assert!(
+                fingerprint_opt
+                    .as_ref()
+                    .map(|f| !response.contains(f))
+                    .unwrap_or(true),
+                "the mismatch answer must never echo the received fingerprint",
+            );
+
+            match &first {
+                None => first = Some(response),
+                Some(first) => assert_eq!(
+                    first, &response,
+                    "a {label} fingerprint must be indistinguishable on the wire",
+                ),
+            }
+        }
+
+        // The unit-level splitter agrees: these are mismatches, while a
+        // fingerprinted-but-credentialless request is merely malformed.
+        let good = expected_id().to_hex();
+        let mismatched = format!(
+            "GET / HTTP/1.1\r\nHost: x\r\n{}: {}\r\nAuthorization: {}\r\n\r\n",
+            PROTOCOL_ID_HEADER,
+            ProtocolId::new(1).to_hex(),
+            base64::encode([9u8]),
+        );
+        assert!(fingerprint_mismatch(mismatched.as_bytes(), &expected_id()));
+        let absent = format!(
+            "GET / HTTP/1.1\r\nHost: x\r\nAuthorization: {}\r\n\r\n",
+            base64::encode([9u8]),
+        );
+        assert!(fingerprint_mismatch(absent.as_bytes(), &expected_id()));
+        let matched = format!(
+            "GET / HTTP/1.1\r\nHost: x\r\n{}: {}\r\nAuthorization: {}\r\n\r\n",
+            PROTOCOL_ID_HEADER,
+            good,
+            base64::encode([9u8]),
+        );
+        assert!(!fingerprint_mismatch(matched.as_bytes(), &expected_id()));
+        assert!(decode_auth_request(matched.as_bytes(), &expected_id()).is_some());
     }
 
     /// The listener is non-blocking, but the streams it accepts are not, so a
