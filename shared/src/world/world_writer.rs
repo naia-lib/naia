@@ -115,6 +115,14 @@ pub(crate) enum UpdateDropReason {
     /// every server auth status -- but both production `GlobalWorldManagerType`
     /// implementors report a real status, so the check is not skipped anywhere.
     AuthorityLost,
+    /// The entity is still in the World, but its local mapping is gone --
+    /// high churn removed it (bulk client timeout) between planning and
+    /// transmit. The lookup below (`global_entity_to_owned_entity`) would
+    /// raise the reachable `Err` as an abort (`unwrap` on
+    /// `EntityDoesNotExistError`), killing the send worker over one dead
+    /// entity. The update is moot: with no local mapping there is no wire
+    /// identity to write it under.
+    LocalMappingGone,
 }
 
 /// The single decision point for the three freeze->transmit races above.
@@ -128,6 +136,7 @@ fn planned_update_drop_reason<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType
     global_entity: &GlobalEntity,
     kinds: &UpdateKinds,
     global_world_manager: &dyn GlobalWorldManagerType,
+    converter: &dyn LocalEntityAndGlobalEntityConverter,
 ) -> Option<UpdateDropReason> {
     if !world.has_entity(world_entity) {
         return Some(UpdateDropReason::EntityDespawned);
@@ -150,6 +159,17 @@ fn planned_update_drop_reason<E: Copy + Eq + Hash + Send + Sync, W: WorldRefType
         }
     }
 
+    // Last: every earlier guard describes the entity's world-side state, and
+    // each must keep reporting ahead of this one (a despawned entity is
+    // despawned even when its mapping is also gone). Only when the world side
+    // is fully intact does a missing local mapping get its own reason.
+    if converter
+        .global_entity_to_owned_entity(global_entity)
+        .is_err()
+    {
+        return Some(UpdateDropReason::LocalMappingGone);
+    }
+
     None
 }
 
@@ -169,7 +189,7 @@ pub(crate) mod drop_counters {
 
     #[cfg(test)]
     thread_local! {
-        static COUNTS: std::cell::Cell<[usize; 3]> = const { std::cell::Cell::new([0; 3]) };
+        static COUNTS: std::cell::Cell<[usize; 4]> = const { std::cell::Cell::new([0; 4]) };
     }
 
     #[cfg(test)]
@@ -178,6 +198,7 @@ pub(crate) mod drop_counters {
             UpdateDropReason::EntityDespawned => 0,
             UpdateDropReason::AllKindsStale => 1,
             UpdateDropReason::AuthorityLost => 2,
+            UpdateDropReason::LocalMappingGone => 3,
         }
     }
 
@@ -203,7 +224,7 @@ pub(crate) mod drop_counters {
     /// counts, so an earlier test on a reused thread cannot inflate them.
     #[cfg(test)]
     pub(crate) fn reset() {
-        COUNTS.with(|counts| counts.set([0; 3]));
+        COUNTS.with(|counts| counts.set([0; 4]));
     }
 }
 
@@ -1061,6 +1082,7 @@ impl WorldWriter {
                 &global_entity,
                 &update_list[i].3,
                 global_world_manager,
+                &world_manager.entity_converter(),
             ) {
                 drop_counters::record(reason);
                 update_list[i].3.clear();
@@ -1627,6 +1649,19 @@ mod delegated_send_guard_tests {
     /// Runs one `write_updates` pass over a single queued update against
     /// `world`, for an entity whose delegated authority is `status`.
     fn run_pass(world: TripwireWorld, host: HostType, status: EntityAuthStatus) -> DropOutcome {
+        run_pass_inner(world, host, status, true)
+    }
+
+    /// Same as [`run_pass`], but skips the host-engine registration when
+    /// `register_mapping` is false -- modelling the freeze->transmit window
+    /// in which high churn removed the local mapping after the update was
+    /// planned (LV-08a).
+    fn run_pass_inner(
+        world: TripwireWorld,
+        host: HostType,
+        status: EntityAuthStatus,
+        register_mapping: bool,
+    ) -> DropOutcome {
         drop_counters::reset();
         let mut kinds = ComponentKinds::new();
         kinds.add_component::<Ghost>();
@@ -1645,12 +1680,14 @@ mod delegated_send_guard_tests {
         // Register the entity with the host engine so the send path can resolve a
         // LocalEntity for it -- otherwise it would stop at that lookup and never
         // reach either the guard or serialization.
-        local_world_manager.host_init_entity(
-            &global_entity,
-            vec![ComponentKind::of::<Ghost>()],
-            &kinds,
-            false,
-        );
+        if register_mapping {
+            local_world_manager.host_init_entity(
+                &global_entity,
+                vec![ComponentKind::of::<Ghost>()],
+                &kinds,
+                false,
+            );
+        }
         let mut update_list: Vec<(GlobalEntity, GlobalEntityIndex, u64, UpdateKinds)> = vec![(
             global_entity,
             GlobalEntityIndex::from(1u32),
@@ -1687,6 +1724,7 @@ mod delegated_send_guard_tests {
             UpdateDropReason::EntityDespawned,
             UpdateDropReason::AllKindsStale,
             UpdateDropReason::AuthorityLost,
+            UpdateDropReason::LocalMappingGone,
         ]
         .into_iter()
         .filter(|reason| drop_counters::count(*reason) > 0)
@@ -1739,7 +1777,34 @@ mod delegated_send_guard_tests {
         }
     }
 
-    /// The two staleness guards, pinned the same way. Together with the test
+    /// A queued update for an entity the world still holds, with writable
+    /// authority and intact kinds, but whose local mapping churn removed
+    /// after planning (LV-08a: bulk client timeout between freeze and
+    /// transmit). The send path must drop it as `LocalMappingGone`, not
+    /// abort the worker in `global_entity_to_owned_entity().unwrap()`.
+    #[test]
+    fn a_queued_update_is_dropped_when_the_local_mapping_is_gone() {
+        let outcome = run_pass_inner(
+            TripwireWorld::intact(),
+            HostType::Server,
+            EntityAuthStatus::Available,
+            false,
+        );
+        assert!(
+            outcome.dropped,
+            "with no local mapping there is no wire identity to write under"
+        );
+        assert!(!outcome.has_written, "nothing may be serialized");
+        assert_eq!(
+            outcome.reason,
+            Some(UpdateDropReason::LocalMappingGone),
+            "an intact world with writable authority must reach the mapping \
+             guard specifically; any other reason means this test never \
+             reached the state it claims to cover",
+        );
+    }
+
+    /// The two staleness guards, pinned the same way. Together with the tests
     /// above this exercises every [`UpdateDropReason`], so the reason a given
     /// entry was dropped is an asserted fact rather than an assumption.
     #[test]
@@ -1928,6 +1993,7 @@ mod delegated_send_guard_tests {
             UpdateDropReason::EntityDespawned,
             UpdateDropReason::AllKindsStale,
             UpdateDropReason::AuthorityLost,
+            UpdateDropReason::LocalMappingGone,
         ]
         .into_iter()
         .filter(|reason| drop_counters::count(*reason) > 0)
