@@ -242,7 +242,7 @@ fn get_enum_wire_schema_method(
             out.push(SCHEMA_TAG_ENUM);
             out.push(#bits_needed);
             wire_schema_count(&mut out, #variant_count);
-            let ctx = &mut WireSchemaContext::new();
+            let ctx = &mut WireSchemaContext::rooted::<Self>();
             #variant_tokens
             out.push(#fragment_byte);
             out.push(#request_byte);
@@ -311,7 +311,7 @@ fn get_wire_schema_method(
             out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
             out.push(#tag);
             wire_schema_count(&mut out, #field_count);
-            let ctx = &mut WireSchemaContext::new();
+            let ctx = &mut WireSchemaContext::rooted::<Self>();
             #field_tokens
             out.push(#fragment_byte);
             out.push(#request_byte);

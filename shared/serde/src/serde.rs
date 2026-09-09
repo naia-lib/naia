@@ -234,6 +234,23 @@ impl WireSchemaContext {
         );
         self.stack.push(TypeId::of::<T>());
     }
+
+    /// A traversal already rooted at `T`: the root emits fully, and any
+    /// recursion back to `T` folds to `BACKREF 0`.
+    ///
+    /// This is the entry point for generated standalone descriptors
+    /// (Message and Replicate `wire_schema()` overrides). It requires only
+    /// `T: 'static` for the `TypeId` — never `T: WireSchema`, which the
+    /// generated overrides deliberately do not impose — because the root's
+    /// own emission is the caller's inline code, not a trait call.
+    /// Starting from `new()` instead would leave the root unseeded: a
+    /// self-containing type would inline one full spurious level before
+    /// anything folded.
+    pub fn rooted<T: ?Sized + 'static>() -> Self {
+        let mut ctx = Self::new();
+        ctx.enter_root::<T>();
+        ctx
+    }
 }
 
 /// Emits one field/element descriptor: a back-reference when `T` is already

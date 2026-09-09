@@ -7,9 +7,16 @@
 //! wire-incompatible mutations of these same fixtures change the
 //! fingerprint.
 
+use std::{any::Any, collections::HashSet};
+
 use naia_shared::{
-    ComponentKind, ComponentKinds, EntityProperty, Message, MessageKinds, Property, Replicate,
-    Request, ResourceKinds, Response,
+    wire_schema_count, wire_schema_field, wire_schema_label, BitReader, BitWrite,
+    ComponentFieldUpdate, ComponentKind, ComponentKinds, DiffMask, EntityAuthAccessor,
+    EntityProperty, LocalEntityAndGlobalEntityConverter, LocalEntityAndGlobalEntityConverterMut,
+    Message, MessageKinds, Named, PendingComponentUpdate, Property, PropertyMutator, RemoteEntity,
+    ReplicaDynMut, ReplicaDynRef, Replicate, ReplicateBuilder, Request, ResourceKinds, Response,
+    Serde, SerdeErr, WireSchema, WireSchemaContext, SCHEMA_TAG_BACKREF, SCHEMA_TAG_STRUCT,
+    WIRE_SCHEMA_DOMAIN,
 };
 
 // --- fixtures --------------------------------------------------------------
@@ -86,6 +93,89 @@ struct Extended {
 struct Pair {
     first: u8,
     second: u16,
+}
+
+// Self-containing generated types: the derives must root the traversal at
+// `Self`, so the boxed self-edge folds to `BACKREF 0` with no spurious
+// inlined level.
+//
+// Neither can derive the codec `Serde` (its derive emits its own support
+// module and `Clone` impl, colliding with the registry derives), so both
+// hand-implement it with unreachable bodies: these fixtures are only ever
+// described, never serialized. `Serde` needs `Clone + PartialEq`; `Clone`
+// comes from the registry derives themselves, `PartialEq` is derived.
+#[derive(PartialEq, Message)]
+#[allow(dead_code)]
+struct ChainMsg {
+    next: Box<ChainMsg>,
+}
+
+impl Serde for ChainMsg {
+    fn ser(&self, _writer: &mut dyn BitWrite) {
+        unreachable!("oracle fixture is described, never serialized");
+    }
+    fn de(_reader: &mut BitReader) -> Result<Self, SerdeErr> {
+        unreachable!("oracle fixture is described, never serialized");
+    }
+    fn bit_length(&self) -> u32 {
+        unreachable!("oracle fixture is described, never serialized");
+    }
+}
+
+// Stands in for the codec `Serde` derive's `WireSchema` impl: the field
+// path needs `Box<ChainMsg>: WireSchema`, which needs `ChainMsg` itself
+// to implement it. Routes the single field through the canonical field
+// path, exactly as generated codec impls do.
+impl WireSchema for ChainMsg {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_STRUCT);
+        wire_schema_count(out, 1);
+        wire_schema_label(out, "next");
+        wire_schema_field::<Box<ChainMsg>>(ctx, out);
+    }
+}
+
+// `Property` has no `PartialEq`, so equality is hand-written through the
+// deref: comparing the innards is what the fixture needs, and the
+// self-reference resolves through this very impl, the standard recursive
+// manual-impl shape.
+#[derive(Replicate)]
+#[allow(dead_code)]
+struct ChainComp {
+    next: Property<Box<ChainComp>>,
+}
+
+// Identity comparison: a structural `==` would recurse forever on a
+// self-containing value (comparing innards compares the whole value
+// again). Fixtures are never compared — the bound exists only to satisfy
+// `Serde` — so address identity is the honest finite choice.
+impl PartialEq for ChainComp {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(&*self.next, &*other.next)
+    }
+}
+
+// Codec-level `WireSchema` stand-in, as for `ChainMsg`: the Replicate
+// descriptor's field path needs the inner `Box<ChainComp>` describable.
+impl WireSchema for ChainComp {
+    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+        out.push(SCHEMA_TAG_STRUCT);
+        wire_schema_count(out, 1);
+        wire_schema_label(out, "next");
+        wire_schema_field::<Box<ChainComp>>(ctx, out);
+    }
+}
+
+impl Serde for ChainComp {
+    fn ser(&self, _writer: &mut dyn BitWrite) {
+        unreachable!("oracle fixture is described, never serialized");
+    }
+    fn de(_reader: &mut BitReader) -> Result<Self, SerdeErr> {
+        unreachable!("oracle fixture is described, never serialized");
+    }
+    fn bit_length(&self) -> u32 {
+        unreachable!("oracle fixture is described, never serialized");
+    }
 }
 
 #[derive(Message)]
@@ -234,6 +324,239 @@ fn adding_an_entity_relation_changes_facts_and_descriptor() {
     assert_ne!(entries[0].1.descriptor, entries[1].1.descriptor);
     assert!(!entries[0].1.has_entity_properties);
     assert!(entries[1].1.has_entity_properties);
+}
+
+// --- generated root seeding -------------------------------------------------
+//
+// The derives start their standalone descriptors from a traversal rooted
+// at `Self`. These pin the exact bytes for self-containing types: one
+// STRUCT level, then `BACKREF 0` — no spurious inlined level. An unseeded
+// (`new()`) context would inline one full level before anything folds;
+// direct-child dispatch in `Box` would nest a level and fold to
+// `BACKREF 1`. Both failure shapes fail these assertions.
+
+fn backref_zero_struct(label: &str, tail: &[u8]) -> Vec<u8> {
+    let mut expected = Vec::new();
+    expected.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+    expected.push(SCHEMA_TAG_STRUCT);
+    let count: u32 = 1;
+    expected.extend_from_slice(&count.to_le_bytes());
+    let label_bytes = label.as_bytes();
+    let label_len: u32 = label_bytes.len() as u32;
+    expected.extend_from_slice(&label_len.to_le_bytes());
+    expected.extend_from_slice(label_bytes);
+    expected.push(SCHEMA_TAG_BACKREF);
+    expected.extend_from_slice(&0u32.to_le_bytes());
+    expected.extend_from_slice(tail);
+    expected
+}
+
+#[test]
+fn generated_message_roots_its_descriptor_at_self() {
+    assert_eq!(
+        <ChainMsg as Message>::wire_schema(),
+        backref_zero_struct("next", &[0, 0])
+    );
+}
+
+#[test]
+fn generated_replicate_roots_its_descriptor_at_self() {
+    assert_eq!(
+        <ChainComp as Replicate>::wire_schema(),
+        backref_zero_struct("next", &[])
+    );
+}
+
+// --- malformed facts are refused --------------------------------------------
+//
+// Hand-written `Replicate` impls whose schema methods disagree about their
+// own layout: label/index length mismatch, and an entity label naming no
+// wired property. Registration must panic in release mode (plain
+// `assert!`, never `debug_assert!`), before anything is stored — a
+// registered lie would frame a truncated fingerprint section.
+
+macro_rules! malformed_component {
+    ($name:ident, $builder:ident, $labels:expr, $indices:expr, $entity:expr) => {
+        #[allow(dead_code)]
+        struct $name;
+        struct $builder;
+        impl Named for $name {
+            fn name(&self) -> String {
+                stringify!($name).to_string()
+            }
+            fn protocol_name() -> &'static str {
+                stringify!($name)
+            }
+        }
+        impl Named for $builder {
+            fn name(&self) -> String {
+                stringify!($builder).to_string()
+            }
+            fn protocol_name() -> &'static str {
+                stringify!($builder)
+            }
+        }
+        impl ReplicateBuilder for $builder {
+            fn read(
+                &self,
+                _reader: &mut BitReader,
+                _converter: &dyn LocalEntityAndGlobalEntityConverter,
+            ) -> Result<Box<dyn Replicate>, SerdeErr> {
+                unreachable!("refused before any read")
+            }
+            fn read_create_update(
+                &self,
+                _reader: &mut BitReader,
+            ) -> Result<PendingComponentUpdate, SerdeErr> {
+                unreachable!("refused before any read")
+            }
+            fn split_update(
+                &self,
+                _converter: &dyn LocalEntityAndGlobalEntityConverter,
+                _update: PendingComponentUpdate,
+            ) -> Result<
+                (
+                    Option<Vec<(RemoteEntity, ComponentFieldUpdate)>>,
+                    Option<PendingComponentUpdate>,
+                ),
+                SerdeErr,
+            > {
+                unreachable!("refused before any read")
+            }
+            fn box_clone(&self) -> Box<dyn ReplicateBuilder> {
+                Box::new($builder)
+            }
+        }
+        impl Replicate for $name {
+            fn kind(&self) -> ComponentKind {
+                ComponentKind::of::<$name>()
+            }
+            fn to_any(&self) -> &dyn Any {
+                self
+            }
+            fn to_any_mut(&mut self) -> &mut dyn Any {
+                self
+            }
+            fn to_boxed_any(self: Box<Self>) -> Box<dyn Any> {
+                self
+            }
+            fn copy_to_box(&self) -> Box<dyn Replicate> {
+                unreachable!("refused before any copy")
+            }
+            fn create_builder() -> Box<dyn ReplicateBuilder>
+            where
+                Self: Sized,
+            {
+                Box::new($builder)
+            }
+            fn diff_mask_size(&self) -> u8 {
+                0
+            }
+            fn dyn_ref(&self) -> ReplicaDynRef<'_> {
+                ReplicaDynRef::new(self)
+            }
+            fn dyn_mut(&mut self) -> ReplicaDynMut<'_> {
+                ReplicaDynMut::new(self)
+            }
+            fn mirror(&mut self, _other: &dyn Replicate) {
+                unreachable!("refused before any mirror")
+            }
+            fn mirror_single_field(&mut self, _index: u8, _other: &dyn Replicate) {
+                unreachable!("refused before any mirror")
+            }
+            fn set_mutator(&mut self, _mutator: &PropertyMutator) {}
+            fn write(
+                &self,
+                _kinds: &ComponentKinds,
+                _writer: &mut dyn BitWrite,
+                _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+            ) {
+                unreachable!("refused before any write")
+            }
+            fn write_update(
+                &self,
+                _mask: &DiffMask,
+                _writer: &mut dyn BitWrite,
+                _converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
+            ) {
+                unreachable!("refused before any write")
+            }
+            fn read_apply_update(
+                &mut self,
+                _converter: &dyn LocalEntityAndGlobalEntityConverter,
+                _update: PendingComponentUpdate,
+            ) -> Result<(), SerdeErr> {
+                unreachable!("refused before any read")
+            }
+            fn read_apply_field_update(
+                &mut self,
+                _converter: &dyn LocalEntityAndGlobalEntityConverter,
+                _update: ComponentFieldUpdate,
+            ) -> Result<(), SerdeErr> {
+                unreachable!("refused before any read")
+            }
+            fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
+                None
+            }
+            fn relations_complete(&mut self, _converter: &dyn LocalEntityAndGlobalEntityConverter) {
+            }
+            fn publish(&mut self, _mutator: &PropertyMutator) {}
+            fn unpublish(&mut self) {}
+            fn enable_delegation(
+                &mut self,
+                _accessor: &EntityAuthAccessor,
+                _mutator: Option<&PropertyMutator>,
+            ) {
+            }
+            fn disable_delegation(&mut self) {}
+            fn localize(&mut self) {}
+            fn wire_schema() -> Vec<u8>
+            where
+                Self: Sized,
+            {
+                Vec::new()
+            }
+            fn replicated_property_labels() -> Vec<&'static str>
+            where
+                Self: Sized,
+            {
+                $labels
+            }
+            fn property_mask_indices() -> Vec<u8>
+            where
+                Self: Sized,
+            {
+                $indices
+            }
+            fn mask_size_bytes() -> u8
+            where
+                Self: Sized,
+            {
+                0
+            }
+            fn entity_property_labels() -> Vec<&'static str>
+            where
+                Self: Sized,
+            {
+                $entity
+            }
+        }
+    };
+}
+
+malformed_component!(Ragged, RaggedBuilder, vec!["a", "b"], vec![0], vec![]);
+malformed_component!(Stray, StrayBuilder, vec!["a"], vec![0], vec!["ghost"]);
+
+#[test]
+#[should_panic(expected = "property labels")]
+fn mismatched_label_and_index_lengths_are_refused() {
+    ComponentKinds::new().add_component::<Ragged>();
+}
+
+#[test]
+#[should_panic(expected = "entity labels")]
+fn entity_label_outside_wired_properties_is_refused() {
+    ComponentKinds::new().add_component::<Stray>();
 }
 
 // --- resources by net ID ----------------------------------------------------

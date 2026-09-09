@@ -240,20 +240,24 @@ impl ComponentKinds {
             .map(str::to_string)
             .collect();
         // Labels and mask indices are parallel lists from the same derive
-        // walk; every entity label must name a wired property.
-        debug_assert_eq!(
+        // walk; every entity label must name a wired property. These are
+        // release checks, not debug-only: a mismatch means the type's
+        // schema methods disagree about its own layout, and registering it
+        // would let the fingerprint frame a truncated or misaligned
+        // component section. Refuse registration instead.
+        assert_eq!(
             property_labels.len(),
             mask_indices.len(),
-            "Component {} has {} property labels but {} mask indices",
+            "refusing to register component {}: {} property labels but {} mask indices",
             std::any::type_name::<C>(),
             property_labels.len(),
             mask_indices.len(),
         );
-        debug_assert!(
+        assert!(
             entity_property_labels
                 .iter()
                 .all(|label| property_labels.contains(label)),
-            "Component {} has entity labels outside its wired properties",
+            "refusing to register component {}: entity labels name properties outside its wired properties",
             std::any::type_name::<C>(),
         );
         self.facts.insert(

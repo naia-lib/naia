@@ -95,12 +95,15 @@ mod tests {
 
 // Schema descriptors //
 
-// `Box<T>` is transparent: it emits `T`'s descriptor unchanged, delegating
-// directly (the caller already tracked `Box<T>` itself for recursion).
-// `Box<[u8]>` is length-prefixed bytes on the wire, like `String`.
+// `Box<T>` is transparent: it emits `T`'s descriptor unchanged, routing the
+// child through the canonical field path. That routing is what makes
+// recursion terminate: `Box<Self>` enters `Box<Self>` on the traversal
+// stack, so the inner `Self` folds to the already-active root (BACKREF 0)
+// instead of re-emitting through a direct call that never consults the
+// stack. `Box<[u8]>` is length-prefixed bytes on the wire, like `String`.
 impl<T: WireSchema> WireSchema for Box<T> {
     fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
-        T::wire_schema(ctx, out);
+        wire_schema_field::<T>(ctx, out);
     }
 }
 
@@ -114,7 +117,49 @@ impl WireSchema for Box<[u8]> {
 #[cfg(test)]
 mod schema_tests {
     use crate::serde::WIRE_SCHEMA_DOMAIN;
-    use crate::serde::{WireSchema, SCHEMA_TAG_BYTES, SCHEMA_TAG_INTEGER};
+    use crate::serde::{
+        wire_schema_count, wire_schema_field, wire_schema_label, WireSchema, WireSchemaContext,
+        SCHEMA_TAG_BACKREF, SCHEMA_TAG_BYTES, SCHEMA_TAG_INTEGER, SCHEMA_TAG_STRUCT,
+    };
+
+    /// A self-containing type whose field routes through the canonical
+    /// field path, exactly as every generated `WireSchema` impl does.
+    /// Never constructed — only described — so the field is appeal-proofed
+    /// against dead-code lint.
+    #[allow(dead_code)]
+    struct Chain {
+        next: Box<Chain>,
+    }
+
+    impl WireSchema for Chain {
+        fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
+            out.push(SCHEMA_TAG_STRUCT);
+            wire_schema_count(out, 1);
+            wire_schema_label(out, "next");
+            wire_schema_field::<Box<Chain>>(ctx, out);
+        }
+    }
+
+    /// Recursion through `Box<Self>` folds to the active root (`BACKREF 0`)
+    /// with no spurious inlined level.
+    ///
+    /// This falsifies direct-child dispatch (`T::wire_schema` inside the
+    /// `Box` impl): bypassing the field path never pushes `Box<Self>`, so
+    /// the inner `Self` re-emits a whole nested STRUCT level and folds to
+    /// `BACKREF 1` instead. The exact-bytes assertion below would fail on
+    /// that shape — no abort, just a red test.
+    #[test]
+    fn recursive_box_folds_to_backref_zero() {
+        let mut expected = Vec::new();
+        expected.extend_from_slice(WIRE_SCHEMA_DOMAIN);
+        expected.push(SCHEMA_TAG_STRUCT);
+        wire_schema_count(&mut expected, 1);
+        wire_schema_label(&mut expected, "next");
+        expected.push(SCHEMA_TAG_BACKREF);
+        expected.extend_from_slice(&0u32.to_le_bytes());
+
+        assert_eq!(Chain::wire_schema_bytes(), expected);
+    }
 
     /// Transparency means byte-identity with the inner type; byte boxes
     /// carry their length codec.

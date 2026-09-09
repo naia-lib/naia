@@ -360,10 +360,22 @@ impl Protocol {
             put_bytes(&mut components, facts.name.as_bytes());
             put_bytes(&mut components, &facts.descriptor);
             components.push(u8::from(facts.immutable));
+            // Registration refuses mismatched facts (see `add_component`),
+            // but the framing must not silently truncate even if that
+            // invariant is ever bypassed: a `zip` would drop trailing
+            // entries without a sound. Assert, then index.
+            assert_eq!(
+                facts.property_labels.len(),
+                facts.mask_indices.len(),
+                "component {} facts disagree: {} labels vs {} mask indices",
+                facts.name,
+                facts.property_labels.len(),
+                facts.mask_indices.len(),
+            );
             put_count(&mut components, facts.property_labels.len());
-            for (label, index) in facts.property_labels.iter().zip(facts.mask_indices.iter()) {
+            for (position, label) in facts.property_labels.iter().enumerate() {
                 put_bytes(&mut components, label.as_bytes());
-                components.push(*index);
+                components.push(facts.mask_indices[position]);
             }
             components.push(facts.mask_size_bytes);
             components.push(u8::from(facts.has_entity_properties));

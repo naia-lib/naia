@@ -534,7 +534,7 @@ pub fn get_wire_schema_method(properties: &[Property]) -> TokenStream {
             out.extend_from_slice(WIRE_SCHEMA_DOMAIN);
             out.push(SCHEMA_TAG_STRUCT);
             wire_schema_count(&mut out, #field_count);
-            let ctx = &mut WireSchemaContext::new();
+            let ctx = &mut WireSchemaContext::rooted::<Self>();
             #field_tokens
             out
         }
