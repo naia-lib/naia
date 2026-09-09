@@ -1,4 +1,4 @@
-use std::{any::Any, collections::HashMap, marker::PhantomData};
+use std::{any::Any, collections::HashMap, marker::PhantomData, net::SocketAddr};
 
 use bevy_ecs::{
     entity::Entity,
@@ -70,24 +70,30 @@ impl<T> DisconnectEvent<T> {
 // RejectEvent
 /// Fires when the server refused the connection.
 ///
+/// `address` is the server address when one is known: a pre-auth rejection
+/// happens before the data address is learned, so it is `None` there, while a
+/// post-address in-band rejection carries `Some`. No sentinel is manufactured.
+///
 /// `message` carries the reason the server sent with
 /// `reject_connection_with`, if any (naia-lib/naia#133). Downcast it with
 /// `container.to_boxed_any().downcast::<MyRejectReason>()`.
 #[derive(bevy_ecs::message::Message)]
 pub struct RejectEvent<T> {
+    pub address: Option<SocketAddr>,
     pub message: Option<MessageContainer>,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> Default for RejectEvent<T> {
     fn default() -> Self {
-        Self::new(None)
+        Self::new(None, None)
     }
 }
 
 impl<T> RejectEvent<T> {
-    pub fn new(message: Option<MessageContainer>) -> Self {
+    pub fn new(address: Option<SocketAddr>, message: Option<MessageContainer>) -> Self {
         Self {
+            address,
             message,
             phantom_t: PhantomData,
         }

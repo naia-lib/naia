@@ -74,3 +74,27 @@ fn decode_reject_payload(body: &str) -> Option<Vec<u8>> {
     }
     base64::decode(trimmed).ok()
 }
+
+#[cfg(test)]
+mod signaling_error_tests {
+    use super::IdentityReceiver;
+    use crate::IdentityReceiverResult;
+
+    /// A non-200 signaling answer surfaces exactly once as an ErrorResponseCode
+    /// with the exact status, then reports Waiting. This is the pre-auth path:
+    /// no data channel exists yet, so there is nothing else to observe.
+    #[test]
+    fn non_200_answer_is_surfaced_once_then_waiting() {
+        let mut receiver = IdentityReceiver::new();
+        receiver.send_error(409, String::new());
+
+        assert!(matches!(
+            receiver.receive(),
+            IdentityReceiverResult::ErrorResponseCode(409, None)
+        ));
+        assert!(matches!(
+            receiver.receive(),
+            IdentityReceiverResult::Waiting
+        ));
+    }
+}

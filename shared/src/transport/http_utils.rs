@@ -37,20 +37,41 @@ pub fn request_to_bytes(request: http::Request<Vec<u8>>) -> Vec<u8> {
     request_bytes
 }
 
+/// Why a byte string is not a parseable HTTP request.
+///
+/// Returned by [`bytes_to_request`] instead of panicking. Every variant maps to
+/// the pre-existing generic malformed-request behavior at the call sites: the
+/// request is dropped without a fingerprint verdict, an auth decode, a user
+/// allocation, or any response that could be mistaken for a mismatch answer.
 #[doc(hidden)]
-pub fn bytes_to_request(request_bytes: &[u8]) -> http::Request<Vec<u8>> {
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RequestParseError {
+    /// Fewer than the three request-line parts (`METHOD path VERSION`).
+    BadRequestLine,
+    /// The method is not a valid HTTP method.
+    BadMethod,
+    /// The request target is not a valid URI.
+    BadUri,
+    /// A header line has no `: ` separator.
+    BadHeader,
+    /// The parsed parts do not form a valid request.
+    Rejected,
+}
+
+#[doc(hidden)]
+pub fn bytes_to_request(request_bytes: &[u8]) -> Result<http::Request<Vec<u8>>, RequestParseError> {
     let request_str = String::from_utf8_lossy(request_bytes);
 
     let (path_line, headers_str, body_start_index) = split_request(&request_str);
-    let (method, url) = parse_path_line(path_line);
-    let headers = parse_headers(headers_str);
+    let (method, url) = parse_path_line(path_line)?;
+    let headers = parse_headers(headers_str)?;
     let body = request_bytes[body_start_index..].to_vec();
 
     let mut request = http::Request::builder().method(method).uri(url);
     for (key, value) in headers {
         request = request.header(key, value);
     }
-    request.body(body).unwrap()
+    request.body(body).map_err(|_| RequestParseError::Rejected)
 }
 
 #[doc(hidden)]
@@ -66,7 +87,10 @@ pub fn bytes_to_response(response_bytes: &[u8]) -> http::Response<Vec<u8>> {
 
     let (status_line, headers_str, body_start_index) = split_response(&response_str);
     let (status_code, _status_text) = parse_status_line(status_line);
-    let headers = parse_headers(headers_str);
+    // Response parsing keeps its historical tolerance: a malformed header
+    // block yields no headers rather than a failure. Only request parsing
+    // (bytes_to_request) reports typed errors.
+    let headers = parse_headers(headers_str).unwrap_or_default();
     let body = response_bytes[body_start_index..].to_vec();
 
     let mut response = http::Response::builder().status(status_code);
@@ -102,14 +126,20 @@ fn split_response(response_str: &str) -> (&str, &str, usize) {
     (status_line, headers, body_start_index)
 }
 
-fn parse_path_line(path_line: &str) -> (Method, String) {
+fn parse_path_line(path_line: &str) -> Result<(Method, String), RequestParseError> {
     let mut parts = path_line.splitn(3, ' ');
-    let method = parts.next().unwrap();
-    let path = parts.next().unwrap();
-    let _http_version = parts.next().unwrap(); // Status text can be empty
+    let (Some(method), Some(path), Some(_http_version)) =
+        (parts.next(), parts.next(), parts.next())
+    else {
+        return Err(RequestParseError::BadRequestLine);
+    };
 
-    let method = method.parse::<Method>().unwrap();
-    (method, path.to_string())
+    let method = method
+        .parse::<Method>()
+        .map_err(|_| RequestParseError::BadMethod)?;
+    path.parse::<http::Uri>()
+        .map_err(|_| RequestParseError::BadUri)?;
+    Ok((method, path.to_string()))
 }
 
 fn parse_status_line(status_line: &str) -> (u16, String) {
@@ -121,15 +151,16 @@ fn parse_status_line(status_line: &str) -> (u16, String) {
     (status_code, status_text)
 }
 
-fn parse_headers(headers: &str) -> Vec<(String, String)> {
+fn parse_headers(headers: &str) -> Result<Vec<(String, String)>, RequestParseError> {
     let mut header_store: Vec<(String, String)> = Vec::new();
     for line in headers.lines() {
         let mut parts = line.splitn(2, ": ");
-        let key = parts.next().unwrap().to_lowercase();
-        let value = parts.next().unwrap().to_string();
-        header_store.push((key, value));
+        let (Some(key), Some(value)) = (parts.next(), parts.next()) else {
+            return Err(RequestParseError::BadHeader);
+        };
+        header_store.push((key.to_lowercase(), value.to_string()));
     }
-    header_store
+    Ok(header_store)
 }
 
 fn response_header_to_vec(r: &http::Response<Vec<u8>>) -> Vec<u8> {

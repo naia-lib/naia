@@ -72,10 +72,16 @@ impl App {
             info!("Client connected to: {}", server_address);
         }
         for (server_address, reason, _message) in world_events.read::<RejectEvent>() {
-            info!(
-                "Client received unauthorized response from: {} (reason: {:?})",
-                server_address, reason
-            );
+            match server_address {
+                Some(addr) => info!(
+                    "Client received unauthorized response from: {} (reason: {:?})",
+                    addr, reason
+                ),
+                None => info!(
+                    "Client refused before the server address was known (reason: {:?})",
+                    reason
+                ),
+            }
 
             // Now give the correct username / password
             let auth = Auth::new("charlie", "12345");

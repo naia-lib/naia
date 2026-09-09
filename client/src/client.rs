@@ -2004,6 +2004,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     return;
                 }
                 IdentityReceiverResult::ErrorResponseCode(code, reject_payload) => {
+                    // Capture the data address BEFORE resetting I/O: a pre-auth
+                    // HTTP/auth rejection lands while the address is still
+                    // unknown (Finding), and after the reset below there is
+                    // nothing left to ask. `None` is reported honestly -- never
+                    // a manufactured address, never a degraded generic error.
                     let old_socket_addr_result = self.io.server_addr();
 
                     // reset connection
@@ -2012,30 +2017,28 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         &self.protocol.compression,
                     );
 
+                    let old_socket_addr = old_socket_addr_result.as_ref().ok().copied();
+
                     if code == PROTOCOL_MISMATCH_STATUS {
                         // The server refused before application auth: the peer
                         // runs a different protocol. Exactly one
                         // `RejectEvent(ProtocolMismatch)`, no message -- the
                         // mismatch response is always payload-free and carries
-                        // neither fingerprint.
-                        match old_socket_addr_result {
-                            Ok(old_socket_addr) => {
-                                self.incoming_world_events.push_rejection(
-                                    &old_socket_addr,
-                                    RejectReason::ProtocolMismatch,
-                                    None,
-                                );
-                            }
-                            Err(err) => {
-                                self.incoming_world_events.push_error(err);
-                            }
-                        }
+                        // neither fingerprint. No retry, no downgrade, no
+                        // ConnectEvent, no extra ErrorEvent.
+                        self.incoming_world_events.push_rejection(
+                            old_socket_addr,
+                            RejectReason::ProtocolMismatch,
+                            None,
+                        );
                     } else if code == 401 {
                         // The server may have sent a message explaining the
                         // rejection (naia-lib/naia#133). A payload we cannot
                         // decode is a protocol mismatch on the reject message
                         // itself -- report the rejection anyway, since that is
-                        // the part the application must act on.
+                        // the part the application must act on. The 401 rides
+                        // the same capture path: the learned address when one
+                        // is known, None while still Finding.
                         let reject_message = reject_payload.and_then(|bytes| {
                             let mut reader = BitReader::new(&bytes);
                             match self
@@ -2055,22 +2058,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         });
 
                         // push out rejection
+                        self.incoming_world_events.push_rejection(
+                            old_socket_addr,
+                            RejectReason::Auth,
+                            reject_message,
+                        );
+                    } else {
+                        // push out error
                         match old_socket_addr_result {
-                            Ok(old_socket_addr) => {
-                                self.incoming_world_events.push_rejection(
-                                    &old_socket_addr,
-                                    RejectReason::Auth,
-                                    reject_message,
-                                );
+                            Ok(_) => {
+                                self.incoming_world_events
+                                    .push_error(NaiaClientError::IdError(code));
                             }
                             Err(err) => {
                                 self.incoming_world_events.push_error(err);
                             }
                         }
-                    } else {
-                        // push out error
-                        self.incoming_world_events
-                            .push_error(NaiaClientError::IdError(code));
                     }
 
                     return;
@@ -2110,8 +2113,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                             let server_addr = self.server_address_unwrapped();
                             // The in-band handshake rejection carries no
                             // message; only the auth (401) path can (#133).
-                            self.incoming_world_events
-                                .push_rejection(&server_addr, reason, None);
+                            // In-band means post-address by construction, so
+                            // this is always Some(actual_addr).
+                            self.incoming_world_events.push_rejection(
+                                Some(server_addr),
+                                reason,
+                                None,
+                            );
                             self.disconnect_reset_connection();
                             break;
                         }

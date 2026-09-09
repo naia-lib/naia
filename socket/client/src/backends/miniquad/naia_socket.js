@@ -99,8 +99,18 @@ const naia_socket = {
                         naia_socket.error("error during 'setRemoteDescription'", err);
                     });
                 } else {
-                    let error_str = "error sending POST request to " + SESSION_ADDRESS;
-                    naia_socket.error(error_str, { response_status: request.status });
+                    // A completed POST with a non-200 status is a signaling
+                    // answer, not a transport failure: 401/409 carry the
+                    // rejection the identity path must surface, so they go to
+                    // the dedicated auth-error callback with status and body,
+                    // never through the generic packet error queue, and never
+                    // wait on a data channel a rejected handshake will not
+                    // create. Network-level failures (onerror, no status) stay
+                    // generic below.
+                    wasm_exports.receive_auth_error(
+                        naia_socket.js_object(String(request.status)),
+                        naia_socket.js_object(request.responseText || "")
+                    );
                 }
             };
             request.onerror = function(err) {

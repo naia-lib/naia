@@ -482,7 +482,12 @@ fn headers_end(bytes: &[u8]) -> Option<usize> {
 /// reaching the server application: no user record, no auth event, no token,
 /// and the credential is never base64-decoded, so it cannot be consumed.
 fn decode_auth_request(bytes: &[u8], expected_protocol_id: &ProtocolId) -> Option<Vec<u8>> {
-    let request = http_utils::bytes_to_request(bytes);
+    // An unparseable request is malformed framing, not a fingerprint verdict:
+    // drop it through the generic path below, never answering and never
+    // classifying it as a protocol mismatch.
+    let Ok(request) = http_utils::bytes_to_request(bytes) else {
+        return None;
+    };
 
     let protocol_id = request
         .headers()
@@ -506,7 +511,11 @@ fn decode_auth_request(bytes: &[u8], expected_protocol_id: &ProtocolId) -> Optio
 /// fingerprints all report `true` through this one condition, and the caller
 /// answers them with identical bytes carrying neither fingerprint.
 fn fingerprint_mismatch(bytes: &[u8], expected_protocol_id: &ProtocolId) -> bool {
-    let request = http_utils::bytes_to_request(bytes);
+    // Unparseable bytes are malformed framing, not a mismatch: the caller
+    // drops them silently as a generic transport error.
+    let Ok(request) = http_utils::bytes_to_request(bytes) else {
+        return false;
+    };
     let protocol_id = request
         .headers()
         .get(PROTOCOL_ID_HEADER)
@@ -671,6 +680,59 @@ mod auth_io_stream_tests {
     use naia_shared::{ProtocolId, PROTOCOL_ID_HEADER, PROTOCOL_MISMATCH_STATUS};
 
     use super::{decode_auth_request, fingerprint_mismatch, AuthIo, MAX_PENDING_AUTH_READS};
+
+    /// A complete malformed request is generic framing failure: the stream is
+    /// dropped with no answer -- no 409, no auth decode, no user, no token --
+    /// and parsing never panics. Malformed is never a fingerprint verdict.
+    #[test]
+    fn a_malformed_request_is_dropped_generically_never_as_mismatch() {
+        use std::io::Read;
+
+        // Note: unknown-but-well-formed methods (e.g. WOBBLE) parse as
+        // extension-method requests and correctly take the mismatch branch
+        // instead -- they are NOT malformed.
+        for (label, bytes) in [
+            ("short line", b"GET\r\n\r\n".to_vec()),
+            (
+                "bad header",
+                b"GET / HTTP/1.1\r\nNoColonHere\r\n\r\n".to_vec(),
+            ),
+            (
+                "bad method",
+                b"GE\x7fT / HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            ),
+            (
+                "bad uri",
+                b"GET {} HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            ),
+        ] {
+            let (mut auth_io, port) = auth_io();
+
+            let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+            stream.write_all(&bytes).unwrap();
+            stream.flush().unwrap();
+
+            assert!(
+                !drain_one(&mut auth_io),
+                "a {label} request must not reach the application",
+            );
+            assert!(
+                auth_io.outgoing_streams.is_empty(),
+                "a {label} request must not retain a stream for the app",
+            );
+
+            let mut response = String::new();
+            stream.read_to_string(&mut response).unwrap();
+            assert!(
+                response.is_empty(),
+                "a {label} request must get no answer at all, got: {response}",
+            );
+            assert!(
+                !fingerprint_mismatch(&bytes, &expected_id()),
+                "a {label} request must never classify as a mismatch",
+            );
+        }
+    }
 
     /// The fingerprint the test server expects. Arbitrary, but fixed: what
     /// matters is that a peer presenting anything else is refused.

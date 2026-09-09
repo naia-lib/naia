@@ -33,7 +33,13 @@ impl ServerAuthIo {
         };
 
         // Parse HTTP request
-        let request = naia_shared::transport::bytes_to_request(&request_bytes);
+        // An unparseable request is malformed framing, not a fingerprint
+        // verdict: drop it silently like any malformed credential. It must
+        // never answer, never reach the application, and never be classified
+        // as a protocol mismatch.
+        let Ok(request) = naia_shared::transport::bytes_to_request(&request_bytes) else {
+            return Ok(None);
+        };
 
         // Compare the protocol fingerprint before anything else. Absent,
         // malformed, wrong-width and wrong-value all leave through this one
@@ -298,6 +304,41 @@ mod local_auth_fingerprint_tests {
                     "a {label} fingerprint must be indistinguishable on the wire",
                 ),
             }
+        }
+    }
+
+    /// A complete malformed request is generic framing failure, not a
+    /// fingerprint verdict: no answer, no application delivery, and above all
+    /// no mismatch response. Every malformed shape takes this one silent path.
+    #[test]
+    fn a_malformed_request_is_dropped_generically_never_as_mismatch() {
+        // Note: unknown-but-well-formed methods (e.g. WOBBLE) and arbitrary
+        // prose with two spaces both parse as extension-method requests and
+        // correctly take the mismatch branch instead -- they are NOT malformed.
+        let malformed: Vec<Vec<u8>> = vec![
+            b"GET\r\n\r\n".to_vec(),
+            b"GET / HTTP/1.1\r\nNoColonHere\r\n\r\n".to_vec(),
+            b"GE\x7fT / HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            b"GET {} HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            Vec::new(),
+        ];
+
+        for bytes in &malformed {
+            let hub = LocalTransportHub::new("127.0.0.1:14191".parse().unwrap());
+            let (_client_addr, auth_req_tx, auth_resp_rx, _data_tx, _data_rx) =
+                hub.register_client();
+            let mut auth_io = ServerAuthIo::new(hub, expected_id());
+
+            auth_req_tx.send(bytes.clone()).unwrap();
+
+            assert!(
+                matches!(auth_io.receive(), Ok(None)),
+                "malformed bytes must not reach the application",
+            );
+            assert!(
+                auth_resp_rx.try_recv().is_err(),
+                "malformed bytes must get no answer at all, mismatch or otherwise",
+            );
         }
     }
 

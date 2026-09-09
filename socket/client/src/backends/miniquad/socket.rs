@@ -8,7 +8,7 @@ use super::{
     identity_receiver::IdentityReceiver,
     packet_receiver::PlainPacketReceiver,
     packet_sender::PacketSender,
-    shared::{naia_connect, JsObject, ERROR_QUEUE, ID_CELL, MESSAGE_QUEUE},
+    shared::{naia_connect, JsObject, AUTH_ERROR_CELL, ERROR_QUEUE, ID_CELL, MESSAGE_QUEUE},
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -94,10 +94,12 @@ impl Socket {
         };
 
         // Safety: connect() is called once at socket startup before any callbacks fire.
-        // ID_CELL, MESSAGE_QUEUE, and ERROR_QUEUE are written here and subsequently only
-        // accessed from the same wasm32 thread via the JS bridge callbacks and receive().
+        // ID_CELL, AUTH_ERROR_CELL, MESSAGE_QUEUE, and ERROR_QUEUE are written here and
+        // subsequently only accessed from the same wasm32 thread via the JS bridge
+        // callbacks and receive().
         unsafe {
             ID_CELL = Some(None);
+            AUTH_ERROR_CELL = Some(None);
             MESSAGE_QUEUE = Some(VecDeque::new());
             ERROR_QUEUE = Some(VecDeque::new());
             // The fingerprint is passed separately from `auth_str`, and the

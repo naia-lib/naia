@@ -206,6 +206,47 @@ mod miniquad_js_bridge_host_oracle {
         );
     }
 
+    /// A completed non-200 session POST is a signaling answer for the identity
+    /// path, not a packet error. The JavaScript must hand its status and body
+    /// to the dedicated `receive_auth_error` callback the Rust half exports;
+    /// routing it through the generic `error` queue would strand the rejection
+    /// as an unparseable diagnostic string, and waiting on a data channel the
+    /// rejected handshake will never create hangs forever. Network-level
+    /// failures (no status at all) stay on the generic path.
+    #[test]
+    fn non_200_signaling_answers_reach_the_identity_path_not_the_packet_queue() {
+        // Both halves name the same two-parameter callback in the same order.
+        assert_eq!(
+            parameter_names(MINIQUAD_SHARED_RS, "pub extern \"C\" fn receive_auth_error"),
+            ["status", "body"],
+            "the Rust half must export receive_auth_error(status, body)",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("wasm_exports.receive_auth_error("),
+            "the JS half must forward non-200 answers to receive_auth_error",
+        );
+
+        // The old ad-hoc routing -- stringifying the status into the generic
+        // packet error queue -- must be gone from the completed-request path.
+        assert!(
+            !NAIA_SOCKET_JS.contains("{ response_status: request.status }"),
+            "signaling status must not be stringified into the packet error queue",
+        );
+
+        // ... while the status-less network failure path keeps its generic
+        // routing: it has no status to report.
+        assert!(
+            NAIA_SOCKET_JS.contains("request.onerror = function(err)"),
+            "network-level POST failures must stay on the generic error path",
+        );
+
+        // The Rust half holds one bounded slot for the outstanding answer.
+        assert!(
+            MINIQUAD_SHARED_RS.contains("AUTH_ERROR_CELL"),
+            "the Rust half must keep a dedicated bounded auth-error cell",
+        );
+    }
+
     /// Framework-last, and unconditional.
     ///
     /// The caller's `Authorization` header goes on first and only if there is

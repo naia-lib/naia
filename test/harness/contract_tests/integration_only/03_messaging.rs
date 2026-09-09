@@ -728,8 +728,14 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     let mut reject_event_received = false;
     scenario.expect(|ctx| {
         ctx.client(client_key, |client| {
-            if let Some((reason, _message)) = client.read_event::<ClientRejectEvent>() {
-                if reason == RejectReason::ProtocolMismatch {
+            // The harness presets the local hub address, so the pre-auth
+            // refusal carries it: exactly (Some, ProtocolMismatch, None), a
+            // single delivery with no manufactured fallback.
+            if let Some((address, reason, message)) = client.read_event::<ClientRejectEvent>() {
+                if reason == RejectReason::ProtocolMismatch
+                    && address.is_some()
+                    && message.is_none()
+                {
                     reject_event_received = true;
                 }
             }

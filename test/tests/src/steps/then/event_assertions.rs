@@ -309,13 +309,19 @@ fn then_server_observes_publish_event_for_client(
 // ──────────────────────────────────────────────────────────────────────
 
 /// Then the connection is rejected with ProtocolMismatch.
+///
+/// The harness presets the local hub address synchronously, so the pre-auth
+/// 409 carries the actual learned address: exactly one rejection, reason
+/// ProtocolMismatch, address Some, payload absent. No sentinel is ever
+/// manufactured; on transports still Finding at refusal time the same code
+/// path honestly reports None.
 #[then("the connection is rejected with ProtocolMismatch")]
 fn then_connection_rejected_protocol_mismatch(ctx: &TestWorldRef) -> AssertOutcome<()> {
     use naia_test_harness::{ClientRejectEvent, RejectReason};
     let client_key = ctx.last_client();
     ctx.client(client_key, |client| {
-        if let Some((reason, _message)) = client.read_event::<ClientRejectEvent>() {
-            if reason == RejectReason::ProtocolMismatch {
+        if let Some((address, reason, message)) = client.read_event::<ClientRejectEvent>() {
+            if reason == RejectReason::ProtocolMismatch && address.is_some() && message.is_none() {
                 return AssertOutcome::Passed(());
             }
         }

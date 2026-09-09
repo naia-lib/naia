@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, net::SocketAddr};
 
 use log::{debug, warn};
 
@@ -18,7 +18,7 @@ type ClientRemovesMap = HashMap<ComponentKind, Vec<(EntityKey, Box<dyn Replicate
 #[derive(Default)]
 pub struct ClientEvents {
     connections: Vec<()>,
-    rejections: Vec<(RejectReason, Option<MessageContainer>)>,
+    rejections: Vec<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)>,
     disconnections: Vec<(DisconnectReason, Option<MessageContainer>)>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
@@ -158,11 +158,13 @@ impl ClientEvents {
             .map(|_| ())
             .collect();
         // The message is the optional reason the server attached with
-        // reject_connection_with (naia-lib/naia#133).
-        let rejections: Vec<(RejectReason, Option<MessageContainer>)> = world_events
-            .read::<naia_client::RejectEvent>()
-            .map(|(_, reason, message)| (reason, message))
-            .collect();
+        // reject_connection_with (naia-lib/naia#133). The address is Some
+        // once the data address is learned, None for pre-auth refusals.
+        let rejections: Vec<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)> =
+            world_events
+                .read::<naia_client::RejectEvent>()
+                .map(|(address, reason, message)| (address, reason, message))
+                .collect();
         // The message is the optional reason the server attached with
         // disconnect_user_with (naia-lib/naia#10).
         let disconnections: Vec<(DisconnectReason, Option<MessageContainer>)> = world_events
@@ -303,8 +305,8 @@ impl ClientEvent for ClientConnectEvent {
 // RejectEvent
 pub struct ClientRejectEvent;
 impl ClientEvent for ClientRejectEvent {
-    type Iter = std::vec::IntoIter<(RejectReason, Option<MessageContainer>)>;
-    type Item = (RejectReason, Option<MessageContainer>);
+    type Iter = std::vec::IntoIter<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)>;
+    type Item = (Option<SocketAddr>, RejectReason, Option<MessageContainer>);
 
     fn iter(events: &mut ClientEvents) -> Self::Iter {
         std::mem::take(&mut events.rejections).into_iter()

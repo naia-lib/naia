@@ -69,3 +69,35 @@ fn decode_reject_payload(body: &str) -> Option<Vec<u8>> {
         }
     }
 }
+
+#[cfg(test)]
+mod session_error_tests {
+    use super::IdentityReceiver;
+    use crate::IdentityReceiverResult;
+    use webrtc_unreliable_client::SessionError;
+
+    /// A pre-auth signaling failure (e.g. 409 with ICE/data still unavailable)
+    /// surfaces exactly once as an ErrorResponseCode with the exact status,
+    /// then reports Waiting. The data-address question is settled one layer
+    /// up, where Finding honestly becomes None.
+    #[test]
+    fn pre_auth_session_error_is_surfaced_once_then_waiting() {
+        let (sender, receiver) = tokio::sync::oneshot::channel();
+        let mut receiver = IdentityReceiver::new(receiver);
+        sender
+            .send(Err(SessionError {
+                status_code: 409,
+                body: String::new(),
+            }))
+            .expect("receiver alive");
+
+        assert!(matches!(
+            receiver.receive(),
+            IdentityReceiverResult::ErrorResponseCode(409, None)
+        ));
+        assert!(matches!(
+            receiver.receive(),
+            IdentityReceiverResult::Waiting
+        ));
+    }
+}

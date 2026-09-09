@@ -15,7 +15,7 @@ type RemovesMap<E> = HashMap<ComponentKind, Vec<(E, Box<dyn Replicate>)>>;
 /// All events produced in one frame: connections, entity lifecycle, component changes, messages, and errors.
 pub struct Events<E: Hash + Copy + Eq + Sync + Send> {
     connections: Vec<SocketAddr>,
-    rejections: Vec<(SocketAddr, RejectReason, Option<MessageContainer>)>,
+    rejections: Vec<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)>,
     disconnections: Vec<(SocketAddr, DisconnectReason, Option<MessageContainer>)>,
     errors: Vec<NaiaClientError>,
     messages: HashMap<ChannelKind, HashMap<MessageKind, Vec<MessageContainer>>>,
@@ -152,11 +152,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> Events<E> {
 
     pub(crate) fn push_rejection(
         &mut self,
-        socket_addr: &SocketAddr,
+        socket_addr: Option<SocketAddr>,
         reason: RejectReason,
         message: Option<MessageContainer>,
     ) {
-        self.rejections.push((*socket_addr, reason, message));
+        self.rejections.push((socket_addr, reason, message));
         self.empty = false;
     }
 
@@ -321,16 +321,20 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 
 /// Fires when the server explicitly rejects the connection.
 ///
-/// Yields the server address, the [`RejectReason`], and -- when the server used
-/// `reject_connection_with` -- the message it sent explaining why
-/// (naia-lib/naia#133). Downcast it with
+/// Yields the server address when one is known, the [`RejectReason`], and --
+/// when the server used `reject_connection_with` -- the message it sent
+/// explaining why (naia-lib/naia#133). Downcast it with
 /// `container.to_boxed_any().downcast::<MyRejectReason>()`.
+///
+/// A pre-auth HTTP/auth rejection happens before the data address is learned,
+/// so the address is `None` there; a post-address in-band rejection carries
+/// `Some`. No sentinel address is ever manufactured.
 ///
 /// The message is only ever present on an auth rejection, and not yet on the
 /// native WebRTC transport.
 pub struct RejectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
-    type Iter = IntoIter<(SocketAddr, RejectReason, Option<MessageContainer>)>;
+    type Iter = IntoIter<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)>;
 
     fn iter(events: &mut Events<E>) -> Self::Iter {
         let list = std::mem::take(&mut events.rejections);

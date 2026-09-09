@@ -15,6 +15,13 @@ use crate::{server_addr::ServerAddr, wasm_utils::candidate_to_addr};
 
 // Static vars
 pub static mut ID_CELL: Option<Option<IdentityToken>> = None;
+/// One outstanding non-200 signaling answer: the status code with the raw
+/// response body. Written once per failed handshake by `receive_auth_error`,
+/// taken once by `IdentityReceiver::receive`. Bounded to a single slot like
+/// `ID_CELL`: a handshake has exactly one outstanding identity attempt, so a
+/// newer answer replacing an unread older one means the older attempt is dead.
+/// Generic JS/network failures keep flowing through `ERROR_QUEUE` untouched.
+pub static mut AUTH_ERROR_CELL: Option<Option<(u16, String)>> = None;
 pub static mut MESSAGE_QUEUE: Option<VecDeque<Box<[u8]>>> = None;
 pub static mut ERROR_QUEUE: Option<VecDeque<String>> = None;
 pub static mut SERVER_ADDR: ServerAddr = ServerAddr::Finding;
@@ -54,6 +61,29 @@ pub extern "C" fn receive_id(id_token: JsObject) {
     unsafe {
         if let Some(id_cell) = &mut ID_CELL {
             *id_cell = IdentityToken::from_signaling_string(&id_token_string);
+        }
+    }
+}
+
+/// Records a non-200 signaling answer for the identity path: the HTTP status
+/// code with the raw response body, which on a rejection carries the optional
+/// base64-encoded reason message. Called by `naia_socket.js` only when the
+/// session POST completes with a non-200 status; network-level failures (no
+/// status at all) keep going to `error`/`ERROR_QUEUE` as generic errors.
+#[no_mangle]
+pub extern "C" fn receive_auth_error(status: JsObject, body: JsObject) {
+    let mut status_string = String::new();
+    let mut body_string = String::new();
+
+    status.to_string(&mut status_string);
+    body.to_string(&mut body_string);
+
+    // Safety: see receive_id above.
+    unsafe {
+        if let Some(auth_error_cell) = &mut AUTH_ERROR_CELL {
+            if let Ok(status_code) = status_string.trim().parse::<u16>() {
+                *auth_error_cell = Some((status_code, body_string));
+            }
         }
     }
 }

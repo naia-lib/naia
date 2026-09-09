@@ -859,11 +859,13 @@ fn server_reject_connection_produces_reject_event() {
 
     let mut reject_event_received = false;
     let mut connect_event_received = false;
+    let mut reject_address: Option<Option<std::net::SocketAddr>> = None;
 
     scenario.expect(|ctx| {
         ctx.client(client_b_key, |client| {
-            if client.read_event::<ClientRejectEvent>().is_some() {
+            if let Some((address, _reason, _message)) = client.read_event::<ClientRejectEvent>() {
                 reject_event_received = true;
+                reject_address = Some(address);
             }
             if client.read_event::<ClientConnectEvent>().is_some() {
                 connect_event_received = true;
@@ -876,6 +878,15 @@ fn server_reject_connection_produces_reject_event() {
     assert!(
         !connect_event_received,
         "No connect event should be received"
+    );
+    // The harness presets the local hub address synchronously at client start,
+    // so the rejection carries the actual learned address -- Some, never a
+    // manufactured sentinel. (On transports where the address is still
+    // Finding at refusal time, the same code path honestly reports None.)
+    assert!(
+        matches!(reject_address, Some(Some(_))),
+        "rejection must carry the learned address, got {:?}",
+        reject_address
     );
 
     // Verify B is rejected and not connected (reject event emitted, not connect event)
@@ -942,9 +953,12 @@ fn server_reject_connection_carries_a_reason_message() {
     });
 
     let mut received_value = None;
+    let mut reject_address: Option<Option<std::net::SocketAddr>> = None;
     scenario.expect(|ctx| {
         ctx.client(client_key, |client| {
-            if let Some((_reason, message_opt)) = client.read_event::<ClientRejectEvent>() {
+            if let Some((address, _reason, message_opt)) = client.read_event::<ClientRejectEvent>()
+            {
+                reject_address = Some(address);
                 let container = message_opt.expect("rejection should carry a reason message");
                 let message = container
                     .to_boxed_any()
@@ -960,6 +974,12 @@ fn server_reject_connection_carries_a_reason_message() {
         received_value,
         Some(7),
         "the rejection message should arrive with its field intact"
+    );
+    // The 401 carries its decoded message alongside the learned address.
+    assert!(
+        matches!(reject_address, Some(Some(_))),
+        "rejection must carry the learned address, got {:?}",
+        reject_address
     );
 }
 
@@ -1323,13 +1343,16 @@ fn expired_or_reused_token_obeys_semantics() {
     // a persistent bool captured via read_event instead.
     let mut reject_event_received = false;
     let mut connect_event_received = false;
+    let mut reject_address: Option<Option<std::net::SocketAddr>> = None;
 
     scenario.spec_expect(
         "connection-25.t1: reused token produces explicit RejectEvent",
         |ctx| {
             ctx.client(client_b_key, |client| {
-                if client.read_event::<ClientRejectEvent>().is_some() {
+                if let Some((address, _reason, _message)) = client.read_event::<ClientRejectEvent>()
+                {
                     reject_event_received = true;
+                    reject_address = Some(address);
                 }
                 if client.read_event::<ClientConnectEvent>().is_some() {
                     connect_event_received = true;
@@ -1346,6 +1369,13 @@ fn expired_or_reused_token_obeys_semantics() {
     assert!(
         !connect_event_received,
         "B must not connect with a consumed/replayed token"
+    );
+    // In-band rejection is post-address by construction: B completed its own
+    // auth exchange, so the rejection carries the actual learned address.
+    assert!(
+        matches!(reject_address, Some(Some(_))),
+        "in-band rejection must carry Some(actual_addr), got {:?}",
+        reject_address
     );
 
     scenario.mutate(|_| {});
