@@ -691,6 +691,16 @@ mod auth_io_stream_tests {
         // Note: unknown-but-well-formed methods (e.g. WOBBLE) parse as
         // extension-method requests and correctly take the mismatch branch
         // instead -- they are NOT malformed.
+        // Invalid UTF-8 in the head is framing failure too: only the
+        // request-line/header region is decoded, and it is decoded strictly
+        // (no lossy conversion).
+        //
+        // Note: a request with no terminator at all is NOT listed here. The
+        // server correctly holds an unterminated stream open awaiting framing
+        // completion, so the table's EOF-blocked `read_to_string` could never
+        // observe its silence -- that shape would hang the test, not fail it.
+        // The missing-terminator drop is pinned by the local suite and the
+        // `bytes_to_request` unit oracle instead.
         for (label, bytes) in [
             ("short line", b"GET\r\n\r\n".to_vec()),
             (
@@ -704,6 +714,14 @@ mod auth_io_stream_tests {
             (
                 "bad uri",
                 b"GET {} HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            ),
+            (
+                "invalid utf-8 request line",
+                b"GET /\xff HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            ),
+            (
+                "invalid utf-8 header",
+                b"GET / HTTP/1.1\r\nX-Bad: \xff\xfe\r\n\r\n".to_vec(),
             ),
         ] {
             let (mut auth_io, port) = auth_io();
@@ -732,6 +750,44 @@ mod auth_io_stream_tests {
                 "a {label} request must never classify as a mismatch",
             );
         }
+    }
+
+    /// Invalid UTF-8 in the body changes nothing: only the head is decoded,
+    /// so a mismatched head with a garbage body still gets the mismatch
+    /// answer. This pins the terminator math -- an offset taken from a lossy
+    /// conversion would slice the wrong bytes here, or panic mid-character.
+    #[test]
+    fn a_mismatch_with_an_invalid_utf8_body_still_gets_the_mismatch_answer() {
+        use std::io::Read;
+
+        let (mut auth_io, port) = auth_io();
+
+        let mut stream = TcpStream::connect(("127.0.0.1", port)).unwrap();
+        stream
+            .write_all(
+                format!(
+                    "GET / HTTP/1.1\r\nHost: localhost\r\n{}: {}\r\nAuthorization: {}\r\n\r\n",
+                    PROTOCOL_ID_HEADER,
+                    ProtocolId::new(1).to_hex(),
+                    base64::encode([1u8, 2, 3, 4]),
+                )
+                .as_bytes(),
+            )
+            .unwrap();
+        stream.write_all(b"\xff\xfe\x00binary body").unwrap();
+        stream.flush().unwrap();
+
+        assert!(
+            !drain_one(&mut auth_io),
+            "a mismatching peer must not reach the application",
+        );
+
+        let mut response = String::new();
+        stream.read_to_string(&mut response).unwrap();
+        assert!(
+            response.starts_with(&format!("HTTP/1.1 {}", PROTOCOL_MISMATCH_STATUS)),
+            "a mismatched head with a garbage body must still get the reserved mismatch status, got: {response}",
+        );
     }
 
     /// The fingerprint the test server expects. Arbitrary, but fixed: what

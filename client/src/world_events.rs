@@ -330,8 +330,11 @@ impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for ConnectEvent {
 /// so the address is `None` there; a post-address in-band rejection carries
 /// `Some`. No sentinel address is ever manufactured.
 ///
-/// The message is only ever present on an auth rejection, and not yet on the
-/// native WebRTC transport.
+/// The message is only ever present on an auth rejection: pre-protocol
+/// refusals carry none. Every identity path -- native WebRTC, wasm-bindgen,
+/// and miniquad -- decodes the base64 body the server sent with
+/// `reject_connection_with`, so a bodyless rejection is `None` on all of them
+/// alike.
 pub struct RejectEvent;
 impl<E: Hash + Copy + Eq + Sync + Send> WorldEvent<E> for RejectEvent {
     type Iter = IntoIter<(Option<SocketAddr>, RejectReason, Option<MessageContainer>)>;

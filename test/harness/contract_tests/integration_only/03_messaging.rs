@@ -16,9 +16,9 @@ use naia_shared::{AuthorityError, EntityAuthStatus, Protocol, Request, Response,
 use naia_test_harness::{
     protocol, protocol_with_large_req_resp, Auth, ClientConnectEvent, ClientDisconnectEvent,
     ClientEntityAuthDeniedEvent, ClientEntityAuthGrantedEvent, ClientEntityAuthResetEvent,
-    ClientKey, ClientRejectEvent, EntityCommandMessage, ExpectCtx, LargeTestMessage,
-    LargeTestRequest, LargeTestResponse, Position, Scenario, ServerAuthEvent, ServerConnectEvent,
-    ServerDisconnectEvent, ToTicks,
+    ClientErrorEvent, ClientKey, ClientRejectEvent, EntityCommandMessage, ExpectCtx,
+    LargeTestMessage, LargeTestRequest, LargeTestResponse, Position, Scenario, ServerAuthEvent,
+    ServerConnectEvent, ServerDisconnectEvent, ToTicks,
 };
 
 // Test protocol types (channels and messages)
@@ -659,7 +659,8 @@ fn misusing_channel_types_yields_defined_failure() {
 /// Given server/client with intentionally mismatched protocol definitions (type ID ordering differs);
 /// when client connects; then the fingerprint gate refuses BEFORE application auth with a clear
 /// mismatch outcome: exactly one client `RejectEvent(ProtocolMismatch)`, no server auth/user/connect
-/// event, no credential use, no gameplay events, and both sides clean up.
+/// event, no accompanying client connect/error event, no credential use, no gameplay events,
+/// and both sides clean up.
 #[test]
 fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
@@ -722,31 +723,57 @@ fn protocol_type_order_mismatch_fails_fast_at_handshake() {
     // compare protocol_id at the data handshake) is gone by contract -- a
     // mismatching peer's credential must never be consumed.
     //
-    // Wait for the client to promptly receive the single distinguishable
-    // rejection. Consuming it here is fine: nothing downstream needs the live
-    // event, only the persistent flag.
-    let mut reject_event_received = false;
+    // Wait for the client to promptly receive the refusal, then hold the
+    // window open a few more polls so a duplicate delivery cannot slip in
+    // after the assertion. The FULL rejection vector is drained -- never a
+    // first-match read -- so cardinality is proven, not claimed.
+    let mut rejections = Vec::new();
+    let mut connects = 0usize;
+    let mut errors = 0usize;
+    let mut quiet_polls = 0u32;
     scenario.expect(|ctx| {
         ctx.client(client_key, |client| {
-            // The harness presets the local hub address, so the pre-auth
-            // refusal carries it: exactly (Some, ProtocolMismatch, None), a
-            // single delivery with no manufactured fallback.
-            if let Some((address, reason, message)) = client.read_event::<ClientRejectEvent>() {
-                if reason == RejectReason::ProtocolMismatch
-                    && address.is_some()
-                    && message.is_none()
-                {
-                    reject_event_received = true;
-                }
+            rejections.extend(client.read_events::<ClientRejectEvent>());
+            connects += client.read_events::<ClientConnectEvent>().len();
+            errors += client.read_events::<ClientErrorEvent>().len();
+            if rejections.is_empty() {
+                quiet_polls = 0;
+                return None;
             }
-            reject_event_received.then_some(())
+            quiet_polls += 1;
+            (quiet_polls >= 5).then_some(())
         })
     });
 
-    assert!(
-        reject_event_received,
-        "Client should promptly receive exactly one RejectEvent(ProtocolMismatch)"
+    // Exact-one cardinality on the full drained vector: a second delivery in
+    // the same batch or the settle window lands here and goes red.
+    assert_eq!(
+        rejections.len(),
+        1,
+        "the refusal must be delivered exactly once, got {} deliveries",
+        rejections.len(),
     );
+    // Exact tuple: the harness presets the local hub address, so the pre-auth
+    // refusal carries it -- (Some, ProtocolMismatch, None), a single delivery
+    // with no manufactured fallback.
+    let (address, reason, message) = &rejections[0];
+    assert!(
+        address.is_some(),
+        "the pre-auth refusal must carry the known hub address",
+    );
+    assert_eq!(
+        *reason,
+        RejectReason::ProtocolMismatch,
+        "the refusal reason must be exactly ProtocolMismatch",
+    );
+    assert!(
+        message.is_none(),
+        "a pre-protocol refusal carries no application message",
+    );
+    // No connect or error event may accompany the refusal.
+    assert_eq!(connects, 0, "no connect event may accompany the refusal");
+    assert_eq!(errors, 0, "no error event may accompany the refusal");
+    let reject_event_received = true;
 
     // Verify connection is rejected before any message exchange.
     // `is_rejected()` is tick-scoped; use the persistent `reject_event_received` flag instead.

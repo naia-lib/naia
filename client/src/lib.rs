@@ -79,6 +79,11 @@ pub mod shared {
     };
 }
 
+/// The refusal reason carried by [`RejectEvent`](crate::RejectEvent) tuples.
+/// Re-exported at the root -- alongside `DisconnectReason` above -- so adapter
+/// crates and users can name the reason without reaching past this crate into
+/// `naia-shared` directly.
+pub use naia_shared::handshake::RejectReason;
 pub use naia_shared::{ConnectionStats, DisconnectReason, EntityPriorityMut, EntityPriorityRef};
 
 mod client;

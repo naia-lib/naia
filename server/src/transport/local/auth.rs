@@ -315,12 +315,22 @@ mod local_auth_fingerprint_tests {
         // Note: unknown-but-well-formed methods (e.g. WOBBLE) and arbitrary
         // prose with two spaces both parse as extension-method requests and
         // correctly take the mismatch branch instead -- they are NOT malformed.
+        // Invalid UTF-8 in the head is framing failure too: only the
+        // request-line/header region is decoded, and it is decoded strictly
+        // (no lossy conversion). The body is never decoded, so garbage there
+        // still parses -- see the mismatch-with-garbage-body oracle below.
+        // A request with no terminator at all is incomplete framing, likewise
+        // dropped. Every entry below must surface as Ok(None) -- no answer,
+        // no verdict, and nothing handed to the application to allocate on.
         let malformed: Vec<Vec<u8>> = vec![
             b"GET\r\n\r\n".to_vec(),
             b"GET / HTTP/1.1\r\nNoColonHere\r\n\r\n".to_vec(),
             b"GE\x7fT / HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
             b"GET {} HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
             Vec::new(),
+            b"GET / HTTP/1.1".to_vec(),
+            b"GET /\xff HTTP/1.1\r\nAuthorization: QUJD\r\n\r\n".to_vec(),
+            b"GET / HTTP/1.1\r\nX-Bad: \xff\xfe\r\n\r\n".to_vec(),
         ];
 
         for bytes in &malformed {
@@ -340,6 +350,42 @@ mod local_auth_fingerprint_tests {
                 "malformed bytes must get no answer at all, mismatch or otherwise",
             );
         }
+    }
+
+    /// Invalid UTF-8 in the body changes nothing: only the head is decoded,
+    /// so a mismatched head with a garbage body still gets the mismatch
+    /// answer. This pins the terminator math -- an offset taken from a lossy
+    /// conversion would slice the wrong bytes here, or panic mid-character.
+    #[test]
+    fn a_mismatch_with_an_invalid_utf8_body_still_gets_the_mismatch_answer() {
+        use naia_shared::transport::bytes_to_response;
+
+        let hub = LocalTransportHub::new("127.0.0.1:14191".parse().unwrap());
+        let (_client_addr, auth_req_tx, auth_resp_rx, _data_tx, _data_rx) = hub.register_client();
+        let mut auth_io = ServerAuthIo::new(hub, expected_id());
+
+        let request = http::Request::builder()
+            .method("POST")
+            .uri("/")
+            .header("Authorization", base64::encode([1u8, 2, 3, 4]))
+            .header(PROTOCOL_ID_HEADER, ProtocolId::new(1).to_hex())
+            .body(vec![0xff, 0xfe, 0x00, b'b', b'o', b'd', b'y'])
+            .unwrap();
+        auth_req_tx.send(request_to_bytes(request)).unwrap();
+
+        assert!(
+            matches!(auth_io.receive(), Ok(None)),
+            "a mismatching peer must not reach the application",
+        );
+        let response_bytes = auth_resp_rx
+            .try_recv()
+            .expect("a mismatching peer must get a prompt answer, not a silent drop");
+        let response = bytes_to_response(&response_bytes);
+        assert_eq!(
+            response.status().as_u16(),
+            PROTOCOL_MISMATCH_STATUS,
+            "a mismatched head with a garbage body must still get the reserved mismatch status",
+        );
     }
 
     /// The ordering itself, asserted on the source.

@@ -81,17 +81,26 @@ mod signaling_error_tests {
     use crate::IdentityReceiverResult;
 
     /// A non-200 signaling answer surfaces exactly once as an ErrorResponseCode
-    /// with the exact status, then reports Waiting. This is the pre-auth path:
-    /// no data channel exists yet, so there is nothing else to observe.
+    /// with the exact status and the exact decoded body, then reports Waiting.
+    /// This is the pre-auth path: no data channel exists yet, so there is
+    /// nothing else to observe.
     #[test]
     fn non_200_answer_is_surfaced_once_then_waiting() {
+        let expected: &[u8] = b"wasm-reject-reason";
         let mut receiver = IdentityReceiver::new();
-        receiver.send_error(409, String::new());
+        receiver.send_error(409, base64::encode(expected));
 
-        assert!(matches!(
-            receiver.receive(),
-            IdentityReceiverResult::ErrorResponseCode(409, None)
-        ));
+        // A nonempty body must arrive as its exact decoded bytes, not None:
+        // dropping it here would silently erase the server's reason.
+        match receiver.receive() {
+            IdentityReceiverResult::ErrorResponseCode(409, Some(bytes)) => {
+                assert_eq!(
+                    bytes, expected,
+                    "the rejection body must decode to its exact bytes",
+                );
+            }
+            _ => panic!("a 409 with a reason body must surface once with its exact decoded bytes"),
+        }
         assert!(matches!(
             receiver.receive(),
             IdentityReceiverResult::Waiting

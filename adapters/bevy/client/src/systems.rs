@@ -155,8 +155,9 @@ pub fn translate_world_events<T: Send + Sync + 'static>(world: &mut World) {
                 let mut event_writer = world
                     .get_resource_mut::<Messages<bevy_events::RejectEvent<T>>>()
                     .unwrap();
-                for (address, _reason, message) in events.read::<naia_events::RejectEvent>() {
-                    event_writer.write(bevy_events::RejectEvent::<T>::new(address, message));
+                for (address, reason, message) in events.read::<naia_events::RejectEvent>() {
+                    event_writer
+                        .write(bevy_events::RejectEvent::<T>::new(address, reason, message));
                 }
             }
 
@@ -335,4 +336,42 @@ pub fn send_packets<T: Send + Sync + 'static>(world: &mut World) {
             client.client.send_all_packets(world.proxy());
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    /// The forwarding system must pass the refusal reason through verbatim:
+    /// substituting a constant would silently collapse `ProtocolMismatch` and
+    /// `Auth` at the Bevy boundary. Asserted on the source, mirroring the UDP
+    /// ordering oracle -- the outcome is identical either way, so only the
+    /// text distinguishes them.
+    ///
+    /// The reads below slice the forwarding block out first, so no other
+    /// function in the file can satisfy the assertion.
+    #[test]
+    fn reject_forwarding_passes_the_reason_verbatim() {
+        const THIS_FILE: &str = include_str!("systems.rs");
+
+        let start = THIS_FILE
+            .find("// Reject Event")
+            .expect("translate_world_events must forward rejections");
+        let body = &THIS_FILE[start..];
+        let end = body
+            .find("// Error Event")
+            .expect("the reject block must be closed");
+        let body = &body[..end];
+
+        assert!(
+            body.contains("for (address, reason, message)"),
+            "the forwarding loop must bind the reason, not discard it",
+        );
+        assert!(
+            body.contains("RejectEvent::<T>::new(address, reason, message)"),
+            "the Bevy event must be built with the client's reason, not a constant",
+        );
+        assert!(
+            !body.contains("RejectReason::"),
+            "the forwarding block must not name a reason constant",
+        );
+    }
 }

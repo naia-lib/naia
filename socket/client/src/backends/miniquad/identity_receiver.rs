@@ -58,10 +58,12 @@ mod auth_error_cell_tests {
 
     use std::collections::VecDeque;
 
-    /// A non-200 answer is consumed exactly once as an ErrorResponseCode and
-    /// then reports Waiting; generic packet errors stay on their own queue.
+    /// A non-200 answer is consumed exactly once as an ErrorResponseCode with
+    /// the exact decoded body, and then reports Waiting; generic packet errors
+    /// stay on their own queue.
     #[test]
     fn non_200_answer_is_consumed_once_while_generic_errors_stay_queued() {
+        let expected: &[u8] = b"miniquad-reject-reason";
         unsafe {
             AUTH_ERROR_CELL = Some(None);
             ERROR_QUEUE = Some(VecDeque::new());
@@ -73,15 +75,22 @@ mod auth_error_cell_tests {
                 error_queue.push_back("data channel error".to_string());
             }
             if let Some(auth_error_cell) = &mut AUTH_ERROR_CELL {
-                *auth_error_cell = Some((409, String::new()));
+                *auth_error_cell = Some((409, base64::encode(expected)));
             }
         }
 
+        // A nonempty body must arrive as its exact decoded bytes, not None:
+        // dropping it here would silently erase the server's reason.
         let mut receiver = IdentityReceiver;
-        assert!(matches!(
-            receiver.receive(),
-            IdentityReceiverResult::ErrorResponseCode(409, None)
-        ));
+        match receiver.receive() {
+            IdentityReceiverResult::ErrorResponseCode(409, Some(bytes)) => {
+                assert_eq!(
+                    bytes, expected,
+                    "the rejection body must decode to its exact bytes",
+                );
+            }
+            _ => panic!("a 409 with a reason body must surface once with its exact decoded bytes"),
+        }
         assert!(matches!(
             receiver.receive(),
             IdentityReceiverResult::Waiting

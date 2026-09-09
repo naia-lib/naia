@@ -77,24 +77,32 @@ mod session_error_tests {
     use webrtc_unreliable_client::SessionError;
 
     /// A pre-auth signaling failure (e.g. 409 with ICE/data still unavailable)
-    /// surfaces exactly once as an ErrorResponseCode with the exact status,
-    /// then reports Waiting. The data-address question is settled one layer
-    /// up, where Finding honestly becomes None.
+    /// surfaces exactly once as an ErrorResponseCode with the exact status and
+    /// the exact decoded body, then reports Waiting. The data-address question
+    /// is settled one layer up, where Finding honestly becomes None.
     #[test]
     fn pre_auth_session_error_is_surfaced_once_then_waiting() {
+        let expected: &[u8] = b"native-reject-reason";
         let (sender, receiver) = tokio::sync::oneshot::channel();
         let mut receiver = IdentityReceiver::new(receiver);
         sender
             .send(Err(SessionError {
                 status_code: 409,
-                body: String::new(),
+                body: base64::encode(expected),
             }))
             .expect("receiver alive");
 
-        assert!(matches!(
-            receiver.receive(),
-            IdentityReceiverResult::ErrorResponseCode(409, None)
-        ));
+        // A nonempty body must arrive as its exact decoded bytes, not None:
+        // dropping it here would silently erase the server's reason.
+        match receiver.receive() {
+            IdentityReceiverResult::ErrorResponseCode(409, Some(bytes)) => {
+                assert_eq!(
+                    bytes, expected,
+                    "the rejection body must decode to its exact bytes",
+                );
+            }
+            _ => panic!("a 409 with a reason body must surface once with its exact decoded bytes"),
+        }
         assert!(matches!(
             receiver.receive(),
             IdentityReceiverResult::Waiting

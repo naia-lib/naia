@@ -247,6 +247,49 @@ mod miniquad_js_bridge_host_oracle {
         );
     }
 
+    /// The callback arguments are live values in the right positions: status
+    /// first, body second. Swapping them would report the body as a status and
+    /// decode the status as a reason; substituting a constant for either would
+    /// blind the identity path to what the server actually answered. Both
+    /// defects keep the callback name intact, so the routing oracle above
+    /// stays green while the refusal itself corrupts -- hence this one reads
+    /// the call's arguments, not just its name.
+    #[test]
+    fn the_js_callback_receives_the_live_status_then_the_live_body() {
+        let call_start = NAIA_SOCKET_JS
+            .find("wasm_exports.receive_auth_error(")
+            .expect("the JS half must forward non-200 answers to receive_auth_error");
+        let call = &NAIA_SOCKET_JS[call_start..];
+        let call_end = call
+            .find(");")
+            .expect("the receive_auth_error call must be closed");
+        let call = &call[..call_end];
+
+        // Both arguments must be live request values, not constants: a
+        // hardcoded status or body would erase the server's actual answer.
+        let status = call
+            .find("request.status")
+            .expect("the first callback argument must be the live request status");
+        let body = call
+            .find("responseText")
+            .expect("the second callback argument must be the live response body");
+
+        // Order across the FFI boundary: status first, body second. The Rust
+        // half declares `receive_auth_error(status, body)`, so a swap here
+        // would silently exchange them.
+        assert!(
+            status < body,
+            "the status must precede the body in the receive_auth_error call",
+        );
+
+        // The status crosses as a string through the same JsObject bridge as
+        // every other argument -- a raw number would mistype at the boundary.
+        assert!(
+            call.contains("String(request.status)"),
+            "the status must be stringified through the JsObject bridge",
+        );
+    }
+
     /// Framework-last, and unconditional.
     ///
     /// The caller's `Authorization` header goes on first and only if there is

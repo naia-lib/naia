@@ -8,7 +8,7 @@ use bevy_ecs::{
 };
 
 use naia_client::DisconnectReason;
-use naia_client::{shared::GlobalResponseId, Events, NaiaClientError};
+use naia_client::{shared::GlobalResponseId, Events, NaiaClientError, RejectReason};
 
 use naia_bevy_shared::{
     Channel, ChannelKind, Message, MessageContainer, MessageKind, ReplicateBundle, Request,
@@ -74,26 +74,37 @@ impl<T> DisconnectEvent<T> {
 /// happens before the data address is learned, so it is `None` there, while a
 /// post-address in-band rejection carries `Some`. No sentinel is manufactured.
 ///
+/// `reason` mirrors the underlying client refusal exactly: `ProtocolMismatch`
+/// for a pre-protocol refusal, `Auth` for an application rejection. It is a
+/// plain field (not folded into `message`) so handlers can match on it without
+/// decoding anything.
+///
 /// `message` carries the reason the server sent with
 /// `reject_connection_with`, if any (naia-lib/naia#133). Downcast it with
 /// `container.to_boxed_any().downcast::<MyRejectReason>()`.
 #[derive(bevy_ecs::message::Message)]
 pub struct RejectEvent<T> {
     pub address: Option<SocketAddr>,
+    pub reason: RejectReason,
     pub message: Option<MessageContainer>,
     phantom_t: PhantomData<T>,
 }
 
 impl<T> Default for RejectEvent<T> {
     fn default() -> Self {
-        Self::new(None, None)
+        Self::new(None, RejectReason::Auth, None)
     }
 }
 
 impl<T> RejectEvent<T> {
-    pub fn new(address: Option<SocketAddr>, message: Option<MessageContainer>) -> Self {
+    pub fn new(
+        address: Option<SocketAddr>,
+        reason: RejectReason,
+        message: Option<MessageContainer>,
+    ) -> Self {
         Self {
             address,
+            reason,
             message,
             phantom_t: PhantomData,
         }
@@ -489,5 +500,33 @@ impl<T> EntityAuthResetEvent<T> {
             entity,
             phantom_t: PhantomData,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The constructor carries the refusal verbatim. Exact `ProtocolMismatch`
+    /// and `Auth` propagation is pinned here, so a dropped or substituted
+    /// reason goes red.
+    #[test]
+    fn reject_event_constructor_propagates_the_exact_reason() {
+        let addr: SocketAddr = "127.0.0.1:14191".parse().unwrap();
+
+        let mismatch = RejectEvent::<()>::new(Some(addr), RejectReason::ProtocolMismatch, None);
+        assert_eq!(mismatch.address, Some(addr));
+        assert_eq!(mismatch.reason, RejectReason::ProtocolMismatch);
+        assert!(mismatch.message.is_none());
+
+        let auth = RejectEvent::<()>::new(None, RejectReason::Auth, None);
+        assert_eq!(auth.address, None);
+        assert_eq!(auth.reason, RejectReason::Auth);
+        assert!(auth.message.is_none());
+
+        assert_ne!(
+            mismatch.reason, auth.reason,
+            "the two refusal kinds must stay distinguishable at the Bevy boundary",
+        );
     }
 }
