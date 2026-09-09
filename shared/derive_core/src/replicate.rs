@@ -75,7 +75,7 @@ pub fn replicate_impl(
         replica_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
     );
-    let module_name = format_ident!("define_{}", lowercase_replica_name);
+    let module_name = format_ident!("define_replicate_{}", lowercase_replica_name);
     let enum_name = format_ident!("{}Property", replica_name);
     let builder_name = format_ident!("{}Builder", replica_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);

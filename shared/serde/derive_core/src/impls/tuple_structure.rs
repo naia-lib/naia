@@ -80,7 +80,7 @@ pub fn derive_serde_tuple_struct(
         struct_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
     );
-    let module_name = format_ident!("define_{}", lowercase_struct_name);
+    let module_name = format_ident!("define_serde_{}", lowercase_struct_name);
 
     let import_types = quote! {BitWrite, Serde, ConstBitLength, BitReader, SerdeErr};
     let imports = quote! { use #serde_crate_name::{#import_types}; };

@@ -43,7 +43,7 @@ pub fn message_impl(
         struct_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
     );
-    let module_name = format_ident!("define_{}", lowercase_struct_name);
+    let module_name = format_ident!("define_message_{}", lowercase_struct_name);
     let builder_name = format_ident!("{}Builder", struct_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);
 
@@ -935,7 +935,7 @@ fn enum_message_impl(
         enum_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
     );
-    let module_name = format_ident!("define_{}", lowercase_enum_name);
+    let module_name = format_ident!("define_message_{}", lowercase_enum_name);
     let builder_name = format_ident!("{}Builder", enum_name);
     let builder_generic_fields = get_builder_generic_fields(&input.generics);
 

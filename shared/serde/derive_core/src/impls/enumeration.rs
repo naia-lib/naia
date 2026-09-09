@@ -141,7 +141,7 @@ pub fn derive_serde_enum(
         enum_name.to_string().to_lowercase().as_str(),
         Span::call_site(),
     );
-    let module_name = format_ident!("define_{}", lowercase_enum_name);
+    let module_name = format_ident!("define_serde_{}", lowercase_enum_name);
 
     let import_types =
         quote! { Serde, BitWrite, UnsignedInteger, BitReader, SerdeErr, ConstBitLength, };
