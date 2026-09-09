@@ -433,7 +433,7 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
         if let Field::EntityProperty(_) = field {
             let field_name = get_field_name(field, index, struct_type);
             let body_add_right = quote! {
-                self.#field_name.waiting_complete(converter);
+                resolved &= self.#field_name.waiting_complete(converter);
             };
             let new_body = quote! {
                 #body
@@ -444,8 +444,10 @@ fn get_relations_complete_method(fields: &[Field], struct_type: &StructType) -> 
     }
 
     quote! {
-        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool {
+            let mut resolved = true;
             #body
+            resolved
         }
     }
 }
@@ -1245,22 +1247,22 @@ fn get_enum_relations_complete_method(variants: &[EnumVariant]) -> TokenStream {
             .map(|f| &f.name)
             .collect();
         let completes = ep_fields.iter().map(|n| {
-            quote! { #n.waiting_complete(converter); }
+            quote! { #n.waiting_complete(converter) }
         });
         match &v.style {
-            VariantStyle::Unit => quote! { Self::#vname => {} },
+            VariantStyle::Unit => quote! { Self::#vname => true, },
             VariantStyle::Named => {
                 if ep_fields.is_empty() {
-                    quote! { Self::#vname { .. } => {} }
+                    quote! { Self::#vname { .. } => true, }
                 } else {
                     quote! {
-                        Self::#vname { #(#ep_fields),*, .. } => { #(#completes)* }
+                        Self::#vname { #(#ep_fields),*, .. } => { #(#completes &&)* true },
                     }
                 }
             }
             VariantStyle::Unnamed => {
                 if ep_fields.is_empty() {
-                    quote! { Self::#vname(..) => {} }
+                    quote! { Self::#vname(..) => true, }
                 } else {
                     let pattern: Vec<TokenStream> = v
                         .fields
@@ -1274,14 +1276,14 @@ fn get_enum_relations_complete_method(variants: &[EnumVariant]) -> TokenStream {
                         })
                         .collect();
                     quote! {
-                        Self::#vname(#(#pattern),*) => { #(#completes)* }
+                        Self::#vname(#(#pattern),*) => { #(#completes &&)* true },
                     }
                 }
             }
         }
     });
     quote! {
-        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool {
             match self {
                 #(#arms)*
             }

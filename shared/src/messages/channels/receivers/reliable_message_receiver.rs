@@ -194,7 +194,12 @@ impl<A: ReceiverArranger> ChannelReceiver<MessageContainer> for ReliableMessageR
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
             for (start_message_index, end_message_index, mut full_message) in list {
-                full_message.relations_complete(converter);
+                if !full_message.relations_complete(converter) {
+                    warn!(
+                        "Dropping waitlisted reliable message: an awaited entity relation is still unresolvable (stale redirect or missing mapping)."
+                    );
+                    continue;
+                }
                 let incoming_messages =
                     self.arranger
                         .process(start_message_index, end_message_index, full_message);

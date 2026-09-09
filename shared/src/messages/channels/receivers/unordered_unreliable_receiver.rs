@@ -75,7 +75,12 @@ impl ChannelReceiver<MessageContainer> for UnorderedUnreliableReceiver {
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
             for mut message in list {
-                message.relations_complete(converter);
+                if !message.relations_complete(converter) {
+                    warn!(
+                        "Dropping waitlisted unordered message: an awaited entity relation is still unresolvable (stale redirect or missing mapping)."
+                    );
+                    continue;
+                }
                 self.incoming_messages.push_back(message);
             }
         }

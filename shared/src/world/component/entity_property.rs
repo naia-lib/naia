@@ -466,7 +466,18 @@ impl EntityProperty {
     }
 
     /// Resolves a waiting entity relation now that its target entity has arrived.
-    pub fn waiting_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+    ///
+    /// Returns `true` when the property resolved (or was already complete).
+    /// Returns `false` when the awaited entity is still unresolvable — the
+    /// redirect may have expired or the mapping may never have arrived — and
+    /// leaves the property parked as `RemoteWaiting` so the caller can drop
+    /// the stale component/message. Never panics on a data condition: a
+    /// library aborting the host process on a recoverable stale mapping
+    /// turns one dead entity into total transport loss.
+    pub fn waiting_complete(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> bool {
         match &mut self.inner {
             EntityRelation::RemoteCreated(_)
             | EntityRelation::RemotePublic(_)
@@ -475,6 +486,7 @@ impl EntityProperty {
                 // waiting Component/Message only sets EntityProperty to RemoteWaiting if it doesn't have an entity in-scope
                 // but the entire Component/Message is put on the waitlist if even one of it's EntityProperties is RemoteWaiting
                 // and `waiting_complete` is called on all of them, so we skip the already in-scope ones here
+                return true;
             }
             EntityRelation::RemoteWaiting(inner) => {
                 let new_global_entity = {
@@ -483,11 +495,15 @@ impl EntityProperty {
                     let owned_entity = inner.remote_entity.copy_to_owned();
                     let redirected_entity = converter.apply_entity_redirect(&owned_entity);
 
-                    if let Ok(global_entity) = redirected_entity.convert_to_global(converter) {
-                        Some(global_entity)
-                    } else {
-                        panic!("Error completing waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}", 
-                               owned_entity, redirected_entity);
+                    match redirected_entity.convert_to_global(converter) {
+                        Ok(global_entity) => Some(global_entity),
+                        Err(_) => {
+                            warn!(
+                                "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}",
+                                owned_entity, redirected_entity
+                            );
+                            return false;
+                        }
                     }
                 };
 
@@ -518,6 +534,7 @@ impl EntityProperty {
                 );
             }
         }
+        true
     }
 
     /// Migrate Remote Property to Public version
@@ -2218,7 +2235,7 @@ mod relation_state_machine_tests {
     #[test]
     fn completing_a_plain_waiting_property_yields_a_remote_property() {
         let mut property = waiting(7);
-        property.waiting_complete(&MapConverter::with(&[7]));
+        assert!(property.waiting_complete(&MapConverter::with(&[7])));
         assert_eq!(property.inner.name(), "RemoteOwned");
         assert_eq!(property.get_inner(), Some(global(7)));
         assert_eq!(property.waiting_remote_entity(), None);
@@ -2229,7 +2246,7 @@ mod relation_state_machine_tests {
         let (mutator, _) = counting_mutator();
         let mut property = waiting(7);
         property.remote_publish(3, &mutator);
-        property.waiting_complete(&MapConverter::with(&[7]));
+        assert!(property.waiting_complete(&MapConverter::with(&[7])));
         assert_eq!(property.inner.name(), "RemotePublic");
         assert_eq!(property.get_inner(), Some(global(7)));
         let EntityRelation::RemotePublic(inner) = &property.inner else {
@@ -2244,7 +2261,7 @@ mod relation_state_machine_tests {
         let mut property = waiting(7);
         property.remote_publish(3, &mutator);
         property.enable_delegation(&full_authority(), Some((3, &mutator)));
-        property.waiting_complete(&MapConverter::with(&[7]));
+        assert!(property.waiting_complete(&MapConverter::with(&[7])));
         assert_eq!(property.inner.name(), "Delegated");
         assert_eq!(property.get_inner(), Some(global(7)));
         let EntityRelation::Delegated(inner) = &property.inner else {
@@ -2261,7 +2278,7 @@ mod relation_state_machine_tests {
             OwnedLocalEntity::new_remote_dynamic(7),
         );
         let mut property = waiting(3);
-        property.waiting_complete(&converter);
+        assert!(property.waiting_complete(&converter));
         assert_eq!(property.get_inner(), Some(global(7)));
     }
 
@@ -2271,29 +2288,55 @@ mod relation_state_machine_tests {
         let (delegated_property, _) = delegated(Some(7));
         for mut property in [remote_created(Some(7)), public_property, delegated_property] {
             let name = property.inner.name().to_string();
-            property.waiting_complete(&MapConverter::empty());
+            assert!(property.waiting_complete(&MapConverter::empty()));
             assert_eq!(property.inner.name(), name, "{name} must be left alone");
             assert_eq!(property.get_inner(), Some(global(7)));
         }
     }
 
     #[test]
-    fn completing_a_waiting_property_whose_entity_never_arrived_panics() {
+    fn completing_a_waiting_property_whose_entity_never_arrived_stays_waiting() {
         let mut property = waiting(7);
-        let message = panic_message_of(|| property.waiting_complete(&MapConverter::empty()));
-        assert!(
-            message
-                .as_deref()
-                .is_some_and(|m| m.contains("Error completing waiting EntityProperty")),
-            "got {message:?}",
+        assert!(!property.waiting_complete(&MapConverter::empty()));
+        assert_eq!(property.inner.name(), "RemoteWaiting");
+        assert_eq!(property.waiting_remote_entity(), Some(RemoteEntity::new(7)));
+        assert_eq!(property.get_inner(), None);
+    }
+
+    #[test]
+    fn completing_a_waiting_property_with_an_expired_redirect_does_not_panic() {
+        use crate::{world::local::local_entity_map::LocalEntityMap, Instant};
+
+        // LV-03a: broker alive across a peer restart lets the 60s redirect
+        // TTL expire while a RemoteWaiting on the old id is still
+        // outstanding. Completion must fail closed, never abort the host.
+        let mut map = LocalEntityMap::new(HostType::Server);
+        map.insert_with_remote_entity(global(7), RemoteEntity::new(7));
+        map.install_entity_redirect(
+            OwnedLocalEntity::new_remote_dynamic(4),
+            OwnedLocalEntity::new_remote_dynamic(7),
         );
+        let mut property = waiting(4);
+        assert!(property.waiting_complete(&map));
+        assert_eq!(property.get_inner(), Some(global(7)));
+
+        // Age out the redirect and lose the new mapping: the old id is now
+        // unresolvable with Original == Redirected, the live shape.
+        map.cleanup_old_redirects(&Instant::now(), 0);
+        map.remove_remote_mapping_if_exists(&RemoteEntity::new(7));
+        let mut stale = waiting(4);
+        assert!(!stale.waiting_complete(&map));
+        assert_eq!(stale.inner.name(), "RemoteWaiting");
+        assert_eq!(stale.waiting_remote_entity(), Some(RemoteEntity::new(4)));
     }
 
     #[test]
     fn completing_a_property_that_never_waits_panics() {
         for mut property in [host_created(Some(7)), local(Some(7)), invalid()] {
             let name = property.inner.name().to_string();
-            let message = panic_message_of(|| property.waiting_complete(&MapConverter::with(&[7])));
+            let message = panic_message_of(|| {
+                property.waiting_complete(&MapConverter::with(&[7]));
+            });
             assert!(
                 message
                     .as_deref()

@@ -100,12 +100,16 @@ impl MessageContainer {
     }
 
     /// Notifies the inner message that all awaited entity relations have been resolved.
-    pub fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+    /// Returns `false` when any awaited entity is still unresolvable; the caller must drop the stale message.
+    pub fn relations_complete(
+        &mut self,
+        converter: &dyn LocalEntityAndGlobalEntityConverter,
+    ) -> bool {
         // relations_complete requires &mut self on the inner message.
         // Since we hold an Arc, we must have exclusive ownership to mutate.
         // This is only called on the receive path where no other Arc clones
         // are live, so make_mut gives us a unique clone if needed (which is
         // already a Box<dyn Message> clone — same cost as before this change).
-        Arc::make_mut(&mut self.inner).relations_complete(converter);
+        Arc::make_mut(&mut self.inner).relations_complete(converter)
     }
 }

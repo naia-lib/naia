@@ -84,7 +84,9 @@ impl Message for StubMessage {
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
         None
     }
-    fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) {}
+    fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) -> bool {
+        true
+    }
 }
 
 fn stub(id: u32) -> MessageContainer {

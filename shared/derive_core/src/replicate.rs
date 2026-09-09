@@ -1610,7 +1610,7 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
         if let Property::Entity(_) = field {
             let field_name = get_field_name(field, struct_type);
             let body_add_right = quote! {
-                self.#field_name.waiting_complete(converter);
+                resolved &= self.#field_name.waiting_complete(converter);
             };
             let new_body = quote! {
                 #body
@@ -1621,8 +1621,10 @@ fn get_relations_complete_method(fields: &[Property], struct_type: &StructType) 
     }
 
     quote! {
-        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) {
+        fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool {
+            let mut resolved = true;
             #body
+            resolved
         }
     }
 }

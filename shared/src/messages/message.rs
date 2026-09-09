@@ -74,8 +74,9 @@ pub trait Message: Send + Sync + Named + MessageClone + Any {
     );
     /// Returns a list of RemoteEntities contained within the Message's EntityProperty fields, which have not yet been received.
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
-    /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities
-    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    /// Converts any LocalEntities contained within the Message's EntityProperty fields to GlobalEntities.
+    /// Returns `false` when any awaited entity is still unresolvable; the caller must drop the stale message.
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool;
     // /// Returns whether has any EntityRelations
     // fn has_entity_relations(&self) -> bool;
     // /// Returns a list of Entities contained within the Message's EntityRelation fields

@@ -768,7 +768,9 @@ mod message_manager_tests {
         fn relations_waiting(&self) -> Option<HashSet<crate::RemoteEntity>> {
             None
         }
-        fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) {}
+        fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) -> bool {
+            true
+        }
     }
 
     /// A message whose encoded length is exactly the number of bits it is built
@@ -863,7 +865,9 @@ mod message_manager_tests {
         fn relations_waiting(&self) -> Option<HashSet<crate::RemoteEntity>> {
             None
         }
-        fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) {}
+        fn relations_complete(&mut self, _: &dyn LocalEntityAndGlobalEntityConverter) -> bool {
+            true
+        }
     }
 
     fn exact(bits: u32) -> MessageContainer {

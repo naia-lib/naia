@@ -98,7 +98,13 @@ impl RemoteWorldWaitlist {
                     .remove(&(global_entity, component_kind));
 
                 {
-                    component.relations_complete(local_converter);
+                    if !component.relations_complete(local_converter) {
+                        warn!(
+                            "Dropping waitlisted component for entity {:?}: an awaited entity relation is still unresolvable (stale redirect or missing mapping).",
+                            global_entity
+                        );
+                        continue;
+                    }
                 }
 
                 output.push((global_entity, component_kind, component));

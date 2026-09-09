@@ -83,7 +83,12 @@ impl ChannelReceiver<MessageContainer> for SequencedUnreliableReceiver {
     ) -> Vec<MessageContainer> {
         if let Some(list) = entity_waitlist.collect_ready_items(now, &mut self.waitlist_store) {
             for (message_index, mut message) in list {
-                message.relations_complete(converter);
+                if !message.relations_complete(converter) {
+                    warn!(
+                        "Dropping waitlisted sequenced message: an awaited entity relation is still unresolvable (stale redirect or missing mapping)."
+                    );
+                    continue;
+                }
                 self.arrange_message(message_index, message);
             }
         }

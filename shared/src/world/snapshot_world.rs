@@ -450,7 +450,12 @@ mod tests {
                 fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
                     None
                 }
-                fn relations_complete(&mut self, _c: &dyn LocalEntityAndGlobalEntityConverter) {}
+                fn relations_complete(
+                    &mut self,
+                    _c: &dyn LocalEntityAndGlobalEntityConverter,
+                ) -> bool {
+                    true
+                }
                 fn publish(&mut self, _m: &PropertyMutator) {}
                 fn unpublish(&mut self) {}
                 fn enable_delegation(

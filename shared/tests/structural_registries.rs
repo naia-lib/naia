@@ -498,7 +498,11 @@ macro_rules! malformed_component {
             fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>> {
                 None
             }
-            fn relations_complete(&mut self, _converter: &dyn LocalEntityAndGlobalEntityConverter) {
+            fn relations_complete(
+                &mut self,
+                _converter: &dyn LocalEntityAndGlobalEntityConverter,
+            ) -> bool {
+                true
             }
             fn publish(&mut self, _mutator: &PropertyMutator) {}
             fn unpublish(&mut self) {}

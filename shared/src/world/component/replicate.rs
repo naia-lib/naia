@@ -223,8 +223,9 @@ pub trait Replicate: Sync + Send + 'static + Named + Any {
     ) -> Result<(), SerdeErr>;
     /// Returns a list of LocalEntities contained within the Component's EntityProperty fields, which are waiting to be converted to GlobalEntities
     fn relations_waiting(&self) -> Option<HashSet<RemoteEntity>>;
-    /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities
-    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter);
+    /// Converts any LocalEntities contained within the Component's EntityProperty fields to GlobalEntities.
+    /// Returns `false` when any awaited entity is still unresolvable; the caller must drop the stale component.
+    fn relations_complete(&mut self, converter: &dyn LocalEntityAndGlobalEntityConverter) -> bool;
     /// Publish Replicate
     fn publish(&mut self, mutator: &PropertyMutator);
     /// Unpublish Replicate
