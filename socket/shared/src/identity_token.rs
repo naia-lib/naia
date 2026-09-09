@@ -1,4 +1,4 @@
-use naia_serde::{BitReader, BitWrite, Serde, SerdeErr};
+use naia_serde::SerdeInternal;
 
 use crate::Random;
 
@@ -17,7 +17,7 @@ const TOKEN_LEN: usize = 32;
 /// over HTTP as text, [`IdentityToken::to_signaling_string`] and
 /// [`IdentityToken::from_signaling_string`] provide a base64 (URL-safe, no
 /// padding) text encoding for that hop only.
-#[derive(Clone, PartialEq, Eq, Hash, Debug)]
+#[derive(SerdeInternal, Clone, PartialEq, Eq, Hash, Debug)]
 pub struct IdentityToken(Box<[u8]>);
 
 impl IdentityToken {
@@ -62,20 +62,6 @@ impl IdentityToken {
         base64::decode_config(string, base64::URL_SAFE_NO_PAD)
             .ok()
             .map(|bytes| Self(bytes.into_boxed_slice()))
-    }
-}
-
-impl Serde for IdentityToken {
-    fn ser(&self, writer: &mut dyn BitWrite) {
-        self.0.ser(writer);
-    }
-
-    fn de(reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        Ok(Self(Box::<[u8]>::de(reader)?))
-    }
-
-    fn bit_length(&self) -> u32 {
-        self.0.bit_length()
     }
 }
 

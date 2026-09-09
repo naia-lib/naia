@@ -97,66 +97,26 @@ struct Pair {
 
 // Self-containing generated types: the derives must root the traversal at
 // `Self`, so the boxed self-edge folds to `BACKREF 0` with no spurious
-// inlined level.
-//
-// Neither can derive the codec `Serde` (its derive emits its own support
-// module and `Clone` impl, colliding with the registry derives), so both
-// hand-implement it with unreachable bodies: these fixtures are only ever
-// described, never serialized. `Serde` needs `Clone + PartialEq`; `Clone`
-// comes from the registry derives themselves, `PartialEq` is derived.
-#[derive(PartialEq, Message)]
+// inlined level. Both stack the codec `Serde` derive (possible since the
+// helper-module collision rename); `Clone` comes from the registry derives,
+// `PartialEq` is derived.
+#[derive(PartialEq, Message, Serde)]
 #[allow(dead_code)]
 struct ChainMsg {
     next: Box<ChainMsg>,
 }
 
-impl Serde for ChainMsg {
-    fn ser(&self, _writer: &mut dyn BitWrite) {
-        unreachable!("oracle fixture is described, never serialized");
-    }
-    fn de(_reader: &mut BitReader) -> Result<Self, SerdeErr> {
-        unreachable!("oracle fixture is described, never serialized");
-    }
-    fn bit_length(&self) -> u32 {
-        unreachable!("oracle fixture is described, never serialized");
-    }
-}
-
-// Stands in for the codec `Serde` derive's `WireSchema` impl: the field
-// path needs `Box<ChainMsg>: WireSchema`, which needs `ChainMsg` itself
-// to implement it. Routes the single field through the canonical field
-// path, exactly as generated codec impls do.
-impl WireSchema for ChainMsg {
-    fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
-        out.push(SCHEMA_TAG_STRUCT);
-        wire_schema_count(out, 1);
-        wire_schema_label(out, "next");
-        wire_schema_field::<Box<ChainMsg>>(ctx, out);
-    }
-}
-
-// `Property` has no `PartialEq`, so equality is hand-written through the
-// deref: comparing the innards is what the fixture needs, and the
-// self-reference resolves through this very impl, the standard recursive
-// manual-impl shape.
+// `Property<Box<ChainComp>>` implements neither `Serde` nor `WireSchema`
+// (a live container with auth state, not a plain value), so no derive can
+// cover this fixture: both impls are hand-written. The `WireSchema` impl
+// routes the single field through the canonical field path, exactly as
+// generated codec impls do.
 #[derive(Replicate)]
 #[allow(dead_code)]
 struct ChainComp {
     next: Property<Box<ChainComp>>,
 }
 
-// Identity comparison: a structural `==` would recurse forever on a
-// self-containing value (comparing innards compares the whole value
-// again). Fixtures are never compared — the bound exists only to satisfy
-// `Serde` — so address identity is the honest finite choice.
-impl PartialEq for ChainComp {
-    fn eq(&self, other: &Self) -> bool {
-        std::ptr::eq(&*self.next, &*other.next)
-    }
-}
-
-// Codec-level `WireSchema` stand-in, as for `ChainMsg`: the Replicate
-// descriptor's field path needs the inner `Box<ChainComp>` describable.
 impl WireSchema for ChainComp {
     fn wire_schema(ctx: &mut WireSchemaContext, out: &mut Vec<u8>) {
         out.push(SCHEMA_TAG_STRUCT);
@@ -175,6 +135,12 @@ impl Serde for ChainComp {
     }
     fn bit_length(&self) -> u32 {
         unreachable!("oracle fixture is described, never serialized");
+    }
+}
+
+impl PartialEq for ChainComp {
+    fn eq(&self, other: &Self) -> bool {
+        std::ptr::eq(&*self.next, &*other.next)
     }
 }
 
