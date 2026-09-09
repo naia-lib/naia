@@ -529,4 +529,27 @@ mod tests {
             "the two refusal kinds must stay distinguishable at the Bevy boundary",
         );
     }
+
+    /// A downstream Bevy consumer matches both refusal kinds through the
+    /// supported root export. This pins the `naia_client::RejectReason`
+    /// re-export: if it ever narrows, moves, or goes private, every
+    /// downstream exhaustive `match` breaks here first, at the public API.
+    ///
+    /// The `use super::*` above names the reason only through the crate
+    /// root (`naia_client::RejectReason`, as imported at the top of this
+    /// file). Reaching into `naia_client::handshake` or any other private
+    /// module instead would fail to compile -- there is no other path, by
+    /// construction, so this test cannot pass on a private import.
+    #[test]
+    fn downstream_consumers_match_both_reasons_through_the_public_export() {
+        fn describe(reason: RejectReason) -> &'static str {
+            match reason {
+                RejectReason::ProtocolMismatch => "mismatch",
+                RejectReason::Auth => "auth",
+            }
+        }
+
+        assert_eq!(describe(RejectReason::ProtocolMismatch), "mismatch");
+        assert_eq!(describe(RejectReason::Auth), "auth");
+    }
 }
