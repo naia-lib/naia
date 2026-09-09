@@ -84,7 +84,9 @@ pub mod shared {
 /// crates and users can name the reason without reaching past this crate into
 /// `naia-shared` directly.
 pub use naia_shared::handshake::RejectReason;
-pub use naia_shared::{ConnectionStats, DisconnectReason, EntityPriorityMut, EntityPriorityRef};
+pub use naia_shared::{
+    ConnectionStats, DisconnectReason, EntityPriorityMut, EntityPriorityRef, ProtocolId,
+};
 
 mod client;
 mod client_config;
