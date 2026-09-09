@@ -224,18 +224,22 @@ impl EntityMessage<RemoteEntity> {
     //         }
     //     }
     //
-    /// Converts this remote-entity message into an `EntityEvent`, resolving the entity via `local_entity_map`.
-    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> EntityEvent {
+    /// Converts this remote-entity message into an `EntityEvent`, resolving the entity via `local_entity_map`,
+    /// or `None` if the entity is not found in the map (stale mapping after churn -- the caller drops it).
+    pub fn to_event(self, local_entity_map: &LocalEntityMap) -> Option<EntityEvent> {
         let remote_entity = self.entity().unwrap();
         let global_entity = match local_entity_map.global_entity_from_remote(&remote_entity) {
             Some(ge) => *ge,
             None => {
-                error!("to_event() failed to find RemoteEntity({:?}) in entity_map! Message type: {:?}", 
-                    remote_entity, self.get_type());
-                panic!("RemoteEntity not found in entity_map during to_event conversion");
+                error!(
+                    "to_event() failed to find RemoteEntity({:?}) in entity_map — message type: {:?}; skipping",
+                    remote_entity,
+                    self.get_type()
+                );
+                return None;
             }
         };
-        match self {
+        Some(match self {
             EntityMessage::Publish(_, _) => EntityEvent::Publish(global_entity),
             EntityMessage::Unpublish(_, _) => EntityEvent::Unpublish(global_entity),
             EntityMessage::EnableDelegation(_, _) => EntityEvent::EnableDelegation(global_entity),
@@ -259,7 +263,33 @@ impl EntityMessage<RemoteEntity> {
             | EntityMessage::InsertComponent(_, _)
             | EntityMessage::RemoveComponent(_, _) => panic!("Handled elsewhere"),
             EntityMessage::Noop => panic!("Cannot convert Noop message to an event"),
-        }
+        })
+    }
+}
+
+#[cfg(test)]
+mod to_event_tests {
+    use super::*;
+    use crate::{BigMapKey, GlobalEntity, HostType};
+
+    fn publish(remote_id: u32) -> EntityMessage<RemoteEntity> {
+        EntityMessage::Publish(0, RemoteEntity::new(remote_id))
+    }
+
+    #[test]
+    fn remote_to_event_resolves_a_known_mapping() {
+        let mut map = LocalEntityMap::new(HostType::Server);
+        let global = GlobalEntity::from_u64(7);
+        map.insert_with_remote_entity(global, RemoteEntity::new(7));
+        assert!(matches!(publish(7).to_event(&map), Some(EntityEvent::Publish(g)) if g == global));
+    }
+
+    #[test]
+    fn remote_to_event_returns_none_for_a_stale_mapping() {
+        // Follow-up to LV-03a/LV-08a: churn removed the mapping after the
+        // message was queued. Must fail closed, never abort the worker.
+        let map = LocalEntityMap::new(HostType::Server);
+        assert!(publish(4).to_event(&map).is_none());
     }
 }
 //
