@@ -281,7 +281,9 @@ mod entity_limit_tests {
     use naia_shared::{GlobalDirtyBitset, GlobalEntityIndex, Protocol};
     use std::{sync::Arc, time::Duration};
 
-    use crate::{server::ServerShared, world::global_world_manager::GlobalWorldManager, ServerConfig};
+    use crate::{
+        server::ServerShared, world::global_world_manager::GlobalWorldManager, ServerConfig,
+    };
 
     /// Builds a `ServerShared` sized the way `InternalWorldServer::new` sizes
     /// one: `max_replicated_entities` slots plus the slot-0 INVALID sentinel.

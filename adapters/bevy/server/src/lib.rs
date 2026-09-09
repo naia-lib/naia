@@ -102,9 +102,8 @@ pub use naia_server::{
         SignedVariableInteger, SocketConfig, UnsignedInteger, UnsignedVariableInteger,
     },
     transport, ConnectionShared, DisconnectReason, EntityOwner, ReceiveOutput, RecvHandle,
-    ReplicationConfig,
-    ResponseSendOutcome, RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde, ServerConfig,
-    TickBufferMessages, UserKey, WorldServer,
+    ReplicationConfig, ResponseSendOutcome, RoomKey, ScopeExit, SendHandle, SerdeBevy as Serde,
+    ServerConfig, TickBufferMessages, UserKey, WorldServer,
 };
 
 #[cfg(feature = "bench_instrumentation")]

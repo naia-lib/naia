@@ -605,9 +605,9 @@ mod tests {
         bigmap::BigMapKey,
         world::{component::property::Property, test_support::TestGwm},
         ComponentFieldUpdate, EntityAndGlobalEntityConverter, GlobalEntityMap,
-        PendingComponentUpdate, RemoteEntity, ReplicaDynMutWrapper,
-        ReplicaDynRefWrapper, ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent,
-        SerdeErr, WorldRefType,
+        PendingComponentUpdate, RemoteEntity, ReplicaDynMutWrapper, ReplicaDynRefWrapper,
+        ReplicaMutWrapper, ReplicaRefWrapper, Replicate, ReplicatedComponent, SerdeErr,
+        WorldRefType,
     };
 
     #[derive(Replicate)]
