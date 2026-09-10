@@ -28,15 +28,23 @@ pub use naia_shared::ReplicateTrait as Replicate;
 // the bevy meaning and the smuggled shared-flavor derives are gone.
 pub use naia_shared::{ChannelTrait as Channel, MessageTrait as Message};
 
+// This list is explicit on purpose: a `pub use naia_shared::*` glob would
+// re-smuggle shared-flavor derives into the bevy macro namespace, silently
+// reverting the `Channel`/`Message`/`Replicate` precedent above. And a facade
+// gap is a defect only when a consumer demonstrates it — add further names
+// one at a time, each with the consuming crate named in the commit message;
+// do not close a gap set wholesale (Usher seq2624).
 pub use naia_shared::{
     sequence_greater_than,
     sequence_less_than,
     wire_schema_count,
+    wire_schema_custom_leaf,
     wire_schema_field,
     wire_schema_label,
     wrapping_diff,
     AuthorityError,
     BandwidthConfig,
+    BitCounter,
     BitReader,
     BitWrite,
     BitWriter,

@@ -36,12 +36,12 @@ pub use naia_derive::{Channel, Message, Replicate};
 #[cfg(feature = "bench_instrumentation")]
 pub use naia_serde::bench_serde_counters;
 pub use naia_serde::{
-    wire_schema_count, wire_schema_field, wire_schema_label, BitCounter, BitReader, BitWrite,
-    BitWriter, CachedComponentUpdate, ConstBitLength, FileBitWriter, MaxBits, MaxBitsFallback,
-    OutgoingPacket, OwnedBitReader, Serde, SerdeBevyClient, SerdeBevyServer, SerdeBevyShared,
-    SerdeErr, SerdeFloatConversion, SerdeIntegerConversion, SerdeInternal, SignedFloat,
-    SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat, UnsignedInteger,
-    UnsignedVariableFloat, UnsignedVariableInteger, WireSchema, WireSchemaContext,
+    wire_schema_count, wire_schema_custom_leaf, wire_schema_field, wire_schema_label, BitCounter,
+    BitReader, BitWrite, BitWriter, CachedComponentUpdate, ConstBitLength, FileBitWriter, MaxBits,
+    MaxBitsFallback, OutgoingPacket, OwnedBitReader, Serde, SerdeBevyClient, SerdeBevyServer,
+    SerdeBevyShared, SerdeErr, SerdeFloatConversion, SerdeIntegerConversion, SerdeInternal,
+    SignedFloat, SignedInteger, SignedVariableFloat, SignedVariableInteger, UnsignedFloat,
+    UnsignedInteger, UnsignedVariableFloat, UnsignedVariableInteger, WireSchema, WireSchemaContext,
     CACHED_UPDATE_BITS, CACHED_UPDATE_BYTES, MTU_SIZE_BITS, MTU_SIZE_BYTES, SCHEMA_NATIVE_ENDIAN,
     SCHEMA_ORDERED, SCHEMA_TAG_ARRAY, SCHEMA_TAG_BACKREF, SCHEMA_TAG_BOOL, SCHEMA_TAG_BYTES,
     SCHEMA_TAG_CHAR, SCHEMA_TAG_CUSTOM_LEAF, SCHEMA_TAG_ENTITY_PROPERTY, SCHEMA_TAG_ENUM,
