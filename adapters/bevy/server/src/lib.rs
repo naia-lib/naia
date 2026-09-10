@@ -118,6 +118,33 @@ pub use naia_server::{
     bench_take_events_counters, bench_write_counters,
 };
 
+/// Standalone-server tier, reachable without a direct `naia-server` dependency.
+///
+/// A sub-namespace rather than a second root glob: `AuthEvent`, `ConnectEvent`
+/// and `UserKey` are each defined twice across the two tiers
+/// (`naia_server::events` and [`events`]), so a root wildcard would collide on
+/// all three. `MainServer`, `MainEvents`, `WorldPacketEvent` and
+/// `QueuedDisconnectEvent` exist only in `naia_server` and pass through
+/// unchanged — `naia_server::X` is `main::X`.
+///
+/// Wire-neutral: a re-export changes no byte on the wire. Structurally, not
+/// just empirically: `naia_server` exports no derive macros at its root and
+/// its only overlapping name `Serde` is reachable as `main::shared::Serde`,
+/// never `main::Serde`, so there is no macro/type pair for a consumer's
+/// derive shadow to be inconsistent with.
+pub mod main {
+    pub use naia_server::*;
+}
+
+/// Re-export of `naia_bevy_shared::TestClock` for bevy-app integration tests
+/// that need to drive naia ticks deterministically. Same type either way:
+/// the single definition in `naia_socket_shared`, via `naia-shared`.
+///
+/// The guard mirrors `naia_bevy_shared`'s exactly — the tier one hop away —
+/// and deliberately not `naia_shared`'s deeper wasm32/wbindgen/mquad nuance.
+#[cfg(all(feature = "test_time", not(target_arch = "wasm32")))]
+pub use naia_bevy_shared::TestClock;
+
 pub mod events;
 pub mod pipeline_timing;
 
