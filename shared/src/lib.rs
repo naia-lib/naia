@@ -131,8 +131,8 @@ pub use connection::{
 pub use messages::{
     channels::{
         channel::{
-            Channel, ChannelCriticality, ChannelDirection, ChannelMode, ChannelSettings,
-            ReliableSettings, TickBufferSettings,
+            Channel, Channel as ChannelTrait, ChannelCriticality, ChannelDirection, ChannelMode,
+            ChannelSettings, ReliableSettings, TickBufferSettings,
         },
         channel_kinds::{ChannelKind, ChannelKinds},
         default_channels,
@@ -146,7 +146,7 @@ pub use messages::{
             request_sender::{LocalRequestId, LocalResponseId},
         },
     },
-    message::{Message, MessageBuilder},
+    message::{Message, Message as MessageTrait, MessageBuilder},
     message_container::MessageContainer,
     message_kinds::{MessageKind, MessageKinds},
     message_manager::MessageManager,

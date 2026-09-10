@@ -5,6 +5,15 @@ pub use bevy_ecs;
 // This goes into the MACRO namespace as `Replicate`.
 pub use naia_bevy_derive::Replicate;
 
+// Bevy-adapter `Channel`/`Message` derives: same `*_impl` traversal as the
+// shared flavor, emitting `naia_bevy_shared::` paths instead of
+// `naia_shared::`. These go into the MACRO namespace. Without them, the
+// `Channel`/`Message` entries in the `naia_shared` list below would smuggle
+// the shared-flavor derives into this macro namespace (a list re-export
+// carries all namespaces), and every bevy-tier consumer would silently expand
+// to `naia_shared::` paths.
+pub use naia_bevy_derive::{Channel, Message};
+
 // The `Replicate` TRAIT — imported from naia_shared under its `ReplicateTrait`
 // alias (which is a pure type re-export) so Rust sees only a TYPE-namespace
 // import here and does not conflict with the macro-namespace derive above.
@@ -12,6 +21,12 @@ pub use naia_bevy_derive::Replicate;
 // derive above, both namespaces hold `naia_bevy_shared::Replicate`, mirroring
 // how naia_shared itself dual-exports the name.
 pub use naia_shared::ReplicateTrait as Replicate;
+
+// The `Channel`/`Message` TRAITs — imported under their pure-type aliases so
+// Rust sees only TYPE-namespace imports here, exactly as for `Replicate`
+// above. Re-exported below as `Channel`/`Message`, so both namespaces hold
+// the bevy meaning and the smuggled shared-flavor derives are gone.
+pub use naia_shared::{ChannelTrait as Channel, MessageTrait as Message};
 
 pub use naia_shared::{
     sequence_greater_than,
@@ -25,7 +40,6 @@ pub use naia_shared::{
     BitReader,
     BitWrite,
     BitWriter,
-    Channel,
     ChannelDirection,
     ChannelKind,
     ChannelMode,
@@ -58,7 +72,6 @@ pub use naia_shared::{
     // resolves everything through this crate for bevy consumers.
     MaxBits,
     MaxBitsFallback,
-    Message,
     MessageBuilder,
     MessageContainer,
     MessageKind,
