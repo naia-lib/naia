@@ -25,3 +25,19 @@ fn facade_bit_counter_is_plain_tier_type() {
     fn takes_bevy_counter(_: BevyBitCounter) {}
     takes_bevy_counter(SharedBitCounter::new(0, 0, u32::MAX));
 }
+
+// `RequestOrResponse` (Usher seq2644/2674): the bevy facade must publish the
+// plain tier's built-in request/response envelope TYPE so Gerry's
+// `session_naia_proto` net-ID tail falsifier can pin it at position 1. Before
+// the fix this file does not compile (`unresolved import
+// naia_bevy_shared::RequestOrResponse`). The fn-pointer coercion below proves
+// both paths name the identical type without needing to construct it (its
+// fields are private).
+use naia_bevy_shared::RequestOrResponse as BevyRequestOrResponse;
+use naia_shared::RequestOrResponse as SharedRequestOrResponse;
+
+#[test]
+fn facade_request_or_response_is_plain_tier_type() {
+    fn takes_bevy(_: BevyRequestOrResponse) {}
+    let _: fn(SharedRequestOrResponse) = takes_bevy;
+}

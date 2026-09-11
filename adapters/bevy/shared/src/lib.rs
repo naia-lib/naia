@@ -100,6 +100,7 @@ pub use naia_shared::{
     ReplicateBuilder,
     ReplicatedComponent,
     Request,
+    RequestOrResponse,
     ResourceAlreadyExists,
     ResourceKinds,
     ResourceRegistry,
