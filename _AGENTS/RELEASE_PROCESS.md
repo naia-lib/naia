@@ -42,15 +42,25 @@ tip are two different bases, and a checkout that mixes them fails *by
 construction* — not because either side is broken.
 
 **And what a consumer checks out is the lock's `sha`, not the branch its `ref`
-string names.** In cyberlith, `tools/ci/verify-producer-lock.py:154` compares
-`git rev-parse HEAD` against the locked sha and fails closed
-(`require(head == selected["sha"], …)`), while the `ref` field is only
-syntax-checked and then never used to resolve anything; and
-`.github/workflows/client-boot.yml:96,107` selects
-`jq -er '.producers.naia.revisions.dev.sha'` and hands it to `actions/checkout`
-as `ref:`. Nothing reads `refs/heads/dev`. So a naia ref advance on its own
-cannot change what a sibling builds, and a sibling whose checkout drifted fails
-loudly (`HEAD <x> != locked <y>`) rather than silently.
+string names.** Cyberlith's lock verifier (`tools/ci/verify-producer-lock.py`,
+`validate_checkouts`) resolves `producers.<name>.checkout_revision` and then
+requires `git rev-parse HEAD` to equal that revision's `sha` field, failing
+closed with `producer <name> HEAD <a> != locked <b>`; it also requires the locked
+object to still exist (`git cat-file -e`) and the checkout's origin to match the
+declared repository. The `ref` field is matched against the shape
+`refs/heads/...` **for syntax only** and is then never resolved — documentation
+of intent, carrying no enforcement. The producing workflow
+(`.github/workflows/client-boot.yml`) does the same thing: it selects the sha
+(`jq` on `.producers.<name>.revisions.<rev>.sha`) and hands it to
+`actions/checkout`. Nothing reads the branch, and nothing rewrites the lock from
+a live ref — every reference to `ci-producers.json` is a read — so the pin moves
+only when a human commits a change to it. The intent is stated outright in that
+repo's testing strategy: check out every sibling "by full commit rather than a
+moving" ref.
+
+So a naia ref advance on its own cannot change what a sibling builds, a locked
+object stays valid as the branch moves past it, and a sibling whose checkout
+drifted fails loudly (`HEAD <x> != locked <y>`) rather than silently.
 
 **Worked example (2026-09-16).** Cyberlith's `main` tree declared naia
 `f1c802d8343b3ae62a581c17774028fbb91b4581` (2026-09-06). The `WireSchema` trait
