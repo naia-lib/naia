@@ -41,6 +41,17 @@ own `ci-producers.json` advances.** Until then the consumer's tree and naia's
 tip are two different bases, and a checkout that mixes them fails *by
 construction* — not because either side is broken.
 
+**And what a consumer checks out is the lock's `sha`, not the branch its `ref`
+string names.** In cyberlith, `tools/ci/verify-producer-lock.py:154` compares
+`git rev-parse HEAD` against the locked sha and fails closed
+(`require(head == selected["sha"], …)`), while the `ref` field is only
+syntax-checked and then never used to resolve anything; and
+`.github/workflows/client-boot.yml:96,107` selects
+`jq -er '.producers.naia.revisions.dev.sha'` and hands it to `actions/checkout`
+as `ref:`. Nothing reads `refs/heads/dev`. So a naia ref advance on its own
+cannot change what a sibling builds, and a sibling whose checkout drifted fails
+loudly (`HEAD <x> != locked <y>`) rather than silently.
+
 **Worked example (2026-09-16).** Cyberlith's `main` tree declared naia
 `f1c802d8343b3ae62a581c17774028fbb91b4581` (2026-09-06). The `WireSchema` trait
 does not exist at that ref at all:
