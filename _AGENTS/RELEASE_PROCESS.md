@@ -19,6 +19,54 @@ repo has used since 2019.
 
 ---
 
+## Sibling consumers (in-family producers)
+
+External consumers take naia from crates.io — that is, from `main`. A
+co-developed sibling that needs dev-only surface instead checks naia out from
+the pin its own repo declares, e.g. cyberlith's `.github/ci-producers.json`:
+
+```json
+"naia": {
+  "repository": "naia-lib/naia",
+  "checkout_revision": "dev",
+  "revisions": { "dev": { "ref": "refs/heads/dev", "sha": "<sha>" } }
+}
+```
+
+Pinning `dev` is the intended mode for those siblings; there is no expectation
+that every consumer follows `main`.
+
+**A naia ref advance is visible to a sibling consumer only once the consumer's
+own `ci-producers.json` advances.** Until then the consumer's tree and naia's
+tip are two different bases, and a checkout that mixes them fails *by
+construction* — not because either side is broken.
+
+**Worked example (2026-09-16).** Cyberlith's `main` tree declared naia
+`f1c802d8343b3ae62a581c17774028fbb91b4581` (2026-09-06). The `WireSchema` trait
+does not exist at that ref at all:
+
+```bash
+git grep -l WireSchema f1c802d8 | wc -l   #  0
+git grep -l WireSchema d82d3d99 | wc -l   # 30  (cyberlith dev's declared pin)
+git grep -l WireSchema 0ef641ed | wc -l   # 32  (naia dev tip)
+```
+
+A session that measured that tree with naia checked out at `0ef641ed` reported
+`error[E0277]: the trait bound ChatDisplayName: WireSchema is not satisfied` on
+every row and concluded the tree could not be measured. It could: the producer
+checkout had moved and the consumer's declared pin had not.
+
+**The cheap check is presence, not a build.** A symbol absent from the pin a
+tree declares cannot be unsatisfied at that pin, and `git grep -l <Symbol> <pin>`
+answers that in one command, without compiling anything.
+
+When a release carries a consumer-visible surface change — a new trait, a new
+bound, or a derive that consumers must now satisfy — name it in the release
+notes (`CHANGELOG.md`) as a consumer-visible surface change, with the ref that
+introduces it, so a consumer can run that presence check against its own pin.
+
+---
+
 ## Cutting a release
 
 1. Verify `dev` is green:
