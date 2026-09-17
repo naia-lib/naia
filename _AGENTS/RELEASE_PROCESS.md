@@ -101,7 +101,11 @@ introduces it, so a consumer can run that presence check against its own pin.
    ```bash
    git checkout main
    git merge --ff-only dev
+   python3 tools/ci/check_no_escaping_path_deps.py
    ```
+   The script must print OK — it fails if the merge carried a workspace
+   member with a repo-escaping path dep (e.g. a surviving `test/bench`).
+   Do not proceed to tag while it fails.
    If `--ff-only` fails, do **not** use a non-FF merge. `main` should never
    have commits that aren't on `dev`. If FF is rejected, investigate why
    `main` moved before proceeding.
