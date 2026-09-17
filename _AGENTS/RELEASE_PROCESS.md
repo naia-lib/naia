@@ -148,3 +148,17 @@ git log dev..main --oneline | wc -l   # MUST be 0 — main has nothing dev doesn
 
 If `dev..main` is non-zero: someone committed on main outside the release process.
 Stop, investigate, and rewind per `BRANCH_REWIND_2026-05-07.md` if needed.
+
+---
+
+## Sibling rule: no repo-escaping path deps on `dev` or `main` (Connor ruling 2026-09-17)
+
+naia is public; external consumers clone it with no siblings present. Crates
+depending on private siblings (`slag`) or the sibling checkout (`namako`)
+live in `exclude` in the root `Cargo.toml`, never in `members` — externals get
+the full library, only internal harness CLIs stay behind. Guarded by
+`tools/ci/check_no_escaping_path_deps.py` (run by hand or self-hosted CI;
+GitHub Actions is disabled in this repo — do not wire it into workflows).
+Release-time: verify `test/bench` is gone from the merge (superseded by
+`bench/wins`); if it survives, swap its one dep line to
+`../../../slag/crates/platform/crucible/core` or delete it.
