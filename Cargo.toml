@@ -16,11 +16,7 @@ members = [
     "test/compile_fail",
     "test/harness",
     "test/loom",
-    "test/npa",
-    "test/bevy_npa",
     "test/spec_tool",
-    "test/tests",
-    "test/bench",
     "adapters/bevy/client",
     "adapters/bevy/server",
     "adapters/bevy/shared",
@@ -43,6 +39,20 @@ members = [
     "demos/socket/client/app",
     "demos/socket/client/wasm_bindgen",
     "demos/socket/client/miniquad",
+]
+# Connor ruling 2026-09-17 (Kepler seq9606): sibling path dependencies are for
+# development checkouts only and must never reach `dev` or `main` — naia is
+# public, and external consumers clone it with no siblings present. These
+# crates depend on private siblings (namako, slag), so they are excluded from
+# the published workspace. In a full sibling checkout they still build via
+# `cargo build --manifest-path <crate>/Cargo.toml`. Guarded by
+# tools/ci/check_no_escaping_path_deps.py (GitHub Actions is disabled in
+# this repo — run it by hand or from self-hosted CI).
+exclude = [
+    "test/npa",
+    "test/bevy_npa",
+    "test/tests",
+    "test/bench",
 ]
 # Do not put demos in the default-members, since they may use conflicting dependencies / feature flags
 default-members = [
