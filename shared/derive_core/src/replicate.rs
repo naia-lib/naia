@@ -989,7 +989,7 @@ pub fn get_new_complete_method(
                 match *struct_type {
                     StructType::Struct => {
                         quote! {
-                             #field_name: #field_name
+                             #field_name
                         }
                     }
                     StructType::TupleStruct => {
@@ -1664,5 +1664,30 @@ pub fn get_builder_box_clone_method(input_generics: &Generics) -> TokenStream {
             let me = #fn_impl ;
             Box::new(me)
         }
+    }
+}
+
+#[cfg(test)]
+mod field_init_shorthand_tests {
+    use super::replicate_impl;
+
+    // Regression guard for the 10882 derive-lint fix: NonReplicated fields
+    // must be emitted with field-init shorthand (`source`) rather than
+    // longhand (`source: source`), which trips
+    // `-D clippy::redundant_field_names` in downstream gates.
+    #[test]
+    fn new_complete_uses_field_init_shorthand() {
+        let input: syn::DeriveInput = syn::parse_quote! {
+            struct Probe {
+                value: naia_shared::Property<u32>,
+                source: u32,
+            }
+        };
+        let out = replicate_impl(input, quote::quote! { naia_shared }, true);
+        let rendered = out.to_string();
+        assert!(
+            !rendered.contains("source : source"),
+            "new_complete must use field-init shorthand, found longhand in:\n{rendered}"
+        );
     }
 }
