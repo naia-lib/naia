@@ -1,5 +1,7 @@
 //! naia-lib/naia#92: dropping the server socket handles must release the
-//! bound ports so a new `Socket::listen` on the same addresses succeeds.
+//! bound ports so a new `Socket::listen` on the same addresses succeeds,
+//! and the explicit `Socket::close` must make that deterministic — it
+//! returns only once the ports are free, so the rebind needs no sleeps.
 
 use std::{
     net::{SocketAddr, UdpSocket},
@@ -10,14 +12,19 @@ use naia_server_socket::{ServerAddrs, Socket};
 use naia_socket_shared::SocketConfig;
 
 const PROTOCOL_ID: &str = "0000000000000000000000000000d000";
-const SESSION_PORT: u16 = 15491;
-const WEBRTC_PORT: u16 = 15492;
+// Each test gets its own ports: cargo runs them in parallel.
+const DROP_SESSION_PORT: u16 = 15491;
+const DROP_WEBRTC_PORT: u16 = 15492;
+const CLOSE_SESSION_PORT: u16 = 15493;
+const CLOSE_WEBRTC_PORT: u16 = 15494;
+const AUTH_SESSION_PORT: u16 = 15495;
+const AUTH_WEBRTC_PORT: u16 = 15496;
 
-fn addrs() -> ServerAddrs {
+fn addrs(session_port: u16, webrtc_port: u16) -> ServerAddrs {
     ServerAddrs::new(
-        SocketAddr::from(([127, 0, 0, 1], SESSION_PORT)),
-        SocketAddr::from(([127, 0, 0, 1], WEBRTC_PORT)),
-        &format!("http://127.0.0.1:{WEBRTC_PORT}"),
+        SocketAddr::from(([127, 0, 0, 1], session_port)),
+        SocketAddr::from(([127, 0, 0, 1], webrtc_port)),
+        &format!("http://127.0.0.1:{webrtc_port}"),
     )
 }
 
@@ -55,7 +62,7 @@ fn wait_for(
 
 #[test]
 fn dropping_socket_handles_releases_listen_ports() {
-    let server_addrs = addrs();
+    let server_addrs = addrs(DROP_SESSION_PORT, DROP_WEBRTC_PORT);
     let session_addr = server_addrs.session_listen_addr;
     let webrtc_addr = server_addrs.webrtc_listen_addr;
 
@@ -87,5 +94,45 @@ fn dropping_socket_handles_releases_listen_ports() {
     assert!(
         wait_for(tcp_taken, session_addr, false, Duration::from_secs(10)),
         "session TCP port still bound 10s after dropping socket handles (#92)"
+    );
+}
+
+/// Explicit close ends the detached tasks and reports only once both
+/// ports are free — the rebind below takes no sleep and no poll loop.
+#[test]
+fn closing_socket_handles_releases_listen_ports() {
+    let server_addrs = addrs(CLOSE_SESSION_PORT, CLOSE_WEBRTC_PORT);
+
+    let handles = Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+
+    assert!(
+        Socket::close(handles, &server_addrs, Duration::from_secs(10)),
+        "ports not free 10s after Socket::close (#92)"
+    );
+
+    // Immediate rebind proves the release is deterministic, not eventual.
+    let handles = Socket::listen(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+    assert!(
+        Socket::close(handles, &server_addrs, Duration::from_secs(10)),
+        "ports not free 10s after second Socket::close (#92)"
+    );
+}
+
+/// Same contract for the auth listen shape (four handles).
+#[test]
+fn closing_auth_socket_handles_releases_listen_ports() {
+    let server_addrs = addrs(AUTH_SESSION_PORT, AUTH_WEBRTC_PORT);
+
+    let handles = Socket::listen_with_auth(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+
+    assert!(
+        Socket::close_with_auth(handles, &server_addrs, Duration::from_secs(10)),
+        "ports not free 10s after Socket::close_with_auth (#92)"
+    );
+
+    let handles = Socket::listen_with_auth(&server_addrs, &SocketConfig::default(), PROTOCOL_ID);
+    assert!(
+        Socket::close_with_auth(handles, &server_addrs, Duration::from_secs(10)),
+        "ports not free 10s after second Socket::close_with_auth (#92)"
     );
 }

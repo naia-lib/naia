@@ -1,4 +1,4 @@
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::Arc, time::Duration};
 
 use futures_util::{pin_mut, select, FutureExt};
 use smol::channel;
@@ -103,6 +103,34 @@ impl Socket {
         let auth_receiver = AuthReceiver::new(from_client_auth_receiver);
 
         (auth_sender, auth_receiver, packet_sender, packet_receiver)
+    }
+
+    /// Explicitly shut down a [`listen`](Self::listen) result: drops both
+    /// handles — which ends the three detached tasks through the shared
+    /// shutdown signal, exactly as a bare drop does — then blocks until
+    /// both ports are free or `timeout` elapses. Returns true iff the
+    /// ports were observed free, so a caller can rebind deterministically
+    /// without sleeping (naia-lib/naia#92).
+    pub fn close(
+        handles: (PacketSender, PacketReceiver),
+        server_addrs: &ServerAddrs,
+        timeout: Duration,
+    ) -> bool {
+        drop(handles);
+        server_addrs.wait_until_free(timeout)
+    }
+
+    /// Explicitly shut down a [`listen_with_auth`](Self::listen_with_auth)
+    /// result. Same contract as [`close`](Self::close) across all four
+    /// handles: every handle holds the shutdown signal, so all four must
+    /// go before the detached tasks end.
+    pub fn close_with_auth(
+        handles: (AuthSender, AuthReceiver, PacketSender, PacketReceiver),
+        server_addrs: &ServerAddrs,
+        timeout: Duration,
+    ) -> bool {
+        drop(handles);
+        server_addrs.wait_until_free(timeout)
     }
 
     fn setup_receiver_loop(
