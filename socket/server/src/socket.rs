@@ -1,14 +1,17 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
-use crate::AuthResponse;
+use futures_util::{pin_mut, select, FutureExt};
 use smol::channel;
 
 use naia_socket_shared::SocketConfig;
 
+use crate::AuthResponse;
+
 use super::{
     async_socket::Socket as AsyncSocket, auth_receiver::AuthReceiver, auth_sender::AuthSender,
     executor, packet_receiver::PacketReceiver, packet_sender::PacketSender,
-    server_addrs::ServerAddrs, NaiaServerSocketError,
+    server_addrs::ServerAddrs, shutdown::shutdown_set, shutdown::ShutdownSignal,
+    shutdown::ShutdownWait, NaiaServerSocketError,
 };
 
 type ClientAuthSender = channel::Sender<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>;
@@ -28,15 +31,34 @@ impl Socket {
     /// [`PROTOCOL_ID_HEADER`](naia_socket_shared::PROTOCOL_ID_HEADER). It is
     /// required rather than optional because there is no state in which this
     /// socket should serve a peer it has not compared against.
+    ///
+    /// Dropping both returned halves releases the bound ports: the last
+    /// handle drop ends the background tasks, which own the sockets.
     pub fn listen(
         server_addrs: &ServerAddrs,
         config: &SocketConfig,
         expected_protocol_id: &str,
     ) -> (PacketSender, PacketReceiver) {
-        let (from_client_receiver, sender_receiver) =
-            Self::setup_receiver_loop(server_addrs, config, None, None, expected_protocol_id);
+        let (shutdown_signal, mut shutdown_waits) = shutdown_set(3);
+        let mut shutdown_waits = shutdown_waits.drain(..);
 
-        Self::setup_sender_loop(config, from_client_receiver, sender_receiver)
+        let (from_client_receiver, sender_receiver) = Self::setup_receiver_loop(
+            server_addrs,
+            config,
+            None,
+            None,
+            expected_protocol_id,
+            shutdown_waits.next().unwrap(),
+            shutdown_waits.next().unwrap(),
+        );
+
+        Self::setup_sender_loop(
+            config,
+            from_client_receiver,
+            sender_receiver,
+            shutdown_waits.next().unwrap(),
+            &shutdown_signal,
+        )
     }
     /// Listens on the Socket for incoming communication from Clients
     ///
@@ -53,16 +75,26 @@ impl Socket {
         let from_client_auth_sender = Some(from_client_auth_sender);
         let to_session_all_auth_receiver = Some(to_session_all_auth_receiver);
 
+        let (shutdown_signal, mut shutdown_waits) = shutdown_set(3);
+        let mut shutdown_waits = shutdown_waits.drain(..);
+
         let (from_client_receiver, sender_receiver) = Self::setup_receiver_loop(
             server_addrs,
             config,
             from_client_auth_sender,
             to_session_all_auth_receiver,
             expected_protocol_id,
+            shutdown_waits.next().unwrap(),
+            shutdown_waits.next().unwrap(),
         );
 
-        let (packet_sender, packet_receiver) =
-            Self::setup_sender_loop(config, from_client_receiver, sender_receiver);
+        let (packet_sender, packet_receiver) = Self::setup_sender_loop(
+            config,
+            from_client_receiver,
+            sender_receiver,
+            shutdown_waits.next().unwrap(),
+            &shutdown_signal,
+        );
 
         // Setup Sender
         let auth_sender = AuthSender::new(to_session_all_auth_sender);
@@ -79,6 +111,8 @@ impl Socket {
         from_client_auth_sender: Option<ClientAuthSender>,
         to_session_all_auth_receiver: Option<channel::Receiver<(SocketAddr, AuthResponse)>>,
         expected_protocol_id: &str,
+        shutdown: ShutdownWait,
+        session_shutdown: ShutdownWait,
     ) -> (ClientMsgReceiver, SenderChannelReceiver) {
         // Set up receiver loop
         let (from_client_sender, from_client_receiver) = channel::unbounded();
@@ -96,6 +130,7 @@ impl Socket {
                 from_client_auth_sender,
                 to_session_all_auth_receiver,
                 expected_protocol_id,
+                session_shutdown,
             )
             .await;
 
@@ -105,10 +140,21 @@ impl Socket {
                 return;
             }
 
+            // The receive future never observes handle drops on its own, so
+            // race it against shutdown: the last handle drop ends this task
+            // and releases the webrtc socket (naia-lib/naia#92).
+            let shutdown = shutdown.wait().fuse();
+            pin_mut!(shutdown);
             loop {
-                let out_message = async_socket.receive().await;
-                if from_client_sender.send(out_message).await.is_err() {
-                    return;
+                let receive = async_socket.receive().fuse();
+                pin_mut!(receive);
+                select! {
+                    _ = shutdown => return,
+                    out_message = receive => {
+                        if from_client_sender.send(out_message).await.is_err() {
+                            return;
+                        }
+                    }
                 }
             }
         })
@@ -121,21 +167,43 @@ impl Socket {
         config: &SocketConfig,
         from_client_receiver: ClientMsgReceiver,
         sender_receiver: SenderChannelReceiver,
+        shutdown: ShutdownWait,
+        shutdown_signal: &Arc<ShutdownSignal>,
     ) -> (PacketSender, PacketReceiver) {
         // Set up sender loop
         let (to_client_sender, to_client_receiver) = channel::unbounded();
 
         executor::spawn(async move {
-            // Create async socket. A closed channel means the owning Socket
+            // A closed channel or the shutdown signal means the owning Socket
             // was dropped: end this task instead of panicking or spinning
             // (this runs on a shared executor).
-            let Ok(async_sender) = sender_receiver.recv().await else {
-                return;
+            let shutdown = shutdown.wait().fuse();
+            pin_mut!(shutdown);
+            let recv = sender_receiver.recv().fuse();
+            pin_mut!(recv);
+            let async_sender = select! {
+                _ = shutdown => return,
+                result = recv => {
+                    let Ok(async_sender) = result else {
+                        return;
+                    };
+                    async_sender
+                }
             };
 
-            while let Ok(msg) = to_client_receiver.recv().await {
-                if async_sender.send(msg).await.is_err() {
-                    return;
+            loop {
+                let recv = to_client_receiver.recv().fuse();
+                pin_mut!(recv);
+                select! {
+                    _ = shutdown => return,
+                    result = recv => {
+                        let Ok(msg) = result else {
+                            return;
+                        };
+                        if async_sender.send(msg).await.is_err() {
+                            return;
+                        }
+                    }
                 }
             }
         })
@@ -144,10 +212,11 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         // Setup Sender
-        let packet_sender = PacketSender::new(to_client_sender);
+        let packet_sender = PacketSender::new(to_client_sender).with_shutdown(shutdown_signal);
 
         // Setup Receiver
-        let packet_receiver = PacketReceiver::new(from_client_receiver, &conditioner_config);
+        let packet_receiver = PacketReceiver::new(from_client_receiver, &conditioner_config)
+            .with_shutdown(shutdown_signal);
 
         (packet_sender, packet_receiver)
     }

@@ -7,6 +7,7 @@ use std::{
 
 use async_dup::Arc;
 use futures_core::Stream;
+use futures_util::{pin_mut, select, FutureExt};
 use http::{header, HeaderValue, Response};
 use log::{info, warn};
 use smol::{
@@ -21,7 +22,10 @@ use naia_socket_shared::{
     SocketConfig, PROTOCOL_ID_HEADER, PROTOCOL_ID_HEADER_VALUE_LEN, PROTOCOL_MISMATCH_STATUS,
 };
 
-use crate::{executor, server_addrs::ServerAddrs, AuthResponse, NaiaServerSocketError};
+use crate::{
+    executor, server_addrs::ServerAddrs, shutdown::ShutdownWait, AuthResponse,
+    NaiaServerSocketError,
+};
 
 /// Caps on what an unauthenticated client may make the session listener buffer.
 ///
@@ -76,6 +80,7 @@ pub fn start_session_server(
     from_client_auth_sender: Option<ClientAuthSender>,
     to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
     expected_protocol_id: String,
+    shutdown: ShutdownWait,
 ) {
     executor::spawn(async move {
         listen(
@@ -85,6 +90,7 @@ pub fn start_session_server(
             from_client_auth_sender,
             to_session_all_auth_receiver,
             expected_protocol_id,
+            shutdown,
         )
         .await;
     })
@@ -99,6 +105,7 @@ async fn listen(
     from_client_auth_sender: Option<ClientAuthSender>,
     to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
     expected_protocol_id: String,
+    shutdown: ShutdownWait,
 ) {
     let rtc_url_paths = RtcUrlPaths {
         post: format!("POST /{}", config.rtc_endpoint_path),
@@ -124,12 +131,21 @@ async fn listen(
             None
         };
 
+    // The accept future never observes handle drops on its own, so race it
+    // against shutdown: the last handle drop ends this task and releases
+    // the session TCP listener (naia-lib/naia#92).
+    let shutdown = shutdown.wait().fuse();
+    pin_mut!(shutdown);
     loop {
         // Accept the next connection.
-        let (response_stream, remote_addr) = listener
-            .accept()
-            .await
-            .expect("was not able to accept the incoming stream from the listener");
+        let accept = listener.accept().fuse();
+        pin_mut!(accept);
+        let (response_stream, remote_addr) = select! {
+            _ = shutdown => return,
+            result = accept => {
+                result.expect("was not able to accept the incoming stream from the listener")
+            }
+        };
 
         let session_endpoint_clone = session_endpoint.clone();
 

@@ -1,10 +1,10 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use smol::channel::Receiver;
 
 use naia_socket_shared::{link_condition_logic, Instant, LinkConditionerConfig, TimeQueue};
 
-use super::error::NaiaServerSocketError;
+use super::{error::NaiaServerSocketError, shutdown::ShutdownSignal};
 
 /// Used to receive packets from the Server Socket
 #[derive(Clone)]
@@ -14,6 +14,11 @@ pub struct ConditionedPacketReceiver {
     link_conditioner_config: LinkConditionerConfig,
     time_queue: TimeQueue<(SocketAddr, Box<[u8]>)>,
     last_payload: Option<Box<[u8]>>,
+    // Shared shutdown trigger for the listen that created this handle: the
+    // last handle drop ends the background tasks (naia-lib/naia#92).
+    // Retained, never read. Set via PacketReceiver::with_shutdown.
+    #[allow(dead_code)]
+    pub(crate) shutdown: Option<Arc<ShutdownSignal>>,
 }
 
 impl ConditionedPacketReceiver {
@@ -28,6 +33,7 @@ impl ConditionedPacketReceiver {
             link_conditioner_config: link_conditioner_config.clone(),
             time_queue: TimeQueue::new(),
             last_payload: None,
+            shutdown: None,
         }
     }
 

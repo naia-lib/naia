@@ -1,10 +1,13 @@
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use smol::channel::Receiver;
 
 use naia_socket_shared::LinkConditionerConfig;
 
-use super::{conditioned_packet_receiver::ConditionedPacketReceiver, error::NaiaServerSocketError};
+use super::{
+    conditioned_packet_receiver::ConditionedPacketReceiver, error::NaiaServerSocketError,
+    shutdown::ShutdownSignal,
+};
 
 /// Used to receive packets from the Server Socket.
 ///
@@ -41,6 +44,19 @@ impl PacketReceiver {
             None => PacketReceiver::Plain(PlainPacketReceiver::new(channel_receiver)),
         }
     }
+
+    /// Attaches the shutdown trigger of the listen that created this handle.
+    pub(crate) fn with_shutdown(mut self, shutdown: &Arc<ShutdownSignal>) -> Self {
+        match &mut self {
+            PacketReceiver::Plain(receiver) => {
+                receiver.shutdown = Some(shutdown.clone());
+            }
+            PacketReceiver::Conditioned(receiver) => {
+                receiver.shutdown = Some(shutdown.clone());
+            }
+        }
+        self
+    }
 }
 
 /// Used to receive packets from the Server Socket
@@ -49,6 +65,11 @@ pub struct PlainPacketReceiver {
     #[allow(clippy::type_complexity)]
     channel_receiver: Receiver<Result<(SocketAddr, Box<[u8]>), NaiaServerSocketError>>,
     last_payload: Option<Box<[u8]>>,
+    // Shared shutdown trigger for the listen that created this handle: the
+    // last handle drop ends the background tasks (naia-lib/naia#92).
+    // Retained, never read.
+    #[allow(dead_code)]
+    shutdown: Option<Arc<ShutdownSignal>>,
 }
 
 impl PlainPacketReceiver {
@@ -60,6 +81,7 @@ impl PlainPacketReceiver {
         Self {
             channel_receiver,
             last_payload: None,
+            shutdown: None,
         }
     }
 
