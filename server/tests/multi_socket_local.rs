@@ -156,3 +156,225 @@ fn multi_socket_receive_is_round_robin() {
     recv_from(&mut packet_receiver, addr_a, &[100]);
     recv_from(&mut packet_receiver, addr_b, &[200]);
 }
+
+// ---- Accept-everything stub transport (models UDP: udp.rs send_to
+// returns Ok for ANY address, so first-Ok-wins silently misroutes). ----
+
+use std::{
+    collections::VecDeque,
+    sync::{Arc, Mutex},
+};
+
+use naia_server::transport::{AuthReceiver, AuthSender, PacketSender, RecvError, SendError};
+use naia_shared::IdentityToken;
+
+type SharedCalls = Arc<Mutex<Vec<(SocketAddr, Vec<u8>)>>>;
+type SharedQueue = Arc<Mutex<VecDeque<(SocketAddr, Vec<u8>)>>>;
+
+#[derive(Clone, Default)]
+struct CallLog(SharedCalls);
+
+#[derive(Clone, Default)]
+struct StubSocket {
+    sends: CallLog,
+    accepts: CallLog,
+    inbound_data: SharedQueue,
+    inbound_auth: SharedQueue,
+}
+
+impl Socket for StubSocket {
+    fn listen(
+        self: Box<Self>,
+        _expected_protocol_id: ProtocolId,
+    ) -> naia_server::transport::ListenResult {
+        let inner = self.as_ref().clone();
+        (
+            Box::new(StubAuthSender {
+                inner: inner.clone(),
+            }),
+            Box::new(StubAuthReceiver {
+                inner: inner.clone(),
+                last: None,
+            }),
+            Box::new(StubPacketSender {
+                inner: inner.clone(),
+            }),
+            Box::new(StubPacketReceiver { inner, last: None }),
+        )
+    }
+}
+
+#[derive(Clone)]
+struct StubAuthSender {
+    inner: StubSocket,
+}
+
+impl AuthSender for StubAuthSender {
+    fn accept(
+        &self,
+        address: &SocketAddr,
+        _identity_token: &IdentityToken,
+    ) -> Result<(), SendError> {
+        self.inner
+            .accepts
+            .0
+            .lock()
+            .unwrap()
+            .push((*address, Vec::new()));
+        Ok(())
+    }
+
+    fn reject(&self, address: &SocketAddr, _payload: Option<&[u8]>) -> Result<(), SendError> {
+        self.inner
+            .accepts
+            .0
+            .lock()
+            .unwrap()
+            .push((*address, Vec::new()));
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct StubAuthReceiver {
+    inner: StubSocket,
+    last: Option<(SocketAddr, Box<[u8]>)>,
+}
+
+impl AuthReceiver for StubAuthReceiver {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+        let next = self.inner.inbound_auth.lock().unwrap().pop_front();
+        match next {
+            Some((addr, bytes)) => {
+                self.last = Some((addr, bytes.into_boxed_slice()));
+                let (addr, payload) = self.last.as_ref().unwrap();
+                Ok(Some((*addr, payload.as_ref())))
+            }
+            None => {
+                self.last = None;
+                Ok(None)
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+struct StubPacketSender {
+    inner: StubSocket,
+}
+
+impl PacketSender for StubPacketSender {
+    fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError> {
+        self.inner
+            .sends
+            .0
+            .lock()
+            .unwrap()
+            .push((*address, payload.to_vec()));
+        Ok(())
+    }
+}
+
+#[derive(Clone)]
+struct StubPacketReceiver {
+    inner: StubSocket,
+    last: Option<(SocketAddr, Box<[u8]>)>,
+}
+
+impl PacketReceiver for StubPacketReceiver {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+        let next = self.inner.inbound_data.lock().unwrap().pop_front();
+        match next {
+            Some((addr, bytes)) => {
+                self.last = Some((addr, bytes.into_boxed_slice()));
+                let (addr, payload) = self.last.as_ref().unwrap();
+                Ok(Some((*addr, payload.as_ref())))
+            }
+            None => {
+                self.last = None;
+                Ok(None)
+            }
+        }
+    }
+}
+
+/// Card req 1: an accept-everything inner in position 0 (the UDP shape) must
+/// never capture another transport's replies. First-Ok-wins fails this: the
+/// stub returns Ok for anything, so every send lands in its log and the real
+/// client times out.
+#[test]
+fn multi_socket_never_guesses_into_accepting_inner() {
+    let stub = StubSocket::default();
+    let stub_log = stub.sends.clone();
+
+    let hub = LocalTransportHub::new("127.0.0.1:15301".parse().unwrap());
+    let (addr_b, _, _, tx_b, rx_b) = hub.register_client();
+
+    let sock_hub = LocalSocket::new(LocalServerSocket::new(hub), None);
+    let boxed: Box<dyn Socket> = MultiSocket::new(vec![Box::new(stub), Box::new(sock_hub)]).into();
+    let (_auth_sender, _auth_receiver, packet_sender, mut packet_receiver) =
+        boxed.listen(ProtocolId::new(0x207));
+
+    // The hub client knocks; its origin (inner 1) is recorded.
+    tx_b.send(vec![7]).unwrap();
+    recv_from(&mut packet_receiver, addr_b, &[7]);
+
+    // The reply must reach the hub client with ZERO sends into the stub.
+    packet_sender.send(&addr_b, &[8]).unwrap();
+    assert_eq!(rx_b.recv_timeout(Duration::from_secs(5)).unwrap(), vec![8]);
+    assert!(
+        stub_log.0.lock().unwrap().is_empty(),
+        "reply to a hub client leaked into the accept-everything inner"
+    );
+
+    // Unknown address: error, not a guess at inner 0.
+    let unknown: SocketAddr = "127.0.0.1:19999".parse().unwrap();
+    assert!(packet_sender.send(&unknown, &[9]).is_err());
+}
+
+/// Auth plane, same rule: accept/reject go through the recorded origin.
+/// Scripted inbound on inner 1; inner 0 must record no accepts.
+#[test]
+fn multi_socket_auth_follows_recorded_origin() {
+    let stub0 = StubSocket::default();
+    let stub1 = StubSocket::default();
+    let log0 = stub0.accepts.clone();
+    let log1 = stub1.accepts.clone();
+
+    let addr_q: SocketAddr = "127.0.0.1:15401".parse().unwrap();
+    stub1
+        .inbound_auth
+        .lock()
+        .unwrap()
+        .push_back((addr_q, vec![1, 2, 3]));
+
+    let boxed: Box<dyn Socket> = MultiSocket::new(vec![Box::new(stub0), Box::new(stub1)]).into();
+    let (auth_sender, mut auth_receiver, _packet_sender, _packet_receiver) =
+        boxed.listen(ProtocolId::new(0x207));
+
+    // Drain until the scripted request arrives (records origin 1).
+    let deadline = Instant::now() + Duration::from_secs(5);
+    loop {
+        match auth_receiver.receive().expect("auth receiver error") {
+            Some((addr, _)) if addr == addr_q => break,
+            Some(_) => continue,
+            None => {
+                assert!(
+                    Instant::now() < deadline,
+                    "timed out waiting for scripted auth request"
+                );
+                std::thread::sleep(Duration::from_millis(5));
+            }
+        }
+    }
+
+    auth_sender
+        .accept(&addr_q, &IdentityToken::generate())
+        .unwrap();
+    assert!(
+        log0.0.lock().unwrap().is_empty(),
+        "accept leaked into inner 0 (not the recorded origin)"
+    );
+    assert_eq!(log1.0.lock().unwrap().len(), 1);
+    assert_eq!(log1.0.lock().unwrap()[0].0, addr_q);
+}
