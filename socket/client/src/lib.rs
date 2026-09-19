@@ -27,6 +27,13 @@ mod error;
 mod identity_receiver;
 mod packet_receiver;
 mod server_addr;
+/// Per-socket connection state for the miniquad backend: live under the
+/// backend's own `wasm32` + `mquad` gate, and under `test` so the host
+/// toolchain executes its isolation tests. Anywhere else the module is
+/// absent, keeping the warning-clean gate quiet about code no target there
+/// can reach.
+#[cfg(any(all(target_arch = "wasm32", feature = "mquad"), test))]
+pub(crate) mod socket_table;
 
 pub use naia_socket_shared as shared;
 
@@ -79,6 +86,11 @@ mod miniquad_js_bridge_host_oracle {
     /// browser, not a compile error here, which is precisely why it is worth an
     /// oracle.
     const MINIQUAD_SHARED_RS: &str = include_str!("backends/miniquad/shared.rs");
+
+    /// The per-socket state. Each socket owns its queues and cells here, so
+    /// the oracles below can pin what each socket -- not the process --
+    /// holds.
+    const SOCKET_TABLE_RS: &str = include_str!("socket_table.rs");
 
     /// Returns the parameter names of the first parameter list following
     /// `after`. Works on both halves: JavaScript parameters are bare names and
@@ -138,7 +150,8 @@ mod miniquad_js_bridge_host_oracle {
     ///
     /// `extern "C" fn naia_connect` in `shared.rs`, the import-object binding,
     /// the JS `connect` definition and the call the binding forwards to must all
-    /// name the same four parameters in the same order. Removing the fourth
+    /// name the same five parameters in the same order: the socket id first
+    /// (naia-lib/naia#193), then the fingerprint last. Removing the fifth
     /// argument or moving it reds here, at the Rust/JS contract itself -- not
     /// later as an unrelated link failure or a silently misaligned argument in a
     /// browser.
@@ -151,6 +164,7 @@ mod miniquad_js_bridge_host_oracle {
         let js_definition = parameter_names(NAIA_SOCKET_JS, "    connect: function (");
 
         let expected = [
+            "socket_id",
             "server_socket_address",
             "rtc_path",
             "auth_str",
@@ -159,7 +173,7 @@ mod miniquad_js_bridge_host_oracle {
 
         assert_eq!(
             rust_declaration, expected,
-            "the Rust FFI declaration must take the fingerprint as its fourth argument",
+            "the Rust FFI declaration must take the socket id first and the fingerprint as its fifth argument",
         );
         assert_eq!(
             js_definition, expected,
@@ -180,7 +194,7 @@ mod miniquad_js_bridge_host_oracle {
         assert_eq!(
             js_binding.last().map(String::as_str),
             Some("protocol_id"),
-            "the fingerprint must be the fourth argument, not an optional trailing extra",
+            "the fingerprint must be the fifth argument, not an optional trailing extra",
         );
     }
 
@@ -215,11 +229,13 @@ mod miniquad_js_bridge_host_oracle {
     /// failures (no status at all) stay on the generic path.
     #[test]
     fn non_200_signaling_answers_reach_the_identity_path_not_the_packet_queue() {
-        // Both halves name the same two-parameter callback in the same order.
+        // Both halves name the same callback with the same parameters in the
+        // same order: the socket id first (naia-lib/naia#193), then status,
+        // then body.
         assert_eq!(
             parameter_names(MINIQUAD_SHARED_RS, "pub extern \"C\" fn receive_auth_error"),
-            ["status", "body"],
-            "the Rust half must export receive_auth_error(status, body)",
+            ["socket_id", "status", "body"],
+            "the Rust half must export receive_auth_error(socket_id, status, body)",
         );
         assert!(
             NAIA_SOCKET_JS.contains("wasm_exports.receive_auth_error("),
@@ -240,10 +256,11 @@ mod miniquad_js_bridge_host_oracle {
             "network-level POST failures must stay on the generic error path",
         );
 
-        // The Rust half holds one bounded slot for the outstanding answer.
+        // Each socket holds one bounded slot for its outstanding answer --
+        // per socket now, not process-global (naia-lib/naia#193).
         assert!(
-            MINIQUAD_SHARED_RS.contains("AUTH_ERROR_CELL"),
-            "the Rust half must keep a dedicated bounded auth-error cell",
+            SOCKET_TABLE_RS.contains("auth_error_cell"),
+            "each socket must keep a dedicated bounded auth-error cell",
         );
     }
 
@@ -288,6 +305,145 @@ mod miniquad_js_bridge_host_oracle {
             call.contains("String(request.status)"),
             "the status must be stringified through the JsObject bridge",
         );
+    }
+
+    /// One id per socket, across the whole bridge (naia-lib/naia#193).
+    ///
+    /// The miniquad backend used to keep a single process-global connection:
+    /// a second `connect` overwrote the first socket's channel and reset its
+    /// queues, so two simultaneous sockets could never coexist. Every crossing
+    /// in both directions now carries the socket id first, so each connection
+    /// routes to its own state. Removing the leading id -- or threading it on
+    /// only one half -- reds here, at the contract itself, not later as
+    /// cross-talk between two live sockets in a browser.
+    #[test]
+    fn the_connect_crossing_carries_the_socket_id_first() {
+        let rust_declaration = parameter_names(MINIQUAD_SHARED_RS, "pub fn naia_connect");
+        let js_binding =
+            parameter_names(NAIA_SOCKET_JS, "importObject.env.naia_connect = function");
+        let js_forwarded_call = parameter_names(NAIA_SOCKET_JS, "naia_socket.connect(");
+        let js_definition = parameter_names(NAIA_SOCKET_JS, "    connect: function (");
+
+        let expected = [
+            "socket_id",
+            "server_socket_address",
+            "rtc_path",
+            "auth_str",
+            "protocol_id",
+        ];
+
+        assert_eq!(
+            rust_declaration, expected,
+            "the Rust FFI declaration must take the socket id as its first argument",
+        );
+        assert_eq!(
+            js_definition, expected,
+            "the JS `connect` definition must match the Rust declaration",
+        );
+        assert_eq!(
+            js_binding, js_forwarded_call,
+            "the import-object binding must forward its arguments in order",
+        );
+        assert_eq!(
+            js_binding, expected,
+            "the import-object binding must carry the socket id first",
+        );
+    }
+
+    /// Every inbound callback routes to its socket: a message, an identity
+    /// token, a candidate, an auth error, or a transport error arriving for
+    /// socket B must never land in socket A's queues. The Rust half declares
+    /// the id first on each callback it exports; the JS half passes it first
+    /// on each call it makes.
+    #[test]
+    fn every_inbound_callback_routes_to_its_socket() {
+        for (anchor, id_param, payload_params) in [
+            (
+                "pub extern \"C\" fn receive(",
+                "socket_id",
+                &["message"][..],
+            ),
+            (
+                "pub extern \"C\" fn receive_id(",
+                "socket_id",
+                &["id_token"][..],
+            ),
+            (
+                "pub extern \"C\" fn receive_candidate(",
+                "socket_id",
+                &["candidate_js"][..],
+            ),
+            (
+                "pub extern \"C\" fn receive_auth_error(",
+                "socket_id",
+                &["status", "body"][..],
+            ),
+            ("pub extern \"C\" fn error(", "socket_id", &["error"][..]),
+        ] {
+            let mut expected = vec![id_param.to_string()];
+            expected.extend(payload_params.iter().map(ToString::to_string));
+            assert_eq!(
+                parameter_names(MINIQUAD_SHARED_RS, anchor),
+                expected,
+                "the Rust callback `{anchor}` must take the socket id first",
+            );
+        }
+
+        for call in [
+            "wasm_exports.receive(",
+            "wasm_exports.receive_id(",
+            "wasm_exports.receive_candidate(",
+            "wasm_exports.receive_auth_error(",
+            "wasm_exports.error(",
+        ] {
+            let call_start = NAIA_SOCKET_JS.find(call).unwrap_or_else(|| {
+                panic!("the JS half must call `{call}`");
+            });
+            let after_open = &NAIA_SOCKET_JS[call_start + call.len()..];
+            let first_arg = after_open
+                .split([')', ','])
+                .next()
+                .unwrap_or_default()
+                .trim();
+            assert_eq!(
+                first_arg, "socket_id",
+                "the JS call `{call}` must pass the socket id first",
+            );
+        }
+    }
+
+    /// The JS half keeps one connection record per socket id, not one global
+    /// channel: a second `connect` must add a record, never replace the first
+    /// socket's channel. Every operation the Rust half drives -- send,
+    /// connected-check, disconnect -- names its socket.
+    #[test]
+    fn the_js_bridge_keeps_a_connection_per_socket() {
+        assert!(
+            NAIA_SOCKET_JS.contains("connections[socket_id]"),
+            "the JS bridge must store one connection record per socket id",
+        );
+        for (anchor, expected) in [
+            ("pub fn naia_send(", vec!["socket_id", "message"]),
+            ("pub fn naia_is_connected(", vec!["socket_id"]),
+            ("pub fn naia_disconnect(", vec!["socket_id"]),
+        ] {
+            let expected: Vec<String> = expected.iter().map(ToString::to_string).collect();
+            assert_eq!(
+                parameter_names(MINIQUAD_SHARED_RS, anchor),
+                expected,
+                "the Rust declaration `{anchor}` must name its socket",
+            );
+        }
+        for call in [
+            "naia_socket.send(socket_id,",
+            "naia_socket.is_connected(socket_id",
+            "naia_socket.disconnect(socket_id",
+        ] {
+            assert!(
+                NAIA_SOCKET_JS.contains(call),
+                "the JS bridge must route `{call}` to its socket",
+            );
+        }
     }
 
     /// Framework-last, and unconditional.

@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use naia_socket_shared::{parse_server_url, SocketConfig};
 
 use crate::packet_receiver::PacketReceiver;
@@ -8,7 +6,7 @@ use super::{
     identity_receiver::IdentityReceiver,
     packet_receiver::PlainPacketReceiver,
     packet_sender::PacketSender,
-    shared::{naia_connect, JsObject, AUTH_ERROR_CELL, ERROR_QUEUE, ID_CELL, MESSAGE_QUEUE},
+    shared::{alloc_socket, naia_connect, JsObject},
 };
 
 /// A client-side socket which communicates with an underlying unordered &
@@ -93,19 +91,23 @@ impl Socket {
             None => "".to_string(),
         };
 
-        // Safety: connect() is called once at socket startup before any callbacks fire.
-        // ID_CELL, AUTH_ERROR_CELL, MESSAGE_QUEUE, and ERROR_QUEUE are written here and
-        // subsequently only accessed from the same wasm32 thread via the JS bridge
-        // callbacks and receive().
+        // Each connect opens a fresh per-socket slot in the shared table and
+        // hands its id to the JS bridge first, so the bridge files this
+        // connection -- and every later callback -- under that id. A second
+        // connect opens a second slot; it never resets the first socket's
+        // state (naia-lib/naia#193).
+        //
+        // Safety: alloc_socket initializes this socket's slot before any
+        // callback for it can fire, and everything afterwards is only
+        // accessed from the same wasm32 thread via the JS bridge callbacks
+        // and the handles below.
+        let socket_id = alloc_socket();
         unsafe {
-            ID_CELL = Some(None);
-            AUTH_ERROR_CELL = Some(None);
-            MESSAGE_QUEUE = Some(VecDeque::new());
-            ERROR_QUEUE = Some(VecDeque::new());
             // The fingerprint is passed separately from `auth_str`, and the
             // JS bridge sets it as its own header after the Authorization one,
             // so it cannot be folded into or displaced by the credential.
             naia_connect(
+                socket_id,
                 JsObject::string(server_url.to_string().as_str()),
                 JsObject::string(config.rtc_endpoint_path.as_str()),
                 JsObject::string(auth_str.as_str()),
@@ -116,14 +118,14 @@ impl Socket {
         let conditioner_config = config.link_condition.clone();
 
         // setup sender
-        let packet_sender = PacketSender;
+        let packet_sender = PacketSender::new(socket_id);
 
         // setup receiver
-        let inner_receiver = PlainPacketReceiver::new();
+        let inner_receiver = PlainPacketReceiver::new(socket_id);
         let packet_receiver = PacketReceiver::new(inner_receiver, &conditioner_config);
 
         // setup id receiver
-        let id_receiver = IdentityReceiver;
+        let id_receiver = IdentityReceiver::new(socket_id);
 
         return (id_receiver, packet_sender, packet_receiver);
     }
@@ -152,17 +154,19 @@ mod js_bridge_contract_tests {
     /// The fingerprint has to reach the JS side to be set at all: the import
     /// shim, the `connect` entry point and the request all have to carry it.
     /// A bridge that accepted the argument and dropped it would set no header
-    /// and fail closed at the server, which is safe but silent.
+    /// and fail closed at the server, which is safe but silent. Both carry
+    /// the socket id first (naia-lib/naia#193).
     #[test]
     fn the_js_bridge_threads_the_fingerprint_from_the_import_to_the_request() {
         assert!(
-            NAIA_SOCKET_JS
-                .contains("naia_connect = function (address, rtc_path, auth_str, protocol_id)"),
+            NAIA_SOCKET_JS.contains(
+                "naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id)"
+            ),
             "the imported shim must take the fingerprint",
         );
         assert!(
             NAIA_SOCKET_JS.contains(
-                "connect: function (server_socket_address, rtc_path, auth_str, protocol_id)"
+                "connect: function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id)"
             ),
             "the connect entry point must take the fingerprint",
         );

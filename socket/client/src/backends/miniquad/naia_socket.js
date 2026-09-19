@@ -1,15 +1,20 @@
 const naia_socket = {
-    channel: null,
     encoder: new TextEncoder(),
     decoder: new TextDecoder("utf-8"),
     js_objects: {},
     unique_js_id: 0,
+    // One connection record per socket id, filed by `connect` under the id
+    // the Rust half allocated. A second socket adds a record; it never
+    // replaces the first socket's channel (naia-lib/naia#193). The transient
+    // `js_objects` above stay shared: they are argument marshaling, not
+    // connection state.
+    connections: {},
 
     plugin: function (importObject) {
-        importObject.env.naia_is_connected = function () { return naia_socket.is_connected(); };
-        importObject.env.naia_connect = function (address, rtc_path, auth_str, protocol_id) { naia_socket.connect(address, rtc_path, auth_str, protocol_id); };
-        importObject.env.naia_disconnect = function () { naia_socket.disconnect(); };
-        importObject.env.naia_send = function (message) { return naia_socket.send(message); };
+        importObject.env.naia_is_connected = function (socket_id) { return naia_socket.is_connected(socket_id); };
+        importObject.env.naia_connect = function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id) { return naia_socket.connect(socket_id, server_socket_address, rtc_path, auth_str, protocol_id); };
+        importObject.env.naia_disconnect = function (socket_id) { naia_socket.disconnect(socket_id); };
+        importObject.env.naia_send = function (socket_id, message) { return naia_socket.send(socket_id, message); };
         importObject.env.naia_create_string = function (buf, max_len) { return naia_socket.js_create_string(buf, max_len); };
         importObject.env.naia_unwrap_to_str = function (js_object, buf, max_len) { naia_socket.js_unwrap_to_str(js_object, buf, max_len); };
         importObject.env.naia_string_length = function (js_object) { return naia_socket.js_string_length(js_object); };
@@ -21,15 +26,16 @@ const naia_socket = {
         importObject.env.naia_now = function () { return Date.now(); };
     },
 
-    is_connected: function() {
-        if (this.channel) {
+    is_connected: function(socket_id) {
+        let connection = this.connections[socket_id];
+        if (connection && connection.channel) {
             return true;
         } else {
             return false;
         }
     },
 
-    connect: function (server_socket_address, rtc_path, auth_str, protocol_id) {
+    connect: function (socket_id, server_socket_address, rtc_path, auth_str, protocol_id) {
         let server_socket_address_string = naia_socket.get_js_object(server_socket_address);
         let rtc_path_string = naia_socket.get_js_object(rtc_path);
         let auth_string = naia_socket.get_js_object(auth_str);
@@ -42,22 +48,25 @@ const naia_socket = {
             }]
         });
 
-        this.channel = peer.createDataChannel("data", {
+        let connection = { channel: null, peer: peer };
+        naia_socket.connections[socket_id] = connection;
+
+        connection.channel = peer.createDataChannel("data", {
             ordered: false,
             maxRetransmits: 0
         });
 
-        this.channel.binaryType = "arraybuffer";
+        connection.channel.binaryType = "arraybuffer";
 
-        this.channel.onopen = function() {
-            naia_socket.channel.onmessage = function(evt) {
+        connection.channel.onopen = function() {
+            connection.channel.onmessage = function(evt) {
                 let array = new Uint8Array(evt.data);
-                wasm_exports.receive(naia_socket.js_object(array));
+                wasm_exports.receive(socket_id, naia_socket.js_object(array));
             };
         };
 
-        this.channel.onerror = function(evt) {
-            naia_socket.error("data channel error", evt.message);
+        connection.channel.onerror = function(evt) {
+            naia_socket.error(socket_id, "data channel error", evt.message);
         };
 
         peer.onicecandidate = function(evt) {
@@ -84,19 +93,19 @@ const naia_socket = {
                 if (request.status === 200) {
                     let response = JSON.parse(request.responseText);
 
-                    wasm_exports.receive_id(naia_socket.js_object(response.id));
+                    wasm_exports.receive_id(socket_id, naia_socket.js_object(response.id));
 
                     peer.setRemoteDescription(new RTCSessionDescription(response.sdp.answer)).then(function() {
                         let response_candidate = response.sdp.candidate;
-                        wasm_exports.receive_candidate(naia_socket.js_object(JSON.stringify(response_candidate.candidate)));
+                        wasm_exports.receive_candidate(socket_id, naia_socket.js_object(JSON.stringify(response_candidate.candidate)));
                         let candidate = new RTCIceCandidate(response_candidate);
                         peer.addIceCandidate(candidate).then(function() {
                             console.log("add ice candidate success");
                         }).catch(function(err) {
-                            naia_socket.error("error during 'addIceCandidate'", err);
+                            naia_socket.error(socket_id, "error during 'addIceCandidate'", err);
                         });
                     }).catch(function(err) {
-                        naia_socket.error("error during 'setRemoteDescription'", err);
+                        naia_socket.error(socket_id, "error during 'setRemoteDescription'", err);
                     });
                 } else {
                     // A completed POST with a non-200 status is a signaling
@@ -108,6 +117,7 @@ const naia_socket = {
                     // create. Network-level failures (onerror, no status) stay
                     // generic below.
                     wasm_exports.receive_auth_error(
+                        socket_id,
                         naia_socket.js_object(String(request.status)),
                         naia_socket.js_object(request.responseText || "")
                     );
@@ -115,28 +125,26 @@ const naia_socket = {
             };
             request.onerror = function(err) {
                 let error_str = "error sending POST request to " + SESSION_ADDRESS;
-                naia_socket.error(error_str, err);
+                naia_socket.error(socket_id, error_str, err);
             };
             request.send(peer.localDescription.sdp);
         }).catch(function(err) {
-            naia_socket.error("error during 'createOffer'", err);
+            naia_socket.error(socket_id, "error during 'createOffer'", err);
         });
     },
 
-    disconnect: function() {
-        if (this.channel) {
-            this.channel = null;
-        }
+    disconnect: function(socket_id) {
+        delete this.connections[socket_id];
     },
 
-    error: function (desc, err) {
+    error: function (socket_id, desc, err) {
         err['naia_desc'] = desc;
-        wasm_exports.error(this.js_object(JSON.stringify(err)));
+        wasm_exports.error(socket_id, this.js_object(JSON.stringify(err)));
     },
 
-    send: function (message) {
+    send: function (socket_id, message) {
         let message_string = naia_socket.get_js_object(message);
-        return this.send_u8_array(message_string);
+        return this.send_u8_array(socket_id, message_string);
     },
 
     js_create_string: function (buf, max_len) {
@@ -159,10 +167,11 @@ const naia_socket = {
         return this.toUTF8Array(str).length;
     },
 
-    send_u8_array: function (str) {
-        if (this.channel) {
+    send_u8_array: function (socket_id, str) {
+        let connection = this.connections[socket_id];
+        if (connection && connection.channel) {
             try {
-                this.channel.send(str);
+                connection.channel.send(str);
                 return true;
             }
             catch(err) {
