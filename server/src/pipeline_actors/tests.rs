@@ -1541,3 +1541,47 @@ fn pipelined_room_join_spawns_entities_in_the_same_order_on_every_fresh_server()
         "entity-scopes-14 (split engine): room-join spawn order must not depend on hash state"
     );
 }
+
+/// [b4-oom] The recv drain loop must terminate when the data channel
+/// fails persistently. Pre-fix, a disconnected channel trapped
+/// `RecvState::receive` in its inner loop: every spin pushed one more
+/// Boxed error, the worker never reached its shutdown checkpoint, the
+/// drop-join hung, and the error Vec grew to 21 GB anon-rss in Mercer's
+/// b4 gate. Post-fix one error is recorded and `receive()` returns, so
+/// the worker can observe shutdown and exit.
+#[test]
+fn recv_drain_loop_terminates_on_persistent_transport_error() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+
+    // No listen: no worker threads. The recv handle is driven directly
+    // on a thread of our own so a regression fails (timeout) instead
+    // of hanging the suite forever.
+    let (_sim, mut recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+
+    // A data channel whose senders are all gone: every try_recv is
+    // Disconnected, so recv_reader() fails on every call.
+    let (ps, pr) = crate::transport::PacketChannel::unbounded();
+    drop(ps);
+    recv.state.recv_io.load(pr);
+
+    let (tx, rx) = std::sync::mpsc::channel();
+    std::thread::spawn(move || {
+        let mut output = recv.receive();
+        let events = drain_lifecycle(&mut output);
+        let _ = tx.send(events);
+    });
+    let events = rx
+        .recv_timeout(std::time::Duration::from_secs(10))
+        .expect("receive() must return on a persistently-failing channel");
+    let errors = events
+        .iter()
+        .filter(|e| matches!(e, RecvLifecycleEvent::RecvError { .. }))
+        .count();
+    assert_eq!(
+        errors, 1,
+        "one error per receive() call, not one per spin: {events:?}"
+    );
+}

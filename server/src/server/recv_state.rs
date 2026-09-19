@@ -247,8 +247,20 @@ impl<E: Copy + Eq + std::hash::Hash + Send + Sync> RecvState<E> {
                 }
                 Ok(None) => break,
                 Err(error) => {
+                    // [b4-oom] Record one error per receive() call and
+                    // return: a persistently-failing transport must not
+                    // trap this drain loop. Previously this arm pushed
+                    // and looped without a break, so a disconnected
+                    // channel spun forever pushing Boxed errors (21 GB
+                    // anon-rss in the b4 gate) and the recv worker never
+                    // reached its shutdown checkpoint, hanging the
+                    // drop-join. The worker re-drives receive() on the
+                    // next readiness wakeup, so a still-broken transport
+                    // surfaces again there — bounded by the drain rate,
+                    // not by the spin rate.
                     self.incoming_world_events
                         .push_error(NaiaServerError::Wrapped(Box::new(error)));
+                    break;
                 }
             }
         }
