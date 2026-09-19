@@ -100,6 +100,12 @@ impl Protocol {
     }
 
     /// Sets the link conditioning configuration (artificial latency/loss). Builder-style.
+    ///
+    /// This is the default shared by both sides. Server and client each
+    /// condition their own inbound path from the socket config they are
+    /// constructed with, so to condition the sides differently (naia #11),
+    /// derive per-side configs via
+    /// `SocketConfig::with_link_condition` instead of forking this builder.
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.check_lock();
         self.socket.link_condition = Some(config);
