@@ -1575,12 +1575,17 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
-        let global_entity = self
+        // Absent entities report None, per the documented contract ("or None
+        // if the entity is not registered"): the marker observers rely on
+        // this to tell a first registration from a repeat.
+        let Ok(global_entity) = self
             .shared
             .global_entity_map
             .read()
             .entity_to_global_entity(world_entity)
-            .unwrap();
+        else {
+            return None;
+        };
         self.shared
             .global_world_manager
             .read()
