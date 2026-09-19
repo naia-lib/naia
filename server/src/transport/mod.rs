@@ -17,6 +17,10 @@ cfg_if! {
     } else {}
 }
 
+/// Fan-in server transport for #207: serve one `Server` from several
+/// transports at once through a single `Socket` handle.
+pub mod multi;
+
 mod conditioner;
 pub use conditioner::ConditionedPacketReceiver;
 
