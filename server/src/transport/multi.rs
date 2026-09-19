@@ -124,9 +124,21 @@ impl PacketReceiver for MultiPacketReceiver {
         let count = self.receivers.len();
         let start = self.start;
         self.start = (self.start + 1) % count;
+        // [b4-oom] Skip a failing inner and keep draining: a
+        // persistently-failing transport must not trap this loop, and a
+        // packet queued behind it must still arrive. The error surfaces
+        // below once the line is quiet — one error per call, not per spin.
+        let mut failed = false;
         for step in 0..count {
             let index = (start + step) % count;
-            if let Some((addr, bytes)) = self.receivers[index].receive()? {
+            let next = match self.receivers[index].receive() {
+                Ok(next) => next,
+                Err(_) => {
+                    failed = true;
+                    continue;
+                }
+            };
+            if let Some((addr, bytes)) = next {
                 self.origins.lock().insert(addr, index);
                 self.last_payload = Some((addr, bytes.to_vec().into_boxed_slice()));
                 let (addr, payload) = self.last_payload.as_ref().unwrap();
@@ -134,6 +146,9 @@ impl PacketReceiver for MultiPacketReceiver {
             }
         }
         self.last_payload = None;
+        if failed {
+            return Err(RecvError);
+        }
         Ok(None)
     }
 
@@ -185,9 +200,20 @@ impl AuthReceiver for MultiAuthReceiver {
         let count = self.receivers.len();
         let start = self.start;
         self.start = (self.start + 1) % count;
+        // [b4-oom] Same skip-and-keep-draining rule as the packet plane: a
+        // failing inner must neither trap this loop nor swallow a knock
+        // queued behind it. One error per quiet call.
+        let mut failed = false;
         for step in 0..count {
             let index = (start + step) % count;
-            if let Some((addr, bytes)) = self.receivers[index].receive()? {
+            let next = match self.receivers[index].receive() {
+                Ok(next) => next,
+                Err(_) => {
+                    failed = true;
+                    continue;
+                }
+            };
+            if let Some((addr, bytes)) = next {
                 self.origins.lock().insert(addr, index);
                 self.last_payload = Some((addr, bytes.to_vec().into_boxed_slice()));
                 let (addr, payload) = self.last_payload.as_ref().unwrap();
@@ -195,6 +221,9 @@ impl AuthReceiver for MultiAuthReceiver {
             }
         }
         self.last_payload = None;
+        if failed {
+            return Err(RecvError);
+        }
         Ok(None)
     }
 }

@@ -378,3 +378,104 @@ fn multi_socket_auth_follows_recorded_origin() {
     assert_eq!(log1.0.lock().unwrap().len(), 1);
     assert_eq!(log1.0.lock().unwrap()[0].0, addr_q);
 }
+
+// ---- [b4-oom] failing-inner transport: every receive fails persistently
+// (models a disconnected channel at teardown). ----
+
+#[derive(Clone, Default)]
+struct FailSocket;
+
+impl Socket for FailSocket {
+    fn listen(
+        self: Box<Self>,
+        _expected_protocol_id: ProtocolId,
+    ) -> naia_server::transport::ListenResult {
+        (
+            Box::new(StubAuthSender {
+                inner: StubSocket::default(),
+            }),
+            Box::new(FailAuthReceiver),
+            Box::new(StubPacketSender {
+                inner: StubSocket::default(),
+            }),
+            Box::new(FailPacketReceiver),
+        )
+    }
+}
+
+#[derive(Clone)]
+struct FailAuthReceiver;
+
+impl AuthReceiver for FailAuthReceiver {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+        Err(RecvError)
+    }
+}
+
+#[derive(Clone)]
+struct FailPacketReceiver;
+
+impl PacketReceiver for FailPacketReceiver {
+    fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+        Err(RecvError)
+    }
+}
+
+/// [b4-oom] A failing inner must not swallow packets queued behind it: skip
+/// the failure, keep draining, and surface the error only once the line is
+/// quiet. Pre-fix the `?` on the failing inner propagates immediately and
+/// the drained-behind packet in `last_payload` is never delivered.
+#[test]
+fn multi_packet_receiver_skips_failing_inner_without_losing_packets() {
+    let stub = StubSocket::default();
+    let addr: SocketAddr = "127.0.0.1:15501".parse().unwrap();
+    stub.inbound_data
+        .lock()
+        .unwrap()
+        .push_back((addr, vec![7, 7]));
+
+    let boxed: Box<dyn Socket> =
+        MultiSocket::new(vec![Box::new(FailSocket), Box::new(stub)]).into();
+    let (_, _, _, mut receiver) = boxed.listen(ProtocolId::new(0x207));
+
+    match receiver.receive() {
+        Ok(Some((a, p))) => {
+            assert_eq!(a, addr, "packet came from the wrong client");
+            assert_eq!(p, &[7, 7], "payload corrupted behind failing inner");
+        }
+        other => panic!("packet queued behind a failing inner was lost: {other:?}"),
+    }
+    // Nothing left but the persistent failure: it must still surface.
+    assert!(
+        receiver.receive().is_err(),
+        "quiet failing inner must still report its error"
+    );
+}
+
+/// [b4-oom] Auth plane, same rule: a knock queued behind a failing inner
+/// must still arrive, and the persistent error must still surface.
+#[test]
+fn multi_auth_receiver_skips_failing_inner_without_losing_knocks() {
+    let stub = StubSocket::default();
+    let addr: SocketAddr = "127.0.0.1:15502".parse().unwrap();
+    stub.inbound_auth
+        .lock()
+        .unwrap()
+        .push_back((addr, vec![9, 9]));
+
+    let boxed: Box<dyn Socket> =
+        MultiSocket::new(vec![Box::new(FailSocket), Box::new(stub)]).into();
+    let (_, mut receiver, _, _) = boxed.listen(ProtocolId::new(0x207));
+
+    match receiver.receive() {
+        Ok(Some((a, p))) => {
+            assert_eq!(a, addr, "knock came from the wrong client");
+            assert_eq!(p, &[9, 9], "knock corrupted behind failing inner");
+        }
+        other => panic!("knock queued behind a failing inner was lost: {other:?}"),
+    }
+    assert!(
+        receiver.receive().is_err(),
+        "quiet failing inner must still report its error"
+    );
+}

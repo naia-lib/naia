@@ -430,7 +430,11 @@ impl MainServer {
                         break;
                     }
                     Err(_) => {
+                        // [b4-oom] Record one error and return: a
+                        // persistently-failing auth channel must not trap
+                        // this drain loop (same shape as the RecvState bug).
                         self.incoming_events.push_error(NaiaServerError::RecvError);
+                        break;
                     }
                 }
             }
@@ -522,8 +526,12 @@ impl MainServer {
                     break;
                 }
                 Err(error) => {
+                    // [b4-oom] Record one error and return: a
+                    // persistently-failing data channel must not trap this
+                    // drain loop (same shape as the RecvState bug).
                     self.incoming_events
                         .push_error(NaiaServerError::Wrapped(Box::new(error)));
+                    break;
                 }
             }
         }
@@ -788,5 +796,108 @@ mod pending_auth_capacity_tests {
         reload_flood(&mut server, 50_000);
         server.maintain_socket();
         assert_eq!(server.users.len(), 0);
+    }
+}
+
+// ---- [b4-oom] drain-termination tests: a persistently-failing transport
+// (disconnected channel at teardown) must not trap `maintain_socket` in
+// either drain loop. Pre-fix both the auth loop and the data loop pushed
+// one Boxed error per spin with no break (same shape as the RecvState bug);
+// the thread below fails by timeout instead of hanging the suite forever.
+#[cfg(test)]
+mod drain_termination_tests {
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::Duration;
+
+    use naia_shared::{IdentityToken, Protocol};
+
+    use crate::events::main_events::ErrorEvent;
+    use crate::transport::{ListenResult, PacketReceiver, RecvError, SendError};
+
+    use super::*;
+
+    #[derive(Clone, Default)]
+    struct FailSocket;
+
+    impl From<FailSocket> for Box<dyn Socket> {
+        fn from(socket: FailSocket) -> Self {
+            Box::new(socket)
+        }
+    }
+
+    impl Socket for FailSocket {
+        fn listen(self: Box<Self>, _: ProtocolId) -> ListenResult {
+            (
+                Box::new(OkAuthSender),
+                Box::new(FailAuthReceiver),
+                Box::new(OkPacketSender),
+                Box::new(FailPacketReceiver),
+            )
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct OkAuthSender;
+
+    impl AuthSender for OkAuthSender {
+        fn accept(
+            &self,
+            _address: &SocketAddr,
+            _identity_token: &IdentityToken,
+        ) -> Result<(), SendError> {
+            Ok(())
+        }
+
+        fn reject(&self, _address: &SocketAddr, _payload: Option<&[u8]>) -> Result<(), SendError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct FailAuthReceiver;
+
+    impl AuthReceiver for FailAuthReceiver {
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+            Err(RecvError)
+        }
+    }
+
+    #[derive(Clone, Default)]
+    struct OkPacketSender;
+
+    impl PacketSender for OkPacketSender {
+        fn send(&self, _address: &SocketAddr, _payload: &[u8]) -> Result<(), SendError> {
+            Ok(())
+        }
+    }
+
+    #[derive(Clone)]
+    struct FailPacketReceiver;
+
+    impl PacketReceiver for FailPacketReceiver {
+        fn receive(&mut self) -> Result<Option<(SocketAddr, &[u8])>, RecvError> {
+            Err(RecvError)
+        }
+    }
+
+    #[test]
+    fn maintain_socket_terminates_on_persistent_transport_error() {
+        let mut server = MainServer::new(ServerConfig::default(), Protocol::builder().build());
+        server.listen(FailSocket);
+
+        let server = Arc::new(Mutex::new(server));
+        let worker = server.clone();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            worker.lock().unwrap().maintain_socket();
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("maintain_socket must return on a persistently-failing transport");
+        // Both drain loops hit their Err arm (not skipped): one error each.
+        assert!(
+            server.lock().unwrap().incoming_events.has::<ErrorEvent>(),
+            "failing channels must record errors, not spin silently"
+        );
     }
 }
