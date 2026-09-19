@@ -1574,6 +1574,22 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     }
 
     /// This is used only for Bevy adapter crates, do not use otherwise!
+    pub fn has_component_record(&self, world_entity: &E, kind: &ComponentKind) -> bool {
+        let Ok(global_entity) = self
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return false;
+        };
+        self.shared
+            .global_world_manager
+            .read()
+            .has_component_record(&global_entity, kind)
+    }
+
+    /// This is used only for Bevy adapter crates, do not use otherwise!
     pub fn entity_replication_config(&self, world_entity: &E) -> Option<ReplicationConfig> {
         // Absent entities report None, per the documented contract ("or None
         // if the entity is not registered"): the marker observers rely on
@@ -2900,7 +2916,16 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
     }
 
     /// Removes a component from the replication layer without touching the world (adapter use only).
+    ///
+    /// Converges to absent: already-untracked components are a silent no-op,
+    /// mirroring `insert_component_worldless`' duplicate-insert guard. The
+    /// adapter's per-component disable (#186) shares this path with the
+    /// world-driven remove observer, so both orders (disable-then-remove,
+    /// remove-then-disable) must land quiet.
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
+        if !self.has_component_record(world_entity, component_kind) {
+            return;
+        }
         let global_entity = self
             .shared
             .global_entity_map

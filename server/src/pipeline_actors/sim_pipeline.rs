@@ -959,9 +959,35 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             });
     }
 
+    /// Whether the replication layer currently tracks `component_kind` on
+    /// `world_entity` (#186 adapter use only). `false` for unregistered
+    /// entities and untracked components alike.
+    pub fn has_component_record(&self, world_entity: &E, component_kind: &ComponentKind) -> bool {
+        let Ok(global_entity) = self
+            .coord()
+            .shared
+            .global_entity_map
+            .read()
+            .entity_to_global_entity(world_entity)
+        else {
+            return false;
+        };
+        self.coord()
+            .shared
+            .global_world_manager
+            .read()
+            .has_component_record(&global_entity, component_kind)
+    }
+
     /// Stage component removal's send-side fanout after applying coord/global
     /// component cleanup synchronously.
+    ///
+    /// Converges to absent: already-untracked components are a silent no-op,
+    /// matching the resident engine's guard.
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
+        if !self.has_component_record(world_entity, component_kind) {
+            return;
+        }
         let global_entity = self
             .coord()
             .shared

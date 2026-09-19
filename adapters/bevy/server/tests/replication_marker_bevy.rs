@@ -16,6 +16,9 @@
 //!   replication was already disabled by command is a silent no-op.
 //! - **cross-frame-command**: enabling by command on a live entity syncs its
 //!   pre-existing components, like the late marker insert.
+//! - **per-component on/off** (#186): disabling one component removes it on
+//!   the client while siblings keep syncing; re-enabling sends the current
+//!   value, not a stale one.
 
 use std::{sync::Arc, time::Duration};
 
@@ -25,7 +28,7 @@ use bevy_ecs::{
     message::Messages,
     resource::Resource,
     schedule::IntoScheduleConfigs,
-    system::{Commands, IntoSystem, ResMut},
+    system::{Commands, IntoSystem, Query, ResMut},
 };
 use parking_lot::Mutex;
 
@@ -46,7 +49,7 @@ use naia_client::transport::local::{LocalAddrCell, LocalClientSocket, Socket as 
 use naia_server::transport::local::{LocalServerSocket, Socket as ServerSocket};
 use naia_shared::transport::local::LocalTransportHub;
 use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
-use naia_test_harness::test_protocol::{Auth, Position, ReliableChannel};
+use naia_test_harness::test_protocol::{Auth, Position, ReliableChannel, Velocity};
 
 const FAKE_SERVER_ADDR: &str = "127.0.0.1:14192";
 
@@ -60,7 +63,8 @@ fn protocol() -> BevyProtocol {
             ChannelDirection::Bidirectional,
             ChannelMode::UnorderedReliable(ReliableSettings::default()),
         )
-        .add_component::<Position>();
+        .add_component::<Position>()
+        .add_component::<Velocity>();
     p.tick_interval(Duration::from_micros(100));
     p.build()
 }
@@ -294,6 +298,50 @@ impl BevyHarness {
             .count()
     }
 
+    fn client_velocity_count(&mut self) -> usize {
+        self.client_app
+            .world_mut()
+            .query::<&Velocity>()
+            .iter(self.client_app.world())
+            .count()
+    }
+
+    fn client_position_value(&mut self) -> Option<(f32, f32)> {
+        let world = self.client_app.world_mut();
+        let mut query = world.query::<&Position>();
+        query
+            .iter(world)
+            .next()
+            .map(|position| (*position.x, *position.y))
+    }
+
+    fn client_velocity_value(&mut self) -> Option<(f32, f32)> {
+        let world = self.client_app.world_mut();
+        let mut query = world.query::<&Velocity>();
+        query
+            .iter(world)
+            .next()
+            .map(|velocity| (*velocity.vx, *velocity.vy))
+    }
+
+    fn server_set_position(&mut self, x: f32, y: f32) {
+        self.run_server_system(move |mut positions: Query<&mut Position>| {
+            for mut position in &mut positions {
+                *position.x = x;
+                *position.y = y;
+            }
+        });
+    }
+
+    fn server_set_velocity(&mut self, vx: f32, vy: f32) {
+        self.run_server_system(move |mut velocities: Query<&mut Velocity>| {
+            for mut velocity in &mut velocities {
+                *velocity.vx = vx;
+                *velocity.vy = vy;
+            }
+        });
+    }
+
     fn client_spawn_count(&self) -> usize {
         self.spawn_count
     }
@@ -492,4 +540,181 @@ fn removing_marker_after_command_disable_is_noop() {
     h.tick_n(30);
     assert_eq!(h.client_position_count(), 0);
     assert_eq!(h.client_despawn_count(), 1);
+}
+
+/// Disabling one component stops its updates while its siblings keep
+/// syncing; re-enabling sends the component's current value (naia-lib/naia#186).
+#[test]
+fn disable_component_stops_its_updates_and_reenable_sends_current() {
+    let mut h = BevyHarness::new();
+    h.wait_for_connect();
+
+    // Entity with two components, spawned carrying the marker.
+    let out: Arc<Mutex<Option<Entity>>> = Arc::new(Mutex::new(None));
+    let out_clone = out.clone();
+    h.run_server_system_raw(move |mut commands: Commands| {
+        let entity = commands
+            .spawn((
+                Position::new(3.0, 4.0),
+                Velocity::new(1.0, 2.0),
+                Replication,
+            ))
+            .id();
+        *out_clone.lock() = Some(entity);
+    });
+    let entity = out.lock().take().expect("spawn ran");
+    h.server_add_to_room(entity);
+    h.tick_n(60);
+    assert_eq!(h.client_position_count(), 1);
+    assert_eq!(h.client_velocity_count(), 1);
+    assert_eq!(h.client_position_value(), Some((3.0, 4.0)));
+
+    // Disable Position: the client loses Position, Velocity keeps syncing.
+    h.run_server_system(move |mut commands: Commands, mut server: Server| {
+        commands
+            .entity(entity)
+            .disable_component_replication::<Position>(&mut server);
+    });
+    h.tick_n(30);
+    assert_eq!(
+        h.client_position_count(),
+        0,
+        "disabling Position must remove it on the client"
+    );
+    assert_eq!(h.client_velocity_count(), 1);
+
+    // Sibling updates still flow while Position is disabled.
+    h.server_set_velocity(5.0, 6.0);
+    h.tick_n(30);
+    assert_eq!(h.client_velocity_value(), Some((5.0, 6.0)));
+    assert_eq!(h.client_position_count(), 0);
+
+    // Mutating the disabled component sends nothing and panics nothing.
+    h.server_set_position(9.0, 9.0);
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 0);
+
+    // Re-enable sends the CURRENT value (7,7), not the disable-time (3,4)
+    // nor the mid-disable (9,9) value.
+    h.server_set_position(7.0, 7.0);
+    h.run_server_system(move |mut commands: Commands, mut server: Server| {
+        commands
+            .entity(entity)
+            .enable_component_replication::<Position>(&mut server);
+    });
+    h.tick_n(30);
+    assert_eq!(
+        h.client_position_value(),
+        Some((7.0, 7.0)),
+        "re-enabling must send the current value, not a stale one"
+    );
+    assert_eq!(h.client_velocity_count(), 1);
+}
+
+/// Disabling an already-disabled component is a silent no-op: no panic,
+/// no resurrection, the sibling keeps syncing (naia-lib/naia#186).
+#[test]
+fn disable_component_twice_is_silent_noop() {
+    let mut h = BevyHarness::new();
+    h.wait_for_connect();
+
+    let out: Arc<Mutex<Option<Entity>>> = Arc::new(Mutex::new(None));
+    let out_clone = out.clone();
+    h.run_server_system_raw(move |mut commands: Commands| {
+        let entity = commands
+            .spawn((
+                Position::new(3.0, 4.0),
+                Velocity::new(1.0, 2.0),
+                Replication,
+            ))
+            .id();
+        *out_clone.lock() = Some(entity);
+    });
+    let entity = out.lock().take().expect("spawn ran");
+    h.server_add_to_room(entity);
+    h.tick_n(60);
+    assert_eq!(h.client_position_count(), 1);
+    assert_eq!(h.client_velocity_count(), 1);
+
+    let disable = move |mut commands: Commands, mut server: Server| {
+        commands
+            .entity(entity)
+            .disable_component_replication::<Position>(&mut server);
+    };
+    h.run_server_system(disable);
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 0);
+    assert_eq!(h.client_velocity_count(), 1);
+
+    // Second disable: must not panic and must change nothing.
+    let disable_again = move |mut commands: Commands, mut server: Server| {
+        commands
+            .entity(entity)
+            .disable_component_replication::<Position>(&mut server);
+    };
+    h.run_server_system(disable_again);
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 0);
+    assert_eq!(h.client_velocity_count(), 1);
+}
+
+/// Enabling an already-tracked component is a silent no-op: no panic and
+/// no duplicate Insert on the client (naia-lib/naia#186).
+#[test]
+fn enable_tracked_component_is_silent_noop() {
+    let mut h = BevyHarness::new();
+    h.wait_for_connect();
+
+    let out: Arc<Mutex<Option<Entity>>> = Arc::new(Mutex::new(None));
+    let out_clone = out.clone();
+    h.run_server_system_raw(move |mut commands: Commands| {
+        let entity = commands
+            .spawn((
+                Position::new(3.0, 4.0),
+                Velocity::new(1.0, 2.0),
+                Replication,
+            ))
+            .id();
+        *out_clone.lock() = Some(entity);
+    });
+    let entity = out.lock().take().expect("spawn ran");
+    h.server_add_to_room(entity);
+    h.tick_n(60);
+    assert_eq!(h.client_position_count(), 1);
+    let inserts_before = h.client_insert_count();
+
+    h.run_server_system(move |mut commands: Commands, mut server: Server| {
+        commands
+            .entity(entity)
+            .enable_component_replication::<Position>(&mut server);
+    });
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 1);
+    assert_eq!(
+        h.client_insert_count(),
+        inserts_before,
+        "enabling a tracked component must not re-insert it"
+    );
+}
+
+/// Disabling a component on an entity the replication layer never saw is
+/// a silent no-op: no panic, nothing replicated (naia-lib/naia#186).
+#[test]
+fn disable_component_on_unregistered_entity_is_noop() {
+    let mut h = BevyHarness::new();
+    h.wait_for_connect();
+
+    // Bare spawn: no marker, no registration, never enters a room.
+    let entity = h.server_spawn_position();
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 0);
+
+    h.run_server_system(move |mut commands: Commands, mut server: Server| {
+        commands
+            .entity(entity)
+            .disable_component_replication::<Position>(&mut server);
+    });
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 0);
+    assert_eq!(h.client_spawn_count(), 0);
 }

@@ -1255,6 +1255,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.world_server
             .remove_component_worldless(world_entity, component_kind);
     }
+
+    /// Whether the replication layer currently tracks `component_kind` on
+    /// `world_entity` (#186 adapter use only).
+    ///
+    /// `false` for unregistered entities and untracked components alike, so
+    /// the adapter can make disable/enable converge silently.
+    pub fn has_component_record(&self, world_entity: &E, component_kind: &ComponentKind) -> bool {
+        self.world_server
+            .has_component_record(world_entity, component_kind)
+    }
 }
 
 impl<E: Hash + Copy + Eq + Sync + Send + 'static> EntityAndGlobalEntityConverter<E> for Server<E> {

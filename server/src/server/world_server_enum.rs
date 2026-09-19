@@ -797,6 +797,15 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         }
     }
 
+    /// Whether the replication layer currently tracks `component_kind` on
+    /// `world_entity` (#186 adapter use only).
+    pub fn has_component_record(&self, world_entity: &E, component_kind: &ComponentKind) -> bool {
+        match &self.inner {
+            WorldServerImpl::Resident(ws) => ws.has_component_record(world_entity, component_kind),
+            WorldServerImpl::Pipelined(ps) => ps.has_component_record(world_entity, component_kind),
+        }
+    }
+
     /// Remove an entity from all replication state without touching the world.
     pub fn despawn_entity_worldless(&mut self, world_entity: &E) {
         match &mut self.inner {
