@@ -77,6 +77,14 @@ mod inner {
     pub trait PacketSender: PacketSenderClone + Send + Sync {
         /// Sends a packet to the Server Socket
         fn send(&self, address: &SocketAddr, payload: &[u8]) -> Result<(), SendError>;
+        /// Drops any per-address state the sender keeps for `address`.
+        ///
+        /// Defaulted no-op so every existing sender (UDP, WebRTC, local,
+        /// test stubs) compiles and behaves unchanged. Only senders that
+        /// route by remembered origin (the fan-in `MultiSocket`) override
+        /// it, to evict the address's entry once the server has torn the
+        /// client down — strictly after the disconnect packets went out.
+        fn forget_address(&self, _address: &SocketAddr) {}
     }
 
     /// Used to clone Box<dyn PacketSender>
@@ -183,6 +191,13 @@ mod inner {
         /// the rejection response, so it must survive a transport that carries
         /// text: implementations base64-encode it.
         fn reject(&self, address: &SocketAddr, payload: Option<&[u8]>) -> Result<(), SendError>;
+        /// Drops any per-address state the sender keeps for `address`.
+        ///
+        /// Same defaulted shape as [`PacketSender::forget_address`]: a
+        /// rejected knock arrived on an inner, so its origin was recorded;
+        /// only origin-routing senders override this, to evict it once the
+        /// rejection response went out.
+        fn forget_address(&self, _address: &SocketAddr) {}
     }
 
     /// Receives raw auth payloads from connecting clients before they are handed the session.

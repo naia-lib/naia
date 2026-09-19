@@ -14,7 +14,10 @@ use naia_client::{
 };
 use naia_demo_world::{WorldMut, WorldRef};
 use naia_server::{
-    transport::local::{LocalServerSocket, Socket as ServerSocket},
+    transport::{
+        local::{LocalServerSocket, Socket as ServerSocket},
+        multi::MultiSocket,
+    },
     RoomKey, Server as NaiaServer, ServerConfig, ServerMode, UserKey,
 };
 use naia_shared::{
@@ -265,6 +268,14 @@ impl Scenario {
         self.server.as_ref()
     }
 
+    /// The local-transport address assigned to a client at `client_start`.
+    ///
+    /// Known before any handshake traffic, so tests can name the address a
+    /// rejected knock arrived on even after its user record is gone.
+    pub fn client_addr(&self, client_key: ClientKey) -> Option<SocketAddr> {
+        self.client_to_addr_map.get(&client_key).copied()
+    }
+
     pub fn server_start(&mut self, server_config: ServerConfig, protocol: Protocol) {
         if self.server.is_some() {
             panic!("server_start() called multiple times");
@@ -291,6 +302,30 @@ impl Scenario {
             Server::new_with_protocol_id(self.server_mode, server_config, protocol, protocol_id);
         let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
         server.listen(server_socket);
+
+        self.server = Some(server);
+    }
+
+    /// Start the server fronted by a single-inner [`MultiSocket`].
+    ///
+    /// One hub means one inner (two server sockets on the same hub would
+    /// each see every client). A single inner still exercises the full
+    /// origin-map path — record on receive, route on send, evict on
+    /// forget — which is what origin-eviction tests need; multi-inner
+    /// fan-in itself is covered in `naia-server`'s transport tests.
+    pub fn server_start_with_multi_socket(
+        &mut self,
+        server_config: ServerConfig,
+        protocol: Protocol,
+    ) {
+        if self.server.is_some() {
+            panic!("server_start() called multiple times");
+        }
+
+        let mut server = Server::new(self.server_mode, server_config, protocol);
+        let server_socket = ServerSocket::new(LocalServerSocket::new(self.hub.clone()), None);
+        let multi = MultiSocket::new(vec![Box::new(server_socket)]);
+        server.listen(multi);
 
         self.server = Some(server);
     }
@@ -1126,6 +1161,38 @@ impl Scenario {
             server.process_all_packets(self.server_world.proxy_mut(), &now);
             server.send_all_packets(self.server_world.proxy());
         }
+    }
+
+    /// One tick in which only the server runs: no client receives,
+    /// processes, or sends.
+    ///
+    /// One tick in which only the server runs: no client receives,
+    /// processes, or sends.
+    ///
+    /// Origin-eviction tests need this window: after the server deletes a
+    /// user, its disconnect burst sits in the hub channel. On the next
+    /// ordinary tick the client would consume the burst and tear down,
+    /// dropping its hub channel — after which a refused raw send reports
+    /// the hub, not the origin map. With clients frozen, their channels
+    /// stay live, so `Ok` vs `Err` on a raw send reports ONLY the map.
+    ///
+    /// The full real teardown runs inside the window — `take_world_events`
+    /// included, which is what sends the disconnect burst and runs the
+    /// main-side delete — so server-side completion (`users_count`) is
+    /// observable normally. Drained events are discarded: a test using
+    /// this lever must assert on state, not on events for these ticks.
+    pub fn tick_server_only(&mut self) {
+        self.assert_clock_thread();
+        self.global_tick += 1;
+        TestClock::advance(TICK_DURATION_MS);
+        let now = Instant::now();
+        self.hub.process_time_queues();
+
+        let server = self.server.as_mut().expect("server not started");
+        server.receive_all_packets();
+        server.process_all_packets(self.server_world.proxy_mut(), &now);
+        server.send_all_packets(self.server_world.proxy());
+        let _ = server.take_world_events();
     }
 
     /// Get the current tick count

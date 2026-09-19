@@ -104,6 +104,13 @@ impl PacketSender for MultiPacketSender {
             None => Err(SendError),
         }
     }
+
+    /// 12121: evict the address's origin entry. The map is shared across
+    /// all four fan-in handles, so this also clears entries recorded by
+    /// the auth receiver for the same address.
+    fn forget_address(&self, address: &SocketAddr) {
+        self.origins.lock().remove(address);
+    }
 }
 
 /// Round-robin receiver: each poll starts one inner further along, so a busy
@@ -183,6 +190,12 @@ impl AuthSender for MultiAuthSender {
             Some(&index) => self.senders[index].reject(address, payload),
             None => Err(SendError),
         }
+    }
+
+    /// 12121: same shared map, same eviction — a rejected knock's entry
+    /// must not linger once the rejection response went out.
+    fn forget_address(&self, address: &SocketAddr) {
+        self.origins.lock().remove(address);
     }
 }
 

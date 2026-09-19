@@ -452,6 +452,66 @@ fn multi_packet_receiver_skips_failing_inner_without_losing_packets() {
     );
 }
 
+/// 12121: forgetting an address evicts its origin entry — a later send to
+/// it is an error again, exactly as if it had never knocked. The defaulted
+/// no-op keeps every non-multi `PacketSender` compiling and behaving
+/// unchanged (the stub still routes after `forget_address`).
+#[test]
+fn packet_sender_forget_evicts_origin() {
+    let stub = StubSocket::default();
+    let addr: SocketAddr = "127.0.0.1:15601".parse().unwrap();
+    stub.inbound_data.lock().unwrap().push_back((addr, vec![1]));
+
+    let boxed: Box<dyn Socket> = MultiSocket::new(vec![Box::new(stub.clone())]).into();
+    let (_, _, packet_sender, mut packet_receiver) = boxed.listen(ProtocolId::new(0x207));
+
+    // Knock records the origin; the reply routes.
+    let next = packet_receiver.receive().expect("receiver error");
+    assert!(matches!(next, Some((a, _)) if a == addr));
+    packet_sender.send(&addr, &[2]).unwrap();
+
+    // Forget evicts: the address is unknown again.
+    packet_sender.forget_address(&addr);
+    assert!(
+        packet_sender.send(&addr, &[3]).is_err(),
+        "send to a forgotten address must fail"
+    );
+
+    // The defaulted no-op: a non-multi sender is unaffected by forget.
+    let plain = StubPacketSender {
+        inner: stub.clone(),
+    };
+    plain.forget_address(&addr);
+    plain.send(&addr, &[4]).unwrap();
+}
+
+/// 12121, auth plane: a rejected knock's origin must be evictable too —
+/// `reject` alone routes through the entry but leaves it behind.
+#[test]
+fn auth_sender_forget_evicts_rejected_origin() {
+    let stub = StubSocket::default();
+    let addr: SocketAddr = "127.0.0.1:15602".parse().unwrap();
+    stub.inbound_auth.lock().unwrap().push_back((addr, vec![5]));
+
+    let boxed: Box<dyn Socket> = MultiSocket::new(vec![Box::new(stub)]).into();
+    let (auth_sender, mut auth_receiver, packet_sender, _) = boxed.listen(ProtocolId::new(0x207));
+
+    // Knock records the origin; the reject routes through it.
+    let next = auth_receiver.receive().expect("auth receiver error");
+    assert!(matches!(next, Some((a, _)) if a == addr));
+    auth_sender
+        .reject(&addr, None)
+        .expect("reject to a known origin must succeed");
+
+    // ... but the entry lingers: forgetting is what removes it.
+    packet_sender.send(&addr, &[6]).unwrap();
+    auth_sender.forget_address(&addr);
+    assert!(
+        packet_sender.send(&addr, &[7]).is_err(),
+        "rejected address must refuse sends after forget"
+    );
+}
+
 /// [b4-oom] Auth plane, same rule: a knock queued behind a failing inner
 /// must still arrive, and the persistent error must still surface.
 #[test]

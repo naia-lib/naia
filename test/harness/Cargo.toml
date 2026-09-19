@@ -97,3 +97,7 @@ path = "contract_tests/integration_only/pipeline_bracket.rs"
 [[test]]
 name = "world_server_enum_shell"
 path = "contract_tests/integration_only/world_server_enum_shell.rs"
+
+[[test]]
+name = "origin_map_eviction"
+path = "contract_tests/integration_only/origin_map_eviction.rs"

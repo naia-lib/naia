@@ -233,6 +233,10 @@ impl MainServer {
                 );
                 // TODO: handle destroying any threads waiting on this response
             }
+            // 12121: the knock recorded an origin; the response went out
+            // above, so evict it (a pending-auth user has no data address
+            // for `user_delete` to forget).
+            auth_sender.forget_address(&auth_addr);
 
             self.user_delete(user_key);
         }
@@ -359,6 +363,16 @@ impl MainServer {
 
         self.handshake_manager
             .delete_user(user_key, user.address_opt());
+
+        // 12121: evict the origin-map entry last. Every caller sends what
+        // it must send first (`disconnect_user` bursts before calling us;
+        // the reject sites answer before calling us), so by now no packet
+        // to this address may still need routing. Pending-auth users have
+        // no data address — their knock's entry is evicted through the
+        // auth sender at the reject sites instead.
+        if let Some(user_addr) = user.address_opt() {
+            self.send_io.forget_address(&user_addr);
+        }
 
         user
     }
@@ -556,6 +570,8 @@ impl MainServer {
                     );
                     if let Some((auth_sender, _)) = self.auth_io.as_mut() {
                         let _ = auth_sender.reject(&auth_addr, None);
+                        // 12121: same eviction as the explicit reject path.
+                        auth_sender.forget_address(&auth_addr);
                     }
                 }
                 self.user_delete(&user_key);
