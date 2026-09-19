@@ -14,6 +14,8 @@
 //!   replication exactly once (no panic, one client despawn).
 //! - **remove-after-disable**: removing the marker from an entity whose
 //!   replication was already disabled by command is a silent no-op.
+//! - **cross-frame-command**: enabling by command on a live entity syncs its
+//!   pre-existing components, like the late marker insert.
 
 use std::{sync::Arc, time::Duration};
 
@@ -331,12 +333,10 @@ fn marker_insert_on_live_entity_begins_replication_and_removal_ends_it() {
     );
     assert_eq!(h.client_spawn_count(), 0);
 
-    // Insert the marker on the live entity: replication begins, the client
-    // spawns the entity. Only the spawn is asserted here: components whose
-    // `Added` change-ticks expired before the marker landed do not
-    // retro-sync, an adapter-wide change-detection limit the command path
-    // shares (not a marker gap). Full component sync is covered by the
-    // spawn-bundle test below.
+    // Insert the marker on the live entity: replication begins -- the client
+    // spawns the entity WITH its pre-existing components. Change-detection
+    // only fires for components inserted while tracked, so the enable path
+    // enumerates the entity's current components itself (cross-frame sync).
     h.run_server_system(move |mut commands: Commands| {
         commands.entity(entity).insert(Replication);
     });
@@ -347,6 +347,12 @@ fn marker_insert_on_live_entity_begins_replication_and_removal_ends_it() {
         1,
         "inserting Replication must replicate the entity to the client"
     );
+    assert_eq!(
+        h.client_position_count(),
+        1,
+        "inserting Replication late must still sync pre-existing components"
+    );
+    assert_eq!(h.client_insert_count(), 1);
 
     // Remove the marker: replication ends, the client despawns.
     h.run_server_system(move |mut commands: Commands| {
@@ -418,6 +424,41 @@ fn despawn_with_marker_disables_exactly_once() {
         1,
         "the client must observe exactly one despawn"
     );
+}
+
+/// Enabling replication by command on a live entity syncs its pre-existing
+/// components, exactly like the late marker insert above: both paths
+/// enumerate the entity's current components on enable.
+#[test]
+fn cross_frame_command_enable_syncs_existing_components() {
+    let mut h = BevyHarness::new();
+    h.wait_for_connect();
+
+    // Bare spawn: unmarked entities stay local long enough for the
+    // component `Added` ticks to expire.
+    let entity = h.server_spawn_position();
+    h.tick_n(30);
+    assert_eq!(h.client_position_count(), 0);
+
+    // Late command enable: the client must see the entity AND its Position.
+    // The spawn flushed long ago, so only enable-time enumeration of the
+    // entity's current components can sync what change-detection missed.
+    h.run_server_system(move |mut commands: Commands, mut server: Server| {
+        commands.entity(entity).enable_replication(&mut server);
+    });
+    h.server_add_to_room(entity);
+    h.tick_n(60);
+    assert_eq!(
+        h.client_spawn_count(),
+        1,
+        "late command enable must replicate the entity to the client"
+    );
+    assert_eq!(
+        h.client_position_count(),
+        1,
+        "late command enable must sync pre-existing components"
+    );
+    assert_eq!(h.client_insert_count(), 1);
 }
 
 /// Removing the marker from an entity whose replication was already disabled
