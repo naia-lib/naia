@@ -1,4 +1,4 @@
-use super::shared::SOCKET_TABLE;
+use super::shared::table_mut;
 use crate::{socket_table::SocketId, IdentityReceiverResult};
 
 /// Handles receiving an IdentityToken from the Server through a given Client Socket
@@ -16,33 +16,29 @@ impl IdentityReceiver {
     }
 
     pub fn receive(&mut self) -> IdentityReceiverResult {
-        // Safety: SOCKET_TABLE is a static mut written by the JS bridge
-        // callbacks. wasm32 is single-threaded; no concurrent access is
-        // possible. A disconnected socket's slot reads as Waiting.
-        unsafe {
-            if let Some(table) = &mut SOCKET_TABLE {
-                if let Some(state) = table.get_mut(SocketId(self.socket_id)) {
-                    // A non-200 signaling answer arrives on the identity path, never
-                    // through the packet ERROR_QUEUE and never via a data channel a
-                    // rejected handshake will not create. Consume it exactly once as
-                    // an ErrorResponseCode; afterwards there is nothing more to report
-                    // until the next handshake, so fall back to Waiting.
-                    if let Some(auth_error_cell) = &mut state.auth_error_cell {
-                        if let Some((status, body)) = auth_error_cell.take() {
-                            return IdentityReceiverResult::ErrorResponseCode(
-                                status,
-                                decode_reject_payload(&body),
-                            );
-                        }
+        // A disconnected socket's slot reads as Waiting.
+        if let Some(table) = table_mut() {
+            if let Some(state) = table.get_mut(SocketId(self.socket_id)) {
+                // A non-200 signaling answer arrives on the identity path, never
+                // through the packet ERROR_QUEUE and never via a data channel a
+                // rejected handshake will not create. Consume it exactly once as
+                // an ErrorResponseCode; afterwards there is nothing more to report
+                // until the next handshake, so fall back to Waiting.
+                if let Some(auth_error_cell) = &mut state.auth_error_cell {
+                    if let Some((status, body)) = auth_error_cell.take() {
+                        return IdentityReceiverResult::ErrorResponseCode(
+                            status,
+                            decode_reject_payload(&body),
+                        );
                     }
-                    if let Some(id_cell) = &mut state.id_cell {
-                        if let Some(id_token) = id_cell.take() {
-                            return IdentityReceiverResult::Success(id_token);
-                        }
+                }
+                if let Some(id_cell) = &mut state.id_cell {
+                    if let Some(id_token) = id_cell.take() {
+                        return IdentityReceiverResult::Success(id_token);
                     }
                 }
             }
-        };
+        }
 
         IdentityReceiverResult::Waiting
     }
@@ -65,7 +61,7 @@ fn decode_reject_payload(body: &str) -> Option<Vec<u8>> {
 
 #[cfg(test)]
 mod auth_error_cell_tests {
-    use super::super::shared::SOCKET_TABLE;
+    use super::super::shared::{table_mut, SOCKET_TABLE};
     use super::{decode_reject_payload, IdentityReceiver};
     use crate::IdentityReceiverResult;
 
@@ -81,15 +77,13 @@ mod auth_error_cell_tests {
         let first = alloc_socket();
         let second = alloc_socket();
 
-        unsafe {
-            if let Some(table) = &mut SOCKET_TABLE {
-                if let Some(state) = table.get_mut(SocketId(second)) {
-                    state
-                        .error_queue
-                        .push_back("data channel error".to_string());
-                    if let Some(auth_error_cell) = &mut state.auth_error_cell {
-                        *auth_error_cell = Some((409, base64::encode(expected)));
-                    }
+        if let Some(table) = table_mut() {
+            if let Some(state) = table.get_mut(SocketId(second)) {
+                state
+                    .error_queue
+                    .push_back("data channel error".to_string());
+                if let Some(auth_error_cell) = &mut state.auth_error_cell {
+                    *auth_error_cell = Some((409, base64::encode(expected)));
                 }
             }
         }
@@ -112,14 +106,12 @@ mod auth_error_cell_tests {
         ));
 
         // The generic error was never touched by the identity path.
-        unsafe {
-            if let Some(table) = &mut SOCKET_TABLE {
-                let state = table.get(SocketId(second)).expect("socket live");
-                assert_eq!(state.error_queue.len(), 1);
-                assert_eq!(state.error_queue[0], "data channel error");
-            } else {
-                panic!("table initialized");
-            }
+        if let Some(table) = table_mut() {
+            let state = table.get(SocketId(second)).expect("socket live");
+            assert_eq!(state.error_queue.len(), 1);
+            assert_eq!(state.error_queue[0], "data channel error");
+        } else {
+            panic!("table initialized");
         }
 
         // The other socket's handshake is still outstanding, not consumed.

@@ -1,7 +1,7 @@
 use crate::{error::NaiaClientSocketError, socket_table::SocketId, ServerAddr};
 
 use super::shared::{
-    free_socket, naia_create_u8_array, naia_disconnect, naia_is_connected, naia_send, SOCKET_TABLE,
+    free_socket, naia_create_u8_array, naia_disconnect, naia_is_connected, naia_send, table_mut,
 };
 
 /// Handles sending messages to the Server for a given Client Socket
@@ -40,14 +40,10 @@ impl PacketSender {
 
     /// Get the Server's Socket address
     pub fn server_addr(&self) -> ServerAddr {
-        // Safety: SOCKET_TABLE is a static mut read here from the same
-        // wasm32 thread that the JS bridge callbacks write. A disconnected
-        // socket's slot reads as still finding.
-        unsafe {
-            if let Some(table) = &mut SOCKET_TABLE {
-                if let Some(state) = table.get(SocketId(self.socket_id)) {
-                    return state.server_addr;
-                }
+        // A disconnected socket's slot reads as still finding.
+        if let Some(table) = table_mut() {
+            if let Some(state) = table.get(SocketId(self.socket_id)) {
+                return state.server_addr;
             }
         }
         ServerAddr::Finding

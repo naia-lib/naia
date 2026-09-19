@@ -19,7 +19,24 @@ use crate::{
 // calls them by name -- so they route through this one table by the socket
 // id the bridge echoes on every call. Each `connect` opens a fresh slot;
 // opening a second socket never resets the first (naia-lib/naia#193).
+//
+// Every access funnels through `table_mut` (plus `alloc_socket`'s
+// get-or-insert): one static-mut expression per helper, not one per call
+// site, which keeps the wasm build's static-mut warnings at two instead of
+// one per callback and handle.
 pub static mut SOCKET_TABLE: Option<SocketTable> = None;
+
+/// The live table, if a socket has been connected yet.
+///
+/// Safety: the borrow is created fresh on each call, used transiently
+/// within the caller's access, and dropped before the next one begins.
+/// SOCKET_TABLE is only touched from the same wasm32 thread -- the JS
+/// bridge callbacks and the socket handles -- and wasm32 is
+/// single-threaded, so no two borrows ever alias. None of the callback
+/// functions re-enter.
+pub(crate) fn table_mut() -> Option<&'static mut SocketTable> {
+    unsafe { SOCKET_TABLE.as_mut() }
+}
 
 /// Opens a fresh per-socket slot and returns its id, to be passed as the
 /// first argument of `naia_connect` so the JS bridge files its connection
@@ -36,11 +53,8 @@ pub fn alloc_socket() -> u32 {
 
 /// Closes a socket's slot, dropping its queued state.
 pub fn free_socket(socket_id: u32) {
-    // Safety: see alloc_socket above.
-    unsafe {
-        if let Some(table) = &mut SOCKET_TABLE {
-            table.disconnect(SocketId(socket_id));
-        }
+    if let Some(table) = table_mut() {
+        table.disconnect(SocketId(socket_id));
     }
 }
 
@@ -72,18 +86,11 @@ pub extern "C" fn receive_id(socket_id: u32, id_token: JsObject) {
 
     id_token.to_string(&mut id_token_string);
 
-    // Safety: SOCKET_TABLE is a static mut acting as the single-producer /
-    // single-consumer store between the JS bridge callbacks (producer) and
-    // the Rust game loop (consumer). wasm32 is single-threaded — the JS event
-    // loop and Rust code never execute concurrently, so accessing it without
-    // synchronization is safe on this target. None of the callback functions
-    // re-enter. A callback for an unknown (disconnected) socket is ignored.
-    unsafe {
-        if let Some(table) = &mut SOCKET_TABLE {
-            if let Some(state) = table.get_mut(SocketId(socket_id)) {
-                if let Some(id_cell) = &mut state.id_cell {
-                    *id_cell = IdentityToken::from_signaling_string(&id_token_string);
-                }
+    // A callback for an unknown (disconnected) socket is ignored.
+    if let Some(table) = table_mut() {
+        if let Some(state) = table.get_mut(SocketId(socket_id)) {
+            if let Some(id_cell) = &mut state.id_cell {
+                *id_cell = IdentityToken::from_signaling_string(&id_token_string);
             }
         }
     }
@@ -102,14 +109,11 @@ pub extern "C" fn receive_auth_error(socket_id: u32, status: JsObject, body: JsO
     status.to_string(&mut status_string);
     body.to_string(&mut body_string);
 
-    // Safety: see receive_id above.
-    unsafe {
-        if let Some(table) = &mut SOCKET_TABLE {
-            if let Some(state) = table.get_mut(SocketId(socket_id)) {
-                if let Some(auth_error_cell) = &mut state.auth_error_cell {
-                    if let Ok(status_code) = status_string.trim().parse::<u16>() {
-                        *auth_error_cell = Some((status_code, body_string));
-                    }
+    if let Some(table) = table_mut() {
+        if let Some(state) = table.get_mut(SocketId(socket_id)) {
+            if let Some(auth_error_cell) = &mut state.auth_error_cell {
+                if let Ok(status_code) = status_string.trim().parse::<u16>() {
+                    *auth_error_cell = Some((status_code, body_string));
                 }
             }
         }
@@ -122,14 +126,11 @@ pub extern "C" fn receive(socket_id: u32, message: JsObject) {
 
     message.to_u8_array(&mut message_string);
 
-    // Safety: see receive_id above.
-    unsafe {
-        if let Some(table) = &mut SOCKET_TABLE {
-            if let Some(state) = table.get_mut(SocketId(socket_id)) {
-                state
-                    .message_queue
-                    .push_back(message_string.into_boxed_slice());
-            }
+    if let Some(table) = table_mut() {
+        if let Some(state) = table.get_mut(SocketId(socket_id)) {
+            state
+                .message_queue
+                .push_back(message_string.into_boxed_slice());
         }
     }
 }
@@ -140,12 +141,9 @@ pub extern "C" fn error(socket_id: u32, error: JsObject) {
 
     error.to_string(&mut error_string);
 
-    // Safety: see receive_id above.
-    unsafe {
-        if let Some(table) = &mut SOCKET_TABLE {
-            if let Some(state) = table.get_mut(SocketId(socket_id)) {
-                state.error_queue.push_back(error_string);
-            }
+    if let Some(table) = table_mut() {
+        if let Some(state) = table.get_mut(SocketId(socket_id)) {
+            state.error_queue.push_back(error_string);
         }
     }
 }
@@ -156,12 +154,9 @@ pub extern "C" fn receive_candidate(socket_id: u32, candidate_js: JsObject) {
 
     candidate_js.to_string(&mut candidate_str);
 
-    // Safety: see receive_id above.
-    unsafe {
-        if let Some(table) = &mut SOCKET_TABLE {
-            if let Some(state) = table.get_mut(SocketId(socket_id)) {
-                state.server_addr = candidate_to_addr(&candidate_str);
-            }
+    if let Some(table) = table_mut() {
+        if let Some(state) = table.get_mut(SocketId(socket_id)) {
+            state.server_addr = candidate_to_addr(&candidate_str);
         }
     }
 }
