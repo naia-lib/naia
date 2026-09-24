@@ -189,26 +189,37 @@ pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);
 /// `ReceiveOutput` carrying them). Kept as a permanent regression sentinel.
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_RX_PACKETS_DECODED: AtomicUsize = AtomicUsize::new(0);
+/// Packets written to the socket, counted per successful send (`send_connection.rs`).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_TX_FRAMES: AtomicUsize = AtomicUsize::new(0);
+/// Entity spawn events applied to a connection's world manager (`remote_spawn_entity`).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_SPAWN_APPLIED: AtomicUsize = AtomicUsize::new(0);
+/// Calls to `transmit_send_job`, i.e. per-tick send executions (`send_state.rs`).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_SEND_ALL_PACKETS_CALLS: AtomicUsize = AtomicUsize::new(0);
+/// Host world events drained per send, summed (`host_world_events.len()` per drain).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_OUTGOING_CMDS_DRAINED_TOTAL: AtomicUsize = AtomicUsize::new(0);
+/// Granted entity-auth statuses emitted to a connection (`host_send_set_auth`, `Granted` only).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_AUTH_GRANTED_EMITTED: AtomicUsize = AtomicUsize::new(0);
+/// Room membership changes: user added to (`room_add_user`) or removed from (`room_remove_user`) a room.
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_ROOM_MOVE_CALLED: AtomicUsize = AtomicUsize::new(0);
+/// Per-connection scope visibility updates enqueued (entity shown, hidden, or despawned).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_SCOPE_DIFF_ENQUEUED: AtomicUsize = AtomicUsize::new(0);
+/// Set-auth messages enqueued for granted entities (`host_send_set_auth`, `Granted` only).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_SET_AUTH_ENQUEUED: AtomicUsize = AtomicUsize::new(0);
+/// Host world messages drained per send, summed (same drain as `SERVER_OUTGOING_CMDS_DRAINED_TOTAL`).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_WORLD_MSGS_DRAINED: AtomicUsize = AtomicUsize::new(0);
+/// Set-auth grants written into outgoing packets.
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_WROTE_SET_AUTH: AtomicUsize = AtomicUsize::new(0);
+/// World packets sent on the socket; ACK-only packets excluded (those count only toward `SERVER_TX_FRAMES`).
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_WORLD_PKTS_SENT: AtomicUsize = AtomicUsize::new(0);
 
