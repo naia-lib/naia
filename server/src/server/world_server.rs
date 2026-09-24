@@ -175,6 +175,8 @@ pub mod bench_iris_counters {
     }
 }
 
+/// Raw packets read off the socket, counted per packet on the socket-read path (`recv_state.rs`).
+/// Pairs with [`SERVER_RX_PACKETS_DECODED`] below; see its doc for the ratio sentinel.
 #[cfg(feature = "e2e_debug")]
 pub static SERVER_RX_FRAMES: AtomicUsize = AtomicUsize::new(0);
 /// Tick-buffered data packets that were actually DECODED (applied to the recv
