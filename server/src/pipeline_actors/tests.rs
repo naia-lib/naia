@@ -14,6 +14,9 @@
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 #[allow(unused_imports)]
 use naia_shared::DisconnectReason;
@@ -24,6 +27,7 @@ use crate::server::receive_output::ReceiveOutput;
 use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
+use super::runtime::{recv_worker_loop, ParkControl, RuntimeTimingHooks};
 use super::{
     drain_lifecycle, drain_tick_buffer, spawn_server_handles, CoordHandle, PipelinedWorldServer,
     RecvLifecycleEvent,
@@ -1583,5 +1587,151 @@ fn recv_drain_loop_terminates_on_persistent_transport_error() {
     assert_eq!(
         errors, 1,
         "one error per receive() call, not one per spin: {events:?}"
+    );
+}
+
+/// Iteration counter for the PF1 worker tests, via the `record_recv` timing
+/// hook (a plain `fn` pointer, so a file-scope atomic is the carrier).
+static RECV_WORKER_ITERATIONS: AtomicUsize = AtomicUsize::new(0);
+
+fn count_recv_worker_iteration(_: u64) {
+    RECV_WORKER_ITERATIONS.fetch_add(1, Ordering::SeqCst);
+}
+
+/// [PF1-A] (Usher 24599) The recv worker must not queue empty
+/// `ReceiveOutput`s. An idle `receive()` still builds an output; queueing one
+/// per poll iteration into the tick-drained unbounded channel is pure heap
+/// growth between drains (the R-CELL-MANAGER-BOOTSTRAP-LEAK flood). The
+/// per-output non-emptiness scan proves the skip is selective, and the
+/// iteration counter proves the worker really looped (no vacuous pass).
+/// Pre-fix this fails with thousands of queued empties.
+#[test]
+fn recv_worker_skips_empty_outputs() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let (_sim, mut recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+
+    // Idle transport, sender alive: readiness never fires, so the None-arm
+    // 100µs poll drives iterations with no wakeup help.
+    let (keepalive_tx, pr) = crate::transport::PacketChannel::unbounded();
+    recv.state.recv_io.load(pr);
+
+    let recv_slot = Arc::new(parking_lot::Mutex::new(Some(recv)));
+    let (out_tx, out_rx) = crossbeam_channel::unbounded::<ReceiveOutput<u64>>();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let park = Arc::new(ParkControl::new());
+    let test_panic = Arc::new(AtomicBool::new(false));
+    RECV_WORKER_ITERATIONS.store(0, Ordering::SeqCst);
+    let timing = RuntimeTimingHooks {
+        record_recv: Some(count_recv_worker_iteration),
+        record_send: None,
+        record_barrier: None,
+    };
+
+    let t_slot = Arc::clone(&recv_slot);
+    let t_tx = out_tx.clone();
+    let t_shutdown = Arc::clone(&shutdown);
+    let t_park = Arc::clone(&park);
+    let t_panic = Arc::clone(&test_panic);
+    let worker = std::thread::spawn(move || {
+        recv_worker_loop(&t_slot, &t_tx, &t_shutdown, &t_park, None, timing, &t_panic);
+    });
+    std::thread::sleep(Duration::from_millis(300));
+    shutdown.store(true, Ordering::SeqCst);
+    worker.join().expect("recv worker thread panicked");
+    drop(keepalive_tx);
+
+    let iters = RECV_WORKER_ITERATIONS.load(Ordering::SeqCst);
+    assert!(
+        iters > 100,
+        "precondition: worker must have iterated (only {iters}) — otherwise this test is vacuous"
+    );
+    let mut empties = 0u64;
+    let mut total = 0u64;
+    for output in out_rx.try_iter() {
+        total += 1;
+        if output.is_empty() {
+            empties += 1;
+        }
+    }
+    assert_eq!(
+        empties, 0,
+        "recv worker queued {empties}/{total} empty outputs in {iters} idle iterations (PF1-A)"
+    );
+}
+
+/// [PF1-B] (Usher 24599) The recv worker must exit when the transport
+/// readiness closes (in-process peer gone) instead of spinning on an
+/// instantly-resolving wait and flooding the undrained out-queue
+/// (~1.5 GB/s measured in R-CELL-MANAGER-BOOTSTRAP-LEAK). The flood is
+/// bounded: 10k queued outputs prove the spin within milliseconds, so the
+/// red run neither hangs the suite nor OOMs it. Pre-fix this fails (spin
+/// proven; the thread only stops via shutdown).
+#[test]
+fn recv_worker_exits_on_closed_readiness() {
+    let mut proto = Protocol::builder();
+    proto.lock();
+    let protocol = proto.build();
+    let (_sim, mut recv, _send) =
+        spawn_server_handles::<u64, _>(ServerConfig::default(), protocol).take_handles();
+
+    // Peer gone before spawn: the readiness channel is closed from the start.
+    let (tx, pr) = crate::transport::PacketChannel::unbounded();
+    drop(tx);
+    recv.state.recv_io.load(pr);
+    let readiness = recv
+        .readiness()
+        .expect("channel transport must expose readiness");
+
+    let recv_slot = Arc::new(parking_lot::Mutex::new(Some(recv)));
+    let (out_tx, out_rx) = crossbeam_channel::unbounded::<ReceiveOutput<u64>>();
+    let shutdown = Arc::new(AtomicBool::new(false));
+    let park = Arc::new(ParkControl::new());
+    let test_panic = Arc::new(AtomicBool::new(false));
+    let timing = RuntimeTimingHooks {
+        record_recv: None,
+        record_send: None,
+        record_barrier: None,
+    };
+    let (done_tx, done_rx) = crossbeam_channel::bounded::<()>(1);
+
+    let t_slot = Arc::clone(&recv_slot);
+    let t_tx = out_tx.clone();
+    let t_shutdown = Arc::clone(&shutdown);
+    let t_park = Arc::clone(&park);
+    let t_panic = Arc::clone(&test_panic);
+    let worker = std::thread::spawn(move || {
+        recv_worker_loop(
+            &t_slot,
+            &t_tx,
+            &t_shutdown,
+            &t_park,
+            Some(readiness),
+            timing,
+            &t_panic,
+        );
+        let _ = done_tx.send(());
+    });
+
+    // Discriminate exit (fixed) from spin (broken).
+    let mut exited = false;
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while Instant::now() < deadline {
+        if done_rx.try_recv().is_ok() {
+            exited = true;
+            break;
+        }
+        if out_rx.len() > 10_000 {
+            break; // spin proven; stop the flood before asserting
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    shutdown.store(true, Ordering::SeqCst);
+    worker.join().expect("recv worker thread panicked");
+    assert!(
+        exited,
+        "recv worker did not exit on closed transport readiness — spinning into an undrained queue (PF1-B)"
     );
 }

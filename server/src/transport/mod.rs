@@ -129,6 +129,15 @@ mod inner {
             let _ = self.0.recv().await;
         }
 
+        /// True when the signalling sender is gone: no future packet can
+        /// ever arrive on this transport (no reattach API exists). The
+        /// recv worker treats this as terminal (PF1-B) rather than
+        /// spinning on an instantly-resolving `wait()` while flooding the
+        /// undrained out-queue.
+        pub fn is_closed(&self) -> bool {
+            self.0.is_closed()
+        }
+
         /// Clear any buffered readiness tokens so a burst of packets that
         /// produced multiple pings collapses into a single wake (the
         /// coalescing `bounded(1)` buffer means at most one is ever held,

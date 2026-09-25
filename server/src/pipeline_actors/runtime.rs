@@ -80,7 +80,7 @@ pub enum RuntimeState {
 
 /// Park-control flags + condvar pair (parking_lot Mutex + Condvar) used to
 /// coordinate the main thread parking the worker threads at their checkpoints.
-struct ParkControl {
+pub(crate) struct ParkControl {
     /// `true` ⇒ workers should park at the top of their loop iteration.
     park: AtomicBool,
     /// `true` ⇒ the send worker must, on its next iteration, drain the
@@ -140,7 +140,7 @@ struct ParkControl {
 }
 
 impl ParkControl {
-    fn new() -> Self {
+    pub(crate) fn new() -> Self {
         // bounded(1) ⇒ coalescing: at most one pending wake token.
         let (control_tx, control_rx) = smol::channel::bounded(1);
         Self {
@@ -666,7 +666,7 @@ fn worker_park_checkpoint(park: &ParkControl) {
 /// 3. `recv.receive()` + ship the `ReceiveOutput`.
 /// 4. **Deposit** the handle back *before* looping to the checkpoint.
 #[cfg_attr(not(workers_active), allow(unused_variables))]
-fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
+pub(crate) fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
     recv_slot: &Arc<Mutex<Option<RecvHandle<E>>>>,
     out_tx: &Sender<ReceiveOutput<E>>,
     shutdown: &Arc<AtomicBool>,
@@ -745,10 +745,15 @@ fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                 }
             }
 
-            // Unbounded channel: NEVER drop a `ReceiveOutput` — it already holds
-            // command packets pulled off the socket. `send` only errors if the
-            // receiver hung up (teardown) — exit cleanly then.
-            if out_tx.send(output).is_err() {
+            // Skip empty outputs (PF1-A): an idle `receive()` still builds a
+            // `ReceiveOutput`, and queueing one per iteration into the
+            // tick-drained unbounded channel is pure heap growth between
+            // drains. `is_empty` already blesses skipping as safe.
+            // Unbounded channel: NEVER drop a non-empty `ReceiveOutput` — it
+            // already holds command packets pulled off the socket. `send`
+            // only errors if the receiver hung up (teardown) — exit cleanly
+            // then.
+            if !output.is_empty() && out_tx.send(output).is_err() {
                 return;
             }
             // Idle inter-iteration wait.
@@ -769,6 +774,13 @@ fn recv_worker_loop<E: Copy + Eq + Hash + Send + Sync + 'static>(
                         smol::block_on(smol::future::or(readiness.wait(), async {
                             let _ = park.control_rx.recv().await;
                         }));
+                    }
+                    // Terminal peer loss (PF1-B): a closed readiness resolves
+                    // instantly every iteration. Exit instead of spinning —
+                    // the deposited handle stays in `recv_slot`, so the
+                    // consumer's park-window drain keeps working after us.
+                    if readiness.is_closed() {
+                        return;
                     }
                     // Clear the token(s) that woke us so the next wait starts
                     // fresh (data is drained by recv.receive() at the loop top).
