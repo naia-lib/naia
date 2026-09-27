@@ -880,7 +880,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
             warn!("user does not exist");
-            return Err(NaiaServerError::Message("user does not exist".to_string()));
+            return Err(NaiaServerError::UserNotFound);
         };
         let Some(send_conn) = self
             .send
@@ -889,9 +889,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .get_mut(&user.address())
         else {
             warn!("currently not connected to user");
-            return Err(NaiaServerError::Message(
-                "currently not connected to user".to_string(),
-            ));
+            return Err(NaiaServerError::UserNotFound);
         };
         let gwm = self.shared.global_world_manager.read();
         let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
@@ -906,9 +904,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         ) {
             // Queue-depth cap reached: nothing was enqueued. Report it rather than
             // handing back an id whose response will never arrive.
-            return Err(NaiaServerError::Message(
-                "channel send queue full; retry later".to_string(),
-            ));
+            return Err(NaiaServerError::MessageQueueFull);
         }
 
         Ok(request_id)

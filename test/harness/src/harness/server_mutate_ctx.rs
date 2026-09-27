@@ -551,7 +551,7 @@ impl<'a, 'scenario: 'a> ServerMutateCtx<'a, 'scenario> {
             let (server, _, _, _) = scenario.split_for_server_mut();
             server.send_request::<C, Q>(&user_key, request)
         } else {
-            Err(NaiaServerError::Message("user does not exist".to_string()))
+            Err(NaiaServerError::UserNotFound)
         }
     }
 

@@ -622,9 +622,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         ) {
             // Queue-depth cap reached: nothing was enqueued. Report it rather than
             // handing back an id whose response will never arrive.
-            return Err(NaiaClientError::Message(
-                "channel send queue full; retry later".to_string(),
-            ));
+            return Err(NaiaClientError::MessageQueueFull);
         }
 
         Ok(request_id)

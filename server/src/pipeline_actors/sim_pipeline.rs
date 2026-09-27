@@ -1824,17 +1824,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             .state
             .global_request_manager
             .create_request_id(user_key);
-        self.require_live_send_connection(
-            user_key,
-            NaiaServerError::Message("user does not exist".to_string()),
-        )
-        .map_err(|_| {
-            if self.coord().state.user_store.get(user_key).is_some() {
-                NaiaServerError::Message("currently not connected to user".to_string())
-            } else {
-                NaiaServerError::Message("user does not exist".to_string())
-            }
-        })?;
+        self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
 
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Request {

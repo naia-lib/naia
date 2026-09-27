@@ -116,7 +116,7 @@ fn send_connection_readiness_is_pure_and_tracks_materialization() {
 }
 
 mod outbound_message_test_protocol {
-    use naia_shared::{Channel, Message};
+    use naia_shared::{Channel, Message, Request, Response};
 
     #[derive(Channel)]
     pub struct TestServerChannel;
@@ -125,6 +125,25 @@ mod outbound_message_test_protocol {
     pub struct TestServerMessage {
         pub value: u32,
     }
+
+    #[derive(Channel)]
+    pub struct TestRequestChannel;
+
+    #[derive(Message, PartialEq, Eq, Hash)]
+    pub struct TestRequest {
+        pub query: u32,
+    }
+
+    #[derive(Message, PartialEq, Eq, Hash)]
+    pub struct TestResponse {
+        pub result: u32,
+    }
+
+    impl Request for TestRequest {
+        type Response = TestResponse;
+    }
+
+    impl Response for TestResponse {}
 }
 
 #[test]
@@ -183,6 +202,193 @@ fn pipelined_send_message_fails_before_materialization_and_after_disconnect() {
     assert!(matches!(
         server.send_message::<TestServerChannel, _>(&user_key, &message),
         Err(NaiaServerError::UserNotFound)
+    ));
+}
+
+#[test]
+fn pipelined_send_request_returns_user_not_found_without_live_connection() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54323".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let request = TestRequest { query: 9 };
+    server.receive_user(user_key, address);
+
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::UserNotFound)
+    ));
+
+    let (coord, recv, mut send) = server.take_handles();
+    let gwm = send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &send.state.shared.server_config.connection,
+        &send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &send.state.shared.channel_kinds,
+        &gwm,
+        send.state.shared.server_config.max_replicated_entities as usize,
+    );
+    drop(gwm);
+    send.state.send_user_connections.insert(address, send_conn);
+    server.restore_handles(coord, recv, send);
+
+    assert!(
+        server
+            .send_request::<TestRequestChannel, _>(&user_key, &request)
+            .is_ok(),
+        "materialized send connection must accept the request"
+    );
+
+    let (coord, recv, mut send) = server.take_handles();
+    send.state.send_user_connections.remove(&address);
+    server.restore_handles(coord, recv, send);
+
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::UserNotFound)
+    ));
+}
+
+#[test]
+fn resident_send_request_returns_user_not_found_without_live_connection() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use crate::server::world_server::InternalWorldServer;
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54324".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let request = TestRequest { query: 9 };
+    server.receive_user(user_key, address);
+
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::UserNotFound)
+    ));
+
+    let gwm = server.send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &server.send.state.shared.server_config.connection,
+        &server.send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &server.send.state.shared.channel_kinds,
+        &gwm,
+        server
+            .send
+            .state
+            .shared
+            .server_config
+            .max_replicated_entities as usize,
+    );
+    drop(gwm);
+    server
+        .send
+        .state
+        .send_user_connections
+        .insert(address, send_conn);
+
+    assert!(
+        server
+            .send_request::<TestRequestChannel, _>(&user_key, &request)
+            .is_ok(),
+        "materialized send connection must accept the request"
+    );
+
+    server.send.state.send_user_connections.remove(&address);
+
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::UserNotFound)
+    ));
+}
+
+#[test]
+fn resident_send_request_returns_message_queue_full_when_channel_queue_fills() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use crate::server::world_server::InternalWorldServer;
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(2),
+            }),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54325".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let request = TestRequest { query: 9 };
+    server.receive_user(user_key, address);
+
+    let gwm = server.send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &server.send.state.shared.server_config.connection,
+        &server.send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &server.send.state.shared.channel_kinds,
+        &gwm,
+        server
+            .send
+            .state
+            .shared
+            .server_config
+            .max_replicated_entities as usize,
+    );
+    drop(gwm);
+    server
+        .send
+        .state
+        .send_user_connections
+        .insert(address, send_conn);
+
+    assert!(server
+        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .is_ok());
+    assert!(server
+        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .is_ok());
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::MessageQueueFull)
     ));
 }
 
