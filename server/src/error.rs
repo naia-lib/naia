@@ -8,6 +8,7 @@ use std::{error::Error, fmt, net::SocketAddr};
 ///
 /// [`Server::send_message`]: crate::Server::send_message
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum NaiaServerError {
     /// A general descriptive error message.
     Message(String),

@@ -8,6 +8,7 @@ use std::{error::Error, fmt};
 ///
 /// [`Client::send_message`]: crate::Client::send_message
 #[derive(Debug)]
+#[non_exhaustive]
 pub enum NaiaClientError {
     /// A general descriptive error message.
     Message(String),
