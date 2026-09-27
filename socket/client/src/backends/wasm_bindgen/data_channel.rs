@@ -9,8 +9,16 @@ use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{
     ErrorEvent, MessageChannel, MessageEvent, ProgressEvent, RtcConfiguration, RtcDataChannel,
     RtcDataChannelInit, RtcDataChannelState, RtcDataChannelType, RtcIceCandidate,
-    RtcIceCandidateInit, RtcPeerConnection, RtcSdpType, RtcSessionDescriptionInit, XmlHttpRequest,
+    RtcIceCandidateInit, RtcIceGatheringState, RtcPeerConnection, RtcSdpType,
+    RtcSessionDescriptionInit, XmlHttpRequest,
 };
+
+/// Bound on ICE gathering before the session offer is POSTed. Gathering that
+/// never completes is a loud client-side error, never an indefinite hang and
+/// never a silent candidate-less offer. Sized generously: typical networks
+/// complete in a few seconds, but constrained ones were measured at ~40s of
+/// candidate-probing tail before `complete` fires.
+const ICE_GATHERING_TIMEOUT_MS: i32 = 60_000;
 
 use naia_socket_shared::{parse_server_url, IdentityToken, SocketConfig};
 
@@ -269,13 +277,85 @@ impl DataChannel {
                         request.set_onload(Some(request_callback.as_ref().unchecked_ref()));
                         request_callback.forget();
 
-                        request
-                            .send_with_opt_str(Some(
-                                peer_3.local_description().unwrap().sdp().as_str(),
-                            ))
-                            .unwrap_or_else(|err| {
-                                info!("WebSys, can't sent request str. Original Error: {:?}", err)
-                            });
+                        // The offer is worthless without the candidates this
+                        // peer was configured to gather (STUN srflx above),
+                        // and posting it early throws that work away with no
+                        // trickle channel to recover it. Gate the send on
+                        // gathering-complete, with a loud client-side timeout.
+                        // The SDP is read at send time: gathering rewrites
+                        // the local description in place, so a snapshot taken
+                        // now would post the pre-gathering text.
+                        let settled = Rc::new(RefCell::new(false));
+                        let window = web_sys::window().expect("gathering gate needs a window");
+                        let timeout_cb = Closure::wrap(Box::new({
+                            let settled = Rc::clone(&settled);
+                            let id_sender = id_sender_3.clone();
+                            move || {
+                                if *settled.borrow() {
+                                    return;
+                                }
+                                *settled.borrow_mut() = true;
+                                // 504 is client-side: no server status exists
+                                // for a gathering failure. The body rides
+                                // base64 per naia-lib/naia#133 so the reason
+                                // survives decode_reject_payload.
+                                id_sender.send_error(
+                                    504,
+                                    base64::encode(format!(
+                                        "ice gathering did not complete within {}ms: \
+                                         session offer never posted",
+                                        ICE_GATHERING_TIMEOUT_MS
+                                    )),
+                                );
+                            }
+                        })
+                            as Box<dyn FnMut()>);
+                        let timeout_handle = window
+                            .set_timeout_with_callback_and_timeout_and_arguments_0(
+                                timeout_cb.as_ref().unchecked_ref(),
+                                ICE_GATHERING_TIMEOUT_MS,
+                            )
+                            .expect("gathering timeout must arm");
+                        timeout_cb.forget();
+                        let send_now = Rc::new({
+                            let settled = Rc::clone(&settled);
+                            let peer = peer_3.clone();
+                            move || {
+                                if *settled.borrow() {
+                                    return;
+                                }
+                                *settled.borrow_mut() = true;
+                                window.clear_timeout_with_handle(timeout_handle);
+                                let offer_sdp = peer.local_description().unwrap().sdp();
+                                request
+                                    .send_with_opt_str(Some(offer_sdp.as_str()))
+                                    .unwrap_or_else(|err| {
+                                        info!(
+                                            "WebSys, can't sent request str. Original Error: {:?}",
+                                            err
+                                        )
+                                    });
+                            }
+                        });
+                        if peer_3.ice_gathering_state() == RtcIceGatheringState::Complete {
+                            send_now();
+                        } else {
+                            let state_cb = Closure::wrap(Box::new({
+                                let peer = peer_3.clone();
+                                let send_now = Rc::clone(&send_now);
+                                move || {
+                                    if peer.ice_gathering_state() == RtcIceGatheringState::Complete
+                                    {
+                                        send_now();
+                                    }
+                                }
+                            })
+                                as Box<dyn FnMut()>);
+                            peer_3.set_onicegatheringstatechange(Some(
+                                state_cb.as_ref().unchecked_ref(),
+                            ));
+                            state_cb.forget();
+                        }
                     });
                     let peer_desc_callback = Closure::wrap(peer_desc_func);
 

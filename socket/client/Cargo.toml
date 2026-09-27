@@ -29,9 +29,9 @@ wasm-bindgen = { version = "0.2", optional = true  }
 js-sys = { version = "0.3.64", optional = true  }
 web_sys = { version = "0.3.64", package = "web-sys", features = [
     "RtcDataChannel", "RtcDataChannelInit", "RtcDataChannelType", "MessageChannel", "MessagePort",
-    "RtcIceCandidate", "RtcIceCandidateInit", "RtcConfiguration", "RtcDataChannelState",
+    "RtcIceCandidate", "RtcIceCandidateInit", "RtcConfiguration", "RtcDataChannelState", "RtcIceGatheringState",
     "RtcPeerConnection", "RtcSdpType",  "RtcSessionDescription", "RtcSessionDescriptionInit",
-    "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob" ], optional = true  }
+    "XmlHttpRequest", "XmlHttpRequestEventTarget", "MessageEvent", "ProgressEvent", "ErrorEvent", "Blob", "Window" ], optional = true  }
 tinyjson = { version = "2.3", optional = true }
 miniquad = { version = "0.3", features = ["log-impl"], optional = true }
 

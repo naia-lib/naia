@@ -80,6 +80,31 @@ const naia_socket = {
         peer.createOffer().then(function(offer) {
             return peer.setLocalDescription(offer);
         }).then(function() {
+            // The offer is worthless without the candidates this peer was
+            // configured to gather (STUN srflx above), and posting it early
+            // throws that work away with no trickle channel to recover it.
+            // Gate the send on gathering-complete, with a loud timeout that
+            // reports through the error callback: never an indefinite hang,
+            // never a silent candidate-less offer. The SDP is read at send
+            // time: gathering rewrites the local description in place, so a
+            // snapshot taken now would post the pre-gathering text.
+            let settled = false;
+            // Sized generously: typical networks complete in a few seconds,
+            // but constrained ones were measured at ~40s of candidate-probing
+            // tail before "complete" fires.
+            let timer = setTimeout(function() {
+                if (settled) return;
+                settled = true;
+                naia_socket.error(socket_id, "ice gathering did not complete within 60000ms: session offer never posted", null);
+            }, 60000);
+            function maybe_post_offer() {
+                if (settled) return;
+                if (peer.iceGatheringState !== "complete") return;
+                settled = true;
+                clearTimeout(timer);
+                post_offer();
+            }
+            function post_offer() {
             let request = new XMLHttpRequest();
             request.open("POST", SESSION_ADDRESS);
             if (auth_string.length > 0) {
@@ -128,6 +153,9 @@ const naia_socket = {
                 naia_socket.error(socket_id, error_str, err);
             };
             request.send(peer.localDescription.sdp);
+            }
+            peer.onicegatheringstatechange = maybe_post_offer;
+            maybe_post_offer();
         }).catch(function(err) {
             naia_socket.error(socket_id, "error during 'createOffer'", err);
         });

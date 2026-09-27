@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>ice-probe</title></head>
+<body><pre id="result">{"pending":true}</pre>
+<script>
+// Faithful to naia socket/client wasm_bindgen/data_channel.rs and
+// miniquad/naia_socket.js: iceServers: [{urls: ["stun:stun.l.google.com:19302"]}].
+(function () {
+  var out = document.getElementById("result");
+  var report = { candidates: [], gatheringState: null, blind: false, error: null };
+  function done() {
+    try {
+      report.gatheringState = pc ? pc.iceGatheringState : "no-pc";
+    } catch (e) { report.error = "state: " + e; }
+    out.textContent = JSON.stringify(report);
+  }
+  var pc = null;
+  try {
+    pc = new RTCPeerConnection({ iceServers: [{ urls: ["stun:stun.l.google.com:19302"] }] });
+    pc.createDataChannel("data", { ordered: false, maxRetransmits: 0 });
+    pc.onicecandidate = function (e) {
+      if (e.candidate) {
+        report.candidates.push(e.candidate.candidate);
+      } else {
+        done(); // null candidate = end of gathering
+      }
+    };
+    pc.createOffer().then(function (offer) {
+      return pc.setLocalDescription(offer);
+    }).then(function () {
+      // What naia's wasm client POSTs: localDescription immediately,
+      // before gathering completes.
+      try { report.postedSdp = pc.localDescription.sdp; } catch (e) {}
+    }).catch(function (e) { report.error = "offer: " + e; done(); });
+    // Deadline: gathering that never completes is BLIND, not clean.
+    // (A srflx/relay sighting before the deadline is still a positive
+    // fact; blindness only threatens absence claims.)
+    setTimeout(function () {
+      if (out.textContent.indexOf("pending") !== -1) {
+        report.blind = true;
+        done();
+      }
+    }, 20000);
+  } catch (e) { report.error = "setup: " + e; report.blind = true; done(); }
+})();
+</script>
+</body></html>

@@ -81,6 +81,11 @@ mod miniquad_js_bridge_host_oracle {
     /// The JavaScript half of the bridge, exactly as it ships.
     const NAIA_SOCKET_JS: &str = include_str!("backends/miniquad/naia_socket.js");
 
+    /// The wasm_bindgen half, exactly as it ships. It compiles only for
+    /// wasm32, but its gathering-gate contract is readable as text on the
+    /// host -- same doctrine as the JS bridge above.
+    const WASM_DATA_CHANNEL_RS: &str = include_str!("backends/wasm_bindgen/data_channel.rs");
+
     /// The Rust half. `extern "C"` declarations are checked by nobody: a
     /// mismatch between this and the JS import object is a runtime failure in a
     /// browser, not a compile error here, which is precisely why it is worth an
@@ -444,6 +449,60 @@ mod miniquad_js_bridge_host_oracle {
                 "the JS bridge must route `{call}` to its socket",
             );
         }
+    }
+
+    /// The session offer must wait for ICE gathering. Posting the local
+    /// description the moment `setLocalDescription` resolves throws away the
+    /// STUN srflx candidates the peer was configured to gather, and the
+    /// session protocol has no trickle channel to recover them. The single
+    /// send site must therefore sit behind the gathering-complete gate, with
+    /// a loud timeout that errors instead of hanging or posting early.
+    #[test]
+    fn the_offer_post_waits_for_gathering_complete() {
+        assert!(
+            NAIA_SOCKET_JS.contains("peer.onicegatheringstatechange = maybe_post_offer"),
+            "the JS bridge must arm the gathering-complete gate before posting",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("if (peer.iceGatheringState !== \"complete\") return;"),
+            "the gate must refuse to post until gathering is complete",
+        );
+        assert_eq!(
+            NAIA_SOCKET_JS.matches("request.send(").count(),
+            1,
+            "the offer must have exactly one send site, inside the gate -- \
+             a second eager send would silently restore the defect",
+        );
+        assert!(
+            NAIA_SOCKET_JS.contains("session offer never posted"),
+            "a gathering timeout must surface a diagnosable error, never hang",
+        );
+    }
+
+    /// Same gate on the wasm_bindgen half, pinned through the same strings:
+    /// both halves report the identical timeout message, so a divergence in
+    /// either repair reds here instead of shipping two behaviors.
+    #[test]
+    fn the_wasm_backend_gates_its_offer_the_same_way() {
+        assert!(
+            WASM_DATA_CHANNEL_RS
+                .matches("RtcIceGatheringState::Complete")
+                .count()
+                >= 2,
+            "the wasm half must check gathering-complete on both the fast path and the event path",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("set_onicegatheringstatechange"),
+            "the wasm half must arm the gathering-complete event",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("session offer never posted"),
+            "the wasm half must report the same diagnosable timeout as the JS bridge",
+        );
+        assert!(
+            WASM_DATA_CHANNEL_RS.contains("ICE_GATHERING_TIMEOUT_MS"),
+            "the wasm half must bound its gathering wait",
+        );
     }
 
     /// Framework-last, and unconditional.

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>offer-proof</title></head>
+<body><pre id="result">{"pending":true}</pre>
+<script>
+// Test-only harness: drives the SHIPPED miniquad naia_socket.js (path
+// substituted by the driver) against a live server through the logging
+// proxy, so the POSTed offer can be inspected on the wire.
+var MQ_JS = "__MQ_JS_PATH__";
+var SERVER_ADDR = "__SERVER_ADDR__"; // trailing slash, proxy URL
+var wasm_exports = {
+  receive: function () {},
+  receive_id: function () {},
+  receive_candidate: function () {},
+  receive_auth_error: function (sid, status, body) {
+    document.getElementById("result").textContent = JSON.stringify({
+      auth_error: true,
+      status: naia_socket.get_js_object(status),
+      body: naia_socket.get_js_object(body),
+    });
+  },
+};
+function miniquad_add_plugin() {}
+</script>
+<script id="realjs"></script>
+<script>
+(function () {
+  document.getElementById("realjs").src = "file://" + MQ_JS;
+  document.getElementById("realjs").onload = function () {
+    try {
+      var orig_error = naia_socket.error;
+      naia_socket.error = function (sid, desc, err) {
+        document.getElementById("result").textContent =
+          JSON.stringify({ error: String(desc) });
+        return orig_error.call(naia_socket, sid, desc, err);
+      };
+      var addr = naia_socket.js_object(SERVER_ADDR);
+      var path = naia_socket.js_object("rtc_session");
+      var auth = naia_socket.js_object("ZGVtbw==");
+      var proto = naia_socket.js_object("0000000000000000000000000000d000");
+      naia_socket.connect(1, addr, path, auth, proto);
+    } catch (e) {
+      document.getElementById("result").textContent =
+        JSON.stringify({ error: "setup: " + e });
+    }
+  };
+})();
+</script>
+</body></html>
