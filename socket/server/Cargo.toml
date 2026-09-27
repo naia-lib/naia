@@ -27,3 +27,6 @@ webrtc-unreliable = { version = "0.6.0", default-features = false }
 async-dup = { version = "1.2.2" }
 http = { version = "0.2" }
 base64 = { version = "0.13" }
+
+[dev-dependencies]
+naia-client-socket = { version = "0.25", path = "../client" }
