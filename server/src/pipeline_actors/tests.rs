@@ -14,8 +14,12 @@
 
 use std::collections::HashSet;
 use std::net::SocketAddr;
+// PF1 worker-test imports only (see the `workers_active` gate on the tests).
+#[cfg(workers_active)]
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+#[cfg(workers_active)]
 use std::sync::Arc;
+#[cfg(workers_active)]
 use std::time::{Duration, Instant};
 
 #[allow(unused_imports)]
@@ -27,6 +31,8 @@ use crate::server::receive_output::ReceiveOutput;
 use crate::user::{UserKey, WorldUser};
 use crate::{NaiaServerError, RecvHandle, SendHandle, ServerConfig};
 
+// PF1 worker-test imports only (see the `workers_active` gate on the tests).
+#[cfg(workers_active)]
 use super::runtime::{recv_worker_loop, ParkControl, RuntimeTimingHooks};
 use super::{
     drain_lifecycle, drain_tick_buffer, spawn_server_handles, CoordHandle, PipelinedWorldServer,
@@ -1592,8 +1598,10 @@ fn recv_drain_loop_terminates_on_persistent_transport_error() {
 
 /// Iteration counter for the PF1 worker tests, via the `record_recv` timing
 /// hook (a plain `fn` pointer, so a file-scope atomic is the carrier).
+#[cfg(workers_active)]
 static RECV_WORKER_ITERATIONS: AtomicUsize = AtomicUsize::new(0);
 
+#[cfg(workers_active)]
 fn count_recv_worker_iteration(_: u64) {
     RECV_WORKER_ITERATIONS.fetch_add(1, Ordering::SeqCst);
 }
