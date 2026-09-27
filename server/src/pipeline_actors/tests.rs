@@ -1605,6 +1605,10 @@ fn count_recv_worker_iteration(_: u64) {
 /// per-output non-emptiness scan proves the skip is selective, and the
 /// iteration counter proves the worker really looped (no vacuous pass).
 /// Pre-fix this fails with thousands of queued empties.
+// Active worker only: under `not(workers_active)` this loop is a
+// consumer-driven parking service, so the self-driving poll this test joins
+// does not exist (the join would hang the suite).
+#[cfg(workers_active)]
 #[test]
 fn recv_worker_skips_empty_outputs() {
     let mut proto = Protocol::builder();
@@ -1669,6 +1673,8 @@ fn recv_worker_skips_empty_outputs() {
 /// bounded: 10k queued outputs prove the spin within milliseconds, so the
 /// red run neither hangs the suite nor OOMs it. Pre-fix this fails (spin
 /// proven; the thread only stops via shutdown).
+// Active worker only: see `recv_worker_skips_empty_outputs`.
+#[cfg(workers_active)]
 #[test]
 fn recv_worker_exits_on_closed_readiness() {
     let mut proto = Protocol::builder();
