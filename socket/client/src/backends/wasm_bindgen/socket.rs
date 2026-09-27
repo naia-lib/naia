@@ -22,7 +22,7 @@ impl Socket {
         config: &SocketConfig,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(server_session_url, config, None, None, protocol_id);
+        Self::connect_inner(server_session_url, config, None, None, protocol_id)
     }
 
     /// Connects to the given server address with authentication
@@ -32,13 +32,13 @@ impl Socket {
         auth_bytes: Vec<u8>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(
+        Self::connect_inner(
             server_session_url,
             config,
             Some(auth_bytes),
             None,
             protocol_id,
-        );
+        )
     }
 
     /// Connects to the given server address with authentication
@@ -48,13 +48,13 @@ impl Socket {
         auth_headers: Vec<(String, String)>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(
+        Self::connect_inner(
             server_session_url,
             config,
             None,
             Some(auth_headers),
             protocol_id,
-        );
+        )
     }
 
     /// Connects to the given server address with authentication
@@ -65,13 +65,13 @@ impl Socket {
         auth_headers: Vec<(String, String)>,
         protocol_id: &str,
     ) -> (IdentityReceiver, PacketSender, PacketReceiver) {
-        return Self::connect_inner(
+        Self::connect_inner(
             server_session_url,
             config,
             Some(auth_bytes),
             Some(auth_headers),
             protocol_id,
-        );
+        )
     }
 
     /// Connects to the given server address
@@ -98,7 +98,7 @@ impl Socket {
 
         data_channel.start();
 
-        return (id_receiver, packet_sender, packet_receiver);
+        (id_receiver, packet_sender, packet_receiver)
     }
 
     // Creates a Socket from an underlying DataPort.
@@ -108,7 +108,7 @@ impl Socket {
         data_port: &DataPort,
     ) -> (PacketSender, PacketReceiver) {
         let addr_cell = AddrCell::new();
-        return Socket::setup_io(config, &addr_cell, data_port);
+        Socket::setup_io(config, &addr_cell, data_port)
     }
 
     fn setup_io(
@@ -117,12 +117,12 @@ impl Socket {
         data_port: &DataPort,
     ) -> (PacketSender, PacketReceiver) {
         // Setup Packet Sender
-        let packet_sender = PacketSender::new(&data_port, addr_cell);
+        let packet_sender = PacketSender::new(data_port, addr_cell);
 
         // Setup Packet Receiver
-        let inner_receiver = PlainPacketReceiver::new(&data_port, addr_cell);
+        let inner_receiver = PlainPacketReceiver::new(data_port, addr_cell);
         let packet_receiver = PacketReceiver::new(inner_receiver, &config.link_condition);
 
-        return (packet_sender, packet_receiver);
+        (packet_sender, packet_receiver)
     }
 }

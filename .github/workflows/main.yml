@@ -122,6 +122,36 @@ jobs:
           command: test
           args: --package ${{ matrix.package }} --features ${{ matrix.features }}
 
+  socket-wasm-clippy:
+    name: Socket WASM Clippy
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-client-socket,
+            naia-socket-shared,
+          ]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      # The wasm_bindgen backend is cfg(target_arch)-gated: host clippy never
+      # compiles it, and the demo wasm job lints demo crates with --no-deps,
+      # so neither sees this code. --all-targets covers the test targets too.
+      - name: Clippy
+        uses: actions-rs/cargo@v1
+        with:
+          command: clippy
+          args: --package ${{ matrix.package }} --target wasm32-unknown-unknown --features wbindgen --all-targets --no-deps --
+
   other:
     name: Other
     strategy:

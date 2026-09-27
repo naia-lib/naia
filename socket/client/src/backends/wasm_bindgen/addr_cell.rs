@@ -36,6 +36,6 @@ impl AddrCell {
     }
 
     pub fn set_addr(&mut self, addr: &SocketAddr) {
-        self.cell.lock().expect("cannot borrow AddrCell.cell!").0 = ServerAddr::Found(addr.clone());
+        self.cell.lock().expect("cannot borrow AddrCell.cell!").0 = ServerAddr::Found(*addr);
     }
 }
