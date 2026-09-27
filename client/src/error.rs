@@ -23,6 +23,8 @@ pub enum NaiaClientError {
     /// queued. The caller may retry on the next tick or discard the message.
     /// Configure [`ReliableSettings::max_queue_depth`] to adjust the limit.
     MessageQueueFull,
+    /// No connection to the server exists. The caller must connect first.
+    NotConnected,
 }
 
 impl NaiaClientError {
@@ -41,6 +43,7 @@ impl fmt::Display for NaiaClientError {
             Self::RecvError => write!(f, "Naia Client Error: Recv Error"),
             Self::IdError(code) => write!(f, "Naia Client Error: Id Error: {}", code),
             Self::MessageQueueFull => write!(f, "Naia Client Error: MessageQueueFull"),
+            Self::NotConnected => write!(f, "Naia Client Error: NotConnected"),
         }
     }
 }

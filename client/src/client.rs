@@ -601,9 +601,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         let Some(connection) = &mut self.server_connection else {
             warn!("currently not connected to server");
-            return Err(NaiaClientError::Message(
-                "currently not connected to server".to_string(),
-            ));
+            return Err(NaiaClientError::NotConnected);
         };
         let mut converter = connection
             .base
@@ -3093,5 +3091,58 @@ mod drain_termination_tests {
             errors, 1,
             "one error per maintain_handshake call, not one per spin"
         );
+    }
+}
+
+// ---- N1-b remainder (27202/4): the client's send path must refuse with a
+// typed variant when no connection exists, like every other send_request arm.
+#[cfg(test)]
+mod typed_refusal_tests {
+    use naia_shared::{
+        Channel, ChannelDirection, ChannelMode, Message, Protocol, ReliableSettings, Request,
+        Response,
+    };
+
+    use super::*;
+    use crate::NaiaClientError;
+
+    #[derive(Channel)]
+    struct TestRequestChannel;
+
+    #[derive(Message)]
+    struct TestRequest {
+        query: u32,
+    }
+
+    #[derive(Message)]
+    struct TestResponse {
+        result: u32,
+    }
+
+    impl Request for TestRequest {
+        type Response = TestResponse;
+    }
+
+    impl Response for TestResponse {}
+
+    #[test]
+    fn send_request_before_connect_returns_not_connected() {
+        let mut proto = Protocol::builder();
+        proto
+            .add_channel::<TestRequestChannel>(
+                ChannelDirection::Bidirectional,
+                ChannelMode::UnorderedReliable(ReliableSettings::default()),
+            )
+            .add_message::<TestRequest>()
+            .add_message::<TestResponse>();
+        // Unlocked: Client::new locks the protocol itself.
+        let protocol = proto.build();
+
+        let mut client = Client::<u64>::new(ClientConfig::default(), protocol);
+        let request = TestRequest { query: 7 };
+        assert!(matches!(
+            client.send_request::<TestRequestChannel, _>(&request),
+            Err(NaiaClientError::NotConnected)
+        ));
     }
 }
