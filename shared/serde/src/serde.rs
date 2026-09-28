@@ -201,28 +201,49 @@ impl WireSchemaContext {
 
     /// Records entering `T`: returns the existing ordinal for a live
     /// recursion, or pushes `T` and returns `None` for a full emission.
+    ///
+    /// Thin wrapper: only the `TypeId` differs per `T`, so every
+    /// instantiation shares one [`enter_inner`](Self::enter_inner) body
+    /// instead of duplicating the scan/push logic per schema type.
     fn enter<T: ?Sized + 'static>(&mut self) -> Option<u32> {
-        let id = TypeId::of::<T>();
-        if let Some(position) = self.stack.iter().position(|active| *active == id) {
+        Self::enter_inner(&mut self.stack, TypeId::of::<T>())
+    }
+
+    /// Non-generic traversal core for [`enter`](Self::enter). Never
+    /// inlined: inlining it back would re-duplicate this logic into each
+    /// of the ~260 schema monos.
+    #[inline(never)]
+    fn enter_inner(stack: &mut Vec<TypeId>, id: TypeId) -> Option<u32> {
+        if let Some(position) = stack.iter().position(|active| *active == id) {
             Some(position as u32)
         } else {
-            self.stack.push(id);
+            stack.push(id);
             None
         }
     }
 
     /// Records leaving `T` after a full emission. Must pair with a prior
     /// `None` from [`enter`](Self::enter).
+    ///
+    /// The order check stays in the generic wrapper so release builds
+    /// never materialize `TypeId::of::<T>()` here; the pop itself is the
+    /// shared [`exit_inner`](Self::exit_inner).
     fn exit<T: ?Sized + 'static>(&mut self) {
-        let id = self
-            .stack
-            .pop()
-            .expect("schema traversal stack underflow: exit without enter");
+        let popped = Self::exit_inner(&mut self.stack);
         debug_assert_eq!(
-            id,
+            popped,
             TypeId::of::<T>(),
             "schema traversal exited out of order",
         );
+    }
+
+    /// Non-generic traversal core for [`exit`](Self::exit). Never inlined,
+    /// for the same reason as [`enter_inner`](Self::enter_inner).
+    #[inline(never)]
+    fn exit_inner(stack: &mut Vec<TypeId>) -> TypeId {
+        stack
+            .pop()
+            .expect("schema traversal stack underflow: exit without enter")
     }
 
     /// Pushes the traversal root. The root always emits fully: a type that
