@@ -1,5 +1,7 @@
+#[cfg(feature = "entity_delegation")]
 use std::collections::HashMap;
 
+#[cfg(feature = "entity_delegation")]
 use crate::{
     world::delegation::{
         auth_channel::{EntityAuthAccessor, EntityAuthChannel, EntityAuthMutator},
@@ -8,10 +10,29 @@ use crate::{
     GlobalEntity, HostType,
 };
 
+#[cfg(not(feature = "entity_delegation"))]
+use crate::{
+    world::delegation::{
+        auth_channel::{EntityAuthAccessor, EntityAuthChannel},
+        entity_auth_status::{EntityAuthStatus, HostEntityAuthStatus},
+    },
+    GlobalEntity, HostType,
+};
+
 /// Server-side registry of per-entity authority channels, tracking which entities are delegated and their current status.
+#[cfg(feature = "entity_delegation")]
 pub struct HostAuthHandler {
     auth_channels: HashMap<GlobalEntity, (EntityAuthMutator, EntityAuthAccessor)>,
 }
+
+// Without the feature no per-entity authority state exists; the handler is a
+// sizeless token. `auth_status` answers `None` (nothing is ever registered),
+// matching the observable steady state of builds that never delegate.
+// Delegation entry points fail closed one layer up with
+// `AuthorityError::DelegationDisabled`.
+/// Feature-off token: no per-entity authority state exists.
+#[cfg(not(feature = "entity_delegation"))]
+pub struct HostAuthHandler;
 
 impl Default for HostAuthHandler {
     fn default() -> Self {
@@ -19,6 +40,7 @@ impl Default for HostAuthHandler {
     }
 }
 
+#[cfg(feature = "entity_delegation")]
 impl HostAuthHandler {
     /// Creates an empty `HostAuthHandler`.
     pub fn new() -> Self {
@@ -80,7 +102,51 @@ impl HostAuthHandler {
     }
 }
 
-#[cfg(test)]
+#[cfg(not(feature = "entity_delegation"))]
+impl HostAuthHandler {
+    /// Creates an empty `HostAuthHandler`.
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Registers `entity` with this handler, creating an authority channel for it and returning the accessor.
+    ///
+    /// Without the feature no state is tracked; the returned accessor is a
+    /// token. Live delegation callers fail closed before reaching here.
+    pub fn register_entity(
+        &mut self,
+        host_type: HostType,
+        _entity: &GlobalEntity,
+    ) -> EntityAuthAccessor {
+        EntityAuthChannel::new_channel(host_type).1
+    }
+
+    /// Removes `entity`'s authority channel. Called on entity despawn.
+    pub fn deregister_entity(&mut self, _entity: &GlobalEntity) {}
+
+    /// Returns a cloned `EntityAuthAccessor` for `entity`. Panics if not registered.
+    ///
+    /// Without the feature nothing is ever registered; returns a token
+    /// accessor rather than panicking so non-delegating builds stay total.
+    pub fn get_accessor(&self, _entity: &GlobalEntity) -> EntityAuthAccessor {
+        EntityAuthChannel::new_channel(HostType::Client).1
+    }
+
+    /// Returns the current authority status for `entity`, or `None` if not registered.
+    ///
+    /// Without the feature this is always `None`.
+    pub fn auth_status(&self, _entity: &GlobalEntity) -> Option<HostEntityAuthStatus> {
+        None
+    }
+
+    /// Updates the authority status for `entity`. Panics if not registered.
+    ///
+    /// Without the feature this is a no-op. Live delegation callers fail
+    /// closed before reaching here.
+    pub fn set_auth_status(&self, _entity: &GlobalEntity, _auth_status: EntityAuthStatus) {}
+}
+
+#[cfg(all(test, feature = "entity_delegation"))]
 mod tests {
     //! `HostAuthHandler` is the server's per-entity authority registry, reached
     //! from 35 call sites across shared/client/server -- and until now it had

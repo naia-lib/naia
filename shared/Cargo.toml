@@ -17,6 +17,15 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = [ "entity_delegation" ]
+# Entity delegation/authority (HostAuthHandler channels, per-entity auth state
+# machines, delegation command handling). ON by default: full behavior.
+# Consumers that provably never use delegation (e.g. the cyberlith game-wasm
+# client closure) opt out with `default-features = false` for size; a
+# delegation packet reaching such a build fails closed with
+# `AuthorityError::DelegationDisabled`. Wire tags are feature-independent
+# (see `delegation_tag_stability` test) — the feature never renumbers them.
+entity_delegation = []
 wbindgen = [ "naia-socket-shared/wbindgen", "js-sys" ]
 mquad = [ "naia-socket-shared/mquad" ]
 zstd_support = [ "zstd" ]

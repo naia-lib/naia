@@ -464,6 +464,7 @@ fn release_authority_without_delegation_panics() {
 /// Delivers `msg` to a server-side host channel, optionally delegated first via
 /// the real `EnableDelegation` command path rather than a force helper, and
 /// reports whether it survived validation.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
 fn delivered_on_host_channel(delegate_first: bool, msg: EntityMessage<()>) -> bool {
     let global_entity = GlobalEntity::from_u64(10020);
     let host_entity = HostEntity::new(20);
@@ -480,6 +481,8 @@ fn delivered_on_host_channel(delegate_first: bool, msg: EntityMessage<()>) -> bo
     !events.is_empty()
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn request_authority_is_accepted_only_on_a_delegated_channel() {
     assert!(
@@ -492,6 +495,8 @@ fn request_authority_is_accepted_only_on_a_delegated_channel() {
     );
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn enable_delegation_response_is_accepted_only_on_a_delegated_channel() {
     assert!(

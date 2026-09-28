@@ -8,8 +8,10 @@
 use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType};
+#[cfg(feature = "entity_delegation")]
 use naia_server::ReplicationConfig;
 use naia_server::ServerConfig;
+#[cfg(feature = "entity_delegation")]
 use naia_shared::EntityAuthStatus;
 use naia_test_harness::{
     protocol, Auth, ClientConnectEvent, ClientKey, Scenario, ServerAuthEvent, ServerConnectEvent,
@@ -403,6 +405,7 @@ fn per_field_diff_one_field_sends_fewer_bytes_than_two() {
     );
 }
 
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn delegated_resource_supports_client_authority_request() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);

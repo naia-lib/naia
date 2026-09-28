@@ -336,6 +336,7 @@ impl GlobalWorldManager {
         }
     }
 
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_disable_delegation(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
@@ -357,6 +358,7 @@ impl GlobalWorldManager {
             .map(|host_status| host_status.status())
     }
 
+    #[cfg(feature = "entity_delegation")]
     pub(crate) fn entity_request_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -378,6 +380,17 @@ impl GlobalWorldManager {
         Ok(())
     }
 
+    // Card 27945: without the feature every authority request fails
+    // closed with the named error.
+    #[cfg(not(feature = "entity_delegation"))]
+    pub(crate) fn entity_request_authority(
+        &mut self,
+        _global_entity: &GlobalEntity,
+    ) -> Result<(), AuthorityError> {
+        Err(AuthorityError::DelegationDisabled)
+    }
+
+    #[cfg(feature = "entity_delegation")]
     pub(crate) fn entity_release_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -397,6 +410,16 @@ impl GlobalWorldManager {
         self.auth_handler
             .set_auth_status(global_entity, EntityAuthStatus::Releasing);
         Ok(())
+    }
+
+    // Card 27945: without the feature every authority release fails
+    // closed with the named error.
+    #[cfg(not(feature = "entity_delegation"))]
+    pub(crate) fn entity_release_authority(
+        &mut self,
+        _global_entity: &GlobalEntity,
+    ) -> Result<(), AuthorityError> {
+        Err(AuthorityError::DelegationDisabled)
     }
 
     pub(crate) fn entity_update_authority(

@@ -13,6 +13,9 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = [ "entity_delegation" ]
+# Entity delegation/authority (card 27945). ON by default: full behavior.
+entity_delegation = [ "naia-shared/entity_delegation" ]
 # this should be used when the underlying transport does not handle it for you (i.e. UDP)
 address_validation = [ "naia-shared/address_validation" ]
 # Replaces wall-clock Instant with TestClock for deterministic test
@@ -28,7 +31,7 @@ transport_local = [ "naia-shared/transport_local" ]
 
 [dependencies]
 naia-bevy-derive = { version = "0.25", path = "../derive" }
-naia-shared = { version = "0.25", path = "../../../shared", features = ["wbindgen"] }
+naia-shared = { version = "0.25", path = "../../../shared", default-features = false, features = ["wbindgen"] }
 bevy_app = { version = "0.19", default-features=false }
 bevy_ecs = { version = "0.19", default-features=false }
 log = { version = "0.4" }

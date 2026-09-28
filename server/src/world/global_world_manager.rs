@@ -330,6 +330,7 @@ impl GlobalWorldManager {
         false
     }
 
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_enable_delegation(&mut self, global_entity: &GlobalEntity) {
         let Some(record) = self.entity_records.get_mut(global_entity) else {
             panic!("entity record does not exist!");
@@ -373,6 +374,8 @@ impl GlobalWorldManager {
         self.auth_handler.authority_status(global_entity)
     }
 
+    #[cfg(feature = "entity_delegation")]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn server_take_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -383,6 +386,19 @@ impl GlobalWorldManager {
         self.auth_handler.server_take_authority(global_entity)
     }
 
+    // Card 27945: without the feature every authority operation fails
+    // closed with the named error.
+    #[cfg(not(feature = "entity_delegation"))]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+    pub(crate) fn server_take_authority(
+        &mut self,
+        _global_entity: &GlobalEntity,
+    ) -> Result<AuthOwner, AuthorityError> {
+        Err(AuthorityError::DelegationDisabled)
+    }
+
+    #[cfg(feature = "entity_delegation")]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn client_request_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -395,10 +411,24 @@ impl GlobalWorldManager {
             .client_request_authority(global_entity, requester)
     }
 
+    // Card 27945: without the feature every authority operation fails
+    // closed with the named error.
+    #[cfg(not(feature = "entity_delegation"))]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+    pub(crate) fn client_request_authority(
+        &mut self,
+        _global_entity: &GlobalEntity,
+        _requester: &AuthOwner,
+    ) -> Result<(), AuthorityError> {
+        Err(AuthorityError::DelegationDisabled)
+    }
+
     /// Server-priority give_authority — sovereign assignment that
     /// overrides any current holder. See
     /// `ServerAuthHandler::server_give_authority_to_client` for the
     /// contract reference.
+    #[cfg(feature = "entity_delegation")]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn server_give_authority_to_client(
         &mut self,
         global_entity: &GlobalEntity,
@@ -411,6 +441,20 @@ impl GlobalWorldManager {
             .server_give_authority_to_client(global_entity, target_user)
     }
 
+    // Card 27945: without the feature every authority operation fails
+    // closed with the named error.
+    #[cfg(not(feature = "entity_delegation"))]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+    pub(crate) fn server_give_authority_to_client(
+        &mut self,
+        _global_entity: &GlobalEntity,
+        _target_user: &UserKey,
+    ) -> Result<AuthOwner, AuthorityError> {
+        Err(AuthorityError::DelegationDisabled)
+    }
+
+    #[cfg(feature = "entity_delegation")]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn client_release_authority(
         &mut self,
         global_entity: &GlobalEntity,
@@ -421,6 +465,18 @@ impl GlobalWorldManager {
         }
         self.auth_handler
             .client_release_authority(global_entity, releaser)
+    }
+
+    // Card 27945: without the feature every authority operation fails
+    // closed with the named error.
+    #[cfg(not(feature = "entity_delegation"))]
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+    pub(crate) fn client_release_authority(
+        &mut self,
+        _global_entity: &GlobalEntity,
+        _releaser: &AuthOwner,
+    ) -> Result<(), AuthorityError> {
+        Err(AuthorityError::DelegationDisabled)
     }
 
     pub(crate) fn user_all_owned_entities(

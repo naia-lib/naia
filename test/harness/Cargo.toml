@@ -9,6 +9,15 @@ publish = false
 description = "Test harness for Naia - Scenario-based testing with local transport"
 
 [features]
+default = [ "entity_delegation" ]
+# Entity delegation/authority (card 27945). ON by default: preserves current
+# behavior. Build with `--no-default-features` for the cross-build leg:
+# feature-ON server + feature-OFF client in one binary.
+entity_delegation = [
+  "naia-client/entity_delegation",
+  "naia-server/entity_delegation",
+  "naia-shared/entity_delegation",
+]
 e2e_debug = [
   "naia-client/e2e_debug",
   "naia-server/e2e_debug",
@@ -18,7 +27,7 @@ test_utils = []
 
 [dependencies]
 naia-server = { path = "../../server", features = ["transport_local", "interior_visibility", "test_time", "test_utils"] }
-naia-client = { path = "../../client", features = ["transport_local", "interior_visibility", "test_time"] }
+naia-client = { path = "../../client", default-features = false, features = ["transport_local", "interior_visibility", "test_time"] }
 naia-shared = { path = "../../shared", features = ["transport_local", "interior_visibility", "test_time", "test_utils"] }
 
 naia-demo-world = { path = "../../demos/demo_utils/demo_world" }
@@ -65,6 +74,10 @@ path = "contract_tests/integration_only/09_entity_ownership.rs"
 [[test]]
 name = "integration_only_10_entity_delegation"
 path = "contract_tests/integration_only/10_entity_delegation.rs"
+
+[[test]]
+name = "integration_only_11_cross_feature_delegation"
+path = "contract_tests/integration_only/11_cross_feature_delegation.rs"
 
 [[test]]
 name = "parallel_send_matches_serial"

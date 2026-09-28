@@ -22,4 +22,11 @@ pub enum AuthorityError {
     /// `request_resource_authority` / `release_resource_authority`
     /// commands when `R` is missing from the registry.
     ResourceNotPresent,
+    /// Entity delegation is compiled out of this build (the
+    /// `entity_delegation` cargo feature is off). Returned by every local
+    /// authority API and recorded when a delegation wire command reaches an
+    /// endpoint built without the feature. Fail-closed: the command is not
+    /// applied, the error is logged and retrievable — never silently
+    /// dropped, never panicked.
+    DelegationDisabled,
 }

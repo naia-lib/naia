@@ -256,6 +256,28 @@ impl AuthChannel {
     fn receiver_validate(&mut self, msg: &EntityMessage<()>) -> bool {
         use EntityAuthChannelState::{Delegated, Published, Unpublished};
 
+        // Without the `entity_delegation` feature, delegation wire commands
+        // pass validation UNCHANGED (no state mutation, no drop). Dropping
+        // here would be silent; instead the message flows to the apply layer,
+        // which fails closed with the named error
+        // `AuthorityError::DelegationDisabled` (recorded, logged,
+        // retrievable). Wire parsing and all non-delegation validation are
+        // identical in both states.
+        #[cfg(not(feature = "entity_delegation"))]
+        {
+            if matches!(
+                msg.get_type(),
+                EntityMessageType::EnableDelegation
+                    | EntityMessageType::DisableDelegation
+                    | EntityMessageType::SetAuthority
+                    | EntityMessageType::RequestAuthority
+                    | EntityMessageType::ReleaseAuthority
+                    | EntityMessageType::EnableDelegationResponse
+            ) {
+                return true;
+            }
+        }
+
         match msg.get_type() {
             EntityMessageType::Publish => {
                 if self.state != Unpublished {

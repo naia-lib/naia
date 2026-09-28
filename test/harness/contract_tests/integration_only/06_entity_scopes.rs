@@ -543,6 +543,7 @@ fn entity_in_multiple_rooms_projects_correctly() {
 /// Contract: [entity-scopes-06], [entity-scopes-07]
 ///
 /// Given delegated E where A holds authority and B observes Denied; when server removes E from A's scope (so A despawns E); then authority MUST release to None, and B MUST observe Denied→Available.
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn authority_releases_when_holder_goes_out_of_scope() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
@@ -815,6 +816,7 @@ fn manual_user_scope_exclude_hides_entity_despite_shared_room() {
 /// Contract: [entity-scopes-08], [entity-scopes-09]
 ///
 /// Given delegated E where A holds authority and B is in scope; when A disconnects; then authority MUST release to None, and B MUST observe Available (or Denied→Available if previously denied), with E still alive and replicated per server policy.
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn authority_releases_when_holder_disconnects() {
     let mut scenario = Scenario::new(naia_server::ServerMode::Resident);

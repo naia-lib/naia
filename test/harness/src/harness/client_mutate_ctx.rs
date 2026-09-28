@@ -153,6 +153,16 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         state.client_mut().disconnect();
     }
 
+    /// Takes a pending fail-closed authority error from the client, if any.
+    ///
+    /// Card 27945 test surface (additive; behavior-neutral): without the
+    /// client's `entity_delegation` feature, refused delegation wire commands
+    /// are recorded on the client instead of applied.
+    pub fn take_authority_error(&mut self) -> Option<naia_shared::AuthorityError> {
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        state.client_mut().take_authority_error()
+    }
+
     // Entity Operations
 
     /// Get all entities as EntityKeys

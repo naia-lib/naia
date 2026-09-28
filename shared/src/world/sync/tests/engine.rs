@@ -383,6 +383,8 @@ fn component_backlog_on_entity_a_does_not_block_entity_b() {
     asserts.check(&mut engine);
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn entity_auth_illegal_disable_delegation_dropped() {
     // DisableDelegation while merely Published (EnableDelegation never arrived).
@@ -401,6 +403,8 @@ fn entity_auth_illegal_disable_delegation_dropped() {
     asserts.check(&mut engine);
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn entity_auth_illegal_update_authority_dropped() {
     // SetAuthority on an entity that was never delegated.
@@ -422,6 +426,8 @@ fn entity_auth_illegal_update_authority_dropped() {
     asserts.check(&mut engine);
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn entity_auth_illegal_unpublish_while_delegated_dropped() {
     // Unpublish is only legal from Published; while Delegated it must be
@@ -445,6 +451,8 @@ fn entity_auth_illegal_unpublish_while_delegated_dropped() {
     asserts.check(&mut engine);
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn entity_auth_illegal_enable_delegation_while_already_delegated_dropped() {
     // Second EnableDelegation while already Delegated.
@@ -486,6 +494,8 @@ fn entity_auth_illegal_publish_while_already_published_dropped() {
     asserts.check(&mut engine);
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn entity_auth_illegal_disable_delegation_while_unpublished_dropped() {
     // DisableDelegation after the entity has gone back to Unpublished.
@@ -842,6 +852,7 @@ fn auth_messages_buffer_until_spawn_epoch() {
 }
 
 /// Every `EntityAuthStatus` the walk below can reach, which is all of them.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
 const ALL_AUTH_STATUSES: [EntityAuthStatus; 5] = [
     EntityAuthStatus::Available,
     EntityAuthStatus::Requested,
@@ -857,6 +868,7 @@ const ALL_AUTH_STATUSES: [EntityAuthStatus; 5] = [
 /// `AuthChannel::auth_status_transition_is_legal`. Asserting the implementation
 /// against itself is a tautology -- it would stay green no matter which edge was
 /// added or deleted, which is the exact failure this test exists to catch.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
 fn edge_is_legal(from: EntityAuthStatus, to: EntityAuthStatus) -> bool {
     use EntityAuthStatus::{Available, Denied, Granted, Releasing, Requested};
     // Re-delivery of the status a channel already holds is an idempotent no-op.
@@ -887,6 +899,7 @@ fn edge_is_legal(from: EntityAuthStatus, to: EntityAuthStatus) -> bool {
 /// Every status is reachable from the `Available` a channel lands in after
 /// `EnableDelegation`; `Releasing` is the only one needing two steps, since it
 /// is only ever entered from `Granted`.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
 fn walk_to_status(
     entity: RemoteEntity,
     target: EntityAuthStatus,
@@ -936,6 +949,8 @@ fn walk_to_status(
 /// delivers `SetAuthority(to)` carrying a fresh ascending subcommand id -- so
 /// the sequencing gate cannot be what rejects it, and only the legality check
 /// can be.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn every_authority_transition_is_accepted_or_dropped_as_the_table_says() {
     for from in ALL_AUTH_STATUSES {
@@ -993,6 +1008,7 @@ fn every_authority_transition_is_accepted_or_dropped_as_the_table_says() {
 /// The setup assertion matters: if the walk itself were rejected the final
 /// message would be judged against the wrong state, and the test would pass for
 /// the wrong reason.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
 fn delivered_on_a_delegated_channel(
     make_msg: fn(u8, RemoteEntity) -> EntityMessage<RemoteEntity>,
 ) -> bool {
@@ -1013,6 +1029,7 @@ fn delivered_on_a_delegated_channel(
 }
 
 /// Same walk, stopped at Published -- delegation is never enabled.
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
 fn delivered_on_a_published_channel(
     make_msg: fn(u8, RemoteEntity) -> EntityMessage<RemoteEntity>,
 ) -> bool {
@@ -1031,6 +1048,8 @@ fn delivered_on_a_published_channel(
     !engine.take_incoming_events().is_empty()
 }
 
+#[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
+#[cfg(feature = "entity_delegation")]
 #[test]
 fn release_authority_is_accepted_only_on_a_delegated_channel() {
     assert!(

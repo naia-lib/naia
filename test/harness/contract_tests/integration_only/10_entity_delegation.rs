@@ -1,3 +1,4 @@
+#![cfg(feature = "entity_delegation")]
 #![allow(
     unused_imports,
     unused_variables,

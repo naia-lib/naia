@@ -42,12 +42,15 @@ bench_instrumentation = [ "naia-server/bench_instrumentation" ]
 e2e_debug = [ "naia-server/e2e_debug" ]
 # Additive, default-off. Cascades to `naia-server/f3_diag` — see that
 # crate's `[features]` for details.
+default = [ "entity_delegation" ]
+# Entity delegation/authority (card 27945). ON by default: full behavior.
+entity_delegation = [ "naia-server/entity_delegation", "naia-bevy-shared/entity_delegation" ]
 f3_diag = [ "naia-server/f3_diag" ]
 
 [dependencies]
 parking_lot = "0.12"
-naia-server = { version = "0.25", path = "../../../server" }
-naia-bevy-shared = { version = "0.25", path = "../shared" }
+naia-server = { version = "0.25", path = "../../../server", default-features = false }
+naia-bevy-shared = { version = "0.25", path = "../shared", default-features = false }
 bevy_app = { version = "0.19", default-features=false }
 bevy_ecs = { version = "0.19", default-features=false }
 log = { version = "0.4" }

@@ -73,6 +73,12 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     global_entity_map: GlobalEntityMap<E>,
     // Events
     incoming_world_events: Events<E>,
+    /// Fail-closed delegation error slot (card 27945). Without the
+    /// `entity_delegation` feature this records
+    /// `AuthorityError::DelegationDisabled` when a delegation wire command
+    /// arrives; always `None` with the feature on. See
+    /// [`Client::take_authority_error`].
+    authority_error: Option<AuthorityError>,
     incoming_tick_events: TickEvents,
     // Per-connection priority layer (single connection; no global/per-user split).
     priority: UserPriorityState<E>,
@@ -143,6 +149,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             global_entity_map: GlobalEntityMap::new(),
             // Events
             incoming_world_events: Events::new(),
+            // Fail-closed delegation error slot (card 27945). Without the
+            // `entity_delegation` feature, delegation wire commands are
+            // recorded here instead of applied; `None` in ON builds.
+            authority_error: None,
             incoming_tick_events: TickEvents::new(),
             priority: UserPriorityState::new(),
             resource_registry: naia_shared::ResourceRegistry::new(),
@@ -1127,6 +1137,35 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_authority_status(&global_entity)
     }
 
+    /// Takes a pending fail-closed authority error, if any (card 27945).
+    ///
+    /// Without the `entity_delegation` feature, delegation wire commands are
+    /// not applied; each one records `AuthorityError::DelegationDisabled`
+    /// here (and logs it) instead. Returns `None` — and, with the feature on,
+    /// always returns `None` — when no such command has arrived since the
+    /// last take.
+    pub fn take_authority_error(&mut self) -> Option<AuthorityError> {
+        self.authority_error.take()
+    }
+
+    /// Records a fail-closed delegation refusal (card 27945). Without the
+    /// `entity_delegation` feature this is the single funnel for delegation
+    /// wire commands that reach the client: the command is NOT applied, the
+    /// named error is logged and stored for [`Client::take_authority_error`]
+    /// — never silently dropped, never panicked.
+    #[cfg(not(feature = "entity_delegation"))]
+    fn record_delegation_disabled(
+        &mut self,
+        command: &'static str,
+        entity: &naia_shared::GlobalEntity,
+    ) {
+        log::error!(
+            "entity delegation is disabled in this build; refusing {command} for entity {entity:?}"
+        );
+        self.authority_error
+            .get_or_insert(AuthorityError::DelegationDisabled);
+    }
+
     /// Sends an authority request to the server for the given delegated entity.
     ///
     /// The server responds with either [`EntityAuthGrantedEvent`] or
@@ -1759,6 +1798,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .entity_enable_delegation(global_entity);
     }
 
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_disable_delegation<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -2608,6 +2648,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     self.unpublish_entity(&global_entity, false);
                     self.incoming_world_events.push_unpublish(world_entity);
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegation(global_entity) => {
                     #[cfg(feature = "e2e_debug")]
                     naia_shared::e2e_trace!(
@@ -2631,9 +2672,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .world_manager
                         .send_enable_delegation_response(&global_entity); // TODO: move to localworld?
                 }
-                EntityEvent::EnableDelegationResponse(_) => {
+                #[cfg(feature = "entity_delegation")]
+                EntityEvent::EnableDelegationResponse(_global_entity) => {
                     panic!("Client should never receive an EnableDelegationEntityResponse event");
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::DisableDelegation(global_entity) => {
                     #[cfg(feature = "e2e_debug")]
                     {
@@ -2652,12 +2695,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .unwrap();
                     self.entity_disable_delegation(world, &global_entity, &world_entity, false);
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::RequestAuthority(_global_entity) => {
                     panic!("Client should never receive an EntityRequestAuthority event");
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::ReleaseAuthority(_global_entity) => {
                     panic!("Client should never receive an EntityReleaseAuthority event");
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::SetAuthority(global_entity, new_auth_status) => {
                     // Count when SetAuthority successfully converts to EntityEvent (after mapping)
                     #[cfg(feature = "e2e_debug")]
@@ -2672,6 +2718,40 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                         .global_entity_to_entity(&global_entity)
                         .unwrap();
                     self.entity_update_authority(&global_entity, &world_entity, new_auth_status);
+                }
+                // Card 27945: without the feature every delegation wire command
+                // fails closed with the named error (never applied, never
+                // panicked). The enum and its tags stay unconditional so the
+                // wire is stable; only handling is compiled out.
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::EnableDelegation(global_entity) => {
+                    self.record_delegation_disabled("EnableDelegation", &global_entity);
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::EnableDelegationResponse(global_entity) => {
+                    self.record_delegation_disabled("EnableDelegationResponse", &global_entity);
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::DisableDelegation(global_entity) => {
+                    self.record_delegation_disabled("DisableDelegation", &global_entity);
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::RequestAuthority(global_entity) => {
+                    self.record_delegation_disabled("RequestAuthority", &global_entity);
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::ReleaseAuthority(global_entity) => {
+                    self.record_delegation_disabled("ReleaseAuthority", &global_entity);
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::SetAuthority(global_entity, _) => {
+                    self.record_delegation_disabled("SetAuthority", &global_entity);
+                    continue;
                 }
                 EntityEvent::MigrateResponse(global_entity, new_remote_entity) => {
                     // Validate we have a valid world entity

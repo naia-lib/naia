@@ -13,6 +13,10 @@ edition = "2021"
 maintenance = { status = "actively-developed" }
 
 [features]
+default = [ "entity_delegation" ]
+# Entity delegation/authority (card 27945). ON by default: full behavior.
+# `default-features = false` consumers opt out; the naia edges below forward.
+entity_delegation = [ "naia-client/entity_delegation", "naia-bevy-shared/entity_delegation" ]
 transport_webrtc = [ "naia-client/transport_webrtc" ]
 transport_udp = [ "naia-client/transport_udp" ]
 transport_local = [ "naia-client/transport_local" ]
@@ -21,8 +25,8 @@ test_time = [ "naia-client/test_time", "naia-bevy-shared/test_time" ]
 
 [dependencies]
 parking_lot = "0.12"
-naia-client = { version = "0.25", path = "../../../client", features = ["wbindgen"] }
-naia-bevy-shared = { version = "0.25", path = "../shared" }
+naia-client = { version = "0.25", path = "../../../client", default-features = false, features = ["wbindgen"] }
+naia-bevy-shared = { version = "0.25", path = "../shared", default-features = false }
 naia-bevy-derive = { version = "0.25", path = "../derive" }
 naia-derive = { version = "0.25", path = "../../../shared/derive" }
 bevy_app = { version = "0.19", default-features=false }

@@ -1,3 +1,4 @@
+#[cfg(feature = "entity_delegation")]
 use std::sync::{Arc, RwLock};
 
 use crate::{
@@ -8,14 +9,13 @@ use crate::{
 // EntityAuthChannel
 #[derive(Clone)]
 pub(crate) struct EntityAuthChannel {
-    data: Arc<RwLock<EntityAuthData>>,
+    #[cfg(feature = "entity_delegation")]
+    data: std::sync::Arc<std::sync::RwLock<EntityAuthData>>,
 }
 
 impl EntityAuthChannel {
     pub(crate) fn new_channel(host_type: HostType) -> (EntityAuthMutator, EntityAuthAccessor) {
-        let channel = Self {
-            data: Arc::new(RwLock::new(EntityAuthData::new(host_type))),
-        };
+        let channel = Self::new_channel_inner(host_type);
 
         let sender = EntityAuthMutator::new(&channel);
         let receiver = EntityAuthAccessor::new(&channel);
@@ -23,6 +23,23 @@ impl EntityAuthChannel {
         (sender, receiver)
     }
 
+    #[cfg(feature = "entity_delegation")]
+    fn new_channel_inner(host_type: HostType) -> Self {
+        Self {
+            data: Arc::new(RwLock::new(EntityAuthData::new(host_type))),
+        }
+    }
+
+    // Without the feature there is no per-entity state to share; the channel
+    // is a sizeless token. Callers that need live state fail closed one layer
+    // up (apply-layer arms / authority APIs return
+    // `AuthorityError::DelegationDisabled`).
+    #[cfg(not(feature = "entity_delegation"))]
+    fn new_channel_inner(_host_type: HostType) -> Self {
+        Self {}
+    }
+
+    #[cfg(feature = "entity_delegation")]
     fn auth_status(&self) -> HostEntityAuthStatus {
         let data = self
             .data
@@ -32,6 +49,7 @@ impl EntityAuthChannel {
         data.auth_status()
     }
 
+    #[cfg(feature = "entity_delegation")]
     fn set_auth_status(&self, auth_status: EntityAuthStatus) {
         let mut data = self
             .data
@@ -43,11 +61,13 @@ impl EntityAuthChannel {
 }
 
 // EntityAuthData
+#[cfg(feature = "entity_delegation")]
 struct EntityAuthData {
     host_type: HostType,
     status: EntityAuthStatus,
 }
 
+#[cfg(feature = "entity_delegation")]
 impl EntityAuthData {
     fn new(host_type: HostType) -> Self {
         let status = match host_type {
@@ -69,40 +89,80 @@ impl EntityAuthData {
 /// Read-only handle to an entity's shared authority state; cloneable and safe to embed in components.
 #[derive(Clone)]
 pub struct EntityAuthAccessor {
+    #[cfg(feature = "entity_delegation")]
     channel: EntityAuthChannel,
 }
 
 impl EntityAuthAccessor {
+    #[cfg(feature = "entity_delegation")]
     fn new(channel: &EntityAuthChannel) -> Self {
         Self {
             channel: channel.clone(),
         }
     }
 
+    // Without the feature no accessor ever carries live state (the handler
+    // stub answers `None` without consulting it); construction is a no-op.
+    #[cfg(not(feature = "entity_delegation"))]
+    fn new(_channel: &EntityAuthChannel) -> Self {
+        Self {}
+    }
+
+    #[cfg(feature = "entity_delegation")]
     pub(crate) fn auth_status(&self) -> HostEntityAuthStatus {
         self.channel.auth_status()
+    }
+
+    // Without the feature there is no per-entity state; report the
+    // client-side steady state a fresh channel would carry
+    // (`HostType::Client` starts `Requested`). This keeps
+    // `DelegatedProperty`'s `can_*` predicates total in OFF builds; live
+    // delegation paths fail closed before consulting it, and builds without
+    // delegation never drive these predicates with delegated entities.
+    #[cfg(not(feature = "entity_delegation"))]
+    pub(crate) fn auth_status(&self) -> HostEntityAuthStatus {
+        HostEntityAuthStatus::new(HostType::Client, EntityAuthStatus::Requested)
     }
 }
 
 // EntityAuthMutator
 // no Clone necessary
 pub(crate) struct EntityAuthMutator {
+    #[cfg(feature = "entity_delegation")]
     channel: EntityAuthChannel,
 }
 
 impl EntityAuthMutator {
+    #[cfg(feature = "entity_delegation")]
     fn new(channel: &EntityAuthChannel) -> Self {
         Self {
             channel: channel.clone(),
         }
     }
 
+    // Without the feature there is no state to mutate; the no-op is
+    // unreachable from live paths (they fail closed before reaching here).
+    #[cfg(not(feature = "entity_delegation"))]
+    fn new(_channel: &EntityAuthChannel) -> Self {
+        Self {}
+    }
+
+    #[cfg(feature = "entity_delegation")]
     pub(crate) fn set_auth_status(&self, auth_status: EntityAuthStatus) {
         self.channel.set_auth_status(auth_status);
     }
+
+    // Without the feature there is no state to mutate. The no-op keeps
+    // `enable_delegation` machinery total in OFF builds; live delegation
+    // entry points fail closed before reaching here (`AuthorityError::
+    // DelegationDisabled`), and builds without delegation never drive these
+    // paths with delegated entities.
+    #[cfg(not(feature = "entity_delegation"))]
+    #[allow(dead_code)]
+    pub(crate) fn set_auth_status(&self, _auth_status: EntityAuthStatus) {}
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "entity_delegation"))]
 mod tests {
     //! The shared-state plumbing behind `HostAuthHandler`: one
     //! `EntityAuthChannel` per entity, handed out as a write-only

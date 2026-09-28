@@ -1983,6 +1983,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         Ok(())
     }
 
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn entity_handle_client_request_authority(
         &mut self,
         requester_user: &UserKey,
@@ -2042,6 +2043,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
     /// Sends `SetAuthority(Denied)` to a single user, resolving that user's
     /// pending `Requested` state after a refused authority request.
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn notify_user_auth_denied(&mut self, user_key: &UserKey, global_entity: &GlobalEntity) {
         let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
             return;
@@ -2063,6 +2065,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             .host_send_set_auth(global_entity, EntityAuthStatus::Denied);
     }
 
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     fn entity_enable_delegation_response(
         &mut self,
         _user_key: &UserKey,
@@ -3136,6 +3139,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         }
     }
 
+    #[cfg_attr(not(feature = "entity_delegation"), allow(dead_code))]
     pub(crate) fn entity_enable_delegation<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -4136,6 +4140,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .incoming_world_events
                         .push_unpublish(user_key, &world_entity);
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegation(global_entity) => {
                     let world_entity = self
                         .shared
@@ -4162,12 +4167,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                         .incoming_world_events
                         .push_delegate(user_key, &world_entity);
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::EnableDelegationResponse(global_entity) => {
                     self.entity_enable_delegation_response(user_key, &global_entity);
                 }
-                EntityEvent::DisableDelegation(_) => {
+                #[cfg(feature = "entity_delegation")]
+                EntityEvent::DisableDelegation(_global_entity) => {
                     panic!("Clients should not be able to disable entity delegation.");
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::RequestAuthority(global_entity) => {
                     let world_entity = self
                         .shared
@@ -4191,6 +4199,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                             .push_auth_denied(user_key, &world_entity);
                     }
                 }
+                #[cfg(feature = "entity_delegation")]
                 EntityEvent::ReleaseAuthority(global_entity) => {
                     // info!("received release auth entity message!");
                     let world_entity = self
@@ -4209,8 +4218,55 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                             .push_auth_reset(&world_entity);
                     }
                 }
-                EntityEvent::SetAuthority(_, _) => {
+                #[cfg(feature = "entity_delegation")]
+                EntityEvent::SetAuthority(_global_entity, _) => {
                     panic!("Clients should not be able to update entity authority.");
+                }
+                // Card 27945: without the feature every delegation wire command
+                // fails closed (refused + logged, never applied, never
+                // panicked). The enum and its tags stay unconditional so the
+                // wire is stable; only handling is compiled out.
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::EnableDelegation(global_entity) => {
+                    log::error!(
+                        "entity delegation is disabled in this build; refusing EnableDelegation for entity {global_entity:?}"
+                    );
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::EnableDelegationResponse(global_entity) => {
+                    log::error!(
+                        "entity delegation is disabled in this build; refusing EnableDelegationResponse for entity {global_entity:?}"
+                    );
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::DisableDelegation(global_entity) => {
+                    log::error!(
+                        "entity delegation is disabled in this build; refusing DisableDelegation for entity {global_entity:?}"
+                    );
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::RequestAuthority(global_entity) => {
+                    log::error!(
+                        "entity delegation is disabled in this build; refusing RequestAuthority for entity {global_entity:?}"
+                    );
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::ReleaseAuthority(global_entity) => {
+                    log::error!(
+                        "entity delegation is disabled in this build; refusing ReleaseAuthority for entity {global_entity:?}"
+                    );
+                    continue;
+                }
+                #[cfg(not(feature = "entity_delegation"))]
+                EntityEvent::SetAuthority(global_entity, _) => {
+                    log::error!(
+                        "entity delegation is disabled in this build; refusing SetAuthority for entity {global_entity:?}"
+                    );
+                    continue;
                 }
                 EntityEvent::MigrateResponse(_, _) => {
                     panic!("Clients should not be able to send this message");
