@@ -1,6 +1,6 @@
-//! naia#92 composed with #207: closing a multi server releases every inner
-//! socket — dropping the fan-in handles frees the UDP inner's ports and
-//! the WebRTC inner's ports alike, and both rebind deterministically.
+//! naia#92: closing a server releases its ports — dropping the listen
+//! handles frees the UDP socket's ports and the WebRTC socket's ports
+//! alike, and both rebind deterministically.
 
 #![cfg(all(feature = "transport_udp", feature = "transport_webrtc"))]
 
@@ -10,7 +10,6 @@ use std::{
 };
 
 use naia_server::transport::{
-    multi::MultiSocket,
     udp::{ServerAddrs as UdpAddrs, Socket as UdpSocket},
     webrtc::{ServerAddrs as RtcAddrs, Socket as RtcSocket},
     Socket as TransportSocket,
@@ -54,8 +53,8 @@ fn tcp_taken(addr: SocketAddr) -> bool {
     }
 }
 
-/// The WebRTC inner binds on detached tasks: wait until its ports are
-/// taken (proves the release below is real, not vacuous). The UDP inner
+/// The WebRTC socket binds on detached tasks: wait until its ports are
+/// taken (proves the release below is real, not vacuous). The UDP socket
 /// binds synchronously at construction, so no wait is needed there.
 fn wait_until_rtc_bound(rtc: &RtcAddrs) {
     let start = Instant::now();
@@ -65,16 +64,7 @@ fn wait_until_rtc_bound(rtc: &RtcAddrs) {
         }
         std::thread::sleep(Duration::from_millis(25));
     }
-    panic!("webrtc inner never bound its ports");
-}
-
-fn listen_multi(udp: &UdpAddrs, rtc: &RtcAddrs) -> ListenHandles {
-    let multi = MultiSocket::new(vec![
-        Box::new(UdpSocket::new(udp, None)),
-        Box::new(RtcSocket::new(rtc, &SocketConfig::default())),
-    ]);
-    let boxed: Box<dyn TransportSocket> = multi.into();
-    boxed.listen(ProtocolId::new(0x92))
+    panic!("webrtc socket never bound its ports");
 }
 
 type ListenHandles = (
@@ -84,36 +74,49 @@ type ListenHandles = (
     Box<dyn naia_server::transport::PacketReceiver>,
 );
 
+fn listen_each(udp: &UdpAddrs, rtc: &RtcAddrs) -> (ListenHandles, ListenHandles) {
+    let udp_socket = UdpSocket::new(udp, None);
+    let boxed_udp: Box<dyn TransportSocket> = Box::new(udp_socket);
+    let rtc_socket = RtcSocket::new(rtc, &SocketConfig::default());
+    let boxed_rtc: Box<dyn TransportSocket> = Box::new(rtc_socket);
+    (
+        boxed_udp.listen(ProtocolId::new(0x92)),
+        boxed_rtc.listen(ProtocolId::new(0x92)),
+    )
+}
+
 #[test]
-fn closing_multi_server_releases_every_inner_socket() {
+fn closing_each_server_releases_its_ports() {
     let udp = udp_addrs();
     let rtc = rtc_addrs();
 
-    let handles = listen_multi(&udp, &rtc);
+    let (udp_handles, rtc_handles) = listen_each(&udp, &rtc);
     wait_until_rtc_bound(&rtc);
 
-    // Dropping the fan-in handles drops every inner handle.
-    drop(handles);
+    // Dropping each socket's handles frees that socket's ports.
+    drop(udp_handles);
+    drop(rtc_handles);
 
-    // WebRTC inner: explicit observable wait; UDP inner rebinds at once
-    // (the probe socket proves freeness, then drops out of scope so the
-    // re-listen below starts from free ports).
+    // WebRTC: explicit observable wait; UDP rebinds at once (the probe
+    // socket proves freeness, then drops out of scope so the re-listen
+    // below starts from free ports).
     assert!(
         rtc.wait_until_free(Duration::from_secs(10)),
-        "webrtc inner ports not free 10s after dropping multi handles"
+        "webrtc ports not free 10s after dropping handles"
     );
     {
         let _udp_probe = UdpSocket::new(&udp, None);
     }
 
-    // And the whole multi listen rebinds deterministically on the same
-    // addresses — full close/reopen cycle with no sleeps past the waits.
-    let handles = listen_multi(&udp, &rtc);
+    // And each listen rebinds deterministically on the same addresses —
+    // full close/reopen cycle with no sleeps past the waits.
+    let (udp_handles, rtc_handles) = listen_each(&udp, &rtc);
     wait_until_rtc_bound(&rtc);
-    drop(handles);
+    drop(udp_handles);
+    drop(rtc_handles);
     assert!(
         rtc.wait_until_free(Duration::from_secs(10)),
-        "webrtc inner ports not free 10s after second multi close"
+        "webrtc ports not free 10s after second close"
     );
     {
         let _udp_probe = UdpSocket::new(&udp, None);
