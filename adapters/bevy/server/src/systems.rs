@@ -44,9 +44,8 @@ use crate::events::CachedTickEventsState;
 /// Change-detection (`on_component_added`) only fires for components inserted
 /// while `HostOwned` is present, so enabling replication on a later frame
 /// than spawn left pre-existing components unsynced: the entity arrived
-/// empty. Enumerating the entity's current components on enable closes that
-/// gap for both the marker and the command path (both funnel through
-/// `HostOwned`).
+/// empty. Enumerating the entity's current components when `HostOwned`
+/// lands closes that gap on the enable path.
 ///
 /// Same-frame double-emits with `on_component_added` are absorbed downstream:
 /// `insert_component_worldless` with an unchanged value marks nothing dirty,
