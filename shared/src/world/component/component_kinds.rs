@@ -213,17 +213,7 @@ impl ComponentKinds {
         // the `capture()` expect in `world_writer.rs` the first time it
         // serializes past the cache. Prefer const-bounded fields for anything
         // large enough to care, so the failure lands at registration.
-        let max_bits = C::max_bit_length();
-        if max_bits != UNBOUNDED_BIT_LENGTH {
-            assert!(
-                max_bits <= CACHED_UPDATE_BITS,
-                "Component {} serializes to {} bits, exceeding the {}-bit \
-                 CachedComponentUpdate ceiling. Slim the component before registering.",
-                std::any::type_name::<C>(),
-                max_bits,
-                CACHED_UPDATE_BITS
-            );
-        }
+        Self::assert_cached_update_ceiling(std::any::type_name::<C>(), C::max_bit_length());
         if C::has_entity_properties() {
             self.user_dependent.insert(component_kind);
         }
@@ -245,20 +235,15 @@ impl ComponentKinds {
         // schema methods disagree about its own layout, and registering it
         // would let the fingerprint frame a truncated or misaligned
         // component section. Refuse registration instead.
-        assert_eq!(
-            property_labels.len(),
-            mask_indices.len(),
-            "refusing to register component {}: {} property labels but {} mask indices",
+        Self::assert_label_mask_agreement(
             std::any::type_name::<C>(),
             property_labels.len(),
             mask_indices.len(),
         );
-        assert!(
-            entity_property_labels
-                .iter()
-                .all(|label| property_labels.contains(label)),
-            "refusing to register component {}: entity labels name properties outside its wired properties",
+        Self::assert_entity_labels_wired(
             std::any::type_name::<C>(),
+            &property_labels,
+            &entity_property_labels,
         );
         self.facts.insert(
             component_kind,
@@ -282,6 +267,57 @@ impl ComponentKinds {
         self.net_id_map.insert(net_id, component_kind);
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
+    }
+
+    /// Enforces the CachedComponentUpdate ceiling for one registration.
+    /// Cold error path shared by every [`add_component`](Self::add_component)
+    /// instantiation: the sentinel skips the assert (unbounded components
+    /// trip the `capture()` expect in `world_writer.rs` instead), and the
+    /// panic message is identical to the inlined form.
+    #[cold]
+    #[inline(never)]
+    fn assert_cached_update_ceiling(type_name: &str, max_bits: u32) {
+        if max_bits != UNBOUNDED_BIT_LENGTH {
+            assert!(
+                max_bits <= CACHED_UPDATE_BITS,
+                "Component {} serializes to {} bits, exceeding the {}-bit \
+                 CachedComponentUpdate ceiling. Slim the component before registering.",
+                type_name,
+                max_bits,
+                CACHED_UPDATE_BITS
+            );
+        }
+    }
+
+    /// Refuses registration when a type's derive walk disagrees about its
+    /// own layout. Cold error path; see [`add_component`](Self::add_component).
+    #[cold]
+    #[inline(never)]
+    fn assert_label_mask_agreement(type_name: &str, labels: usize, masks: usize) {
+        assert_eq!(
+            labels, masks,
+            "refusing to register component {}: {} property labels but {} mask indices",
+            type_name, labels, masks,
+        );
+    }
+
+    /// Refuses registration when entity labels name properties outside the
+    /// type's wired properties. Cold error path; see
+    /// [`add_component`](Self::add_component).
+    #[cold]
+    #[inline(never)]
+    fn assert_entity_labels_wired(
+        type_name: &str,
+        property_labels: &[String],
+        entity_property_labels: &[String],
+    ) {
+        assert!(
+            entity_property_labels
+                .iter()
+                .all(|label| property_labels.contains(label)),
+            "refusing to register component {}: entity labels name properties outside its wired properties",
+            type_name,
+        );
     }
 
     /// Returns every registered component's structural facts in **wire

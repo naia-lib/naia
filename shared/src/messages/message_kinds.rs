@@ -122,19 +122,35 @@ impl MessageKinds {
     /// Registers message type `M`, assigning it the next sequential net-ID.
     pub fn add_message<M: Message>(&mut self) {
         let message_kind = MessageKind::of::<M>();
-
-        let net_id = self.current_net_id;
-        self.kind_map.insert(
-            message_kind,
-            (net_id, M::create_builder(), M::protocol_name().to_string()),
-        );
-        self.net_id_map.insert(net_id, message_kind);
-        self.descriptors.insert(message_kind, M::wire_schema());
         debug_assert!(
             self.current_net_id < NetId::MAX,
             "MessageKinds NetId overflow — too many message types registered (max {})",
             NetId::MAX
         );
+        self.insert_message(
+            message_kind,
+            M::create_builder(),
+            M::protocol_name().to_string(),
+            M::wire_schema(),
+        );
+    }
+
+    /// Non-generic registration core for [`add_message`](Self::add_message).
+    /// Only the builder, name, and schema differ per `M`; the map inserts
+    /// and counter updates are shared here instead of duplicated into each
+    /// of the ~170 message monos. Never inlined, for the same reason.
+    #[inline(never)]
+    fn insert_message(
+        &mut self,
+        kind: MessageKind,
+        builder: Box<dyn MessageBuilder>,
+        name: String,
+        schema: Vec<u8>,
+    ) {
+        let net_id = self.current_net_id;
+        self.kind_map.insert(kind, (net_id, builder, name));
+        self.net_id_map.insert(net_id, kind);
+        self.descriptors.insert(kind, schema);
         self.current_net_id += 1;
         self.kind_bit_width = bit_width_for_kind_count(self.current_net_id);
     }
