@@ -31,6 +31,21 @@ impl GlobalRequestManager {
         id
     }
 
+    /// Number of outstanding request ids, across all users. Test observer.
+    #[cfg(test)]
+    pub(crate) fn outstanding(&self) -> usize {
+        self.map.len()
+    }
+
+    /// Drop a request row unconditionally (send-side cancel on Err).
+    ///
+    /// Unlike [`destroy_request_id`](Self::destroy_request_id), which only
+    /// releases ANSWERED rows to the caller, this removes whatever is there:
+    /// a request that never left must not linger until disconnect.
+    pub(crate) fn cancel_request_id(&mut self, request_id: &GlobalRequestId) -> bool {
+        self.map.remove(request_id).is_some()
+    }
+
     pub(crate) fn destroy_request_id(
         &mut self,
         request_id: &GlobalRequestId,

@@ -392,6 +392,149 @@ fn resident_send_request_returns_message_queue_full_when_channel_queue_fills() {
     ));
 }
 
+/// A pipelined send_request that fails the live-connection check must not
+/// leave a request row behind: nothing was sent, so nothing may linger.
+#[test]
+fn pipelined_send_request_leaves_no_row_without_live_connection() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54326".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let request = TestRequest { query: 9 };
+    server.receive_user(user_key, address);
+
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::UserNotFound)
+    ));
+
+    let (coord, recv, send) = server.take_handles();
+    let outstanding = coord.state.global_request_manager.outstanding();
+    server.restore_handles(coord, recv, send);
+    assert_eq!(
+        outstanding, 0,
+        "failed send_request must leave zero outstanding rows"
+    );
+}
+
+/// Same leak on the resident path: user registered, no send connection.
+#[test]
+fn resident_send_request_leaves_no_row_without_live_connection() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use crate::server::world_server::InternalWorldServer;
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54327".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let request = TestRequest { query: 9 };
+    server.receive_user(user_key, address);
+
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::UserNotFound)
+    ));
+    assert_eq!(
+        server.sim_handle.state.global_request_manager.outstanding(),
+        0,
+        "failed send_request must leave zero outstanding rows"
+    );
+}
+
+/// A resident send_request refused by the queue-depth cap must roll its row
+/// back: the two accepted requests stay, the refused one leaves nothing.
+#[test]
+fn resident_send_request_queue_full_leaves_no_row() {
+    use naia_shared::{ChannelDirection, ChannelMode, ReliableSettings};
+
+    use crate::server::world_server::InternalWorldServer;
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings {
+                rtt_resend_factor: 1.5,
+                max_queue_depth: Some(2),
+            }),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54328".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    let request = TestRequest { query: 9 };
+    server.receive_user(user_key, address);
+
+    let gwm = server.send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &server.send.state.shared.server_config.connection,
+        &server.send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &server.send.state.shared.channel_kinds,
+        &gwm,
+        server
+            .send
+            .state
+            .shared
+            .server_config
+            .max_replicated_entities as usize,
+    );
+    drop(gwm);
+    server
+        .send
+        .state
+        .send_user_connections
+        .insert(address, send_conn);
+
+    assert!(server
+        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .is_ok());
+    assert!(server
+        .send_request::<TestRequestChannel, _>(&user_key, &request)
+        .is_ok());
+    assert!(matches!(
+        server.send_request::<TestRequestChannel, _>(&user_key, &request),
+        Err(NaiaServerError::MessageQueueFull)
+    ));
+    assert_eq!(
+        server.sim_handle.state.global_request_manager.outstanding(),
+        2,
+        "queue-full refusal must not add a row"
+    );
+}
+
 fn make_empty_receive_output() -> ReceiveOutput<u64> {
     ReceiveOutput {
         world_events: WorldEvents::<u64>::new(),

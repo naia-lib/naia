@@ -1793,12 +1793,14 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             panic!("Requests can only be sent over Bidirectional, Reliable Channels");
         }
 
+        // Check first: allocating the id before this Err left a row with no
+        // request ever sent, unpurged until disconnect.
+        self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
         let request_id = self
             .coord_mut()
             .state
             .global_request_manager
             .create_request_id(user_key);
-        self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
 
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Request {

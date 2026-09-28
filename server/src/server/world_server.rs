@@ -872,12 +872,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             panic!("Requests can only be sent over Bidirectional, Reliable Channels");
         }
 
-        let request_id = self
-            .sim_handle
-            .state
-            .global_request_manager
-            .create_request_id(user_key);
-
+        // Check before allocating: every Err below used to leak a request row
+        // with no request ever sent, unpurged until disconnect.
         let Some(user) = self.sim_handle.state.user_store.get(user_key) else {
             warn!("user does not exist");
             return Err(NaiaServerError::UserNotFound);
@@ -891,6 +887,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             warn!("currently not connected to user");
             return Err(NaiaServerError::UserNotFound);
         };
+
+        // The queue call embeds the id in the fragments it enqueues, so it
+        // must be allocated first here -- and rolled back if refused.
+        let request_id = self
+            .sim_handle
+            .state
+            .global_request_manager
+            .create_request_id(user_key);
         let gwm = self.shared.global_world_manager.read();
         let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
 
@@ -902,8 +906,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             request_id,
             message,
         ) {
-            // Queue-depth cap reached: nothing was enqueued. Report it rather than
-            // handing back an id whose response will never arrive.
+            // Queue-depth cap reached: nothing was enqueued. Roll the row
+            // back rather than handing back an id whose response will never
+            // arrive -- or leaking a row the caller never sees.
+            self.sim_handle
+                .state
+                .global_request_manager
+                .cancel_request_id(&request_id);
             return Err(NaiaServerError::MessageQueueFull);
         }
 
