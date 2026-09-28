@@ -1837,11 +1837,13 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         response_key: &ResponseSendKey<S>,
         response: &S,
     ) -> bool {
+        // Peek, don't consume: a refused send must leave the routing so the
+        // caller can retry with the same key (mirrors the resident path).
         let Some((user_key, channel_kind, local_response_id)) = self
-            .coord_mut()
+            .coord()
             .state
             .global_response_manager
-            .destroy_response_id(&response_key.response_id())
+            .peek_response_id(&response_key.response_id())
         else {
             return false;
         };
@@ -1852,6 +1854,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             return false;
         }
 
+        self.coord_mut()
+            .state
+            .global_response_manager
+            .destroy_response_id(&response_key.response_id());
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Response {
                 user_key,

@@ -535,6 +535,161 @@ fn resident_send_request_queue_full_leaves_no_row() {
     );
 }
 
+/// A refused pipelined send_response must not burn the response id: the
+/// caller retries with the same key once the connection is live.
+#[test]
+fn pipelined_send_response_without_live_connection_keeps_routing_for_retry() {
+    use naia_shared::{
+        ChannelDirection, ChannelKind, ChannelMode, LocalRequestId, ReliableSettings,
+        ResponseSendKey,
+    };
+
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54329".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    server.receive_user(user_key, address);
+
+    // Register the response routing as an incoming request would.
+    let (mut coord, recv, send) = server.take_handles();
+    let global_id = coord.state.global_response_manager.create_response_id(
+        &user_key,
+        &ChannelKind::of::<TestRequestChannel>(),
+        &LocalRequestId::from(1u16).receive_from_remote(),
+    );
+    server.restore_handles(coord, recv, send);
+
+    let key = ResponseSendKey::<TestResponse>::new(global_id);
+    let response = TestResponse { result: 1 };
+
+    // No live send connection: refused...
+    assert!(!server.send_response(&key, &response));
+
+    // ...but the mapping survives for retry.
+    let (coord, recv, send) = server.take_handles();
+    let still_routable = coord
+        .state
+        .global_response_manager
+        .peek_response_id(&global_id)
+        .is_some();
+    server.restore_handles(coord, recv, send);
+    assert!(
+        still_routable,
+        "refused send_response must keep the routing"
+    );
+
+    // Retry succeeds once the connection is live.
+    let (coord, recv, mut send) = server.take_handles();
+    let gwm = send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &send.state.shared.server_config.connection,
+        &send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &send.state.shared.channel_kinds,
+        &gwm,
+        send.state.shared.server_config.max_replicated_entities as usize,
+    );
+    drop(gwm);
+    send.state.send_user_connections.insert(address, send_conn);
+    server.restore_handles(coord, recv, send);
+    assert!(
+        server.send_response(&key, &response),
+        "retry with the same key must send once connected"
+    );
+}
+
+/// Resident parity guard: the resident path already peeks before consuming,
+/// so a refused send leaves the routing for retry.
+#[test]
+fn resident_send_response_without_live_connection_keeps_routing_for_retry() {
+    use naia_shared::{
+        ChannelDirection, ChannelKind, ChannelMode, LocalRequestId, ReliableSettings,
+        ResponseSendKey,
+    };
+
+    use crate::server::world_server::InternalWorldServer;
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = InternalWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54330".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    server.receive_user(user_key, address);
+
+    let global_id = server
+        .sim_handle
+        .state
+        .global_response_manager
+        .create_response_id(
+            &user_key,
+            &ChannelKind::of::<TestRequestChannel>(),
+            &LocalRequestId::from(1u16).receive_from_remote(),
+        );
+
+    let key = ResponseSendKey::<TestResponse>::new(global_id);
+    let response = TestResponse { result: 1 };
+
+    assert!(!server.send_response(&key, &response));
+    assert!(
+        server
+            .sim_handle
+            .state
+            .global_response_manager
+            .peek_response_id(&global_id)
+            .is_some(),
+        "refused send_response must keep the routing"
+    );
+
+    let gwm = server.send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &server.send.state.shared.server_config.connection,
+        &server.send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &server.send.state.shared.channel_kinds,
+        &gwm,
+        server
+            .send
+            .state
+            .shared
+            .server_config
+            .max_replicated_entities as usize,
+    );
+    drop(gwm);
+    server
+        .send
+        .state
+        .send_user_connections
+        .insert(address, send_conn);
+    assert!(
+        server.send_response(&key, &response),
+        "retry with the same key must send once connected"
+    );
+}
+
 fn make_empty_receive_output() -> ReceiveOutput<u64> {
     ReceiveOutput {
         world_events: WorldEvents::<u64>::new(),
