@@ -7,7 +7,7 @@ use naia_bevy_shared::{
 };
 use naia_server::{ReplicationConfig, UserKey};
 
-use crate::{components::Replication, plugin::Singleton, server::ServerImpl, Server};
+use crate::{plugin::Singleton, server::ServerImpl, Server};
 
 // =====================================================================
 // EntityCommands extension
@@ -39,9 +39,7 @@ pub trait CommandsExt<'a> {
     ///
     /// After this call, inserting any `#[derive(Replicate)]` component
     /// on the entity will begin diff-tracking and replication to in-scope
-    /// clients. Also inserts the [`Replication`](crate::Replication) marker,
-    /// so the command path and the marker path agree; inserting the marker
-    /// directly is equivalent.
+    /// clients.
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
 
     /// Marks the entity as static — no diff-tracking after initial replication.
@@ -58,9 +56,7 @@ pub trait CommandsExt<'a> {
 
     /// Removes the entity from the naia replication layer.
     ///
-    /// Despawns the entity on all clients for whom it was in scope. Also
-    /// removes the [`Replication`](crate::Replication) marker, so removing
-    /// the marker directly is equivalent.
+    /// Despawns the entity on all clients for whom it was in scope.
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
 
     /// Updates the [`ReplicationConfig`] for this entity.
@@ -116,16 +112,8 @@ pub trait CommandsExt<'a> {
 
 impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
-        let id = self.id();
-        // Converge onto the marker: the entity ends up marked whether the
-        // caller used the command or the component. The guard keeps a
-        // marker-then-command sequence from double-enabling (fail-loud);
-        // single-call behavior is unchanged.
-        if server.replication_config(&id).is_none() {
-            server.enable_replication(&id);
-        }
+        server.enable_replication(&self.id());
         self.insert(HostOwned::new::<Singleton>());
-        self.insert(Replication);
         self
     }
 
@@ -142,9 +130,6 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.disable_replication(&self.id());
         self.remove::<HostOwned>();
-        // Converge onto the marker: removing an absent marker is a silent
-        // no-op that fires no event, so repeat disables stay quiet.
-        self.remove::<Replication>();
         self
     }
 
