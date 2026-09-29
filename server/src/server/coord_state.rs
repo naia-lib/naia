@@ -18,7 +18,8 @@ use std::{collections::HashMap, hash::Hash};
 
 use naia_shared::{
     ChannelKind, ComponentKind, GlobalEntity, GlobalEntityIndex, GlobalPriorityState,
-    GlobalRequestId, LocalResponseId, MessageContainer, ResourceRegistry, UserPriorityState,
+    GlobalRequestId, GlobalResponseId, LocalResponseId, MessageContainer, ResourceRegistry,
+    UserPriorityState,
 };
 
 use crate::request::{GlobalRequestManager, GlobalResponseManager};
@@ -165,6 +166,7 @@ pub(crate) enum PendingOutboundMessageOp {
         user_key: UserKey,
         channel_kind: ChannelKind,
         local_response_id: LocalResponseId,
+        response_id: GlobalResponseId,
         message: MessageContainer,
     },
 }

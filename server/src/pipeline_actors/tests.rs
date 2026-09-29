@@ -690,6 +690,157 @@ fn resident_send_response_without_live_connection_keeps_routing_for_retry() {
     );
 }
 
+/// Id-burn: the pipelined path destroys the response routing at ENQUEUE time
+/// while reporting Sent, so if the user is gone when the D6 drain runs, the
+/// op is dropped with nothing delivered and no retry possible. The routing
+/// must survive an undelivered drain (resident destroys only on channel
+/// acceptance).
+#[test]
+fn pipelined_send_response_user_gone_before_drain_keeps_routing_for_retry() {
+    use naia_shared::{
+        ChannelDirection, ChannelKind, ChannelMode, LocalRequestId, ReliableSettings,
+        ResponseSendKey,
+    };
+
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54331".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    server.receive_user(user_key, address);
+
+    // Live connection so the enqueue reports Sent.
+    let (coord, recv, mut send) = server.take_handles();
+    let gwm = send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &send.state.shared.server_config.connection,
+        &send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &send.state.shared.channel_kinds,
+        &gwm,
+        send.state.shared.server_config.max_replicated_entities as usize,
+    );
+    drop(gwm);
+    send.state.send_user_connections.insert(address, send_conn);
+    server.restore_handles(coord, recv, send);
+
+    // Register the response routing as an incoming request would.
+    let (mut coord, recv, send) = server.take_handles();
+    let global_id = coord.state.global_response_manager.create_response_id(
+        &user_key,
+        &ChannelKind::of::<TestRequestChannel>(),
+        &LocalRequestId::from(1u16).receive_from_remote(),
+    );
+    server.restore_handles(coord, recv, send);
+
+    let key = ResponseSendKey::<TestResponse>::new(global_id);
+    let response = TestResponse { result: 1 };
+    assert!(
+        server.send_response(&key, &response),
+        "enqueue with a live connection must report Sent"
+    );
+
+    // Disconnect lands before the D6 drain: the op is dropped undelivered.
+    server.coord_mut().state.user_store.remove(&user_key);
+    let world = naia_shared::SnapshotWorld::<u64>::new();
+    server.send(&world);
+
+    // The id must not burn with the dropped op: retry stays possible.
+    let (coord, recv, send) = server.take_handles();
+    let still_routable = coord
+        .state
+        .global_response_manager
+        .peek_response_id(&global_id)
+        .is_some();
+    server.restore_handles(coord, recv, send);
+    assert!(
+        still_routable,
+        "drain-dropped response must keep its routing for retry"
+    );
+}
+
+/// Twin guard: a drain that DELIVERS still destroys the routing — the
+/// destroy-at-drain-accept fix must not leak ids or allow double answers.
+#[test]
+fn pipelined_send_response_delivered_drain_destroys_routing() {
+    use naia_shared::{
+        ChannelDirection, ChannelKind, ChannelMode, LocalRequestId, ReliableSettings,
+        ResponseSendKey,
+    };
+
+    use outbound_message_test_protocol::{TestRequest, TestRequestChannel, TestResponse};
+
+    let mut proto = Protocol::builder();
+    proto
+        .add_channel::<TestRequestChannel>(
+            ChannelDirection::Bidirectional,
+            ChannelMode::UnorderedReliable(ReliableSettings::default()),
+        )
+        .add_message::<TestRequest>()
+        .add_message::<TestResponse>();
+    proto.lock();
+    let protocol = proto.build();
+
+    let mut server = PipelinedWorldServer::<u64>::new(ServerConfig::default(), protocol);
+    let address: SocketAddr = "127.0.0.1:54332".parse().unwrap();
+    let user_key = UserKey::from_u64(8);
+    server.receive_user(user_key, address);
+
+    let (coord, recv, mut send) = server.take_handles();
+    let gwm = send.state.shared.global_world_manager.read();
+    let (_recv_conn, send_conn) = crate::connection::connection::new_connection_pair(
+        &send.state.shared.server_config.connection,
+        &send.state.shared.server_config.ping,
+        &address,
+        &user_key,
+        &send.state.shared.channel_kinds,
+        &gwm,
+        send.state.shared.server_config.max_replicated_entities as usize,
+    );
+    drop(gwm);
+    send.state.send_user_connections.insert(address, send_conn);
+    server.restore_handles(coord, recv, send);
+
+    let (mut coord, recv, send) = server.take_handles();
+    let global_id = coord.state.global_response_manager.create_response_id(
+        &user_key,
+        &ChannelKind::of::<TestRequestChannel>(),
+        &LocalRequestId::from(1u16).receive_from_remote(),
+    );
+    server.restore_handles(coord, recv, send);
+
+    let key = ResponseSendKey::<TestResponse>::new(global_id);
+    let response = TestResponse { result: 1 };
+    assert!(server.send_response(&key, &response));
+
+    let world = naia_shared::SnapshotWorld::<u64>::new();
+    server.send(&world);
+
+    let (coord, recv, send) = server.take_handles();
+    let still_routable = coord
+        .state
+        .global_response_manager
+        .peek_response_id(&global_id)
+        .is_some();
+    server.restore_handles(coord, recv, send);
+    assert!(
+        !still_routable,
+        "delivered drain must destroy the routing (no leak, no double answer)"
+    );
+}
+
 fn make_empty_receive_output() -> ReceiveOutput<u64> {
     ReceiveOutput {
         world_events: WorldEvents::<u64>::new(),

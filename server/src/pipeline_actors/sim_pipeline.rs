@@ -1837,8 +1837,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         response_key: &ResponseSendKey<S>,
         response: &S,
     ) -> bool {
-        // Peek, don't consume: a refused send must leave the routing so the
-        // caller can retry with the same key (mirrors the resident path).
+        // Peek, don't consume: the routing is destroyed at DRAIN-accept, not
+        // here. A refused send leaves the routing for retry (as does a
+        // drain-time drop), mirroring the resident path, which destroys only
+        // when the channel accepts the bytes.
         let Some((user_key, channel_kind, local_response_id)) = self
             .coord()
             .state
@@ -1854,15 +1856,12 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
             return false;
         }
 
-        self.coord_mut()
-            .state
-            .global_response_manager
-            .destroy_response_id(&response_key.response_id());
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Response {
                 user_key,
                 channel_kind,
                 local_response_id,
+                response_id: response_key.response_id(),
                 message: MessageContainer::new(S::clone_box(response)),
             },
         );
@@ -2615,17 +2614,38 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     user_key,
                     channel_kind,
                     local_response_id,
+                    response_id,
                     message,
                 } => {
+                    // User gone: drop the op but KEEP the routing — the caller
+                    // was told Sent, and the id must not burn with the op.
                     let Some(user) = coord.state.user_store.get(&user_key) else {
                         continue;
                     };
-                    let _ = send.state.send_response_container_to_address(
+                    // At-most-once: a second op for an already-answered id
+                    // (double-enqueue before the drain) is dropped.
+                    if coord
+                        .state
+                        .global_response_manager
+                        .peek_response_id(&response_id)
+                        .is_none()
+                    {
+                        continue;
+                    }
+                    let accepted = send.state.send_response_container_to_address(
                         &user.address(),
                         &channel_kind,
                         local_response_id,
                         message,
                     );
+                    // Resident parity: destroy only on acceptance. A refused
+                    // drain keeps the routing so the same key can retry.
+                    if accepted {
+                        coord
+                            .state
+                            .global_response_manager
+                            .destroy_response_id(&response_id);
+                    }
                 }
             }
         }
