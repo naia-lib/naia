@@ -11,6 +11,7 @@ use std::time::Duration;
 
 use naia_client::{ClientConfig, JitterBufferType, Publicity};
 use naia_server::{ReplicationConfig, RoomKey, ServerConfig};
+use naia_shared::handshake::RejectReason;
 use naia_shared::{
     AuthorityError, DisconnectReason, EntityAuthStatus, Protocol, Request, Response, Tick,
 };
@@ -410,6 +411,83 @@ fn timeout_disconnect_then_reconnect_stays_connected() {
     scenario.expect(|ctx| server_and_client_connected(ctx, client_key));
 
     // ...and stays there: extra ticks, no second disconnect, still connected.
+    scenario.mutate(|_ctx| {});
+    scenario.mutate(|_ctx| {});
+    scenario.expect(|ctx| {
+        let no_second = ctx.client(client_key, |c| {
+            c.read_event::<ClientDisconnectEvent>().is_none()
+        });
+        let still_connected = ctx.client(client_key, |c| c.connection_status().is_connected());
+        (no_second && still_connected).then_some(())
+    });
+}
+
+/// Server-rejected handshake, then a fresh authenticated connect on the
+/// SAME client object, must settle connected with no spurious events.
+///
+/// Red-first: the explicit-reject path does NOT funnel through
+/// `disconnect_reset_connection` — the pre-auth 401 branch resets the
+/// socket inline. This pin proves that branch returns the client to
+/// `Disconnected`: without its inline io reset the reconnect's `connect()`
+/// panics on the loaded socket and the client never settles.
+#[test]
+fn server_reject_then_reconnect_settles_connected() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let auth = Auth::new("client", "password");
+    let client_key = scenario.client_start(
+        "Client",
+        auth.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Server holds the pending auth, then explicitly rejects it.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            server
+                .read_event::<ServerAuthEvent<Auth>>()
+                .is_some()
+                .then_some(())
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.reject_connection(&client_key);
+        });
+    });
+
+    // Exactly one reject with the Auth reason; never connected, never a
+    // disconnect event; the attempt reset returns the client to Disconnected.
+    let mut reason_seen = None;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            if let Some((_address, reason, _message)) = client.read_event::<ClientRejectEvent>() {
+                reason_seen = Some(reason);
+            }
+            let no_connect = client.read_event::<ClientConnectEvent>().is_none();
+            let no_disconnect = client.read_event::<ClientDisconnectEvent>().is_none();
+            let back_to_idle = client.connection_status().is_disconnected();
+            (reason_seen.is_some() && no_connect && no_disconnect && back_to_idle).then_some(())
+        })
+    });
+    assert_eq!(
+        reason_seen,
+        Some(RejectReason::Auth),
+        "an explicit server reject must report RejectReason::Auth exactly once"
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Same-client fresh authenticated reconnect settles connected...
+    scenario.client_reconnect(client_key);
+    accept_reconnect(&mut scenario, client_key, &auth);
+    scenario.expect(|ctx| server_and_client_connected(ctx, client_key));
+
+    // ...and stays there: extra ticks, no disconnect, still connected.
     scenario.mutate(|_ctx| {});
     scenario.mutate(|_ctx| {});
     scenario.expect(|ctx| {
