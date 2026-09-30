@@ -1,4 +1,8 @@
-use std::{default::Default, net::SocketAddr};
+use std::{
+    default::Default,
+    net::{SocketAddr, TcpListener, UdpSocket},
+    time::{Duration, Instant},
+};
 
 /// List of addresses needed to start listening on a ServerSocket
 #[derive(Clone)]
@@ -24,6 +28,32 @@ impl ServerAddrs {
             webrtc_listen_addr,
             public_webrtc_url: public_webrtc_url.to_string(),
         }
+    }
+}
+
+impl ServerAddrs {
+    /// Block until both listen ports are free (rebindable) or `timeout`
+    /// elapses. Returns true iff both were observed free.
+    ///
+    /// This is the observable half of shutdown (naia-lib/naia#92):
+    /// dropping the listen handles ends the detached tasks, but that exit
+    /// is asynchronous — a bare drop cannot promise *when* the ports come
+    /// back. Poll `wait_until_free` (or use [`Socket::close`](crate::Socket::close),
+    /// which drops and waits) and rebind only on true: no guessed sleeps.
+    pub fn wait_until_free(&self, timeout: Duration) -> bool {
+        let start = Instant::now();
+        while start.elapsed() < timeout {
+            if self.ports_free() {
+                return true;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        self.ports_free()
+    }
+
+    fn ports_free(&self) -> bool {
+        TcpListener::bind(self.session_listen_addr).is_ok()
+            && UdpSocket::bind(self.webrtc_listen_addr).is_ok()
     }
 }
 

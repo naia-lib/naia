@@ -1,13 +1,16 @@
+use std::ops::DerefMut;
+
 use bevy_ecs::{
     system::{Commands, EntityCommands},
     world::Mut,
 };
 use naia_bevy_shared::{
-    EntityAuthStatus, HostOwned, ReplicatedResource, WorldOpCommand, WorldProxyMut,
+    ComponentKind, EntityAuthStatus, HostOwned, Replicate, ReplicatedResource, WorldMutType,
+    WorldOpCommand, WorldProxy, WorldProxyMut, WorldRefType,
 };
 use naia_server::{ReplicationConfig, UserKey};
 
-use crate::{plugin::Singleton, server::ServerImpl, Server};
+use crate::{components::Replication, plugin::Singleton, server::ServerImpl, Server};
 
 // =====================================================================
 // EntityCommands extension
@@ -39,7 +42,9 @@ pub trait CommandsExt<'a> {
     ///
     /// After this call, inserting any `#[derive(Replicate)]` component
     /// on the entity will begin diff-tracking and replication to in-scope
-    /// clients.
+    /// clients. Also inserts the [`Replication`](crate::Replication) marker,
+    /// so the command path and the marker path agree; inserting the marker
+    /// directly is equivalent.
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
 
     /// Marks the entity as static — no diff-tracking after initial replication.
@@ -56,7 +61,9 @@ pub trait CommandsExt<'a> {
 
     /// Removes the entity from the naia replication layer.
     ///
-    /// Despawns the entity on all clients for whom it was in scope.
+    /// Despawns the entity on all clients for whom it was in scope. Also
+    /// removes the [`Replication`](crate::Replication) marker, so removing
+    /// the marker directly is equivalent.
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
 
     /// Updates the [`ReplicationConfig`] for this entity.
@@ -108,12 +115,41 @@ pub trait CommandsExt<'a> {
 
     /// Resumes replication for an entity previously paused.
     fn resume_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a>;
+
+    /// Stops replicating one component of a replicated entity (naia-lib/naia#186).
+    ///
+    /// The client removes the component; the entity and its siblings keep
+    /// syncing, and the server keeps simulating the component locally.
+    /// Disabling an untracked component is a silent no-op.
+    fn disable_component_replication<R: Replicate>(
+        &'a mut self,
+        server: &mut Server,
+    ) -> &'a mut EntityCommands<'a>;
+
+    /// Re-enables replication of one component disabled with
+    /// [`disable_component_replication`](CommandsExt::disable_component_replication).
+    ///
+    /// The client receives the component's CURRENT value, not the one it
+    /// had when disabled. Enabling an already-tracked component is a
+    /// silent no-op.
+    fn enable_component_replication<R: Replicate>(
+        &'a mut self,
+        server: &mut Server,
+    ) -> &'a mut EntityCommands<'a>;
 }
 
 impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn enable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
-        server.enable_replication(&self.id());
+        let id = self.id();
+        // Converge onto the marker: the entity ends up marked whether the
+        // caller used the command or the component. The guard keeps a
+        // marker-then-command sequence from double-enabling (fail-loud);
+        // single-call behavior is unchanged.
+        if server.replication_config(&id).is_none() {
+            server.enable_replication(&id);
+        }
         self.insert(HostOwned::new::<Singleton>());
+        self.insert(Replication);
         self
     }
 
@@ -130,6 +166,9 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
     fn disable_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.disable_replication(&self.id());
         self.remove::<HostOwned>();
+        // Converge onto the marker: removing an absent marker is a silent
+        // no-op that fires no event, so repeat disables stay quiet.
+        self.remove::<Replication>();
         self
     }
 
@@ -175,6 +214,74 @@ impl<'a> CommandsExt<'a> for EntityCommands<'a> {
 
     fn resume_replication(&'a mut self, server: &mut Server) -> &'a mut EntityCommands<'a> {
         server.resume_replication(&self.id());
+        self
+    }
+
+    fn disable_component_replication<R: Replicate>(
+        &'a mut self,
+        _server: &mut Server,
+    ) -> &'a mut EntityCommands<'a> {
+        // Deferred: the Remove path needs world access for the authority
+        // check, mirroring the `HostSyncEvent::Remove` arm of
+        // `world_to_host_sync`. The Bevy component is untouched — only the
+        // replication record, diff handler, and in-scope client copies go
+        // away. Untracked components (and unregistered entities) converge
+        // silently via the core no-op guard.
+        let entity = self.id();
+        let component_kind = ComponentKind::of::<R>();
+        self.commands().queue(WorldOpCommand::new(move |world| {
+            world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+                // The command applies after the caller's system returns; the
+                // entity may have despawned in between.
+                if !world.proxy().has_entity(&entity) {
+                    return;
+                }
+                if server.entity_authority_status(world.proxy(), &entity)
+                    == Some(EntityAuthStatus::Denied)
+                {
+                    return;
+                }
+                server.remove_component_worldless(&entity, &component_kind);
+            });
+        }));
+        self
+    }
+
+    fn enable_component_replication<R: Replicate>(
+        &'a mut self,
+        _server: &mut Server,
+    ) -> &'a mut EntityCommands<'a> {
+        // Deferred: re-registration needs the component's CURRENT value from
+        // the world, so the client receives a fresh Insert rather than a
+        // stale snapshot. Already-tracked components (and unregistered
+        // entities, or components since removed from the world) converge
+        // silently — no warn, no panic, no duplicate Insert.
+        let entity = self.id();
+        let component_kind = ComponentKind::of::<R>();
+        self.commands().queue(WorldOpCommand::new(move |world| {
+            world.resource_scope(|world, mut server: Mut<ServerImpl>| {
+                // The command applies after the caller's system returns; the
+                // entity (or the component) may be gone by then.
+                if !world.proxy().has_entity(&entity) {
+                    return;
+                }
+                if server.entity_authority_status(world.proxy(), &entity)
+                    == Some(EntityAuthStatus::Denied)
+                {
+                    return;
+                }
+                if server.has_component_record(&entity, &component_kind) {
+                    return;
+                }
+                let mut world_proxy = world.proxy_mut();
+                let Some(mut component_mut) =
+                    world_proxy.component_mut_of_kind(&entity, &component_kind)
+                else {
+                    return;
+                };
+                server.insert_component_worldless(&entity, DerefMut::deref_mut(&mut component_mut));
+            });
+        }));
         self
     }
 }

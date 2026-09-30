@@ -51,6 +51,8 @@ impl Protocol {
         self
     }
 
+    /// Shared default; for per-side conditioning see
+    /// `SocketConfig::with_link_condition` (naia #11).
     pub fn link_condition(&mut self, config: LinkConditionerConfig) -> &mut Self {
         self.inner.link_condition(config);
         self

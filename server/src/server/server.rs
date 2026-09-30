@@ -996,6 +996,17 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
         self.main_server.user_address(user_key)
     }
 
+    /// Clone the loaded transport packet sender (test-only).
+    ///
+    /// Lets `test_utils` tests probe transport-level send behavior — e.g.
+    /// asserting a disconnected client's address now refuses sends because
+    /// its origin entry was evicted — without going through connection
+    /// bookkeeping.
+    #[cfg(feature = "test_utils")]
+    pub fn sender_cloned_for_tests(&self) -> Box<dyn PacketSender> {
+        self.main_server.sender_cloned()
+    }
+
     /// Returns a read-only view of the fine-grained scope for the given user.
     ///
     /// Use this to query whether a specific entity is currently included in
@@ -1254,6 +1265,16 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> Server<E> {
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         self.world_server
             .remove_component_worldless(world_entity, component_kind);
+    }
+
+    /// Whether the replication layer currently tracks `component_kind` on
+    /// `world_entity` (#186 adapter use only).
+    ///
+    /// `false` for unregistered entities and untracked components alike, so
+    /// the adapter can make disable/enable converge silently.
+    pub fn has_component_record(&self, world_entity: &E, component_kind: &ComponentKind) -> bool {
+        self.world_server
+            .has_component_record(world_entity, component_kind)
     }
 }
 

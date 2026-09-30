@@ -169,7 +169,7 @@ mod schema_tests {
         assert_eq!(&bytes[..WIRE_SCHEMA_DOMAIN.len()], WIRE_SCHEMA_DOMAIN);
         assert_eq!(bytes[WIRE_SCHEMA_DOMAIN.len()], SCHEMA_TAG_STRUCT);
         let body = &bytes[WIRE_SCHEMA_DOMAIN.len() + 5..];
-        assert!(body.windows(16).any(|w| w == b"skip_component"));
+        assert!(body.windows(14).any(|w| w == b"skip_component"));
         assert!(body.windows(19).any(|w| w == b"skipped_is_negative"));
         assert!(body.windows(10).any(|w| w == b"components"));
     }

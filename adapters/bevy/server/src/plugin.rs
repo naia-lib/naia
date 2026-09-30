@@ -23,10 +23,11 @@ use super::{
         AuthEvents, ConnectEvent, DespawnEntityEvent, DisconnectEvent, ErrorEvent, MessageEvents,
         PublishEntityEvent, RequestEvents, SpawnEntityEvent, TickEvent, UnpublishEntityEvent,
     },
+    replication_marker::{on_replication_added, on_replication_despawned, on_replication_removed},
     server::ServerImpl,
     systems::{
-        process_packets, receive_packets, send_packets, send_packets_init, translate_tick_events,
-        translate_world_events, world_to_host_sync,
+        emit_initial_component_inserts, process_packets, receive_packets, send_packets,
+        send_packets_init, translate_tick_events, translate_world_events, world_to_host_sync,
     },
 };
 
@@ -272,6 +273,12 @@ impl Plugin {
 
 impl PluginType for Plugin {
     fn build(&self, app: &mut App) {
+        // The Replication marker's observers run on every topology: they only
+        // fire for entities carrying the marker (naia-lib/naia#182).
+        app.add_observer(on_replication_added)
+            .add_observer(on_replication_removed)
+            .add_observer(on_replication_despawned);
+
         let mut config = self.config.lock().deref_mut().take().unwrap();
 
         // Take server-event installers before the protocol is consumed by
@@ -402,7 +409,14 @@ impl PluginType for Plugin {
         // the caller (cyberlith's GameCell::update) drives an equivalent
         // pipeline-flavored host-sync explicitly via its own helper.
         if !self.state_external {
-            app.add_systems(Update, world_to_host_sync.in_set(WorldToHostSync));
+            // The initial-insert pass runs first so its events drain in the
+            // same update (both modes drain the same HostSyncEvent buffer).
+            app.add_systems(
+                Update,
+                (emit_initial_component_inserts, world_to_host_sync)
+                    .chain()
+                    .in_set(WorldToHostSync),
+            );
         }
 
         // Recv/translate/send systems are driven by the pipeline coordinator

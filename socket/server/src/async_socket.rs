@@ -30,6 +30,7 @@ impl Socket {
         from_client_auth_sender: Option<ClientAuthSender>,
         to_session_all_auth_receiver: Option<smol::channel::Receiver<(SocketAddr, AuthResponse)>>,
         expected_protocol_id: String,
+        session_shutdown: crate::shutdown::ShutdownWait,
     ) -> Self {
         let (to_client_sender, to_client_receiver) = smol::channel::unbounded();
 
@@ -52,6 +53,7 @@ impl Socket {
             from_client_auth_sender,
             to_session_all_auth_receiver,
             expected_protocol_id,
+            session_shutdown,
         );
 
         socket

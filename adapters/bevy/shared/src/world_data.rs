@@ -103,6 +103,13 @@ impl WorldData {
 
     // Components
 
+    /// Every registered replicated-component kind. Used by the host-sync
+    /// initial-insert pass, which enumerates an entity's current components
+    /// when tracking begins (cross-frame enable).
+    pub fn component_kinds(&self) -> impl Iterator<Item = &ComponentKind> {
+        self.kind_to_accessor_map.keys()
+    }
+
     #[allow(clippy::borrowed_box)]
     pub fn component_access(
         &self,

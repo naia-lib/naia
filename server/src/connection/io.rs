@@ -167,6 +167,15 @@ impl SendIo {
         self.packet_sender.as_ref().unwrap().clone()
     }
 
+    /// 12121: evict `address` from the loaded sender's per-address state
+    /// (a no-op unless the sender routes by remembered origin). Best
+    /// effort: with no sender loaded there is no map to drain.
+    pub fn forget_address(&self, address: &SocketAddr) {
+        if let Some(sender) = self.packet_sender.as_ref() {
+            sender.forget_address(address);
+        }
+    }
+
     pub fn send_packet(
         &mut self,
         address: &SocketAddr,

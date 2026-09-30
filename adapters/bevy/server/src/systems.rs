@@ -1,7 +1,9 @@
-use std::ops::DerefMut;
+use std::{any::TypeId, ops::DerefMut};
 
 use bevy_ecs::{
+    entity::Entity,
     message::Messages,
+    query::Added,
     system::{Res, ResMut, SystemState},
     world::{Mut, World},
 };
@@ -9,7 +11,8 @@ use bevy_ecs::{
 use log::warn;
 
 use naia_bevy_shared::{
-    HostOwned, HostSyncEvent, Instant, WorldMutType, WorldProxy, WorldProxyMut, WorldRefType,
+    ComponentKind, HostOwned, HostSyncEvent, Instant, WorldData, WorldMutType, WorldProxy,
+    WorldProxyMut, WorldRefType,
 };
 use naia_server::EntityOwner;
 
@@ -34,6 +37,53 @@ mod bevy_events {
 }
 
 use crate::events::CachedTickEventsState;
+
+/// Emits `HostSyncEvent::Insert` for every replicated component already on
+/// an entity whose host-side tracking begins this update.
+///
+/// Change-detection (`on_component_added`) only fires for components inserted
+/// while `HostOwned` is present, so enabling replication on a later frame
+/// than spawn left pre-existing components unsynced: the entity arrived
+/// empty. Enumerating the entity's current components on enable closes that
+/// gap for both the marker and the command path (both funnel through
+/// `HostOwned`).
+///
+/// Same-frame double-emits with `on_component_added` are absorbed downstream:
+/// `insert_component_worldless` with an unchanged value marks nothing dirty,
+/// so no second client event follows.
+pub fn emit_initial_component_inserts(world: &mut World) {
+    // Entities whose host-side tracking begins this update.
+    let mut newly_owned: Vec<(Entity, TypeId)> = Vec::new();
+    {
+        let mut query = world.query_filtered::<(Entity, &HostOwned), Added<HostOwned>>();
+        for (entity, host_owned) in query.iter(world) {
+            newly_owned.push((entity, host_owned.type_id()));
+        }
+    }
+    if newly_owned.is_empty() {
+        return;
+    }
+    world.resource_scope(|world, mut events: Mut<Messages<HostSyncEvent>>| {
+        let Some(world_data) = world.get_resource::<WorldData>() else {
+            return;
+        };
+        let kinds: Vec<ComponentKind> = world_data.component_kinds().copied().collect();
+        for (entity, host_id) in newly_owned {
+            if world.get_entity(entity).is_err() {
+                continue;
+            }
+            for kind in &kinds {
+                let present = world_data
+                    .component_access(kind)
+                    .map(|accessor| accessor.component(world, &entity).is_some())
+                    .unwrap_or(false);
+                if present {
+                    events.write(HostSyncEvent::Insert(host_id, entity, *kind));
+                }
+            }
+        }
+    });
+}
 
 pub fn world_to_host_sync(world: &mut World) {
     world.resource_scope(|world, mut server: Mut<ServerImpl>| {

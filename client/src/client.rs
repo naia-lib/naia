@@ -2130,8 +2130,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     break;
                 }
                 Err(error) => {
+                    // [b4-oom] Record one error and return: a
+                    // persistently-failing socket must not trap the
+                    // handshake drain loop (same shape as the server
+                    // RecvState bug).
                     self.incoming_world_events
                         .push_error(NaiaClientError::Wrapped(Box::new(error)));
+                    break;
                 }
             }
         }
@@ -2271,8 +2276,14 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
                     break;
                 }
                 Err(error) => {
+                    // [b4-oom] Record one error and return: a
+                    // persistently-failing socket must not trap the
+                    // connection drain loop either (identical shape to the
+                    // handshake loop above; covered by its RED test as proxy
+                    // — driving maintain_connection needs a full Connection).
                     self.incoming_world_events
                         .push_error(NaiaClientError::Wrapped(Box::new(error)));
+                    break;
                 }
             }
         }
@@ -2992,5 +3003,97 @@ cfg_if! {
                 Some(LocalEntity::from(owned_entity))
             }
         }
+    }
+}
+
+// ---- [b4-oom] drain-termination tests: a persistently-failing transport
+// (disconnected socket at teardown) must not trap the handshake drain loop.
+// Pre-fix the Err arm pushed one Boxed error per spin with no break (same
+// shape as the server RecvState bug); the thread below fails by timeout
+// instead of hanging the suite forever.
+#[cfg(test)]
+mod drain_termination_tests {
+    use std::net::SocketAddr;
+    use std::sync::{mpsc, Arc, Mutex};
+    use std::time::Duration;
+
+    use naia_shared::{IdentityToken, Protocol};
+
+    use crate::transport::{
+        IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError,
+        SendError, ServerAddr,
+    };
+    use crate::world_events::ErrorEvent;
+
+    use super::*;
+
+    fn dummy_server() -> ServerAddr {
+        ServerAddr::Found("127.0.0.1:9999".parse::<SocketAddr>().unwrap())
+    }
+
+    #[derive(Clone)]
+    struct OkIdReceiver;
+
+    impl IdentityReceiver for OkIdReceiver {
+        fn receive(&mut self) -> IdentityReceiverResult {
+            IdentityReceiverResult::Success(IdentityToken::generate())
+        }
+    }
+
+    #[derive(Clone)]
+    struct OkPacketSender;
+
+    impl PacketSender for OkPacketSender {
+        fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
+            Ok(())
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    #[derive(Clone)]
+    struct FailPacketReceiver;
+
+    impl PacketReceiver for FailPacketReceiver {
+        fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
+            Err(RecvError)
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    #[test]
+    fn maintain_handshake_terminates_on_persistent_transport_error() {
+        let mut client = Client::<u64>::new(ClientConfig::default(), Protocol::builder().build());
+        client.io.load(
+            Box::new(OkIdReceiver),
+            Box::new(OkPacketSender),
+            Box::new(FailPacketReceiver),
+        );
+
+        let client = Arc::new(Mutex::new(client));
+        let worker = client.clone();
+        let (tx, rx) = mpsc::channel();
+        std::thread::spawn(move || {
+            worker.lock().unwrap().maintain_handshake();
+            let _ = tx.send(());
+        });
+        rx.recv_timeout(Duration::from_secs(10))
+            .expect("maintain_handshake must return on a persistently-failing transport");
+        // The loop hit its Err arm (not skipped): exactly one error.
+        let errors = client
+            .lock()
+            .unwrap()
+            .incoming_world_events
+            .read::<ErrorEvent>()
+            .count();
+        assert_eq!(
+            errors, 1,
+            "one error per maintain_handshake call, not one per spin"
+        );
     }
 }

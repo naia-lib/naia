@@ -204,6 +204,17 @@ impl ServerImpl {
         }
     }
 
+    pub(crate) fn has_component_record(
+        &self,
+        entity: &Entity,
+        component_kind: &ComponentKind,
+    ) -> bool {
+        match self {
+            Self::Full(server) => server.has_component_record(entity, component_kind),
+            Self::WorldOnly(server) => server.has_component_record(entity, component_kind),
+        }
+    }
+
     pub(crate) fn despawn_entity_worldless(&mut self, entity: &Entity) {
         match self {
             Self::Full(server) => server.despawn_entity_worldless(entity),

@@ -14,6 +14,22 @@ pub struct SocketConfig {
 }
 
 impl SocketConfig {
+    /// Derives a side-specific config from this (shared) one, replacing only
+    /// the inbound link conditioning (naia #11).
+    ///
+    /// Server and client sockets each condition their own inbound path from
+    /// the config they are constructed with, so both sides can share one
+    /// `Protocol` while conditioning differently: build each transport from
+    /// `shared.with_link_condition(...)` with that side's config. The shared
+    /// base is untouched and unrelated fields (e.g. the WebRTC session path)
+    /// are preserved.
+    pub fn with_link_condition(&self, link_condition: Option<LinkConditionerConfig>) -> Self {
+        Self {
+            link_condition,
+            rtc_endpoint_path: self.rtc_endpoint_path.clone(),
+        }
+    }
+
     /// Creates a new SocketConfig
     pub fn new(
         link_condition: Option<LinkConditionerConfig>,

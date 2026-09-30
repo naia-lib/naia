@@ -158,6 +158,7 @@ mod host_sync_pipeline;
 mod plugin;
 mod plugin_full;
 mod protocol_ext;
+mod replication_marker;
 mod server;
 mod server_entity_converter;
 mod snapshot_builder;
@@ -170,7 +171,7 @@ pub use apply_receive_output::{
 };
 pub use commands::{CommandsExt, ServerCommandsExt};
 pub use component_event_registry::ComponentEventRegistry;
-pub use components::{ClientOwned, ServerOwned};
+pub use components::{ClientOwned, Replication, ServerOwned};
 pub use host_sync_pipeline::drain_host_sync_into_pipeline;
 pub use plugin::{DriveShape, Plugin, ServerPluginConfig, SimIntegrationConfig, Topology};
 pub use protocol_ext::ProtocolServerExt;
