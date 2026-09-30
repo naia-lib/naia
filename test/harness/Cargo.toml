@@ -110,3 +110,7 @@ path = "contract_tests/integration_only/pipeline_bracket.rs"
 [[test]]
 name = "world_server_enum_shell"
 path = "contract_tests/integration_only/world_server_enum_shell.rs"
+
+[[test]]
+name = "12_reconnect_cancel"
+path = "contract_tests/integration_only/12_reconnect_cancel.rs"

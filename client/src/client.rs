@@ -332,6 +332,24 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         self.manual_disconnect = true;
     }
 
+    /// Cancels a pending (not yet established) connection attempt, returning
+    /// the client to `Disconnected` so a fresh [`connect`](Client::connect)
+    /// starts cleanly instead of panicking on the loaded socket.
+    ///
+    /// DWO-2: an in-match grace expiry must be able to abandon a stuck
+    /// handshake and renew the attempt on the same client object. Safe to
+    /// call in any state — a live connection is left untouched (orderly
+    /// teardown stays [`disconnect`](Client::disconnect)'s job) and an
+    /// idle client stays idle. Emits no events and drops no entities:
+    /// nothing was ever established.
+    pub fn cancel_connect(&mut self) {
+        if self.server_connection.is_some() {
+            // Established connection: not a pending attempt, leave it alone.
+            return;
+        }
+        self.reset_attempt_state();
+    }
+
     /// Returns the socket configuration from the protocol.
     pub fn socket_config(&self) -> &SocketConfig {
         &self.protocol.socket
@@ -2442,6 +2460,20 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     fn disconnect_reset_connection(&mut self) {
         self.server_connection = None;
 
+        self.reset_attempt_state();
+
+        let mut global_world_manager = GlobalWorldManager::new();
+        global_world_manager.init_protocol_kind_count(self.protocol.component_kinds.kind_count());
+        self.global_world_manager = global_world_manager;
+    }
+
+    /// Drops any in-flight attempt state (socket, handshake progress,
+    /// disconnect flags) without touching world state or emitting events.
+    ///
+    /// Shared by `disconnect_reset_connection` (entities already despawned,
+    /// disconnect event already queued) and `cancel_connect` (nothing was
+    /// ever established, so there is nothing else to tear down).
+    fn reset_attempt_state(&mut self) {
         self.io = Io::new(
             &self.client_config.connection.bandwidth_measure_duration,
             &self.protocol.compression,
@@ -2455,9 +2487,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         ));
 
         self.manual_disconnect = false;
-        let mut global_world_manager = GlobalWorldManager::new();
-        global_world_manager.init_protocol_kind_count(self.protocol.component_kinds.kind_count());
-        self.global_world_manager = global_world_manager;
+        // DWO-2: a processed explicit server disconnect must not poison the
+        // next attempt on this client. Its reason/message were already
+        // delivered with the disconnect event (or never existed); retaining
+        // the flags makes the first post-handshake tick take the disconnect
+        // path again — a spurious disconnect with a wrong
+        // `ClientDisconnected` reason, and the client never settles
+        // connected.
+        self.server_disconnect = false;
+        self.server_disconnect_details = None;
     }
 
     fn server_address_unwrapped(&self) -> SocketAddr {

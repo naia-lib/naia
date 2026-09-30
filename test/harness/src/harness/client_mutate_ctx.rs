@@ -153,6 +153,13 @@ impl<'a, 'scenario: 'a> ClientMutateCtx<'a, 'scenario> {
         state.client_mut().disconnect();
     }
 
+    /// Cancel a pending connection attempt (DWO-2 pass-through to the core
+    /// Client API). Safe in any state; a live connection is untouched.
+    pub fn cancel_connect(&mut self) {
+        let state = self.ctx.scenario_mut().client_state_mut(&self.client_key);
+        state.client_mut().cancel_connect();
+    }
+
     /// Takes a pending fail-closed authority error from the client, if any.
     ///
     /// Card 27945 test surface (additive; behavior-neutral): without the

@@ -173,6 +173,11 @@ pub struct Scenario {
     user_to_client_map: HashMap<UserKey, ClientKey>,
     /// Pending auth payloads for clients that have started connecting but not yet authenticated
     pending_auths: HashMap<ClientKey, Auth>,
+    /// Retained auth payloads per client, re-armed into `pending_auths` by
+    /// `client_reconnect` so a same-client re-auth re-maps to its ClientKey.
+    /// DWO-2: without this the second AuthEvent (new server UserKey) matches
+    /// nothing and is dropped, and the reconnect can never complete.
+    reconnect_auths: HashMap<ClientKey, Auth>,
     /// Mapping: ClientKey -> SocketAddr (for link conditioner configuration)
     client_to_addr_map: HashMap<ClientKey, SocketAddr>,
     /// Current tick count (incremented on each tick)
@@ -242,6 +247,7 @@ impl Scenario {
             next_client_key: 1,
             user_to_client_map: HashMap::new(),
             pending_auths: HashMap::new(),
+            reconnect_auths: HashMap::new(),
             client_to_addr_map: HashMap::new(),
             global_tick: 0,
             server_event_history: Vec::new(),
@@ -322,6 +328,8 @@ impl Scenario {
 
         // Store auth in pending_auths for later matching with AuthEvent
         self.pending_auths.insert(client_key, auth.clone());
+        // Retain it for client_reconnect re-auth matching (DWO-2)
+        self.reconnect_auths.insert(client_key, auth.clone());
 
         client.auth(auth);
         client.connect(socket);
@@ -366,6 +374,8 @@ impl Scenario {
 
         // Store auth in pending_auths for later matching with AuthEvent
         self.pending_auths.insert(client_key, auth.clone());
+        // Retain it for client_reconnect re-auth matching (DWO-2)
+        self.reconnect_auths.insert(client_key, auth.clone());
 
         client.auth(auth);
         client.connect(socket);
@@ -380,6 +390,39 @@ impl Scenario {
         self.last_client_key = Some(client_key);
 
         client_key
+    }
+
+    /// Reconnect an EXISTING client with a fresh socket (same `Client`, same
+    /// auth material, new transport registration).
+    ///
+    /// DWO-2: an in-match grace expiry drives exactly this path — the client
+    /// object survives the outage, only the attempt is renewed. The
+    /// production [`connect`](Client::connect) panics unless the client is
+    /// `Disconnected`, so a cancelled or fully-reset attempt must return to
+    /// exactly that state; reconnecting anything else is a caller bug and
+    /// panics here too.
+    pub fn client_reconnect(&mut self, client_key: ClientKey) {
+        // Setup-like operation: callable after either mutate() or expect().
+        self.allow_flexible_next();
+
+        // Re-arm the retained auth payload: the re-auth arrives under a new
+        // server UserKey, and without a pending entry `register_auth_event`
+        // drops it (DWO-2 reconnect can never complete).
+        if let Some(auth) = self.reconnect_auths.get(&client_key).cloned() {
+            self.pending_auths.insert(client_key, auth);
+        }
+
+        // Fresh transport identity; the old socket is dropped with this.
+        // (New token/rejection cells are intentionally not installed into
+        // the existing ClientState: reconnect tests assert on connection
+        // state and events, never on token handles.)
+        let (socket, _identity_token, _rejection_code, client_addr) = self.create_client_socket();
+        self.client_to_addr_map.insert(client_key, client_addr);
+
+        let state = self.client_state_mut(&client_key);
+        state.client_mut().connect(socket);
+
+        self.allow_flexible_next();
     }
 
     /// Perform actions in a mutate phase and propagate changes.
