@@ -194,3 +194,75 @@ fn cancel_pending_handshake_then_reconnect_never_panics() {
         (no_event && still_connected).then_some(())
     });
 }
+
+/// Cancelling while the server holds a pending, unaccepted auth, then
+/// reconnecting on the same client, must settle connected with no spurious
+/// client events.
+///
+/// Red-first: the cancelled attempt's auth already reached the server, so
+/// its pending state stays live there. The reconnect's fresh auth must
+/// surface as a second servable AuthEvent — the stale first attempt must
+/// neither shadow it (reconnect stalls pre-connect) nor later complete
+/// into a phantom session (spurious second disconnect kills the new one).
+#[test]
+fn cancel_during_auth_phase_then_reconnect_settles_connected() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let auth = Auth::new("client", "password");
+    let client_key = scenario.client_start(
+        "Client",
+        auth.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+
+    // Auth phase: the server holds a pending, unaccepted auth for this key.
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
+                if incoming_client_key == client_key && incoming_auth == auth {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+
+    // Cancel mid-auth: back to Disconnected, nothing emitted.
+    scenario.mutate(|ctx| {
+        ctx.client(client_key, |client| {
+            client.cancel_connect();
+        });
+    });
+    scenario.expect(|ctx| {
+        let status = ctx.client(client_key, |c| c.connection_status());
+        let no_event = ctx.client(client_key, |c| {
+            c.read_event::<ClientDisconnectEvent>().is_none()
+        });
+        (status.is_disconnected() && no_event).then_some(())
+    });
+    scenario.mutate(|_ctx| {});
+
+    // Fresh attempt on the same client: the server must serve the second
+    // auth and the session must settle connected on both sides.
+    scenario.client_reconnect(client_key);
+    accept_reconnect(&mut scenario, client_key, &auth);
+    scenario.expect(|ctx| server_and_client_connected(ctx, client_key));
+
+    // ...and stay there: extra ticks, no second disconnect, still connected.
+    scenario.mutate(|_ctx| {});
+    scenario.mutate(|_ctx| {});
+    scenario.expect(|ctx| {
+        let no_second = ctx.client(client_key, |c| {
+            c.read_event::<ClientDisconnectEvent>().is_none()
+        });
+        let still_connected = ctx.client(client_key, |c| c.connection_status().is_connected());
+        (no_second && still_connected).then_some(())
+    });
+}
