@@ -267,6 +267,77 @@ fn cancel_during_auth_phase_then_reconnect_settles_connected() {
     });
 }
 
+/// Client-initiated disconnect, then a fresh authenticated connect on the
+/// SAME client object, must settle connected with exactly one disconnect
+/// event carrying the `ClientDisconnected` reason.
+///
+/// Red-first: `disconnect()` latches `manual_disconnect`, the last
+/// retained-flag source without a same-client reconnect pin
+/// (`server_disconnect` and the timeout latch both have one). If the
+/// reset ever stops clearing it, the first post-handshake tick re-takes
+/// the disconnect path with a second event and the client never settles.
+#[test]
+fn manual_disconnect_then_reconnect_stays_connected() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let auth = Auth::new("client", "password");
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client",
+        auth.clone(),
+        test_client_config(),
+        test_protocol.clone(),
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Orderly client-initiated teardown.
+    scenario.mutate(|ctx| {
+        ctx.client(client_key, |client| {
+            client.disconnect();
+        });
+    });
+
+    // Exactly one disconnect event with the self-hangup reason, and both
+    // sides agree the session is gone.
+    let mut reason_seen = None;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            if let Some((reason, _message)) = client.read_event::<ClientDisconnectEvent>() {
+                reason_seen = Some(reason);
+            }
+        });
+        (reason_seen.is_some() && server_and_client_disconnected(ctx, client_key).is_some())
+            .then_some(())
+    });
+    assert_eq!(
+        reason_seen,
+        Some(DisconnectReason::ClientDisconnected),
+        "an orderly client teardown must report ClientDisconnected exactly once"
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Same-client fresh authenticated reconnect settles connected...
+    scenario.client_reconnect(client_key);
+    accept_reconnect(&mut scenario, client_key, &auth);
+    scenario.expect(|ctx| server_and_client_connected(ctx, client_key));
+
+    // ...and stays there: extra ticks, no second disconnect, still connected.
+    scenario.mutate(|_ctx| {});
+    scenario.mutate(|_ctx| {});
+    scenario.expect(|ctx| {
+        let no_second = ctx.client(client_key, |c| {
+            c.read_event::<ClientDisconnectEvent>().is_none()
+        });
+        let still_connected = ctx.client(client_key, |c| c.connection_status().is_connected());
+        (no_second && still_connected).then_some(())
+    });
+}
+
 /// Timeout-driven (not explicit) disconnect, then a fresh authenticated
 /// connect on the SAME client object, must settle connected with no second
 /// disconnect.
