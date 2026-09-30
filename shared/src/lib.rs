@@ -129,6 +129,10 @@ pub use connection::{
     standard_header::StandardHeader,
 };
 pub use messages::{
+    abandonment::{
+        AbandonDisposition, CancelDisposition, ConnectionRequestNonce, NonceAllocator,
+        NonceExhaustion, RequestPoll, TransportTerminal,
+    },
     channels::{
         channel::{
             Channel, Channel as ChannelTrait, ChannelCriticality, ChannelDirection, ChannelMode,
