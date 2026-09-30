@@ -4,15 +4,15 @@ use log::{debug, info, warn};
 
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
-    AuthorityError, BitReader, BitWriter, Channel, ChannelKind, ChannelMode, ComponentKind,
-    ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus, EntityDoesNotExistError,
-    EntityEvent, EntityPriorityMut, EntityPriorityRef, FakeEntityConverter, GameInstant,
-    GlobalEntity, GlobalEntityMap, GlobalEntitySpawner, GlobalRequestId, GlobalResponseId,
-    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter, Message,
-    MessageContainer, OwnedLocalEntity, PacketType, Protocol, ProtocolId, Replicate,
-    ReplicatedComponent, Request, Response, ResponseReceiveKey, ResponseSendKey, Serde,
-    SharedGlobalWorldManager, SocketConfig, StandardHeader, Tick, UserPriorityState, WorldMutType,
-    WorldRefType, PROTOCOL_MISMATCH_STATUS,
+    AuthorityError, BitReader, BitWriter, CancelDisposition, Channel, ChannelKind, ChannelMode,
+    ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
+    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
+    FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
+    GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant,
+    LocalEntityAndGlobalEntityConverter, Message, MessageContainer, OwnedLocalEntity, PacketType,
+    Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, RequestPoll, Response,
+    ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
+    StandardHeader, Tick, UserPriorityState, WorldMutType, WorldRefType, PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -21,6 +21,7 @@ use super::{
 use crate::{
     connection::{base_time_manager::BaseTimeManager, connection::Connection, io::Io},
     handshake::{HandshakeManager, HandshakeResult, Handshaker},
+    request::SlotPoll,
     tick_events::TickEvents,
     transport::{IdentityReceiverResult, Socket},
     world::{
@@ -656,7 +657,13 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .world_manager
             .entity_converter_mut(&self.global_world_manager);
 
-        let request_id = connection.global_request_manager.create_request_id();
+        // H3: the nonce supply is checked — exhaustion retires the
+        // connection rather than aliasing a live nonce, so a spent supply
+        // is a typed backpressure error, not a panic.
+        let request_id = connection
+            .global_request_manager
+            .create_request_id()
+            .map_err(|_| NaiaClientError::RequestNonceExhausted)?;
         let message = MessageContainer::new(request_box);
         if !connection.base.send.message_manager.send_request(
             &self.protocol.message_kinds,
@@ -765,6 +772,59 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             .map(|boxed_s| *boxed_s)
             .unwrap();
         Some(response)
+    }
+
+    /// Cancels a pending request (H3 request abandonment).
+    ///
+    /// Removes the routing entry and marks the exchange's nonce abandoned,
+    /// so a late response drops instead of resurrecting the slot. Returns
+    /// [`CancelDisposition::UnknownKey`] when no entry exists — without a
+    /// connection, or for an already completed, cancelled, or never-sent
+    /// key.
+    pub fn cancel_request<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> CancelDisposition {
+        let Some(connection) = &mut self.server_connection else {
+            return CancelDisposition::UnknownKey;
+        };
+        connection
+            .global_request_manager
+            .cancel_request(&response_key.request_id())
+    }
+
+    /// Non-destructive poll of a pending request (H3 request abandonment).
+    ///
+    /// [`RequestPoll::Response`] carries the decoded reply without
+    /// consuming it — call
+    /// [`receive_response`](Client::receive_response) to take it.
+    /// [`RequestPoll::Abandoned`] means no reply will ever arrive: the
+    /// request was cancelled or the key names nothing live.
+    pub fn poll_request<S: Response>(
+        &mut self,
+        response_key: &ResponseReceiveKey<S>,
+    ) -> RequestPoll<S> {
+        let Some(connection) = &mut self.server_connection else {
+            return RequestPoll::Abandoned;
+        };
+        match connection
+            .global_request_manager
+            .poll_slot(&response_key.request_id())
+        {
+            SlotPoll::Pending => RequestPoll::Pending,
+            SlotPoll::Abandoned => RequestPoll::Abandoned,
+            SlotPoll::Ready => {
+                let container = connection
+                    .global_request_manager
+                    .peek_request(&response_key.request_id())
+                    .expect("Ready slot holds its response until taken");
+                let response: S = Box::<dyn Any + 'static>::downcast::<S>(container.to_boxed_any())
+                    .ok()
+                    .map(|boxed_s| *boxed_s)
+                    .unwrap();
+                RequestPoll::Response(response)
+            }
+        }
     }
     //
 

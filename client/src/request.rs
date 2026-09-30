@@ -1,50 +1,139 @@
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 
 use log::warn;
 
 use naia_shared::{
-    ChannelKind, GlobalRequestId, GlobalResponseId, LocalResponseId, MessageContainer,
+    CancelDisposition, ChannelKind, ConnectionRequestNonce, GlobalRequestId, GlobalResponseId,
+    LocalResponseId, MessageContainer, NonceAllocator, NonceExhaustion,
 };
+
+/// Non-destructive read of a request slot's state.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum SlotPoll {
+    /// The request is live and no terminal state arrived yet.
+    Pending,
+    /// A response arrived and waits to be taken.
+    Ready,
+    /// No response will ever arrive: the request was cancelled, its
+    /// exchange abandoned, or the key names nothing live.
+    Abandoned,
+}
+
+/// One live outgoing request: its checked H3 nonce plus an optional
+/// arrived-but-untaken response.
+struct RequestSlot {
+    nonce: ConnectionRequestNonce,
+    response: Option<MessageContainer>,
+}
 
 // GlobalRequestManager
 pub struct GlobalRequestManager {
-    map: HashMap<GlobalRequestId, Option<MessageContainer>>,
+    slots: HashMap<GlobalRequestId, RequestSlot>,
+    /// Nonces whose exchanges are over by cancel or abandonment. Consulted
+    /// for duplicate suppression and for polling cancelled keys; dropped
+    /// with the connection, which owns this manager.
+    abandoned: HashSet<ConnectionRequestNonce>,
+    nonces: NonceAllocator,
     next_id: u64,
 }
 
 impl GlobalRequestManager {
     pub fn new() -> Self {
         Self {
-            map: HashMap::new(),
+            slots: HashMap::new(),
+            abandoned: HashSet::new(),
+            nonces: NonceAllocator::new(),
             next_id: 0,
         }
     }
 
-    pub(crate) fn create_request_id(&mut self) -> GlobalRequestId {
+    /// Starts the nonce supply at `next_nonce`. Test hook: names where a
+    /// fresh supply begins (for the exhaustion pin), never resumes a live one.
+    #[cfg(test)]
+    pub(crate) fn with_nonce_start(next_nonce: u64) -> Self {
+        Self {
+            slots: HashMap::new(),
+            abandoned: HashSet::new(),
+            nonces: NonceAllocator::with_next(next_nonce),
+            next_id: 0,
+        }
+    }
+
+    /// Number of live request slots. Test observer: the H3 acceptance
+    /// requires routing tables to return to baseline.
+    #[cfg(test)]
+    pub(crate) fn outstanding(&self) -> usize {
+        self.slots.len()
+    }
+
+    /// Allocates a request id with a checked, never-reused H3 nonce.
+    ///
+    /// H3: nonce exhaustion is an error the caller handles by retiring the
+    /// connection, never by aliasing a live nonce — so this fails rather
+    /// than wrapping.
+    pub(crate) fn create_request_id(&mut self) -> Result<GlobalRequestId, NonceExhaustion> {
+        let nonce = self.nonces.next()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
-        self.map.insert(id, None);
+        self.slots.insert(
+            id,
+            RequestSlot {
+                nonce,
+                response: None,
+            },
+        );
 
-        id
+        Ok(id)
     }
 
     /// Check if a response is available for the given request ID (non-destructive)
     pub(crate) fn has_response(&self, request_id: &GlobalRequestId) -> bool {
-        self.map
+        self.slots
             .get(request_id)
-            .map(|opt| opt.is_some())
+            .map(|slot| slot.response.is_some())
             .unwrap_or(false)
+    }
+
+    /// Non-destructive read of a slot: live without a response is Pending,
+    /// live with one is Ready, anything else is Abandoned — a cancelled,
+    /// completed-and-taken, or never-allocated key will never yield a
+    /// response again.
+    pub(crate) fn poll_slot(&self, request_id: &GlobalRequestId) -> SlotPoll {
+        match self.slots.get(request_id) {
+            Some(slot) if slot.response.is_some() => SlotPoll::Ready,
+            Some(_) => SlotPoll::Pending,
+            None => SlotPoll::Abandoned,
+        }
+    }
+
+    /// Cancels a live request: removes its routing entry and marks its
+    /// transport nonce abandoned, so a late response for it drops on the
+    /// unknown-id path instead of resurrecting the slot.
+    pub(crate) fn cancel_request(&mut self, request_id: &GlobalRequestId) -> CancelDisposition {
+        match self.slots.remove(request_id) {
+            Some(slot) => {
+                self.abandoned.insert(slot.nonce);
+                CancelDisposition::Cancelled { nonce: slot.nonce }
+            }
+            None => CancelDisposition::UnknownKey,
+        }
+    }
+
+    /// Non-destructive read of an arrived response. The slot keeps its
+    /// copy; take it with [`destroy_request_id`](Self::destroy_request_id).
+    pub(crate) fn peek_request(&self, request_id: &GlobalRequestId) -> Option<MessageContainer> {
+        self.slots.get(request_id)?.response.clone()
     }
 
     pub(crate) fn destroy_request_id(
         &mut self,
         request_id: &GlobalRequestId,
     ) -> Option<MessageContainer> {
-        let response_opt = self.map.get(request_id)?;
-        if response_opt.is_some() {
-            let response_opt = self.map.remove(request_id).unwrap();
-            return Some(response_opt.unwrap());
+        let slot = self.slots.get(request_id)?;
+        if slot.response.is_some() {
+            let slot = self.slots.remove(request_id).unwrap();
+            return Some(slot.response.unwrap());
         }
         None
     }
@@ -54,8 +143,8 @@ impl GlobalRequestManager {
         request_id: &GlobalRequestId,
         response: MessageContainer,
     ) {
-        if let Some(response_opt) = self.map.get_mut(request_id) {
-            *response_opt = Some(response);
+        if let Some(slot) = self.slots.get_mut(request_id) {
+            slot.response = Some(response);
         } else {
             warn!("receive_response: dropping response for unknown request_id {:?}; request was likely cancelled or the connection was reset", request_id);
         }
@@ -207,5 +296,98 @@ mod tests {
 
         assert_eq!(manager.outstanding(), 0);
         assert!(manager.order.len() <= 1);
+    }
+
+    // H3 request-abandonment producer (LOCAL_GUEST_PLAN) — the plan's
+    // acceptance selector is `cargo test -p naia-client --lib
+    // local_guest_abandonment`.
+    use naia_shared::Message;
+
+    #[derive(Message)]
+    struct ProbeMessage {
+        value: u8,
+    }
+
+    fn probe_container() -> MessageContainer {
+        MessageContainer::new(Box::new(ProbeMessage { value: 7 }))
+    }
+
+    fn request_manager() -> GlobalRequestManager {
+        GlobalRequestManager::new()
+    }
+
+    #[test]
+    fn local_guest_abandonment_cancel_removes_slot_and_names_nonce() {
+        let mut manager = request_manager();
+        let id = manager.create_request_id().expect("capacity remains");
+        assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
+
+        let disposition = manager.cancel_request(&id);
+        let CancelDisposition::Cancelled { nonce } = disposition else {
+            panic!("first cancel must succeed, got {:?}", disposition);
+        };
+        assert_eq!(nonce.value(), 0);
+        assert!(!manager.has_response(&id));
+        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+    }
+
+    #[test]
+    fn local_guest_abandonment_second_cancel_is_unknown_key() {
+        let mut manager = request_manager();
+        let id = manager.create_request_id().expect("capacity remains");
+        assert!(matches!(
+            manager.cancel_request(&id),
+            CancelDisposition::Cancelled { .. }
+        ));
+        assert_eq!(manager.cancel_request(&id), CancelDisposition::UnknownKey);
+    }
+
+    #[test]
+    fn local_guest_abandonment_poll_pending_then_ready() {
+        let mut manager = request_manager();
+        let id = manager.create_request_id().expect("capacity remains");
+        assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
+
+        manager.receive_response(&id, probe_container());
+        assert_eq!(manager.poll_slot(&id), SlotPoll::Ready);
+    }
+
+    #[test]
+    fn local_guest_abandonment_late_response_after_cancel_drops() {
+        let mut manager = request_manager();
+        let id = manager.create_request_id().expect("capacity remains");
+        manager.cancel_request(&id);
+
+        manager.receive_response(&id, probe_container());
+        assert!(!manager.has_response(&id));
+        assert_eq!(manager.poll_slot(&id), SlotPoll::Abandoned);
+    }
+
+    #[test]
+    fn local_guest_abandonment_exhaustion_is_checked() {
+        let mut manager = GlobalRequestManager::with_nonce_start(u64::MAX);
+        let last = manager.create_request_id().expect("u64::MAX allocatable");
+        assert!(manager.create_request_id().is_err());
+        // No wrap: the failed create allocated nothing.
+        assert_eq!(manager.outstanding(), 1);
+        assert_eq!(manager.poll_slot(&last), SlotPoll::Pending);
+    }
+
+    #[test]
+    fn local_guest_abandonment_routing_returns_to_baseline() {
+        let mut manager = request_manager();
+        let mut ids = Vec::new();
+        for _ in 0..64 {
+            ids.push(manager.create_request_id().expect("capacity remains"));
+        }
+        for (i, id) in ids.iter().enumerate() {
+            if i % 2 == 0 {
+                manager.cancel_request(id);
+            } else {
+                manager.receive_response(id, probe_container());
+                manager.destroy_request_id(id);
+            }
+        }
+        assert_eq!(manager.outstanding(), 0);
     }
 }

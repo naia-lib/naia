@@ -26,6 +26,10 @@ pub enum NaiaClientError {
     MessageQueueFull,
     /// No connection to the server exists. The caller must connect first.
     NotConnected,
+    /// The connection's request-nonce supply is spent (H3). Retire the
+    /// connection normally and reconnect; a fresh connection starts a fresh
+    /// supply. Never resolved by reusing a nonce.
+    RequestNonceExhausted,
 }
 
 impl NaiaClientError {
@@ -45,6 +49,9 @@ impl fmt::Display for NaiaClientError {
             Self::IdError(code) => write!(f, "Naia Client Error: Id Error: {}", code),
             Self::MessageQueueFull => write!(f, "Naia Client Error: MessageQueueFull"),
             Self::NotConnected => write!(f, "Naia Client Error: NotConnected"),
+            Self::RequestNonceExhausted => {
+                write!(f, "Naia Client Error: RequestNonceExhausted")
+            }
         }
     }
 }
