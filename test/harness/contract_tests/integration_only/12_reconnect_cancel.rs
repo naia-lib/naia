@@ -266,3 +266,86 @@ fn cancel_during_auth_phase_then_reconnect_settles_connected() {
         (no_second && still_connected).then_some(())
     });
 }
+
+/// Timeout-driven (not explicit) disconnect, then a fresh authenticated
+/// connect on the SAME client object, must settle connected with no second
+/// disconnect.
+///
+/// Red-first: the timeout source funnels through the same
+/// `disconnect_reset_connection` as the explicit path, so DWO-2's
+/// stale-flag reset should already cover it — this pins that. The reason
+/// assertion is the tripwire: a retained `server_disconnect` flag would
+/// re-take the disconnect path with a wrong `ClientDisconnected` reason
+/// instead of settling, and any `should_drop` latch surviving the reset
+/// would do the same with a second `TimedOut`.
+#[test]
+fn timeout_disconnect_then_reconnect_stays_connected() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    let mut server_config = ServerConfig::default();
+    server_config.connection.heartbeat_interval = Duration::from_millis(100);
+    server_config.connection.disconnection_timeout_duration = Duration::from_millis(200);
+    scenario.server_start(server_config, test_protocol.clone());
+
+    let mut client_config = test_client_config();
+    client_config.connection.heartbeat_interval = Duration::from_millis(100);
+    client_config.connection.disconnection_timeout_duration = Duration::from_millis(200);
+
+    let room_key = scenario.mutate(|ctx| ctx.server(|server| server.create_room().key()));
+
+    let auth = Auth::new("client", "password");
+    let client_key = client_connect(
+        &mut scenario,
+        &room_key,
+        "Client",
+        auth.clone(),
+        client_config,
+        test_protocol.clone(),
+    );
+    scenario.mutate(|_ctx| {});
+
+    // Silence the link: both sides must time out on their own — no
+    // explicit disconnect from either end.
+    scenario.pause_traffic();
+
+    let mut client_timed_out = false;
+    let mut server_timed_out = false;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            if let Some((reason, _message)) = client.read_event::<ClientDisconnectEvent>() {
+                if reason == DisconnectReason::TimedOut {
+                    client_timed_out = true;
+                }
+            }
+        });
+        ctx.server(|server| {
+            while let Some(disconnected_key) = server.read_event::<ServerDisconnectEvent>() {
+                if disconnected_key == client_key {
+                    server_timed_out = true;
+                }
+            }
+        });
+        (client_timed_out && server_timed_out).then_some(())
+    });
+    scenario.mutate(|_ctx| {});
+
+    // Link back, same-client fresh authenticated reconnect (grace expiry).
+    scenario.resume_traffic();
+    scenario.client_reconnect(client_key);
+    accept_reconnect(&mut scenario, client_key, &auth);
+
+    // Settles connected on both sides...
+    scenario.expect(|ctx| server_and_client_connected(ctx, client_key));
+
+    // ...and stays there: extra ticks, no second disconnect, still connected.
+    scenario.mutate(|_ctx| {});
+    scenario.mutate(|_ctx| {});
+    scenario.expect(|ctx| {
+        let no_second = ctx.client(client_key, |c| {
+            c.read_event::<ClientDisconnectEvent>().is_none()
+        });
+        let still_connected = ctx.client(client_key, |c| c.connection_status().is_connected());
+        (no_second && still_connected).then_some(())
+    });
+}
