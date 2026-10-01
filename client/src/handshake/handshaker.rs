@@ -345,3 +345,209 @@ impl HandshakeManager {
         digest.ser(writer);
     }
 }
+
+// Mid-handshake transition pins: timeout-driven retransmit pacing and
+// wrong-stage packet handling. The retransmit tests run the timer; the
+// wrong-stage tests pin that a packet for a stage we are not in is
+// ignored WITHOUT moving the state machine — a stray ServerConnectResponse
+// mid-handshake must not clobber the in-progress stage into Connected.
+#[cfg(all(test, feature = "test_time"))]
+mod tests {
+    use std::time::Duration;
+
+    use naia_shared::{
+        handshake::{HandshakeHeader, RejectReason},
+        BitReader, BitWriter, IdentityToken, PacketType, ProtocolId, Serde, StandardHeader,
+        TestClock,
+    };
+
+    use super::{HandshakeManager, HandshakeResult, Handshaker};
+
+    const SEND_INTERVAL_MS: u64 = 1000;
+
+    fn protocol_id() -> ProtocolId {
+        ProtocolId::from_bytes([7u8; 16])
+    }
+
+    fn manager() -> HandshakeManager {
+        HandshakeManager::new(
+            protocol_id(),
+            Duration::from_millis(SEND_INTERVAL_MS),
+            Duration::from_millis(100),
+            3,
+        )
+    }
+
+    fn with_token(manager: &mut HandshakeManager) {
+        manager.set_identity_token(IdentityToken::from_bytes(vec![9u8; 16]));
+    }
+
+    /// Serializes one inbound server packet for `recv`.
+    fn inbound_bytes(packet_type: PacketType, header: Option<HandshakeHeader>) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(packet_type, 0, 0, 0).ser(&mut writer);
+        if let Some(header) = header {
+            header.ser(&mut writer);
+        }
+        writer.to_packet().slice().to_vec()
+    }
+
+    fn recv_handshake(manager: &mut HandshakeManager, header: HandshakeHeader) -> Option<HandshakeResult> {
+        let bytes = inbound_bytes(PacketType::Handshake, Some(header));
+        let mut reader = BitReader::new(&bytes);
+        manager.recv(&mut reader)
+    }
+
+    fn packet_type_of_first_send(manager: &mut HandshakeManager) -> Option<PacketType> {
+        let packet = manager.send()?;
+        let mut reader = BitReader::new(packet.slice());
+        StandardHeader::de(&mut reader)
+            .ok()
+            .map(|header| header.packet_type)
+    }
+
+    #[test]
+    fn retransmit_paced_by_handshake_timer() {
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut manager = manager();
+            with_token(&mut manager);
+
+            // Constructor rings the timer manually: first send fires at once.
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake)
+            );
+            // Immediately after, the interval gates us.
+            assert!(manager.send().is_none());
+            TestClock::advance(SEND_INTERVAL_MS - 1);
+            assert!(manager.send().is_none());
+            // Once the interval elapses the identify retransmits.
+            TestClock::advance(2);
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake)
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn send_without_token_emits_nothing_but_keeps_stage() {
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut manager = manager();
+
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            assert!(manager.send().is_none());
+            // Setting the token later resumes the pending identify: the
+            // stage was never moved by the tokenless ticks.
+            with_token(&mut manager);
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake)
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn mid_handshake_reject_is_terminal() {
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut manager = manager();
+            with_token(&mut manager);
+
+            let result = recv_handshake(
+                &mut manager,
+                HandshakeHeader::ServerRejectResponse(RejectReason::Auth),
+            );
+            assert!(
+                matches!(
+                    result,
+                    Some(HandshakeResult::Rejected(RejectReason::Auth))
+                ),
+                "mid-handshake server reject must surface as terminal Rejected",
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn wrong_stage_connect_response_does_not_clobber_identify() {
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut manager = manager();
+            with_token(&mut manager);
+
+            // A stray connect response for a stage we never reached: no
+            // result, and — critically — no state move.
+            let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
+            assert!(result.is_none());
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake),
+                "stray connect response must leave the identify stage intact",
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn non_handshake_packets_ignored_mid_handshake() {
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut manager = manager();
+            with_token(&mut manager);
+
+            for packet_type in [PacketType::Data, PacketType::Heartbeat, PacketType::Ping] {
+                let bytes = inbound_bytes(packet_type, None);
+                let mut reader = BitReader::new(&bytes);
+                assert!(manager.recv(&mut reader).is_none());
+            }
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake)
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[test]
+    fn wrong_stage_connect_response_does_not_clobber_timesync() {
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut manager = manager();
+            with_token(&mut manager);
+
+            // Reach TimeSync with the identify response.
+            let result = recv_handshake(&mut manager, HandshakeHeader::ServerIdentifyResponse);
+            assert!(result.is_none());
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake),
+                "timesync stage must emit pings",
+            );
+            // Stray connect response mid-timesync: no result, no state move.
+            let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
+            assert!(result.is_none());
+            TestClock::advance(SEND_INTERVAL_MS + 1);
+            assert_eq!(
+                packet_type_of_first_send(&mut manager),
+                Some(PacketType::Handshake),
+                "stray connect response must leave the timesync stage intact",
+            );
+        })
+        .join()
+        .unwrap();
+    }
+}
