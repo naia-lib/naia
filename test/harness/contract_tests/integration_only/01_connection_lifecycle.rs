@@ -1810,3 +1810,87 @@ fn no_partial_protocol_compatibility() {
         ctx.client(client_a_key, |c| c.connection_status().is_connected()).then_some(())
     });
 }
+
+/// Give-up then re-dial on the same client recovers
+/// Contract: handshake give-up recovery (Usher 38421 + silence fix)
+///
+/// Given a silent server that made the client give up with AuthTimeout;
+/// when the SAME client object dials again and the server now accepts;
+/// then the client connects with no further AuthTimeout. This is the
+/// consumer offline-to-online cycle: the give-up teardown must leave
+/// the client re-dialable, not bricked.
+#[test]
+fn give_up_then_redial_recovers_on_same_client() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    let mut client_config = test_client_config();
+    client_config.connection.disconnection_timeout_duration = Duration::from_millis(200);
+
+    let client_auth = Auth::new("client_redial", "password");
+
+    // Phase 1: silent server. The server never accepts: no auth read,
+    // no accept call. The client must give up exactly once.
+    let client_key = scenario.client_start(
+        "Client Redial",
+        client_auth.clone(),
+        client_config,
+        test_protocol.clone(),
+    );
+
+    let mut auth_timeouts = 0usize;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            for (reason, _) in client.read_events::<ClientDisconnectEvent>() {
+                if reason == DisconnectReason::AuthTimeout {
+                    auth_timeouts += 1;
+                }
+            }
+        });
+        (auth_timeouts == 1).then_some(())
+    });
+    assert_eq!(
+        auth_timeouts, 1,
+        "phase 1 must end in exactly one AuthTimeout"
+    );
+
+    // Phase 2: the same client object dials again; the server accepts
+    // this time. Mirror the accept half of `client_connect`.
+    scenario.client_reconnect(client_key);
+
+    scenario.expect(|ctx| {
+        ctx.server(|server| {
+            if let Some((incoming_client_key, incoming_auth)) =
+                server.read_event::<ServerAuthEvent<Auth>>()
+            {
+                if incoming_client_key == client_key && incoming_auth == client_auth {
+                    return Some(());
+                }
+            }
+            None
+        })
+    });
+    scenario.mutate(|ctx| {
+        ctx.server(|server| {
+            server.accept_connection(&client_key);
+        });
+    });
+    scenario.expect(|ctx| server_and_client_connected(ctx, client_key));
+
+    // Connected, and the recovery emitted no further AuthTimeout: drain
+    // the disconnect queue over one more tick and demand emptiness.
+    let mut late_disconnects = 0usize;
+    scenario.mutate(|_ctx| {});
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            late_disconnects += client.read_events::<ClientDisconnectEvent>().len();
+        });
+        server_and_client_connected(ctx, client_key)
+    });
+    assert_eq!(
+        late_disconnects, 0,
+        "recovery must connect without any further disconnect event"
+    );
+}
