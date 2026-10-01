@@ -129,4 +129,20 @@ mod wall_jump_tests {
             "a one-hour backwards wall-clock jump moved Instant backwards"
         );
     }
+
+    // DWO monotonic clock, sampling side: consecutive reads of the live
+    // performance.now timeline never step backwards, with no sleeps and no
+    // injected jumps — the facade holds under ordinary sampling too.
+    #[wasm_bindgen_test]
+    fn successive_nows_never_go_backwards() {
+        let mut previous = Instant::now();
+        for _ in 0..1000 {
+            let current = Instant::now();
+            assert!(
+                current >= previous,
+                "successive performance.now reads stepped backwards"
+            );
+            previous = current;
+        }
+    }
 }

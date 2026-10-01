@@ -548,3 +548,102 @@ mod tests {
         );
     }
 }
+
+// DWO clock browser proof: the handshake state machine runs on the real
+// wasm clock here (performance.now behind the facade), not the frozen
+// test-time backend, so there are no sleeps and no clock advances — a
+// bounded spin covers the sub-millisecond gap between construction and the
+// strictly-elapsed ring. naia-shared's wasm Timer is exercised through
+// `send()` pacing: it is the same timer the production browser client uses.
+#[cfg(all(test, target_arch = "wasm32", feature = "wbindgen"))]
+mod wasm_handshake_tests {
+    use std::time::Duration;
+
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use naia_shared::{
+        handshake::HandshakeHeader, BitReader, BitWriter, IdentityToken, PacketType, ProtocolId,
+        Serde, StandardHeader,
+    };
+
+    use super::HandshakeManager;
+    use crate::handshake::{HandshakeResult, Handshaker};
+
+    const SEND_INTERVAL: Duration = Duration::from_millis(1000);
+    /// Upper bound on spins waiting for the live clock to tick past the
+    /// construction instant; each spin re-reads performance.now, so this
+    /// only exhausts on a clock that never advances at all.
+    const MAX_RING_SPINS: u32 = 100_000;
+
+    fn manager() -> HandshakeManager {
+        let mut manager = HandshakeManager::new(
+            ProtocolId::from_bytes([7u8; 16]),
+            SEND_INTERVAL,
+            Duration::from_millis(100),
+            3,
+        );
+        manager.set_identity_token(IdentityToken::from_bytes(vec![9u8; 16]));
+        manager
+    }
+
+    /// Spins until the handshake timer rings on the live wasm clock and
+    /// returns the emitted packet's type. The constructor pre-rings the
+    /// timer, so the first call resolves on the first clock tick.
+    fn spun_send_packet_type(manager: &mut HandshakeManager) -> Option<PacketType> {
+        for _ in 0..MAX_RING_SPINS {
+            if let Some(packet) = manager.send() {
+                let mut reader = BitReader::new(packet.slice());
+                return StandardHeader::de(&mut reader)
+                    .ok()
+                    .map(|header| header.packet_type);
+            }
+        }
+        panic!("wasm handshake timer never rang on the live clock");
+    }
+
+    fn recv_handshake(
+        manager: &mut HandshakeManager,
+        header: HandshakeHeader,
+    ) -> Option<HandshakeResult> {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        header.ser(&mut writer);
+        let bytes = writer.to_packet().slice().to_vec();
+        let mut reader = BitReader::new(&bytes);
+        manager.recv(&mut reader)
+    }
+
+    #[wasm_bindgen_test]
+    fn wasm_first_send_fires_identify_on_construction() {
+        let mut manager = manager();
+        assert_eq!(
+            spun_send_packet_type(&mut manager),
+            Some(PacketType::Handshake)
+        );
+        // Immediately after a send the interval gates us: a fresh reset
+        // cannot have strictly elapsed on the live clock.
+        assert!(manager.send().is_none());
+    }
+
+    #[wasm_bindgen_test]
+    fn wasm_wrong_stage_connect_response_preserves_identify() {
+        let mut manager = manager();
+        assert!(recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse).is_none());
+        assert_eq!(
+            spun_send_packet_type(&mut manager),
+            Some(PacketType::Handshake),
+            "stray connect response must leave the identify stage intact on wasm",
+        );
+    }
+
+    #[wasm_bindgen_test]
+    fn wasm_identify_reaches_timesync_pings() {
+        let mut manager = manager();
+        assert!(recv_handshake(&mut manager, HandshakeHeader::ServerIdentifyResponse).is_none());
+        assert_eq!(
+            spun_send_packet_type(&mut manager),
+            Some(PacketType::Ping),
+            "timesync stage must emit pings on wasm",
+        );
+    }
+}
