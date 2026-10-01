@@ -3479,12 +3479,17 @@ mod client_disconnect_tests {
     }
 
     fn loading_client(sender: CountingSender) -> Client<u64> {
+        loading_client_with_receiver(sender, Box::new(EmptyReceiver))
+    }
+
+    fn loading_client_with_receiver(
+        sender: CountingSender,
+        receiver: Box<dyn PacketReceiver>,
+    ) -> Client<u64> {
         let mut client = idle_client();
-        client.io.load(
-            Box::new(OkIdReceiver),
-            Box::new(sender),
-            Box::new(EmptyReceiver),
-        );
+        client
+            .io
+            .load(Box::new(OkIdReceiver), Box::new(sender), receiver);
         client
     }
 
@@ -3602,5 +3607,113 @@ mod client_disconnect_tests {
         let (reason, payload) = Client::<u64>::resolve_disconnect_reason(None, false, false);
         assert_eq!(reason, DisconnectReason::TimedOut);
         assert!(payload.is_none());
+    }
+
+    /// A scripted inbound transport: yields each packet once, then silence.
+    /// Lets established-state tests drive `maintain_socket` with exact wire
+    /// bytes, the way the server's `write_disconnect` emits them.
+    #[derive(Clone)]
+    struct ScriptedReceiver {
+        packets: Vec<Vec<u8>>,
+        next: usize,
+    }
+
+    impl PacketReceiver for ScriptedReceiver {
+        fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
+            let out = self.packets.get(self.next).map(Vec::as_slice);
+            if out.is_some() {
+                self.next += 1;
+            }
+            Ok(out)
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    /// Byte-identical to the server's `write_disconnect`: standard header +
+    /// `ServerDisconnect` header + optional message payload.
+    fn server_disconnect_packet(reason: DisconnectReason, payload: Option<&[u8]>) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Handshake, 0, 0, 0).ser(&mut writer);
+        HandshakeHeader::ServerDisconnect(reason).ser(&mut writer);
+        payload.map(|bytes| bytes.to_vec()).ser(&mut writer);
+        writer.to_packet().slice().to_vec()
+    }
+
+    fn connected_client_with_receiver(
+        sender: CountingSender,
+        receiver: Box<dyn PacketReceiver>,
+    ) -> Client<u64> {
+        let mut client = loading_client_with_receiver(sender, receiver);
+        client
+            .handshake_manager
+            .set_identity_token(IdentityToken::generate());
+        let time_manager = TimeManager::from_parts(
+            Duration::from_millis(100),
+            BaseTimeManager::new(),
+            0,
+            GameInstant::new(&Instant::now()),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        client.server_connection = Some(Connection::new(
+            &client.client_config.connection,
+            &client.protocol.channel_kinds,
+            time_manager,
+            &client.global_world_manager,
+            client.client_config.jitter_buffer,
+            &client.protocol.component_kinds,
+        ));
+        client
+    }
+
+    #[test]
+    fn repeated_server_disconnect_keeps_first_reason_and_payload() {
+        // The server sends the disconnect several times for reliability; the
+        // client must report the FIRST reading, not the last — otherwise a
+        // terminal Kicked could be overwritten by a later packet and the
+        // consumer would auto-reconnect into an eviction loop.
+        let sent = Arc::new(AtomicUsize::new(0));
+        let mut client = connected_client_with_receiver(
+            CountingSender { sent },
+            Box::new(ScriptedReceiver {
+                packets: vec![
+                    server_disconnect_packet(DisconnectReason::Kicked, Some(&[1, 2, 3])),
+                    server_disconnect_packet(DisconnectReason::TimedOut, Some(&[9])),
+                ],
+                next: 0,
+            }),
+        );
+        client.maintain_socket();
+        assert!(client.server_disconnect);
+        assert_eq!(
+            client.server_disconnect_details,
+            Some((DisconnectReason::Kicked, Some(vec![1u8, 2, 3]))),
+            "a repeated server disconnect must not clobber the first reason",
+        );
+    }
+
+    #[test]
+    fn cancel_connect_drops_poisoned_server_disconnect_flags() {
+        // DWO-2: a stale explicit-disconnect flag (e.g. left by a previous
+        // incarnation of this client object) must not survive into the next
+        // attempt — the first post-handshake tick would otherwise take the
+        // disconnect path again with a wrong ClientDisconnected reason.
+        let sent = Arc::new(AtomicUsize::new(0));
+        let mut client = loading_client(CountingSender { sent: sent.clone() });
+        assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+        client.server_disconnect = true;
+        client.server_disconnect_details = Some((DisconnectReason::Kicked, Some(vec![1u8])));
+        client.cancel_connect();
+        assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+        assert!(
+            !client.server_disconnect && client.server_disconnect_details.is_none(),
+            "cancel must drop stale server-disconnect state with the attempt",
+        );
     }
 }
