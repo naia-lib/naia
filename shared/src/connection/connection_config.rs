@@ -6,7 +6,9 @@ use crate::connection::bandwidth::BandwidthConfig;
 #[derive(Clone, Debug)]
 pub struct ConnectionConfig {
     /// The duration to wait for communication from a remote host before
-    /// initiating a disconnect
+    /// initiating a disconnect. On the client this window doubles as the
+    /// handshake give-up deadline: a full window of inbound silence while
+    /// the handshake is in flight surfaces `DisconnectReason::AuthTimeout`
     pub disconnection_timeout_duration: Duration,
     /// The duration to wait before sending a heartbeat message to a remote
     /// host, if the host has not already sent another message within that time
