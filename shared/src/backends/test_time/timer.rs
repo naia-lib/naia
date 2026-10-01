@@ -103,3 +103,31 @@ impl Timer {
         }
     }
 }
+
+// test_time takes precedence over every live backend on every target, so a
+// virtual-time suite behaves identically on host and wasm. This pin executes
+// on wasm32 (where the live clock would otherwise win) and proves the Timer
+// under test_time follows TestClock there, not performance.now.
+#[cfg(all(test, target_arch = "wasm32", feature = "test_time"))]
+mod wasm_test_time_precedence_tests {
+    use std::time::Duration;
+
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::Timer;
+    use crate::TestClock;
+
+    #[wasm_bindgen_test]
+    fn virtual_advance_rings_timer_on_wasm() {
+        TestClock::init(0);
+        let timer = Timer::new(Duration::from_millis(100));
+        assert!(!timer.ringing());
+        TestClock::advance(99);
+        assert!(!timer.ringing());
+        TestClock::advance(2);
+        assert!(
+            timer.ringing(),
+            "test_time Timer must follow TestClock on wasm"
+        );
+    }
+}
