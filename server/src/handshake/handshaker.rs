@@ -451,3 +451,100 @@ impl HandshakeManager {
         packet
     }
 }
+
+// Server reject-production pins: the reject packets whose wire encoding
+// (shared) and terminal handling (client) are already pinned must
+// actually be produced here with the right reason. This module is the
+// server handshaker's first unit coverage — no sockets involved, just the
+// state machine over crafted inbound bytes.
+#[cfg(test)]
+mod tests {
+    use std::net::SocketAddr;
+
+    use super::*;
+
+    fn addr() -> SocketAddr {
+        "127.0.0.1:9999".parse().unwrap()
+    }
+
+    fn server_pid() -> ProtocolId {
+        ProtocolId::from_bytes([7u8; 16])
+    }
+
+    fn wrong_pid() -> ProtocolId {
+        ProtocolId::from_bytes([8u8; 16])
+    }
+
+    /// Inbound handshake bytes: header plus an optional trailing identity
+    /// token, the way the transport delivers them after the standard
+    /// header (which `maintain_handshake` never sees).
+    fn inbound(header: &HandshakeHeader, token: Option<&IdentityToken>) -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        header.ser(&mut writer);
+        if let Some(token) = token {
+            token.ser(&mut writer);
+        }
+        writer.to_packet().slice().to_vec()
+    }
+
+    fn maintain(manager: &mut HandshakeManager, bytes: &[u8]) -> Result<HandshakeAction, SerdeErr> {
+        let mut reader = BitReader::new(bytes);
+        manager.maintain_handshake(&addr(), &mut reader, false)
+    }
+
+    /// A produced reject packet must parse as the named reason — this is
+    /// the producer half of the wire+consumer pins.
+    fn reject_reason_of(packet: &OutgoingPacket) -> RejectReason {
+        let mut reader = BitReader::new(packet.slice());
+        StandardHeader::de(&mut reader).expect("reject packet must parse");
+        match HandshakeHeader::de(&mut reader).expect("reject header must parse") {
+            HandshakeHeader::ServerRejectResponse(reason) => reason,
+            other => panic!("expected a reject packet, got {other:?}"),
+        }
+    }
+
+    #[cfg(feature = "transport_udp")]
+    #[test]
+    fn challenge_wrong_protocol_emits_mismatch_reject() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let bytes = inbound(&HandshakeHeader::ClientChallengeRequest(wrong_pid()), None);
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                assert_eq!(reject_reason_of(&packet), RejectReason::ProtocolMismatch,)
+            }
+            _ => panic!("wrong protocol must be rejected with a packet"),
+        }
+    }
+
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn identify_wrong_protocol_emits_mismatch_reject() {
+        let mut manager = HandshakeManager::new(server_pid());
+        let bytes = inbound(&HandshakeHeader::ClientIdentifyRequest(wrong_pid()), None);
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                assert_eq!(reject_reason_of(&packet), RejectReason::ProtocolMismatch,)
+            }
+            _ => panic!("wrong protocol must be rejected with a packet"),
+        }
+    }
+
+    #[cfg(not(feature = "transport_udp"))]
+    #[test]
+    fn identify_unknown_token_emits_auth_reject() {
+        // A well-formed identify for a token the server never authenticated
+        // is a credential failure, not a protocol failure.
+        let mut manager = HandshakeManager::new(server_pid());
+        let token = IdentityToken::generate();
+        let bytes = inbound(
+            &HandshakeHeader::ClientIdentifyRequest(server_pid()),
+            Some(&token),
+        );
+        match maintain(&mut manager, &bytes) {
+            Ok(HandshakeAction::SendPacket(packet)) => {
+                assert_eq!(reject_reason_of(&packet), RejectReason::Auth)
+            }
+            _ => panic!("unknown token must be auth-rejected with a packet"),
+        }
+    }
+}
