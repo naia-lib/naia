@@ -42,3 +42,58 @@ impl Timer {
         self.last -= self.duration;
     }
 }
+
+// DWO clock browser proof, naia-shared side: this Timer paces the
+// production handshake (`send()` retransmits), so it is pinned directly
+// against the live performance.now timeline — no sleeps, no frozen clock.
+// A bounded spin covers the sub-millisecond gap between construction and
+// the strictly-elapsed ring.
+#[cfg(all(test, target_arch = "wasm32"))]
+mod wasm_timer_tests {
+    use std::time::Duration;
+
+    use wasm_bindgen_test::wasm_bindgen_test;
+
+    use super::Timer;
+    use crate::Instant;
+
+    /// Upper bound on spins waiting for the live clock to tick past the
+    /// construction instant; each spin re-reads performance.now, so this
+    /// only exhausts on a clock that never advances at all.
+    const MAX_RING_SPINS: u32 = 100_000;
+
+    fn spin_until_ringing(timer: &Timer) {
+        for _ in 0..MAX_RING_SPINS {
+            if timer.ringing() {
+                return;
+            }
+        }
+        panic!("wasm Timer never rang on the live clock");
+    }
+
+    #[wasm_bindgen_test]
+    fn ring_manual_rings_on_live_clock() {
+        let mut timer = Timer::new(Duration::from_secs(3600));
+        timer.ring_manual();
+        spin_until_ringing(&timer);
+    }
+
+    #[wasm_bindgen_test]
+    fn fresh_reset_is_silent() {
+        let mut timer = Timer::new(Duration::from_secs(3600));
+        timer.reset();
+        // A just-reset hour timer cannot have strictly elapsed.
+        assert!(!timer.ringing());
+    }
+
+    #[wasm_bindgen_test]
+    fn timer_agrees_with_instant_facade() {
+        let before = Instant::now();
+        let mut timer = Timer::new(Duration::from_secs(3600));
+        timer.ring_manual();
+        spin_until_ringing(&timer);
+        // Same underlying source: the Instant facade never steps backwards
+        // across the Timer's ring.
+        assert!(Instant::now() >= before);
+    }
+}
