@@ -2136,15 +2136,19 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return;
         }
 
-        // Bounded handshake (Usher 38421): an attempt that never completes —
-        // silent server, or auth that never resolves — must fail loudly
-        // instead of retransmitting forever. At the link-silence deadline
-        // the client reports `AuthTimeout` on the same disconnection event
-        // path the established link uses, then tears the attempt down (which
-        // also disarms the timer, so exactly one event fires). The address
-        // is attached when one is known; while still `Finding` there is
-        // nothing honest to attribute, but the state still resets so the
-        // consumer's retry loop re-engages.
+        // Bounded handshake (Usher 38421): an attempt that hears nothing for
+        // a full link-silence window must fail loudly instead of
+        // retransmitting forever. At the deadline the client reports
+        // `AuthTimeout` on the same disconnection event path the
+        // established link uses, then tears the attempt down (which also
+        // disarms the timer, so exactly one event fires). The deadline
+        // measures SILENCE, not time since dial: any inbound packet
+        // re-arms it below, mirroring `mark_heard` on the established
+        // path — otherwise a healthy-but-slow handshake under a short
+        // silence window would report AuthTimeout mid-connect. The
+        // address is attached when one is known; while still `Finding`
+        // there is nothing honest to attribute, but the state still
+        // resets so the consumer's retry loop re-engages.
         if self.handshake_timeout.ringing() {
             match self.io.server_addr() {
                 Ok(server_addr) => {
@@ -2258,6 +2262,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         loop {
             match self.io.recv_reader() {
                 Ok(Some(mut reader)) => {
+                    // The server is alive: a full silence window with no
+                    // inbound traffic is the only thing that may end the
+                    // attempt, so any packet re-arms the give-up timer.
+                    self.handshake_timeout.reset();
                     match self.handshake_manager.recv(&mut reader) {
                         Some(HandshakeResult::Connected(time_manager)) => {
                             // new connect!
@@ -3919,6 +3927,77 @@ mod client_disconnect_tests {
             // A further tick emits nothing more: the reset disarmed the timer.
             client.maintain_socket();
             assert!(take_disconnects(&mut client).is_empty());
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// A receiver that delivers exactly one undecodable packet, then
+    /// silence: the peer is alive (bytes arrive) but says nothing the
+    /// handshake can use. Proves heard traffic re-arms the give-up timer.
+    #[derive(Clone)]
+    struct OnceReceiver {
+        packet: Vec<u8>,
+        live: bool,
+    }
+
+    impl PacketReceiver for OnceReceiver {
+        fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
+            if self.live {
+                self.live = false;
+                Ok(Some(self.packet.as_slice()))
+            } else {
+                Ok(None)
+            }
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn heard_handshake_traffic_rearms_give_up_timer() {
+        // The give-up deadline measures link SILENCE, not time since dial:
+        // a peer that keeps sending — even packets the handshake cannot
+        // use — keeps the attempt alive. Without the re-arm, a
+        // healthy-but-slow handshake under a short silence window reports
+        // AuthTimeout mid-connect and kills the attempt (heartbeat-timeout
+        // e2e regression: first-bad e567e1fe).
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(AtomicUsize::new(0));
+            let mut client = loading_client_with_receiver(
+                Box::new(CountingSender { sent }),
+                Box::new(OnceReceiver {
+                    packet: vec![0xFF; 8],
+                    live: true,
+                }),
+            );
+            assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+
+            // Near the deadline a packet arrives: still trying, no event.
+            TestClock::advance(29_999);
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+            assert!(take_disconnects(&mut client).is_empty());
+
+            // Past the ORIGINAL deadline the attempt survives: the heard
+            // packet re-armed the timer.
+            TestClock::advance(2);
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+            assert!(take_disconnects(&mut client).is_empty());
+
+            // A full silent window after the last heard packet still gives
+            // up: exactly one AuthTimeout, attempt over.
+            TestClock::advance(30_000);
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+            let events = take_disconnects(&mut client);
+            assert_eq!(events.len(), 1, "silence must still give up exactly once");
+            assert_eq!(events[0].1, DisconnectReason::AuthTimeout);
         })
         .join()
         .unwrap();
