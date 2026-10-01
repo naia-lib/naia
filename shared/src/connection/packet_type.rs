@@ -68,7 +68,7 @@ impl Serde for PacketType {
             return output;
         }
 
-        output += <UnsignedInteger<4> as ConstBitLength>::const_bit_length();
+        output += <UnsignedInteger<2> as ConstBitLength>::const_bit_length();
 
         output
     }
