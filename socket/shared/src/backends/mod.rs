@@ -3,6 +3,7 @@ cfg_if! {
     if #[cfg(all(target_arch = "wasm32", feature = "wbindgen"))] {
         mod wasm_bindgen;
         pub use self::wasm_bindgen::instant::Instant;
+        pub use self::wasm_bindgen::instant::monotonic_now_ms;
     }
     else if #[cfg(all(target_arch = "wasm32", feature = "mquad"))] {
         mod miniquad;

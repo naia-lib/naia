@@ -24,6 +24,8 @@ mod socket_config;
 mod time_queue;
 mod url_parse;
 
+#[cfg(all(target_arch = "wasm32", feature = "wbindgen"))]
+pub use backends::monotonic_now_ms;
 pub use backends::{Instant, Random};
 pub use identity_token::*;
 pub use link_conditioner_config::LinkConditionerConfig;
