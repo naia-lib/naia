@@ -5,14 +5,15 @@ use log::{debug, info, warn};
 use naia_shared::{
     handshake::{HandshakeHeader, RejectReason},
     AuthorityError, BitReader, BitWriter, CancelDisposition, Channel, ChannelKind, ChannelMode,
-    ComponentKind, ConnectionStats, EntityAndGlobalEntityConverter, EntityAuthStatus,
-    EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
+    ComponentKind, ConnectionStats, DisconnectReason, EntityAndGlobalEntityConverter,
+    EntityAuthStatus, EntityDoesNotExistError, EntityEvent, EntityPriorityMut, EntityPriorityRef,
     FakeEntityConverter, GameInstant, GlobalEntity, GlobalEntityMap, GlobalEntitySpawner,
     GlobalRequestId, GlobalResponseId, GlobalWorldManagerType, HostType, Instant,
     LocalEntityAndGlobalEntityConverter, Message, MessageContainer, OwnedLocalEntity, PacketType,
     Protocol, ProtocolId, Replicate, ReplicatedComponent, Request, RequestPoll, Response,
     ResponseReceiveKey, ResponseSendKey, Serde, SharedGlobalWorldManager, SocketConfig,
-    StandardHeader, Tick, UserPriorityState, WorldMutType, WorldRefType, PROTOCOL_MISMATCH_STATUS,
+    StandardHeader, Tick, Timer, UserPriorityState, WorldMutType, WorldRefType,
+    PROTOCOL_MISMATCH_STATUS,
 };
 
 use super::{
@@ -68,6 +69,12 @@ pub struct Client<E: Copy + Eq + Hash + Send + Sync> {
     /// serialized message it carried (naia-lib/naia#10).
     server_disconnect_details: Option<(naia_shared::DisconnectReason, Option<Vec<u8>>)>,
     server_disconnect: bool,
+    /// Bounds the handshake: fires when an attempt runs longer than the
+    /// link-silence deadline without connecting. Reset at every attempt
+    /// start (`connect`) and every attempt teardown (`reset_attempt_state`);
+    /// consulted only while the handshake is in flight, never once
+    /// `server_connection` exists.
+    handshake_timeout: Timer,
     waitlist_messages: VecDeque<(ChannelKind, Box<dyn Message>)>,
     // World
     global_world_manager: GlobalWorldManager,
@@ -144,6 +151,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             manual_disconnect: false,
             server_disconnect: false,
             server_disconnect_details: None,
+            handshake_timeout: Timer::new(client_config.connection.disconnection_timeout_duration),
             waitlist_messages: VecDeque::new(),
             // World
             global_world_manager,
@@ -218,6 +226,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         if !self.is_disconnected() {
             panic!("Client has already initiated a connection, cannot initiate a new one. TIP: Check client.is_disconnected() before calling client.connect()");
         }
+
+        // Start the handshake deadline: a fresh attempt gets the full
+        // link-silence window. (Without this, a client constructed long
+        // before its first connect would time out immediately.)
+        self.handshake_timeout.reset();
 
         // The fingerprint goes on every one of these branches, including the
         // no-auth one: `require_auth = false` still means the two ends have to
@@ -2123,6 +2136,38 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return;
         }
 
+        // Bounded handshake (Usher 38421): an attempt that never completes —
+        // silent server, or auth that never resolves — must fail loudly
+        // instead of retransmitting forever. At the link-silence deadline
+        // the client reports `AuthTimeout` on the same disconnection event
+        // path the established link uses, then tears the attempt down (which
+        // also disarms the timer, so exactly one event fires). The address
+        // is attached when one is known; while still `Finding` there is
+        // nothing honest to attribute, but the state still resets so the
+        // consumer's retry loop re-engages.
+        if self.handshake_timeout.ringing() {
+            match self.io.server_addr() {
+                Ok(server_addr) => {
+                    self.incoming_world_events.push_disconnection(
+                        &server_addr,
+                        DisconnectReason::AuthTimeout,
+                        None,
+                    );
+                }
+                Err(_) => {
+                    warn!(
+                        "Client: handshake timed out with the server address \
+                         still unknown; reporting Disconnected without an event"
+                    );
+                }
+            }
+            // Same teardown as `cancel_connect`: nothing was ever
+            // established, so no world state is touched — the reset drops
+            // the socket, the attempt flags, and the rung timer together.
+            self.reset_attempt_state();
+            return;
+        }
+
         if !self.io.is_authenticated() {
             match self.io.recv_auth() {
                 IdentityReceiverResult::Success(id_token) => {
@@ -2576,6 +2621,8 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         // connected.
         self.server_disconnect = false;
         self.server_disconnect_details = None;
+        // A rung give-up timer must not leak into the next attempt either.
+        self.handshake_timeout.reset();
     }
 
     fn server_address_unwrapped(&self) -> SocketAddr {
@@ -3426,6 +3473,9 @@ mod client_disconnect_tests {
     use naia_shared::TestClock;
     use naia_shared::{DisconnectReason, GameInstant, IdentityToken, Instant, Protocol};
 
+    #[cfg(feature = "test_time")]
+    use crate::world_events::{DisconnectEvent, WorldEvent};
+
     use crate::connection::time_manager::TimeManager;
     use crate::transport::{
         IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError,
@@ -3823,6 +3873,110 @@ mod client_disconnect_tests {
                     header.packet_type,
                 );
             }
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// Drain the public disconnection events, so give-up tests can assert
+    /// exact event counts and reasons.
+    #[cfg(feature = "test_time")]
+    fn take_disconnects(
+        client: &mut Client<u64>,
+    ) -> Vec<(SocketAddr, DisconnectReason, Option<MessageContainer>)> {
+        DisconnectEvent::iter(&mut client.take_world_events()).collect()
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn silent_handshake_gives_up_with_auth_timeout_at_deadline() {
+        // A server that never answers must surface exactly one AuthTimeout
+        // at the 30 s link-silence deadline — never before, never twice —
+        // so the consumer's offline path learns the attempt failed instead
+        // of watching "connecting" forever.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(AtomicUsize::new(0));
+            let mut client = loading_client(CountingSender { sent });
+            assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+
+            // Just inside the deadline: still trying, no event.
+            TestClock::advance(29_999);
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+            assert!(take_disconnects(&mut client).is_empty());
+
+            // Past it: exactly one AuthTimeout carrying the dial target.
+            TestClock::advance(2);
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+            let events = take_disconnects(&mut client);
+            assert_eq!(events.len(), 1, "give-up must emit exactly one event");
+            assert_eq!(events[0].0, "127.0.0.1:9999".parse().unwrap());
+            assert_eq!(events[0].1, DisconnectReason::AuthTimeout);
+            assert!(events[0].2.is_none());
+
+            // A further tick emits nothing more: the reset disarmed the timer.
+            client.maintain_socket();
+            assert!(take_disconnects(&mut client).is_empty());
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn established_connection_ignores_handshake_deadline() {
+        // The give-up timer is a handshake-only instrument: a live
+        // connection kept awake by heartbeats must never consult it, no
+        // matter how long the attempt clock has been running.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(AtomicUsize::new(0));
+            let mut client = connected_client_with_receiver(
+                Box::new(CountingSender { sent }),
+                Box::new(ScriptedReceiver {
+                    packets: vec![
+                        heartbeat_packet(),
+                        heartbeat_packet(),
+                        heartbeat_packet(),
+                        heartbeat_packet(),
+                    ],
+                    next: 0,
+                }),
+            );
+            // 60 s total — twice the deadline — with a heartbeat every 15 s.
+            for _ in 0..4 {
+                TestClock::advance(15_000);
+                client.maintain_socket();
+            }
+            assert!(client.server_connection.is_some());
+            assert!(
+                take_disconnects(&mut client).is_empty(),
+                "an established connection must never report AuthTimeout",
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn cancel_before_deadline_gives_no_auth_timeout() {
+        // Abandoning the attempt wins over the deadline: no event for an
+        // attempt the consumer already withdrew.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(AtomicUsize::new(0));
+            let mut client = loading_client(CountingSender { sent });
+            TestClock::advance(29_999);
+            client.maintain_socket();
+            client.cancel_connect();
+            TestClock::advance(60_000);
+            client.maintain_socket();
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+            assert!(take_disconnects(&mut client).is_empty());
         })
         .join()
         .unwrap();
