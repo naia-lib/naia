@@ -31,7 +31,9 @@ pub struct SequencedArranger {
     newest_received_message_index: MessageIndex,
 }
 
-#[cfg(test)]
+// Test-only constructor: its only caller is the proptest strategy suite,
+// which stays on native (no wasm32 proptest support).
+#[cfg(all(test, not(target_arch = "wasm32")))]
 impl SequencedArranger {
     pub(crate) fn new() -> Self {
         Self {
