@@ -4003,6 +4003,47 @@ mod client_disconnect_tests {
         .unwrap();
     }
 
+    /// A sender whose transport never learned the peer address: the dial
+    /// target never resolved to a socket address.
+    #[derive(Clone)]
+    struct FindingSender;
+
+    impl PacketSender for FindingSender {
+        fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
+            Ok(())
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            ServerAddr::Finding
+        }
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn give_up_with_unknown_peer_emits_no_event_but_resets() {
+        // Deadline with the peer address never learned: there is nothing
+        // honest to attribute an AuthTimeout to, so no event is
+        // fabricated — but the attempt still tears down to Disconnected
+        // so the consumer's retry loop re-engages instead of watching
+        // "connecting" forever.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let mut client =
+                loading_client_with_receiver(Box::new(FindingSender), Box::new(EmptyReceiver));
+            assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+
+            TestClock::advance(30_001);
+            client.maintain_socket();
+            assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+            assert!(
+                take_disconnects(&mut client).is_empty(),
+                "no address means no event, never a manufactured one"
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
     #[cfg(feature = "test_time")]
     #[test]
     fn established_connection_ignores_handshake_deadline() {
