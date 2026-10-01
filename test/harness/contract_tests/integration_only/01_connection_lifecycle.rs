@@ -1136,6 +1136,76 @@ fn client_disconnects_due_to_heartbeat_timeout() {
     );
 }
 
+/// Silent server surfaces exactly one AuthTimeout over real sockets
+/// Contract: handshake give-up (Usher 38421; unit pins under test_time)
+///
+/// Given a server that never accepts; when a client dials with a short
+/// link-silence deadline; then the client emits exactly one disconnect
+/// event carrying AuthTimeout — over real sockets and the real clock, not
+/// just the TestClock — instead of sitting on "connecting" forever.
+#[test]
+fn silent_server_surfaces_single_auth_timeout() {
+    let mut scenario = Scenario::new(naia_server::ServerMode::Resident);
+    let test_protocol = protocol();
+
+    scenario.server_start(ServerConfig::default(), test_protocol.clone());
+
+    // Short deadline: the give-up reuses the link-silence duration.
+    let mut client_config = test_client_config();
+    client_config.connection.disconnection_timeout_duration = Duration::from_millis(200);
+
+    // Dial, but the server never accepts: no auth read, no accept call.
+    let client_key = scenario.client_start(
+        "Client Silent",
+        Auth::new("client_silent", "password"),
+        client_config,
+        test_protocol.clone(),
+    );
+
+    // Past the deadline the client gives up. The expect loop advances real
+    // time; accumulate across ticks and stop at the first AuthTimeout.
+    let mut auth_timeouts = 0usize;
+    let mut other_disconnects = 0usize;
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            for (reason, _) in client.read_events::<ClientDisconnectEvent>() {
+                match reason {
+                    DisconnectReason::AuthTimeout => auth_timeouts += 1,
+                    _ => other_disconnects += 1,
+                }
+            }
+        });
+        (auth_timeouts == 1).then_some(())
+    });
+
+    assert_eq!(
+        auth_timeouts, 1,
+        "silent server must surface exactly one AuthTimeout"
+    );
+    assert_eq!(
+        other_disconnects, 0,
+        "no other disconnect reason may fire on a silent server"
+    );
+
+    // The attempt is over: the client is disconnected, not still connecting.
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            client.connection_status().is_disconnected().then_some(())
+        })
+    });
+
+    // One more tick surfaces no second event: the teardown disarmed the timer.
+    scenario.mutate(|_ctx| {});
+    scenario.expect(|ctx| {
+        ctx.client(client_key, |client| {
+            client
+                .read_events::<ClientDisconnectEvent>()
+                .is_empty()
+                .then_some(())
+        })
+    });
+}
+
 /// Protocol or handshake mismatch fails before connection
 /// Contract: [connection-21], [connection-22]
 ///
