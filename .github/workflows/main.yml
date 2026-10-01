@@ -152,6 +152,47 @@ jobs:
           command: clippy
           args: --package ${{ matrix.package }} --target wasm32-unknown-unknown --features wbindgen --all-targets --no-deps --
 
+  wasm-tests:
+    name: WASM Tests
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          [
+            naia-client,
+            naia-socket-shared,
+          ]
+    # naia-shared is deliberately absent: its parking_lot -> wait-timeout
+    # -> getrandom chain has no wasm32-unknown-unknown support
+    # (pre-existing gap), so its lib tests cannot build there. Its wasm
+    # Timer is still exercised on this target through the naia-client
+    # handshake tests below, which pace `send()` with that same timer.
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clone repo
+        uses: actions/checkout@v3
+
+      - name: Install wasm target
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: Cache crates
+        uses: Swatinem/rust-cache@v2
+
+      # The runner's bindgen schema must exactly match the wasm-bindgen
+      # version in Cargo.lock, so derive it there instead of pinning.
+      - name: Install matching wasm test runner
+        run: |
+          VERSION=$(grep -A2 'name = "wasm-bindgen"' Cargo.lock | grep '^version' | head -1 | cut -d'"' -f2)
+          cargo install wasm-bindgen-cli --version "$VERSION" --bin wasm-bindgen-test-runner
+
+      - name: Test on wasm32 under node
+        uses: actions-rs/cargo@v1
+        env:
+          CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUNNER: wasm-bindgen-test-runner
+        with:
+          command: test
+          args: --package ${{ matrix.package }} --target wasm32-unknown-unknown --features wbindgen --lib
+
   other:
     name: Other
     strategy:
