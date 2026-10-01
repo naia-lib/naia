@@ -329,6 +329,15 @@ impl HandshakeManager {
 
     // Step 6 of Handshake
     fn recv_connect_response(&mut self) -> Option<HandshakeResult> {
+        // Ignore a connect response for a stage we are not in. The swap
+        // below used to run unconditionally, clobbering an in-progress
+        // identify/time-sync into Connected while reporting None.
+        if !matches!(
+            self.connection_state,
+            HandshakeState::AwaitingConnectResponse(_)
+        ) {
+            return None;
+        }
         let HandshakeState::AwaitingConnectResponse(time_manager) =
             std::mem::replace(&mut self.connection_state, HandshakeState::Connected)
         else {
@@ -365,6 +374,15 @@ mod tests {
 
     const SEND_INTERVAL_MS: u64 = 1000;
 
+    /// Starts the thread-local TestClock at a nonzero epoch millisecond.
+    /// Production clocks read epoch time, which never sits at zero; the
+    /// test backend saturates `ring_manual` subtractions at zero, so a
+    /// clock left at exactly 0 cannot represent "in the past". Every test
+    /// below starts the clock where production lives.
+    fn init_clock() {
+        TestClock::init(1_000_000);
+    }
+
     fn protocol_id() -> ProtocolId {
         ProtocolId::from_bytes([7u8; 16])
     }
@@ -392,7 +410,10 @@ mod tests {
         writer.to_packet().slice().to_vec()
     }
 
-    fn recv_handshake(manager: &mut HandshakeManager, header: HandshakeHeader) -> Option<HandshakeResult> {
+    fn recv_handshake(
+        manager: &mut HandshakeManager,
+        header: HandshakeHeader,
+    ) -> Option<HandshakeResult> {
         let bytes = inbound_bytes(PacketType::Handshake, Some(header));
         let mut reader = BitReader::new(&bytes);
         manager.recv(&mut reader)
@@ -408,146 +429,122 @@ mod tests {
 
     #[test]
     fn retransmit_paced_by_handshake_timer() {
-        std::thread::spawn(|| {
-            TestClock::init(0);
-            let mut manager = manager();
-            with_token(&mut manager);
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
 
-            // Constructor rings the timer manually: first send fires at once.
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake)
-            );
-            // Immediately after, the interval gates us.
-            assert!(manager.send().is_none());
-            TestClock::advance(SEND_INTERVAL_MS - 1);
-            assert!(manager.send().is_none());
-            // Once the interval elapses the identify retransmits.
-            TestClock::advance(2);
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake)
-            );
-        })
-        .join()
-        .unwrap();
+        // Constructor rings the timer manually; the backend only rings once
+        // the interval has *strictly* elapsed, and frozen test time supplies
+        // no epsilon the way production wall time does.
+        TestClock::advance(1);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Handshake)
+        );
+        // Immediately after, the interval gates us.
+        assert!(manager.send().is_none());
+        TestClock::advance(SEND_INTERVAL_MS - 1);
+        assert!(manager.send().is_none());
+        // Once the interval elapses the identify retransmits.
+        TestClock::advance(2);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Handshake)
+        );
     }
 
     #[test]
     fn send_without_token_emits_nothing_but_keeps_stage() {
-        std::thread::spawn(|| {
-            TestClock::init(0);
-            let mut manager = manager();
+        init_clock();
+        let mut manager = manager();
 
-            TestClock::advance(SEND_INTERVAL_MS + 1);
-            assert!(manager.send().is_none());
-            // Setting the token later resumes the pending identify: the
-            // stage was never moved by the tokenless ticks.
-            with_token(&mut manager);
-            TestClock::advance(SEND_INTERVAL_MS + 1);
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake)
-            );
-        })
-        .join()
-        .unwrap();
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert!(manager.send().is_none());
+        // Setting the token later resumes the pending identify: the
+        // stage was never moved by the tokenless ticks.
+        with_token(&mut manager);
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Handshake)
+        );
     }
 
     #[test]
     fn mid_handshake_reject_is_terminal() {
-        std::thread::spawn(|| {
-            TestClock::init(0);
-            let mut manager = manager();
-            with_token(&mut manager);
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
 
-            let result = recv_handshake(
-                &mut manager,
-                HandshakeHeader::ServerRejectResponse(RejectReason::Auth),
-            );
-            assert!(
-                matches!(
-                    result,
-                    Some(HandshakeResult::Rejected(RejectReason::Auth))
-                ),
-                "mid-handshake server reject must surface as terminal Rejected",
-            );
-        })
-        .join()
-        .unwrap();
+        let result = recv_handshake(
+            &mut manager,
+            HandshakeHeader::ServerRejectResponse(RejectReason::Auth),
+        );
+        assert!(
+            matches!(result, Some(HandshakeResult::Rejected(RejectReason::Auth))),
+            "mid-handshake server reject must surface as terminal Rejected",
+        );
     }
 
     #[test]
     fn wrong_stage_connect_response_does_not_clobber_identify() {
-        std::thread::spawn(|| {
-            TestClock::init(0);
-            let mut manager = manager();
-            with_token(&mut manager);
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
 
-            // A stray connect response for a stage we never reached: no
-            // result, and — critically — no state move.
-            let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
-            assert!(result.is_none());
-            TestClock::advance(SEND_INTERVAL_MS + 1);
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake),
-                "stray connect response must leave the identify stage intact",
-            );
-        })
-        .join()
-        .unwrap();
+        // A stray connect response for a stage we never reached: no
+        // result, and — critically — no state move.
+        let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
+        assert!(result.is_none());
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Handshake),
+            "stray connect response must leave the identify stage intact",
+        );
     }
 
     #[test]
     fn non_handshake_packets_ignored_mid_handshake() {
-        std::thread::spawn(|| {
-            TestClock::init(0);
-            let mut manager = manager();
-            with_token(&mut manager);
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
 
-            for packet_type in [PacketType::Data, PacketType::Heartbeat, PacketType::Ping] {
-                let bytes = inbound_bytes(packet_type, None);
-                let mut reader = BitReader::new(&bytes);
-                assert!(manager.recv(&mut reader).is_none());
-            }
-            TestClock::advance(SEND_INTERVAL_MS + 1);
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake)
-            );
-        })
-        .join()
-        .unwrap();
+        for packet_type in [PacketType::Data, PacketType::Heartbeat, PacketType::Ping] {
+            let bytes = inbound_bytes(packet_type, None);
+            let mut reader = BitReader::new(&bytes);
+            assert!(manager.recv(&mut reader).is_none());
+        }
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Handshake)
+        );
     }
 
     #[test]
     fn wrong_stage_connect_response_does_not_clobber_timesync() {
-        std::thread::spawn(|| {
-            TestClock::init(0);
-            let mut manager = manager();
-            with_token(&mut manager);
+        init_clock();
+        let mut manager = manager();
+        with_token(&mut manager);
 
-            // Reach TimeSync with the identify response.
-            let result = recv_handshake(&mut manager, HandshakeHeader::ServerIdentifyResponse);
-            assert!(result.is_none());
-            TestClock::advance(SEND_INTERVAL_MS + 1);
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake),
-                "timesync stage must emit pings",
-            );
-            // Stray connect response mid-timesync: no result, no state move.
-            let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
-            assert!(result.is_none());
-            TestClock::advance(SEND_INTERVAL_MS + 1);
-            assert_eq!(
-                packet_type_of_first_send(&mut manager),
-                Some(PacketType::Handshake),
-                "stray connect response must leave the timesync stage intact",
-            );
-        })
-        .join()
-        .unwrap();
+        // Reach TimeSync with the identify response.
+        let result = recv_handshake(&mut manager, HandshakeHeader::ServerIdentifyResponse);
+        assert!(result.is_none());
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Ping),
+            "timesync stage must emit pings",
+        );
+        // Stray connect response mid-timesync: no result, no state move.
+        let result = recv_handshake(&mut manager, HandshakeHeader::ServerConnectResponse);
+        assert!(result.is_none());
+        TestClock::advance(SEND_INTERVAL_MS + 1);
+        assert_eq!(
+            packet_type_of_first_send(&mut manager),
+            Some(PacketType::Ping),
+            "stray connect response must leave the timesync stage intact",
+        );
     }
 }
