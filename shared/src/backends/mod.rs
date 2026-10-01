@@ -1,5 +1,12 @@
 cfg_if! {
-    if #[cfg(all(target_arch = "wasm32", feature = "wbindgen"))] {
+    // test_time first: a virtual clock overrides every live backend, on any
+    // target, so virtual-time suites execute identically on host and wasm.
+    if #[cfg(feature = "test_time")] {
+        mod test_time;
+        pub use self::test_time::timer::Timer;
+        pub use self::test_time::timestamp::Timestamp;
+    }
+    else if #[cfg(all(target_arch = "wasm32", feature = "wbindgen"))] {
         mod wasm_bindgen;
         pub use self::wasm_bindgen::timer::Timer;
         pub use self::wasm_bindgen::timestamp::Timestamp;
@@ -8,11 +15,6 @@ cfg_if! {
         mod miniquad;
         pub use self::miniquad::timer::Timer;
         pub use self::miniquad::timestamp::Timestamp;
-    }
-    else if #[cfg(feature = "test_time")] {
-        mod test_time;
-        pub use self::test_time::timer::Timer;
-        pub use self::test_time::timestamp::Timestamp;
     }
     else if #[cfg(not(target_arch = "wasm32"))] {
         mod native;

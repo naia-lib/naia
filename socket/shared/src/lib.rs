@@ -24,7 +24,11 @@ mod socket_config;
 mod time_queue;
 mod url_parse;
 
-#[cfg(all(target_arch = "wasm32", feature = "wbindgen"))]
+#[cfg(all(
+    target_arch = "wasm32",
+    feature = "wbindgen",
+    not(feature = "test_time")
+))]
 pub use backends::monotonic_now_ms;
 pub use backends::{Instant, Random};
 pub use identity_token::*;
@@ -37,10 +41,7 @@ pub use socket_config::SocketConfig;
 pub use time_queue::TimeQueue;
 pub use url_parse::{parse_server_url, url_to_socket_addr};
 
-#[cfg(all(
-    feature = "test_time",
-    not(all(target_arch = "wasm32", any(feature = "wbindgen", feature = "mquad")))
-))]
+#[cfg(feature = "test_time")]
 pub use backends::TestClock;
 
 #[derive(Debug, Eq, PartialEq)]

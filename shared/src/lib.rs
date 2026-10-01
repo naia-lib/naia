@@ -55,10 +55,7 @@ pub use naia_socket_shared::{
     TimeQueue,
 };
 
-#[cfg(all(
-    feature = "test_time",
-    not(all(target_arch = "wasm32", any(feature = "wbindgen", feature = "mquad")))
-))]
+#[cfg(feature = "test_time")]
 pub use naia_socket_shared::TestClock;
 
 mod backends;
