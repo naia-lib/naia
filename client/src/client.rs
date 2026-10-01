@@ -3422,6 +3422,8 @@ mod client_disconnect_tests {
     };
     use std::time::Duration;
 
+    #[cfg(feature = "test_time")]
+    use naia_shared::TestClock;
     use naia_shared::{DisconnectReason, GameInstant, IdentityToken, Instant, Protocol};
 
     use crate::connection::time_manager::TimeManager;
@@ -3479,17 +3481,15 @@ mod client_disconnect_tests {
     }
 
     fn loading_client(sender: CountingSender) -> Client<u64> {
-        loading_client_with_receiver(sender, Box::new(EmptyReceiver))
+        loading_client_with_receiver(Box::new(sender), Box::new(EmptyReceiver))
     }
 
     fn loading_client_with_receiver(
-        sender: CountingSender,
+        sender: Box<dyn PacketSender>,
         receiver: Box<dyn PacketReceiver>,
     ) -> Client<u64> {
         let mut client = idle_client();
-        client
-            .io
-            .load(Box::new(OkIdReceiver), Box::new(sender), receiver);
+        client.io.load(Box::new(OkIdReceiver), sender, receiver);
         client
     }
 
@@ -3643,7 +3643,7 @@ mod client_disconnect_tests {
     }
 
     fn connected_client_with_receiver(
-        sender: CountingSender,
+        sender: Box<dyn PacketSender>,
         receiver: Box<dyn PacketReceiver>,
     ) -> Client<u64> {
         let mut client = loading_client_with_receiver(sender, receiver);
@@ -3680,7 +3680,7 @@ mod client_disconnect_tests {
         // consumer would auto-reconnect into an eviction loop.
         let sent = Arc::new(AtomicUsize::new(0));
         let mut client = connected_client_with_receiver(
-            CountingSender { sent },
+            Box::new(CountingSender { sent }),
             Box::new(ScriptedReceiver {
                 packets: vec![
                     server_disconnect_packet(DisconnectReason::Kicked, Some(&[1, 2, 3])),
@@ -3696,6 +3696,136 @@ mod client_disconnect_tests {
             Some((DisconnectReason::Kicked, Some(vec![1u8, 2, 3]))),
             "a repeated server disconnect must not clobber the first reason",
         );
+    }
+
+    /// A bare keep-alive, the way the server's heartbeat task emits it.
+    fn heartbeat_packet() -> Vec<u8> {
+        let mut writer = BitWriter::new();
+        StandardHeader::new(PacketType::Heartbeat, 0, 0, 0).ser(&mut writer);
+        writer.to_packet().slice().to_vec()
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn silence_past_timeout_marks_connection_for_drop() {
+        // 30 s default timeout: a peer gone silent that long must read as
+        // disconnecting, resolving to TimedOut downstream (safe to
+        // auto-reconnect). Each test runs on its own thread so the
+        // thread-local TestClock is clean.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(AtomicUsize::new(0));
+            let mut client = connected_client_with_receiver(
+                Box::new(CountingSender { sent }),
+                Box::new(ScriptedReceiver {
+                    packets: vec![],
+                    next: 0,
+                }),
+            );
+            assert!(!client.is_disconnecting());
+            TestClock::advance(30_001);
+            client.maintain_socket();
+            assert!(
+                client.is_disconnecting(),
+                "30 s of silence must mark the connection for drop",
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn heard_packet_rearms_drop_timer() {
+        // Any heard packet — even a bare heartbeat — resets the timeout:
+        // 29 s + heartbeat + 29 s must NOT read as disconnecting, but a
+        // further 2 s of silence must.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(AtomicUsize::new(0));
+            let mut client = connected_client_with_receiver(
+                Box::new(CountingSender { sent }),
+                Box::new(ScriptedReceiver {
+                    packets: vec![heartbeat_packet()],
+                    next: 0,
+                }),
+            );
+            TestClock::advance(29_000);
+            client.maintain_socket();
+            assert!(!client.is_disconnecting());
+            TestClock::advance(29_000);
+            client.maintain_socket();
+            assert!(
+                !client.is_disconnecting(),
+                "a heartbeat 29 s ago must still hold the connection",
+            );
+            TestClock::advance(2_000);
+            client.maintain_socket();
+            assert!(
+                client.is_disconnecting(),
+                "31 s after the last heard packet must mark drop",
+            );
+        })
+        .join()
+        .unwrap();
+    }
+
+    /// A sender that keeps every payload, so keep-alive tests can inspect
+    /// what the client actually emitted while silent.
+    #[derive(Clone)]
+    struct CapturingSender {
+        sent: Arc<std::sync::Mutex<Vec<Vec<u8>>>>,
+    }
+
+    impl PacketSender for CapturingSender {
+        fn send(&self, payload: &[u8]) -> Result<(), SendError> {
+            self.sent.lock().unwrap().push(payload.to_vec());
+            Ok(())
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    #[cfg(feature = "test_time")]
+    #[test]
+    fn silent_client_emits_keep_alive_past_interval() {
+        // 4 s default heartbeat interval: the silent side must speak first,
+        // or the peer's 30 s drop timer fires on a merely-idle connection
+        // and a healthy link flaps through TimedOut reconnects. The client
+        // keeps alive with Ping (latency probe) and Heartbeat packets —
+        // never Data.
+        std::thread::spawn(|| {
+            TestClock::init(0);
+            let sent = Arc::new(std::sync::Mutex::new(Vec::new()));
+            let mut client = connected_client_with_receiver(
+                Box::new(CapturingSender { sent: sent.clone() }),
+                Box::new(ScriptedReceiver {
+                    packets: vec![],
+                    next: 0,
+                }),
+            );
+            // Idle past the heartbeat interval: the client must speak.
+            TestClock::advance(4_001);
+            client.maintain_socket();
+            let sent = sent.lock().unwrap();
+            assert!(
+                !sent.is_empty(),
+                "a silent client must emit a keep-alive past the heartbeat interval",
+            );
+            for payload in sent.iter() {
+                let mut reader = BitReader::new(payload);
+                let header = StandardHeader::de(&mut reader).expect("keep-alive must parse");
+                assert!(
+                    matches!(header.packet_type, PacketType::Ping | PacketType::Heartbeat),
+                    "idle emissions must be keep-alives, not data: {:?}",
+                    header.packet_type,
+                );
+            }
+        })
+        .join()
+        .unwrap();
     }
 
     #[test]
