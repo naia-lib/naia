@@ -161,12 +161,13 @@ jobs:
           [
             naia-client,
             naia-socket-shared,
+            naia-shared,
           ]
-    # naia-shared is deliberately absent: its parking_lot -> wait-timeout
-    # -> getrandom chain has no wasm32-unknown-unknown support
-    # (pre-existing gap), so its lib tests cannot build there. Its wasm
-    # Timer is still exercised on this target through the naia-client
-    # handshake tests below, which pace `send()` with that same timer.
+    # naia-shared runs here since its proptest dev-dep (rusty-fork ->
+    # wait-timeout -> getrandom, no wasm32 support) was target-gated off
+    # wasm32 and its wasm Timer facade tests added (nash-dev: gap commit).
+    # naia-shared's remaining suites are native-only (test_time, proptest)
+    # and stay on the host legs.
     runs-on: ubuntu-latest
     steps:
       - name: Clone repo
