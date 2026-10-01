@@ -378,20 +378,11 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
     pub fn process_all_packets<W: WorldMutType<E>>(&mut self, mut world: W, now: &Instant) {
         // all other operations
         if self.is_disconnecting() {
-            // A server-initiated disconnect now names its own reason; falling
-            // back to `ClientDisconnected` for one would tell the client it hung
-            // up on itself (naia-lib/naia#10).
-            let (reason, payload) = match self.server_disconnect_details.take() {
-                Some((reason, payload)) => (reason, payload),
-                None => {
-                    let reason = if self.manual_disconnect || self.server_disconnect {
-                        naia_shared::DisconnectReason::ClientDisconnected
-                    } else {
-                        naia_shared::DisconnectReason::TimedOut
-                    };
-                    (reason, None)
-                }
-            };
+            let (reason, payload) = Self::resolve_disconnect_reason(
+                self.server_disconnect_details.take(),
+                self.manual_disconnect,
+                self.server_disconnect,
+            );
             let message = payload.and_then(|bytes| self.decode_server_message(&bytes));
             self.disconnect_with_events(&mut world, reason, message);
             return;
@@ -2468,6 +2459,31 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
         }
     }
 
+    /// Resolve which disconnect reason to report for a disconnecting client.
+    ///
+    /// Pure mapping, extracted for tests: a server-initiated disconnect
+    /// names its own reason (falling back to `ClientDisconnected` for one
+    /// would tell the client it hung up on itself — naia-lib/naia#10); a
+    /// locally-initiated or server-flagged teardown without details reports
+    /// `ClientDisconnected`; a bare connection drop reports `TimedOut`.
+    fn resolve_disconnect_reason(
+        server_details: Option<(naia_shared::DisconnectReason, Option<Vec<u8>>)>,
+        manual_disconnect: bool,
+        server_disconnect: bool,
+    ) -> (naia_shared::DisconnectReason, Option<Vec<u8>>) {
+        match server_details {
+            Some((reason, payload)) => (reason, payload),
+            None => {
+                let reason = if manual_disconnect || server_disconnect {
+                    naia_shared::DisconnectReason::ClientDisconnected
+                } else {
+                    naia_shared::DisconnectReason::TimedOut
+                };
+                (reason, None)
+            }
+        }
+    }
+
     fn disconnect_with_events<W: WorldMutType<E>>(
         &mut self,
         world: &mut W,
@@ -3075,7 +3091,7 @@ impl<E: Hash + Copy + Eq + Sync + Send> EntityAndGlobalEntityConverter<E> for Cl
 /// The lifecycle state of the client's connection to the server.
 ///
 /// Retrieved via [`Client::connection_status`].
-#[derive(Copy, Clone, PartialEq, Eq)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum ConnectionStatus {
     /// No socket is open; [`connect`](Client::connect) has not been called.
     Disconnected,
@@ -3387,5 +3403,204 @@ mod typed_refusal_tests {
             client.send_message::<TestCappedChannel, _>(&message),
             Err(NaiaClientError::MessageQueueFull)
         ));
+    }
+}
+
+// ---- Item 2 (Usher 38239): client lifecycle disconnect transitions.
+//
+// `disconnect` / `cancel_connect` / `connection_status` form the client side
+// of the reconnect/disconnect contract: graceful teardown emits packets and
+// moves Connected -> Disconnecting, abandoning a stuck handshake returns to
+// Disconnected without touching a live connection, and teardown on a client
+// that never connected is a panic, not a silent no-op.
+#[cfg(test)]
+mod client_disconnect_tests {
+    use std::net::SocketAddr;
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use std::time::Duration;
+
+    use naia_shared::{DisconnectReason, GameInstant, IdentityToken, Instant, Protocol};
+
+    use crate::connection::time_manager::TimeManager;
+    use crate::transport::{
+        IdentityReceiver, IdentityReceiverResult, PacketReceiver, PacketSender, RecvError,
+        SendError, ServerAddr,
+    };
+
+    use super::*;
+
+    fn dummy_server() -> ServerAddr {
+        ServerAddr::Found("127.0.0.1:9999".parse::<SocketAddr>().unwrap())
+    }
+
+    #[derive(Clone)]
+    struct OkIdReceiver;
+
+    impl IdentityReceiver for OkIdReceiver {
+        fn receive(&mut self) -> IdentityReceiverResult {
+            IdentityReceiverResult::Success(IdentityToken::generate())
+        }
+    }
+
+    #[derive(Clone)]
+    struct CountingSender {
+        sent: Arc<AtomicUsize>,
+    }
+
+    impl PacketSender for CountingSender {
+        fn send(&self, _payload: &[u8]) -> Result<(), SendError> {
+            self.sent.fetch_add(1, Ordering::SeqCst);
+            Ok(())
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    #[derive(Clone)]
+    struct EmptyReceiver;
+
+    impl PacketReceiver for EmptyReceiver {
+        fn receive(&mut self) -> Result<Option<&[u8]>, RecvError> {
+            Ok(None)
+        }
+
+        fn server_addr(&self) -> ServerAddr {
+            dummy_server()
+        }
+    }
+
+    fn idle_client() -> Client<u64> {
+        Client::<u64>::new(ClientConfig::default(), Protocol::builder().build())
+    }
+
+    fn loading_client(sender: CountingSender) -> Client<u64> {
+        let mut client = idle_client();
+        client.io.load(
+            Box::new(OkIdReceiver),
+            Box::new(sender),
+            Box::new(EmptyReceiver),
+        );
+        client
+    }
+
+    /// A client with an established connection, without a live server: the
+    /// connection is built exactly the way `maintain_handshake` builds it on
+    /// `HandshakeResult::Connected`, with pristine (zero-sample) timing.
+    fn connected_client() -> (Client<u64>, Arc<AtomicUsize>) {
+        let sent = Arc::new(AtomicUsize::new(0));
+        let mut client = loading_client(CountingSender { sent: sent.clone() });
+        client
+            .handshake_manager
+            .set_identity_token(IdentityToken::generate());
+        let time_manager = TimeManager::from_parts(
+            Duration::from_millis(100),
+            BaseTimeManager::new(),
+            0,
+            GameInstant::new(&Instant::now()),
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+        );
+        client.server_connection = Some(Connection::new(
+            &client.client_config.connection,
+            &client.protocol.channel_kinds,
+            time_manager,
+            &client.global_world_manager,
+            client.client_config.jitter_buffer,
+            &client.protocol.component_kinds,
+        ));
+        (client, sent)
+    }
+
+    #[test]
+    #[should_panic(expected = "not connected yet")]
+    fn disconnect_panics_when_not_connected() {
+        let mut client = idle_client();
+        client.disconnect();
+    }
+
+    #[test]
+    fn cancel_connect_on_idle_stays_disconnected() {
+        let mut client = idle_client();
+        assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+        client.cancel_connect();
+        assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+    }
+
+    #[test]
+    fn cancel_connect_abandons_pending_handshake() {
+        let sent = Arc::new(AtomicUsize::new(0));
+        let mut client = loading_client(CountingSender { sent: sent.clone() });
+        assert_eq!(client.connection_status(), ConnectionStatus::Connecting);
+        client.cancel_connect();
+        assert_eq!(client.connection_status(), ConnectionStatus::Disconnected);
+        // Abandoning sends nothing: teardown of an unestablished attempt is
+        // silent (no graceful-disconnect packets for a connection that never
+        // existed).
+        assert_eq!(sent.load(Ordering::SeqCst), 0);
+    }
+
+    #[test]
+    fn cancel_connect_leaves_live_connection_alone() {
+        let (mut client, _sent) = connected_client();
+        assert_eq!(client.connection_status(), ConnectionStatus::Connected);
+        client.cancel_connect();
+        assert_eq!(client.connection_status(), ConnectionStatus::Connected);
+        assert!(client.server_connection.is_some());
+    }
+
+    #[test]
+    fn disconnect_sends_ten_packets_then_disconnecting() {
+        let (mut client, sent) = connected_client();
+        client.disconnect();
+        assert_eq!(
+            sent.load(Ordering::SeqCst),
+            10,
+            "graceful disconnect must emit exactly 10 packets",
+        );
+        assert_eq!(client.connection_status(), ConnectionStatus::Disconnecting);
+    }
+
+    #[test]
+    fn server_named_reason_wins_over_local_flags() {
+        // naia-lib/naia#10: a server-initiated disconnect names its own
+        // reason; falling back to ClientDisconnected would tell the client
+        // it hung up on itself — even when the manual flag is also set.
+        let payload = Some(vec![7u8; 4]);
+        let (reason, out_payload) = Client::<u64>::resolve_disconnect_reason(
+            Some((DisconnectReason::Kicked, payload.clone())),
+            true,
+            true,
+        );
+        assert_eq!(reason, DisconnectReason::Kicked);
+        assert_eq!(out_payload, payload);
+    }
+
+    #[test]
+    fn manual_disconnect_maps_to_client_disconnected() {
+        let (reason, payload) = Client::<u64>::resolve_disconnect_reason(None, true, false);
+        assert_eq!(reason, DisconnectReason::ClientDisconnected);
+        assert!(payload.is_none());
+    }
+
+    #[test]
+    fn server_disconnect_flag_maps_to_client_disconnected() {
+        let (reason, payload) = Client::<u64>::resolve_disconnect_reason(None, false, true);
+        assert_eq!(reason, DisconnectReason::ClientDisconnected);
+        assert!(payload.is_none());
+    }
+
+    #[test]
+    fn bare_connection_drop_maps_to_timed_out() {
+        let (reason, payload) = Client::<u64>::resolve_disconnect_reason(None, false, false);
+        assert_eq!(reason, DisconnectReason::TimedOut);
+        assert!(payload.is_none());
     }
 }
