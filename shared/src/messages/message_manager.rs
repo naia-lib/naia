@@ -36,11 +36,14 @@ use crate::{
         entity::entity_converters::LocalEntityAndGlobalEntityConverterMut,
         remote::remote_entity_waitlist::RemoteEntityWaitlist,
     },
-    LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable,
+    ConnectionRequestNonce, LocalEntityAndGlobalEntityConverter, MessageKinds, PacketNotifiable,
 };
 
 type RequestsAndResponsesOut = (
-    Vec<(ChannelKind, Vec<(LocalResponseId, MessageContainer)>)>,
+    Vec<(
+        ChannelKind,
+        Vec<(LocalResponseId, ConnectionRequestNonce, MessageContainer)>,
+    )>,
     Vec<(GlobalRequestId, MessageContainer)>,
 );
 
@@ -250,6 +253,9 @@ impl MessageManager {
 
     /// Queues a request with `global_request_id` into the given channel's send buffer.
     ///
+    /// H3: `nonce` names the exchange on the wire (envelope cutover, codec
+    /// grammar 2) and keys the transport's (local id, nonce) match.
+    ///
     /// Returns `false` if the channel refused it (reliable queue-depth cap
     /// reached); nothing was enqueued and the caller must retry later.
     pub fn send_request(
@@ -258,15 +264,19 @@ impl MessageManager {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
         global_request_id: GlobalRequestId,
+        nonce: ConnectionRequestNonce,
         request: MessageContainer,
     ) -> bool {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
-        channel.send_outgoing_request(message_kinds, converter, global_request_id, request)
+        channel.send_outgoing_request(message_kinds, converter, global_request_id, nonce, request)
     }
 
     /// Queues a response keyed by `local_response_id` into the given channel's send buffer.
+    ///
+    /// H3: `nonce` echoes the incoming request's wire nonce, so the
+    /// requester's transport resolves by (local id, nonce).
     ///
     /// Returns `false` if the channel refused it (reliable queue-depth cap
     /// reached); nothing was enqueued and the caller must retry later.
@@ -276,12 +286,13 @@ impl MessageManager {
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         channel_kind: &ChannelKind,
         local_response_id: LocalResponseId,
+        nonce: ConnectionRequestNonce,
         response: MessageContainer,
     ) -> bool {
         let Some(channel) = self.channel_senders.get_mut(channel_kind) else {
             panic!("Channel not configured correctly! Cannot send message.");
         };
-        channel.send_outgoing_response(message_kinds, converter, local_response_id, response)
+        channel.send_outgoing_response(message_kinds, converter, local_response_id, nonce, response)
     }
 
     /// Advances all channel senders, re-queuing any messages due for retransmission given current RTT.
@@ -450,15 +461,17 @@ impl MessageManager {
                         channel_kind
                     );
                 };
-                for (local_request_id, response) in responses {
+                for (local_request_id, wire_nonce, response) in responses {
                     // The id this response claims to answer is read off the
                     // wire. A peer can answer a request that was never made, or
                     // answer the same one twice, so an id with no outstanding
                     // request is malformed input rather than a local invariant.
                     // `LocalRequestId` is a single byte, so the whole space is
-                    // trivially reachable by a hostile peer.
+                    // trivially reachable by a hostile peer. H3: the wire nonce
+                    // must also name the outstanding exchange, or the packet
+                    // drops without touching the mapping.
                     let Some(global_request_id) =
-                        channel_sender.process_incoming_response(&local_request_id)
+                        channel_sender.process_incoming_response(&local_request_id, wire_nonce)
                     else {
                         warn!(
                             "dropping a response on channel {:?} that answers no outstanding request",
@@ -529,7 +542,11 @@ mod unsolicited_response_tests {
     /// outstanding request, standing in for a peer that made one up. The id is
     /// a single byte on the wire, so every value is reachable.
     struct UnsolicitedResponseReceiver {
-        response: Option<(crate::LocalRequestId, MessageContainer)>,
+        response: Option<(
+            crate::LocalRequestId,
+            crate::ConnectionRequestNonce,
+            MessageContainer,
+        )>,
     }
 
     impl ChannelReceiver<MessageContainer> for UnsolicitedResponseReceiver {
@@ -590,7 +607,11 @@ mod unsolicited_response_tests {
         manager.channel_receivers.insert(
             channel_kind,
             Box::new(UnsolicitedResponseReceiver {
-                response: Some((bogus_id, filler_message())),
+                response: Some((
+                    bogus_id,
+                    crate::ConnectionRequestNonce::from_wire(0x2a),
+                    filler_message(),
+                )),
             }),
         );
 
@@ -1588,6 +1609,7 @@ mod message_manager_tests {
                 &mut FakeEntityConverter,
                 &channel,
                 GlobalRequestId::new(0),
+                crate::ConnectionRequestNonce::from_wire(0),
                 ping(1),
             ),
             "the first request fits the one-deep queue"
@@ -1598,6 +1620,7 @@ mod message_manager_tests {
                 &mut FakeEntityConverter,
                 &channel,
                 GlobalRequestId::new(1),
+                crate::ConnectionRequestNonce::from_wire(1),
                 ping(2),
             ),
             "the second must be refused, not silently swallowed"
@@ -1623,6 +1646,7 @@ mod message_manager_tests {
             &mut FakeEntityConverter,
             &channel,
             GlobalRequestId::new(7),
+            crate::ConnectionRequestNonce::from_wire(7),
             ping(1),
         ));
         deliver(&mut client, &mut server, &kinds, &messages);
@@ -1633,11 +1657,16 @@ mod message_manager_tests {
         let (request_channel, mut on_channel) = requests.into_iter().next().unwrap();
         assert_eq!(request_channel, channel);
         assert_eq!(on_channel.len(), 1);
-        let (response_id, request) = on_channel.remove(0);
+        let (response_id, request_nonce, request) = on_channel.remove(0);
         assert_eq!(
             request.to_boxed_any().downcast::<Ping>().unwrap().0,
             1,
             "and it must carry the payload that was sent"
+        );
+        assert_eq!(
+            request_nonce,
+            crate::ConnectionRequestNonce::from_wire(7),
+            "the request must carry the wire nonce the response echoes"
         );
 
         assert!(server.send_response(
@@ -1645,6 +1674,7 @@ mod message_manager_tests {
             &mut FakeEntityConverter,
             &channel,
             response_id,
+            request_nonce,
             ping(2),
         ));
         deliver(&mut server, &mut client, &kinds, &messages);
@@ -1683,6 +1713,7 @@ mod message_manager_tests {
                 &mut FakeEntityConverter,
                 &channel,
                 LocalRequestId::from(0u16).receive_from_remote(),
+                crate::ConnectionRequestNonce::from_wire(0),
                 ping(1),
             ),
             "the first response fits the one-deep queue"
@@ -1693,6 +1724,7 @@ mod message_manager_tests {
                 &mut FakeEntityConverter,
                 &channel,
                 LocalRequestId::from(1u16).receive_from_remote(),
+                crate::ConnectionRequestNonce::from_wire(1),
                 ping(2),
             ),
             "the second must be refused, not silently swallowed"

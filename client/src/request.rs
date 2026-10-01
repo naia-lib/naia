@@ -70,8 +70,11 @@ impl GlobalRequestManager {
     ///
     /// H3: nonce exhaustion is an error the caller handles by retiring the
     /// connection, never by aliasing a live nonce — so this fails rather
-    /// than wrapping.
-    pub(crate) fn create_request_id(&mut self) -> Result<GlobalRequestId, NonceExhaustion> {
+    /// than wrapping. The nonce is handed back alongside the id so the
+    /// caller can name the exchange on the wire (envelope cutover).
+    pub(crate) fn create_request_id(
+        &mut self,
+    ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
         let nonce = self.nonces.next()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
@@ -84,7 +87,7 @@ impl GlobalRequestManager {
             },
         );
 
-        Ok(id)
+        Ok((id, nonce))
     }
 
     /// Check if a response is available for the given request ID (non-destructive)
@@ -161,7 +164,10 @@ const MAX_OUTSTANDING_RESPONSES: usize = 4096;
 
 // GlobalResponseManager
 pub struct GlobalResponseManager {
-    map: HashMap<GlobalResponseId, (ChannelKind, LocalResponseId)>,
+    /// H3: the routing keeps the incoming request's wire nonce, so
+    /// `send_response` echoes it and the requester resolves by
+    /// (local id, nonce).
+    map: HashMap<GlobalResponseId, (ChannelKind, LocalResponseId, ConnectionRequestNonce)>,
     /// Insertion order, used to evict oldest-first at the cap. Ids here may
     /// already have been answered and removed from the map; they are skipped when
     /// encountered rather than eagerly purged.
@@ -188,11 +194,13 @@ impl GlobalResponseManager {
         &mut self,
         channel_kind: &ChannelKind,
         local_response_id: &LocalResponseId,
+        nonce: ConnectionRequestNonce,
     ) -> GlobalResponseId {
         let id = GlobalResponseId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
-        self.map.insert(id, (*channel_kind, *local_response_id));
+        self.map
+            .insert(id, (*channel_kind, *local_response_id, nonce));
         self.order.push_back(id);
 
         // Discard ids the application has already answered, so they do not count
@@ -229,14 +237,14 @@ impl GlobalResponseManager {
     pub(crate) fn peek_response_id(
         &self,
         global_response_id: &GlobalResponseId,
-    ) -> Option<(ChannelKind, LocalResponseId)> {
+    ) -> Option<(ChannelKind, LocalResponseId, ConnectionRequestNonce)> {
         self.map.get(global_response_id).cloned()
     }
 
     pub(crate) fn destroy_response_id(
         &mut self,
         global_response_id: &GlobalResponseId,
-    ) -> Option<(ChannelKind, LocalResponseId)> {
+    ) -> Option<(ChannelKind, LocalResponseId, ConnectionRequestNonce)> {
         self.map.remove(global_response_id)
     }
 }
@@ -262,7 +270,11 @@ mod tests {
         let mut manager = GlobalResponseManager::new();
 
         for i in 0..(MAX_OUTSTANDING_RESPONSES as u16 * 8) {
-            manager.create_response_id(&channel(), &response_id(i));
+            manager.create_response_id(
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
         }
 
         assert_eq!(manager.outstanding(), MAX_OUTSTANDING_RESPONSES);
@@ -275,9 +287,17 @@ mod tests {
     fn the_oldest_unanswered_request_is_the_one_dropped() {
         let mut manager = GlobalResponseManager::new();
 
-        let oldest = manager.create_response_id(&channel(), &response_id(0));
+        let oldest = manager.create_response_id(
+            &channel(),
+            &response_id(0),
+            ConnectionRequestNonce::from_wire(0),
+        );
         for i in 1..=(MAX_OUTSTANDING_RESPONSES as u16) {
-            manager.create_response_id(&channel(), &response_id(i));
+            manager.create_response_id(
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
         }
 
         assert!(manager.peek_response_id(&oldest).is_none());
@@ -290,7 +310,11 @@ mod tests {
         let mut manager = GlobalResponseManager::new();
 
         for i in 0..(MAX_OUTSTANDING_RESPONSES as u16 * 8) {
-            let id = manager.create_response_id(&channel(), &response_id(i));
+            let id = manager.create_response_id(
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
             manager.destroy_response_id(&id);
         }
 
@@ -319,7 +343,7 @@ mod tests {
     #[test]
     fn local_guest_abandonment_cancel_removes_slot_and_names_nonce() {
         let mut manager = request_manager();
-        let id = manager.create_request_id().expect("capacity remains");
+        let (id, _) = manager.create_request_id().expect("capacity remains");
         assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
 
         let disposition = manager.cancel_request(&id);
@@ -334,7 +358,7 @@ mod tests {
     #[test]
     fn local_guest_abandonment_second_cancel_is_unknown_key() {
         let mut manager = request_manager();
-        let id = manager.create_request_id().expect("capacity remains");
+        let (id, _) = manager.create_request_id().expect("capacity remains");
         assert!(matches!(
             manager.cancel_request(&id),
             CancelDisposition::Cancelled { .. }
@@ -345,7 +369,7 @@ mod tests {
     #[test]
     fn local_guest_abandonment_poll_pending_then_ready() {
         let mut manager = request_manager();
-        let id = manager.create_request_id().expect("capacity remains");
+        let (id, _) = manager.create_request_id().expect("capacity remains");
         assert_eq!(manager.poll_slot(&id), SlotPoll::Pending);
 
         manager.receive_response(&id, probe_container());
@@ -355,7 +379,7 @@ mod tests {
     #[test]
     fn local_guest_abandonment_late_response_after_cancel_drops() {
         let mut manager = request_manager();
-        let id = manager.create_request_id().expect("capacity remains");
+        let (id, _) = manager.create_request_id().expect("capacity remains");
         manager.cancel_request(&id);
 
         manager.receive_response(&id, probe_container());
@@ -366,11 +390,25 @@ mod tests {
     #[test]
     fn local_guest_abandonment_exhaustion_is_checked() {
         let mut manager = GlobalRequestManager::with_nonce_start(u64::MAX);
-        let last = manager.create_request_id().expect("u64::MAX allocatable");
+        let (last, _) = manager.create_request_id().expect("u64::MAX allocatable");
         assert!(manager.create_request_id().is_err());
         // No wrap: the failed create allocated nothing.
         assert_eq!(manager.outstanding(), 1);
         assert_eq!(manager.poll_slot(&last), SlotPoll::Pending);
+    }
+
+    /// H3 envelope cutover: the response routing keeps the incoming
+    /// request's wire nonce, so `send_response` echoes the nonce the
+    /// requester resolves on. A routing that dropped it would answer with
+    /// a nonce no outstanding exchange names.
+    #[test]
+    fn response_routing_keeps_the_wire_nonce() {
+        let mut manager = GlobalResponseManager::new();
+        let nonce = ConnectionRequestNonce::from_wire(41);
+        let id = manager.create_response_id(&channel(), &response_id(3), nonce);
+
+        let (_, _, kept) = manager.peek_response_id(&id).expect("a live routing peeks");
+        assert_eq!(kept, nonce);
     }
 
     #[test]
@@ -378,7 +416,8 @@ mod tests {
         let mut manager = request_manager();
         let mut ids = Vec::new();
         for _ in 0..64 {
-            ids.push(manager.create_request_id().expect("capacity remains"));
+            let (id, _) = manager.create_request_id().expect("capacity remains");
+            ids.push(id);
         }
         for (i, id) in ids.iter().enumerate() {
             if i % 2 == 0 {

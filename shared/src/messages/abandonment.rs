@@ -9,13 +9,16 @@
 
 use std::fmt::{self, Debug, Display, Formatter};
 
+use naia_serde::SerdeInternal;
+
 /// Identifies one request/response exchange on a live connection.
 ///
 /// Constructible only by [`NonceAllocator`] (or from the wire, once the H3
 /// envelope cutover lands): application code can name a nonce it was given,
 /// never mint one. `Copy` so routing tables can key on it freely; equality
-/// is the raw value.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+/// is the raw value. `SerdeInternal` so the `RequestOrResponse` envelope
+/// can carry it on the wire (H3 cutover, codec grammar 2).
+#[derive(Clone, Copy, Eq, Hash, PartialEq, SerdeInternal)]
 pub struct ConnectionRequestNonce {
     value: u64,
 }

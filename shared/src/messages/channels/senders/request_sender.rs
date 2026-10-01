@@ -3,13 +3,21 @@ use std::{collections::HashMap, time::Duration};
 use naia_derive::MessageRequest;
 use naia_serde::{SerdeInternal, VecBitWriter};
 
+use crate::messages::abandonment::ConnectionRequestNonce;
 use crate::messages::request::GlobalRequestId;
 use crate::{KeyGenerator, LocalEntityAndGlobalEntityConverterMut, MessageContainer, MessageKinds};
 
 /// Manages the lifecycle of outgoing requests and their local-to-global ID mapping.
+///
+/// H3: every outstanding exchange is additionally keyed by its
+/// [`ConnectionRequestNonce`]. A response resolves only when its wire
+/// (local id, nonce) pair names the outstanding exchange; anything else —
+/// stale duplicate, recycled-id alias, hostile packet — drops without
+/// touching the mapping.
 pub struct RequestSender {
     local_key_generator: KeyGenerator<LocalRequestId>,
     local_to_global_ids: HashMap<LocalRequestId, GlobalRequestId>,
+    local_to_nonce: HashMap<LocalRequestId, ConnectionRequestNonce>,
 }
 
 impl RequestSender {
@@ -18,6 +26,7 @@ impl RequestSender {
         Self {
             local_key_generator: KeyGenerator::new(Duration::from_secs(60)),
             local_to_global_ids: HashMap::new(),
+            local_to_nonce: HashMap::new(),
         }
     }
 
@@ -26,16 +35,18 @@ impl RequestSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
+        nonce: ConnectionRequestNonce,
         request: MessageContainer,
     ) -> MessageContainer {
         let local_request_id = self.local_key_generator.generate();
         self.local_to_global_ids
             .insert(local_request_id, global_request_id);
+        self.local_to_nonce.insert(local_request_id, nonce);
 
         let mut writer = VecBitWriter::new();
         request.write(message_kinds, &mut writer, converter);
         let request_bytes = writer.to_bytes();
-        let request_message = RequestOrResponse::request(local_request_id, request_bytes);
+        let request_message = RequestOrResponse::request(local_request_id, nonce, request_bytes);
         MessageContainer::new(Box::new(request_message))
     }
 
@@ -44,51 +55,74 @@ impl RequestSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         local_response_id: LocalResponseId,
+        nonce: ConnectionRequestNonce,
         response: MessageContainer,
     ) -> MessageContainer {
         let mut writer = VecBitWriter::new();
         response.write(message_kinds, &mut writer, converter);
         let response_bytes = writer.to_bytes();
-        let response_message = RequestOrResponse::response(local_response_id, response_bytes);
+        let response_message =
+            RequestOrResponse::response(local_response_id, nonce, response_bytes);
         MessageContainer::new(Box::new(response_message))
     }
 
     pub(crate) fn process_incoming_response(
         &mut self,
         local_request_id: &LocalRequestId,
+        wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
-        self.local_key_generator.recycle_key(local_request_id);
-        self.local_to_global_ids.remove(local_request_id)
+        // Both halves must name the outstanding exchange. A foreign nonce
+        // recycles nothing: the exchange stays live so the real response
+        // still resolves, and the packet drops on the unknown-id path.
+        match (
+            self.local_to_global_ids.get(local_request_id),
+            self.local_to_nonce.get(local_request_id),
+        ) {
+            (Some(global), Some(recorded)) if *recorded == wire_nonce => {
+                let global = *global;
+                self.local_key_generator.recycle_key(local_request_id);
+                self.local_to_global_ids.remove(local_request_id);
+                self.local_to_nonce.remove(local_request_id);
+                Some(global)
+            }
+            _ => None,
+        }
     }
 }
 
-/// Wire envelope that carries either a request or a response payload with its local correlation ID.
+/// Wire envelope that carries either a request or a response payload with
+/// its local correlation ID and its H3 [`ConnectionRequestNonce`].
 #[derive(MessageRequest)]
 pub struct RequestOrResponse {
     id: LocalRequestOrResponseId,
+    nonce: ConnectionRequestNonce,
     bytes: Box<[u8]>,
 }
 
 impl RequestOrResponse {
-    /// Wraps `bytes` as a request tagged with `id`.
-    pub fn request(id: LocalRequestId, bytes: Box<[u8]>) -> Self {
+    /// Wraps `bytes` as a request tagged with `id` and `nonce`.
+    pub fn request(id: LocalRequestId, nonce: ConnectionRequestNonce, bytes: Box<[u8]>) -> Self {
         Self {
             id: id.to_req_res_id(),
+            nonce,
             bytes,
         }
     }
 
-    /// Wraps `bytes` as a response tagged with `id`.
-    pub fn response(id: LocalResponseId, bytes: Box<[u8]>) -> Self {
+    /// Wraps `bytes` as a response tagged with `id` and `nonce`.
+    pub fn response(id: LocalResponseId, nonce: ConnectionRequestNonce, bytes: Box<[u8]>) -> Self {
         Self {
             id: id.to_req_res_id(),
+            nonce,
             bytes,
         }
     }
 
     #[allow(clippy::wrong_self_convention)]
-    pub(crate) fn to_id_and_bytes(self) -> (LocalRequestOrResponseId, Box<[u8]>) {
-        (self.id, self.bytes)
+    pub(crate) fn to_id_and_bytes(
+        self,
+    ) -> (LocalRequestOrResponseId, ConnectionRequestNonce, Box<[u8]>) {
+        (self.id, self.nonce, self.bytes)
     }
 }
 
@@ -192,5 +226,117 @@ impl LocalResponseId {
     #[cfg(test)]
     pub(crate) fn from_raw(id: u8) -> Self {
         Self { id }
+    }
+}
+
+#[cfg(test)]
+mod request_sender_tests {
+    //! H3 envelope cutover pins: the `ConnectionRequestNonce` rides the
+    //! `RequestOrResponse` envelope in both directions, and the transport
+    //! matches responses by (local id, nonce) — a wire nonce that does not
+    //! name the outstanding exchange drops instead of resolving.
+
+    use super::*;
+    use crate::messages::abandonment::ConnectionRequestNonce;
+    use crate::{
+        messages::request::GlobalRequestId, FakeEntityConverter, Message, MessageContainer,
+        MessageKinds,
+    };
+
+    #[derive(Message)]
+    struct ProbeRequest {
+        value: u8,
+    }
+
+    fn kinds() -> MessageKinds {
+        let mut kinds = MessageKinds::new();
+        kinds.add_message::<ProbeRequest>();
+        kinds
+    }
+
+    fn probe_container() -> MessageContainer {
+        MessageContainer::new(Box::new(ProbeRequest { value: 3 }))
+    }
+
+    fn envelope_of(container: MessageContainer) -> RequestOrResponse {
+        *container
+            .to_boxed_any()
+            .downcast::<RequestOrResponse>()
+            .expect("request sender wraps payloads in the envelope")
+    }
+
+    #[test]
+    fn outgoing_request_envelope_carries_its_nonce() {
+        let mut sender = RequestSender::new();
+        let mut converter = FakeEntityConverter;
+        let nonce = ConnectionRequestNonce::from_wire(7);
+
+        let wrapped = sender.process_outgoing_request(
+            &kinds(),
+            &mut converter,
+            GlobalRequestId::new(11),
+            nonce,
+            probe_container(),
+        );
+        let envelope = envelope_of(wrapped);
+        let (id, out_nonce, bytes) = envelope.to_id_and_bytes();
+
+        assert!(id.is_request());
+        assert_eq!(out_nonce, nonce);
+        assert!(!bytes.is_empty());
+    }
+
+    #[test]
+    fn incoming_response_resolves_only_on_id_and_nonce_match() {
+        let mut sender = RequestSender::new();
+        let mut converter = FakeEntityConverter;
+        let global_id = GlobalRequestId::new(11);
+        let nonce = ConnectionRequestNonce::from_wire(7);
+
+        let wrapped = sender.process_outgoing_request(
+            &kinds(),
+            &mut converter,
+            global_id,
+            nonce,
+            probe_container(),
+        );
+        let (local_id, _, _) = envelope_of(wrapped).to_id_and_bytes();
+        let local_request_id = local_id.to_request_id();
+
+        // Exact (id, nonce) match resolves to the global id.
+        assert_eq!(
+            sender.process_incoming_response(&local_request_id, nonce),
+            Some(global_id)
+        );
+    }
+
+    #[test]
+    fn incoming_response_with_foreign_nonce_drops() {
+        let mut sender = RequestSender::new();
+        let mut converter = FakeEntityConverter;
+        let nonce = ConnectionRequestNonce::from_wire(7);
+
+        let wrapped = sender.process_outgoing_request(
+            &kinds(),
+            &mut converter,
+            GlobalRequestId::new(11),
+            nonce,
+            probe_container(),
+        );
+        let (local_id, _, _) = envelope_of(wrapped).to_id_and_bytes();
+        let local_request_id = local_id.to_request_id();
+
+        // Same local id, wrong nonce: a stale or hostile packet that must
+        // not resolve the outstanding exchange.
+        assert_eq!(
+            sender
+                .process_incoming_response(&local_request_id, ConnectionRequestNonce::from_wire(8)),
+            None
+        );
+        // The outstanding exchange survives the drop and still resolves.
+        assert_eq!(
+            sender.process_incoming_response(&local_request_id, nonce),
+            Some(GlobalRequestId::new(11))
+        );
     }
 }

@@ -1794,19 +1794,24 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         }
 
         // Check first: allocating the id before this Err left a row with no
-        // request ever sent, unpurged until disconnect.
+        // request ever sent, unpurged until disconnect. H3: the nonce
+        // supply is checked — exhaustion retires the connection rather
+        // than aliasing a live nonce, and the nonce names the exchange on
+        // the wire (envelope cutover).
         self.require_live_send_connection(user_key, NaiaServerError::UserNotFound)?;
-        let request_id = self
+        let (request_id, nonce) = self
             .coord_mut()
             .state
             .global_request_manager
-            .create_request_id(user_key);
+            .create_request_id(user_key)
+            .map_err(|_| NaiaServerError::RequestNonceExhausted)?;
 
         self.coord_mut().state.pending_outbound_message_ops.push(
             PendingOutboundMessageOp::Request {
                 user_key: *user_key,
                 channel_kind,
                 request_id,
+                nonce,
                 message: MessageContainer::new(Q::clone_box(request)),
             },
         );
@@ -1840,8 +1845,9 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
         // Peek, don't consume: the routing is destroyed at DRAIN-accept, not
         // here. A refused send leaves the routing for retry (as does a
         // drain-time drop), mirroring the resident path, which destroys only
-        // when the channel accepts the bytes.
-        let Some((user_key, channel_kind, local_response_id)) = self
+        // when the channel accepts the bytes. H3: the kept wire nonce rides
+        // the op so the drain echoes it.
+        let Some((user_key, channel_kind, local_response_id, nonce)) = self
             .coord()
             .state
             .global_response_manager
@@ -1861,6 +1867,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                 user_key,
                 channel_kind,
                 local_response_id,
+                nonce,
                 response_id: response_key.response_id(),
                 message: MessageContainer::new(S::clone_box(response)),
             },
@@ -2598,6 +2605,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     user_key,
                     channel_kind,
                     request_id,
+                    nonce,
                     message,
                 } => {
                     let Some(user) = coord.state.user_store.get(&user_key) else {
@@ -2607,6 +2615,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         &user.address(),
                         &channel_kind,
                         request_id,
+                        nonce,
                         message,
                     );
                 }
@@ -2614,6 +2623,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                     user_key,
                     channel_kind,
                     local_response_id,
+                    nonce,
                     response_id,
                     message,
                 } => {
@@ -2636,6 +2646,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> PipelinedWorldServer<E> {
                         &user.address(),
                         &channel_kind,
                         local_response_id,
+                        nonce,
                         message,
                     );
                     // Resident parity: destroy only on acceptance. A refused

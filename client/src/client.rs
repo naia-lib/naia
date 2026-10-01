@@ -659,8 +659,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
 
         // H3: the nonce supply is checked — exhaustion retires the
         // connection rather than aliasing a live nonce, so a spent supply
-        // is a typed backpressure error, not a panic.
-        let request_id = connection
+        // is a typed backpressure error, not a panic. The nonce names the
+        // exchange on the wire (envelope cutover, codec grammar 2).
+        let (request_id, nonce) = connection
             .global_request_manager
             .create_request_id()
             .map_err(|_| NaiaClientError::RequestNonceExhausted)?;
@@ -670,6 +671,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut converter,
             channel_kind,
             request_id,
+            nonce,
             message,
         ) {
             // Queue-depth cap reached: nothing was enqueued. Report it rather than
@@ -709,8 +711,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             return false;
         };
         // Peek, don't consume: if the enqueue is refused below, the mapping must
-        // survive so the caller can retry with the same key.
-        let Some((channel_kind, local_response_id)) = connection
+        // survive so the caller can retry with the same key. H3: the kept
+        // wire nonce is echoed so the requester resolves by (id, nonce).
+        let Some((channel_kind, local_response_id, nonce)) = connection
             .global_response_manager
             .peek_response_id(response_id)
         else {
@@ -728,6 +731,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> Client<E> {
             &mut converter,
             &channel_kind,
             local_response_id,
+            nonce,
             response,
         );
         if accepted {

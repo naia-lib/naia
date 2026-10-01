@@ -27,13 +27,13 @@ use parking_lot::Mutex;
 use log::warn;
 
 use naia_shared::{
-    BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind, EntityAndGlobalEntityConverter,
-    EntityAuthStatus, GlobalEntity, GlobalEntityIndex, GlobalEntityMap, GlobalEntitySpawner,
-    GlobalPriorityState, GlobalRequestId, GlobalWorldManagerType, HostType, Instant,
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, Message, MessageContainer,
-    OutgoingPacket, OutgoingPriorityHook, OwnedBitReader, PacketType, Replicate, SendPlan,
-    SendUpdateEvents, Serde, SnapshotMap, Tick, Timer, UpdateKinds, UserPriorityState,
-    WorldMutType, WorldRefType,
+    BigMapKey, BitWriter, Channel, ChannelKind, ComponentKind, ConnectionRequestNonce,
+    EntityAndGlobalEntityConverter, EntityAuthStatus, GlobalEntity, GlobalEntityIndex,
+    GlobalEntityMap, GlobalEntitySpawner, GlobalPriorityState, GlobalRequestId,
+    GlobalWorldManagerType, HostType, Instant, LocalEntityAndGlobalEntityConverter,
+    LocalResponseId, Message, MessageContainer, OutgoingPacket, OutgoingPriorityHook,
+    OwnedBitReader, PacketType, Replicate, SendPlan, SendUpdateEvents, Serde, SnapshotMap, Tick,
+    Timer, UpdateKinds, UserPriorityState, WorldMutType, WorldRefType,
 };
 
 use crate::{
@@ -611,6 +611,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         address: &std::net::SocketAddr,
         channel_kind: &ChannelKind,
         global_request_id: GlobalRequestId,
+        nonce: ConnectionRequestNonce,
         request: MessageContainer,
     ) -> bool {
         let Some(send_conn) = self.send_user_connections.get_mut(address) else {
@@ -623,6 +624,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             &mut converter,
             channel_kind,
             global_request_id,
+            nonce,
             request,
         )
     }
@@ -634,6 +636,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         address: &std::net::SocketAddr,
         channel_kind: &ChannelKind,
         local_response_id: LocalResponseId,
+        nonce: ConnectionRequestNonce,
         response: MessageContainer,
     ) -> bool {
         let Some(send_conn) = self.send_user_connections.get_mut(address) else {
@@ -646,6 +649,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
             &mut converter,
             channel_kind,
             local_response_id,
+            nonce,
             response,
         )
     }

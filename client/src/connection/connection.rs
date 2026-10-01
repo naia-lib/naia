@@ -213,10 +213,12 @@ impl Connection {
             .receive_requests_and_responses();
         // Requests
         for (channel_kind, requests) in requests {
-            for (local_response_id, request) in requests {
-                let global_response_id = self
-                    .global_response_manager
-                    .create_response_id(&channel_kind, &local_response_id);
+            for (local_response_id, wire_nonce, request) in requests {
+                let global_response_id = self.global_response_manager.create_response_id(
+                    &channel_kind,
+                    &local_response_id,
+                    wire_nonce,
+                );
                 incoming_events.push_request(&channel_kind, global_response_id, request);
             }
         }

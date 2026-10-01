@@ -15,7 +15,7 @@ use crate::{
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
+    ConnectionRequestNonce, LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
 };
 
 pub struct SequencedUnreliableSender {
@@ -86,6 +86,7 @@ impl MessageChannelSender for SequencedUnreliableSender {
         _: &MessageKinds,
         _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         _: GlobalRequestId,
+        _: ConnectionRequestNonce,
         _: MessageContainer,
     ) -> bool {
         panic!("SequencedUnreliable channel does not support requests");
@@ -96,12 +97,17 @@ impl MessageChannelSender for SequencedUnreliableSender {
         _: &MessageKinds,
         _: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         _: LocalResponseId,
+        _: ConnectionRequestNonce,
         _: MessageContainer,
     ) -> bool {
         panic!("SequencedUnreliable channel does not support requests");
     }
 
-    fn process_incoming_response(&mut self, _: &LocalRequestId) -> Option<GlobalRequestId> {
+    fn process_incoming_response(
+        &mut self,
+        _: &LocalRequestId,
+        _: ConnectionRequestNonce,
+    ) -> Option<GlobalRequestId> {
         panic!("SequencedUnreliable channel does not support requests");
     }
 }
@@ -310,6 +316,7 @@ mod sequenced_unreliable_sender_tests {
             &kinds(),
             &mut FakeEntityConverter,
             GlobalRequestId::new(0),
+            crate::ConnectionRequestNonce::from_wire(0),
             tagged(1, 4),
         );
     }
@@ -322,6 +329,7 @@ mod sequenced_unreliable_sender_tests {
             &kinds(),
             &mut FakeEntityConverter,
             LocalRequestId::from(0).receive_from_remote(),
+            crate::ConnectionRequestNonce::from_wire(0),
             tagged(1, 4),
         );
     }
@@ -330,6 +338,9 @@ mod sequenced_unreliable_sender_tests {
     #[should_panic(expected = "does not support requests")]
     fn processing_a_response_is_a_programming_error() {
         let mut sender = SequencedUnreliableSender::new();
-        sender.process_incoming_response(&LocalRequestId::from(0));
+        sender.process_incoming_response(
+            &LocalRequestId::from(0),
+            crate::ConnectionRequestNonce::from_wire(0),
+        );
     }
 }

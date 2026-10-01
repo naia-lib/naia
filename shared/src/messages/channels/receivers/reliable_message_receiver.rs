@@ -19,7 +19,8 @@ use crate::{
     },
     types::MessageIndex,
     world::remote::remote_entity_waitlist::{RemoteEntityWaitlist, WaitlistStore},
-    LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer, RequestOrResponse,
+    ConnectionRequestNonce, LocalEntityAndGlobalEntityConverter, LocalResponseId, MessageContainer,
+    RequestOrResponse,
 };
 
 // Receiver Arranger Trait
@@ -39,8 +40,8 @@ pub struct ReliableMessageReceiver<A: ReceiverArranger> {
     arranger: A,
     fragment_receiver: FragmentReceiver,
     waitlist_store: WaitlistStore<(MessageIndex, MessageIndex, MessageContainer)>,
-    incoming_requests: Vec<(LocalResponseId, MessageContainer)>,
-    incoming_responses: Vec<(LocalRequestId, MessageContainer)>,
+    incoming_requests: Vec<(LocalResponseId, ConnectionRequestNonce, MessageContainer)>,
+    incoming_responses: Vec<(LocalRequestId, ConnectionRequestNonce, MessageContainer)>,
 }
 
 impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
@@ -148,7 +149,8 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 .to_boxed_any()
                 .downcast::<RequestOrResponse>()
                 .unwrap();
-            let (local_id, request_bytes) = request_or_response_container.to_id_and_bytes();
+            let (local_id, wire_nonce, request_bytes) =
+                request_or_response_container.to_id_and_bytes();
             let mut reader = BitReader::new(&request_bytes);
             let request_or_response = match message_kinds.read(&mut reader, converter) {
                 Ok(msg) => msg,
@@ -164,17 +166,21 @@ impl<A: ReceiverArranger> ReliableMessageReceiver<A> {
                 }
             };
 
-            // add it to incoming requests or responses
+            // add it to incoming requests or responses, keeping the wire
+            // nonce: the response path echoes it, and the request path
+            // resolves on (local id, nonce).
             match local_id {
                 LocalRequestOrResponseId::Request(local_request_id) => {
                     let request = request_or_response;
                     let local_response_id = local_request_id.receive_from_remote();
-                    self.incoming_requests.push((local_response_id, request));
+                    self.incoming_requests
+                        .push((local_response_id, wire_nonce, request));
                 }
                 LocalRequestOrResponseId::Response(local_response_id) => {
                     let response = request_or_response;
                     let local_request_id = local_response_id.receive_from_remote();
-                    self.incoming_responses.push((local_request_id, response));
+                    self.incoming_responses
+                        .push((local_request_id, wire_nonce, response));
                 }
             }
         } else {

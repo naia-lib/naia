@@ -8,12 +8,14 @@ use crate::{
         message_kinds::MessageKinds,
     },
     world::remote::remote_entity_waitlist::RemoteEntityWaitlist,
-    LocalEntityAndGlobalEntityConverter, LocalResponseId,
+    ConnectionRequestNonce, LocalEntityAndGlobalEntityConverter, LocalResponseId,
 };
 
+/// H3: every entry carries the wire [`ConnectionRequestNonce`] naming the
+/// exchange, so responses echo it and resolve by (local id, nonce).
 pub type RequestsAndResponses = (
-    Vec<(LocalResponseId, MessageContainer)>,
-    Vec<(LocalRequestId, MessageContainer)>,
+    Vec<(LocalResponseId, ConnectionRequestNonce, MessageContainer)>,
+    Vec<(LocalRequestId, ConnectionRequestNonce, MessageContainer)>,
 );
 
 /// Trait implemented by all channel receivers that surface typed payloads.

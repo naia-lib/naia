@@ -27,6 +27,10 @@ pub enum NaiaServerError {
     /// queued. The caller may retry on the next tick or discard the message.
     /// Configure [`ReliableSettings::max_queue_depth`] to adjust the limit.
     MessageQueueFull,
+    /// The connection's request nonce supply is spent. No further request
+    /// may start on it: retire the connection. A fresh connection starts a
+    /// fresh supply. Never resolved by reusing a live nonce.
+    RequestNonceExhausted,
 }
 
 impl NaiaServerError {
@@ -52,6 +56,9 @@ impl fmt::Display for NaiaServerError {
             }
             NaiaServerError::MessageQueueFull => {
                 write!(f, "Naia Server Error: MessageQueueFull")
+            }
+            NaiaServerError::RequestNonceExhausted => {
+                write!(f, "Naia Server Error: RequestNonceExhausted")
             }
         }
     }

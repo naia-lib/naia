@@ -668,7 +668,12 @@ fn put_compression_mode(out: &mut Vec<u8>, mode: Option<&CompressionMode>) {
 /// This is a property of the naia implementation, not of any application
 /// protocol. Bump it when the encoding changes; never expose it to consumers
 /// as a per-message or per-application version.
-pub const CODEC_GRAMMAR_VERSION: u32 = 1;
+///
+/// H3 envelope cutover (Usher 37609): 2, because the `RequestOrResponse`
+/// envelope carries a `ConnectionRequestNonce`. Old (grammar-1) peers
+/// compute a different `ProtocolId` and are refused at the handshake — no
+/// mixed-version fallback.
+pub const CODEC_GRAMMAR_VERSION: u32 = 2;
 
 /// Fold a length-prefixed byte string into the preimage.
 ///
@@ -1591,7 +1596,11 @@ mod protocol_tests {
     /// no per-message version and no application-settable epoch.
     #[test]
     fn the_codec_grammar_constant_is_protocol_wide_and_not_application_settable() {
-        assert_eq!(super::CODEC_GRAMMAR_VERSION, 1);
+        // H3 envelope cutover: the RequestOrResponse envelope carries a
+        // ConnectionRequestNonce, so the grammar is 2. An old (grammar-1)
+        // peer computes a different ProtocolId and is refused at the
+        // handshake — no mixed-version fallback.
+        assert_eq!(super::CODEC_GRAMMAR_VERSION, 2);
 
         // Nothing a builder can call changes it: two protocols with identical
         // registrations agree regardless of how they were configured.

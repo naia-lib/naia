@@ -1,6 +1,7 @@
 use naia_serde::BitWriter;
 use naia_socket_shared::Instant;
 
+use crate::messages::abandonment::ConnectionRequestNonce;
 use crate::messages::channels::senders::request_sender::LocalRequestId;
 use crate::messages::request::GlobalRequestId;
 use crate::{
@@ -35,27 +36,37 @@ pub trait MessageChannelSender: ChannelSender<MessageContainer> {
         has_written: &mut bool,
     ) -> Option<Vec<MessageIndex>>;
 
-    /// Queues a Request to be transmitted to the remote host into an internal buffer
+    /// Queues a Request to be transmitted to the remote host into an internal buffer.
+    ///
+    /// H3: `nonce` names the exchange on the wire (envelope cutover,
+    /// codec grammar 2).
     fn send_outgoing_request(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
+        nonce: ConnectionRequestNonce,
         request: MessageContainer,
     ) -> bool;
 
-    /// Queues a Response to be transmitted to the remote host into an internal buffer
+    /// Queues a Response to be transmitted to the remote host into an internal buffer.
+    ///
+    /// H3: `nonce` echoes the incoming request's nonce on the wire.
     fn send_outgoing_response(
         &mut self,
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         local_response_id: LocalResponseId,
+        nonce: ConnectionRequestNonce,
         response: MessageContainer,
     ) -> bool;
 
-    /// Request is finished, so clean up the local request id and return the global request id
+    /// Request is finished, so clean up the local request id and return the global request id.
+    ///
+    /// H3: resolves only when `wire_nonce` names the outstanding exchange.
     fn process_incoming_response(
         &mut self,
         local_request_id: &LocalRequestId,
+        wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId>;
 }

@@ -15,7 +15,8 @@ use crate::{
         message_kinds::MessageKinds,
     },
     types::MessageIndex,
-    LocalEntityAndGlobalEntityConverterMut, LocalResponseId, ReliableSender,
+    ConnectionRequestNonce, LocalEntityAndGlobalEntityConverterMut, LocalResponseId,
+    ReliableSender,
 };
 
 // Sender
@@ -116,12 +117,14 @@ impl MessageChannelSender for ReliableMessageSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         global_request_id: GlobalRequestId,
+        nonce: ConnectionRequestNonce,
         request: MessageContainer,
     ) -> bool {
         let processed = self.request_sender.process_outgoing_request(
             message_kinds,
             converter,
             global_request_id,
+            nonce,
             request,
         );
         self.send_or_fragment(message_kinds, converter, processed)
@@ -132,12 +135,14 @@ impl MessageChannelSender for ReliableMessageSender {
         message_kinds: &MessageKinds,
         converter: &mut dyn LocalEntityAndGlobalEntityConverterMut,
         local_response_id: LocalResponseId,
+        nonce: ConnectionRequestNonce,
         response: MessageContainer,
     ) -> bool {
         let processed = self.request_sender.process_outgoing_response(
             message_kinds,
             converter,
             local_response_id,
+            nonce,
             response,
         );
         self.send_or_fragment(message_kinds, converter, processed)
@@ -146,8 +151,9 @@ impl MessageChannelSender for ReliableMessageSender {
     fn process_incoming_response(
         &mut self,
         local_request_id: &LocalRequestId,
+        wire_nonce: ConnectionRequestNonce,
     ) -> Option<GlobalRequestId> {
         self.request_sender
-            .process_incoming_response(local_request_id)
+            .process_incoming_response(local_request_id, wire_nonce)
     }
 }

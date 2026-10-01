@@ -890,11 +890,15 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
 
         // The queue call embeds the id in the fragments it enqueues, so it
         // must be allocated first here -- and rolled back if refused.
-        let request_id = self
+        // H3: the nonce supply is checked — exhaustion retires the
+        // connection rather than aliasing a live nonce, and the nonce
+        // names the exchange on the wire (envelope cutover).
+        let (request_id, nonce) = self
             .sim_handle
             .state
             .global_request_manager
-            .create_request_id(user_key);
+            .create_request_id(user_key)
+            .map_err(|_| NaiaServerError::RequestNonceExhausted)?;
         let gwm = self.shared.global_world_manager.read();
         let mut converter = send_conn.base.world_manager.entity_converter_mut(&*gwm);
 
@@ -904,6 +908,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
             &mut converter,
             channel_kind,
             request_id,
+            nonce,
             message,
         ) {
             // Queue-depth cap reached: nothing was enqueued. Roll the row
@@ -963,8 +968,9 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
         response_box: Box<dyn Message>,
     ) -> ResponseSendOutcome {
         // Peek, don't consume: if the enqueue is refused below, the mapping must
-        // survive so the caller can retry with the same key.
-        let Some((user_key, channel_kind, local_response_id)) = self
+        // survive so the caller can retry with the same key. H3: the kept
+        // wire nonce is echoed so the requester resolves by (id, nonce).
+        let Some((user_key, channel_kind, local_response_id, nonce)) = self
             .sim_handle
             .state
             .global_response_manager
@@ -993,6 +999,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> InternalWorldServer<E> {
                 &mut converter,
                 &channel_kind,
                 local_response_id,
+                nonce,
                 response,
             )
         };

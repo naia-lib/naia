@@ -568,6 +568,7 @@ fn pipelined_send_response_without_live_connection_keeps_routing_for_retry() {
         &user_key,
         &ChannelKind::of::<TestRequestChannel>(),
         &LocalRequestId::from(1u16).receive_from_remote(),
+        naia_shared::ConnectionRequestNonce::from_wire(1),
     );
     server.restore_handles(coord, recv, send);
 
@@ -647,6 +648,7 @@ fn resident_send_response_without_live_connection_keeps_routing_for_retry() {
             &user_key,
             &ChannelKind::of::<TestRequestChannel>(),
             &LocalRequestId::from(1u16).receive_from_remote(),
+            naia_shared::ConnectionRequestNonce::from_wire(1),
         );
 
     let key = ResponseSendKey::<TestResponse>::new(global_id);
@@ -742,6 +744,7 @@ fn pipelined_send_response_user_gone_before_drain_keeps_routing_for_retry() {
         &user_key,
         &ChannelKind::of::<TestRequestChannel>(),
         &LocalRequestId::from(1u16).receive_from_remote(),
+        naia_shared::ConnectionRequestNonce::from_wire(1),
     );
     server.restore_handles(coord, recv, send);
 
@@ -818,6 +821,7 @@ fn pipelined_send_response_delivered_drain_destroys_routing() {
         &user_key,
         &ChannelKind::of::<TestRequestChannel>(),
         &LocalRequestId::from(1u16).receive_from_remote(),
+        naia_shared::ConnectionRequestNonce::from_wire(1),
     );
     server.restore_handles(coord, recv, send);
 

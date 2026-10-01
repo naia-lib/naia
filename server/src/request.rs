@@ -3,14 +3,19 @@ use std::collections::{HashMap, VecDeque};
 use log::warn;
 
 use naia_shared::{
-    ChannelKind, GlobalRequestId, GlobalResponseId, LocalResponseId, MessageContainer,
+    ChannelKind, ConnectionRequestNonce, GlobalRequestId, GlobalResponseId, LocalResponseId,
+    MessageContainer, NonceAllocator, NonceExhaustion,
 };
 
 use crate::UserKey;
 
 // GlobalRequestManager
 pub struct GlobalRequestManager {
-    map: HashMap<GlobalRequestId, (UserKey, Option<MessageContainer>)>,
+    map: HashMap<GlobalRequestId, (UserKey, ConnectionRequestNonce, Option<MessageContainer>)>,
+    /// H3: one nonce supply per user (per connection). A new connection
+    /// starts a fresh supply, so supplies never span connections; exhaustion
+    /// fails the send rather than aliasing a live nonce.
+    nonces: HashMap<UserKey, NonceAllocator>,
     next_id: u64,
 }
 
@@ -18,17 +23,26 @@ impl GlobalRequestManager {
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
+            nonces: HashMap::new(),
             next_id: 0,
         }
     }
 
-    pub(crate) fn create_request_id(&mut self, user_key: &UserKey) -> GlobalRequestId {
+    /// Allocates a request id with a checked, never-reused H3 nonce for
+    /// `user_key`. The nonce is handed back alongside the id so the caller
+    /// can name the exchange on the wire (envelope cutover).
+    pub(crate) fn create_request_id(
+        &mut self,
+        user_key: &UserKey,
+    ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
+        let allocator = self.nonces.entry(*user_key).or_default();
+        let nonce = allocator.next()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
-        self.map.insert(id, (*user_key, None));
+        self.map.insert(id, (*user_key, nonce, None));
 
-        id
+        Ok((id, nonce))
     }
 
     /// Number of outstanding request ids, across all users. Test observer.
@@ -50,9 +64,9 @@ impl GlobalRequestManager {
         &mut self,
         request_id: &GlobalRequestId,
     ) -> Option<(UserKey, MessageContainer)> {
-        let (_, response_opt) = self.map.get(request_id)?;
+        let (_, _, response_opt) = self.map.get(request_id)?;
         if response_opt.is_some() {
-            let (user_key, response_opt) = self.map.remove(request_id).unwrap();
+            let (user_key, _, response_opt) = self.map.remove(request_id).unwrap();
             return Some((user_key, response_opt.unwrap()));
         }
         None
@@ -63,7 +77,7 @@ impl GlobalRequestManager {
         request_id: &GlobalRequestId,
         response: MessageContainer,
     ) {
-        if let Some((_, response_opt)) = self.map.get_mut(request_id) {
+        if let Some((_, _, response_opt)) = self.map.get_mut(request_id) {
             *response_opt = Some(response);
         } else {
             warn!("receive_response: dropping response for unknown request_id {:?}; request was likely cancelled or the user disconnected", request_id);
@@ -72,8 +86,11 @@ impl GlobalRequestManager {
 
     /// Remove all outstanding request entries for a user that has disconnected.
     /// Without this, disconnecting mid-request leaks the entry indefinitely.
+    /// The user's nonce supply goes with it: a reconnect starts a fresh
+    /// supply, so nonces never span connections.
     pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
-        self.map.retain(|_, (key, _)| key != user_key);
+        self.map.retain(|_, (key, _, _)| key != user_key);
+        self.nonces.remove(user_key);
     }
 }
 
@@ -90,7 +107,18 @@ const MAX_OUTSTANDING_RESPONSES_PER_USER: usize = 4096;
 
 // GlobalResponseManager
 pub struct GlobalResponseManager {
-    map: HashMap<GlobalResponseId, (UserKey, ChannelKind, LocalResponseId)>,
+    /// H3: the routing keeps the incoming request's wire nonce, so
+    /// `send_response` echoes it and the requester resolves by
+    /// (local id, nonce).
+    map: HashMap<
+        GlobalResponseId,
+        (
+            UserKey,
+            ChannelKind,
+            LocalResponseId,
+            ConnectionRequestNonce,
+        ),
+    >,
     /// Per-user insertion order, used to evict oldest-first at the cap. Entries
     /// are removed from the map on their own schedule, so ids in here may already
     /// be dead; they are skipped when encountered rather than eagerly purged.
@@ -118,12 +146,13 @@ impl GlobalResponseManager {
         user_key: &UserKey,
         channel_kind: &ChannelKind,
         local_response_id: &LocalResponseId,
+        nonce: ConnectionRequestNonce,
     ) -> GlobalResponseId {
         let id = GlobalResponseId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
         self.map
-            .insert(id, (*user_key, *channel_kind, *local_response_id));
+            .insert(id, (*user_key, *channel_kind, *local_response_id, nonce));
 
         let queue = self.order.entry(*user_key).or_default();
         queue.push_back(id);
@@ -159,20 +188,30 @@ impl GlobalResponseManager {
     pub(crate) fn peek_response_id(
         &self,
         global_response_id: &GlobalResponseId,
-    ) -> Option<(UserKey, ChannelKind, LocalResponseId)> {
+    ) -> Option<(
+        UserKey,
+        ChannelKind,
+        LocalResponseId,
+        ConnectionRequestNonce,
+    )> {
         self.map.get(global_response_id).cloned()
     }
 
     pub(crate) fn destroy_response_id(
         &mut self,
         global_response_id: &GlobalResponseId,
-    ) -> Option<(UserKey, ChannelKind, LocalResponseId)> {
+    ) -> Option<(
+        UserKey,
+        ChannelKind,
+        LocalResponseId,
+        ConnectionRequestNonce,
+    )> {
         self.map.remove(global_response_id)
     }
 
     /// Remove all outstanding response entries for a user that has disconnected.
     pub(crate) fn purge_user(&mut self, user_key: &UserKey) {
-        self.map.retain(|_, (key, _, _)| key != user_key);
+        self.map.retain(|_, (key, _, _, _)| key != user_key);
         self.order.remove(user_key);
     }
 }
@@ -219,7 +258,12 @@ mod tests {
         let user = UserKey::from_u64(1);
 
         for i in 0..(MAX_OUTSTANDING_RESPONSES_PER_USER as u16 * 8) {
-            manager.create_response_id(&user, &channel(), &response_id(i));
+            manager.create_response_id(
+                &user,
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
         }
 
         assert_eq!(manager.outstanding(), MAX_OUTSTANDING_RESPONSES_PER_USER);
@@ -238,9 +282,19 @@ mod tests {
         let mut manager = GlobalResponseManager::new();
         let user = UserKey::from_u64(1);
 
-        let oldest = manager.create_response_id(&user, &channel(), &response_id(0));
+        let oldest = manager.create_response_id(
+            &user,
+            &channel(),
+            &response_id(0),
+            ConnectionRequestNonce::from_wire(0),
+        );
         for i in 1..=(MAX_OUTSTANDING_RESPONSES_PER_USER as u16) {
-            manager.create_response_id(&user, &channel(), &response_id(i));
+            manager.create_response_id(
+                &user,
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
         }
 
         assert!(
@@ -257,9 +311,19 @@ mod tests {
         let quiet = UserKey::from_u64(1);
         let flooder = UserKey::from_u64(2);
 
-        let quiet_request = manager.create_response_id(&quiet, &channel(), &response_id(0));
+        let quiet_request = manager.create_response_id(
+            &quiet,
+            &channel(),
+            &response_id(0),
+            ConnectionRequestNonce::from_wire(0),
+        );
         for i in 0..(MAX_OUTSTANDING_RESPONSES_PER_USER as u16 * 4) {
-            manager.create_response_id(&flooder, &channel(), &response_id(i));
+            manager.create_response_id(
+                &flooder,
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
         }
 
         assert!(
@@ -277,7 +341,12 @@ mod tests {
         let user = UserKey::from_u64(1);
 
         for i in 0..(MAX_OUTSTANDING_RESPONSES_PER_USER as u16 * 8) {
-            let id = manager.create_response_id(&user, &channel(), &response_id(i));
+            let id = manager.create_response_id(
+                &user,
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
             manager.destroy_response_id(&id);
         }
 
@@ -288,6 +357,57 @@ mod tests {
         );
     }
 
+    /// H3 envelope cutover: the response routing keeps the incoming
+    /// request's wire nonce, so `send_response` echoes the nonce the
+    /// requester resolves on. A routing that dropped it would answer with
+    /// a nonce no outstanding exchange names.
+    #[test]
+    fn response_routing_keeps_the_wire_nonce() {
+        let mut manager = GlobalResponseManager::new();
+        let user = UserKey::from_u64(1);
+        let nonce = ConnectionRequestNonce::from_wire(41);
+        let id = manager.create_response_id(&user, &channel(), &response_id(3), nonce);
+
+        let (_, _, _, kept) = manager.peek_response_id(&id).expect("a live routing peeks");
+        assert_eq!(kept, nonce);
+    }
+
+    /// H3 envelope cutover: one user's request ids arrive with sequential
+    /// nonces from a supply that is theirs alone — a second user's first
+    /// nonce still starts at zero.
+    #[test]
+    fn request_nonces_are_sequential_per_user() {
+        let mut manager = GlobalRequestManager::new();
+        let first = UserKey::from_u64(1);
+        let second = UserKey::from_u64(2);
+
+        let (_, nonce_a) = manager.create_request_id(&first).expect("capacity remains");
+        let (_, nonce_b) = manager.create_request_id(&first).expect("capacity remains");
+        let (_, nonce_other) = manager
+            .create_request_id(&second)
+            .expect("capacity remains");
+
+        assert_eq!(nonce_a.value(), 0);
+        assert_eq!(nonce_b.value(), 1);
+        assert_eq!(nonce_other.value(), 0);
+    }
+
+    /// H3 envelope cutover: a disconnect drops the user's nonce supply with
+    /// their rows, so a reconnect starts a fresh supply and nonces never
+    /// span connections.
+    #[test]
+    fn purging_a_user_resets_the_nonce_supply() {
+        let mut manager = GlobalRequestManager::new();
+        let user = UserKey::from_u64(1);
+
+        let (_, first) = manager.create_request_id(&user).expect("capacity remains");
+        assert_eq!(first.value(), 0);
+        manager.purge_user(&user);
+
+        let (_, fresh) = manager.create_request_id(&user).expect("capacity remains");
+        assert_eq!(fresh.value(), 0);
+    }
+
     /// A disconnect must drop the ordering queue too, not just the routing map.
     #[test]
     fn purging_a_user_clears_the_ordering_queue() {
@@ -295,7 +415,12 @@ mod tests {
         let user = UserKey::from_u64(1);
 
         for i in 0..64u16 {
-            manager.create_response_id(&user, &channel(), &response_id(i));
+            manager.create_response_id(
+                &user,
+                &channel(),
+                &response_id(i),
+                ConnectionRequestNonce::from_wire(i as u64),
+            );
         }
         manager.purge_user(&user);
 
