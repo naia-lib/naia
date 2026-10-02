@@ -75,7 +75,7 @@ impl FragmentIndex {
 
     pub(crate) fn increment(&mut self) {
         self.inner += 1;
-        assert!(self.inner < FRAGMENT_INDEX_LIMIT, "Attempting to fragment large message, but hit fragment limit of {FRAGMENT_INDEX_LIMIT}. This means you're trying to transmit about 500 megabytes, which is a bad idea.")
+        assert!(self.inner < FRAGMENT_INDEX_LIMIT, "Attempting to fragment large message, but hit fragment limit of {FRAGMENT_INDEX_LIMIT}. This means you're trying to transmit about 500 megabytes, which is a bad idea.");
     }
 
     pub fn as_usize(&self) -> usize {

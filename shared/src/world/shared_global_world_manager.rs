@@ -13,6 +13,10 @@ impl SharedGlobalWorldManager {
     ///
     /// This synthesizes teardown events with no wire message behind them; `tick`
     /// must be the caller's current tick (the tick at which the mirror ceases).
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Global World Manager must not have an accurate component list.
     pub fn despawn_all_entities<E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>>(
         world: &mut W,
         converter: &dyn EntityAndGlobalEntityConverter<E>,

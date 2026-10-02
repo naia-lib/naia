@@ -84,7 +84,7 @@ impl IndexedMessageWriter {
         if let Some(last_id) = last_written_id {
             // write message id diff
             let id_diff = wrapping_diff(last_id, message_index);
-            assert!(id_diff >= 0, "Packet Write Error: Message Index diff is negative in subsequent message.. Previous: {}, Current: {}, Diff: {}", last_id, message_index, id_diff);
+            assert!(id_diff >= 0, "Packet Write Error: Message Index diff is negative in subsequent message.. Previous: {last_id}, Current: {message_index}, Diff: {id_diff}");
             let id_diff_encoded = UnsignedVariableInteger::<3>::new(id_diff);
             id_diff_encoded.ser(writer);
         } else {

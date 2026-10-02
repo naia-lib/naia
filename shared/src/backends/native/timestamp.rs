@@ -5,6 +5,10 @@ pub struct Timestamp;
 
 impl Timestamp {
     /// Returns seconds since the Unix epoch as a `u64`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: timing error!.
     #[must_use]
     pub fn now() -> u64 {
         SystemTime::now()

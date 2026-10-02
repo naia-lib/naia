@@ -126,8 +126,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> GlobalEntitySpawner<E> for GlobalEntityM
     fn reserve_global_entity(&mut self, remote_entity: RemoteEntity) -> GlobalEntity {
         assert!(
             !self.reserved_global_entities.contains_key(&remote_entity),
-            "Remote entity {:?} already has a reserved global entity",
-            remote_entity
+            "Remote entity {remote_entity:?} already has a reserved global entity"
         );
 
         let global_entity = self.global_to_entity_map.insert(None);

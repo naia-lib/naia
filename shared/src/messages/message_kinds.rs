@@ -186,6 +186,14 @@ impl MessageKinds {
     /// net-IDs are dense registration ordinals, so the walk covers the whole
     /// net-ID space and `HashMap` iteration order never leaks into the
     /// result.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: `MessageKinds` net-ID space must be dense.
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: `MessageKinds` net-ID space must be dense.
     #[must_use]
     pub fn schema_descriptor_entries(&self) -> Vec<(NetId, Vec<u8>)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);
@@ -252,9 +260,17 @@ impl MessageKinds {
     /// travel on the wire, so hashing sorted names would leave a reordering
     /// that renumbers every message undetectable. Walking the net-ID space
     /// also keeps `HashMap` iteration order out of the result, which is what
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: `MessageKinds` net-ID space must be dense.
     /// makes the fingerprint reproducible across processes.
     ///
     /// Net-IDs are dense by construction, so a gap is a broken invariant.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: `MessageKinds` net-ID space must be dense.
     #[must_use]
     pub fn schema_entries(&self) -> Vec<(NetId, String)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);

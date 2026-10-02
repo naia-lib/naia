@@ -122,7 +122,7 @@ impl EntityRelation {
             if let Ok(world_entity) = converter.global_entity_to_entity(global_entity) {
                 return Some(world_entity);
             }
-            warn!("Could not find World Entity from Global Entity `{:?}`, in order to get the EntityRelation value!", global_entity);
+            warn!("Could not find World Entity from Global Entity `{global_entity:?}`, in order to get the EntityRelation value!");
             return None;
         }
         warn!("Could not get EntityRelation value, because EntityRelation has no GlobalEntity!");
@@ -390,6 +390,10 @@ impl EntityProperty {
     }
 
     /// Updates this property's inner relation from the remote host's bit stream.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: This shouldn't be possible. Unknown read case for `EntityProperty`..
     pub fn read(
         &mut self,
         reader: &mut BitReader,
@@ -471,10 +475,18 @@ impl EntityProperty {
     /// Returns `true` when the property resolved (or was already complete).
     /// Returns `false` when the awaited entity is still unresolvable — the
     /// redirect may have expired or the mapping may never have arrived — and
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Can't complete `EntityProperty` of type: `{:?}`!.
     /// leaves the property parked as `RemoteWaiting` so the caller can drop
     /// the stale component/message. Never panics on a data condition: a
     /// library aborting the host process on a recoverable stale mapping
     /// turns one dead entity into total transport loss.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Can't complete `EntityProperty` of type: `{:?}`!.
     pub fn waiting_complete(
         &mut self,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
@@ -500,8 +512,7 @@ impl EntityProperty {
                         Some(global_entity)
                     } else {
                         warn!(
-                            "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {:?}, Redirected: {:?}",
-                            owned_entity, redirected_entity
+                            "Dropping stale waiting EntityProperty! Could not convert RemoteEntity to GlobalEntity! Original: {owned_entity:?}, Redirected: {redirected_entity:?}"
                         );
                         return false;
                     }
@@ -538,6 +549,10 @@ impl EntityProperty {
     }
 
     /// Migrate Remote Property to Public version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never be made public twice..
     pub fn remote_publish(&mut self, mutator_index: u8, mutator: &PropertyMutator) {
         match &mut self.inner {
             EntityRelation::RemoteCreated(inner) => {
@@ -565,6 +580,10 @@ impl EntityProperty {
     }
 
     /// Migrate Remote Property to Public version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never be unpublished..
     pub fn remote_unpublish(&mut self) {
         match &mut self.inner {
             EntityRelation::RemotePublic(inner) => {
@@ -590,6 +609,10 @@ impl EntityProperty {
     }
 
     /// Migrate Host/RemotePublic Property to Delegated version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type `{:?}` should never enable delegation..
     pub fn enable_delegation(
         &mut self,
         accessor: &EntityAuthAccessor,
@@ -651,6 +674,10 @@ impl EntityProperty {
     }
 
     /// Migrate Delegated Property to Host-Owned (Public) version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never disable delegation..
     pub fn disable_delegation(&mut self) {
         match &mut self.inner {
             EntityRelation::Delegated(inner) => {
@@ -677,6 +704,10 @@ impl EntityProperty {
     }
 
     /// Migrate Host Property to Local version
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `EntityProperty` of type: `{:?}` should never be made local..
     pub fn localize(&mut self) {
         match &mut self.inner {
             EntityRelation::HostCreated(inner) => {

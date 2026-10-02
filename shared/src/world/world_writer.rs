@@ -630,12 +630,10 @@ impl WorldWriter {
                     // is a legitimate quiet Noop.
                     if is_writing && insert_has_global {
                         log::warn!(
-                            "InsertComponent for {:?} ({:?}) degraded to a TERMINAL \
+                            "InsertComponent for {global_entity:?} ({component_kind:?}) degraded to a TERMINAL \
                              Noop: component missing from the snapshot world \
                              (needed-set or snapshot-registry under-supply) — \
                              the insert will never reach this peer",
-                            global_entity,
-                            component_kind,
                         );
                     }
                     EntityMessageType::Noop.ser(writer);

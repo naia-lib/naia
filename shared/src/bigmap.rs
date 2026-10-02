@@ -51,6 +51,10 @@ impl<K: BigMapKey, V> BigMap<K, V> {
     }
 
     /// Inserts a value and returns its newly generated key. Panics on `u64` overflow.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self.current_index != u64::MAX` does not hold.
     pub fn insert(&mut self, value: V) -> K {
         // [entity-replication-11] GlobalEntity rollover is a terminal error
         assert!(

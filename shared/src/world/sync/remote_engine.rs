@@ -116,8 +116,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     pub fn send_auth_command(&mut self, entity: E, command: EntityCommand) {
         assert!(
             self.entity_channels.contains_key(&entity),
-            "Cannot send a command to an entity that does not exist in the engine: {:?}",
-            entity
+            "Cannot send a command to an entity that does not exist in the engine: {entity:?}"
         );
 
         let entity_channel = self.entity_channels.get_mut(&entity).unwrap();
@@ -142,8 +141,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     pub fn send_entity_command(&mut self, entity: E, command: EntityCommand) {
         assert!(
             self.entity_channels.contains_key(&entity),
-            "Cannot send a command to an entity that does not exist in the engine: {:?}",
-            entity
+            "Cannot send a command to an entity that does not exist in the engine: {entity:?}"
         );
 
         // Handle entity commands for RemoteEngine
@@ -186,8 +184,7 @@ impl<E: Copy + Hash + Eq + Debug> RemoteEngine<E> {
     pub(crate) fn insert_entity_channel(&mut self, entity: E, channel: RemoteEntityChannel) {
         assert!(
             !self.entity_channels.contains_key(&entity),
-            "Cannot insert entity channel that already exists for entity: {:?}",
-            entity
+            "Cannot insert entity channel that already exists for entity: {entity:?}"
         );
 
         self.entity_channels.insert(entity, channel);

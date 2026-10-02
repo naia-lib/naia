@@ -18,6 +18,14 @@ pub struct ChannelSettings {
 
 impl ChannelSettings {
     /// Creates a `ChannelSettings` with the given mode and direction, deriving default criticality from the mode.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!(mode.tick_buffered(` does not hold.
+    /// # Panics
+    ///
+    /// Panics if `!(mode.tick_buffered(` does not hold.
     #[must_use]
     pub fn new(mode: ChannelMode, direction: ChannelDirection) -> Self {
         assert!(

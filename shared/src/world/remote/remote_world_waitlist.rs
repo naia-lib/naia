@@ -246,7 +246,7 @@ impl RemoteWorldWaitlist {
                         .component_apply_update(
                             local_converter,
                             &world_entity,
-                            *&component_kind,
+                            component_kind,
                             ready_update,
                         )
                         .is_err()

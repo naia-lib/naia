@@ -47,6 +47,10 @@ impl PingStore {
     }
 
     /// Removes and returns the send-time for the given `ping_index`, or `None` if not found.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value expected to be present is missing.
     pub fn remove(&mut self, ping_index: PingIndex) -> Option<GameInstant> {
         let mut vec_index = self.buffer.len();
 

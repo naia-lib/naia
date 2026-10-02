@@ -157,7 +157,7 @@ impl DirtyQueue {
                     return true;
                 }
                 bits.get(entity_base + w)
-                    .map_or(true, |word| word.load(Ordering::Relaxed) == 0)
+                    .is_none_or(|word| word.load(Ordering::Relaxed) == 0)
             })
         };
         if was_clear {

@@ -114,6 +114,10 @@ impl<P: Send + Sync> ReliableSender<P> {
     }
 
     /// Acknowledges delivery of `message_index`, removing it from the retransmit buffer and returning the message.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value expected to be present is missing.
     // Called when a message has been delivered
     // If this message has never been delivered before, will clear from the outgoing
     // buffer and return the message previously there
