@@ -286,7 +286,7 @@ fn local_entity_map_install_and_apply_redirect() {
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // Apply redirect
-    let redirected = entity_map.apply_entity_redirect(&old_entity);
+    let redirected = entity_map.apply_entity_redirect(old_entity);
     assert_eq!(redirected, new_entity);
 
     // Non-redirected entity returns itself
@@ -294,7 +294,7 @@ fn local_entity_map_install_and_apply_redirect() {
         id: 99,
         is_static: false,
     };
-    let not_redirected = entity_map.apply_entity_redirect(&other_entity);
+    let not_redirected = entity_map.apply_entity_redirect(other_entity);
     assert_eq!(not_redirected, other_entity);
 }
 
@@ -440,7 +440,7 @@ fn install_and_apply_redirect() {
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // Apply redirect
-    let redirected = entity_map.apply_entity_redirect(&old_entity);
+    let redirected = entity_map.apply_entity_redirect(old_entity);
     assert_eq!(redirected, new_entity);
 
     // Non-redirected entity returns itself
@@ -448,7 +448,7 @@ fn install_and_apply_redirect() {
         id: 99,
         is_static: false,
     };
-    let not_redirected = entity_map.apply_entity_redirect(&other_entity);
+    let not_redirected = entity_map.apply_entity_redirect(other_entity);
     assert_eq!(not_redirected, other_entity);
 }
 

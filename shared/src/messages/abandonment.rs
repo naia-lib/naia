@@ -62,7 +62,7 @@ impl std::error::Error for NonceExhaustion {}
 
 /// Issues [`ConnectionRequestNonce`]s for one live connection.
 ///
-/// Checked: [`next`](NonceAllocator::next) returns [`NonceExhaustion`]
+/// Checked: [`next_nonce`](NonceAllocator::next_nonce) returns [`NonceExhaustion`]
 /// instead of wrapping past `u64::MAX`, and stays exhausted. One allocator
 /// per connection; a new connection starts a new allocator, so supplies
 /// never span connections.
@@ -96,7 +96,7 @@ impl NonceAllocator {
     /// spent. Checked increment: `u64::MAX` is issued once, then the
     /// allocator is exhausted rather than wrapping to zero and aliasing a
     /// live nonce.
-    pub fn next(&mut self) -> Result<ConnectionRequestNonce, NonceExhaustion> {
+    pub fn next_nonce(&mut self) -> Result<ConnectionRequestNonce, NonceExhaustion> {
         if self.exhausted {
             return Err(NonceExhaustion);
         }
@@ -186,8 +186,12 @@ mod tests {
     #[test]
     fn allocator_issues_sequential_nonces_from_zero() {
         let mut allocator = NonceAllocator::new();
-        let first = allocator.next().expect("fresh allocator has capacity");
-        let second = allocator.next().expect("fresh allocator has capacity");
+        let first = allocator
+            .next_nonce()
+            .expect("fresh allocator has capacity");
+        let second = allocator
+            .next_nonce()
+            .expect("fresh allocator has capacity");
         assert_eq!(first.value(), 0);
         assert_eq!(second.value(), 1);
     }
@@ -197,7 +201,7 @@ mod tests {
         let mut allocator = NonceAllocator::new();
         let mut seen = std::collections::HashSet::new();
         for _ in 0..10_000 {
-            let nonce = allocator.next().expect("capacity remains");
+            let nonce = allocator.next_nonce().expect("capacity remains");
             assert!(seen.insert(nonce), "nonce {:?} allocated twice", nonce);
         }
     }
@@ -205,23 +209,25 @@ mod tests {
     #[test]
     fn exhaustion_is_checked_not_wrapping() {
         let mut allocator = NonceAllocator::with_next(u64::MAX);
-        let last = allocator.next().expect("u64::MAX is still allocatable");
+        let last = allocator
+            .next_nonce()
+            .expect("u64::MAX is still allocatable");
         assert_eq!(last.value(), u64::MAX);
-        assert_eq!(allocator.next(), Err(NonceExhaustion));
+        assert_eq!(allocator.next_nonce(), Err(NonceExhaustion));
     }
 
     #[test]
     fn exhaustion_is_sticky() {
         let mut allocator = NonceAllocator::with_next(u64::MAX);
-        let _ = allocator.next();
-        assert_eq!(allocator.next(), Err(NonceExhaustion));
-        assert_eq!(allocator.next(), Err(NonceExhaustion));
+        let _ = allocator.next_nonce();
+        assert_eq!(allocator.next_nonce(), Err(NonceExhaustion));
+        assert_eq!(allocator.next_nonce(), Err(NonceExhaustion));
     }
 
     #[test]
     fn abandoned_terminal_carries_its_nonce() {
         let mut allocator = NonceAllocator::new();
-        let nonce = allocator.next().expect("capacity remains");
+        let nonce = allocator.next_nonce().expect("capacity remains");
         let terminal = TransportTerminal::Abandoned { nonce };
         assert_eq!(terminal.nonce(), nonce);
     }

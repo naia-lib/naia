@@ -853,14 +853,14 @@ mod tests {
 
         fx.manager.init_entity_send_host_commands(
             map.entity_converter(),
-            &bare,
+            bare,
             vec![],
             &mut fx.updater,
             &fx.kinds,
         );
         fx.manager.init_entity_send_host_commands(
             map.entity_converter(),
-            &loaded,
+            loaded,
             vec![ghost()],
             &mut fx.updater,
             &fx.kinds,
@@ -888,12 +888,12 @@ mod tests {
         let mut fx = Fixture::new();
         let mut map = LocalEntityMap::new(HostType::Server);
         let (global_entity, _) = mapped(&mut map, 1);
-        fx.arm_diff_handler(&global_entity, &ghost());
-        fx.arm_diff_handler(&global_entity, &stone());
+        fx.arm_diff_handler(global_entity, ghost());
+        fx.arm_diff_handler(global_entity, stone());
 
         fx.manager.init_entity_send_host_commands(
             map.entity_converter(),
-            &global_entity,
+            global_entity,
             vec![ghost(), stone()],
             &mut fx.updater,
             &fx.kinds,
@@ -901,12 +901,12 @@ mod tests {
 
         assert!(
             fx.updater
-                .diff_handler_has_component(&global_entity, &ghost()),
+                .diff_handler_has_component(global_entity, ghost()),
             "the mutable component was not registered for diff-tracking",
         );
         assert!(
             !fx.updater
-                .diff_handler_has_component(&global_entity, &stone()),
+                .diff_handler_has_component(global_entity, stone()),
             "an immutable component was registered for diff-tracking",
         );
     }
@@ -921,10 +921,10 @@ mod tests {
         let (loaded, _) = mapped(&mut map, 2);
 
         fx.manager
-            .init_static_entity_send_host_commands(map.entity_converter(), &bare, vec![]);
+            .init_static_entity_send_host_commands(map.entity_converter(), bare, vec![]);
         fx.manager.init_static_entity_send_host_commands(
             map.entity_converter(),
-            &loaded,
+            loaded,
             vec![stone()],
         );
 
@@ -1041,18 +1041,18 @@ mod tests {
             .send_command(map.entity_converter(), EntityCommand::Spawn(global_entity));
         let _ = fx.manager.take_outgoing_commands();
         fx.manager
-            .get_entity_channel_mut(&host_entity)
+            .get_entity_channel_mut(host_entity)
             .expect("fixture: the spawned entity should have a channel")
             .send_command(EntityCommand::EnableDelegation(Some(0), global_entity));
 
-        let first = fx.manager.extract_entity_commands(&host_entity);
-        let second = fx.manager.extract_entity_commands(&host_entity);
+        let first = fx.manager.extract_entity_commands(host_entity);
+        let second = fx.manager.extract_entity_commands(host_entity);
 
         assert!(!first.is_empty(), "the queued command was not extracted");
         assert!(second.is_empty(), "the extract left the command behind");
         assert!(fx
             .manager
-            .extract_entity_commands(&HostEntity::new(99))
+            .extract_entity_commands(HostEntity::new(99))
             .is_empty());
     }
 
@@ -1066,13 +1066,13 @@ mod tests {
         let mut fx = Fixture::new();
         let mut map = LocalEntityMap::new(HostType::Server);
         let (global_entity, host_entity) = mapped(&mut map, 1);
-        assert!(!fx.manager.has_entity(&host_entity));
+        assert!(!fx.manager.has_entity(host_entity));
 
         fx.manager
             .send_command(map.entity_converter(), EntityCommand::Spawn(global_entity));
 
-        assert!(fx.manager.has_entity(&host_entity));
-        assert!(!fx.manager.has_entity(&HostEntity::new(99)));
+        assert!(fx.manager.has_entity(host_entity));
+        assert!(!fx.manager.has_entity(HostEntity::new(99)));
     }
 
     #[test]
@@ -1083,15 +1083,12 @@ mod tests {
         fx.manager
             .send_command(map.entity_converter(), EntityCommand::Spawn(global_entity));
 
-        assert!(fx.manager.get_entity_channel(&host_entity).is_some());
+        assert!(fx.manager.get_entity_channel(host_entity).is_some());
+        assert!(fx.manager.get_entity_channel(HostEntity::new(99)).is_none());
+        assert!(fx.manager.get_entity_channel_mut(host_entity).is_some());
         assert!(fx
             .manager
-            .get_entity_channel(&HostEntity::new(99))
-            .is_none());
-        assert!(fx.manager.get_entity_channel_mut(&host_entity).is_some());
-        assert!(fx
-            .manager
-            .get_entity_channel_mut(&HostEntity::new(99))
+            .get_entity_channel_mut(HostEntity::new(99))
             .is_none());
     }
 
@@ -1102,16 +1099,16 @@ mod tests {
         let mut fx = Fixture::new();
         let _map = LocalEntityMap::new(HostType::Server);
         let host_entity = HostEntity::new(7);
-        assert!(fx.manager.get_entity_channel(&host_entity).is_none());
+        assert!(fx.manager.get_entity_channel(host_entity).is_none());
 
         fx.manager
             .insert_entity_channel(host_entity, HostEntityChannel::new(HostType::Server));
 
         assert!(
-            fx.manager.get_entity_channel(&host_entity).is_some(),
+            fx.manager.get_entity_channel(host_entity).is_some(),
             "the inserted channel was not registered",
         );
-        assert!(fx.manager.has_entity(&host_entity));
+        assert!(fx.manager.has_entity(host_entity));
     }
 
     #[test]
@@ -1122,9 +1119,9 @@ mod tests {
         fx.manager
             .insert_entity_channel(host_entity, HostEntityChannel::new(HostType::Server));
 
-        let _channel = fx.manager.remove_entity_channel(&host_entity);
+        let _channel = fx.manager.remove_entity_channel(host_entity);
 
-        assert!(!fx.manager.has_entity(&host_entity));
+        assert!(!fx.manager.has_entity(host_entity));
     }
 
     /// Reserved host entities are handed back exactly once.
@@ -1133,21 +1130,21 @@ mod tests {
         let mut fx = Fixture::new();
         let mut map = LocalEntityMap::new(HostType::Server);
         let global_entity = GlobalEntity::from_u64(1);
-        let reserved = fx.manager.host_reserve_entity(&mut map, &global_entity);
+        let reserved = fx.manager.host_reserve_entity(&mut map, global_entity);
 
         assert_eq!(
-            fx.manager.host_removed_reserved_entity(&global_entity),
+            fx.manager.host_removed_reserved_entity(global_entity),
             Some(reserved),
             "the reservation was not returned",
         );
         assert_eq!(
-            fx.manager.host_removed_reserved_entity(&global_entity),
+            fx.manager.host_removed_reserved_entity(global_entity),
             None,
             "the reservation survived its removal",
         );
         assert_eq!(
             fx.manager
-                .host_removed_reserved_entity(&GlobalEntity::from_u64(99)),
+                .host_removed_reserved_entity(GlobalEntity::from_u64(99)),
             None,
             "an entity that was never reserved produced a reservation",
         );
@@ -1198,13 +1195,13 @@ mod tests {
         fx.manager
             .deliver_message(2, EntityMessage::Despawn(host_entity));
 
-        assert!(map.contains_host_entity(&host_entity));
+        assert!(map.contains_host_entity(host_entity));
 
         fx.manager
             .process_delivered_commands(&mut map, &mut fx.updater);
 
         assert!(
-            !map.contains_host_entity(&host_entity),
+            !map.contains_host_entity(host_entity),
             "the delivered despawn did not release the host entity mapping",
         );
     }
@@ -1217,11 +1214,11 @@ mod tests {
         let mut fx = Fixture::new();
         let mut map = LocalEntityMap::new(HostType::Server);
         let (global_entity, host_entity) = mapped(&mut map, 1);
-        fx.arm_diff_handler(&global_entity, &ghost());
-        fx.updater.register_component(&global_entity, &ghost());
+        fx.arm_diff_handler(global_entity, ghost());
+        fx.updater.register_component(global_entity, ghost());
         assert!(
             fx.updater
-                .diff_handler_has_component(&global_entity, &ghost()),
+                .diff_handler_has_component(global_entity, ghost()),
             "fixture: the component was never registered",
         );
 
@@ -1237,7 +1234,7 @@ mod tests {
 
         assert!(
             !fx.updater
-                .diff_handler_has_component(&global_entity, &ghost()),
+                .diff_handler_has_component(global_entity, ghost()),
             "the delivered remove did not deregister the component",
         );
     }
@@ -1252,7 +1249,7 @@ mod tests {
         let (global_entity, host_entity) = mapped(&mut map, 1);
         fx.manager.init_entity_send_host_commands(
             map.entity_converter(),
-            &global_entity,
+            global_entity,
             vec![ghost()],
             &mut fx.updater,
             &fx.kinds,
@@ -1303,7 +1300,7 @@ mod tests {
         let (global_entity, _) = mapped(&mut map, 1);
         fx.manager.init_static_entity_send_host_commands(
             map.entity_converter(),
-            &global_entity,
+            global_entity,
             vec![],
         );
         let _ = fx.manager.take_outgoing_commands();
@@ -1361,12 +1358,12 @@ mod tests {
 
         assert!(
             !fx.manager
-                .is_component_updatable(map.entity_converter(), &unmapped, &ghost()),
+                .is_component_updatable(map.entity_converter(), unmapped, ghost()),
             "an entity with no host mapping reported an updatable component",
         );
         assert!(
             !fx.manager
-                .is_component_updatable(map.entity_converter(), &global_entity, &ghost()),
+                .is_component_updatable(map.entity_converter(), global_entity, ghost()),
             "an entity with no host channel reported an updatable component",
         );
 
@@ -1377,7 +1374,7 @@ mod tests {
         let _ = fx.manager.take_outgoing_commands();
         assert!(
             !fx.manager
-                .is_component_updatable(map.entity_converter(), &global_entity, &ghost()),
+                .is_component_updatable(map.entity_converter(), global_entity, ghost()),
             "a component the peer has not confirmed reported as updatable",
         );
 
@@ -1390,12 +1387,12 @@ mod tests {
 
         assert!(
             fx.manager
-                .is_component_updatable(map.entity_converter(), &global_entity, &ghost()),
+                .is_component_updatable(map.entity_converter(), global_entity, ghost()),
             "a fully delivered component was not updatable",
         );
         assert!(
             !fx.manager
-                .is_component_updatable(map.entity_converter(), &global_entity, &stone()),
+                .is_component_updatable(map.entity_converter(), global_entity, stone()),
             "a kind the host channel does not hold reported as updatable",
         );
     }

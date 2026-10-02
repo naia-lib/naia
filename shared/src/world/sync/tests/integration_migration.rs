@@ -91,7 +91,7 @@ fn server_side_migration_complete_flow() {
     host_engine.insert_entity_channel(host_entity, new_host_channel);
 
     // MIGRATION: Update entity map - remove old mapping first
-    entity_map.remove_by_global_entity(&global_entity);
+    entity_map.remove_by_global_entity(global_entity);
     entity_map.insert_with_host_entity(global_entity, host_entity);
 
     // MIGRATION: Install entity redirect
@@ -106,7 +106,7 @@ fn server_side_migration_complete_flow() {
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // VERIFICATION: Test entity redirect works
-    let redirected = entity_map.apply_entity_redirect(&old_entity);
+    let redirected = entity_map.apply_entity_redirect(old_entity);
     assert_eq!(redirected, new_entity);
 
     // VERIFICATION: Test non-redirected entity
@@ -114,11 +114,11 @@ fn server_side_migration_complete_flow() {
         id: 99,
         is_static: false,
     };
-    let not_redirected = entity_map.apply_entity_redirect(&other_entity);
+    let not_redirected = entity_map.apply_entity_redirect(other_entity);
     assert_eq!(not_redirected, other_entity);
 
     // VERIFICATION: HostEntityChannel has correct components
-    let host_channel = host_engine.get_entity_channel(&host_entity).unwrap();
+    let host_channel = host_engine.get_entity_channel(host_entity).unwrap();
     assert_eq!(host_channel.component_kinds().len(), 3);
     assert!(host_channel.component_kinds().contains(&pos_kind));
     assert!(host_channel.component_kinds().contains(&vel_kind));
@@ -195,7 +195,7 @@ fn migration_error_handling() {
     let fake_entity = GlobalEntity::from_u64(999);
 
     // This should return an error when trying to get a non-existent entity
-    let result = entity_map.global_entity_to_remote_entity(&fake_entity);
+    let result = entity_map.global_entity_to_remote_entity(fake_entity);
     assert!(result.is_err());
 }
 
@@ -221,7 +221,7 @@ fn high_frequency_migration_operations() {
 
     // Test all redirects work correctly
     for (old_entity, expected_new_entity) in redirects {
-        let redirected = entity_map.apply_entity_redirect(&old_entity);
+        let redirected = entity_map.apply_entity_redirect(old_entity);
         assert_eq!(redirected, expected_new_entity);
     }
 
@@ -230,7 +230,7 @@ fn high_frequency_migration_operations() {
         id: 9999,
         is_static: false,
     };
-    let result = entity_map.apply_entity_redirect(&non_existent);
+    let result = entity_map.apply_entity_redirect(non_existent);
     assert_eq!(result, non_existent);
 }
 

@@ -955,7 +955,7 @@ mod message_manager_tests {
         kinds: &ChannelKinds,
         messages: &MessageKinds,
     ) {
-        from.collect_outgoing_messages(&Instant::now(), &200.0);
+        from.collect_outgoing_messages(&Instant::now(), 200.0);
         let mut writer = BitWriter::new();
         let mut has_written = false;
         from.write_messages(
@@ -1230,7 +1230,7 @@ mod message_manager_tests {
              collected: `send_message` enqueues, `collect_outgoing_messages` is \
              what makes it eligible for a packet"
         );
-        manager.collect_outgoing_messages(&Instant::now(), &200.0);
+        manager.collect_outgoing_messages(&Instant::now(), 200.0);
         assert!(
             manager.has_outgoing_messages(),
             "once collected, the fragments are ready to write"
@@ -1395,7 +1395,7 @@ mod message_manager_tests {
             ping(2),
         );
         // A reliable sender only offers collected messages to a packet.
-        client.collect_outgoing_messages(&Instant::now(), &200.0);
+        client.collect_outgoing_messages(&Instant::now(), 200.0);
 
         let mut writer = BitWriter::new();
         let mut has_written = false;
@@ -1494,7 +1494,7 @@ mod message_manager_tests {
         );
 
         let now = Instant::now();
-        manager.collect_outgoing_messages(&now, &200.0);
+        manager.collect_outgoing_messages(&now, 200.0);
         let mut writer = BitWriter::new();
         let mut has_written = false;
         manager.write_messages(
@@ -1512,7 +1512,7 @@ mod message_manager_tests {
         // Advance well past any resend timeout.
         let mut later = Instant::now();
         later.add_millis(10_000);
-        manager.collect_outgoing_messages(&later, &200.0);
+        manager.collect_outgoing_messages(&later, 200.0);
         assert!(
             !manager.has_outgoing_messages(),
             "an acked reliable message must not be re-queued for retransmission"
@@ -1535,7 +1535,7 @@ mod message_manager_tests {
         );
 
         let now = Instant::now();
-        manager.collect_outgoing_messages(&now, &200.0);
+        manager.collect_outgoing_messages(&now, 200.0);
         let mut writer = BitWriter::new();
         let mut has_written = false;
         manager.write_messages(
@@ -1553,7 +1553,7 @@ mod message_manager_tests {
 
         let mut later = Instant::now();
         later.add_millis(10_000);
-        manager.collect_outgoing_messages(&later, &200.0);
+        manager.collect_outgoing_messages(&later, 200.0);
         assert!(
             manager.has_outgoing_messages(),
             "an unacked reliable message must come back for another attempt"

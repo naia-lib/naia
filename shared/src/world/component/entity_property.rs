@@ -1473,6 +1473,9 @@ mod relation_state_machine_tests {
 
     // -- fixtures ----------------------------------------------------------
 
+    /// One named mirror-matrix case: a label plus a builder for the property.
+    type CaseBuilder = (&'static str, fn() -> EntityProperty);
+
     #[derive(Clone)]
     struct CountingMutator(Arc<AtomicUsize>);
 
@@ -1574,7 +1577,7 @@ mod relation_state_machine_tests {
             self.check(remote_entity.value() as u64)
         }
         fn apply_entity_redirect(&self, entity: OwnedLocalEntity) -> OwnedLocalEntity {
-            self.redirects.get(entity).copied().unwrap_or(*entity)
+            self.redirects.get(&entity).copied().unwrap_or(entity)
         }
     }
 
@@ -2384,7 +2387,7 @@ mod relation_state_machine_tests {
         // Age out the redirect and lose the new mapping: the old id is now
         // unresolvable with Original == Redirected, the live shape.
         map.cleanup_old_redirects(&Instant::now(), 0);
-        map.remove_remote_mapping_if_exists(&RemoteEntity::new(7));
+        map.remove_remote_mapping_if_exists(RemoteEntity::new(7));
         let mut stale = waiting(4);
         assert!(!stale.waiting_complete(&map));
         assert_eq!(stale.inner.name(), "RemoteWaiting");
@@ -2683,14 +2686,14 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_copies_the_entity_into_every_settable_relation() {
-        let sources: [(&str, fn() -> EntityProperty); 5] = [
+        let sources: [CaseBuilder; 5] = [
             ("host", || host_created(Some(7))),
             ("remote", || remote_created(Some(7))),
             ("public", || remote_public(Some(7)).0),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),
         ];
-        let targets: [(&str, fn() -> EntityProperty); 3] = [
+        let targets: [CaseBuilder; 3] = [
             ("host", || host_created(None)),
             ("local", || local(None)),
             ("delegated", || delegated(None).0),
@@ -2710,7 +2713,7 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_a_waiting_property_clears_the_target() {
-        let targets: [(&str, fn() -> EntityProperty); 3] = [
+        let targets: [CaseBuilder; 3] = [
             ("host", || host_created(Some(7))),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),
@@ -2728,7 +2731,7 @@ mod relation_state_machine_tests {
 
     #[test]
     fn mirroring_an_invalid_property_panics() {
-        let targets: [(&str, fn() -> EntityProperty); 3] = [
+        let targets: [CaseBuilder; 3] = [
             ("host", || host_created(Some(7))),
             ("local", || local(Some(7))),
             ("delegated", || delegated(Some(7)).0),

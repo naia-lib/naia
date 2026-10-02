@@ -102,7 +102,7 @@ fn local_entity_map_perfect_operations() {
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // Test redirect application
-    let redirected = entity_map.apply_entity_redirect(&old_entity);
+    let redirected = entity_map.apply_entity_redirect(old_entity);
     assert_eq!(redirected, new_entity);
 
     // Test non-redirected entity
@@ -110,7 +110,7 @@ fn local_entity_map_perfect_operations() {
         id: 99,
         is_static: false,
     };
-    let not_redirected = entity_map.apply_entity_redirect(&other_entity);
+    let not_redirected = entity_map.apply_entity_redirect(other_entity);
     assert_eq!(not_redirected, other_entity);
 }
 
@@ -121,7 +121,7 @@ fn migration_error_handling_perfect() {
     let fake_entity = GlobalEntity::from_u64(70001);
 
     // Test that non-existent entity returns error
-    let result = entity_map.global_entity_to_remote_entity(&fake_entity);
+    let result = entity_map.global_entity_to_remote_entity(fake_entity);
     assert!(result.is_err());
 }
 
@@ -222,7 +222,7 @@ fn high_frequency_operations_perfect() {
             id: i + 1000,
             is_static: false,
         };
-        let redirected = entity_map.apply_entity_redirect(&old_entity);
+        let redirected = entity_map.apply_entity_redirect(old_entity);
         assert_eq!(redirected, expected_new_entity);
     }
 }
@@ -331,7 +331,7 @@ fn performance_perfect() {
             id: i as u32 + 10_000,
             is_static: false,
         };
-        let redirected = entity_map.apply_entity_redirect(&old_entity);
+        let redirected = entity_map.apply_entity_redirect(old_entity);
         assert_eq!(redirected, expected_new_entity);
     }
 }

@@ -327,7 +327,7 @@ mod request_sender_tests {
 
         // Exact (id, nonce) match resolves to the global id.
         assert_eq!(
-            sender.process_incoming_response(&local_request_id, nonce),
+            sender.process_incoming_response(local_request_id, nonce),
             Some(global_id)
         );
     }
@@ -352,12 +352,12 @@ mod request_sender_tests {
         // not resolve the outstanding exchange.
         assert_eq!(
             sender
-                .process_incoming_response(&local_request_id, ConnectionRequestNonce::from_wire(8)),
+                .process_incoming_response(local_request_id, ConnectionRequestNonce::from_wire(8)),
             None
         );
         // The outstanding exchange survives the drop and still resolves.
         assert_eq!(
-            sender.process_incoming_response(&local_request_id, nonce),
+            sender.process_incoming_response(local_request_id, nonce),
             Some(GlobalRequestId::new(11))
         );
     }

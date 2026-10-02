@@ -92,7 +92,7 @@ impl Fixture {
     fn drain_commands(&mut self) -> Vec<crate::EntityCommand> {
         let now = Instant::now();
         self.manager
-            .take_outgoing_commands(&now, &200.0)
+            .take_outgoing_commands(&now, 200.0)
             .into_iter()
             .map(|(_, command)| command)
             .collect()
@@ -109,11 +109,11 @@ fn initialising_a_host_entity_maps_it_and_registers_a_channel() {
     let mut fx = Fixture::server();
     let entity = global(1);
 
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
 
-    assert!(fx.manager.has_global_entity(&entity));
-    assert!(fx.manager.has_host_entity(&host_entity));
-    assert!(fx.manager.get_host_entity_channel(&host_entity).is_some());
+    assert!(fx.manager.has_global_entity(entity));
+    assert!(fx.manager.has_host_entity(host_entity));
+    assert!(fx.manager.get_host_entity_channel(host_entity).is_some());
 }
 
 /// Both `has_*` predicates must consult the registry rather than answer a
@@ -121,22 +121,22 @@ fn initialising_a_host_entity_maps_it_and_registers_a_channel() {
 #[test]
 fn the_entity_predicates_answer_for_tracked_entities_only() {
     let mut fx = Fixture::server();
-    let host_entity = fx.spawn_host(&global(1), vec![]);
+    let host_entity = fx.spawn_host(global(1), vec![]);
     let untracked = HostEntity::new(200);
 
-    assert!(fx.manager.has_host_entity(&host_entity));
-    assert!(!fx.manager.has_host_entity(&untracked));
-    assert!(fx.manager.has_global_entity(&global(1)));
-    assert!(!fx.manager.has_global_entity(&global(99)));
-    assert!(fx.manager.has_local_entity(&OwnedLocalEntity::Host {
+    assert!(fx.manager.has_host_entity(host_entity));
+    assert!(!fx.manager.has_host_entity(untracked));
+    assert!(fx.manager.has_global_entity(global(1)));
+    assert!(!fx.manager.has_global_entity(global(99)));
+    assert!(fx.manager.has_local_entity(OwnedLocalEntity::Host {
         id: host_entity.value(),
         is_static: false,
     }));
-    assert!(!fx.manager.has_local_entity(&OwnedLocalEntity::Host {
+    assert!(!fx.manager.has_local_entity(OwnedLocalEntity::Host {
         id: untracked.value(),
         is_static: false,
     }));
-    assert!(!fx.manager.has_local_entity(&OwnedLocalEntity::Remote {
+    assert!(!fx.manager.has_local_entity(OwnedLocalEntity::Remote {
         id: host_entity.value(),
         is_static: false,
     }));
@@ -146,16 +146,16 @@ fn the_entity_predicates_answer_for_tracked_entities_only() {
 #[test]
 fn the_host_channel_lookups_find_only_tracked_entities() {
     let mut fx = Fixture::server();
-    let host_entity = fx.spawn_host(&global(1), vec![]);
+    let host_entity = fx.spawn_host(global(1), vec![]);
     let untracked = HostEntity::new(200);
 
-    assert!(fx.manager.get_host_entity_channel(&host_entity).is_some());
-    assert!(fx.manager.get_host_entity_channel(&untracked).is_none());
+    assert!(fx.manager.get_host_entity_channel(host_entity).is_some());
+    assert!(fx.manager.get_host_entity_channel(untracked).is_none());
     assert!(fx
         .manager
-        .get_host_entity_channel_mut(&host_entity)
+        .get_host_entity_channel_mut(host_entity)
         .is_some());
-    assert!(fx.manager.get_host_entity_channel_mut(&untracked).is_none());
+    assert!(fx.manager.get_host_entity_channel_mut(untracked).is_none());
 }
 
 /// A reservation hands out a host id up front; removing it returns that id
@@ -165,13 +165,13 @@ fn a_reserved_host_entity_is_returned_once_and_then_gone() {
     let mut fx = Fixture::server();
     let entity = global(1);
 
-    let reserved = fx.manager.host_reserve_entity(&entity);
+    let reserved = fx.manager.host_reserve_entity(entity);
 
     assert_eq!(
-        fx.manager.host_remove_reserved_entity(&entity),
+        fx.manager.host_remove_reserved_entity(entity),
         Some(reserved)
     );
-    assert_eq!(fx.manager.host_remove_reserved_entity(&entity), None);
+    assert_eq!(fx.manager.host_remove_reserved_entity(entity), None);
 }
 
 /// A reservation alone does not survive `host_init_entity`. The stale-mapping
@@ -185,17 +185,17 @@ fn a_reserved_host_entity_is_returned_once_and_then_gone() {
 fn initialising_a_reserved_entity_allocates_a_fresh_id() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    let reserved = fx.manager.host_reserve_entity(&entity);
+    let reserved = fx.manager.host_reserve_entity(entity);
 
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
 
     assert_ne!(
         host_entity, reserved,
         "the stale-mapping check did not evict the reservation",
     );
-    assert!(fx.manager.has_host_entity(&host_entity));
+    assert!(fx.manager.has_host_entity(host_entity));
     assert!(
-        !fx.manager.has_host_entity(&reserved),
+        !fx.manager.has_host_entity(reserved),
         "the reserved id was left registered as a live channel",
     );
 }
@@ -208,17 +208,17 @@ fn initialising_a_reserved_entity_allocates_a_fresh_id() {
 fn pausing_and_resuming_moves_an_entity_in_and_out_of_the_pause_set() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    assert!(!fx.manager.is_entity_paused(&entity));
+    assert!(!fx.manager.is_entity_paused(entity));
 
-    fx.manager.pause_entity(&entity);
-    assert!(fx.manager.is_entity_paused(&entity));
+    fx.manager.pause_entity(entity);
+    assert!(fx.manager.is_entity_paused(entity));
     assert!(
-        !fx.manager.is_entity_paused(&global(2)),
+        !fx.manager.is_entity_paused(global(2)),
         "pausing one entity paused another",
     );
 
-    fx.manager.resume_entity(&entity);
-    assert!(!fx.manager.is_entity_paused(&entity));
+    fx.manager.resume_entity(entity);
+    assert!(!fx.manager.is_entity_paused(entity));
 }
 
 /// A despawn clears the pause state too -- a paused entity that goes away must
@@ -227,12 +227,12 @@ fn pausing_and_resuming_moves_an_entity_in_and_out_of_the_pause_set() {
 fn despawning_a_paused_entity_clears_the_pause_state() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.manager.pause_entity(&entity);
+    fx.spawn_host(entity, vec![]);
+    fx.manager.pause_entity(entity);
 
-    fx.manager.despawn_entity(&entity);
+    fx.manager.despawn_entity(entity);
 
-    assert!(!fx.manager.is_entity_paused(&entity));
+    assert!(!fx.manager.is_entity_paused(entity));
 }
 
 // -- command routing -------------------------------------------------------
@@ -243,11 +243,11 @@ fn despawning_a_paused_entity_clears_the_pause_state() {
 fn the_routers_queue_the_matching_command_for_a_host_entity() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.insert_component(&entity, &wraith());
-    fx.manager.remove_component(&entity, &wraith());
-    fx.manager.despawn_entity(&entity);
+    fx.manager.insert_component(entity, wraith());
+    fx.manager.remove_component(entity, wraith());
+    fx.manager.despawn_entity(entity);
 
     let commands = fx.drain_commands();
     assert!(
@@ -270,9 +270,9 @@ fn the_routers_queue_the_matching_command_for_a_host_entity() {
 fn the_spawn_shape_follows_the_component_list() {
     let mut fx = Fixture::server();
     fx.manager
-        .host_init_entity(&global(1), vec![], &fx.kinds.clone(), false);
+        .host_init_entity(global(1), vec![], &fx.kinds.clone(), false);
     fx.manager
-        .host_init_entity(&global(2), vec![ghost()], &fx.kinds.clone(), false);
+        .host_init_entity(global(2), vec![ghost()], &fx.kinds.clone(), false);
 
     let commands = fx.drain_commands();
     assert!(
@@ -301,7 +301,7 @@ fn only_queued_commands_reach_the_sender() {
     );
 
     fx.manager
-        .host_init_entity(&global(1), vec![], &fx.kinds.clone(), false);
+        .host_init_entity(global(1), vec![], &fx.kinds.clone(), false);
 
     assert!(fx
         .drain_commands()
@@ -315,7 +315,7 @@ fn only_queued_commands_reach_the_sender() {
 fn despawning_an_unmapped_entity_panics() {
     let mut fx = Fixture::server();
 
-    fx.manager.despawn_entity(&global(1));
+    fx.manager.despawn_entity(global(1));
 }
 
 #[test]
@@ -323,7 +323,7 @@ fn despawning_an_unmapped_entity_panics() {
 fn inserting_a_component_on_an_unmapped_entity_panics() {
     let mut fx = Fixture::server();
 
-    fx.manager.insert_component(&global(1), &ghost());
+    fx.manager.insert_component(global(1), ghost());
 }
 
 #[test]
@@ -331,7 +331,7 @@ fn inserting_a_component_on_an_unmapped_entity_panics() {
 fn removing_a_component_from_an_unmapped_entity_panics() {
     let mut fx = Fixture::server();
 
-    fx.manager.remove_component(&global(1), &ghost());
+    fx.manager.remove_component(global(1), ghost());
 }
 
 /// `despawn_entity_and_notify_server` returns quietly for an unmapped entity
@@ -341,7 +341,7 @@ fn removing_a_component_from_an_unmapped_entity_panics() {
 fn notifying_a_despawn_for_an_unmapped_entity_is_a_no_op() {
     let mut fx = Fixture::server();
 
-    fx.manager.despawn_entity_and_notify_server(&global(1));
+    fx.manager.despawn_entity_and_notify_server(global(1));
 
     assert!(fx.drain_commands().is_empty());
 }
@@ -353,9 +353,9 @@ fn notifying_a_despawn_for_an_unmapped_entity_is_a_no_op() {
 fn notifying_a_despawn_of_a_host_entity_queues_one_despawn() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
+    fx.spawn_host(entity, vec![]);
 
-    fx.manager.despawn_entity_and_notify_server(&entity);
+    fx.manager.despawn_entity_and_notify_server(entity);
 
     let despawns = fx
         .drain_commands()
@@ -377,12 +377,12 @@ fn an_unknown_component_is_neither_updatable_nor_dirty() {
 
     assert!(!fx
         .manager
-        .is_component_updatable_for_entity(&entity, &ghost()));
+        .is_component_updatable_for_entity(entity, ghost()));
     assert!(!fx
         .manager
-        .is_component_dirty_and_delivered_for_entity(&entity, &ghost()));
+        .is_component_dirty_and_delivered_for_entity(entity, ghost()));
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "an unregistered component reported pending bits",
     );
 }
@@ -416,11 +416,11 @@ fn collecting_messages_retires_command_packets_past_the_ttl() {
     let sent_at = Instant::now();
     let mut much_later = sent_at.clone();
     much_later.add_millis(120_000);
-    fx.manager.insert_sent_command_packet(&0, sent_at);
-    fx.manager.collect_messages(&much_later, &200.0);
+    fx.manager.insert_sent_command_packet(0, sent_at);
+    fx.manager.collect_messages(&much_later, 200.0);
 
     fx.manager
-        .record_command_written(&0, &0, crate::EntityMessage::Noop);
+        .record_command_written(0, 0, crate::EntityMessage::Noop);
 }
 
 /// A record inside the TTL survives the sweep, so the write lands.
@@ -430,11 +430,11 @@ fn a_fresh_command_packet_survives_the_ttl_sweep() {
     let sent_at = Instant::now();
     let mut soon = sent_at.clone();
     soon.add_millis(1_000);
-    fx.manager.insert_sent_command_packet(&0, sent_at);
-    fx.manager.collect_messages(&soon, &200.0);
+    fx.manager.insert_sent_command_packet(0, sent_at);
+    fx.manager.collect_messages(&soon, 200.0);
 
     fx.manager
-        .record_command_written(&0, &0, crate::EntityMessage::Noop);
+        .record_command_written(0, 0, crate::EntityMessage::Noop);
 }
 
 /// Re-inserting the same packet index must not create a second record, or the
@@ -448,15 +448,15 @@ fn inserting_the_same_command_packet_twice_keeps_one_record() {
     much_later.add_millis(120_000);
     let mut mid = sent_at.clone();
     mid.add_millis(90_000);
-    fx.manager.insert_sent_command_packet(&0, sent_at);
-    fx.manager.insert_sent_command_packet(&0, much_later);
+    fx.manager.insert_sent_command_packet(0, sent_at);
+    fx.manager.insert_sent_command_packet(0, much_later);
 
     // If the second insert had replaced the record with the later timestamp,
     // this sweep would leave it in place.
-    fx.manager.collect_messages(&mid, &200.0);
+    fx.manager.collect_messages(&mid, 200.0);
     let panicked = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         fx.manager
-            .record_command_written(&0, &0, crate::EntityMessage::Noop);
+            .record_command_written(0, 0, crate::EntityMessage::Noop);
     }))
     .is_err();
     assert!(panicked, "the duplicate insert kept the record alive");
@@ -471,7 +471,7 @@ fn the_remote_entity_list_holds_only_remote_entities() {
     let mut fx = Fixture::server();
     assert!(fx.manager.remote_entities().is_empty());
 
-    fx.spawn_host(&global(1), vec![]);
+    fx.spawn_host(global(1), vec![]);
 
     assert!(
         fx.manager.remote_entities().is_empty(),
@@ -487,7 +487,7 @@ fn the_pending_outbound_set_follows_initialisation() {
     assert_eq!(fx.manager.pending_outbound_entities().count(), 0);
 
     fx.manager
-        .host_init_entity(&global(1), vec![ghost()], &fx.kinds.clone(), false);
+        .host_init_entity(global(1), vec![ghost()], &fx.kinds.clone(), false);
 
     let pending: Vec<GlobalEntity> = fx.manager.pending_outbound_entities().collect();
     assert_eq!(pending, vec![global(1)]);
@@ -500,7 +500,7 @@ fn the_pending_outbound_set_follows_initialisation() {
 impl Fixture {
     fn record_written(
         &mut self,
-        packet_index: &crate::PacketIndex,
+        packet_index: crate::PacketIndex,
         commands: std::collections::VecDeque<(
             crate::world::host::host_world_manager::CommandId,
             crate::EntityCommand,
@@ -509,18 +509,18 @@ impl Fixture {
         for (command_id, command) in commands {
             let message = match command {
                 crate::EntityCommand::Spawn(global_entity) => {
-                    crate::EntityMessage::Spawn(self.owned(&global_entity))
+                    crate::EntityMessage::Spawn(self.owned(global_entity))
                 }
                 crate::EntityCommand::SpawnWithComponents(global_entity, kinds) => {
-                    crate::EntityMessage::SpawnWithComponents(self.owned(&global_entity), kinds)
+                    crate::EntityMessage::SpawnWithComponents(self.owned(global_entity), kinds)
                 }
                 crate::EntityCommand::InsertComponent(global_entity, kind) => {
-                    crate::EntityMessage::InsertComponent(self.owned(&global_entity), kind)
+                    crate::EntityMessage::InsertComponent(self.owned(global_entity), kind)
                 }
                 other => panic!("fixture: no translation for {other:?}"),
             };
             self.manager
-                .record_command_written(packet_index, &command_id, message);
+                .record_command_written(packet_index, command_id, message);
         }
     }
 
@@ -538,9 +538,9 @@ impl Fixture {
 fn the_host_component_kinds_come_from_the_channel() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost(), wraith()]);
+    fx.spawn_host(entity, vec![ghost(), wraith()]);
 
-    let kinds = fx.manager.extract_host_component_kinds(&entity);
+    let kinds = fx.manager.extract_host_component_kinds(entity);
     assert_eq!(
         kinds,
         std::collections::HashSet::from([ghost(), wraith()]),
@@ -556,11 +556,11 @@ fn the_host_component_kinds_come_from_the_channel() {
 fn extracting_the_host_commands_finds_an_already_drained_channel_empty() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.insert_component(&entity, &wraith());
+    fx.manager.insert_component(entity, wraith());
     assert!(
-        fx.manager.extract_host_entity_commands(&entity).is_empty(),
+        fx.manager.extract_host_entity_commands(entity).is_empty(),
         "send_command already forwarded the insert to the engine buffer"
     );
     assert!(
@@ -576,25 +576,25 @@ fn extracting_the_host_commands_finds_an_already_drained_channel_empty() {
 #[should_panic(expected = "EntityDoesNotExistError")]
 fn extracting_the_host_commands_of_an_unmapped_entity_panics() {
     let mut fx = Fixture::server();
-    let _ = fx.manager.extract_host_entity_commands(&global(9));
+    let _ = fx.manager.extract_host_entity_commands(global(9));
 }
 
 #[test]
 fn removing_a_host_entity_drops_both_the_channel_and_the_mapping() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.remove_host_entity(&entity);
+    fx.manager.remove_host_entity(entity);
 
     assert!(
-        !fx.manager.has_host_entity(&host_entity),
+        !fx.manager.has_host_entity(host_entity),
         "the host engine channel should be gone"
     );
     assert!(
         fx.manager
             .entity_converter()
-            .global_entity_to_host_entity(&entity)
+            .global_entity_to_host_entity(entity)
             .is_err(),
         "and so should the entity map entry"
     );
@@ -607,18 +607,18 @@ fn delivering_a_packet_retires_the_commands_it_carried() {
     let mut fx = Fixture::server();
     let entity = global(1);
     fx.manager
-        .host_init_entity(&entity, vec![ghost()], &fx.kinds, false);
+        .host_init_entity(entity, vec![ghost()], &fx.kinds, false);
 
     let now = Instant::now();
-    let outgoing = fx.manager.take_outgoing_commands(&now, &200.0);
+    let outgoing = fx.manager.take_outgoing_commands(&now, 200.0);
     assert!(
         !outgoing.is_empty(),
         "fixture: the spawn should have produced a command to deliver"
     );
 
     let packet_index: crate::PacketIndex = 0;
-    fx.manager.insert_sent_command_packet(&packet_index, now);
-    fx.record_written(&packet_index, outgoing);
+    fx.manager.insert_sent_command_packet(packet_index, now);
+    fx.record_written(packet_index, outgoing);
 
     assert!(
         fx.manager.pending_outbound_entities().any(|e| e == entity),
@@ -639,9 +639,9 @@ fn delivering_an_unknown_packet_is_a_no_op() {
     let mut fx = Fixture::server();
     let entity = global(1);
     fx.manager
-        .host_init_entity(&entity, vec![ghost()], &fx.kinds, false);
+        .host_init_entity(entity, vec![ghost()], &fx.kinds, false);
     let now = Instant::now();
-    let _ = fx.manager.take_outgoing_commands(&now, &200.0);
+    let _ = fx.manager.take_outgoing_commands(&now, 200.0);
 
     PacketNotifiable::notify_packet_delivered(&mut fx.manager, 9);
     fx.manager.process_delivered_commands();
@@ -656,21 +656,21 @@ fn delivering_an_unknown_packet_is_a_no_op() {
 fn patching_the_in_flight_refs_redirects_the_delivery() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.insert_component(&entity, &wraith());
+    fx.manager.insert_component(entity, wraith());
     let now = Instant::now();
-    let outgoing = fx.manager.take_outgoing_commands(&now, &200.0);
+    let outgoing = fx.manager.take_outgoing_commands(&now, 200.0);
     let packet_index: crate::PacketIndex = 0;
-    fx.manager.insert_sent_command_packet(&packet_index, now);
-    fx.record_written(&packet_index, outgoing);
+    fx.manager.insert_sent_command_packet(packet_index, now);
+    fx.record_written(packet_index, outgoing);
 
     // Point every in-flight reference at an entity the host engine has never
     // heard of. Delivery must follow the patch, so the real channel is left
     // untouched -- if the patch were a no-op the insert would retire here.
     let stranger = HostEntity::new(250).copy_to_owned();
     fx.manager
-        .update_sent_command_entity_refs(&entity, host_entity.copy_to_owned(), stranger);
+        .update_sent_command_entity_refs(entity, host_entity.copy_to_owned(), stranger);
     PacketNotifiable::notify_packet_delivered(&mut fx.manager, packet_index);
     fx.manager.process_delivered_commands();
 
@@ -706,16 +706,16 @@ fn types_after_the_spawn(commands: &[crate::EntityCommand]) -> Vec<crate::Entity
 fn a_client_publishes_its_own_host_entity_through_the_host_engine() {
     let mut fx = Fixture::new(HostType::Client);
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.send_publish(HostType::Client, &entity);
+    fx.manager.send_publish(HostType::Client, entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![crate::EntityMessageType::Publish],
         "the publish should reach the sender as a Publish command"
     );
 
-    fx.manager.send_unpublish(HostType::Client, &entity);
+    fx.manager.send_unpublish(HostType::Client, entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![
@@ -731,8 +731,8 @@ fn a_client_publishes_its_own_host_entity_through_the_host_engine() {
 fn a_server_cannot_publish_its_own_entity() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
-    fx.manager.send_publish(HostType::Server, &entity);
+    fx.spawn_host(entity, vec![ghost()]);
+    fx.manager.send_publish(HostType::Server, entity);
 }
 
 #[test]
@@ -740,8 +740,8 @@ fn a_server_cannot_publish_its_own_entity() {
 fn a_server_cannot_unpublish_its_own_entity() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
-    fx.manager.send_unpublish(HostType::Server, &entity);
+    fx.spawn_host(entity, vec![ghost()]);
+    fx.manager.send_unpublish(HostType::Server, entity);
 }
 
 /// A server-owned host channel starts in `Published`, so the publish is
@@ -752,10 +752,10 @@ fn a_server_cannot_unpublish_its_own_entity() {
 fn enabling_delegation_on_an_already_published_entity_skips_the_publish() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &entity);
+        .send_enable_delegation(HostType::Server, false, entity);
 
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
@@ -768,11 +768,11 @@ fn enabling_delegation_on_an_already_published_entity_skips_the_publish() {
 fn disabling_delegation_queues_one_command() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &entity);
-    fx.manager.send_disable_delegation(&entity);
+        .send_enable_delegation(HostType::Server, false, entity);
+    fx.manager.send_disable_delegation(entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![
@@ -787,21 +787,21 @@ fn disabling_delegation_queues_one_command() {
 fn a_client_must_own_the_entity_to_enable_delegation() {
     let mut fx = Fixture::new(HostType::Client);
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
     fx.manager
-        .send_enable_delegation(HostType::Client, false, &entity);
+        .send_enable_delegation(HostType::Client, false, entity);
 }
 
 #[test]
 fn releasing_authority_on_a_host_entity_goes_out_through_the_host_engine() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &entity);
+        .send_enable_delegation(HostType::Server, false, entity);
     let _ = fx.drain_commands();
 
-    fx.manager.remote_send_release_auth(&entity);
+    fx.manager.remote_send_release_auth(entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![
@@ -819,7 +819,7 @@ fn releasing_authority_on_a_host_entity_goes_out_through_the_host_engine() {
 impl Fixture {
     fn arm_and_grant(&mut self, entity: GlobalEntity, kind: ComponentKind) {
         self.gwm.arm_diff_handler(&self.kinds, entity, kind);
-        self.gwm.declare_kinds(entity, vec![*kind]);
+        self.gwm.declare_kinds(entity, vec![kind]);
         self.manager.insert_component(entity, kind);
         let _ = self.drain_commands();
         self.manager.register_authed_entity(&self.gwm, entity);
@@ -830,17 +830,17 @@ impl Fixture {
 fn granting_authority_dirties_every_declared_component() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
+    fx.spawn_host(entity, vec![]);
 
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "before the grant there is nothing pending"
     );
 
-    fx.arm_and_grant(&entity, &ghost());
+    fx.arm_and_grant(entity, ghost());
 
     assert!(
-        !fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        !fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "the grant republishes full state, so every bit should be set"
     );
 }
@@ -849,13 +849,13 @@ fn granting_authority_dirties_every_declared_component() {
 fn revoking_authority_stops_tracking_the_components() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
 
-    fx.manager.deregister_authed_entity(&fx.gwm, &entity);
+    fx.manager.deregister_authed_entity(&fx.gwm, entity);
 
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "a deregistered component has no live mask left to report"
     );
 }
@@ -864,30 +864,30 @@ fn revoking_authority_stops_tracking_the_components() {
 fn an_entity_with_no_declared_components_is_a_no_op_for_both_directions() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
     // `declare_kinds` is never called, so the manager reports `None` kinds.
 
-    fx.manager.register_authed_entity(&fx.gwm, &entity);
+    fx.manager.register_authed_entity(&fx.gwm, entity);
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "with nothing declared the grant has nothing to dirty"
     );
-    fx.manager.deregister_authed_entity(&fx.gwm, &entity);
+    fx.manager.deregister_authed_entity(&fx.gwm, entity);
 }
 
 #[test]
 fn recording_an_update_clears_the_live_mask() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
 
     let now = Instant::now();
     fx.manager
-        .record_update(&now, &0, &entity, &ghost(), crate::DiffMask::new(1));
+        .record_update(&now, 0, entity, ghost(), crate::DiffMask::new(1));
 
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "the client path records the ledger entry AND clears the live mask"
     );
 }
@@ -896,15 +896,15 @@ fn recording_an_update_clears_the_live_mask() {
 fn recording_a_sent_update_leaves_the_live_mask_alone() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
 
     let now = Instant::now();
     fx.manager
-        .record_sent_update(&now, &0, &entity, &ghost(), crate::DiffMask::new(1));
+        .record_sent_update(&now, 0, entity, ghost(), crate::DiffMask::new(1));
 
     assert!(
-        !fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        !fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "the server path clears up-front in prepare_send_job, never here"
     );
 }
@@ -913,15 +913,15 @@ fn recording_a_sent_update_leaves_the_live_mask_alone() {
 fn the_dense_clear_reaches_the_same_mask_as_the_keyed_query() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
 
     let (entity_idx, kind_bit) = {
         let gdh = fx.gwm.diff_handler.read().unwrap();
         (
-            gdh.entity_to_global_idx(&entity)
+            gdh.entity_to_global_idx(entity)
                 .expect("the armed entity should have a dense index"),
-            gdh.kind_bit(&ghost())
+            gdh.kind_bit(ghost())
                 .expect("the armed component should have a kind bit"),
         )
     };
@@ -934,7 +934,7 @@ fn the_dense_clear_reaches_the_same_mask_as_the_keyed_query() {
     fx.manager.clear_diff_mask_dense(entity_idx, kind_bit);
 
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "and the dense clear should be visible through the keyed query"
     );
 }
@@ -945,9 +945,9 @@ fn the_dense_clear_reaches_the_same_mask_as_the_keyed_query() {
 fn the_host_enable_delegation_sender_queues_one_command() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.host_send_enable_delegation(&entity);
+    fx.manager.host_send_enable_delegation(entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![crate::EntityMessageType::EnableDelegation],
@@ -961,15 +961,15 @@ fn the_host_enable_delegation_sender_queues_one_command() {
 fn enabling_delegation_locally_sends_nothing_but_still_delegates() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
 
-    fx.manager.host_local_enable_delegation(&host_entity);
+    fx.manager.host_local_enable_delegation(host_entity);
     assert!(
         types_after_the_spawn(&fx.drain_commands()).is_empty(),
         "the local transition must not put anything on the wire"
     );
 
-    fx.manager.send_disable_delegation(&entity);
+    fx.manager.send_disable_delegation(entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![crate::EntityMessageType::DisableDelegation],
@@ -982,21 +982,21 @@ fn enabling_delegation_locally_sends_nothing_but_still_delegates() {
 fn enabling_delegation_locally_on_an_unknown_host_entity_panics() {
     let mut fx = Fixture::server();
     fx.manager
-        .host_local_enable_delegation(&HostEntity::new(200));
+        .host_local_enable_delegation(HostEntity::new(200));
 }
 
 #[test]
 fn the_migrate_response_is_reserved_as_the_first_command() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
     // MigrateResponse is only legal on a delegated channel, and it must be the
     // FIRST command the channel emits -- so the channel has to be delegated
     // locally, which flips the state without queueing an EnableDelegation.
-    fx.manager.host_local_enable_delegation(&host_entity);
+    fx.manager.host_local_enable_delegation(host_entity);
 
     fx.manager
-        .host_send_migrate_response(&entity, &crate::RemoteEntity::new(5), &host_entity);
+        .host_send_migrate_response(entity, crate::RemoteEntity::new(5), host_entity);
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
         vec![crate::EntityMessageType::MigrateResponse],
@@ -1007,14 +1007,14 @@ fn the_migrate_response_is_reserved_as_the_first_command() {
 fn setting_authority_on_a_host_entity_queues_one_command() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
     // SetAuthority is only legal on a delegated channel.
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &entity);
+        .send_enable_delegation(HostType::Server, false, entity);
     let _ = fx.drain_commands();
 
     fx.manager
-        .host_send_set_auth(&entity, crate::EntityAuthStatus::Granted);
+        .host_send_set_auth(entity, crate::EntityAuthStatus::Granted);
     // The unacked EnableDelegation is retransmitted alongside the new command.
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),
@@ -1030,7 +1030,7 @@ fn setting_authority_on_a_host_entity_queues_one_command() {
 fn setting_authority_on_an_unmapped_entity_panics() {
     let mut fx = Fixture::server();
     fx.manager
-        .host_send_set_auth(&global(9), crate::EntityAuthStatus::Granted);
+        .host_send_set_auth(global(9), crate::EntityAuthStatus::Granted);
 }
 
 // -- migration -----------------------------------------------------------
@@ -1039,9 +1039,9 @@ fn setting_authority_on_an_unmapped_entity_panics() {
 fn a_host_owned_entity_cannot_be_migrated_and_keeps_its_mapping() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    let host_entity = fx.spawn_host(&entity, vec![ghost()]);
+    let host_entity = fx.spawn_host(entity, vec![ghost()]);
 
-    let result = fx.manager.migrate_entity_remote_to_host(&entity);
+    let result = fx.manager.migrate_entity_remote_to_host(entity);
     assert!(
         result.is_err(),
         "only remote-owned entities migrate, got {result:?}"
@@ -1049,7 +1049,7 @@ fn a_host_owned_entity_cannot_be_migrated_and_keeps_its_mapping() {
     assert_eq!(
         fx.manager
             .entity_converter()
-            .global_entity_to_host_entity(&entity)
+            .global_entity_to_host_entity(entity)
             .expect("the record should have been restored"),
         host_entity,
         "a rejected migration must put the entity record back"
@@ -1059,10 +1059,7 @@ fn a_host_owned_entity_cannot_be_migrated_and_keeps_its_mapping() {
 #[test]
 fn migrating_an_unmapped_entity_reports_the_missing_entity() {
     let mut fx = Fixture::server();
-    assert!(fx
-        .manager
-        .migrate_entity_remote_to_host(&global(9))
-        .is_err());
+    assert!(fx.manager.migrate_entity_remote_to_host(global(9)).is_err());
 }
 
 // -- the updater-facing predicates ----------------------------------------
@@ -1084,10 +1081,10 @@ impl Fixture {
     /// which is what flips a component's `delivered` flag.
     fn deliver_everything_queued(&mut self) {
         let now = Instant::now();
-        let outgoing = self.manager.take_outgoing_commands(&now, &200.0);
+        let outgoing = self.manager.take_outgoing_commands(&now, 200.0);
         let packet_index: crate::PacketIndex = 0;
-        self.manager.insert_sent_command_packet(&packet_index, now);
-        self.record_written(&packet_index, outgoing);
+        self.manager.insert_sent_command_packet(packet_index, now);
+        self.record_written(packet_index, outgoing);
         PacketNotifiable::notify_packet_delivered(&mut self.manager, packet_index);
         self.manager.process_delivered_commands();
     }
@@ -1101,30 +1098,30 @@ impl Fixture {
 fn a_sent_update_is_replayed_onto_the_live_mask_when_the_packet_times_out() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
-    let (entity_idx, kind_bit) = fx.dense(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
+    let (entity_idx, kind_bit) = fx.dense(entity, ghost());
 
     let now = Instant::now();
     let mut diff_mask = crate::DiffMask::new(1);
     diff_mask.set_bit(0, true);
     fx.manager
-        .record_sent_update(&now, &0, &entity, &ghost(), diff_mask);
+        .record_sent_update(&now, 0, entity, ghost(), diff_mask);
 
     // Simulate the send path clearing up-front, so the mask can only come back
     // from the ledger.
     fx.manager.clear_diff_mask_dense(entity_idx, kind_bit);
     assert!(
-        fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "fixture: the mask should start clear so the replay is the only source"
     );
 
     let mut much_later = Instant::now();
     much_later.add_millis(5_000);
-    fx.manager.collect_messages(&much_later, &1.0);
+    fx.manager.collect_messages(&much_later, 1.0);
 
     assert!(
-        !fx.manager.diff_mask_is_clear_for_entity(&entity, &ghost()),
+        !fx.manager.diff_mask_is_clear_for_entity(entity, ghost()),
         "the timed-out packet's recorded mask should be OR'd back on"
     );
 }
@@ -1136,19 +1133,19 @@ fn a_sent_update_is_replayed_onto_the_live_mask_when_the_packet_times_out() {
 fn a_host_owned_component_is_updatable_and_an_unknown_one_is_not() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
     // Updatability requires the insert to have been acked into the delivered world.
     fx.deliver_everything_queued();
 
     assert!(
         fx.manager
-            .is_component_updatable_for_entity(&entity, &ghost()),
+            .is_component_updatable_for_entity(entity, ghost()),
         "the host engine owns this component, so the host half alone says yes"
     );
     assert!(
         !fx.manager
-            .is_component_updatable_for_entity(&global(99), &ghost()),
+            .is_component_updatable_for_entity(global(99), ghost()),
         "an entity the manager never saw is updatable through neither engine"
     );
 }
@@ -1160,13 +1157,13 @@ fn a_host_owned_component_is_updatable_and_an_unknown_one_is_not() {
 fn the_dirty_and_delivered_fast_path_answers_after_the_insert_is_acked() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
-    let (entity_idx, kind_bit) = fx.dense(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
+    let (entity_idx, kind_bit) = fx.dense(entity, ghost());
 
     assert!(
         !fx.manager
-            .is_component_dirty_and_delivered_for_entity(&entity, &ghost()),
+            .is_component_dirty_and_delivered_for_entity(entity, ghost()),
         "before the ack the delivered flag is unset, so the fast path abstains"
     );
 
@@ -1174,7 +1171,7 @@ fn the_dirty_and_delivered_fast_path_answers_after_the_insert_is_acked() {
 
     assert!(
         fx.manager
-            .is_component_dirty_and_delivered_for_entity(&entity, &ghost()),
+            .is_component_dirty_and_delivered_for_entity(entity, ghost()),
         "the grant left the mask dirty and the ack marked it delivered"
     );
     assert!(
@@ -1208,11 +1205,11 @@ fn the_dirty_and_delivered_fast_path_answers_after_the_insert_is_acked() {
 fn taking_update_events_reports_the_dirty_updatable_components() {
     let mut fx = Fixture::client_with_dirty_set();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![]);
-    fx.arm_and_grant(&entity, &ghost());
+    fx.spawn_host(entity, vec![]);
+    fx.arm_and_grant(entity, ghost());
     fx.deliver_everything_queued();
     // The ack cycle clears the mask; re-grant so there is something dirty left.
-    fx.manager.register_authed_entity(&fx.gwm, &entity);
+    fx.manager.register_authed_entity(&fx.gwm, entity);
 
     // The updater reads the component out of the world to build the event, so
     // the world has to actually hold it.
@@ -1238,14 +1235,14 @@ fn taking_outgoing_events_returns_the_queued_spawn() {
     let mut fx = Fixture::server();
     let entity = global(1);
     fx.manager
-        .host_init_entity(&entity, vec![ghost()], &fx.kinds, false);
+        .host_init_entity(entity, vec![ghost()], &fx.kinds, false);
 
     let world = crate::world::test_world::TestWorld::new();
     let converter = crate::world::test_world::IdentityConverter;
     let now = Instant::now();
     let events = fx
         .manager
-        .take_outgoing_events::<u64, _>(&now, &200.0, &world, &converter, &fx.gwm);
+        .take_outgoing_events::<u64, _>(&now, 200.0, &world, &converter, &fx.gwm);
 
     assert!(
         !events.0.is_empty(),
@@ -1264,9 +1261,9 @@ fn only_an_authority_holding_client_notifies_the_server_of_a_despawn() {
     let mut kinds = std::collections::HashSet::new();
     kinds.insert(ghost());
     fx.manager
-        .insert_remote_entity(&entity, remote_entity, kinds);
+        .insert_remote_entity(entity, remote_entity, kinds);
 
-    fx.manager.despawn_entity_and_notify_server(&entity);
+    fx.manager.despawn_entity_and_notify_server(entity);
 
     assert!(
         types_after_the_spawn(&fx.drain_commands()).is_empty(),
@@ -1281,10 +1278,10 @@ fn only_an_authority_holding_client_notifies_the_server_of_a_despawn() {
 fn enabling_delegation_on_an_already_published_channel_skips_the_publish() {
     let mut fx = Fixture::server();
     let entity = global(1);
-    fx.spawn_host(&entity, vec![ghost()]);
+    fx.spawn_host(entity, vec![ghost()]);
 
     fx.manager
-        .send_enable_delegation(HostType::Server, false, &entity);
+        .send_enable_delegation(HostType::Server, false, entity);
 
     assert_eq!(
         types_after_the_spawn(&fx.drain_commands()),

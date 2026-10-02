@@ -131,7 +131,7 @@ fn migration_handles_entity_redirects() {
     entity_map.install_entity_redirect(old_entity, new_entity);
 
     // Test redirect application
-    let redirected = entity_map.apply_entity_redirect(&old_entity);
+    let redirected = entity_map.apply_entity_redirect(old_entity);
     assert_eq!(redirected, new_entity);
 
     // Test non-redirected entity
@@ -139,7 +139,7 @@ fn migration_handles_entity_redirects() {
         id: 99,
         is_static: false,
     };
-    let not_redirected = entity_map.apply_entity_redirect(&other_entity);
+    let not_redirected = entity_map.apply_entity_redirect(other_entity);
     assert_eq!(not_redirected, other_entity);
 }
 
@@ -257,7 +257,7 @@ fn migration_handles_network_failures() {
         id: 999,
         is_static: false,
     };
-    let result = entity_map.apply_entity_redirect(&fake_owned);
+    let result = entity_map.apply_entity_redirect(fake_owned);
     assert_eq!(result, fake_owned);
 }
 

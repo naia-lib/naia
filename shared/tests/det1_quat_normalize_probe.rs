@@ -650,7 +650,7 @@ fn decode_qprobe01(d: &[u8]) -> Result<Vec<QBinBucket>, QBinErr> {
 }
 
 fn bucket_index(tag: u8, tick: u16) -> Result<u32, QBinErr> {
-    if tag > 2 || tick < 24 || tick > 47 {
+    if tag > 2 || !(24..=47).contains(&tick) {
         return Err(QBinErr {
             off: 0,
             msg: "bucket out of window",
@@ -802,6 +802,8 @@ fn wbucket(v: &mut Vec<u8>, tag: u8, tick: u16, ov: u8, count: u16) {
     wu8(v, ov);
     wu16(v, count);
 }
+/// Writes one qprobe01 record. `optics` bundles the (pre, norm, post) quaternion
+/// words so the writer stays under the argument-count limit.
 fn wrecord(
     v: &mut Vec<u8>,
     slot: u32,
@@ -809,10 +811,9 @@ fn wrecord(
     ord: u32,
     entity: Option<u64>,
     did: Option<(u16, u32, u16)>,
-    pre: [u32; 4],
-    norm: u32,
-    post: [u32; 4],
+    optics: ([u32; 4], u32, [u32; 4]),
 ) {
+    let (pre, norm, post) = optics;
     wu32(v, slot);
     wu32(v, sub);
     wu32(v, ord);
@@ -894,9 +895,7 @@ fn qbin_present_identity_roundtrip() {
         3,
         Some(0x1122334455667788),
         Some((4, 0x10000, 0)),
-        DIVERGING_PRE,
-        0x3f7fb0f3,
-        DIVERGING_PRE,
+        (DIVERGING_PRE, 0x3f7fb0f3, DIVERGING_PRE),
     );
     assert_eq!(rec.len(), 114);
     let at = 10 + 4 * 6;
@@ -922,7 +921,7 @@ fn qbin_present_identity_roundtrip() {
 fn qbin_missing_identity_roundtrip() {
     let mut d = empty_stream();
     let mut rec = Vec::new();
-    wrecord(&mut rec, 9, 2, 5, None, None, IDENT, 0x3f800000, IDENT);
+    wrecord(&mut rec, 9, 2, 5, None, None, (IDENT, 0x3f800000, IDENT));
     let at = 10 + 4 * 6;
     d.splice(at + 6..at + 6, rec.iter().cloned());
     d[at + 4] = 1;
@@ -966,9 +965,7 @@ fn qbin_rejects_corrupt() {
         0,
         Some(1),
         Some((1, 2, 3)),
-        IDENT,
-        0x3f800000,
-        IDENT,
+        (IDENT, 0x3f800000, IDENT),
     );
     let at = 10;
     d.splice(at + 6..at + 6, rec.iter().cloned());
@@ -992,7 +989,7 @@ fn qbin_rejects_corrupt() {
     // Entity-missing sentinel nonzero.
     let mut d = empty_stream();
     let mut rec = Vec::new();
-    wrecord(&mut rec, 0, 0, 0, None, None, IDENT, 0x3f800000, IDENT);
+    wrecord(&mut rec, 0, 0, 0, None, None, (IDENT, 0x3f800000, IDENT));
     let at = 10;
     d.splice(at + 6..at + 6, rec.iter().cloned());
     d[at + 4] = 1;
@@ -1063,7 +1060,7 @@ fn regression_design_pins() {
 fn qbin_earliest_mismatch_binary_logic() {
     let mut d = empty_stream();
     let mut r0 = Vec::new();
-    wrecord(&mut r0, 0, 0, 0, None, None, IDENT, 0x3f800000, IDENT);
+    wrecord(&mut r0, 0, 0, 0, None, None, (IDENT, 0x3f800000, IDENT));
     let mut r1 = Vec::new();
     wrecord(
         &mut r1,
@@ -1072,9 +1069,7 @@ fn qbin_earliest_mismatch_binary_logic() {
         3,
         Some(5),
         Some((4, 0x10000, 0)),
-        DIVERGING_PRE,
-        0,
-        DIVERGING_PRE,
+        (DIVERGING_PRE, 0, DIVERGING_PRE),
     );
     // Bucket (0,28) index 4 gets identity then diverging; bucket (1,28) gets none.
     let at = 10 + 4 * 6;
