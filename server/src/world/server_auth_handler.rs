@@ -67,7 +67,7 @@ impl ServerAuthHandler {
     pub(crate) fn entity_has_holder(&self, entity: &GlobalEntity) -> bool {
         match self.entity_auth_map.get(entity) {
             Some(AuthOwner::None) | None => false,
-            Some(AuthOwner::Server) | Some(AuthOwner::Client(_)) => true,
+            Some(AuthOwner::Server | AuthOwner::Client(_)) => true,
         }
     }
 

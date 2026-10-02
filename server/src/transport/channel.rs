@@ -48,7 +48,7 @@ impl TransportSender for PacketChannelSender {
         // the worker will wake and drain everything) and `Closed` (the
         // worker is gone; the data send above already succeeded/failed).
         match self.ready_tx.try_send(()) {
-            Ok(()) | Err(TrySendError::Full(())) | Err(TrySendError::Closed(())) => {}
+            Ok(()) | Err(TrySendError::Full(()) | TrySendError::Closed(())) => {}
         }
         Ok(())
     }

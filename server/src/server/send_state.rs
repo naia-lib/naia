@@ -784,10 +784,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                     for (word_idx, dirty_word) in
                         frozen_dirty.dirty_words(global_idx).iter().enumerate()
                     {
-                        let mut word = *dirty_word;
-                        while word != 0 {
-                            let bit_pos = word.trailing_zeros() as usize;
-                            word &= word - 1;
+                        let mut remaining = *dirty_word;
+                        while remaining != 0 {
+                            let bit_pos = remaining.trailing_zeros() as usize;
+                            remaining &= remaining - 1;
                             let kind_bit = (word_idx * 64 + bit_pos) as u16;
                             let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                                 continue;
@@ -955,10 +955,10 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
                 for (word_idx, dirty_word) in
                     frozen_dirty.dirty_words(global_idx).iter().enumerate()
                 {
-                    let mut word = *dirty_word;
-                    while word != 0 {
-                        let bit_pos = word.trailing_zeros() as usize;
-                        word &= word - 1;
+                    let mut remaining = *dirty_word;
+                    while remaining != 0 {
+                        let bit_pos = remaining.trailing_zeros() as usize;
+                        remaining &= remaining - 1;
                         let kind_bit = (word_idx * 64 + bit_pos) as u16;
                         let Some(component_kind) = guard.kind_for_bit(kind_bit) else {
                             continue;
@@ -2079,7 +2079,7 @@ impl<E: Copy + Eq + Hash + Send + Sync> SendState<E> {
         }
         if matches!(
             owner,
-            Some(EntityOwner::Client(_)) | Some(EntityOwner::ClientWaiting(_))
+            Some(EntityOwner::Client(_) | EntityOwner::ClientWaiting(_))
         ) {
             return;
         }
