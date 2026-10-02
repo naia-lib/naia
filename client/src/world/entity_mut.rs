@@ -90,7 +90,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync, W: WorldMutType<E>> EntityMut<'s, E,
     /// Panics if the entity is static and this handle was not obtained via
     /// `as_static()` or `spawn_static_entity()`.
     pub fn insert_component<R: ReplicatedComponent>(&mut self, component_ref: R) -> &mut Self {
-        assert!(!(!self.allow_static_insert && self.client.entity_is_static(&self.entity)), "Cannot insert_component on a static entity after construction: call .as_static() and insert all components before dropping EntityMut");
+        assert!(self.allow_static_insert || !self.client.entity_is_static(&self.entity), "Cannot insert_component on a static entity after construction: call .as_static() and insert all components before dropping EntityMut");
         self.client
             .insert_component(&mut self.world, &self.entity, component_ref);
 

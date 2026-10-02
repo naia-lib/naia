@@ -75,7 +75,7 @@ impl GlobalRequestManager {
     pub(crate) fn create_request_id(
         &mut self,
     ) -> Result<(GlobalRequestId, ConnectionRequestNonce), NonceExhaustion> {
-        let nonce = self.nonces.next()?;
+        let nonce = self.nonces.next_nonce()?;
         let id = GlobalRequestId::new(self.next_id);
         self.next_id = self.next_id.wrapping_add(1);
 
