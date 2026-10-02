@@ -48,6 +48,16 @@ impl<T: Clone> CommandHistory<T> {
         }
     }
 
+    /// Drops all history up to and including `tick`, and returns nothing.
+    ///
+    /// Unlike [`Self::replays`], the retained suffix is left in the buffer
+    /// rather than cloned out of it, so this is safe to call unconditionally
+    /// — the rollback path prunes the confirmed tick on every pass, even
+    /// with no rollback trigger queued, without disturbing a later replay.
+    pub fn retire_through(&mut self, tick: Tick) {
+        self.remove_to_and_including(tick);
+    }
+
     /// Drops all history up to and including `start_tick`, then returns all remaining (tick, command) pairs for replay.
     pub fn replays(&mut self, start_tick: &Tick) -> Vec<(Tick, T)> {
         // Remove history of commands until current received tick
@@ -212,6 +222,44 @@ mod tests {
         history.insert(5, 5);
         assert_eq!(history.get(&(u16::MAX - 5)), None);
         assert_eq!(span(&history), 10);
+    }
+
+    /// The rollback path must prune on every pass — even with no rollback
+    /// trigger queued — and `replays` cannot do that: it clones and returns
+    /// the retained suffix, so calling it unconditionally would discard the
+    /// replays a later rollback still needs. `retire_through` prunes and
+    /// returns nothing, leaving the suffix in place.
+    #[test]
+    fn retire_through_removes_at_and_below_and_leaves_later_intact() {
+        let mut history = CommandHistory::new(100);
+        insert_range(&mut history, 0, 10);
+
+        history.retire_through(4);
+
+        // Boundary inclusion: tick 4 itself is gone ...
+        assert_eq!(history.get(&4), None);
+        assert_eq!(history.get(&0), None);
+        // ... and everything above it survives, uncloned and in place.
+        assert_eq!(history.buffer.len(), 5);
+        assert_eq!(history.get(&5), Some(&5));
+        assert_eq!(history.most_recent_tick(), Some(9));
+    }
+
+    /// Pruning by confirmed tick must stay correct when the confirmed tick
+    /// has wrapped past zero while the buffer still straddles `u16::MAX`.
+    #[test]
+    fn retire_through_is_correct_across_the_tick_wrap() {
+        let mut history = CommandHistory::new(100);
+        // Straddle the u16 boundary: 65530..=65535 then 0..=4.
+        insert_range(&mut history, u16::MAX - 5, 11);
+
+        history.retire_through(1);
+
+        assert_eq!(history.get(&u16::MAX), None);
+        assert_eq!(history.get(&0), None);
+        assert_eq!(history.get(&1), None);
+        assert_eq!(history.get(&2), Some(&2));
+        assert_eq!(history.most_recent_tick(), Some(4));
     }
 
     #[test]
