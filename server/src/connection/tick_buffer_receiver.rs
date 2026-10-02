@@ -34,8 +34,8 @@ impl TickBufferReceiver {
         &mut self,
         channel_kinds: &ChannelKinds,
         message_kinds: &MessageKinds,
-        host_tick: &Tick,
-        remote_tick: &Tick,
+        host_tick: Tick,
+        remote_tick: Tick,
         converter: &dyn LocalEntityAndGlobalEntityConverter,
         reader: &mut BitReader,
     ) -> Result<(), SerdeErr> {
@@ -75,7 +75,7 @@ impl TickBufferReceiver {
     /// Retrieved stored data from the tick buffer for the given [`Tick`]
     pub fn receive_messages(
         &mut self,
-        host_tick: &Tick,
+        host_tick: Tick,
     ) -> Vec<(ChannelKind, Vec<MessageContainer>)> {
         let mut output = Vec::new();
         for (channel_kind, channel) in &mut self.channel_receivers {

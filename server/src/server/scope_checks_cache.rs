@@ -343,7 +343,7 @@ mod tests {
                     global_entity,
                     users_in_room,
                 } => {
-                    erm.entity_add_room(&global_entity, &room_key);
+                    erm.entity_add_room(global_entity, room_key);
                     cache.on_entity_added_to_room(room_key, world_entity, users_in_room);
                 }
                 RoomChange::EntityRemoved {
@@ -351,7 +351,7 @@ mod tests {
                     world_entity,
                     global_entity,
                 } => {
-                    erm.remove_from_room(&global_entity, &room_key);
+                    erm.remove_from_room(global_entity, room_key);
                     cache.on_entity_removed_from_room(room_key, world_entity);
                 }
                 RoomChange::RoomDestroyed {
@@ -359,7 +359,7 @@ mod tests {
                     removed_entities,
                 } => {
                     for (_world_entity, global_entity) in &removed_entities {
-                        erm.remove_from_room(global_entity, &room_key);
+                        erm.remove_from_room(*global_entity, room_key);
                     }
                     cache.on_room_destroyed(room_key);
                 }
@@ -409,7 +409,7 @@ mod tests {
         let mut direct_cache = ScopeChecksCache::<u32>::new();
         let mut direct_erm = EntityRoomMap::new();
         direct_cache.on_entity_added_to_room(rk(0), 42u32, [uk(0), uk(1)]);
-        direct_erm.entity_add_room(&ge(0), &rk(0));
+        direct_erm.entity_add_room(ge(0), rk(0));
 
         // Via RoomChange:
         let mut via_cache = ScopeChecksCache::<u32>::new();
@@ -427,8 +427,8 @@ mod tests {
 
         assert_eq!(snapshot(&direct_cache), snapshot(&via_cache));
         assert_eq!(
-            direct_erm.entity_get_rooms(&ge(0)),
-            via_erm.entity_get_rooms(&ge(0))
+            direct_erm.entity_get_rooms(ge(0)),
+            via_erm.entity_get_rooms(ge(0))
         );
     }
 
@@ -438,8 +438,8 @@ mod tests {
         let mut erm = EntityRoomMap::new();
         // Populate the cache and erm.
         cache.on_user_added_to_room(rk(0), uk(0), [10u32, 20]);
-        erm.entity_add_room(&ge(10), &rk(0));
-        erm.entity_add_room(&ge(20), &rk(0));
+        erm.entity_add_room(ge(10), rk(0));
+        erm.entity_add_room(ge(20), rk(0));
 
         // Destroy the room via the drainer path.
         apply_room_changes(
@@ -456,11 +456,11 @@ mod tests {
             "cache should be empty after room destroyed"
         );
         assert!(
-            erm.entity_get_rooms(&ge(10)).is_none(),
+            erm.entity_get_rooms(ge(10)).is_none(),
             "entity_room_map should be clean for ge(10)"
         );
         assert!(
-            erm.entity_get_rooms(&ge(20)).is_none(),
+            erm.entity_get_rooms(ge(20)).is_none(),
             "entity_room_map should be clean for ge(20)"
         );
     }

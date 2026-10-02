@@ -19,6 +19,7 @@ impl TickEvents {
     // Public
 
     /// Returns `true` if no tick events are pending.
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.empty
     }
@@ -29,6 +30,7 @@ impl TickEvents {
     }
 
     /// Returns `true` if at least one tick event of type `V` is pending.
+    #[must_use]
     pub fn has<V: TickEventType>(&self) -> bool {
         V::has(self)
     }

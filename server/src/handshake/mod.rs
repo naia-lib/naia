@@ -11,10 +11,10 @@ mod handshaker;
 pub use handshaker::HandshakeManager;
 
 pub trait Handshaker: Send + Sync {
-    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: &UserKey);
+    fn authenticate_user(&mut self, identity_token: &IdentityToken, user_key: UserKey);
 
     // address is optional because user may not have been identified yet
-    fn delete_user(&mut self, user_key: &UserKey, address_opt: Option<SocketAddr>);
+    fn delete_user(&mut self, user_key: UserKey, address_opt: Option<SocketAddr>);
 
     fn maintain_handshake(
         &mut self,

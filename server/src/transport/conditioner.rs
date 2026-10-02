@@ -15,7 +15,8 @@ pub struct ConditionedPacketReceiver {
 }
 
 impl ConditionedPacketReceiver {
-    /// Creates a new ConditionedPacketReceiver
+    /// Creates a new `ConditionedPacketReceiver`
+    #[must_use]
     pub fn new(
         inner_receiver: Box<dyn PacketReceiver>,
         link_conditioner_config: &LinkConditionerConfig,

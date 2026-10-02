@@ -42,7 +42,7 @@ impl GameInstant {
 
     /// Returns the duration elapsed since `previous_instant` (assumed to be in the past).
     #[must_use]
-    pub fn time_since(&self, previous_instant: &GameInstant) -> GameDuration {
+    pub fn time_since(&self, previous_instant: GameInstant) -> GameDuration {
         let previous_millis = previous_instant.millis;
         let current_millis = self.millis;
 

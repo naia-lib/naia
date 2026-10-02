@@ -119,9 +119,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         match server {
             EntityMutTarget::Resident(ws) => ws.despawn_entity(world, &entity),
             EntityMutTarget::Pipelined(ps) => {
-                if !world.has_entity(&entity) {
-                    panic!("attempted to de-spawn nonexistent entity");
-                }
+                assert!(world.has_entity(&entity), "attempted to de-spawn nonexistent entity");
                 world.despawn_entity(&entity);
                 ps.despawn_entity_worldless(&entity);
             }
@@ -149,17 +147,13 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
     /// `as_static()` — i.e., component insertion after construction is
     /// forbidden on static entities.
     pub fn insert_component<R: ReplicatedComponent>(&mut self, component_ref: R) -> &mut Self {
-        if !self.allow_static_insert && self.target_entity_is_static() {
-            panic!("Cannot insert_component on a static entity after construction: call .as_static() and insert all components before dropping EntityMut");
-        }
+        assert!(self.allow_static_insert || !self.target_entity_is_static(), "Cannot insert_component on a static entity after construction: call .as_static() and insert all components before dropping EntityMut");
         let entity = self.entity;
         let Self { server, world, .. } = self;
         match server {
             EntityMutTarget::Resident(ws) => ws.insert_component(world, &entity, component_ref),
             EntityMutTarget::Pipelined(ps) => {
-                if !world.has_entity(&entity) {
-                    panic!("attempted to add component to non-existent entity");
-                }
+                assert!(world.has_entity(&entity), "attempted to add component to non-existent entity");
 
                 let mut component = component_ref;
                 let component_kind = component.kind();
@@ -185,9 +179,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
     /// Panics if called on a static entity — static entities are immutable
     /// after construction.
     pub fn remove_component<R: ReplicatedComponent>(&mut self) -> Option<R> {
-        if self.target_entity_is_static() {
-            panic!("Cannot remove_component on a static entity"); // no allow_static_insert exception — removal is never valid
-        }
+        // no allow_static_insert exception — removal is never valid
+        assert!(!self.target_entity_is_static(), "Cannot remove_component on a static entity");
         let entity = self.entity;
         let Self { server, world, .. } = self;
         match server {
@@ -208,7 +201,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
         let Self { server, world, .. } = self;
         match server {
             EntityMutTarget::Resident(ws) => {
-                ws.configure_entity_replication(world, &entity, config)
+                ws.configure_entity_replication(world, &entity, config);
             }
             // Pipelined: capture coord/send work without reassembly, then apply
             // world hooks immediately because this API already holds `&mut World`.
@@ -301,7 +294,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
         let entity = self.entity;
         match &mut self.server {
-            EntityMutTarget::Resident(ws) => ws.room_add_entity(room_key, &entity),
+            EntityMutTarget::Resident(ws) => ws.room_add_entity(*room_key, &entity),
             EntityMutTarget::Pipelined(ps) => ps.room_add_entity(room_key, &entity),
         }
 
@@ -314,7 +307,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static, W: WorldMutType<E>> Entity
     pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
         let entity = self.entity;
         match &mut self.server {
-            EntityMutTarget::Resident(ws) => ws.room_remove_entity(room_key, &entity),
+            EntityMutTarget::Resident(ws) => ws.room_remove_entity(*room_key, &entity),
             EntityMutTarget::Pipelined(ps) => ps.room_remove_entity(room_key, &entity),
         }
 

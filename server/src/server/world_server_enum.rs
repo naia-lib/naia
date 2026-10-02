@@ -122,7 +122,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// `room_add_entity`).
     pub fn room_add_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         match &mut self.inner {
-            WorldServerImpl::Resident(ws) => ws.room_add_entity(room_key, world_entity),
+            WorldServerImpl::Resident(ws) => ws.room_add_entity(*room_key, world_entity),
             WorldServerImpl::Pipelined(ps) => ps.room_add_entity(room_key, world_entity),
         }
     }
@@ -130,7 +130,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// Remove `world_entity` from `room_key`.
     pub fn room_remove_entity(&mut self, room_key: &RoomKey, world_entity: &E) {
         match &mut self.inner {
-            WorldServerImpl::Resident(ws) => ws.room_remove_entity(room_key, world_entity),
+            WorldServerImpl::Resident(ws) => ws.room_remove_entity(*room_key, world_entity),
             WorldServerImpl::Pipelined(ps) => ps.room_remove_entity(room_key, world_entity),
         }
     }
@@ -323,7 +323,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.io_load(sender, receiver),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.io_load(sender, receiver))
+                ps.with_monolithic_world_server(|ws| ws.io_load(sender, receiver));
             }
         }
     }
@@ -375,7 +375,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// transmits the frozen needed-set snapshot (oracle inline, or published to
     /// the send worker). Byte-identical modulo the worker's one-tick lag
     /// (g9pre).
-    pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+    pub fn send<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_all_packets(world),
             WorldServerImpl::Pipelined(ps) => ps.send(&world),
@@ -397,9 +397,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// Panics if `entity` does not exist in `world` (matching the resident
     /// `InternalWorldServer::entity_mut` contract).
     pub fn entity_mut<W: WorldMutType<E>>(&mut self, world: W, entity: &E) -> EntityMut<'_, E, W> {
-        if !world.has_entity(entity) {
-            panic!("No Entity exists for given Key!");
-        }
+        assert!(world.has_entity(entity), "No Entity exists for given Key!");
         let target = match &mut self.inner {
             WorldServerImpl::Resident(ws) => EntityMutTarget::Resident(ws),
             WorldServerImpl::Pipelined(ps) => EntityMutTarget::Pipelined(ps),
@@ -609,7 +607,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.receive_all_packets(),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.receive_all_packets())
+                ps.with_monolithic_world_server(super::world_server::InternalWorldServer::receive_all_packets);
             }
         }
     }
@@ -619,7 +617,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.process_all_packets(&mut world, now),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.process_all_packets(&mut world, now))
+                ps.with_monolithic_world_server(|ws| ws.process_all_packets(&mut world, now));
             }
         }
     }
@@ -629,7 +627,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.take_world_events(),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.take_world_events())
+                ps.with_monolithic_world_server(super::world_server::InternalWorldServer::take_world_events)
             }
         }
     }
@@ -645,11 +643,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// Flush one tick's worth of outbound traffic against `world`.
-    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: W) {
+    pub fn send_all_packets<W: WorldRefType<E> + Sync>(&mut self, world: &W) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.send_all_packets(world),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.send_all_packets(world))
+                ps.with_monolithic_world_server(|ws| ws.send_all_packets(world));
             }
         }
     }
@@ -758,7 +756,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     ) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => {
-                ws.configure_entity_replication(world, world_entity, config)
+                ws.configure_entity_replication(world, world_entity, config);
             }
             WorldServerImpl::Pipelined(ps) => {
                 ps.configure_entity_replication(world_entity, config);
@@ -780,7 +778,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.insert_component_worldless(world_entity, component),
             WorldServerImpl::Pipelined(ps) => {
-                ps.insert_component_worldless(world_entity, component)
+                ps.insert_component_worldless(world_entity, component);
             }
         }
     }
@@ -789,10 +787,10 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     pub fn remove_component_worldless(&mut self, world_entity: &E, component_kind: &ComponentKind) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => {
-                ws.remove_component_worldless(world_entity, component_kind)
+                ws.remove_component_worldless(world_entity, component_kind);
             }
             WorldServerImpl::Pipelined(ps) => {
-                ps.remove_component_worldless(world_entity, component_kind)
+                ps.remove_component_worldless(world_entity, component_kind);
             }
         }
     }
@@ -912,7 +910,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// Record a Historian snapshot of all replicated component values.
-    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: W, tick: Tick) {
+    pub fn record_historian_tick<W: WorldRefType<E>>(&mut self, world: &W, tick: Tick) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.record_historian_tick(world, tick),
             WorldServerImpl::Pipelined(ps) => ps.record_historian_tick(world, tick),
@@ -956,7 +954,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// Queue a verified-handshake disconnect for the given user.
     pub fn user_queue_disconnect(&mut self, user_key: &UserKey, reason: DisconnectReason) {
         match &mut self.inner {
-            WorldServerImpl::Resident(ws) => ws.user_queue_disconnect(user_key, reason),
+            WorldServerImpl::Resident(ws) => ws.user_queue_disconnect(*user_key, reason),
             WorldServerImpl::Pipelined(ps) => ps.user_queue_disconnect(user_key, reason),
         }
     }
@@ -989,7 +987,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// specific client unless `origin_user` is given).
     pub fn entity_release_authority(
         &mut self,
-        origin_user: Option<&UserKey>,
+        origin_user: Option<UserKey>,
         world_entity: &E,
     ) -> Result<(), AuthorityError> {
         match &mut self.inner {
@@ -1014,7 +1012,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// All entities currently present in `world` (mode-agnostic).
-    pub fn entities<W: WorldRefType<E>>(&self, world: W) -> Vec<E> {
+    pub fn entities<W: WorldRefType<E>>(&self, world: &W) -> Vec<E> {
         world.entities()
     }
 
@@ -1089,11 +1087,11 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     }
 
     /// Serialize + send a prepared [`SendPlan`] against the snapshot `world`.
-    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: W, plan: SendPlan) {
+    pub fn transmit_send_job<W: WorldRefType<E> + Sync>(&mut self, world: &W, plan: SendPlan) {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.transmit_send_job(world, plan),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.transmit_send_job(world, plan))
+                ps.with_monolithic_world_server(|ws| ws.transmit_send_job(world, plan));
             }
         }
     }
@@ -1103,7 +1101,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.drain_all_acks(),
             WorldServerImpl::Pipelined(ps) => {
-                ps.with_monolithic_world_server(|ws| ws.drain_all_acks())
+                ps.with_monolithic_world_server(super::world_server::InternalWorldServer::drain_all_acks);
             }
         }
     }
@@ -1131,10 +1129,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user(user_key),
             WorldServerImpl::Pipelined(ps) => {
-                if !ps.user_exists(user_key) {
-                    panic!("No User exists for given Key!");
-                }
-                UserRef::with_pipeline(ps, user_key)
+                assert!(ps.user_exists(user_key), "No User exists for given Key!");
+                UserRef::with_pipeline(ps, *user_key)
             }
         }
     }
@@ -1145,7 +1141,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => ws.user_opt(user_key),
             WorldServerImpl::Pipelined(ps) => ps
                 .user_exists(user_key)
-                .then(|| UserRef::with_pipeline(ps, user_key)),
+                .then(|| UserRef::with_pipeline(ps, *user_key)),
         }
     }
 
@@ -1154,10 +1150,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_mut(user_key),
             WorldServerImpl::Pipelined(ps) => {
-                if !ps.user_exists(user_key) {
-                    panic!("No User exists for given Key!");
-                }
-                UserMut::with_pipeline(ps, user_key)
+                assert!(ps.user_exists(user_key), "No User exists for given Key!");
+                UserMut::with_pipeline(ps, *user_key)
             }
         }
     }
@@ -1168,7 +1162,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => ws.user_mut_opt(user_key),
             WorldServerImpl::Pipelined(ps) => ps
                 .user_exists(user_key)
-                .then(|| UserMut::with_pipeline(ps, user_key)),
+                .then(|| UserMut::with_pipeline(ps, *user_key)),
         }
     }
 
@@ -1177,10 +1171,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.user_scope(user_key),
             WorldServerImpl::Pipelined(ps) => {
-                if !ps.user_exists(user_key) {
-                    panic!("No User exists for given Key!");
-                }
-                UserScopeRef::with_pipeline(ps, user_key)
+                assert!(ps.user_exists(user_key), "No User exists for given Key!");
+                UserScopeRef::with_pipeline(ps, *user_key)
             }
         }
     }
@@ -1190,10 +1182,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.user_scope_mut(user_key),
             WorldServerImpl::Pipelined(ps) => {
-                if !ps.user_exists(user_key) {
-                    panic!("No User exists for given Key!");
-                }
-                UserScopeMut::with_pipeline(ps, user_key)
+                assert!(ps.user_exists(user_key), "No User exists for given Key!");
+                UserScopeMut::with_pipeline(ps, *user_key)
             }
         }
     }
@@ -1249,7 +1239,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
             WorldServerImpl::Resident(ws) => ws.create_room(),
             WorldServerImpl::Pipelined(ps) => {
                 let room_key = ps.create_room();
-                RoomMut::with_pipeline(ps, &room_key)
+                RoomMut::with_pipeline(ps, room_key)
             }
         }
     }
@@ -1259,10 +1249,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &self.inner {
             WorldServerImpl::Resident(ws) => ws.room(room_key),
             WorldServerImpl::Pipelined(ps) => {
-                if !ps.room_exists(room_key) {
-                    panic!("No Room exists for given Key!");
-                }
-                RoomRef::with_pipeline(ps, room_key)
+                assert!(ps.room_exists(room_key), "No Room exists for given Key!");
+                RoomRef::with_pipeline(ps, *room_key)
             }
         }
     }
@@ -1272,10 +1260,8 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
         match &mut self.inner {
             WorldServerImpl::Resident(ws) => ws.room_mut(room_key),
             WorldServerImpl::Pipelined(ps) => {
-                if !ps.room_exists(room_key) {
-                    panic!("No Room exists for given Key!");
-                }
-                RoomMut::with_pipeline(ps, room_key)
+                assert!(ps.room_exists(room_key), "No Room exists for given Key!");
+                RoomMut::with_pipeline(ps, *room_key)
             }
         }
     }
@@ -1300,9 +1286,7 @@ impl<E: Copy + Eq + Hash + Send + Sync + 'static> WorldServer<E> {
     /// A read-only handle to `entity`. Panics if `entity` does not exist in
     /// `world` (matching the resident [`crate::Server::entity`] contract).
     pub fn entity<W: WorldRefType<E>>(&self, world: W, entity: &E) -> EntityRef<'_, E, W> {
-        if !world.has_entity(entity) {
-            panic!("No Entity exists for given Key!");
-        }
+        assert!(world.has_entity(entity), "No Entity exists for given Key!");
         let target = match &self.inner {
             WorldServerImpl::Resident(ws) => EntityRefTarget::Resident(ws),
             WorldServerImpl::Pipelined(ps) => EntityRefTarget::Pipelined(ps),

@@ -35,6 +35,7 @@ pub enum NaiaServerError {
 
 impl NaiaServerError {
     /// Constructs a [`NaiaServerError::Message`] variant from a string slice.
+    #[must_use]
     pub fn from_message(message: &str) -> Self {
         Self::Message(message.to_string())
     }
@@ -43,10 +44,10 @@ impl NaiaServerError {
 impl fmt::Display for NaiaServerError {
     fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         match self {
-            NaiaServerError::Message(msg) => write!(f, "Naia Server Error: {}", msg),
+            NaiaServerError::Message(msg) => write!(f, "Naia Server Error: {msg}"),
             NaiaServerError::Wrapped(boxed_err) => fmt::Display::fmt(boxed_err.as_ref(), f),
             NaiaServerError::SendError(address) => {
-                write!(f, "Naia Server Error: SendError: {}", address)
+                write!(f, "Naia Server Error: SendError: {address}")
             }
             NaiaServerError::RecvError => {
                 write!(f, "Naia Server Error: RecvError")

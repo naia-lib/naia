@@ -127,7 +127,7 @@ impl ServerImpl {
         }
     }
 
-    pub(crate) fn send_all_packets<W: WorldRefType<Entity> + Sync>(&mut self, world: W) {
+    pub(crate) fn send_all_packets<W: WorldRefType<Entity> + Sync>(&mut self, world: &W) {
         match self {
             Self::Full(server) => server.send_all_packets(world),
             Self::WorldOnly(server) => server.send_all_packets(world),
@@ -666,7 +666,7 @@ impl<'w> Server<'w> {
         }
     }
 
-    pub fn record_historian_tick<W: WorldRefType<Entity>>(&mut self, world: W, tick: Tick) {
+    pub fn record_historian_tick<W: WorldRefType<Entity>>(&mut self, world: &W, tick: Tick) {
         match &mut *self.server_impl {
             ServerImpl::WorldOnly(server) => server.record_historian_tick(world, tick),
             ServerImpl::Full(server) => server.record_historian_tick(world, tick),

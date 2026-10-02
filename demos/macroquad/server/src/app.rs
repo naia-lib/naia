@@ -47,7 +47,7 @@ impl App {
 
         let socket = webrtc::Socket::new(&server_addresses, &protocol.socket);
 
-        let mut server = Server::new(ServerMode::Resident, ServerConfig::default(), protocol);
+        let mut server = Server::new(ServerMode::Resident, &ServerConfig::default(), protocol);
         server.listen(socket);
 
         // Create a new, singular room, which will contain Users and Entities that they

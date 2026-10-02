@@ -119,10 +119,10 @@ impl BaseTimeManager {
             let recv_offset_millis = server_sent_time.offset_from(&client_received_time);
 
             let round_trip_time_millis = client_received_time
-                .time_since(&client_sent_time)
+                .time_since(client_sent_time)
                 .as_millis();
             let server_process_time_millis = server_sent_time
-                .time_since(&server_received_time)
+                .time_since(server_received_time)
                 .as_millis();
 
             // Final values

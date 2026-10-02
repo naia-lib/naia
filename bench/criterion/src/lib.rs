@@ -235,7 +235,7 @@ impl BenchWorld {
             server_config.connection.bandwidth.target_bytes_per_sec = u32::MAX;
         }
         let mut server: NaiaServer<BenchEntity> =
-            NaiaServer::new(ServerMode::Resident, server_config, protocol.clone());
+            NaiaServer::new(ServerMode::Resident, &server_config, protocol.clone());
         server.listen(ServerSocket::new(LocalServerSocket::new(hub.clone()), None));
 
         let mut server_world = World::default();

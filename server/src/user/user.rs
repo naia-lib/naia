@@ -47,47 +47,51 @@ pub struct UserRef<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserRef<'s, E> {
-    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s InternalWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserRefTarget::Resident(server),
-            key: *key,
+            key,
         }
     }
 
-    pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn with_pipeline(server: &'s PipelinedWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserRefTarget::Pipelined(server),
-            key: *key,
+            key,
         }
     }
 
     /// Returns the [`UserKey`] for this user.
+    #[must_use]
     pub fn key(&self) -> UserKey {
         self.key
     }
 
     /// Returns the remote [`SocketAddr`] for this connection.
+    #[must_use]
     pub fn address(&self) -> SocketAddr {
         match &self.server {
-            UserRefTarget::Resident(ws) => ws.user_address(&self.key),
-            UserRefTarget::Pipelined(ps) => ps.user_address(&self.key),
+            UserRefTarget::Resident(ws) => ws.user_address(self.key),
+            UserRefTarget::Pipelined(ps) => ps.user_address(self.key),
         }
         .unwrap()
     }
 
     /// Returns the number of rooms this user currently belongs to.
+    #[must_use]
     pub fn rooms_count(&self) -> usize {
         match &self.server {
-            UserRefTarget::Resident(ws) => ws.user_rooms_count(&self.key),
+            UserRefTarget::Resident(ws) => ws.user_rooms_count(self.key),
             UserRefTarget::Pipelined(ps) => ps.user_rooms_count(&self.key),
         }
         .unwrap()
     }
 
     /// Returns an iterator over the [`RoomKey`]s of all rooms the user belongs to.
+    #[must_use]
     pub fn room_keys(&self) -> Iter<'_, RoomKey> {
         match &self.server {
-            UserRefTarget::Resident(ws) => ws.user_room_keys(&self.key),
+            UserRefTarget::Resident(ws) => ws.user_room_keys(self.key),
             UserRefTarget::Pipelined(ps) => ps.user_room_keys(&self.key),
         }
         .unwrap()
@@ -104,30 +108,32 @@ pub struct UserMut<'s, E: Copy + Eq + Hash + Send + Sync + 'static> {
 }
 
 impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
-    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn new(server: &'s mut InternalWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserMutTarget::Resident(server),
-            key: *key,
+            key,
         }
     }
 
-    pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: &UserKey) -> Self {
+    pub(crate) fn with_pipeline(server: &'s mut PipelinedWorldServer<E>, key: UserKey) -> Self {
         Self {
             server: UserMutTarget::Pipelined(server),
-            key: *key,
+            key,
         }
     }
 
     /// Returns the [`UserKey`] for this user.
+    #[must_use]
     pub fn key(&self) -> UserKey {
         self.key
     }
 
     /// Returns the remote [`SocketAddr`] for this connection.
+    #[must_use]
     pub fn address(&self) -> SocketAddr {
         match &self.server {
-            UserMutTarget::Resident(ws) => ws.user_address(&self.key),
-            UserMutTarget::Pipelined(ps) => ps.user_address(&self.key),
+            UserMutTarget::Resident(ws) => ws.user_address(self.key),
+            UserMutTarget::Pipelined(ps) => ps.user_address(self.key),
         }
         .unwrap()
     }
@@ -139,7 +145,7 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     pub fn disconnect(&mut self) {
         match &mut self.server {
             UserMutTarget::Resident(ws) => {
-                ws.user_queue_disconnect(&self.key, naia_shared::DisconnectReason::Kicked)
+                ws.user_queue_disconnect(self.key, naia_shared::DisconnectReason::Kicked);
             }
             // Pipelined: coord queues `(key, Kicked)` into
             // `pending_disconnect_requests`; the recv path drains it at the top of
@@ -156,8 +162,8 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     /// replicating to this user.
     pub fn enter_room(&mut self, room_key: &RoomKey) -> &mut Self {
         match &mut self.server {
-            UserMutTarget::Resident(ws) => ws.room_add_user(room_key, &self.key),
-            UserMutTarget::Pipelined(ps) => ps.room_add_user(room_key, &self.key),
+            UserMutTarget::Resident(ws) => ws.room_add_user(*room_key, self.key),
+            UserMutTarget::Pipelined(ps) => ps.room_add_user(*room_key, self.key),
         }
         self
     }
@@ -168,25 +174,27 @@ impl<'s, E: Copy + Eq + Hash + Send + Sync + 'static> UserMut<'s, E> {
     /// include) will be despawned on this user's side.
     pub fn leave_room(&mut self, room_key: &RoomKey) -> &mut Self {
         match &mut self.server {
-            UserMutTarget::Resident(ws) => ws.room_remove_user(room_key, &self.key),
-            UserMutTarget::Pipelined(ps) => ps.room_remove_user(room_key, &self.key),
+            UserMutTarget::Resident(ws) => ws.room_remove_user(*room_key, self.key),
+            UserMutTarget::Pipelined(ps) => ps.room_remove_user(*room_key, self.key),
         }
         self
     }
 
     /// Returns the number of rooms this user currently belongs to.
+    #[must_use]
     pub fn rooms_count(&self) -> usize {
         match &self.server {
-            UserMutTarget::Resident(ws) => ws.user_rooms_count(&self.key),
+            UserMutTarget::Resident(ws) => ws.user_rooms_count(self.key),
             UserMutTarget::Pipelined(ps) => ps.user_rooms_count(&self.key),
         }
         .unwrap()
     }
 
     /// Returns an iterator over the [`RoomKey`]s of all rooms the user belongs to.
+    #[must_use]
     pub fn room_keys(&'_ self) -> Iter<'_, RoomKey> {
         match &self.server {
-            UserMutTarget::Resident(ws) => ws.user_room_keys(&self.key),
+            UserMutTarget::Resident(ws) => ws.user_room_keys(self.key),
             UserMutTarget::Pipelined(ps) => ps.user_room_keys(&self.key),
         }
         .unwrap()
