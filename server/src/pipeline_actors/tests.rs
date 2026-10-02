@@ -2192,7 +2192,7 @@ fn split_room_join_spawn_order() -> Vec<u64> {
         .zip(global_entities.iter())
         .map(|(entity, global_entity)| {
             let host = converter
-                .global_entity_to_host_entity(global_entity)
+                .global_entity_to_host_entity(*global_entity)
                 .expect("room join must spawn every room entity for the user");
             (host.value(), *entity)
         })
