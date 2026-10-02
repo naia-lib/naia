@@ -58,6 +58,14 @@ impl GameInstant {
     }
 
     /// Signed millisecond offset to `other` (positive = `other` is later). Wraps correctly at 2^22.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: integer overflow, this shouldn't happen.
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: integer overflow, this shouldn't happen.
     #[must_use]
     pub fn offset_from(&self, other: &GameInstant) -> i32 {
         const MAX: i32 = TIME_OFFSET_MAX;

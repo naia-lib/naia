@@ -66,6 +66,10 @@ impl<K: From<I> + Into<I> + Copy, I: KeyInt> KeyGenerator<K, I> {
     }
 
     /// Get a new, unused key
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value expected to be present is missing.
     pub fn generate(&mut self) -> K {
         let now = Instant::now();
 

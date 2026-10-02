@@ -153,6 +153,10 @@ impl GlobalDiffHandler {
     }
 
     /// Creates a `MutSender`/`MutReceiverBuilder` pair for `(global_entity, component_kind)` and returns the sender.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `GlobalDiffHandler`: For Entity {`global_entity`:?}, Component {name} cannot Register more than once!.
     pub fn register_component(
         &mut self,
         component_kinds: &ComponentKinds,

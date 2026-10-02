@@ -75,10 +75,7 @@ impl ReceiverArranger for OrderedArranger {
             if current_index < self.buffer.len() {
                 let Some((old_message_index, old_message)) = self.buffer.get_mut(current_index)
                 else {
-                    panic!(
-                        "Buffer should be instantiated to slot {:?} !",
-                        start_message_index
-                    );
+                    panic!("Buffer should be instantiated to slot {start_message_index:?} !");
                 };
                 let old_message_index = *old_message_index;
                 if old_message_index == start_message_index {
@@ -92,8 +89,7 @@ impl ReceiverArranger for OrderedArranger {
                                 self.buffer.get_mut(current_index)
                             else {
                                 panic!(
-                                    "Buffer should be instantiated to slot {:?} !",
-                                    old_message_index
+                                    "Buffer should be instantiated to slot {old_message_index:?} !"
                                 );
                             };
                             let old_message_index = *old_message_index;
@@ -102,8 +98,7 @@ impl ReceiverArranger for OrderedArranger {
                                 *old_message = MessageSlot::PreviousFragment;
                             } else {
                                 panic!(
-                                    "Buffer should not have received message in slot {:?} !",
-                                    old_message_index
+                                    "Buffer should not have received message in slot {old_message_index:?} !"
                                 );
                             }
                         }
@@ -111,8 +106,7 @@ impl ReceiverArranger for OrderedArranger {
                         break;
                     }
                     panic!(
-                        "Buffer should not have received message in slot {:?} !",
-                        old_message_index
+                        "Buffer should not have received message in slot {old_message_index:?} !"
                     );
                 }
             } else {

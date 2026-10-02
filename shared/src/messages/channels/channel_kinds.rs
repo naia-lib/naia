@@ -118,6 +118,14 @@ impl ChannelKinds {
     }
 
     /// Returns the `ChannelSettings` for the given kind. Panics if the kind was not registered.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: could not find `ChannelKind` for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!.
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: could not find `ChannelKind` for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!.
     #[must_use]
     pub fn channel(&self, kind: &ChannelKind) -> ChannelSettings {
         let (_, settings, _) = self.kind_map.get(kind).expect("could not find ChannelKind for given Channel. Make sure Channel struct has `#[derive(Channel)]` on it!");
@@ -156,9 +164,17 @@ impl ChannelKinds {
     /// the result, which is what makes the fingerprint reproducible across
     /// processes.
     ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: `ChannelKinds` net-ID space must be dense.
     /// Net-IDs are dense by construction (`add_channel` hands out
     /// `0..current_net_id` with no gaps), so a missing entry is a broken
     /// invariant rather than a recoverable condition.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: `ChannelKinds` net-ID space must be dense.
     #[must_use]
     pub fn schema_entries(&self) -> Vec<(NetId, String, Vec<u8>)> {
         let mut output = Vec::with_capacity(self.current_net_id as usize);

@@ -49,6 +49,10 @@ impl HostEntityGenerator {
     // Host entities
 
     /// Allocates a [`HostEntity`] for `global_entity` before it has been sent, expiring reservations that have timed out.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.reserved_host_entities.contains_key(&global_entity` does not hold.
     pub fn host_reserve_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,
@@ -141,6 +145,10 @@ impl HostEntityGenerator {
     }
 
     /// Removes the entity identified by `remote_entity` from `entity_map`, recycles its host ID, and returns its [`GlobalEntity`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: Attempting to despawn entity which does not exist!.
     pub fn remove_by_remote_entity(
         &mut self,
         entity_map: &mut LocalEntityMap,

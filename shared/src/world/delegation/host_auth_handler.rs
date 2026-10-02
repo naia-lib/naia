@@ -51,6 +51,10 @@ impl HostAuthHandler {
     }
 
     /// Registers `entity` with this handler, creating an authority channel for it and returning the accessor.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.auth_channels.contains_key(&entity` does not hold.
     pub fn register_entity(
         &mut self,
         host_type: HostType,
@@ -75,6 +79,10 @@ impl HostAuthHandler {
     }
 
     /// Returns a cloned `EntityAuthAccessor` for `entity`. Panics if not registered.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: Entity must be registered with Server before it can receive messages!.
     #[must_use]
     pub fn get_accessor(&self, entity: GlobalEntity) -> EntityAuthAccessor {
         let (_, receiver) = self
@@ -96,6 +104,10 @@ impl HostAuthHandler {
     }
 
     /// Updates the authority status for `entity`. Panics if not registered.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: Entity must be registered with Server before it can be mutated!.
     pub fn set_auth_status(&self, entity: GlobalEntity, auth_status: EntityAuthStatus) {
         let (sender, _) = self
             .auth_channels

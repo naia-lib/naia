@@ -39,6 +39,14 @@ pub fn sequence_equal_or_less_than(s1: u16, s2: u16) -> bool {
 /// `wrapping_diff(2,1)` will return -1
 /// `wrapping_diff(65535,0)` will return 1
 /// `wrapping_diff(0,65535)` will return -1
+///
+///
+/// # Panics
+///
+/// Panics when the invalid state is reached: integer overflow, this shouldn't happen.
+/// # Panics
+///
+/// Panics when the invalid state is reached: integer overflow, this shouldn't happen.
 #[must_use]
 pub fn wrapping_diff(a: u16, b: u16) -> i16 {
     const MAX: i32 = i16::MAX as i32;

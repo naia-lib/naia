@@ -170,7 +170,7 @@ impl RemoteEntityChannel {
 
     pub(crate) fn receive_message(&mut self, id: MessageIndex, tick: Tick, msg: EntityMessage<()>) {
         if let Some(last_epoch_id) = self.last_epoch_id {
-            assert!(last_epoch_id != id, "EntityChannel received a message with the same id as the last epoch id. This should not happen. Message: {:?}", msg);
+            assert!(last_epoch_id != id, "EntityChannel received a message with the same id as the last epoch id. This should not happen. Message: {msg:?}");
             if sequence_less_than(id, last_epoch_id) {
                 // This message is older than the last spawn message, ignore it
                 return;
@@ -409,7 +409,7 @@ impl RemoteEntityChannel {
         }
 
         // Force-drain all component channels
-        for (_, component_channel) in &mut self.component_channels {
+        for component_channel in self.component_channels.values_mut() {
             component_channel.force_drain_buffers(self.state);
         }
     }

@@ -208,6 +208,10 @@ impl MessageManager {
     /// if the message was accepted, `false` if the channel queue was full and
     /// the message was dropped (reliable channels only — unreliable channels
     /// always return `true`, evicting the oldest queued message if needed).
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     pub fn send_message(
         &mut self,
         message_kinds: &MessageKinds,
@@ -255,10 +259,18 @@ impl MessageManager {
     /// Queues a request with `global_request_id` into the given channel's send buffer.
     ///
     /// H3: `nonce` names the exchange on the wire (envelope cutover, codec
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     /// grammar 2) and keys the transport's (local id, nonce) match.
     ///
     /// Returns `false` if the channel refused it (reliable queue-depth cap
     /// reached); nothing was enqueued and the caller must retry later.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     pub fn send_request(
         &mut self,
         message_kinds: &MessageKinds,
@@ -281,6 +293,10 @@ impl MessageManager {
     ///
     /// Returns `false` if the channel refused it (reliable queue-depth cap
     /// reached); nothing was enqueued and the caller must retry later.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message..
     pub fn send_response(
         &mut self,
         message_kinds: &MessageKinds,
@@ -304,6 +320,10 @@ impl MessageManager {
     }
 
     /// Returns whether the Manager has queued Messages that can be transmitted
+    ///
+    /// # Panics
+    ///
+    /// Panics on internal invariant violation.
     /// to the remote host
     #[must_use]
     pub fn has_outgoing_messages(&self) -> bool {
@@ -316,6 +336,10 @@ impl MessageManager {
     }
 
     /// Encodes all pending outgoing messages across all channels into `writer`, ordered by channel criticality.
+    ///
+    /// # Panics
+    ///
+    /// Panics if a value expected to be present is missing.
     pub fn write_messages(
         &mut self,
         channel_kinds: &ChannelKinds,
@@ -437,6 +461,10 @@ impl MessageManager {
     }
 
     /// Retrieve all requests from the channel buffers
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Channel not configured correctly! Cannot send message on channel: {`channel_kind`:?}.
     pub fn receive_requests_and_responses(&mut self) -> RequestsAndResponsesOut {
         let mut request_output = Vec::new();
         let mut response_output = Vec::new();

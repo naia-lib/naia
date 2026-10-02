@@ -74,24 +74,21 @@ impl AuthChannel {
             EntityMessageType::Publish => {
                 assert!(
                     self.state == EntityAuthChannelState::Unpublished,
-                    "Cannot publish Entity: {:?} that is already published",
-                    entity
+                    "Cannot publish Entity: {entity:?} that is already published"
                 );
                 self.state = EntityAuthChannelState::Published;
             }
             EntityMessageType::Unpublish => {
                 assert!(
                     self.state == EntityAuthChannelState::Published,
-                    "Cannot unpublish Entity: {:?} that is not published",
-                    entity
+                    "Cannot unpublish Entity: {entity:?} that is not published"
                 );
                 self.state = EntityAuthChannelState::Unpublished;
             }
             EntityMessageType::EnableDelegation => {
                 assert!(
                     self.state == EntityAuthChannelState::Published,
-                    "Cannot enable delegation on Entity: {:?} that is not published",
-                    entity
+                    "Cannot enable delegation on Entity: {entity:?} that is not published"
                 );
                 self.state = EntityAuthChannelState::Delegated;
                 self.auth_status = Some(EntityAuthStatus::Available);
@@ -105,16 +102,14 @@ impl AuthChannel {
                 );
                 assert!(
                     self.state == EntityAuthChannelState::Delegated,
-                    "Cannot disable delegation on Entity: {:?} that is not delegated",
-                    entity
+                    "Cannot disable delegation on Entity: {entity:?} that is not delegated"
                 );
                 self.state = EntityAuthChannelState::Published;
             }
             EntityMessageType::ReleaseAuthority => {
                 assert!(
                     self.state == EntityAuthChannelState::Delegated,
-                    "Cannot release authority on Entity: {:?} that is not delegated",
-                    entity
+                    "Cannot release authority on Entity: {entity:?} that is not delegated"
                 );
 
                 // This is actually valid, because it should be possible for a client to ReleaseAuthority right after EnableDelegation, so that auth isn't automatically set to Granted
@@ -123,8 +118,7 @@ impl AuthChannel {
             EntityMessageType::SetAuthority => {
                 assert!(
                     self.state == EntityAuthChannelState::Delegated,
-                    "Cannot set authority on Entity: {:?} that is not delegated",
-                    entity
+                    "Cannot set authority on Entity: {entity:?} that is not delegated"
                 );
 
                 let EntityCommand::SetAuthority(_, _entity, next_status) = command else {
@@ -142,9 +136,7 @@ impl AuthChannel {
 
                 assert!(
                     Self::auth_status_transition_is_legal(from_status, *next_status),
-                    "Invalid authority transition from {:?} to {:?}",
-                    from_status,
-                    next_status
+                    "Invalid authority transition from {from_status:?} to {next_status:?}"
                 );
 
                 self.auth_status = Some(*next_status);
@@ -153,8 +145,7 @@ impl AuthChannel {
                 // Client is requesting authority for a delegated entity
                 assert!(
                     self.state == EntityAuthChannelState::Delegated,
-                    "Cannot request authority on Entity: {:?} that is not delegated",
-                    entity
+                    "Cannot request authority on Entity: {entity:?} that is not delegated"
                 );
 
                 // Auth status will be updated by server's SetAuthority response
@@ -164,8 +155,7 @@ impl AuthChannel {
                 // This is valid for entities that were just delegated
                 assert!(
                     self.state == EntityAuthChannelState::Delegated,
-                    "Cannot send EnableDelegationResponse for Entity: {:?} that is not delegated",
-                    entity
+                    "Cannot send EnableDelegationResponse for Entity: {entity:?} that is not delegated"
                 );
             }
             EntityMessageType::MigrateResponse => {
@@ -174,8 +164,7 @@ impl AuthChannel {
                 // Valid for delegated entities
                 assert!(
                     self.state == EntityAuthChannelState::Delegated,
-                    "Cannot send MigrateResponse for Entity: {:?} that is not delegated",
-                    entity
+                    "Cannot send MigrateResponse for Entity: {entity:?} that is not delegated"
                 );
             }
             EntityMessageType::Noop => {
@@ -310,7 +299,7 @@ impl AuthChannel {
                 if self.state != Delegated {
                     return false;
                 }
-                let EntityMessage::SetAuthority(_, _, next_status) = msg else {
+                let EntityMessage::SetAuthority(_, (), next_status) = msg else {
                     return false;
                 };
                 // No auth_status yet means we never saw the EnableDelegation

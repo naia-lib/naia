@@ -45,6 +45,10 @@ impl HostEntityChannel {
     }
 
     /// Validates and routes `command` to the component set or authority sub-channel, queuing it for outbound delivery.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: These should be handled by the Engine, not the `EntityChannelSender`.
     pub fn send_command(&mut self, command: EntityCommand) {
         // Flush any reserved auth-channel command first so it lands at
         // subcommand_id=0 ahead of `command`. No-op if none reserved.
@@ -199,13 +203,21 @@ impl HostEntityChannel {
     ///   already gone).
     /// - The reserved command MUST be an auth-channel command type
     ///   (Publish / Unpublish / `EnableDelegation` / `DisableDelegation` /
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self.reserved_first_command.is_none(` does not hold.
     ///   `SetAuthority` / `RequestAuthority` / `ReleaseAuthority` /
     ///   `EnableDelegationResponse` / `MigrateResponse`). Lifecycle
     ///   commands (Spawn/Despawn/Noop) and component commands are
     ///   rejected with a panic.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self.reserved_first_command.is_none(` does not hold.
     pub fn reserve_first_command(&mut self, command: EntityCommand) {
         assert!(
-            !self.reserved_first_command.is_some(),
+            self.reserved_first_command.is_none(),
             "HostEntityChannel::reserve_first_command called twice before drain (type={:?})",
             command.get_type()
         );

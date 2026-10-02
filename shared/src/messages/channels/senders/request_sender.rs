@@ -157,6 +157,14 @@ impl LocalRequestOrResponseId {
     }
 
     /// Returns the inner `LocalRequestId`. Panics if this is a response.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `LocalRequestOrResponseId` is a response.
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `LocalRequestOrResponseId` is a response.
     #[must_use]
     pub fn to_request_id(&self) -> LocalRequestId {
         match self {
@@ -168,6 +176,10 @@ impl LocalRequestOrResponseId {
     }
 
     /// Returns the inner `LocalResponseId`. Panics if this is a request.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: `LocalRequestOrResponseId` is a request.
     #[must_use]
     pub fn to_response_id(&self) -> LocalResponseId {
         match self {

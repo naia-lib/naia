@@ -114,6 +114,10 @@ impl LocalEntityMap {
     }
 
     /// Registers a host-owned mapping from `global_entity` to `host_entity`, panicking on duplicate keys.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.global_to_local.contains_key(&global_entity` does not hold.
     pub fn insert_with_host_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -121,14 +125,12 @@ impl LocalEntityMap {
     ) {
         assert!(
             !self.global_to_local.contains_key(&global_entity),
-            "Cannot overwrite inserted global entity: {:?}",
-            global_entity
+            "Cannot overwrite inserted global entity: {global_entity:?}"
         );
 
         assert!(
             !self.host_to_global.contains_key(&host_entity),
-            "Cannot overwrite inserted host entity {:?}",
-            host_entity
+            "Cannot overwrite inserted host entity {host_entity:?}"
         );
 
         self.global_to_local.insert(
@@ -140,6 +142,10 @@ impl LocalEntityMap {
     }
 
     /// Registers a static host-owned mapping from `global_entity` to `host_entity`, panicking on duplicate keys.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.global_to_local.contains_key(&global_entity` does not hold.
     pub fn insert_with_static_host_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -147,14 +153,12 @@ impl LocalEntityMap {
     ) {
         assert!(
             !self.global_to_local.contains_key(&global_entity),
-            "Cannot overwrite inserted global entity: {:?}",
-            global_entity
+            "Cannot overwrite inserted global entity: {global_entity:?}"
         );
 
         assert!(
             !self.host_to_global.contains_key(&host_entity),
-            "Cannot overwrite inserted static host entity {:?}",
-            host_entity
+            "Cannot overwrite inserted static host entity {host_entity:?}"
         );
 
         self.global_to_local.insert(
@@ -166,6 +170,10 @@ impl LocalEntityMap {
     }
 
     /// Registers a remote-owned mapping from `global_entity` to `remote_entity`, panicking on duplicate keys.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.global_to_local.contains_key(&global_entity` does not hold.
     pub fn insert_with_remote_entity(
         &mut self,
         global_entity: GlobalEntity,
@@ -173,14 +181,12 @@ impl LocalEntityMap {
     ) {
         assert!(
             !self.global_to_local.contains_key(&global_entity),
-            "Cannot overwrite inserted global entity: {:?}",
-            global_entity
+            "Cannot overwrite inserted global entity: {global_entity:?}"
         );
 
         assert!(
             !self.remote_to_global.contains_key(&remote_entity),
-            "Cannot overwrite inserted remote entity {:?}",
-            remote_entity
+            "Cannot overwrite inserted remote entity {remote_entity:?}"
         );
 
         self.global_to_local.insert(

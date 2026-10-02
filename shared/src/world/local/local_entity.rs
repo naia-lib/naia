@@ -191,6 +191,14 @@ impl OwnedLocalEntity {
     }
 
     /// Extracts the inner [`HostEntity`], panicking if this is a `Remote` variant.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Expected `OwnedLocalEntity::Host`, found `OwnedLocalEntity::Remote`.
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Expected `OwnedLocalEntity::Host`, found `OwnedLocalEntity::Remote`.
     #[must_use]
     pub fn host(&self) -> HostEntity {
         match self {
@@ -208,6 +216,10 @@ impl OwnedLocalEntity {
     }
 
     /// Extracts the inner [`RemoteEntity`], panicking if this is a `Host` variant.
+    ///
+    /// # Panics
+    ///
+    /// Panics when the invalid state is reached: Expected `OwnedLocalEntity::Remote`, found `OwnedLocalEntity::Host`.
     #[must_use]
     pub fn remote(&self) -> RemoteEntity {
         match self {

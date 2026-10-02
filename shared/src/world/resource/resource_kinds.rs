@@ -98,6 +98,14 @@ impl ResourceKinds {
     /// `Protocol::add_resource`, which calls `add_component` first); a kind
     /// missing there is a broken registration invariant, not a remote input,
     /// and panics.
+    ///
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: every Replicated Resource must be registered as a component first.
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: every Replicated Resource must be registered as a component first.
     #[must_use]
     pub fn member_net_ids(&self, components: &ComponentKinds) -> Vec<u16> {
         let mut ids: Vec<u16> = self

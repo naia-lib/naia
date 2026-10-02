@@ -242,6 +242,10 @@ impl Protocol {
     }
 
     /// Panics if the protocol has already been locked.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `!self.locked` does not hold.
     pub fn check_lock(&self) {
         assert!(!self.locked, "Protocol already locked!");
     }
@@ -252,6 +256,10 @@ impl Protocol {
     }
 
     /// Returns the cached protocol ID. Panics if protocol is not locked.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the expected value is missing: Protocol must be locked before calling `protocol_id()`.
     #[must_use]
     pub fn protocol_id(&self) -> ProtocolId {
         self.cached_protocol_id
